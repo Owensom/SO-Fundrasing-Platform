@@ -22,8 +22,14 @@ type Purchase = {
   createdAt: string;
 };
 
+type Drafts = Record<number, { total: string; price: string }>;
+
 function clampSquares(n: number) {
   return Math.max(1, Math.min(500, Number.isFinite(n) ? Math.floor(n) : 1));
+}
+
+function clampPrice(n: number) {
+  return Math.max(1, Number.isFinite(n) ? n : 1);
 }
 
 function money(n: number) {
@@ -41,13 +47,13 @@ function cardStyle(): React.CSSProperties {
   };
 }
 
-function inputStyle(): React.CSSProperties {
+function inputStyle(invalid = false): React.CSSProperties {
   return {
     width: "100%",
     padding: "14px 16px",
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(2,6,23,0.72)",
+    border: invalid ? "1px solid rgba(251,113,133,0.45)" : "1px solid rgba(255,255,255,0.10)",
+    background: invalid ? "rgba(127,29,29,0.18)" : "rgba(2,6,23,0.72)",
     color: "white",
     boxSizing: "border-box",
   };
@@ -107,18 +113,31 @@ export default function App() {
   });
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
+  const [drafts, setDrafts] = useState<Drafts>({
+    1: { total: "100", price: "10" },
+    2: { total: "120", price: "5" },
+  });
 
   const game = games.find((g) => g.id === activeGameId) ?? games[0];
   const selected = selectedByGame[game.id] ?? [];
+  const draft = drafts[game.id] ?? { total: String(game.total), price: String(game.price) };
+  const hasBlankRequiredValues = draft.total.trim() === "" || draft.price.trim() === "";
   const visibleSelected = useMemo(
     () => selected.filter((n) => n <= game.total && !game.sold.includes(n) && !game.reserved.includes(n)),
     [selected, game],
   );
   const totalCost = visibleSelected.length * game.price;
-  const canBuy = buyerName.trim() !== "" && buyerEmail.trim() !== "" && visibleSelected.length > 0;
+  const canBuy = buyerName.trim() !== "" && buyerEmail.trim() !== "" && visibleSelected.length > 0 && !hasBlankRequiredValues;
 
   function setGamePatch(id: number, patch: Partial<Game>) {
     setGames((curr) => curr.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  }
+
+  function setDraftPatch(id: number, patch: Partial<{ total: string; price: string }>) {
+    setDrafts((curr) => ({
+      ...curr,
+      [id]: { ...(curr[id] ?? { total: "", price: "" }), ...patch },
+    }));
   }
 
   function toggleSquare(n: number) {
@@ -145,6 +164,7 @@ export default function App() {
     };
     setGames((curr) => [...curr, newGame]);
     setSelectedByGame((curr) => ({ ...curr, [id]: [] }));
+    setDrafts((curr) => ({ ...curr, [id]: { total: "100", price: "5" } }));
     setActiveGameId(id);
   }
 
@@ -153,6 +173,11 @@ export default function App() {
     const remaining = games.filter((g) => g.id !== game.id);
     setGames(remaining);
     setSelectedByGame((curr) => {
+      const next = { ...curr };
+      delete next[game.id];
+      return next;
+    });
+    setDrafts((curr) => {
       const next = { ...curr };
       delete next[game.id];
       return next;
@@ -247,7 +272,7 @@ export default function App() {
                 SO Fundraising Platform
               </h1>
               <p style={{ margin: "10px 0 0", color: "#cbd5e1", maxWidth: 760 }}>
-                Clean Squares rebuild with multiple games, add/remove game, background image upload,
+                Clean Squares rebuild with blank-editable number fields, multiple games, background image upload,
                 admin purchase tracking, and buyer PDF receipts.
               </p>
             </div>
@@ -285,7 +310,7 @@ export default function App() {
                 <input
                   value={game.title}
                   onChange={(e) => setGamePatch(game.id, { title: e.target.value })}
-                  style={inputStyle()}
+                  style={inputStyle(false)}
                 />
               </div>
 
@@ -295,29 +320,35 @@ export default function App() {
                   type="number"
                   min={1}
                   max={500}
-                  value={game.total}
+                  value={draft.total}
                   onChange={(e) => {
-                    const nextTotal = clampSquares(Number(e.target.value || 1));
-                    setGames((curr) =>
-                      curr.map((g) =>
-                        g.id === game.id
-                          ? {
-                              ...g,
-                              total: nextTotal,
-                              sold: g.sold.filter((n) => n <= nextTotal),
-                              reserved: g.reserved.filter((n) => n <= nextTotal),
-                            }
-                          : g,
-                      ),
-                    );
-                    setSelectedByGame((curr) => ({
-                      ...curr,
-                      [game.id]: (curr[game.id] || []).filter((n) => n <= nextTotal),
-                    }));
+                    const v = e.target.value;
+                    setDraftPatch(game.id, { total: v });
+                    if (v.trim() !== "") {
+                      const nextTotal = clampSquares(Number(v));
+                      setGames((curr) =>
+                        curr.map((g) =>
+                          g.id === game.id
+                            ? {
+                                ...g,
+                                total: nextTotal,
+                                sold: g.sold.filter((n) => n <= nextTotal),
+                                reserved: g.reserved.filter((n) => n <= nextTotal),
+                              }
+                            : g,
+                        ),
+                      );
+                      setSelectedByGame((curr) => ({
+                        ...curr,
+                        [game.id]: (curr[game.id] || []).filter((n) => n <= nextTotal),
+                      }));
+                    }
                   }}
-                  style={inputStyle()}
+                  style={inputStyle(draft.total.trim() === "")}
                 />
-                <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>Allowed range: 1 to 500</div>
+                <div style={{ marginTop: 6, fontSize: 11, color: draft.total.trim() === "" ? "#fda4af" : "#64748b" }}>
+                  Blank allowed while editing. Required for completion. Range: 1 to 500.
+                </div>
               </div>
 
               <div>
@@ -325,10 +356,19 @@ export default function App() {
                 <input
                   type="number"
                   min={1}
-                  value={game.price}
-                  onChange={(e) => setGamePatch(game.id, { price: Math.max(1, Number(e.target.value || 1)) })}
-                  style={inputStyle()}
+                  value={draft.price}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDraftPatch(game.id, { price: v });
+                    if (v.trim() !== "") {
+                      setGamePatch(game.id, { price: clampPrice(Number(v)) });
+                    }
+                  }}
+                  style={inputStyle(draft.price.trim() === "")}
                 />
+                <div style={{ marginTop: 6, fontSize: 11, color: draft.price.trim() === "" ? "#fda4af" : "#64748b" }}>
+                  Blank allowed while editing. Required for completion.
+                </div>
               </div>
 
               <div style={{ ...cardStyle(), padding: 16, borderRadius: 20 }}>
@@ -341,6 +381,21 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {hasBlankRequiredValues && (
+              <div
+                style={{
+                  marginTop: 16,
+                  border: "1px solid rgba(251,113,133,0.35)",
+                  background: "rgba(127,29,29,0.18)",
+                  borderRadius: 18,
+                  padding: 14,
+                  color: "#fecdd3",
+                }}
+              >
+                One or more required number fields are blank. They can be blank while editing, but not for completion.
+              </div>
+            )}
 
             <div style={{ marginTop: 22 }}>
               <h3 style={{ marginTop: 0 }}>Purchase data</h3>
@@ -391,12 +446,12 @@ export default function App() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
             <div>
               <label style={labelStyle()}>Buyer name</label>
-              <input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} style={inputStyle()} />
+              <input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} style={inputStyle(false)} />
             </div>
 
             <div>
               <label style={labelStyle()}>Buyer email</label>
-              <input value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} style={inputStyle()} />
+              <input value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} style={inputStyle(false)} />
             </div>
 
             <div style={{ ...cardStyle(), padding: 16, borderRadius: 20 }}>
