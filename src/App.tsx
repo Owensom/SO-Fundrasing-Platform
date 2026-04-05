@@ -101,24 +101,8 @@ const raffleBg =
   'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=1400&q=80';
 
 const squaresSeed: SquaresListing[] = [
-  {
-    id: 1,
-    title: 'Super Bowl Squares',
-    totalSquares: 100,
-    price: 10,
-    background: squareBg,
-    sold: [3, 8, 14],
-    reserved: [5, 11],
-  },
-  {
-    id: 2,
-    title: 'World Cup Final Squares',
-    totalSquares: 100,
-    price: 5,
-    background: squareBg,
-    sold: [1, 7],
-    reserved: [4, 15],
-  },
+  { id: 1, title: 'Super Bowl Squares', totalSquares: 100, price: 10, background: squareBg, sold: [3, 8, 14], reserved: [5, 11] },
+  { id: 2, title: 'World Cup Final Squares', totalSquares: 100, price: 5, background: squareBg, sold: [1, 7], reserved: [4, 15] },
 ];
 
 const ticketsSeed: TicketListing[] = [
@@ -190,9 +174,7 @@ function formatMoney(value: number): string {
 function availableNumbers(batch: Batch, extra: Set<number>): number[] {
   const taken = new Set([...batch.sold, ...extra]);
   const out: number[] = [];
-  for (let i = 1; i <= batch.count; i += 1) {
-    if (!taken.has(i)) out.push(i);
-  }
+  for (let i = 1; i <= batch.count; i += 1) if (!taken.has(i)) out.push(i);
   return out;
 }
 
@@ -215,7 +197,6 @@ function bundlePrice(batch: Batch | undefined, qty: number): number {
   const rules = [...batch.rules].sort((a, b) => b.qty - a.qty);
   let remaining = qty;
   let total = 0;
-
   for (const rule of rules) {
     if (rule.qty < 1) continue;
     const bundles = Math.floor(remaining / rule.qty);
@@ -224,17 +205,10 @@ function bundlePrice(batch: Batch | undefined, qty: number): number {
       remaining -= bundles * rule.qty;
     }
   }
-
   return total + remaining * batch.price;
 }
 
-async function exportReceipt(
-  title: string,
-  buyer: string,
-  email: string,
-  lines: string[],
-  total: number
-): Promise<void> {
+async function exportReceipt(title: string, buyer: string, email: string, lines: string[], total: number): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF();
   doc.setFontSize(22);
@@ -243,7 +217,6 @@ async function exportReceipt(
   doc.text(title, 20, 34);
   doc.text(`Name: ${buyer}`, 20, 48);
   doc.text(`Email: ${email}`, 20, 60);
-
   let y = 76;
   for (const line of lines) {
     if (y > 270) {
@@ -253,7 +226,6 @@ async function exportReceipt(
     doc.text(line, 20, y);
     y += 10;
   }
-
   doc.text(`Total: ${formatMoney(total)}`, 20, y + 6);
   doc.save(`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-receipt.pdf`);
 }
@@ -321,31 +293,27 @@ function SummaryBox({ children, className = '' }: { children: React.ReactNode; c
   );
 }
 
-function AdminPanel({
-  show,
+function AdminDataPanel({
   tab,
   setTab,
   squareOrders,
   ticketOrders,
   raffleOrders,
 }: {
-  show: boolean;
   tab: AdminTab;
   setTab: (t: AdminTab) => void;
   squareOrders: Order[];
   ticketOrders: Order[];
   raffleOrders: Order[];
 }) {
-  if (!show) return null;
   const map = { squares: squareOrders, tickets: ticketOrders, raffle: raffleOrders };
-
   return (
-    <PremiumCard>
+    <div className="mt-6 border-t border-white/10 pt-6">
       <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Database className="h-5 w-5 text-sky-300" />
         Admin purchase data
       </div>
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid gap-2 md:grid-cols-3">
         {(['squares', 'tickets', 'raffle'] as AdminTab[]).map((t) => (
           <SectionChip key={t} active={tab === t} onClick={() => setTab(t)}>
             {t}
@@ -373,7 +341,7 @@ function AdminPanel({
           ))
         )}
       </div>
-    </PremiumCard>
+    </div>
   );
 }
 
@@ -645,7 +613,7 @@ export default function App() {
                 Premium fundraising suite
               </div>
               <h1 className="text-4xl font-semibold tracking-tight">SO Fundraising Platform</h1>
-              <p className="mt-2 max-w-2xl text-slate-300">Stable premium preview with Squares up to 500, multi-listing support, admin controls, buyer PDF receipts, and raffle draw flow.</p>
+              <p className="mt-2 max-w-2xl text-slate-300">Admin tools are grouped into one complete section for each part of the app, and buyer view is now full width for a clearer real-customer preview.</p>
             </div>
             <SectionChip active={isAdminView} onClick={() => setIsAdminView((v) => !v)}>
               {isAdminView ? 'Admin view on' : 'Admin view off'}
@@ -670,331 +638,292 @@ export default function App() {
           ))}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
-            <PremiumCard>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-2xl font-semibold">Buyer</h2>
-                <SectionChip onClick={() => imageRef.current?.click()}>
-                  <span className="inline-flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    Background image
-                  </span>
-                </SectionChip>
+        {isAdminView && (
+          <PremiumCard>
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Admin: {section === 'squares' ? 'Squares setup' : section === 'tickets' ? 'Event setup' : 'Raffle setup'}</h2>
+                <p className="mt-1 text-sm text-slate-400">All admin actions for this section are grouped here. Toggle admin view off to see the cleaner buyer view.</p>
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <TextField label="Buyer name" value={buyerName} onChange={setBuyerName} />
-                <TextField label="Buyer email" value={buyerEmail} onChange={setBuyerEmail} />
-              </div>
-            </PremiumCard>
+              <SectionChip onClick={() => imageRef.current?.click()}>
+                <span className="inline-flex items-center gap-2"><ImageIcon className="h-4 w-4" />Background image</span>
+              </SectionChip>
+            </div>
 
             {section === 'squares' && (
               <>
-                <PremiumCard>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-2xl font-semibold">Admin: Squares setup</h2>
-                    <div className="flex gap-2">
-                      <SectionChip onClick={addSquareListing}>
-                        <span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add squares game</span>
-                      </SectionChip>
-                      <SectionChip onClick={() => removeSquareListing(square.id)}>Remove current</SectionChip>
-                    </div>
-                  </div>
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {squareListings.map((l) => (
-                      <SectionChip key={l.id} active={activeSquareId === l.id} onClick={() => setActiveSquareId(l.id)}>
-                        {l.title}
-                      </SectionChip>
-                    ))}
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <TextField label="Game title" value={square.title} onChange={(v) => setSquareListings((curr) => curr.map((x) => (x.id === square.id ? { ...x, title: v } : x)))} />
-                    <NumberField label="Price per square" value={getDraft(`sq-price-${square.id}`, square.price)} onChange={(v) => applyDraft(`sq-price-${square.id}`, v, (n) => setSquareListings((curr) => curr.map((x) => (x.id === square.id ? { ...x, price: n } : x))))} />
-                    <NumberField
-                      label="Squares to sell"
-                      value={getDraft(`sq-total-${square.id}`, square.totalSquares)}
-                      onChange={(v) =>
-                        applyDraft(`sq-total-${square.id}`, v, (n) => {
-                          const safeTotal = Math.min(n, 500);
-                          setSquareListings((curr) =>
-                            curr.map((x) =>
-                              x.id === square.id
-                                ? {
-                                    ...x,
-                                    totalSquares: safeTotal,
-                                    sold: x.sold.filter((num) => num <= safeTotal),
-                                    reserved: x.reserved.filter((num) => num <= safeTotal),
-                                  }
-                                : x
-                            )
-                          );
-                          setSelectedSquaresByListing((curr) => ({
-                            ...curr,
-                            [square.id]: (curr[square.id] || []).filter((num) => num <= safeTotal),
-                          }));
-                        })
-                      }
-                    />
-                  </div>
-                </PremiumCard>
-
-                <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_20px_80px_rgba(2,6,23,0.45)]" style={{ backgroundImage: `url(${square.background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                  <div className="bg-slate-950/75 p-6 backdrop-blur-[2px]">
-                    <h2 className="text-2xl font-semibold">{square.title}</h2>
-                    <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: 'repeat(10, minmax(0, 1fr))' }}>
-                      {Array.from({ length: square.totalSquares }).map((_, i) => {
-                        const n = i + 1;
-                        const style = square.sold.includes(n)
-                          ? 'border-rose-400/30 bg-rose-500/20 text-rose-100'
-                          : square.reserved.includes(n)
-                            ? 'border-amber-400/30 bg-amber-500/20 text-amber-100'
-                            : selectedSquares.includes(n)
-                              ? 'border-white bg-white text-slate-950 shadow-[0_8px_24px_rgba(255,255,255,0.18)]'
-                              : 'border-white/15 bg-slate-900/70';
-                        return (
-                          <button key={n} type="button" onClick={() => toggleSquare(n)} disabled={square.sold.includes(n) || square.reserved.includes(n)} className={`flex aspect-square items-center justify-center rounded-2xl border text-sm font-semibold transition ${style}`}>
-                            {n}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <SummaryBox className="mt-4">
-                      <div className="flex justify-between"><span>Squares selected</span><span>{selectedSquares.length}</span></div>
-                      <div className="mt-2 text-xs text-slate-400">Numbers: {selectedSquares.join(', ')}</div>
-                      <div className="mt-2 flex justify-between"><span>Total</span><span>{formatMoney(squaresTotal)}</span></div>
-                    </SummaryBox>
-                    <button onClick={() => void buySquares()} disabled={!buyerName.trim() || !buyerEmail.trim() || selectedSquares.length === 0 || hasBlankNumbers} className="mt-4 w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.14)] transition hover:bg-slate-100 disabled:opacity-50">
-                      Pay for squares + export PDF
-                    </button>
-                  </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <SectionChip onClick={addSquareListing}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add squares game</span></SectionChip>
+                  <SectionChip onClick={() => removeSquareListing(square.id)}>Remove current</SectionChip>
                 </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {squareListings.map((l) => (
+                    <SectionChip key={l.id} active={activeSquareId === l.id} onClick={() => setActiveSquareId(l.id)}>{l.title}</SectionChip>
+                  ))}
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <TextField label="Game title" value={square.title} onChange={(v) => setSquareListings((curr) => curr.map((x) => (x.id === square.id ? { ...x, title: v } : x)))} />
+                  <NumberField label="Price per square" value={getDraft(`sq-price-${square.id}`, square.price)} onChange={(v) => applyDraft(`sq-price-${square.id}`, v, (n) => setSquareListings((curr) => curr.map((x) => (x.id === square.id ? { ...x, price: n } : x))))} />
+                  <NumberField
+                    label="Squares to sell"
+                    value={getDraft(`sq-total-${square.id}`, square.totalSquares)}
+                    onChange={(v) =>
+                      applyDraft(`sq-total-${square.id}`, v, (n) => {
+                        const safeTotal = Math.min(n, 500);
+                        setSquareListings((curr) =>
+                          curr.map((x) =>
+                            x.id === square.id
+                              ? {
+                                  ...x,
+                                  totalSquares: safeTotal,
+                                  sold: x.sold.filter((num) => num <= safeTotal),
+                                  reserved: x.reserved.filter((num) => num <= safeTotal),
+                                }
+                              : x
+                          )
+                        );
+                        setSelectedSquaresByListing((curr) => ({
+                          ...curr,
+                          [square.id]: (curr[square.id] || []).filter((num) => num <= safeTotal),
+                        }));
+                      })
+                    }
+                  />
+                </div>
+                <AdminDataPanel tab={adminTab} setTab={setAdminTab} squareOrders={squareOrders} ticketOrders={ticketOrders} raffleOrders={raffleOrders} />
               </>
             )}
 
             {section === 'tickets' && (
               <>
-                <PremiumCard>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-2xl font-semibold">Admin: Event setup</h2>
-                    <div className="flex gap-2">
-                      <SectionChip onClick={addTicketListing}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add event</span></SectionChip>
-                      <SectionChip onClick={() => removeTicketListing(ticket.id)}>Remove current</SectionChip>
-                    </div>
-                  </div>
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {ticketListings.map((l) => (
-                      <SectionChip key={l.id} active={activeTicketId === l.id} onClick={() => { setActiveTicketId(l.id); setSelectedTableId(l.tables[0]?.id ?? 0); }}>
-                        {l.title}
-                      </SectionChip>
-                    ))}
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <TextField label="Listing title" value={ticket.title} onChange={(v) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, title: v } : x)))} />
-                    <TextField label="Event name" value={ticket.eventName} onChange={(v) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, eventName: v } : x)))} />
-                    <TextField label="Venue" value={ticket.venue} onChange={(v) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, venue: v } : x)))} />
-                    <NumberField label="Ticket price" value={getDraft(`tk-price-${ticket.id}`, ticket.price)} onChange={(v) => applyDraft(`tk-price-${ticket.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, price: n } : x))))} />
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    {(['quantity', 'seats', 'tables'] as TicketMode[]).map((m) => (
-                      <SectionChip key={m} active={ticket.mode === m} onClick={() => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, mode: m } : x)))}>
-                        {m}
-                      </SectionChip>
-                    ))}
-                  </div>
-                  {ticket.mode === 'seats' && (
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <NumberField label="Rows" value={getDraft(`tk-rows-${ticket.id}`, ticket.rows)} onChange={(v) => applyDraft(`tk-rows-${ticket.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, rows: n } : x))))} />
-                      <NumberField label="Seats per row" value={getDraft(`tk-seats-${ticket.id}`, ticket.seatsPerRow)} onChange={(v) => applyDraft(`tk-seats-${ticket.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, seatsPerRow: n } : x))))} />
-                    </div>
-                  )}
-                  {ticket.mode === 'tables' && (
-                    <div className="mt-4 rounded-[24px] border border-white/10 bg-slate-950/60 p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <div className="font-semibold">Tables</div>
-                        <SectionChip onClick={addTable}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add table</span></SectionChip>
-                      </div>
-                      <div className="space-y-3">
-                        {ticket.tables.map((tb) => (
-                          <div key={tb.id} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3 md:grid-cols-[1fr_110px_110px]">
-                            <TextField label="Table name" value={tb.name} onChange={(v) => setTicketListings((curr) => curr.map((x) => x.id === ticket.id ? { ...x, tables: x.tables.map((t) => (t.id === tb.id ? { ...t, name: v } : t)) } : x))} />
-                            <NumberField label="Seats" value={getDraft(`tb-seats-${tb.id}`, tb.seats)} onChange={(v) => applyDraft(`tb-seats-${tb.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => x.id === ticket.id ? { ...x, tables: x.tables.map((t) => (t.id === tb.id ? { ...t, seats: n } : t)) } : x))))} />
-                            <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3.5">
-                              <div className="text-xs uppercase tracking-[0.14em] text-slate-500">Available</div>
-                              <div className="mt-1 font-semibold">{Math.max(tb.seats - tb.sold, 0)}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </PremiumCard>
-
-                <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_20px_80px_rgba(2,6,23,0.45)]" style={{ backgroundImage: `url(${ticket.background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                  <div className="bg-slate-950/75 p-6 backdrop-blur-[2px]">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-2xl font-semibold">{ticket.title}</h2>
-                      <div className="text-slate-200">{formatMoney(ticket.price)} each</div>
-                    </div>
-                    {ticket.mode === 'tables' && (
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        {ticket.tables.map((tb) => (
-                          <button key={tb.id} onClick={() => setSelectedTableId(tb.id)} className={`rounded-[22px] border p-4 text-left transition ${selectedTableId === tb.id ? 'border-sky-300/45 bg-white/12' : 'border-white/10 bg-slate-950/55'}`}>
-                            <div className="font-semibold">{tb.name}</div>
-                            <div className="mt-1 text-sm text-slate-400">{Math.max(tb.seats - tb.sold, 0)} available of {tb.seats}</div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {ticket.mode === 'seats' && (
-                      <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${ticket.seatsPerRow}, minmax(0, 1fr))` }}>
-                        {Array.from({ length: ticket.rows * ticket.seatsPerRow }).map((_, i) => (
-                          <div key={i} className="rounded-xl border border-white/10 bg-slate-950/60 p-2 text-center text-xs">
-                            {String.fromCharCode(65 + Math.floor(i / ticket.seatsPerRow))}{(i % ticket.seatsPerRow) + 1}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-4"><NumberField label="Quantity" value={ticketQty} onChange={setTicketQty} /></div>
-                    <SummaryBox className="mt-4">
-                      <div className="flex justify-between"><span>Quantity</span><span>{ticketQuantity || '—'}</span></div>
-                      {ticket.mode === 'tables' && selectedTable && (
-                        <>
-                          <div className="mt-2 flex justify-between"><span>Table</span><span>{selectedTable.name}</span></div>
-                          <div className="mt-2 flex justify-between"><span>Available seats</span><span>{tableAvailable}</span></div>
-                        </>
-                      )}
-                      <div className="mt-2 flex justify-between"><span>Total</span><span>{formatMoney(ticketTotal)}</span></div>
-                    </SummaryBox>
-                    <button onClick={() => void buyTickets()} disabled={!buyerName.trim() || !buyerEmail.trim() || ticketQuantity <= 0 || hasBlankNumbers || (ticket.mode === 'tables' && selectedTable && ticketQuantity > tableAvailable)} className="mt-4 w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.14)] transition hover:bg-slate-100 disabled:opacity-50">
-                      Pay for tickets + export PDF
-                    </button>
-                  </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <SectionChip onClick={addTicketListing}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add event</span></SectionChip>
+                  <SectionChip onClick={() => removeTicketListing(ticket.id)}>Remove current</SectionChip>
+                  <SectionChip onClick={addTable}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add table</span></SectionChip>
                 </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {ticketListings.map((l) => (
+                    <SectionChip key={l.id} active={activeTicketId === l.id} onClick={() => { setActiveTicketId(l.id); setSelectedTableId(l.tables[0]?.id ?? 0); }}>{l.title}</SectionChip>
+                  ))}
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <TextField label="Listing title" value={ticket.title} onChange={(v) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, title: v } : x)))} />
+                  <TextField label="Event name" value={ticket.eventName} onChange={(v) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, eventName: v } : x)))} />
+                  <TextField label="Venue" value={ticket.venue} onChange={(v) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, venue: v } : x)))} />
+                  <NumberField label="Ticket price" value={getDraft(`tk-price-${ticket.id}`, ticket.price)} onChange={(v) => applyDraft(`tk-price-${ticket.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, price: n } : x))))} />
+                  <NumberField label="Rows" value={getDraft(`tk-rows-${ticket.id}`, ticket.rows)} onChange={(v) => applyDraft(`tk-rows-${ticket.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, rows: n } : x))))} />
+                  <NumberField label="Seats per row" value={getDraft(`tk-seats-${ticket.id}`, ticket.seatsPerRow)} onChange={(v) => applyDraft(`tk-seats-${ticket.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, seatsPerRow: n } : x))))} />
+                </div>
+                <div className="mt-4 flex gap-2">
+                  {(['quantity', 'seats', 'tables'] as TicketMode[]).map((m) => (
+                    <SectionChip key={m} active={ticket.mode === m} onClick={() => setTicketListings((curr) => curr.map((x) => (x.id === ticket.id ? { ...x, mode: m } : x)))}>{m}</SectionChip>
+                  ))}
+                </div>
+                {ticket.mode === 'tables' && (
+                  <div className="mt-4 space-y-3">
+                    {ticket.tables.map((tb) => (
+                      <div key={tb.id} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3 md:grid-cols-[1fr_140px_140px]">
+                        <TextField label="Table name" value={tb.name} onChange={(v) => setTicketListings((curr) => curr.map((x) => x.id === ticket.id ? { ...x, tables: x.tables.map((t) => (t.id === tb.id ? { ...t, name: v } : t)) } : x))} />
+                        <NumberField label="Seats" value={getDraft(`tb-seats-${tb.id}`, tb.seats)} onChange={(v) => applyDraft(`tb-seats-${tb.id}`, v, (n) => setTicketListings((curr) => curr.map((x) => x.id === ticket.id ? { ...x, tables: x.tables.map((t) => (t.id === tb.id ? { ...t, seats: n } : t)) } : x))))} />
+                        <SummaryBox>
+                          <div className="text-xs uppercase tracking-[0.14em] text-slate-500">Available</div>
+                          <div className="mt-1 font-semibold">{Math.max(tb.seats - tb.sold, 0)}</div>
+                        </SummaryBox>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <AdminDataPanel tab={adminTab} setTab={setAdminTab} squareOrders={squareOrders} ticketOrders={ticketOrders} raffleOrders={raffleOrders} />
               </>
             )}
 
             {section === 'raffle' && (
               <>
-                <PremiumCard>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-2xl font-semibold">Admin: Raffle setup</h2>
-                    <div className="flex gap-2">
-                      <SectionChip onClick={addRaffleListing}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add raffle</span></SectionChip>
-                      <SectionChip onClick={addBatch}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add colour</span></SectionChip>
-                      <SectionChip onClick={() => removeRaffleListing(raffle.id)}>Remove current</SectionChip>
-                    </div>
-                  </div>
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {raffleListings.map((l) => (
-                      <SectionChip key={l.id} active={activeRaffleId === l.id} onClick={() => setActiveRaffleId(l.id)}>
-                        {l.title}
-                      </SectionChip>
-                    ))}
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <TextField label="Listing title" value={raffle.title} onChange={(v) => setRaffleListings((curr) => curr.map((x) => (x.id === raffle.id ? { ...x, title: v } : x)))} />
-                    <TextField label="Prize" value={raffle.prize} onChange={(v) => setRaffleListings((curr) => curr.map((x) => (x.id === raffle.id ? { ...x, prize: v } : x)))} />
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {raffle.batches.map((b) => (
-                      <div key={b.id} className="rounded-[24px] border border-white/10 bg-slate-950/60 p-4">
-                        <div className="grid gap-3">
-                          <TextField label="Colour" value={b.color} onChange={(v) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => (q.id === b.id ? { ...q, color: v } : q)) } : x))} />
-                          <NumberField label="Total tickets" value={getDraft(`rf-count-${b.id}`, b.count)} onChange={(v) => applyDraft(`rf-count-${b.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => (q.id === b.id ? { ...q, count: n } : q)) } : x))))} />
-                          <NumberField label="Single ticket price" value={getDraft(`rf-price-${b.id}`, b.price)} onChange={(v) => applyDraft(`rf-price-${b.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => (q.id === b.id ? { ...q, price: n } : q)) } : x))))} />
-                          <SectionChip onClick={() => addRule(b.id)}>Add offer</SectionChip>
-                          {b.rules.map((r) => (
-                            <div key={r.id} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3 md:grid-cols-2">
-                              <NumberField label="Bundle qty" value={getDraft(`rule-qty-${r.id}`, r.qty)} onChange={(v) => applyDraft(`rule-qty-${r.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => q.id === b.id ? { ...q, rules: q.rules.map((z) => (z.id === r.id ? { ...z, qty: n } : z)) } : q) } : x))))} />
-                              <NumberField label="Bundle price" value={getDraft(`rule-price-${r.id}`, r.price)} onChange={(v) => applyDraft(`rule-price-${r.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => q.id === b.id ? { ...q, rules: q.rules.map((z) => (z.id === r.id ? { ...z, price: n } : z)) } : q) } : x))))} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </PremiumCard>
-
-                <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_20px_80px_rgba(2,6,23,0.45)]" style={{ backgroundImage: `url(${raffle.background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                  <div className="bg-slate-950/75 p-6 backdrop-blur-[2px]">
-                    <h2 className="text-2xl font-semibold">{raffle.title}</h2>
-                    <p className="mt-2 text-sm text-slate-300">Prize: {raffle.prize}</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      {raffle.batches.map((b) => (
-                        <div key={b.id} className="rounded-[24px] border border-white/10 bg-slate-950/55 p-4 shadow-[0_14px_36px_rgba(2,6,23,0.22)]">
-                          <div className="font-semibold">{b.color}</div>
-                          <div className="mt-1 text-sm text-slate-400">{b.count - b.sold.length} available of {b.count}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-4 space-y-4">
-                      {raffleChoices.map((choice, i) => (
-                        <div key={choice.id} className="grid gap-3 rounded-[24px] border border-white/10 bg-slate-950/55 p-4 md:grid-cols-[1fr_120px_90px]">
-                          <div>
-                            <label className="mb-1.5 block text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Colour {i + 1}</label>
-                            <select value={choice.color} onChange={(e) => updateChoice(choice.id, { color: e.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white">
-                              <option value="">Select</option>
-                              {raffle.batches.map((b) => (
-                                <option key={b.id} value={b.color}>{b.color}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <NumberField label="Count" value={choice.qty} onChange={(v) => updateChoice(choice.id, { qty: v })} />
-                          <div className="flex items-end">
-                            <button onClick={() => removeChoice(choice.id)} className="w-full rounded-2xl border border-rose-400/30 bg-rose-400/10 px-3 py-3 text-sm text-rose-200 transition hover:bg-rose-400/15">
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-
-                      <SectionChip onClick={addChoice}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add colour</span></SectionChip>
-                      <SummaryBox>
-                        <div className="flex justify-between"><span>Total tickets</span><span>{raffleTotalQty || '—'}</span></div>
-                        <div className="mt-2 text-xs text-slate-400">Discounts apply across any combination of colours when the total ticket count reaches a bundle offer.</div>
-                        <div className="mt-2 flex justify-between"><span>Total</span><span>{formatMoney(raffleTotal)}</span></div>
-                      </SummaryBox>
-                      <button onClick={() => void buyRaffle()} disabled={!canRaffleBuy} className="w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.14)] transition hover:bg-slate-100 disabled:opacity-50">
-                        Complete purchase + export PDF
-                      </button>
-                      {raffleHasBlankQty && <div className="text-xs text-amber-300">Blank counts are allowed while editing, but not for checkout.</div>}
-                      {raffleHasInvalid && <div className="text-xs text-rose-300">One or more colours exceed available tickets.</div>}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            {section === 'raffle' && (
-              <PremiumCard>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-semibold">Overall Raffle Draw</h2>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <SectionChip onClick={addRaffleListing}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add raffle</span></SectionChip>
+                  <SectionChip onClick={addBatch}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add colour</span></SectionChip>
+                  <SectionChip onClick={() => removeRaffleListing(raffle.id)}>Remove current</SectionChip>
                   <SectionChip onClick={drawWinner}><span className="inline-flex items-center gap-2"><Shuffle className="h-4 w-4" />Draw winner</span></SectionChip>
                 </div>
-                {winner ? (
-                  <div className="mt-4 rounded-[24px] border border-emerald-400/30 bg-emerald-400/10 p-4">
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {raffleListings.map((l) => (
+                    <SectionChip key={l.id} active={activeRaffleId === l.id} onClick={() => setActiveRaffleId(l.id)}>{l.title}</SectionChip>
+                  ))}
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <TextField label="Listing title" value={raffle.title} onChange={(v) => setRaffleListings((curr) => curr.map((x) => (x.id === raffle.id ? { ...x, title: v } : x)))} />
+                  <TextField label="Prize" value={raffle.prize} onChange={(v) => setRaffleListings((curr) => curr.map((x) => (x.id === raffle.id ? { ...x, prize: v } : x)))} />
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {raffle.batches.map((b) => (
+                    <div key={b.id} className="rounded-[24px] border border-white/10 bg-slate-950/60 p-4">
+                      <div className="grid gap-3">
+                        <TextField label="Colour" value={b.color} onChange={(v) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => (q.id === b.id ? { ...q, color: v } : q)) } : x))} />
+                        <NumberField label="Total tickets" value={getDraft(`rf-count-${b.id}`, b.count)} onChange={(v) => applyDraft(`rf-count-${b.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => (q.id === b.id ? { ...q, count: n } : q)) } : x))))} />
+                        <NumberField label="Single ticket price" value={getDraft(`rf-price-${b.id}`, b.price)} onChange={(v) => applyDraft(`rf-price-${b.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => (q.id === b.id ? { ...q, price: n } : q)) } : x))))} />
+                        <SectionChip onClick={() => addRule(b.id)}>Add offer</SectionChip>
+                        {b.rules.map((r) => (
+                          <div key={r.id} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3 md:grid-cols-2">
+                            <NumberField label="Bundle qty" value={getDraft(`rule-qty-${r.id}`, r.qty)} onChange={(v) => applyDraft(`rule-qty-${r.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => q.id === b.id ? { ...q, rules: q.rules.map((z) => (z.id === r.id ? { ...z, qty: n } : z)) } : q) } : x))))} />
+                            <NumberField label="Bundle price" value={getDraft(`rule-price-${r.id}`, r.price)} onChange={(v) => applyDraft(`rule-price-${r.id}`, v, (n) => setRaffleListings((curr) => curr.map((x) => x.id === raffle.id ? { ...x, batches: x.batches.map((q) => q.id === b.id ? { ...q, rules: q.rules.map((z) => (z.id === r.id ? { ...z, price: n } : z)) } : q) } : x))))} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {winner && (
+                  <div className="mt-6 rounded-[24px] border border-emerald-400/30 bg-emerald-400/10 p-4">
                     <div className="font-semibold">Winner</div>
                     <div className="mt-1">{winner}</div>
                   </div>
-                ) : (
-                  <div className="mt-4 text-sm text-slate-400">No winner drawn yet.</div>
                 )}
-              </PremiumCard>
+                <AdminDataPanel tab={adminTab} setTab={setAdminTab} squareOrders={squareOrders} ticketOrders={ticketOrders} raffleOrders={raffleOrders} />
+              </>
             )}
+          </PremiumCard>
+        )}
 
-            <PremiumCard>
-              <div className="flex items-center gap-2 text-lg font-semibold">
-                <Download className="h-5 w-5 text-sky-300" />
-                Buyer PDF receipts
-              </div>
-              <p className="mt-2 text-sm text-slate-300">Every completed squares, tickets, and raffle purchase exports a buyer receipt PDF.</p>
-            </PremiumCard>
-
-            <AdminPanel show={isAdminView} tab={adminTab} setTab={setAdminTab} squareOrders={squareOrders} ticketOrders={ticketOrders} raffleOrders={raffleOrders} />
+        <PremiumCard>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-semibold">Buyer details</h2>
+              <p className="mt-1 text-sm text-slate-400">This section stays full width so you can see clearly what the buyer sees.</p>
+            </div>
           </div>
-        </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextField label="Buyer name" value={buyerName} onChange={setBuyerName} />
+            <TextField label="Buyer email" value={buyerEmail} onChange={setBuyerEmail} />
+          </div>
+        </PremiumCard>
+
+        {section === 'squares' && (
+          <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_20px_80px_rgba(2,6,23,0.45)]" style={{ backgroundImage: `url(${square.background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+            <div className="bg-slate-950/75 p-6 backdrop-blur-[2px]">
+              <h2 className="text-2xl font-semibold">{square.title}</h2>
+              <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: 'repeat(10, minmax(0, 1fr))' }}>
+                {Array.from({ length: square.totalSquares }).map((_, i) => {
+                  const n = i + 1;
+                  const style = square.sold.includes(n)
+                    ? 'border-rose-400/30 bg-rose-500/20 text-rose-100'
+                    : square.reserved.includes(n)
+                      ? 'border-amber-400/30 bg-amber-500/20 text-amber-100'
+                      : selectedSquares.includes(n)
+                        ? 'border-white bg-white text-slate-950 shadow-[0_8px_24px_rgba(255,255,255,0.18)]'
+                        : 'border-white/15 bg-slate-900/70';
+                  return (
+                    <button key={n} type="button" onClick={() => toggleSquare(n)} disabled={square.sold.includes(n) || square.reserved.includes(n)} className={`flex aspect-square items-center justify-center rounded-2xl border text-sm font-semibold transition ${style}`}>
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+              <SummaryBox className="mt-4">
+                <div className="flex justify-between"><span>Squares selected</span><span>{selectedSquares.length}</span></div>
+                <div className="mt-2 text-xs text-slate-400">Numbers: {selectedSquares.join(', ')}</div>
+                <div className="mt-2 flex justify-between"><span>Total</span><span>{formatMoney(selectedSquares.length * square.price)}</span></div>
+              </SummaryBox>
+              <button onClick={() => void buySquares()} disabled={!buyerName.trim() || !buyerEmail.trim() || selectedSquares.length === 0 || hasBlankNumbers} className="mt-4 w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.14)] transition hover:bg-slate-100 disabled:opacity-50">
+                Pay for squares + export PDF
+              </button>
+            </div>
+          </div>
+        )}
+
+        {section === 'tickets' && (
+          <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_20px_80px_rgba(2,6,23,0.45)]" style={{ backgroundImage: `url(${ticket.background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+            <div className="bg-slate-950/75 p-6 backdrop-blur-[2px]">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-semibold">{ticket.title}</h2>
+                <div className="text-slate-200">{formatMoney(ticket.price)} each</div>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <SummaryBox><div className="text-xs uppercase tracking-[0.14em] text-slate-500">Event</div><div className="mt-1 font-semibold">{ticket.eventName}</div></SummaryBox>
+                <SummaryBox><div className="text-xs uppercase tracking-[0.14em] text-slate-500">Venue</div><div className="mt-1 font-semibold">{ticket.venue}</div></SummaryBox>
+                <SummaryBox><div className="text-xs uppercase tracking-[0.14em] text-slate-500">Mode</div><div className="mt-1 font-semibold">{ticket.mode}</div></SummaryBox>
+              </div>
+              {ticket.mode === 'tables' && (
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {ticket.tables.map((tb) => (
+                    <button key={tb.id} onClick={() => setSelectedTableId(tb.id)} className={`rounded-[22px] border p-4 text-left transition ${selectedTableId === tb.id ? 'border-sky-300/45 bg-white/12' : 'border-white/10 bg-slate-950/55'}`}>
+                      <div className="font-semibold">{tb.name}</div>
+                      <div className="mt-1 text-sm text-slate-400">{Math.max(tb.seats - tb.sold, 0)} available of {tb.seats}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {ticket.mode === 'seats' && (
+                <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${ticket.seatsPerRow}, minmax(0, 1fr))` }}>
+                  {Array.from({ length: ticket.rows * ticket.seatsPerRow }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-white/10 bg-slate-950/60 p-2 text-center text-xs">
+                      {String.fromCharCode(65 + Math.floor(i / ticket.seatsPerRow))}{(i % ticket.seatsPerRow) + 1}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 max-w-sm">
+                <NumberField label="Quantity" value={ticketQty} onChange={setTicketQty} />
+              </div>
+              <SummaryBox className="mt-4">
+                <div className="flex justify-between"><span>Quantity</span><span>{ticketQuantity || '—'}</span></div>
+                {ticket.mode === 'tables' && selectedTable && (
+                  <>
+                    <div className="mt-2 flex justify-between"><span>Table</span><span>{selectedTable.name}</span></div>
+                    <div className="mt-2 flex justify-between"><span>Available seats</span><span>{tableAvailable}</span></div>
+                  </>
+                )}
+                <div className="mt-2 flex justify-between"><span>Total</span><span>{formatMoney(ticketQuantity * ticket.price)}</span></div>
+              </SummaryBox>
+              <button onClick={() => void buyTickets()} disabled={!buyerName.trim() || !buyerEmail.trim() || ticketQuantity <= 0 || hasBlankNumbers || (ticket.mode === 'tables' && selectedTable && ticketQuantity > tableAvailable)} className="mt-4 w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.14)] transition hover:bg-slate-100 disabled:opacity-50">
+                Pay for tickets + export PDF
+              </button>
+            </div>
+          </div>
+        )}
+
+        {section === 'raffle' && (
+          <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_20px_80px_rgba(2,6,23,0.45)]" style={{ backgroundImage: `url(${raffle.background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+            <div className="bg-slate-950/75 p-6 backdrop-blur-[2px]">
+              <h2 className="text-2xl font-semibold">{raffle.title}</h2>
+              <p className="mt-2 text-sm text-slate-300">Prize: {raffle.prize}</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {raffle.batches.map((b) => (
+                  <SummaryBox key={b.id}><div className="font-semibold">{b.color}</div><div className="mt-1 text-sm text-slate-400">{b.count - b.sold.length} available of {b.count}</div></SummaryBox>
+                ))}
+              </div>
+              <div className="mt-4 space-y-4">
+                {raffleChoices.map((choice, i) => (
+                  <div key={choice.id} className="grid gap-3 rounded-[24px] border border-white/10 bg-slate-950/55 p-4 md:grid-cols-[1fr_140px_100px]">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Colour {i + 1}</label>
+                      <select value={choice.color} onChange={(e) => updateChoice(choice.id, { color: e.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white">
+                        <option value="">Select</option>
+                        {raffle.batches.map((b) => (
+                          <option key={b.id} value={b.color}>{b.color}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <NumberField label="Count" value={choice.qty} onChange={(v) => updateChoice(choice.id, { qty: v })} />
+                    <div className="flex items-end">
+                      <button onClick={() => removeChoice(choice.id)} className="w-full rounded-2xl border border-rose-400/30 bg-rose-400/10 px-3 py-3 text-sm text-rose-200 transition hover:bg-rose-400/15">Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <SectionChip onClick={addChoice}><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />Add colour</span></SectionChip>
+                <SummaryBox>
+                  <div className="flex justify-between"><span>Total tickets</span><span>{raffleTotalQty || '—'}</span></div>
+                  <div className="mt-2 text-xs text-slate-400">Discounts apply across any combination of colours when the total ticket count reaches a bundle offer.</div>
+                  <div className="mt-2 flex justify-between"><span>Total</span><span>{formatMoney(raffleTotal)}</span></div>
+                </SummaryBox>
+                <button onClick={() => void buyRaffle()} disabled={!canRaffleBuy} className="w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.14)] transition hover:bg-slate-100 disabled:opacity-50">
+                  Complete purchase + export PDF
+                </button>
+                {raffleHasBlankQty && <div className="text-xs text-amber-300">Blank counts are allowed while editing, but not for checkout.</div>}
+                {raffleHasInvalid && <div className="text-xs text-rose-300">One or more colours exceed available tickets.</div>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
