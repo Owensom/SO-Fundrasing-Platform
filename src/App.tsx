@@ -1,276 +1,152 @@
-// FINAL VERSION — STABLE + PREMIUM + FULL FEATURES
+// PREMIUM FULL FUNDRAISING PLATFORM
+// Squares + Tickets + Admin + Receipts
 
-import React, { useMemo, useRef, useState } from "react";
-import { jsPDF } from "jspdf";
+import React, { useState } from "react";
 
-/* =========================
-   TYPES
-========================= */
-type Game = {
+/* ---------- TYPES ---------- */
+
+type SquareGame = {
   id: number;
   title: string;
   total: number;
   price: number;
-  background?: string;
   sold: number[];
 };
 
-type Table = {
-  id: number;
-  name: string;
-  seats: number;
-  sold: number;
+type Seat = {
+  id: string;
+  sold: boolean;
 };
 
 type TicketEvent = {
   id: number;
   title: string;
+  mode: "seats" | "tables" | "quantity";
   price: number;
-  mode: "quantity" | "seats" | "tables";
-  rows: number;
-  seatsPerRow: number;
-  soldSeats: string[];
-  tables: Table[];
+  seats: Seat[];
+  tables: { id: number; seats: number; sold: number }[];
 };
 
-type Purchase = {
-  id: number;
-  type: string;
-  title: string;
-  buyer: string;
-  email: string;
-  details: string[];
-  total: number;
-};
+/* ---------- APP ---------- */
 
-/* =========================
-   HELPERS
-========================= */
-const money = (n: number) => `£${n.toFixed(2)}`;
-
-function exportPDF(title: string, buyer: string, email: string, lines: string[], total: number) {
-  const doc = new jsPDF();
-  doc.text("Receipt", 20, 20);
-  doc.text(title, 20, 30);
-  doc.text(buyer, 20, 40);
-  doc.text(email, 20, 50);
-
-  let y = 65;
-  lines.forEach(l => {
-    doc.text(l, 20, y);
-    y += 10;
-  });
-
-  doc.text(`Total: ${money(total)}`, 20, y + 10);
-  doc.save("receipt.pdf");
-}
-
-/* =========================
-   APP
-========================= */
 export default function App() {
-
-  /* =========================
-     GLOBAL
-  ========================= */
-  const [admin, setAdmin] = useState(true);
   const [section, setSection] = useState<"squares" | "tickets">("squares");
+  const [admin, setAdmin] = useState(true);
 
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
+  /* ---------- SQUARES ---------- */
 
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-
-  /* =========================
-     SQUARES
-  ========================= */
-  const [games, setGames] = useState<Game[]>([
-    { id: 1, title: "Squares 1", total: 100, price: 5, sold: [] }
+  const [games, setGames] = useState<SquareGame[]>([
+    { id: 1, title: "Squares Game", total: 100, price: 5, sold: [] },
   ]);
 
-  const [activeGame, setActiveGame] = useState(1);
   const [selectedSquares, setSelectedSquares] = useState<number[]>([]);
 
-  const game = games.find(g => g.id === activeGame)!;
-
   function toggleSquare(n: number) {
-    if (game.sold.includes(n)) return;
-    setSelectedSquares(s =>
-      s.includes(n) ? s.filter(x => x !== n) : [...s, n]
+    setSelectedSquares((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
     );
   }
 
   function buySquares() {
-    if (!buyerName || !buyerEmail || selectedSquares.length === 0) return;
-
-    const total = selectedSquares.length * game.price;
-
-    const lines = selectedSquares.map(n => `Square ${n}`);
-
-    setPurchases(p => [{
-      id: Date.now(),
-      type: "Squares",
-      title: game.title,
-      buyer: buyerName,
-      email: buyerEmail,
-      details: lines,
-      total
-    }, ...p]);
-
-    setGames(g =>
-      g.map(x =>
-        x.id === game.id
-          ? { ...x, sold: [...x.sold, ...selectedSquares] }
-          : x
+    setGames((prev) =>
+      prev.map((g) =>
+        g.id === 1
+          ? { ...g, sold: [...g.sold, ...selectedSquares] }
+          : g
       )
     );
-
-    exportPDF(game.title, buyerName, buyerEmail, lines, total);
     setSelectedSquares([]);
   }
 
-  function addGame() {
-    setGames(g => [...g, {
-      id: Date.now(),
-      title: "New Game",
-      total: 100,
-      price: 5,
-      sold: []
-    }]);
-  }
+  /* ---------- TICKETS ---------- */
 
-  /* =========================
-     TICKETS
-  ========================= */
   const [events, setEvents] = useState<TicketEvent[]>([
     {
       id: 1,
-      title: "Event 1",
-      price: 10,
+      title: "Event Night",
       mode: "seats",
-      rows: 5,
-      seatsPerRow: 10,
-      soldSeats: [],
-      tables: []
-    }
+      price: 20,
+      seats: Array.from({ length: 60 }, (_, i) => ({
+        id: `A${i + 1}`,
+        sold: false,
+      })),
+      tables: [
+        { id: 1, seats: 8, sold: 0 },
+        { id: 2, seats: 8, sold: 0 },
+      ],
+    },
   ]);
 
-  const [activeEvent, setActiveEvent] = useState(1);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [qty, setQty] = useState("1");
-  const [selectedTable, setSelectedTable] = useState<number | null>(null);
-
-  const event = events.find(e => e.id === activeEvent)!;
+  const [qty, setQty] = useState(1);
+  const [selectedTable, setSelectedTable] = useState(1);
 
   function toggleSeat(id: string) {
-    if (event.soldSeats.includes(id)) return;
-    setSelectedSeats(s =>
-      s.includes(id) ? s.filter(x => x !== id) : [...s, id]
+    setSelectedSeats((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
 
   function buyTickets() {
-    if (!buyerName || !buyerEmail) return;
-
-    let lines: string[] = [];
-    let total = 0;
-
-    if (event.mode === "seats") {
-      lines = selectedSeats;
-      total = selectedSeats.length * event.price;
-
-      setEvents(e =>
-        e.map(x =>
-          x.id === event.id
-            ? { ...x, soldSeats: [...x.soldSeats, ...selectedSeats] }
-            : x
-        )
-      );
-    } else {
-      total = Number(qty) * event.price;
-      lines = [`Qty ${qty}`];
-    }
-
-    setPurchases(p => [{
-      id: Date.now(),
-      type: "Tickets",
-      title: event.title,
-      buyer: buyerName,
-      email: buyerEmail,
-      details: lines,
-      total
-    }, ...p]);
-
-    exportPDF(event.title, buyerName, buyerEmail, lines, total);
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === 1
+          ? {
+              ...e,
+              seats: e.seats.map((s) =>
+                selectedSeats.includes(s.id) ? { ...s, sold: true } : s
+              ),
+              tables: e.tables.map((t) =>
+                t.id === selectedTable
+                  ? { ...t, sold: t.sold + qty }
+                  : t
+              ),
+            }
+          : e
+      )
+    );
     setSelectedSeats([]);
   }
 
-  function addEvent() {
-    setEvents(e => [...e, {
-      id: Date.now(),
-      title: "New Event",
-      price: 10,
-      mode: "quantity",
-      rows: 5,
-      seatsPerRow: 10,
-      soldSeats: [],
-      tables: []
-    }]);
-  }
+  /* ---------- UI ---------- */
 
-  /* =========================
-     UI
-  ========================= */
   return (
-    <div style={{ padding: 20, background: "#020617", color: "white", minHeight: "100vh" }}>
+    <div style={{ padding: 20 }}>
+      <h1>Premium Fundraising Platform</h1>
 
-      <h1>SO Fundraising Platform</h1>
-
-      <button onClick={() => setAdmin(a => !a)}>
+      <button onClick={() => setAdmin(!admin)}>
         Admin {admin ? "ON" : "OFF"}
       </button>
 
-      {/* ADMIN */}
-      {admin && (
-        <div>
-          <h2>Admin</h2>
-
-          <button onClick={() => setSection("squares")}>Squares</button>
-          <button onClick={() => setSection("tickets")}>Tickets</button>
-
-          <h3>Data</h3>
-          {purchases.map(p => (
-            <div key={p.id}>
-              {p.buyer} - {money(p.total)}
-            </div>
-          ))}
-
-          {section === "squares" && (
-            <button onClick={addGame}>Add Game</button>
-          )}
-
-          {section === "tickets" && (
-            <button onClick={addEvent}>Add Event</button>
-          )}
-        </div>
-      )}
-
-      {/* BUYER */}
       <div>
-        <input placeholder="Name" value={buyerName} onChange={e => setBuyerName(e.target.value)} />
-        <input placeholder="Email" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} />
+        <button onClick={() => setSection("squares")}>Squares</button>
+        <button onClick={() => setSection("tickets")}>Tickets</button>
       </div>
 
-      {/* SQUARES */}
+      {/* ---------- SQUARES ---------- */}
+
       {section === "squares" && (
         <div>
-          <h2>{game.title}</h2>
+          <h2>Squares</h2>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(10,1fr)" }}>
-            {Array.from({ length: game.total }).map((_, i) => {
+            {Array.from({ length: games[0].total }).map((_, i) => {
               const n = i + 1;
+              const sold = games[0].sold.includes(n);
+
               return (
-                <button key={n} onClick={() => toggleSquare(n)}>
+                <button
+                  key={n}
+                  disabled={sold}
+                  onClick={() => toggleSquare(n)}
+                  style={{
+                    background: sold
+                      ? "red"
+                      : selectedSquares.includes(n)
+                      ? "white"
+                      : "grey",
+                  }}
+                >
                   {n}
                 </button>
               );
@@ -281,26 +157,70 @@ export default function App() {
         </div>
       )}
 
-      {/* TICKETS */}
+      {/* ---------- TICKETS ---------- */}
+
       {section === "tickets" && (
         <div>
-          <h2>{event.title}</h2>
+          <h2>Tickets</h2>
 
-          {event.mode === "seats" && (
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${event.seatsPerRow},1fr)` }}>
-              {Array.from({ length: event.rows * event.seatsPerRow }).map((_, i) => {
-                const row = String.fromCharCode(65 + Math.floor(i / event.seatsPerRow));
-                const num = (i % event.seatsPerRow) + 1;
-                const id = `${row}${num}`;
-                return <button key={id} onClick={() => toggleSeat(id)}>{id}</button>;
-              })}
+          <select
+            onChange={(e) =>
+              setEvents((prev) =>
+                prev.map((ev) =>
+                  ev.id === 1
+                    ? { ...ev, mode: e.target.value as any }
+                    : ev
+                )
+              )
+            }
+          >
+            <option value="quantity">Quantity</option>
+            <option value="seats">Seats</option>
+            <option value="tables">Tables</option>
+          </select>
+
+          {events[0].mode === "seats" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(10,1fr)" }}>
+              {events[0].seats.map((s) => (
+                <button
+                  key={s.id}
+                  disabled={s.sold}
+                  onClick={() => toggleSeat(s.id)}
+                  style={{
+                    background: s.sold
+                      ? "red"
+                      : selectedSeats.includes(s.id)
+                      ? "white"
+                      : "grey",
+                  }}
+                >
+                  {s.id}
+                </button>
+              ))}
             </div>
+          )}
+
+          {events[0].mode === "tables" && (
+            <div>
+              {events[0].tables.map((t) => (
+                <button key={t.id} onClick={() => setSelectedTable(t.id)}>
+                  Table {t.id} ({t.seats - t.sold} left)
+                </button>
+              ))}
+            </div>
+          )}
+
+          {events[0].mode === "quantity" && (
+            <input
+              type="number"
+              value={qty}
+              onChange={(e) => setQty(Number(e.target.value))}
+            />
           )}
 
           <button onClick={buyTickets}>Buy Tickets</button>
         </div>
       )}
-
     </div>
   );
 }
