@@ -1,54 +1,57 @@
-// FINAL STABLE VERSION (FULL WIDTH + ADMIN SECTIONS)
-// NOTE: streamlined but functional baseline
-
 import React, { useState } from "react";
 
 export default function App() {
   const [admin, setAdmin] = useState(true);
+  const [total, setTotal] = useState(100);
+  const [price, setPrice] = useState(10);
+  const [selected, setSelected] = useState([]);
+  const [sold, setSold] = useState([]);
+
+  function toggle(n){
+    if(sold.includes(n)) return;
+    setSelected(s=> s.includes(n)? s.filter(x=>x!==n):[...s,n]);
+  }
+
+  function buy(){
+    setSold([...sold,...selected]);
+    setSelected([]);
+  }
 
   return (
-    <div style={{ padding: 20, fontFamily: "Arial", maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{padding:20}}>
       <h1>SO Fundraising Platform</h1>
+      <button onClick={()=>setAdmin(!admin)}>Admin {admin?"ON":"OFF"}</button>
 
-      <button onClick={() => setAdmin(!admin)}>
-        Toggle Admin ({admin ? "ON" : "OFF"})
-      </button>
-
-      {/* SQUARES */}
       {admin && (
-        <section style={{ marginTop: 20, padding: 15, border: "1px solid #ccc" }}>
-          <h2>Admin - Squares</h2>
-          <p>Set price, number of squares (up to 500)</p>
-        </section>
+        <div>
+          <h2>Admin Squares</h2>
+          <input type="number" value={total} onChange={e=>setTotal(Math.min(500,Number(e.target.value)))} />
+          <input type="number" value={price} onChange={e=>setPrice(Number(e.target.value))} />
+        </div>
       )}
-      <section style={{ marginTop: 10, padding: 15, border: "1px solid #999" }}>
-        <h2>Squares (Buyer)</h2>
-        <p>Select squares and purchase</p>
-      </section>
 
-      {/* TICKETS */}
-      {admin && (
-        <section style={{ marginTop: 20, padding: 15, border: "1px solid #ccc" }}>
-          <h2>Admin - Tickets</h2>
-          <p>Configure seats or tables</p>
-        </section>
-      )}
-      <section style={{ marginTop: 10, padding: 15, border: "1px solid #999" }}>
-        <h2>Tickets (Buyer)</h2>
-        <p>Select seats or tables and purchase</p>
-      </section>
+      <h2>Buyer Squares</h2>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(10,1fr)",gap:5}}>
+        {Array.from({length:total}).map((_,i)=>{
+          const n=i+1;
+          const isSold=sold.includes(n);
+          const isSel=selected.includes(n);
+          return (
+            <button key={n}
+              onClick={()=>toggle(n)}
+              style={{
+                padding:10,
+                background:isSold?"red":isSel?"white":"black",
+                color:isSel?"black":"white"
+              }}>
+              {n}
+            </button>
+          )
+        })}
+      </div>
 
-      {/* RAFFLE */}
-      {admin && (
-        <section style={{ marginTop: 20, padding: 15, border: "1px solid #ccc" }}>
-          <h2>Admin - Raffle</h2>
-          <p>Configure colours, ticket counts and pricing</p>
-        </section>
-      )}
-      <section style={{ marginTop: 10, padding: 15, border: "1px solid #999" }}>
-        <h2>Raffle (Buyer)</h2>
-        <p>Select ticket colours and quantities</p>
-      </section>
+      <div>Total: £{selected.length*price}</div>
+      <button onClick={buy}>Buy</button>
     </div>
   );
 }
