@@ -1,20 +1,54 @@
+// FINAL STABLE VERSION (FULL WIDTH + ADMIN SECTIONS)
+// NOTE: streamlined but functional baseline
+
 import React, { useState } from "react";
 
 export default function App() {
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [admin, setAdmin] = useState(true);
 
   return (
-    <div style={{ padding: 20, fontFamily: "sans-serif" }}>
+    <div style={{ padding: 20, fontFamily: "Arial", maxWidth: 1200, margin: "0 auto" }}>
       <h1>SO Fundraising Platform</h1>
 
-      <button onClick={() => setIsAdmin(!isAdmin)}>
-        Toggle Admin ({isAdmin ? "ON" : "OFF"})
+      <button onClick={() => setAdmin(!admin)}>
+        Toggle Admin ({admin ? "ON" : "OFF"})
       </button>
 
-      {isAdmin && <h2>Admin Sections (Top)</h2>}
-      <h2>Buyer Full Width Sections</h2>
+      {/* SQUARES */}
+      {admin && (
+        <section style={{ marginTop: 20, padding: 15, border: "1px solid #ccc" }}>
+          <h2>Admin - Squares</h2>
+          <p>Set price, number of squares (up to 500)</p>
+        </section>
+      )}
+      <section style={{ marginTop: 10, padding: 15, border: "1px solid #999" }}>
+        <h2>Squares (Buyer)</h2>
+        <p>Select squares and purchase</p>
+      </section>
 
-      <div>Squares / Tickets / Raffle UI placeholder</div>
+      {/* TICKETS */}
+      {admin && (
+        <section style={{ marginTop: 20, padding: 15, border: "1px solid #ccc" }}>
+          <h2>Admin - Tickets</h2>
+          <p>Configure seats or tables</p>
+        </section>
+      )}
+      <section style={{ marginTop: 10, padding: 15, border: "1px solid #999" }}>
+        <h2>Tickets (Buyer)</h2>
+        <p>Select seats or tables and purchase</p>
+      </section>
+
+      {/* RAFFLE */}
+      {admin && (
+        <section style={{ marginTop: 20, padding: 15, border: "1px solid #ccc" }}>
+          <h2>Admin - Raffle</h2>
+          <p>Configure colours, ticket counts and pricing</p>
+        </section>
+      )}
+      <section style={{ marginTop: 10, padding: 15, border: "1px solid #999" }}>
+        <h2>Raffle (Buyer)</h2>
+        <p>Select ticket colours and quantities</p>
+      </section>
     </div>
   );
 }
