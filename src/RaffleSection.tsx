@@ -11,6 +11,8 @@ type RaffleEvent = {
   price: number;
   startNumber: number;
   totalTickets: number;
+  offerQuantity: number;
+  offerPrice: number;
   colors: RaffleColor[];
   soldByColor: Record<RaffleColor, number[]>;
   background?: string;
@@ -33,6 +35,8 @@ type Drafts = Record<number, {
   price: string;
   startNumber: string;
   totalTickets: string;
+  offerQuantity: string;
+  offerPrice: string;
 }>;
 
 const ALL_COLORS: RaffleColor[] = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange"];
@@ -156,6 +160,8 @@ export default function RaffleSection() {
       price: 2,
       startNumber: 1,
       totalTickets: 100,
+      offerQuantity: 5,
+      offerPrice: 8,
       colors: ["Red", "Blue", "Green"],
       soldByColor: {
         Red: [1, 2, 8],
@@ -171,7 +177,7 @@ export default function RaffleSection() {
 
   const [activeEventId, setActiveEventId] = useState(1);
   const [drafts, setDrafts] = useState<Drafts>({
-    1: { price: "2", startNumber: "1", totalTickets: "100" },
+    1: { price: "2", startNumber: "1", totalTickets: "100", offerQuantity: "5", offerPrice: "8" },
   });
   const [selectedColorByEvent, setSelectedColorByEvent] = useState<Record<number, RaffleColor>>({
     1: "Red",
@@ -187,18 +193,36 @@ export default function RaffleSection() {
     price: String(event.price),
     startNumber: String(event.startNumber),
     totalTickets: String(event.totalTickets),
+    offerQuantity: String(event.offerQuantity),
+    offerPrice: String(event.offerPrice),
   };
   const selectedColor = selectedColorByEvent[event.id] ?? event.colors[0] ?? "Red";
   const selectedTickets = selectedTicketsByEvent[event.id] ?? [];
   const soldForSelectedColor = event.soldByColor[selectedColor] ?? [];
   const availableForSelectedColor = event.totalTickets - soldForSelectedColor.length;
-  const total = selectedTickets.length * event.price;
+  const qualifiesForOffer =
+    draft.offerQuantity.trim() !== "" &&
+    draft.offerPrice.trim() !== "" &&
+    Number(draft.offerQuantity) > 0 &&
+    Number(draft.offerPrice) > 0 &&
+    selectedTickets.length >= Number(draft.offerQuantity);
+
+  const total = qualifiesForOffer
+    ? selectedTickets.length * Number(draft.offerPrice)
+    : selectedTickets.length * event.price;
 
   const priceInvalid = draft.price.trim() === "" || Number(draft.price) <= 0;
   const startInvalid = draft.startNumber.trim() === "" || Number(draft.startNumber) <= 0;
   const totalInvalid = draft.totalTickets.trim() === "" || Number(draft.totalTickets) <= 0;
+  const offerQuantityInvalid =
+    !(draft.offerQuantity.trim() === "" || Number(draft.offerQuantity) === 0) &&
+    Number(draft.offerQuantity) < 0;
+  const offerPriceInvalid =
+    !(draft.offerPrice.trim() === "" || Number(draft.offerPrice) === 0) &&
+    Number(draft.offerPrice) < 0;
   const colorsInvalid = event.colors.length === 0;
-  const invalidForCompletion = priceInvalid || startInvalid || totalInvalid || colorsInvalid;
+  const invalidForCompletion =
+    priceInvalid || startInvalid || totalInvalid || colorsInvalid || offerQuantityInvalid || offerPriceInvalid;
 
   const canBuy =
     buyerName.trim() !== "" &&
@@ -234,12 +258,14 @@ export default function RaffleSection() {
       price: 0,
       startNumber: 0,
       totalTickets: 0,
+      offerQuantity: 0,
+      offerPrice: 0,
       colors,
       soldByColor: buildInitialSold(colors),
       background: "",
     };
     setEvents((curr) => [...curr, newEvent]);
-    setDrafts((curr) => ({ ...curr, [id]: { price: "0", startNumber: "0", totalTickets: "0" } }));
+    setDrafts((curr) => ({ ...curr, [id]: { price: "0", startNumber: "0", totalTickets: "0", offerQuantity: "0", offerPrice: "0" } }));
     setSelectedColorByEvent((curr) => ({ ...curr, [id]: "Red" }));
     setSelectedTicketsByEvent((curr) => ({ ...curr, [id]: [] }));
     setActiveEventId(id);
@@ -316,8 +342,13 @@ export default function RaffleSection() {
     doc.text(`Color: ${selectedColor}`, 20, 68);
     doc.text(`Tickets: ${selectedTickets.length ? selectedTickets.join(", ") : "None"}`, 20, 78);
     doc.text(`Quantity: ${selectedTickets.length}`, 20, 88);
-    doc.text(`Price each: ${money(event.price)}`, 20, 98);
-    doc.text(`Total: ${money(total)}`, 20, 108);
+    doc.text(`Standard price: ${money(event.price)}`, 20, 98);
+    doc.text(
+      `Offer: ${Number(draft.offerQuantity) > 0 && Number(draft.offerPrice) > 0 ? `${draft.offerQuantity}+ at ${money(Number(draft.offerPrice))}` : "None"}`,
+      20,
+      108,
+    );
+    doc.text(`Total: ${money(total)}`, 20, 118);
     doc.save("buyer-raffle-receipt.pdf");
   }
 
@@ -516,6 +547,46 @@ export default function RaffleSection() {
                 </div>
               </div>
 
+              <div>
+                <label style={labelStyle()}>Offer quantity</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.offerQuantity}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDraftPatch(event.id, { offerQuantity: v });
+                    if (v.trim() !== "") {
+                      setEventPatch(event.id, { offerQuantity: Math.max(0, Math.floor(Number(v))) });
+                    }
+                  }}
+                  style={inputStyle(offerQuantityInvalid)}
+                />
+                <div style={{ marginTop: 6, fontSize: 11, color: offerQuantityInvalid ? "#fda4af" : "#64748b" }}>
+                  0 disables the offer. Example: 5 means offer applies to 5 or more tickets.
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle()}>Offer price per ticket</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.offerPrice}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDraftPatch(event.id, { offerPrice: v });
+                    if (v.trim() !== "") {
+                      setEventPatch(event.id, { offerPrice: Math.max(0, Number(v)) });
+                    }
+                  }}
+                  style={inputStyle(offerPriceInvalid)}
+                />
+                <div style={{ marginTop: 6, fontSize: 11, color: offerPriceInvalid ? "#fda4af" : "#64748b" }}>
+                  0 disables the offer. Applies across all raffle colors.
+                </div>
+              </div>
+
               <div style={summaryCardStyle()}>
                 <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
                   Availability
@@ -666,6 +737,12 @@ export default function RaffleSection() {
             <div style={{ marginTop: 8, color: "#e2e8f0" }}>
               {selectedTickets.length ? `${selectedColor}: ${selectedTickets.join(", ")}` : "None selected"}
             </div>
+
+            {Number(draft.offerQuantity) > 0 && Number(draft.offerPrice) > 0 && (
+              <div style={{ marginTop: 14, color: qualifiesForOffer ? "#bbf7d0" : "#cbd5e1", fontSize: 14 }}>
+                Offer: buy {draft.offerQuantity}+ tickets at {money(Number(draft.offerPrice))} each, regardless of color.
+              </div>
+            )}
 
             <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
