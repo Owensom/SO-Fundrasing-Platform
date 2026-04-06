@@ -592,4 +592,3 @@ export default function SquaresSection() {
     </div>
     );
 }
-}
