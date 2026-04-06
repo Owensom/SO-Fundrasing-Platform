@@ -210,6 +210,18 @@ export default function SquaresSection() {
   createdAt: now,
 };
 
+    appendLedger({
+  id: String(purchase.id),
+  module: "squares",
+  itemTitle: purchase.gameTitle,
+  buyerName: purchase.buyerName,
+  buyerEmail: purchase.buyerEmail,
+  description: `Squares: ${purchase.squares.join(", ")}`,
+  quantity: purchase.squares.length,
+  total: purchase.total,
+  createdAt: purchase.createdAt,
+});
+    
     setPurchases((curr) => [purchase, ...curr]);
     setGames((curr) =>
       curr.map((g) =>
