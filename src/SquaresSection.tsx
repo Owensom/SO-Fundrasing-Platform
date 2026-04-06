@@ -1,4 +1,4 @@
-function buySquares() {
+export default function SquaresSection() {
   if (!canBuy) return;
 
   const now = new Date().toLocaleString();
