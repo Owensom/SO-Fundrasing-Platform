@@ -590,5 +590,6 @@ export default function SquaresSection() {
         </section>
       </div>
     </div>
-  );
+    );
+}
 }
