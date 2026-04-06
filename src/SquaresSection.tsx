@@ -199,17 +199,16 @@ export default function SquaresSection() {
   function buySquares() {
     if (!canBuy) return;
 
-    const now = new Date().toLocaleString();
     const purchase: Purchase = {
-      id: Date.now(),
-      gameId: game.id,
-      gameTitle: game.title,
-      buyerName: buyerName.trim(),
-      buyerEmail: buyerEmail.trim(),
-      squares: [...visibleSelected],
-      total: totalCost,
-      createdAt: now,
-    };
+  id: Date.now(),
+  gameId: game.id,
+  gameTitle: game.title,
+  buyerName: buyerName.trim(),
+  buyerEmail: buyerEmail.trim(),
+  squares: [...visibleSelected],
+  total: totalCost,
+  createdAt: now,
+};
 
     setPurchases((curr) => [purchase, ...curr]);
     setGames((curr) =>
