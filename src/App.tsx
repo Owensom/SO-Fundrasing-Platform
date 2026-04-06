@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import SquaresSection from "./SquaresSection";
 import TicketsSection from "./TicketsSection";
 import RaffleSection from "./RaffleSection";
+import AdminDashboard from "./AdminDashboard";
 
 export default function App() {
-  const [section, setSection] = useState<"squares" | "tickets" | "raffle">("squares");
+  const [section, setSection] = useState<"squares" | "tickets" | "raffle" | "dashboard">("squares");
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     border: active ? "1px solid rgba(125,211,252,0.35)" : "1px solid rgba(255,255,255,0.10)",
@@ -33,22 +34,16 @@ export default function App() {
           flexWrap: "wrap",
         }}
       >
-        <button onClick={() => setSection("squares")} style={tabStyle(section === "squares")}>
-          Squares
-        </button>
-
-        <button onClick={() => setSection("tickets")} style={tabStyle(section === "tickets")}>
-          Tickets
-        </button>
-
-        <button onClick={() => setSection("raffle")} style={tabStyle(section === "raffle")}>
-          Raffle
-        </button>
+        <button onClick={() => setSection("squares")} style={tabStyle(section === "squares")}>Squares</button>
+        <button onClick={() => setSection("tickets")} style={tabStyle(section === "tickets")}>Tickets</button>
+        <button onClick={() => setSection("raffle")} style={tabStyle(section === "raffle")}>Raffle</button>
+        <button onClick={() => setSection("dashboard")} style={tabStyle(section === "dashboard")}>Dashboard</button>
       </div>
 
       {section === "squares" && <SquaresSection />}
       {section === "tickets" && <TicketsSection />}
       {section === "raffle" && <RaffleSection />}
+      {section === "dashboard" && <AdminDashboard />}
     </div>
   );
 }
