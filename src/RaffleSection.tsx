@@ -340,7 +340,18 @@ export default function RaffleSection() {
           : e,
       ),
     );
-
+appendLedger({
+  id: String(Date.now()),
+  module: "raffle",
+  itemTitle: event.title,
+  buyerName: buyerName.trim(),
+  buyerEmail: buyerEmail.trim(),
+  description: `${selectedColor}: ${selectedTickets.join(", ")}`,
+  quantity: selectedTickets.length,
+  total,
+  createdAt: now,
+});
+    
     setPurchases((curr) => [
       {
         id: Date.now(),
