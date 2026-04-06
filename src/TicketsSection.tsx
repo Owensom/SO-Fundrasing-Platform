@@ -447,6 +447,18 @@ export default function TicketsSection() {
             : e,
         ),
       );
+      appendLedger({
+  id: String(Date.now()),
+  module: "tickets",
+  itemTitle: event.title,
+  buyerName: buyerName.trim(),
+  buyerEmail: buyerEmail.trim(),
+  description: `Table: ${selectedTable?.name ?? "Unknown"} × ${quantity}`,
+  quantity,
+  total,
+  createdAt: now,
+});
+      
       setPurchases((curr) => [
         {
           id: Date.now(),
