@@ -1,4 +1,4 @@
-function buyRaffleTickets() {
+export default function RaffleSection() {
   if (!canBuy) return;
 
   const now = new Date().toLocaleString();
