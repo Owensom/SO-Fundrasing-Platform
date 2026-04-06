@@ -1,4 +1,4 @@
-function buyTickets() {
+export default function TicketsSection() {
   if (!canBuy) return;
 
   const now = new Date().toLocaleString();
