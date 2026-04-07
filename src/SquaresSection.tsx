@@ -460,17 +460,16 @@ function buySquares() {
         )}
 
         <section
+  <section
   style={{
     ...cardStyle(),
-    position: "relative", // 👈 ADD THIS
-    backgroundImage: game.background
-      ? `linear-gradient(rgba(2,6,23,0.75), rgba(2,6,23,0.75)), url(${game.background})`
-      : undefined,
+    position: "relative",
+    backgroundImage: game.background ? `linear-gradient(rgba(2,6,23,0.75), rgba(2,6,23,0.75)), url(${game.background})` : undefined,
     backgroundSize: "cover",
     backgroundPosition: "center",
   }}
 >
-  <div style={{ position: "relative", zIndex: 2 }}> {/* 👈 ADD THIS WRAPPER */}
+  <div style={{ position: "relative", zIndex: 2 }}>
 
     {/* EVERYTHING inside stays EXACTLY the same */}
 
