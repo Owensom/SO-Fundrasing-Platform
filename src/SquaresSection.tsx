@@ -128,7 +128,13 @@ export default function SquaresSection() {
     [selected, game],
   );
   const totalCost = visibleSelected.length * game.price;
-  const canBuy = buyerName.trim() !== "" && buyerEmail.trim() !== "" && visibleSelected.length > 0 && !hasBlankRequiredValues;
+  const validNumbers = Number(draft.total) > 0 && Number(draft.price) > 0;
+
+const canBuy =
+  buyerName.trim() !== "" &&
+  buyerEmail.trim() !== "" &&
+  visibleSelected.length > 0 &&
+  validNumbers;
 
   function setGamePatch(id: number, patch: Partial<Game>) {
     setGames((curr) => curr.map((g) => (g.id === id ? { ...g, ...patch } : g)));
