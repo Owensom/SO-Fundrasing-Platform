@@ -564,16 +564,19 @@ function buySquares() {
               onClick={buySquares}
               disabled={!canBuy}
               style={{
-                marginTop: 16,
-                width: "100%",
-                borderRadius: 18,
-                padding: "14px 18px",
-                background: canBuy ? "white" : "rgba(255,255,255,0.25)",
-                color: canBuy ? "#020617" : "#cbd5e1",
-                fontWeight: 700,
-                border: "none",
-                cursor: canBuy ? "pointer" : "not-allowed",
-              }}
+  marginTop: 16,
+  width: "100%",
+  borderRadius: 18,
+  padding: "14px 18px",
+  background: canBuy ? "white" : "rgba(255,255,255,0.25)",
+  color: canBuy ? "#020617" : "#cbd5e1",
+  fontWeight: 700,
+  border: "none",
+  cursor: canBuy ? "pointer" : "not-allowed",
+
+  position: "relative",
+  zIndex: 10,   // 👈 ADD THIS
+}}
             >
               Buy Selected Squares
             </button>
