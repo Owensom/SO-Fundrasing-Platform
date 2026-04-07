@@ -122,10 +122,11 @@ export default function SquaresSection() {
   const game = games.find((g) => g.id === activeGameId) ?? games[0];
   const selected = selectedByGame[game.id] ?? [];
   const draft = drafts[game.id] ?? { total: String(game.total), price: String(game.price) };
-const hasBlankRequiredValues = draft.total.trim() === "" || draft.price.trim() === "";
 
 const totalValue = draft.total.trim() === "" ? game.total : Number(draft.total);
 const priceValue = draft.price.trim() === "" ? game.price : Number(draft.price);
+
+const hasBlankRequiredValues = draft.total.trim() === "" || draft.price.trim() === "";
 
 const visibleSelected = useMemo(
   () => selected.filter((n) => n <= game.total && !game.sold.includes(n) && !game.reserved.includes(n)),
