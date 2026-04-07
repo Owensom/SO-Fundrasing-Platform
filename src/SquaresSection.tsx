@@ -460,21 +460,6 @@ function buySquares() {
         )}
 
         <section
-  <section
-  style={{
-    ...cardStyle(),
-    position: "relative",
-    backgroundImage: game.background ? `linear-gradient(rgba(2,6,23,0.75), rgba(2,6,23,0.75)), url(${game.background})` : undefined,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-  }}
->
-  <div style={{ position: "relative", zIndex: 2 }}>
-
-    {/* EVERYTHING inside stays EXACTLY the same */}
-
-  </div>
-</section>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
             <div>
