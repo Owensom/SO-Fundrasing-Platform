@@ -224,7 +224,17 @@ export default function SquaresSection() {
     createdAt: purchase.createdAt,
   });
 
-    setSelectedByGame((curr) => ({ ...curr, [game.id]: [] }));
+  setPurchases((curr) => [purchase, ...curr]);
+
+  setGames((curr) =>
+    curr.map((g) =>
+      g.id === game.id
+        ? { ...g, sold: [...g.sold, ...visibleSelected].sort((a, b) => a - b) }
+        : g,
+    ),
+  );
+
+  setSelectedByGame((curr) => ({ ...curr, [game.id]: [] }));
 
   const doc = new jsPDF();
   doc.setFontSize(20);
@@ -240,7 +250,6 @@ export default function SquaresSection() {
   doc.text(`Total: ${money(purchase.total)}`, 20, 112);
   doc.save(`${purchase.gameTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-receipt.pdf`);
 }
-
 
   setGames((curr) =>
     curr.map((g) =>
