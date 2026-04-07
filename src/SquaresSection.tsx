@@ -254,7 +254,7 @@ function buySquares() {
   doc.text(`Purchased: ${purchase.createdAt}`, 20, 68);
   doc.text(`Squares: ${purchase.squares.join(", ")}`, 20, 82);
   doc.text(`Quantity: ${purchase.squares.length}`, 20, 92);
-  doc.text(`Price each: ${money(game.price)}`, 20, 102);
+  doc.text(`Price each: ${money(priceValue)}`, 20, 102);
   doc.text(`Total: ${money(purchase.total)}`, 20, 112);
   doc.save(`${purchase.gameTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-receipt.pdf`);
 }
