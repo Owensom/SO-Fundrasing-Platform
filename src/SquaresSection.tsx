@@ -542,6 +542,9 @@ function buySquares() {
                 <div style={{ marginTop: 8, fontWeight: 700, fontSize: 22 }}>{money(totalCost)}</div>
               </div>
             </div>
+<div style={{ marginTop: 12, fontSize: 12, color: "#94a3b8" }}>
+  canBuy: {String(canBuy)} | name: {String(buyerName.trim() !== "")} | email: {String(buyerEmail.trim() !== "")} | selected: {visibleSelected.length} | blanks: {String(hasBlankRequiredValues)}
+</div>
 
             <button
               onClick={buySquares}
