@@ -205,6 +205,7 @@ const canBuy =
 }
 
 function buySquares() {
+  alert(`buySquares fired | canBuy=${canBuy} | selected=${visibleSelected.length}`);
   if (!canBuy) return;
 
   const now = new Date().toLocaleString();
