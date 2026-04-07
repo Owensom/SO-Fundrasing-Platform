@@ -460,17 +460,22 @@ function buySquares() {
         )}
 
         <section
-          style={{
-            ...cardStyle(),
-            backgroundImage: game.background ? `linear-gradient(rgba(2,6,23,0.75), rgba(2,6,23,0.75)), url(${game.background})` : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: 30 }}>{game.title} • Buyer View</h2>
-          <p style={{ marginTop: 0, marginBottom: 18, color: "#cbd5e1" }}>
-            Choose your squares below. Sold squares are locked. Reserved squares are not available.
-          </p>
+  style={{
+    ...cardStyle(),
+    position: "relative", // 👈 ADD THIS
+    backgroundImage: game.background
+      ? `linear-gradient(rgba(2,6,23,0.75), rgba(2,6,23,0.75)), url(${game.background})`
+      : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  }}
+>
+  <div style={{ position: "relative", zIndex: 2 }}> {/* 👈 ADD THIS WRAPPER */}
+
+    {/* EVERYTHING inside stays EXACTLY the same */}
+
+  </div>
+</section>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
             <div>
