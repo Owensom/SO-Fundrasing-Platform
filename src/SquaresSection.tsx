@@ -196,7 +196,7 @@ export default function SquaresSection() {
     reader.readAsDataURL(file);
   }
 
- function buySquares() {
+  function buySquares() {
   if (!canBuy) return;
 
   const now = new Date().toLocaleString();
@@ -224,7 +224,23 @@ export default function SquaresSection() {
     createdAt: purchase.createdAt,
   });
 
-  setPurchases((curr) => [purchase, ...curr]);
+    setSelectedByGame((curr) => ({ ...curr, [game.id]: [] }));
+
+  const doc = new jsPDF();
+  doc.setFontSize(20);
+  doc.text("Squares Purchase Receipt", 20, 22);
+  doc.setFontSize(12);
+  doc.text(`Game: ${purchase.gameTitle}`, 20, 38);
+  doc.text(`Buyer: ${purchase.buyerName}`, 20, 48);
+  doc.text(`Email: ${purchase.buyerEmail}`, 20, 58);
+  doc.text(`Purchased: ${purchase.createdAt}`, 20, 68);
+  doc.text(`Squares: ${purchase.squares.join(", ")}`, 20, 82);
+  doc.text(`Quantity: ${purchase.squares.length}`, 20, 92);
+  doc.text(`Price each: ${money(game.price)}`, 20, 102);
+  doc.text(`Total: ${money(purchase.total)}`, 20, 112);
+  doc.save(`${purchase.gameTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-receipt.pdf`);
+}
+
 
   setGames((curr) =>
     curr.map((g) =>
