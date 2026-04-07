@@ -128,8 +128,10 @@ export default function SquaresSection() {
     [selected, game],
   );
   const totalCost = visibleSelected.length * game.price;
-  const validNumbers = Number(draft.total) > 0 && Number(draft.price) > 0;
+  const totalValue = draft.total.trim() === "" ? game.total : Number(draft.total);
+const priceValue = draft.price.trim() === "" ? game.price : Number(draft.price);
 
+const validNumbers = totalValue > 0 && priceValue > 0;
 const canBuy =
   buyerName.trim() !== "" &&
   buyerEmail.trim() !== "" &&
