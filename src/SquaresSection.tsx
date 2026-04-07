@@ -127,7 +127,7 @@ export default function SquaresSection() {
     () => selected.filter((n) => n <= game.total && !game.sold.includes(n) && !game.reserved.includes(n)),
     [selected, game],
   );
-  const totalCost = visibleSelected.length * game.price;
+  const totalCost = visibleSelected.length * priceValue;
   const totalValue = draft.total.trim() === "" ? game.total : Number(draft.total);
 const priceValue = draft.price.trim() === "" ? game.price : Number(draft.price);
 
