@@ -187,16 +187,16 @@ export default function SquaresSection() {
   }
 
   function onUploadBackground(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setGamePatch(game.id, { background: String(reader.result || "") });
-    };
-    reader.readAsDataURL(file);
-  }
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    setGamePatch(game.id, { background: String(reader.result || "") });
+  };
+  reader.readAsDataURL(file);
+}
 
- function buySquares() {
+function buySquares() {
   if (!canBuy) return;
 
   const now = new Date().toLocaleString();
@@ -250,56 +250,6 @@ export default function SquaresSection() {
   doc.text(`Total: ${money(purchase.total)}`, 20, 112);
   doc.save(`${purchase.gameTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-receipt.pdf`);
 }
-  setGames((curr) =>
-    curr.map((g) =>
-      g.id === game.id
-        ? { ...g, sold: [...g.sold, ...visibleSelected].sort((a, b) => a - b) }
-        : g,
-    ),
-  );
-
-  setSelectedByGame((curr) => ({ ...curr, [game.id]: [] }));
-
-  const doc = new jsPDF();
-  doc.setFontSize(20);
-  doc.text("Squares Purchase Receipt", 20, 22);
-  doc.setFontSize(12);
-  doc.text(`Game: ${purchase.gameTitle}`, 20, 38);
-  doc.text(`Buyer: ${purchase.buyerName}`, 20, 48);
-  doc.text(`Email: ${purchase.buyerEmail}`, 20, 58);
-  doc.text(`Purchased: ${purchase.createdAt}`, 20, 68);
-  doc.text(`Squares: ${purchase.squares.join(", ")}`, 20, 82);
-  doc.text(`Quantity: ${purchase.squares.length}`, 20, 92);
-  doc.text(`Price each: ${money(game.price)}`, 20, 102);
-  doc.text(`Total: ${money(purchase.total)}`, 20, 112);
-  doc.save(`${purchase.gameTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-receipt.pdf`);
-}
-    
-    setPurchases((curr) => [purchase, ...curr]);
-    setGames((curr) =>
-      curr.map((g) =>
-        g.id === game.id
-          ? { ...g, sold: [...g.sold, ...visibleSelected].sort((a, b) => a - b) }
-          : g,
-      ),
-    );
-    setSelectedByGame((curr) => ({ ...curr, [game.id]: [] }));
-
-    const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.text("Squares Purchase Receipt", 20, 22);
-    doc.setFontSize(12);
-    doc.text(`Game: ${purchase.gameTitle}`, 20, 38);
-    doc.text(`Buyer: ${purchase.buyerName}`, 20, 48);
-    doc.text(`Email: ${purchase.buyerEmail}`, 20, 58);
-    doc.text(`Purchased: ${purchase.createdAt}`, 20, 68);
-    doc.text(`Squares: ${purchase.squares.join(", ")}`, 20, 82);
-    doc.text(`Quantity: ${purchase.squares.length}`, 20, 92);
-    doc.text(`Price each: ${money(game.price)}`, 20, 102);
-    doc.text(`Total: ${money(purchase.total)}`, 20, 112);
-    doc.save(`${purchase.gameTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-receipt.pdf`);
-  }
-
   return (
     <div
       style={{
