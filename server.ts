@@ -126,6 +126,28 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function uniqueTenantSlug(name: string) {
+  const base = slugify(name) || "tenant";
+  let slug = base;
+  let counter = 2;
+
+  while (tenants.some((t) => t.slug === slug)) {
+    slug = `${base}-${counter}`;
+    counter += 1;
+  }
+
+  return slug;
+}
+
 function buildInitialSold(): Record<RaffleColor, number[]> {
   return ALL_COLORS.reduce((acc, color) => {
     acc[color] = [];
@@ -199,14 +221,13 @@ const tenants: Tenant[] = [
   },
 ];
 
-// Replace these hashes with real generated bcrypt hashes if you want fixed passwords.
 const DEMO_PASSWORD_HASH = bcrypt.hashSync("Password123!", 10);
 
 const users: User[] = [
   {
     id: randomUUID(),
     tenantId: tenantAId,
-    email: "ownerA@example.com",
+    email: "ownera@example.com",
     passwordHash: DEMO_PASSWORD_HASH,
     role: "owner",
     isActive: true,
@@ -215,7 +236,7 @@ const users: User[] = [
   {
     id: randomUUID(),
     tenantId: tenantAId,
-    email: "adminA@example.com",
+    email: "admina@example.com",
     passwordHash: DEMO_PASSWORD_HASH,
     role: "admin",
     isActive: true,
@@ -224,7 +245,7 @@ const users: User[] = [
   {
     id: randomUUID(),
     tenantId: tenantBId,
-    email: "ownerB@example.com",
+    email: "ownerb@example.com",
     passwordHash: DEMO_PASSWORD_HASH,
     role: "owner",
     isActive: true,
@@ -350,6 +371,79 @@ let purchases: Purchase[] = [];
 // Auth routes
 // --------------------
 
+app.post("/api/auth/register", async (req, res) => {
+  const { email, password, tenantName } = req.body ?? {};
+
+  if (!email || !password || !tenantName) {
+    return res.status(400).json({ error: "Email, password and tenant name are required" });
+  }
+
+  const normalizedEmail = String(email).toLowerCase().trim();
+
+  const exists = users.some((u) => u.email === normalizedEmail);
+  if (exists) {
+    return res.status(409).json({ error: "Email already exists" });
+  }
+
+  if (String(password).length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+
+  const tenantId = randomUUID();
+  const tenantSlug = uniqueTenantSlug(String(tenantName));
+
+  const tenant: Tenant = {
+    id: tenantId,
+    name: String(tenantName).trim(),
+    slug: tenantSlug,
+    isActive: true,
+    createdAt: nowIso(),
+  };
+
+  const passwordHash = await bcrypt.hash(String(password), 12);
+
+  const user: User = {
+    id: randomUUID(),
+    tenantId,
+    email: normalizedEmail,
+    passwordHash,
+    role: "owner",
+    isActive: true,
+    createdAt: nowIso(),
+  };
+
+  tenants.push(tenant);
+  users.push(user);
+
+  const token = signAuthToken({
+    userId: user.id,
+    tenantId: user.tenantId,
+    role: user.role,
+    email: user.email,
+  });
+
+  res.cookie("auth_token", token, {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  return res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    },
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+    },
+  });
+});
+
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body ?? {};
 
@@ -435,7 +529,6 @@ app.post("/api/auth/logout", (_req, res) => {
 
 // --------------------
 // Tenant user management
-// Owner/admin can add more users for their own tenant
 // --------------------
 
 app.post("/api/users", requireAuth, requireAdminOrOwner, async (req, res) => {
@@ -450,18 +543,19 @@ app.post("/api/users", requireAuth, requireAdminOrOwner, async (req, res) => {
     return res.status(400).json({ error: "Invalid role" });
   }
 
-  const exists = users.some((u) => u.email.toLowerCase() === String(email).toLowerCase());
+  const normalizedEmail = String(email).toLowerCase().trim();
+  const exists = users.some((u) => u.email === normalizedEmail);
 
   if (exists) {
     return res.status(409).json({ error: "Email already exists" });
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await bcrypt.hash(String(password), 12);
 
   const newUser: User = {
     id: randomUUID(),
     tenantId: auth.tenantId,
-    email: String(email).toLowerCase(),
+    email: normalizedEmail,
     passwordHash,
     role,
     isActive: true,
@@ -497,7 +591,7 @@ app.get("/api/users", requireAuth, requireAdminOrOwner, (req, res) => {
 });
 
 // --------------------
-// Squares routes
+// Squares admin routes
 // --------------------
 
 app.get("/api/squares", requireAuth, (req, res) => {
@@ -564,7 +658,7 @@ app.delete("/api/squares/:id", requireAuth, requireAdminOrOwner, (req, res) => {
 });
 
 // --------------------
-// Raffles routes
+// Raffles admin routes
 // --------------------
 
 app.get("/api/raffles", requireAuth, (req, res) => {
@@ -634,7 +728,7 @@ app.delete("/api/raffles/:id", requireAuth, requireAdminOrOwner, (req, res) => {
 });
 
 // --------------------
-// Tickets routes
+// Tickets admin routes
 // --------------------
 
 app.get("/api/tickets", requireAuth, (req, res) => {
@@ -705,7 +799,7 @@ app.delete("/api/tickets/:id", requireAuth, requireAdminOrOwner, (req, res) => {
 });
 
 // --------------------
-// Purchase routes
+// Protected purchase routes
 // --------------------
 
 app.post("/api/squares/purchase", requireAuth, (req, res) => {
@@ -768,7 +862,7 @@ app.post("/api/raffles/purchase", requireAuth, (req, res) => {
   }
 
   for (const color of ALL_COLORS) {
-    const picked = Array.isArray(selections[color]) ? selections[color] : [];
+    const picked = Array.isArray((selections as any)[color]) ? (selections as any)[color] : [];
     const sold = event.soldByColor[color] ?? [];
 
     const invalid = picked.some(
@@ -784,14 +878,14 @@ app.post("/api/raffles/purchase", requireAuth, (req, res) => {
   }
 
   for (const color of ALL_COLORS) {
-    const picked = Array.isArray(selections[color]) ? selections[color] : [];
+    const picked = Array.isArray((selections as any)[color]) ? (selections as any)[color] : [];
     event.soldByColor[color] = [...(event.soldByColor[color] ?? []), ...picked].sort((a, b) => a - b);
   }
 
   event.updatedAt = nowIso();
 
   const quantity = ALL_COLORS.reduce((sum, color) => {
-    const picked = Array.isArray(selections[color]) ? selections[color] : [];
+    const picked = Array.isArray((selections as any)[color]) ? (selections as any)[color] : [];
     return sum + picked.length;
   }, 0);
 
@@ -887,6 +981,289 @@ app.post("/api/tickets/purchase", requireAuth, (req, res) => {
     const purchase: Purchase = {
       id: randomUUID(),
       tenantId: auth.tenantId,
+      module: "tickets",
+      itemId: event.id,
+      itemTitle: event.title,
+      buyerName,
+      buyerEmail,
+      quantity: qty,
+      subtotal: qty * event.price,
+      total: qty * event.price,
+      details: { mode: "tables", tableId: table.id, tableName: table.name },
+      createdAt: nowIso(),
+    };
+
+    purchases.unshift(purchase);
+
+    return res.json({ purchase, event });
+  }
+
+  return res.status(400).json({ error: "Invalid ticket mode" });
+});
+
+// --------------------
+// Public squares routes
+// --------------------
+
+app.get("/api/public/squares/:slug", (req, res) => {
+  const tenant = tenants.find((t) => t.slug === req.params.slug && t.isActive);
+
+  if (!tenant) {
+    return res.status(404).json({ error: "Tenant not found" });
+  }
+
+  const games = squareGames.filter((g) => g.tenantId === tenant.id);
+
+  return res.json({
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+    },
+    games,
+  });
+});
+
+app.post("/api/public/squares/:slug/purchase", (req, res) => {
+  const tenant = tenants.find((t) => t.slug === req.params.slug && t.isActive);
+
+  if (!tenant) {
+    return res.status(404).json({ error: "Tenant not found" });
+  }
+
+  const { gameId, buyerName, buyerEmail, squares } = req.body ?? {};
+
+  const game = squareGames.find((g) => g.id === gameId && g.tenantId === tenant.id);
+
+  if (!game) {
+    return res.status(404).json({ error: "Squares game not found" });
+  }
+
+  if (!buyerName || !buyerEmail || !Array.isArray(squares) || squares.length === 0) {
+    return res.status(400).json({ error: "Invalid purchase request" });
+  }
+
+  const blocked = squares.some(
+    (n: number) => game.sold.includes(n) || game.reserved.includes(n) || n < 1 || n > game.total
+  );
+
+  if (blocked) {
+    return res.status(409).json({ error: "One or more squares are unavailable" });
+  }
+
+  game.sold = [...game.sold, ...squares].sort((a, b) => a - b);
+  game.updatedAt = nowIso();
+
+  const purchase: Purchase = {
+    id: randomUUID(),
+    tenantId: tenant.id,
+    module: "squares",
+    itemId: game.id,
+    itemTitle: game.title,
+    buyerName,
+    buyerEmail,
+    quantity: squares.length,
+    subtotal: squares.length * game.price,
+    total: squares.length * game.price,
+    details: { squares },
+    createdAt: nowIso(),
+  };
+
+  purchases.unshift(purchase);
+
+  return res.json({ purchase, game });
+});
+
+// --------------------
+// Public raffle routes
+// --------------------
+
+app.get("/api/public/raffles/:slug", (req, res) => {
+  const tenant = tenants.find((t) => t.slug === req.params.slug && t.isActive);
+
+  if (!tenant) {
+    return res.status(404).json({ error: "Tenant not found" });
+  }
+
+  const raffles = raffleEvents.filter((e) => e.tenantId === tenant.id);
+
+  return res.json({
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+    },
+    raffles,
+  });
+});
+
+app.post("/api/public/raffles/:slug/purchase", (req, res) => {
+  const tenant = tenants.find((t) => t.slug === req.params.slug && t.isActive);
+
+  if (!tenant) {
+    return res.status(404).json({ error: "Tenant not found" });
+  }
+
+  const { eventId, buyerName, buyerEmail, selections, subtotal, total } = req.body ?? {};
+
+  const event = raffleEvents.find((e) => e.id === eventId && e.tenantId === tenant.id);
+
+  if (!event) {
+    return res.status(404).json({ error: "Raffle not found" });
+  }
+
+  if (!buyerName || !buyerEmail || !selections || typeof selections !== "object") {
+    return res.status(400).json({ error: "Invalid purchase request" });
+  }
+
+  for (const color of ALL_COLORS) {
+    const picked = Array.isArray((selections as any)[color]) ? (selections as any)[color] : [];
+    const sold = event.soldByColor[color] ?? [];
+
+    const invalid = picked.some(
+      (n: number) =>
+        sold.includes(n) ||
+        n < event.startNumber ||
+        n >= event.startNumber + event.totalTickets
+    );
+
+    if (invalid) {
+      return res.status(409).json({ error: `One or more ${color} tickets are unavailable` });
+    }
+  }
+
+  for (const color of ALL_COLORS) {
+    const picked = Array.isArray((selections as any)[color]) ? (selections as any)[color] : [];
+    event.soldByColor[color] = [...(event.soldByColor[color] ?? []), ...picked].sort((a, b) => a - b);
+  }
+
+  event.updatedAt = nowIso();
+
+  const quantity = ALL_COLORS.reduce((sum, color) => {
+    const picked = Array.isArray((selections as any)[color]) ? (selections as any)[color] : [];
+    return sum + picked.length;
+  }, 0);
+
+  const purchase: Purchase = {
+    id: randomUUID(),
+    tenantId: tenant.id,
+    module: "raffle",
+    itemId: event.id,
+    itemTitle: event.title,
+    buyerName,
+    buyerEmail,
+    quantity,
+    subtotal: Number(subtotal ?? 0),
+    total: Number(total ?? 0),
+    details: { selections },
+    createdAt: nowIso(),
+  };
+
+  purchases.unshift(purchase);
+
+  return res.json({ purchase, event });
+});
+
+// --------------------
+// Public ticket routes
+// --------------------
+
+app.get("/api/public/tickets/:slug", (req, res) => {
+  const tenant = tenants.find((t) => t.slug === req.params.slug && t.isActive);
+
+  if (!tenant) {
+    return res.status(404).json({ error: "Tenant not found" });
+  }
+
+  const events = ticketEvents.filter((e) => e.tenantId === tenant.id);
+
+  return res.json({
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+    },
+    events,
+  });
+});
+
+app.post("/api/public/tickets/:slug/purchase", (req, res) => {
+  const tenant = tenants.find((t) => t.slug === req.params.slug && t.isActive);
+
+  if (!tenant) {
+    return res.status(404).json({ error: "Tenant not found" });
+  }
+
+  const { eventId, buyerName, buyerEmail, mode, seats, tableId, quantity } = req.body ?? {};
+
+  const event = ticketEvents.find((e) => e.id === eventId && e.tenantId === tenant.id);
+
+  if (!event) {
+    return res.status(404).json({ error: "Ticket event not found" });
+  }
+
+  if (!buyerName || !buyerEmail) {
+    return res.status(400).json({ error: "Buyer details required" });
+  }
+
+  if (mode === "rows") {
+    if (!Array.isArray(seats) || seats.length === 0) {
+      return res.status(400).json({ error: "No seats selected" });
+    }
+
+    const blocked = seats.some((seatId: string) => event.soldSeatIds.includes(seatId));
+
+    if (blocked) {
+      return res.status(409).json({ error: "One or more seats are unavailable" });
+    }
+
+    event.soldSeatIds = [...event.soldSeatIds, ...seats].sort();
+    event.updatedAt = nowIso();
+
+    const purchase: Purchase = {
+      id: randomUUID(),
+      tenantId: tenant.id,
+      module: "tickets",
+      itemId: event.id,
+      itemTitle: event.title,
+      buyerName,
+      buyerEmail,
+      quantity: seats.length,
+      subtotal: seats.length * event.price,
+      total: seats.length * event.price,
+      details: { mode: "rows", seats },
+      createdAt: nowIso(),
+    };
+
+    purchases.unshift(purchase);
+
+    return res.json({ purchase, event });
+  }
+
+  if (mode === "tables") {
+    const table = event.tables.find((t) => t.id === tableId);
+    const qty = Number(quantity ?? 0);
+
+    if (!table) {
+      return res.status(404).json({ error: "Table not found" });
+    }
+
+    if (qty <= 0) {
+      return res.status(400).json({ error: "Invalid quantity" });
+    }
+
+    const available = table.seats - table.sold;
+
+    if (qty > available) {
+      return res.status(409).json({ error: "Not enough seats available at this table" });
+    }
+
+    table.sold += qty;
+    event.updatedAt = nowIso();
+
+    const purchase: Purchase = {
+      id: randomUUID(),
+      tenantId: tenant.id,
       module: "tickets",
       itemId: event.id,
       itemTitle: event.title,
