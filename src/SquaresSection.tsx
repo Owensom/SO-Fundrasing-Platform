@@ -202,7 +202,7 @@ export default function SquaresSection() {
   }
 
   async function addGame() {
-    if (!isAdmin) return;
+   if (!canManage) return;
 
     setAdminMessage("");
     setAdminBusy(true);
