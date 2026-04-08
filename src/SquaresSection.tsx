@@ -1,6 +1,8 @@
 import { appendLedger } from "./purchaseLedger";
 import React, { useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
+import { useAdminAuth } from "./useAdminAuth";
+import { adminFetch } from "./api";
 
 type Game = {
   id: number;
@@ -89,7 +91,8 @@ function chipStyle(active: boolean): React.CSSProperties {
 }
 
 export default function SquaresSection() {
-  const [admin, setAdmin] = useState(true);
+  const { isAdmin, loading } = useAdminAuth();
+
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
 
@@ -128,6 +131,9 @@ export default function SquaresSection() {
     1: { total: "100", price: "10" },
     2: { total: "120", price: "5" },
   });
+
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminMessage, setAdminMessage] = useState("");
 
   const game = games.find((g) => g.id === activeGameId) ?? games[0];
   const selected = selectedByGame[game.id] ?? [];
@@ -195,44 +201,85 @@ export default function SquaresSection() {
     });
   }
 
-  function addGame() {
-    const id = Date.now();
+  async function addGame() {
+    if (!isAdmin) return;
 
-    const newGame: Game = {
-      id,
-      title: `New Squares Game ${games.length + 1}`,
-      total: 100,
-      price: 5,
-      sold: [],
-      reserved: [],
-      background: "",
-    };
+    setAdminMessage("");
+    setAdminBusy(true);
 
-    setGames((curr) => [...curr, newGame]);
-    setSelectedByGame((curr) => ({ ...curr, [id]: [] }));
-    setDrafts((curr) => ({ ...curr, [id]: { total: "100", price: "5" } }));
-    setActiveGameId(id);
+    try {
+      const payload = {
+        title: `New Squares Game ${games.length + 1}`,
+        total: 100,
+        price: 5,
+        sold: [],
+        reserved: [],
+        background: "",
+      };
+
+      const saved = await adminFetch("/api/squares", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const newGame: Game = {
+        id: saved.id,
+        title: saved.title,
+        total: saved.total,
+        price: saved.price,
+        sold: saved.sold ?? [],
+        reserved: saved.reserved ?? [],
+        background: saved.background ?? "",
+      };
+
+      setGames((curr) => [...curr, newGame]);
+      setSelectedByGame((curr) => ({ ...curr, [newGame.id]: [] }));
+      setDrafts((curr) => ({
+        ...curr,
+        [newGame.id]: { total: String(newGame.total), price: String(newGame.price) },
+      }));
+      setActiveGameId(newGame.id);
+      setAdminMessage("Game created.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to add game.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
-  function removeCurrentGame() {
-    if (games.length <= 1) return;
+  async function removeCurrentGame() {
+    if (!isAdmin || games.length <= 1) return;
 
-    const remaining = games.filter((g) => g.id !== game.id);
-    setGames(remaining);
+    setAdminMessage("");
+    setAdminBusy(true);
 
-    setSelectedByGame((curr) => {
-      const next = { ...curr };
-      delete next[game.id];
-      return next;
-    });
+    try {
+      await adminFetch(`/api/squares/${game.id}`, {
+        method: "DELETE",
+      });
 
-    setDrafts((curr) => {
-      const next = { ...curr };
-      delete next[game.id];
-      return next;
-    });
+      const remaining = games.filter((g) => g.id !== game.id);
+      setGames(remaining);
 
-    setActiveGameId(remaining[0].id);
+      setSelectedByGame((curr) => {
+        const next = { ...curr };
+        delete next[game.id];
+        return next;
+      });
+
+      setDrafts((curr) => {
+        const next = { ...curr };
+        delete next[game.id];
+        return next;
+      });
+
+      setActiveGameId(remaining[0].id);
+      setAdminMessage("Game removed.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to remove game.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
   function onUploadBackground(e: React.ChangeEvent<HTMLInputElement>) {
@@ -244,6 +291,33 @@ export default function SquaresSection() {
       setGamePatch(game.id, { background: String(reader.result || "") });
     };
     reader.readAsDataURL(file);
+  }
+
+  async function saveCurrentGame() {
+    if (!isAdmin) return;
+
+    setAdminMessage("");
+    setAdminBusy(true);
+
+    try {
+      await adminFetch(`/api/squares/${game.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: game.title,
+          total: game.total,
+          price: game.price,
+          sold: game.sold,
+          reserved: game.reserved,
+          background: game.background ?? "",
+        }),
+      });
+
+      setAdminMessage("Game saved.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to save game.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
   function buySquares() {
@@ -366,13 +440,22 @@ export default function SquaresSection() {
               </p>
             </div>
 
-            <button onClick={() => setAdmin((v) => !v)} style={chipStyle(admin)}>
-              Admin {admin ? "ON" : "OFF"}
-            </button>
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.08)",
+                borderRadius: 999,
+                padding: "10px 14px",
+                fontSize: 12,
+                color: loading ? "#cbd5e1" : isAdmin ? "#86efac" : "#cbd5e1",
+              }}
+            >
+              {loading ? "Checking admin..." : isAdmin ? "Admin logged in" : "Buyer mode"}
+            </div>
           </div>
         </section>
 
-        {admin && (
+        {!loading && isAdmin && (
           <section style={cardStyle()}>
             <div
               style={{
@@ -385,17 +468,21 @@ export default function SquaresSection() {
             >
               <h2 style={{ margin: 0, fontSize: 28 }}>Admin • Squares</h2>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={addGame} style={chipStyle(false)}>
+                <button onClick={addGame} disabled={adminBusy} style={chipStyle(false)}>
                   Add Game
                 </button>
-                <button onClick={removeCurrentGame} style={chipStyle(false)}>
+                <button onClick={removeCurrentGame} disabled={adminBusy} style={chipStyle(false)}>
                   Remove Current
                 </button>
                 <button
                   onClick={() => uploadRef.current?.click()}
+                  disabled={adminBusy}
                   style={chipStyle(false)}
                 >
                   Background Image
+                </button>
+                <button onClick={saveCurrentGame} disabled={adminBusy} style={chipStyle(false)}>
+                  Save Game
                 </button>
               </div>
             </div>
@@ -407,6 +494,21 @@ export default function SquaresSection() {
               style={{ display: "none" }}
               onChange={onUploadBackground}
             />
+
+            {adminMessage && (
+              <div
+                style={{
+                  marginTop: 14,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(2,6,23,0.55)",
+                  borderRadius: 16,
+                  padding: 12,
+                  color: "#cbd5e1",
+                }}
+              >
+                {adminMessage}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
               {games.map((g) => (
@@ -479,8 +581,7 @@ export default function SquaresSection() {
                     color: draft.total.trim() === "" ? "#fda4af" : "#64748b",
                   }}
                 >
-                  Blank allowed while editing. Required for completion. Range: 1 to
-                  500.
+                  Blank allowed while editing. Required for completion. Range: 1 to 500.
                 </div>
               </div>
 
