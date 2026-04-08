@@ -60,10 +60,6 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
-export function slugify(value: string) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-}
-
 export function buildInitialSold(): Record<RaffleColor, number[]> {
   return ALL_COLORS.reduce((acc, color) => {
     acc[color] = [];
@@ -71,13 +67,35 @@ export function buildInitialSold(): Record<RaffleColor, number[]> {
   }, {} as Record<RaffleColor, number[]>);
 }
 
+export function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
 const tenantAId = randomUUID();
 const tenantBId = randomUUID();
+
 const DEMO_PASSWORD_HASH = bcrypt.hashSync("Password123!", 10);
 
 export const tenants: Tenant[] = [
-  { id: tenantAId, name: "SO Fundraising Demo A", slug: "demo-a", isActive: true, createdAt: nowIso() },
-  { id: tenantBId, name: "SO Fundraising Demo B", slug: "demo-b", isActive: true, createdAt: nowIso() },
+  {
+    id: tenantAId,
+    name: "SO Fundraising Demo A",
+    slug: "demo-a",
+    isActive: true,
+    createdAt: nowIso(),
+  },
+  {
+    id: tenantBId,
+    name: "SO Fundraising Demo B",
+    slug: "demo-b",
+    isActive: true,
+    createdAt: nowIso(),
+  },
 ];
 
 export const users: User[] = [
