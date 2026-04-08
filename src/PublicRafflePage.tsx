@@ -1,3 +1,4 @@
+import { appendLedger } from "./purchaseLedger";
 import React, { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import { publicApiFetch } from "./api";
@@ -86,6 +87,18 @@ function labelStyle(): React.CSSProperties {
   };
 }
 
+function chipStyle(active: boolean): React.CSSProperties {
+  return {
+    border: active ? "1px solid rgba(125,211,252,0.35)" : "1px solid rgba(255,255,255,0.10)",
+    background: active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
+    color: "white",
+    borderRadius: 18,
+    padding: "12px 18px",
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+}
+
 function secondaryButtonStyle(): React.CSSProperties {
   return {
     borderRadius: 18,
@@ -160,11 +173,25 @@ function calculateOfferTotal(quantity: number, singlePrice: number) {
   };
 }
 
+function getSlugFromPath() {
+  if (typeof window === "undefined") return "";
+  const parts = window.location.pathname.split("/").filter(Boolean);
+
+  const tenantIndex = parts.indexOf("tenant");
+  if (tenantIndex >= 0 && parts[tenantIndex + 1]) {
+    return parts[tenantIndex + 1];
+  }
+
+  return "";
+}
+
 type Props = {
-  slug: string;
+  slug?: string;
 };
 
 export default function PublicRafflePage({ slug }: Props) {
+  const resolvedSlug = slug || getSlugFromPath();
+
   const [tenant, setTenant] = useState<PublicTenant | null>(null);
   const [events, setEvents] = useState<RaffleEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,11 +207,17 @@ export default function PublicRafflePage({ slug }: Props) {
 
   useEffect(() => {
     async function loadRaffles() {
+      if (!resolvedSlug) {
+        setMessage("No tenant slug found in the URL.");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setMessage("");
 
       try {
-        const data = await publicApiFetch(`/api/public/raffles/${slug}`);
+        const data = await publicApiFetch(`/api/public/raffles/${resolvedSlug}`);
         const loadedTenant = data?.tenant ?? null;
         const loadedEvents = Array.isArray(data?.raffles) ? data.raffles : [];
 
@@ -207,6 +240,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
         if (loadedEvents.length > 0) {
           setActiveEventId(loadedEvents[0].id);
+        } else {
+          setMessage("No raffle found for this fundraiser.");
         }
       } catch (err) {
         setMessage(err instanceof Error ? err.message : "Unable to load raffle.");
@@ -216,7 +251,7 @@ export default function PublicRafflePage({ slug }: Props) {
     }
 
     loadRaffles();
-  }, [slug]);
+  }, [resolvedSlug]);
 
   const event = events.find((e) => e.id === activeEventId) ?? events[0];
 
@@ -383,7 +418,7 @@ export default function PublicRafflePage({ slug }: Props) {
         return acc;
       }, {} as Record<RaffleColor, number[]>);
 
-      const response = await publicApiFetch(`/api/public/raffles/${slug}/purchase`, {
+      const response = await publicApiFetch(`/api/public/raffles/${resolvedSlug}/purchase`, {
         method: "POST",
         body: JSON.stringify({
           eventId: event.id,
