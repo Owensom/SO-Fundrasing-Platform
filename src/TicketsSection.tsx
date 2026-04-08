@@ -1,13 +1,15 @@
 import { appendLedger } from "./purchaseLedger";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { jsPDF } from "jspdf";
+import { useAdminAuth } from "./useAdminAuth";
+import { adminFetch } from "./api";
 
 type TicketMode = "rows" | "tables";
 
 type TicketTable = {
   id: number;
   name: string;
-  seats: number; // committed numeric value
+  seats: number;
   sold: number;
 };
 
@@ -16,10 +18,10 @@ type TicketEvent = {
   title: string;
   eventName: string;
   venue: string;
-  price: number; // committed numeric value
+  price: number;
   mode: TicketMode;
-  rows: number; // committed numeric value
-  seatsPerRow: number; // committed numeric value
+  rows: number;
+  seatsPerRow: number;
   soldSeatIds: string[];
   tables: TicketTable[];
   background?: string;
@@ -60,18 +62,13 @@ type TableDrafts = Record<
 >;
 
 function money(n: number) {
-  return `£${n.toFixed(2)}`;
+  return `£${Number.isFinite(n) ? n.toFixed(2) : "0.00"}`;
 }
 
 function seatIdForIndex(index: number, seatsPerRow: number): string {
   const row = String.fromCharCode(65 + Math.floor(index / seatsPerRow));
   const num = (index % seatsPerRow) + 1;
   return `${row}${num}`;
-}
-
-function clampPositiveInt(n: number, fallback = 1) {
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(1, Math.floor(n));
 }
 
 function pageStyle(): React.CSSProperties {
@@ -154,7 +151,8 @@ function secondaryButtonStyle(): React.CSSProperties {
 }
 
 export default function TicketsSection() {
-  const [admin, setAdmin] = useState(true);
+  const { isAdmin, loading } = useAdminAuth();
+
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
 
@@ -219,6 +217,9 @@ export default function TicketsSection() {
   });
 
   const [purchases, setPurchases] = useState<TicketPurchase[]>([]);
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminMessage, setAdminMessage] = useState("");
+
   const uploadRef = useRef<HTMLInputElement | null>(null);
 
   const event = events.find((e) => e.id === activeEventId) ?? events[0];
@@ -233,27 +234,38 @@ export default function TicketsSection() {
   const selectedTable = event.tables.find((t) => t.id === selectedTableId);
   const quantity = Math.max(0, Number(quantityByEvent[event.id] || "0") || 0);
 
-  const rowsCountInvalid = event.mode === "rows" && (draft.rows.trim() === "" || Number(draft.rows) <= 0);
+  const rowsCountInvalid =
+    event.mode === "rows" && (draft.rows.trim() === "" || Number(draft.rows) <= 0);
+
   const seatsPerRowInvalid =
-    event.mode === "rows" && (draft.seatsPerRow.trim() === "" || Number(draft.seatsPerRow) <= 0);
+    event.mode === "rows" &&
+    (draft.seatsPerRow.trim() === "" || Number(draft.seatsPerRow) <= 0);
+
   const priceInvalid = draft.price.trim() === "" || Number(draft.price) <= 0;
 
   const anyTableInvalid =
     event.mode === "tables" &&
     event.tables.some((table) => {
-      const td = tableDrafts[event.id]?.[table.id] ?? { name: table.name, seats: String(table.seats) };
+      const td = tableDrafts[event.id]?.[table.id] ?? {
+        name: table.name,
+        seats: String(table.seats),
+      };
       return td.name.trim() === "" || td.seats.trim() === "" || Number(td.seats) <= 0;
     });
 
-  const invalidForCompletion = priceInvalid || rowsCountInvalid || seatsPerRowInvalid || anyTableInvalid;
+  const invalidForCompletion =
+    priceInvalid || rowsCountInvalid || seatsPerRowInvalid || anyTableInvalid;
 
   const totalRowSeats = event.rows * event.seatsPerRow;
   const availableRowSeats = totalRowSeats - event.soldSeatIds.length;
   const totalTableSeats = event.tables.reduce((sum, t) => sum + t.seats, 0);
   const totalSoldTables = event.tables.reduce((sum, t) => sum + t.sold, 0);
-  const availableSelectedTable = selectedTable ? Math.max(selectedTable.seats - selectedTable.sold, 0) : 0;
+  const availableSelectedTable = selectedTable
+    ? Math.max(selectedTable.seats - selectedTable.sold, 0)
+    : 0;
 
-  const total = event.mode === "rows" ? selectedSeats.length * event.price : quantity * event.price;
+  const total =
+    event.mode === "rows" ? selectedSeats.length * event.price : quantity * event.price;
 
   const canBuy =
     buyerName.trim() !== "" &&
@@ -274,7 +286,11 @@ export default function TicketsSection() {
     }));
   }
 
-  function setTableDraftPatch(eventId: number, tableId: number, patch: Partial<TableDrafts[number][number]>) {
+  function setTableDraftPatch(
+    eventId: number,
+    tableId: number,
+    patch: Partial<TableDrafts[number][number]>
+  ) {
     setTableDrafts((curr) => ({
       ...curr,
       [eventId]: {
@@ -287,41 +303,123 @@ export default function TicketsSection() {
     }));
   }
 
-  function addEvent() {
-    const id = Date.now();
-    const newEvent: TicketEvent = {
-      id,
-      title: `New Event ${events.length + 1}`,
-      eventName: "New Event",
-      venue: "Venue",
-      price: 0,
-      mode: "rows",
-      rows: 0,
-      seatsPerRow: 0,
-      soldSeatIds: [],
-      tables: [],
-      background: "",
-    };
-    setEvents((curr) => [...curr, newEvent]);
-    setDrafts((curr) => ({
-      ...curr,
-      [id]: { price: "0", rows: "0", seatsPerRow: "0" },
-    }));
-    setTableDrafts((curr) => ({ ...curr, [id]: {} }));
-    setSelectedSeatIdsByEvent((curr) => ({ ...curr, [id]: [] }));
-    setSelectedTableByEvent((curr) => ({ ...curr, [id]: 0 }));
-    setQuantityByEvent((curr) => ({ ...curr, [id]: "0" }));
-    setActiveEventId(id);
+  async function addEvent() {
+    if (!isAdmin) return;
+
+    setAdminMessage("");
+    setAdminBusy(true);
+
+    try {
+      const payload = {
+        title: `New Event ${events.length + 1}`,
+        eventName: "New Event",
+        venue: "Venue",
+        price: 0,
+        mode: "rows" as TicketMode,
+        rows: 0,
+        seatsPerRow: 0,
+        soldSeatIds: [],
+        tables: [],
+        background: "",
+      };
+
+      const saved = await adminFetch("/api/tickets", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const newEvent: TicketEvent = {
+        id: saved.id,
+        title: saved.title,
+        eventName: saved.eventName,
+        venue: saved.venue,
+        price: saved.price,
+        mode: saved.mode,
+        rows: saved.rows,
+        seatsPerRow: saved.seatsPerRow,
+        soldSeatIds: saved.soldSeatIds ?? [],
+        tables: saved.tables ?? [],
+        background: saved.background ?? "",
+      };
+
+      setEvents((curr) => [...curr, newEvent]);
+      setDrafts((curr) => ({
+        ...curr,
+        [newEvent.id]: {
+          price: String(newEvent.price),
+          rows: String(newEvent.rows),
+          seatsPerRow: String(newEvent.seatsPerRow),
+        },
+      }));
+      setTableDrafts((curr) => ({ ...curr, [newEvent.id]: {} }));
+      setSelectedSeatIdsByEvent((curr) => ({ ...curr, [newEvent.id]: [] }));
+      setSelectedTableByEvent((curr) => ({ ...curr, [newEvent.id]: 0 }));
+      setQuantityByEvent((curr) => ({ ...curr, [newEvent.id]: "0" }));
+      setActiveEventId(newEvent.id);
+      setAdminMessage("Event created.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to add event.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
-  function removeCurrentEvent() {
-    if (events.length <= 1) return;
-    const remaining = events.filter((e) => e.id !== event.id);
-    setEvents(remaining);
-    setActiveEventId(remaining[0].id);
+  async function removeCurrentEvent() {
+    if (!isAdmin || events.length <= 1) return;
+
+    setAdminMessage("");
+    setAdminBusy(true);
+
+    try {
+      await adminFetch(`/api/tickets/${event.id}`, {
+        method: "DELETE",
+      });
+
+      const remaining = events.filter((e) => e.id !== event.id);
+      setEvents(remaining);
+      setActiveEventId(remaining[0].id);
+
+      setDrafts((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setTableDrafts((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setSelectedSeatIdsByEvent((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setSelectedTableByEvent((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setQuantityByEvent((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setAdminMessage("Event removed.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to remove event.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
-  function addTable() {
+  async function addTable() {
+    if (!isAdmin) return;
+
     const tableId = Date.now();
     const newTable: TicketTable = {
       id: tableId,
@@ -329,19 +427,39 @@ export default function TicketsSection() {
       seats: 8,
       sold: 0,
     };
+
+    const nextTables = [...event.tables, newTable];
+
     setEvents((curr) =>
-      curr.map((e) => (e.id === event.id ? { ...e, tables: [...e.tables, newTable] } : e)),
+      curr.map((e) => (e.id === event.id ? { ...e, tables: nextTables } : e))
     );
     setTableDraftPatch(event.id, tableId, { name: newTable.name, seats: "8" });
     setSelectedTableByEvent((curr) => ({ ...curr, [event.id]: tableId }));
   }
 
-  function removeTable(tableId: number) {
+  async function removeTable(tableId: number) {
+    if (!isAdmin) return;
+
     const remainingTables = event.tables.filter((t) => t.id !== tableId);
+
     setEvents((curr) =>
-      curr.map((e) => (e.id === event.id ? { ...e, tables: remainingTables } : e)),
+      curr.map((e) => (e.id === event.id ? { ...e, tables: remainingTables } : e))
     );
-    setSelectedTableByEvent((curr) => ({ ...curr, [event.id]: remainingTables[0]?.id ?? 0 }));
+
+    setSelectedTableByEvent((curr) => ({
+      ...curr,
+      [event.id]: remainingTables[0]?.id ?? 0,
+    }));
+
+    setTableDrafts((curr) => {
+      const next = { ...curr };
+      if (next[event.id]) {
+        const eventTables = { ...next[event.id] };
+        delete eventTables[tableId];
+        next[event.id] = eventTables;
+      }
+      return next;
+    });
   }
 
   function uploadBackground(e: React.ChangeEvent<HTMLInputElement>) {
@@ -352,6 +470,37 @@ export default function TicketsSection() {
       setEventPatch(event.id, { background: String(reader.result || "") });
     };
     reader.readAsDataURL(file);
+  }
+
+  async function saveCurrentEvent() {
+    if (!isAdmin) return;
+
+    setAdminMessage("");
+    setAdminBusy(true);
+
+    try {
+      await adminFetch(`/api/tickets/${event.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: event.title,
+          eventName: event.eventName,
+          venue: event.venue,
+          price: event.price,
+          mode: event.mode,
+          rows: event.rows,
+          seatsPerRow: event.seatsPerRow,
+          soldSeatIds: event.soldSeatIds,
+          tables: event.tables,
+          background: event.background ?? "",
+        }),
+      });
+
+      setAdminMessage("Event saved.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to save event.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
   function toggleSeat(seatId: string) {
@@ -403,21 +552,22 @@ export default function TicketsSection() {
         curr.map((e) =>
           e.id === event.id
             ? { ...e, soldSeatIds: [...e.soldSeatIds, ...selectedSeats].sort() }
-            : e,
-        ),
+            : e
+        )
       );
+
       appendLedger({
-  id: String(Date.now()),
-  module: "tickets",
-  itemTitle: event.title,
-  buyerName: buyerName.trim(),
-  buyerEmail: buyerEmail.trim(),
-  description: `Seats: ${selectedSeats.join(", ")}`,
-  quantity: selectedSeats.length,
-  total,
-  createdAt: now,
-});
-      
+        id: String(Date.now()),
+        module: "tickets",
+        itemTitle: event.title,
+        buyerName: buyerName.trim(),
+        buyerEmail: buyerEmail.trim(),
+        description: `Seats: ${selectedSeats.join(", ")}`,
+        quantity: selectedSeats.length,
+        total,
+        createdAt: now,
+      });
+
       setPurchases((curr) => [
         {
           id: Date.now(),
@@ -433,6 +583,7 @@ export default function TicketsSection() {
         },
         ...curr,
       ]);
+
       setSelectedSeatIdsByEvent((curr) => ({ ...curr, [event.id]: [] }));
     } else {
       setEvents((curr) =>
@@ -441,24 +592,25 @@ export default function TicketsSection() {
             ? {
                 ...e,
                 tables: e.tables.map((t) =>
-                  t.id === selectedTableId ? { ...t, sold: t.sold + quantity } : t,
+                  t.id === selectedTableId ? { ...t, sold: t.sold + quantity } : t
                 ),
               }
-            : e,
-        ),
+            : e
+        )
       );
+
       appendLedger({
-  id: String(Date.now()),
-  module: "tickets",
-  itemTitle: event.title,
-  buyerName: buyerName.trim(),
-  buyerEmail: buyerEmail.trim(),
-  description: `Table: ${selectedTable?.name ?? "Unknown"} × ${quantity}`,
-  quantity,
-  total,
-  createdAt: now,
-});
-      
+        id: String(Date.now()),
+        module: "tickets",
+        itemTitle: event.title,
+        buyerName: buyerName.trim(),
+        buyerEmail: buyerEmail.trim(),
+        description: `Table: ${selectedTable?.name ?? "Unknown"} × ${quantity}`,
+        quantity,
+        total,
+        createdAt: now,
+      });
+
       setPurchases((curr) => [
         {
           id: Date.now(),
@@ -517,13 +669,23 @@ export default function TicketsSection() {
                 Tickets Standalone
               </h1>
               <p style={{ margin: "10px 0 0", color: "#cbd5e1", maxWidth: 760 }}>
-                Rebuilt premium tickets file with rows mode, tables mode, admin controls, background image, seat blocking, and buyer PDF receipt.
+                Rebuilt premium tickets file with rows mode, tables mode, admin controls,
+                background image, seat blocking, and buyer PDF receipt.
               </p>
             </div>
 
-            <button onClick={() => setAdmin((v) => !v)} style={chipStyle(admin)}>
-              Admin {admin ? "ON" : "OFF"}
-            </button>
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.08)",
+                borderRadius: 999,
+                padding: "10px 14px",
+                fontSize: 12,
+                color: loading ? "#cbd5e1" : isAdmin ? "#86efac" : "#cbd5e1",
+              }}
+            >
+              {loading ? "Checking admin..." : isAdmin ? "Admin logged in" : "Buyer mode"}
+            </div>
           </div>
         </section>
 
@@ -546,7 +708,7 @@ export default function TicketsSection() {
           </div>
         </section>
 
-        {admin && (
+        {!loading && isAdmin && (
           <section style={cardStyle()}>
             <div
               style={{
@@ -559,13 +721,47 @@ export default function TicketsSection() {
             >
               <h2 style={{ margin: 0, fontSize: 28 }}>Admin • Tickets</h2>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={addEvent} style={chipStyle(false)}>Add Event</button>
-                <button onClick={removeCurrentEvent} style={chipStyle(false)}>Remove Current</button>
-                <button onClick={() => uploadRef.current?.click()} style={chipStyle(false)}>Background Image</button>
+                <button onClick={addEvent} disabled={adminBusy} style={chipStyle(false)}>
+                  Add Event
+                </button>
+                <button onClick={removeCurrentEvent} disabled={adminBusy} style={chipStyle(false)}>
+                  Remove Current
+                </button>
+                <button
+                  onClick={() => uploadRef.current?.click()}
+                  disabled={adminBusy}
+                  style={chipStyle(false)}
+                >
+                  Background Image
+                </button>
+                <button onClick={saveCurrentEvent} disabled={adminBusy} style={chipStyle(false)}>
+                  Save Event
+                </button>
               </div>
             </div>
 
-            <input ref={uploadRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadBackground} />
+            <input
+              ref={uploadRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={uploadBackground}
+            />
+
+            {adminMessage && (
+              <div
+                style={{
+                  marginTop: 14,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(2,6,23,0.55)",
+                  borderRadius: 16,
+                  padding: 12,
+                  color: "#cbd5e1",
+                }}
+              >
+                {adminMessage}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
               {events.map((e) => (
@@ -630,7 +826,11 @@ export default function TicketsSection() {
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
               {(["rows", "tables"] as TicketMode[]).map((m) => (
-                <button key={m} onClick={() => setEventPatch(event.id, { mode: m })} style={chipStyle(event.mode === m)}>
+                <button
+                  key={m}
+                  onClick={() => setEventPatch(event.id, { mode: m })}
+                  style={chipStyle(event.mode === m)}
+                >
                   {m}
                 </button>
               ))}
@@ -680,7 +880,13 @@ export default function TicketsSection() {
                     }}
                     style={inputStyle(seatsPerRowInvalid)}
                   />
-                  <div style={{ marginTop: 6, fontSize: 11, color: seatsPerRowInvalid ? "#fda4af" : "#64748b" }}>
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      color: seatsPerRowInvalid ? "#fda4af" : "#64748b",
+                    }}
+                  >
                     0 allowed while editing. Must be greater than 0 for completion.
                   </div>
                 </div>
@@ -703,7 +909,9 @@ export default function TicketsSection() {
                   <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
                     Availability
                   </div>
-                  <div style={{ marginTop: 8, fontWeight: 700, fontSize: 20 }}>{totalTableSeats - totalSoldTables} available</div>
+                  <div style={{ marginTop: 8, fontWeight: 700, fontSize: 20 }}>
+                    {totalTableSeats - totalSoldTables} available
+                  </div>
                   <div style={{ marginTop: 6, color: "#cbd5e1", fontSize: 14 }}>
                     {event.tables.length} tables • {totalSoldTables} sold of {totalTableSeats}
                   </div>
@@ -716,6 +924,7 @@ export default function TicketsSection() {
                   };
                   const seatsInvalid = td.seats.trim() === "" || Number(td.seats) <= 0;
                   const nameInvalid = td.name.trim() === "";
+
                   return (
                     <div
                       key={table.id}
@@ -742,11 +951,11 @@ export default function TicketsSection() {
                                   ? {
                                       ...ev,
                                       tables: ev.tables.map((t) =>
-                                        t.id === table.id ? { ...t, name: v } : t,
+                                        t.id === table.id ? { ...t, name: v } : t
                                       ),
                                     }
-                                  : ev,
-                              ),
+                                  : ev
+                              )
                             );
                           }}
                           style={inputStyle(nameInvalid)}
@@ -770,11 +979,11 @@ export default function TicketsSection() {
                                         tables: ev.tables.map((t) =>
                                           t.id === table.id
                                             ? { ...t, seats: Math.max(0, Math.floor(Number(v))) }
-                                            : t,
+                                            : t
                                         ),
                                       }
-                                    : ev,
-                                ),
+                                    : ev
+                                )
                               );
                             }
                           }}
@@ -783,7 +992,14 @@ export default function TicketsSection() {
                       </div>
 
                       <div style={summaryCardStyle()}>
-                        <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.14em" }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#94a3b8",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.14em",
+                          }}
+                        >
                           Available
                         </div>
                         <div style={{ marginTop: 6, fontWeight: 700 }}>
@@ -801,6 +1017,7 @@ export default function TicketsSection() {
                 <button onClick={addTable} style={chipStyle(false)}>
                   Add Table
                 </button>
+
                 <div style={{ marginTop: 6, fontSize: 11, color: anyTableInvalid ? "#fda4af" : "#64748b" }}>
                   Table names must not be blank. Table seats can be 0 while editing, but must be greater than 0 for completion.
                 </div>
@@ -943,7 +1160,9 @@ export default function TicketsSection() {
               {event.tables.map((table) => (
                 <button
                   key={table.id}
-                  onClick={() => setSelectedTableByEvent((curr) => ({ ...curr, [event.id]: table.id }))}
+                  onClick={() =>
+                    setSelectedTableByEvent((curr) => ({ ...curr, [event.id]: table.id }))
+                  }
                   style={{
                     border:
                       selectedTableId === table.id
@@ -976,13 +1195,15 @@ export default function TicketsSection() {
                 type="number"
                 min={1}
                 value={quantityByEvent[event.id] ?? ""}
-                onChange={(e) => setQuantityByEvent((curr) => ({ ...curr, [event.id]: e.target.value }))}
+                onChange={(e) =>
+                  setQuantityByEvent((curr) => ({ ...curr, [event.id]: e.target.value }))
+                }
                 style={inputStyle()}
               />
             </div>
           )}
 
-          <div style={summaryCardStyle()}>
+          <div style={{ ...summaryCardStyle(), marginTop: 18 }}>
             <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
               {event.mode === "rows" ? "Selected seats" : "Selected table"}
             </div>
