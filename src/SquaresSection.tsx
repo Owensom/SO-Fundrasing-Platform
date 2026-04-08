@@ -91,7 +91,7 @@ function chipStyle(active: boolean): React.CSSProperties {
 }
 
 export default function SquaresSection() {
-  const { isAdmin, loading } = useAdminAuth();
+  const { canManage, loading, tenant } = useAuth();
 
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
