@@ -1,7 +1,7 @@
 import { appendLedger } from "./purchaseLedger";
 import React, { useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
-import { useAdminAuth } from "./useAdminAuth";
+import { useAuth } from "./useAuth";
 import { adminFetch } from "./api";
 
 type Game = {
