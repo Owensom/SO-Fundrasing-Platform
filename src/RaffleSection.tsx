@@ -1,6 +1,8 @@
 import { appendLedger } from "./purchaseLedger";
 import React, { useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
+import { useAdminAuth } from "./useAdminAuth";
+import { adminFetch } from "./api";
 
 type RaffleColor = "Red" | "Blue" | "Green" | "Yellow" | "Purple" | "Orange";
 
@@ -47,8 +49,6 @@ const ALL_COLORS: RaffleColor[] = ["Red", "Blue", "Green", "Yellow", "Purple", "
  * Example offer pricing:
  * 5 tickets for £8
  * 10 tickets for £15
- *
- * Edit these to your actual offer.
  */
 const OFFER_TIERS = [
   { quantity: 10, price: 15 },
@@ -189,9 +189,12 @@ function calculateOfferTotal(quantity: number, singlePrice: number) {
 }
 
 export default function RaffleSection() {
-  const [admin, setAdmin] = useState(true);
+  const { isAdmin, loading } = useAdminAuth();
+
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminMessage, setAdminMessage] = useState("");
 
   const [events, setEvents] = useState<RaffleEvent[]>([
     {
@@ -241,9 +244,7 @@ export default function RaffleSection() {
   };
 
   const selectedColor = selectedColorByEvent[event.id] ?? event.colors[0] ?? "Red";
-
   const eventSelections = selectedTicketsByEvent[event.id] ?? buildEmptyColorSelection();
-
   const selectedTicketsForActiveColor = eventSelections[selectedColor] ?? [];
   const soldForSelectedColor = event.soldByColor[selectedColor] ?? [];
   const availableForSelectedColor = event.totalTickets - soldForSelectedColor.length;
@@ -308,57 +309,102 @@ export default function RaffleSection() {
     }));
   }
 
-  function addEvent() {
-    const id = Date.now();
-    const colors: RaffleColor[] = ["Red", "Blue"];
+  async function addEvent() {
+    if (!isAdmin) return;
 
-    const newEvent: RaffleEvent = {
-      id,
-      title: `New Raffle ${events.length + 1}`,
-      eventName: "New Raffle",
-      venue: "Venue",
-      price: 0,
-      startNumber: 0,
-      totalTickets: 0,
-      colors,
-      soldByColor: buildInitialSold(),
-      background: "",
-    };
+    setAdminMessage("");
+    setAdminBusy(true);
 
-    setEvents((curr) => [...curr, newEvent]);
-    setDrafts((curr) => ({
-      ...curr,
-      [id]: { price: "0", startNumber: "0", totalTickets: "0" },
-    }));
-    setSelectedColorByEvent((curr) => ({ ...curr, [id]: "Red" }));
-    setSelectedTicketsByEvent((curr) => ({ ...curr, [id]: buildEmptyColorSelection() }));
-    setActiveEventId(id);
+    try {
+      const payload = {
+        title: `New Raffle ${events.length + 1}`,
+        eventName: "New Raffle",
+        venue: "Venue",
+        price: 0,
+        startNumber: 0,
+        totalTickets: 0,
+        colors: ["Red", "Blue"],
+        soldByColor: buildInitialSold(),
+        background: "",
+      };
+
+      const saved = await adminFetch("/api/raffles", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const newEvent: RaffleEvent = {
+        id: saved.id,
+        title: saved.title,
+        eventName: saved.eventName,
+        venue: saved.venue,
+        price: saved.price,
+        startNumber: saved.startNumber,
+        totalTickets: saved.totalTickets,
+        colors: saved.colors ?? ["Red", "Blue"],
+        soldByColor: saved.soldByColor ?? buildInitialSold(),
+        background: saved.background ?? "",
+      };
+
+      setEvents((curr) => [...curr, newEvent]);
+      setDrafts((curr) => ({
+        ...curr,
+        [newEvent.id]: {
+          price: String(newEvent.price),
+          startNumber: String(newEvent.startNumber),
+          totalTickets: String(newEvent.totalTickets),
+        },
+      }));
+      setSelectedColorByEvent((curr) => ({ ...curr, [newEvent.id]: newEvent.colors[0] ?? "Red" }));
+      setSelectedTicketsByEvent((curr) => ({ ...curr, [newEvent.id]: buildEmptyColorSelection() }));
+      setActiveEventId(newEvent.id);
+      setAdminMessage("Raffle created.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to add raffle.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
-  function removeCurrentEvent() {
-    if (events.length <= 1) return;
+  async function removeCurrentEvent() {
+    if (!isAdmin || events.length <= 1) return;
 
-    const remaining = events.filter((e) => e.id !== event.id);
-    setEvents(remaining);
-    setActiveEventId(remaining[0].id);
+    setAdminMessage("");
+    setAdminBusy(true);
 
-    setDrafts((curr) => {
-      const next = { ...curr };
-      delete next[event.id];
-      return next;
-    });
+    try {
+      await adminFetch(`/api/raffles/${event.id}`, {
+        method: "DELETE",
+      });
 
-    setSelectedColorByEvent((curr) => {
-      const next = { ...curr };
-      delete next[event.id];
-      return next;
-    });
+      const remaining = events.filter((e) => e.id !== event.id);
+      setEvents(remaining);
+      setActiveEventId(remaining[0].id);
 
-    setSelectedTicketsByEvent((curr) => {
-      const next = { ...curr };
-      delete next[event.id];
-      return next;
-    });
+      setDrafts((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setSelectedColorByEvent((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setSelectedTicketsByEvent((curr) => {
+        const next = { ...curr };
+        delete next[event.id];
+        return next;
+      });
+
+      setAdminMessage("Raffle removed.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to remove raffle.");
+    } finally {
+      setAdminBusy(false);
+    }
   }
 
   function toggleColor(color: RaffleColor) {
@@ -438,6 +484,36 @@ export default function RaffleSection() {
           },
         };
       });
+    }
+  }
+
+  async function saveCurrentEvent() {
+    if (!isAdmin) return;
+
+    setAdminMessage("");
+    setAdminBusy(true);
+
+    try {
+      await adminFetch(`/api/raffles/${event.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: event.title,
+          eventName: event.eventName,
+          venue: event.venue,
+          price: event.price,
+          startNumber: event.startNumber,
+          totalTickets: event.totalTickets,
+          colors: event.colors,
+          soldByColor: event.soldByColor,
+          background: event.background ?? "",
+        }),
+      });
+
+      setAdminMessage("Raffle saved.");
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : "Unable to save raffle.");
+    } finally {
+      setAdminBusy(false);
     }
   }
 
@@ -614,9 +690,18 @@ export default function RaffleSection() {
               </p>
             </div>
 
-            <button onClick={() => setAdmin((v) => !v)} style={chipStyle(admin)}>
-              Admin {admin ? "ON" : "OFF"}
-            </button>
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.08)",
+                borderRadius: 999,
+                padding: "10px 14px",
+                fontSize: 12,
+                color: loading ? "#cbd5e1" : isAdmin ? "#86efac" : "#cbd5e1",
+              }}
+            >
+              {loading ? "Checking admin..." : isAdmin ? "Admin logged in" : "Buyer mode"}
+            </div>
           </div>
         </section>
 
@@ -633,14 +718,23 @@ export default function RaffleSection() {
           </div>
         </section>
 
-        {admin && (
+        {!loading && isAdmin && (
           <section style={cardStyle()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 28 }}>Admin • Raffle</h2>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={addEvent} style={chipStyle(false)}>Add Raffle</button>
-                <button onClick={removeCurrentEvent} style={chipStyle(false)}>Remove Current</button>
-                <button onClick={() => uploadRef.current?.click()} style={chipStyle(false)}>Background Image</button>
+                <button onClick={addEvent} disabled={adminBusy} style={chipStyle(false)}>
+                  Add Raffle
+                </button>
+                <button onClick={removeCurrentEvent} disabled={adminBusy} style={chipStyle(false)}>
+                  Remove Current
+                </button>
+                <button onClick={() => uploadRef.current?.click()} disabled={adminBusy} style={chipStyle(false)}>
+                  Background Image
+                </button>
+                <button onClick={saveCurrentEvent} disabled={adminBusy} style={chipStyle(false)}>
+                  Save Raffle
+                </button>
               </div>
             </div>
 
@@ -651,6 +745,21 @@ export default function RaffleSection() {
               style={{ display: "none" }}
               onChange={uploadBackground}
             />
+
+            {adminMessage && (
+              <div
+                style={{
+                  marginTop: 14,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(2,6,23,0.55)",
+                  borderRadius: 16,
+                  padding: 12,
+                  color: "#cbd5e1",
+                }}
+              >
+                {adminMessage}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
               {events.map((e) => (
@@ -849,7 +958,8 @@ export default function RaffleSection() {
                   onClick={() => toggleColor(color)}
                   style={colorBadgeStyle(color, selectedColor === color)}
                 >
-                  {color}{count > 0 ? ` (${count})` : ""}
+                  {color}
+                  {count > 0 ? ` (${count})` : ""}
                 </button>
               );
             })}
