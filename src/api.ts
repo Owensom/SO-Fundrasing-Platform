@@ -24,11 +24,7 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
     throw new Error(message);
   }
 
-  if (isJson) {
-    return res.json();
-  }
-
-  return null;
+  return isJson ? res.json() : null;
 }
 
 export async function publicApiFetch(url: string, options: RequestInit = {}) {
@@ -56,9 +52,5 @@ export async function publicApiFetch(url: string, options: RequestInit = {}) {
     throw new Error(message);
   }
 
-  if (isJson) {
-    return res.json();
-  }
-
-  return null;
+  return isJson ? res.json() : null;
 }
