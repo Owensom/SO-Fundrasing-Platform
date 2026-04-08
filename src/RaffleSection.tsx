@@ -17,29 +17,47 @@ type RaffleEvent = {
   background?: string;
 };
 
+type ColorSelectionMap = Record<number, Record<RaffleColor, number[]>>;
+
 type RafflePurchase = {
   id: number;
   eventId: number;
   eventTitle: string;
   buyerName: string;
   buyerEmail: string;
-  color: RaffleColor;
-  tickets: number[];
+  selections: Record<RaffleColor, number[]>;
   quantity: number;
+  subtotal: number;
   total: number;
   createdAt: string;
 };
 
-type Drafts = Record<number, {
-  price: string;
-  startNumber: string;
-  totalTickets: string;
-}>;
+type Drafts = Record<
+  number,
+  {
+    price: string;
+    startNumber: string;
+    totalTickets: string;
+  }
+>;
 
 const ALL_COLORS: RaffleColor[] = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange"];
 
+/**
+ * Set your offer pricing here.
+ * Example below:
+ * 5 tickets for £8
+ * 10 tickets for £15
+ *
+ * The calculator will always use the cheapest valid combination.
+ */
+const OFFER_TIERS = [
+  { quantity: 10, price: 15 },
+  { quantity: 5, price: 8 },
+];
+
 function money(n: number) {
-  return `£${n.toFixed(2)}`;
+  return `£${Number.isFinite(n) ? n.toFixed(2) : "0.00"}`;
 }
 
 function cardStyle(): React.CSSProperties {
@@ -131,16 +149,45 @@ function colorBadgeStyle(color: RaffleColor, active = false): React.CSSPropertie
   };
 }
 
-function clampPositiveInt(n: number, fallback = 1) {
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(1, Math.floor(n));
-}
-
-function buildInitialSold(colors: RaffleColor[]): Record<RaffleColor, number[]> {
+function buildInitialSold(): Record<RaffleColor, number[]> {
   return ALL_COLORS.reduce((acc, c) => {
-    acc[c] = colors.includes(c) ? [] : [];
+    acc[c] = [];
     return acc;
   }, {} as Record<RaffleColor, number[]>);
+}
+
+function buildEmptySelections(): Record<RaffleColor, number[]> {
+  return ALL_COLORS.reduce((acc, c) => {
+    acc[c] = [];
+    return acc;
+  }, {} as Record<RaffleColor, number[]>);
+}
+
+function getOfferBreakdown(quantity: number, basePrice: number) {
+  const tiers = [...OFFER_TIERS]
+    .filter((t) => t.quantity > 0 && t.price >= 0)
+    .sort((a, b) => b.quantity - a.quantity);
+
+  let remaining = quantity;
+  let total = 0;
+  const applied: { quantity: number; price: number; count: number }[] = [];
+
+  for (const tier of tiers) {
+    const count = Math.floor(remaining / tier.quantity);
+    if (count > 0) {
+      applied.push({ ...tier, count });
+      remaining -= count * tier.quantity;
+      total += count * tier.price;
+    }
+  }
+
+  total += remaining * basePrice;
+
+  return {
+    total,
+    remainderCount: remaining,
+    applied,
+  };
 }
 
 export default function RaffleSection() {
@@ -157,7 +204,7 @@ export default function RaffleSection() {
       price: 2,
       startNumber: 1,
       totalTickets: 100,
-      colors: ["Red", "Blue", "Green"],
+      colors: ["Red", "Blue", "Green", "Yellow"],
       soldByColor: {
         Red: [1, 2, 8],
         Blue: [3, 10],
@@ -174,12 +221,15 @@ export default function RaffleSection() {
   const [drafts, setDrafts] = useState<Drafts>({
     1: { price: "2", startNumber: "1", totalTickets: "100" },
   });
+
   const [selectedColorByEvent, setSelectedColorByEvent] = useState<Record<number, RaffleColor>>({
     1: "Red",
   });
-  const [selectedTicketsByEvent, setSelectedTicketsByEvent] = useState<Record<number, number[]>>({
-    1: [],
+
+  const [selectedTicketsByEvent, setSelectedTicketsByEvent] = useState<ColorSelectionMap>({
+    1: buildEmptySelections(),
   });
+
   const [purchases, setPurchases] = useState<RafflePurchase[]>([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
 
@@ -189,11 +239,33 @@ export default function RaffleSection() {
     startNumber: String(event.startNumber),
     totalTickets: String(event.totalTickets),
   };
+
   const selectedColor = selectedColorByEvent[event.id] ?? event.colors[0] ?? "Red";
-  const selectedTickets = selectedTicketsByEvent[event.id] ?? [];
+  const eventSelections = selectedTicketsByEvent[event.id] ?? buildEmptySelections();
+  const selectedTicketsForColor = eventSelections[selectedColor] ?? [];
   const soldForSelectedColor = event.soldByColor[selectedColor] ?? [];
   const availableForSelectedColor = event.totalTickets - soldForSelectedColor.length;
-  const total = selectedTickets.length * event.price;
+
+  const totalSelectedCount = useMemo(() => {
+    return event.colors.reduce((sum, color) => sum + (eventSelections[color]?.length ?? 0), 0);
+  }, [event.colors, eventSelections]);
+
+  const selectedSummaryText = useMemo(() => {
+    const parts = event.colors
+      .map((color) => {
+        const nums = eventSelections[color] ?? [];
+        if (!nums.length) return null;
+        return `${color}: ${nums.join(", ")}`;
+      })
+      .filter(Boolean);
+
+    return parts.length ? parts.join(" • ") : "None selected";
+  }, [event.colors, eventSelections]);
+
+  const subtotal = totalSelectedCount * event.price;
+  const offerPricing = getOfferBreakdown(totalSelectedCount, event.price);
+  const total = offerPricing.total;
+  const savings = subtotal - total;
 
   const priceInvalid = draft.price.trim() === "" || Number(draft.price) <= 0;
   const startInvalid = draft.startNumber.trim() === "" || Number(draft.startNumber) <= 0;
@@ -204,8 +276,7 @@ export default function RaffleSection() {
   const canBuy =
     buyerName.trim() !== "" &&
     buyerEmail.trim() !== "" &&
-    selectedColor &&
-    selectedTickets.length > 0 &&
+    totalSelectedCount > 0 &&
     !invalidForCompletion;
 
   const visibleTicketNumbers = useMemo(() => {
@@ -227,6 +298,7 @@ export default function RaffleSection() {
   function addEvent() {
     const id = Date.now();
     const colors: RaffleColor[] = ["Red", "Blue"];
+
     const newEvent: RaffleEvent = {
       id,
       title: `New Raffle ${events.length + 1}`,
@@ -236,37 +308,74 @@ export default function RaffleSection() {
       startNumber: 0,
       totalTickets: 0,
       colors,
-      soldByColor: buildInitialSold(colors),
+      soldByColor: buildInitialSold(),
       background: "",
     };
+
     setEvents((curr) => [...curr, newEvent]);
     setDrafts((curr) => ({ ...curr, [id]: { price: "0", startNumber: "0", totalTickets: "0" } }));
     setSelectedColorByEvent((curr) => ({ ...curr, [id]: "Red" }));
-    setSelectedTicketsByEvent((curr) => ({ ...curr, [id]: [] }));
+    setSelectedTicketsByEvent((curr) => ({ ...curr, [id]: buildEmptySelections() }));
     setActiveEventId(id);
   }
 
   function removeCurrentEvent() {
     if (events.length <= 1) return;
+
     const remaining = events.filter((e) => e.id !== event.id);
     setEvents(remaining);
+
+    setDrafts((curr) => {
+      const next = { ...curr };
+      delete next[event.id];
+      return next;
+    });
+
+    setSelectedColorByEvent((curr) => {
+      const next = { ...curr };
+      delete next[event.id];
+      return next;
+    });
+
+    setSelectedTicketsByEvent((curr) => {
+      const next = { ...curr };
+      delete next[event.id];
+      return next;
+    });
+
     setActiveEventId(remaining[0].id);
   }
 
   function toggleColor(color: RaffleColor) {
     setSelectedColorByEvent((curr) => ({ ...curr, [event.id]: color }));
-    setSelectedTicketsByEvent((curr) => ({ ...curr, [event.id]: [] }));
   }
 
   function toggleTicketNumber(ticketNo: number) {
     if (soldForSelectedColor.includes(ticketNo)) return;
+
     setSelectedTicketsByEvent((curr) => {
-      const existing = curr[event.id] ?? [];
-      const next = existing.includes(ticketNo)
+      const eventMap = curr[event.id] ?? buildEmptySelections();
+      const existing = eventMap[selectedColor] ?? [];
+
+      const nextForColor = existing.includes(ticketNo)
         ? existing.filter((n) => n !== ticketNo)
         : [...existing, ticketNo].sort((a, b) => a - b);
-      return { ...curr, [event.id]: next };
+
+      return {
+        ...curr,
+        [event.id]: {
+          ...eventMap,
+          [selectedColor]: nextForColor,
+        },
+      };
     });
+  }
+
+  function clearAllSelections() {
+    setSelectedTicketsByEvent((curr) => ({
+      ...curr,
+      [event.id]: buildEmptySelections(),
+    }));
   }
 
   function uploadBackground(e: React.ChangeEvent<HTMLInputElement>) {
@@ -281,10 +390,7 @@ export default function RaffleSection() {
 
   function toggleAdminColor(color: RaffleColor) {
     const exists = event.colors.includes(color);
-    const nextColors = exists
-      ? event.colors.filter((c) => c !== color)
-      : [...event.colors, color];
-
+    const nextColors = exists ? event.colors.filter((c) => c !== color) : [...event.colors, color];
     const nextSelected = nextColors.includes(selectedColor) ? selectedColor : nextColors[0] ?? "Red";
 
     setEvents((curr) =>
@@ -303,22 +409,85 @@ export default function RaffleSection() {
     );
 
     setSelectedColorByEvent((curr) => ({ ...curr, [event.id]: nextSelected }));
-    setSelectedTicketsByEvent((curr) => ({ ...curr, [event.id]: [] }));
+
+    setSelectedTicketsByEvent((curr) => {
+      const existing = curr[event.id] ?? buildEmptySelections();
+      const nextSelections = { ...existing };
+
+      if (exists) {
+        nextSelections[color] = [];
+      } else {
+        nextSelections[color] = nextSelections[color] ?? [];
+      }
+
+      return {
+        ...curr,
+        [event.id]: nextSelections,
+      };
+    });
   }
 
-  function downloadReceipt() {
+  function downloadReceipt(purchase?: {
+    buyerName: string;
+    buyerEmail: string;
+    selections: Record<RaffleColor, number[]>;
+    quantity: number;
+    subtotal: number;
+    total: number;
+    createdAt?: string;
+  }) {
+    const buyer = purchase?.buyerName ?? buyerName ?? "";
+    const email = purchase?.buyerEmail ?? buyerEmail ?? "";
+    const selections = purchase?.selections ?? eventSelections;
+    const quantity = purchase?.quantity ?? totalSelectedCount;
+    const receiptSubtotal = purchase?.subtotal ?? subtotal;
+    const receiptTotal = purchase?.total ?? total;
+    const purchasedAt = purchase?.createdAt ?? new Date().toLocaleString();
+
+    const selectionLines = event.colors
+      .map((color) => {
+        const tickets = selections[color] ?? [];
+        return tickets.length ? `${color}: ${tickets.join(", ")}` : null;
+      })
+      .filter(Boolean) as string[];
+
     const doc = new jsPDF();
+    let y = 22;
+
     doc.setFontSize(20);
-    doc.text("Raffle Purchase Receipt", 20, 22);
+    doc.text("Raffle Purchase Receipt", 20, y);
+    y += 16;
+
     doc.setFontSize(12);
-    doc.text(`Raffle: ${event.title}`, 20, 38);
-    doc.text(`Buyer: ${buyerName || "Not entered"}`, 20, 48);
-    doc.text(`Email: ${buyerEmail || "Not entered"}`, 20, 58);
-    doc.text(`Color: ${selectedColor}`, 20, 68);
-    doc.text(`Tickets: ${selectedTickets.length ? selectedTickets.join(", ") : "None"}`, 20, 78);
-    doc.text(`Quantity: ${selectedTickets.length}`, 20, 88);
-    doc.text(`Price each: ${money(event.price)}`, 20, 98);
-    doc.text(`Total: ${money(total)}`, 20, 108);
+    doc.text(`Raffle: ${event.title}`, 20, y);
+    y += 10;
+    doc.text(`Buyer: ${buyer || "Not entered"}`, 20, y);
+    y += 10;
+    doc.text(`Email: ${email || "Not entered"}`, 20, y);
+    y += 10;
+    doc.text(`Purchased: ${purchasedAt}`, 20, y);
+    y += 14;
+
+    doc.text(`Quantity: ${quantity}`, 20, y);
+    y += 10;
+    doc.text(`Standard subtotal: ${money(receiptSubtotal)}`, 20, y);
+    y += 10;
+    doc.text(`Total paid: ${money(receiptTotal)}`, 20, y);
+    y += 14;
+
+    doc.text("Selections:", 20, y);
+    y += 10;
+
+    if (!selectionLines.length) {
+      doc.text("None", 20, y);
+    } else {
+      selectionLines.forEach((line) => {
+        const wrapped = doc.splitTextToSize(line, 170);
+        doc.text(wrapped, 20, y);
+        y += wrapped.length * 8;
+      });
+    }
+
     doc.save("buyer-raffle-receipt.pdf");
   }
 
@@ -327,49 +496,80 @@ export default function RaffleSection() {
 
     const now = new Date().toLocaleString();
 
+    const cleanedSelections = ALL_COLORS.reduce((acc, color) => {
+      const tickets = (eventSelections[color] ?? []).slice().sort((a, b) => a - b);
+      acc[color] = tickets;
+      return acc;
+    }, {} as Record<RaffleColor, number[]>);
+
     setEvents((curr) =>
       curr.map((e) =>
         e.id === event.id
           ? {
               ...e,
-              soldByColor: {
-                ...e.soldByColor,
-                [selectedColor]: [...(e.soldByColor[selectedColor] ?? []), ...selectedTickets].sort((a, b) => a - b),
-              },
+              soldByColor: ALL_COLORS.reduce((soldAcc, color) => {
+                const existing = e.soldByColor[color] ?? [];
+                const newlySelected = cleanedSelections[color] ?? [];
+                soldAcc[color] = [...existing, ...newlySelected].sort((a, b) => a - b);
+                return soldAcc;
+              }, {} as Record<RaffleColor, number[]>),
             }
           : e,
       ),
     );
-appendLedger({
-  id: String(Date.now()),
-  module: "raffle",
-  itemTitle: event.title,
-  buyerName: buyerName.trim(),
-  buyerEmail: buyerEmail.trim(),
-  description: `${selectedColor}: ${selectedTickets.join(", ")}`,
-  quantity: selectedTickets.length,
-  total,
-  createdAt: now,
-});
-    
-    setPurchases((curr) => [
-      {
-        id: Date.now(),
-        eventId: event.id,
-        eventTitle: event.title,
-        buyerName: buyerName.trim(),
-        buyerEmail: buyerEmail.trim(),
-        color: selectedColor,
-        tickets: [...selectedTickets],
-        quantity: selectedTickets.length,
-        total,
-        createdAt: now,
-      },
-      ...curr,
-    ]);
 
-    setSelectedTicketsByEvent((curr) => ({ ...curr, [event.id]: [] }));
-    downloadReceipt();
+    const description = event.colors
+      .map((color) => {
+        const nums = cleanedSelections[color] ?? [];
+        return nums.length ? `${color}: ${nums.join(", ")}` : null;
+      })
+      .filter(Boolean)
+      .join(" | ");
+
+    appendLedger({
+      id: String(Date.now()),
+      module: "raffle",
+      itemTitle: event.title,
+      buyerName: buyerName.trim(),
+      buyerEmail: buyerEmail.trim(),
+      description,
+      quantity: totalSelectedCount,
+      total,
+      createdAt: now,
+    });
+
+    const purchaseRecord: RafflePurchase = {
+      id: Date.now(),
+      eventId: event.id,
+      eventTitle: event.title,
+      buyerName: buyerName.trim(),
+      buyerEmail: buyerEmail.trim(),
+      selections: cleanedSelections,
+      quantity: totalSelectedCount,
+      subtotal,
+      total,
+      createdAt: now,
+    };
+
+    setPurchases((curr) => [purchaseRecord, ...curr]);
+
+    setSelectedTicketsByEvent((curr) => ({
+      ...curr,
+      [event.id]: buildEmptySelections(),
+    }));
+
+    setBuyerName("");
+    setBuyerEmail("");
+
+    downloadReceipt({
+      buyerName: purchaseRecord.buyerName,
+      buyerEmail: purchaseRecord.buyerEmail,
+      selections: purchaseRecord.selections,
+      quantity: purchaseRecord.quantity,
+      subtotal: purchaseRecord.subtotal,
+      total: purchaseRecord.total,
+      createdAt: purchaseRecord.createdAt,
+    });
   }
 
   const eventPurchaseData = purchases.filter((p) => p.eventId === event.id);
@@ -387,7 +587,15 @@ appendLedger({
     >
       <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gap: 20 }}>
         <section style={cardStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
               <div
                 style={{
@@ -411,7 +619,8 @@ appendLedger({
                 Raffle Standalone
               </h1>
               <p style={{ margin: "10px 0 0", color: "#cbd5e1", maxWidth: 760 }}>
-                Premium raffle section with multiple raffles, color ticket books, admin controls, sold blocking, purchase data, and PDF receipts.
+                Premium raffle section with multiple raffles, multi-colour ticket selection, admin controls, sold
+                blocking, purchase data, offer pricing, and PDF receipts.
               </p>
             </div>
 
@@ -436,12 +645,26 @@ appendLedger({
 
         {admin && (
           <section style={cardStyle()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
               <h2 style={{ margin: 0, fontSize: 28 }}>Admin • Raffle</h2>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={addEvent} style={chipStyle(false)}>Add Raffle</button>
-                <button onClick={removeCurrentEvent} style={chipStyle(false)}>Remove Current</button>
-                <button onClick={() => uploadRef.current?.click()} style={chipStyle(false)}>Background Image</button>
+                <button onClick={addEvent} style={chipStyle(false)}>
+                  Add Raffle
+                </button>
+                <button onClick={removeCurrentEvent} style={chipStyle(false)}>
+                  Remove Current
+                </button>
+                <button onClick={() => uploadRef.current?.click()} style={chipStyle(false)}>
+                  Background Image
+                </button>
               </div>
             </div>
 
@@ -455,24 +678,47 @@ appendLedger({
               ))}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 18 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 16,
+                marginTop: 18,
+              }}
+            >
               <div>
                 <label style={labelStyle()}>Listing title</label>
-                <input value={event.title} onChange={(e) => setEventPatch(event.id, { title: e.target.value })} style={inputStyle()} />
+                <input
+                  value={event.title}
+                  onChange={(e) => setEventPatch(event.id, { title: e.target.value })}
+                  style={inputStyle()}
+                />
               </div>
+
               <div>
                 <label style={labelStyle()}>Event name</label>
-                <input value={event.eventName} onChange={(e) => setEventPatch(event.id, { eventName: e.target.value })} style={inputStyle()} />
+                <input
+                  value={event.eventName}
+                  onChange={(e) => setEventPatch(event.id, { eventName: e.target.value })}
+                  style={inputStyle()}
+                />
               </div>
+
               <div>
                 <label style={labelStyle()}>Venue</label>
-                <input value={event.venue} onChange={(e) => setEventPatch(event.id, { venue: e.target.value })} style={inputStyle()} />
+                <input
+                  value={event.venue}
+                  onChange={(e) => setEventPatch(event.id, { venue: e.target.value })}
+                  style={inputStyle()}
+                />
               </div>
+
               <div>
                 <label style={labelStyle()}>Ticket price</label>
                 <input
                   type="number"
                   min={0}
+                  step="0.01"
                   value={draft.price}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -532,9 +778,7 @@ appendLedger({
                 <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
                   Availability
                 </div>
-                <div style={{ marginTop: 8, fontWeight: 700, fontSize: 20 }}>
-                  {availableForSelectedColor} available
-                </div>
+                <div style={{ marginTop: 8, fontWeight: 700, fontSize: 20 }}>{availableForSelectedColor} available</div>
                 <div style={{ marginTop: 6, color: "#cbd5e1", fontSize: 14 }}>
                   {soldForSelectedColor.length} sold of {event.totalTickets} for {selectedColor}
                 </div>
@@ -570,7 +814,8 @@ appendLedger({
                   color: "#fecdd3",
                 }}
               >
-                Some required values are blank or 0. They are allowed while editing, but must be greater than 0 for completion.
+                Some required values are blank or 0. They are allowed while editing, but must be greater than 0 for
+                completion.
               </div>
             )}
 
@@ -596,7 +841,16 @@ appendLedger({
                       </div>
                       <div style={{ marginTop: 6, color: "#cbd5e1" }}>{purchase.buyerEmail}</div>
                       <div style={{ marginTop: 6, color: "#cbd5e1" }}>
-                        {purchase.color}: {purchase.tickets.join(", ")}
+                        {event.colors
+                          .map((color) => {
+                            const nums = purchase.selections[color] ?? [];
+                            return nums.length ? `${color}: ${nums.join(", ")}` : null;
+                          })
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </div>
+                      <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+                        {purchase.quantity} tickets • subtotal {money(purchase.subtotal)} • paid {money(purchase.total)}
                       </div>
                       <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>{purchase.createdAt}</div>
                     </div>
@@ -619,21 +873,29 @@ appendLedger({
         >
           <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: 30 }}>{event.title} • Buyer View</h2>
           <p style={{ marginTop: 0, marginBottom: 18, color: "#cbd5e1" }}>
-            Choose a raffle color, then select the ticket numbers you want. Sold tickets are blocked to avoid duplication.
+            Choose any colour, select ticket numbers, then switch colours and keep building the same basket. Offer
+            pricing is applied across the combined total.
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-            {event.colors.map((color) => (
-              <button key={color} onClick={() => toggleColor(color)} style={colorBadgeStyle(color, selectedColor === color)}>
-                {color}
-              </button>
-            ))}
+            {event.colors.map((color) => {
+              const count = eventSelections[color]?.length ?? 0;
+              return (
+                <button
+                  key={color}
+                  onClick={() => toggleColor(color)}
+                  style={colorBadgeStyle(color, selectedColor === color)}
+                >
+                  {color} {count > 0 ? `(${count})` : ""}
+                </button>
+              );
+            })}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(10, minmax(0, 1fr))", gap: 8 }}>
             {visibleTicketNumbers.map((ticketNo) => {
               const isSold = soldForSelectedColor.includes(ticketNo);
-              const isSelected = selectedTickets.includes(ticketNo);
+              const isSelected = selectedTicketsForColor.includes(ticketNo);
 
               return (
                 <button
@@ -649,11 +911,7 @@ appendLedger({
                       : isSelected
                       ? "1px solid white"
                       : "1px solid rgba(255,255,255,0.15)",
-                    background: isSold
-                      ? "rgba(244,63,94,0.22)"
-                      : isSelected
-                      ? "white"
-                      : "rgba(15,23,42,0.72)",
+                    background: isSold ? "rgba(244,63,94,0.22)" : isSelected ? "white" : "rgba(15,23,42,0.72)",
                     color: isSelected ? "#020617" : "white",
                     fontWeight: 700,
                     cursor: isSold ? "not-allowed" : "pointer",
@@ -667,26 +925,65 @@ appendLedger({
           </div>
 
           <div style={{ marginTop: 10, color: "#94a3b8", fontSize: 12 }}>
-            Sold tickets are blocked and remain sold after purchase for the selected color.
+            Sold tickets are blocked only within the currently selected colour book. You can mix colours in one order.
           </div>
 
-          <div style={summaryCardStyle()}>
+          <div style={{ ...summaryCardStyle(), marginTop: 18 }}>
             <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
               Selected tickets
             </div>
 
-            <div style={{ marginTop: 8, color: "#e2e8f0" }}>
-              {selectedTickets.length ? `${selectedColor}: ${selectedTickets.join(", ")}` : "None selected"}
-            </div>
+            <div style={{ marginTop: 8, color: "#e2e8f0" }}>{selectedSummaryText}</div>
 
-            <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                Amount due
+            <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
+                  Total tickets
+                </div>
+                <div style={{ fontWeight: 700 }}>{totalSelectedCount}</div>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 22 }}>{money(total)}</div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
+                  Standard subtotal
+                </div>
+                <div style={{ fontWeight: 700 }}>{money(subtotal)}</div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
+                  Offer pricing total
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 22 }}>{money(total)}</div>
+              </div>
+
+              {savings > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
+                    Savings
+                  </div>
+                  <div style={{ fontWeight: 700 }}>{money(savings)}</div>
+                </div>
+              )}
+
+              {offerPricing.applied.length > 0 && (
+                <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>
+                  Offer applied:{" "}
+                  {offerPricing.applied
+                    .map((tier) => `${tier.count} × (${tier.quantity} for ${money(tier.price)})`)
+                    .join(" + ")}
+                  {offerPricing.remainderCount > 0
+                    ? ` + ${offerPricing.remainderCount} at ${money(event.price)} each`
+                    : ""}
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+              <button onClick={clearAllSelections} style={{ ...secondaryButtonStyle(), flex: 1, minWidth: 220 }}>
+                Clear Selection
+              </button>
+
               <button
                 onClick={buyRaffleTickets}
                 disabled={!canBuy}
@@ -705,7 +1002,7 @@ appendLedger({
                 Buy Raffle Tickets
               </button>
 
-              <button onClick={downloadReceipt} style={{ ...secondaryButtonStyle(), flex: 1, minWidth: 220 }}>
+              <button onClick={() => downloadReceipt()} style={{ ...secondaryButtonStyle(), flex: 1, minWidth: 220 }}>
                 Download PDF Receipt
               </button>
             </div>
