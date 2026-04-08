@@ -3,15 +3,24 @@ import Login from "./Login";
 import SquaresSection from "./SquaresSection";
 import RaffleSection from "./RaffleSection";
 import TicketsSection from "./TicketsSection";
+import PublicRafflePage from "./PublicRafflePage";
 import { useAuth } from "./useAuth";
 
-type View = "home" | "login" | "squares" | "raffle" | "tickets";
+type View =
+  | "home"
+  | "login"
+  | "squares"
+  | "raffle"
+  | "tickets"
+  | "public-raffle";
 
 function navButtonStyle(active: boolean): React.CSSProperties {
   return {
     padding: "10px 16px",
     borderRadius: 12,
-    border: active ? "1px solid rgba(125,211,252,0.35)" : "1px solid rgba(255,255,255,0.10)",
+    border: active
+      ? "1px solid rgba(125,211,252,0.35)"
+      : "1px solid rgba(255,255,255,0.10)",
     background: active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
     color: "white",
     fontWeight: 600,
@@ -22,6 +31,9 @@ function navButtonStyle(active: boolean): React.CSSProperties {
 export default function App() {
   const [view, setView] = useState<View>("home");
   const { user, tenant, isLoggedIn, canManage, loading } = useAuth();
+
+  // change this to your real tenant slug
+  const publicSlug = "brave-ceilidh-25";
 
   return (
     <div
@@ -51,15 +63,23 @@ export default function App() {
         <button onClick={() => setView("home")} style={navButtonStyle(view === "home")}>
           Home
         </button>
+
+        <button onClick={() => setView("public-raffle")} style={navButtonStyle(view === "public-raffle")}>
+          Public Raffle
+        </button>
+
         <button onClick={() => setView("squares")} style={navButtonStyle(view === "squares")}>
-          Squares
+          Admin Squares
         </button>
+
         <button onClick={() => setView("raffle")} style={navButtonStyle(view === "raffle")}>
-          Raffle
+          Admin Raffle
         </button>
+
         <button onClick={() => setView("tickets")} style={navButtonStyle(view === "tickets")}>
-          Tickets
+          Admin Tickets
         </button>
+
         <button onClick={() => setView("login")} style={navButtonStyle(view === "login")}>
           {loading ? "Checking..." : isLoggedIn ? "Account" : "Login"}
         </button>
@@ -85,10 +105,14 @@ export default function App() {
               : "You are not logged in."}
           </p>
           <p>{canManage ? "You can manage this private platform." : "Buyer or public mode."}</p>
+          <p>Public buyer testing slug: {publicSlug}</p>
         </div>
       )}
 
       {view === "login" && <Login />}
+
+      {view === "public-raffle" && <PublicRafflePage slug={publicSlug} />}
+
       {view === "squares" && <SquaresSection />}
       {view === "raffle" && <RaffleSection />}
       {view === "tickets" && <TicketsSection />}
