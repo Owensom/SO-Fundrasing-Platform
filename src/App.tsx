@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import AdminLogin from "./AdminLogin";
+import Login from "./Login";
 import SquaresSection from "./SquaresSection";
 import RaffleSection from "./RaffleSection";
 import TicketsSection from "./TicketsSection";
-import { useAdminAuth } from "./useAdminAuth";
+import { useAuth } from "./useAuth";
 
-type View = "home" | "admin-login" | "squares" | "raffle" | "tickets";
+type View = "home" | "login" | "squares" | "raffle" | "tickets";
 
 function navButtonStyle(active: boolean): React.CSSProperties {
   return {
@@ -21,7 +21,7 @@ function navButtonStyle(active: boolean): React.CSSProperties {
 
 export default function App() {
   const [view, setView] = useState<View>("home");
-  const { isAdmin, loading } = useAdminAuth();
+  const { user, tenant, isLoggedIn, canManage, loading } = useAuth();
 
   return (
     <div
@@ -39,6 +39,7 @@ export default function App() {
           display: "flex",
           gap: 12,
           flexWrap: "wrap",
+          alignItems: "center",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           background: "rgba(2,6,23,0.75)",
           position: "sticky",
@@ -59,23 +60,35 @@ export default function App() {
         <button onClick={() => setView("tickets")} style={navButtonStyle(view === "tickets")}>
           Tickets
         </button>
-        <button
-          onClick={() => setView("admin-login")}
-          style={navButtonStyle(view === "admin-login")}
-        >
-          {loading ? "Checking..." : isAdmin ? "Admin Account" : "Admin Login"}
+        <button onClick={() => setView("login")} style={navButtonStyle(view === "login")}>
+          {loading ? "Checking..." : isLoggedIn ? "Account" : "Login"}
         </button>
+
+        <div style={{ marginLeft: "auto", fontSize: 13, color: "#cbd5e1" }}>
+          {loading
+            ? "Checking access..."
+            : isLoggedIn
+            ? `${tenant?.name ?? "Tenant"} • ${user?.role ?? "user"}`
+            : "Not logged in"}
+        </div>
       </div>
 
       {view === "home" && (
         <div style={{ padding: 24 }}>
           <h1 style={{ marginTop: 0 }}>SO Fundraising Platform</h1>
           <p>Select a section above.</p>
-          <p>{loading ? "Checking admin..." : isAdmin ? "Admin is logged in." : "Buyer mode."}</p>
+          <p>
+            {loading
+              ? "Checking account..."
+              : isLoggedIn
+              ? `Logged in to ${tenant?.name ?? "your tenant"} as ${user?.email}.`
+              : "You are not logged in."}
+          </p>
+          <p>{canManage ? "You can manage this private platform." : "Buyer or public mode."}</p>
         </div>
       )}
 
-      {view === "admin-login" && <AdminLogin />}
+      {view === "login" && <Login />}
       {view === "squares" && <SquaresSection />}
       {view === "raffle" && <RaffleSection />}
       {view === "tickets" && <TicketsSection />}
