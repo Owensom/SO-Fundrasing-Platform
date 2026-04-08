@@ -1,22 +1,23 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { tenants, raffleEvents } from "../../_lib/store";
+import { getStore } from "../../_lib/store";
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
-  const slug = String(req.query.slug || "");
-  const tenant = tenants.find((t) => t.slug === slug && t.isActive);
+export default function handler(req: any, res: any) {
+  const { slug } = req.query;
+
+  if (!slug) {
+    return res.status(400).json({ error: "Missing slug" });
+  }
+
+  const store = getStore();
+
+  const tenant = store.tenants.find((t: any) => t.slug === slug);
 
   if (!tenant) {
     return res.status(404).json({ error: "Tenant not found" });
   }
 
-  const raffles = raffleEvents.filter((e) => e.tenantId === tenant.id);
+  const raffles = store.raffles.filter(
+    (r: any) => r.tenantId === tenant.id
+  );
 
-  return res.json({
-    tenant: {
-      id: tenant.id,
-      name: tenant.name,
-      slug: tenant.slug,
-    },
-    raffles,
-  });
+  res.json(raffles);
 }
