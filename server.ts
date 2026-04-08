@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { randomUUID } from "crypto";
 
 dotenv.config();
 
@@ -14,35 +15,52 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: "http://localhost:5173",
     credentials: true,
   })
 );
 
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret";
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
-const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || "";
 
-type AdminJwtPayload = {
+type Role = "owner" | "admin" | "staff";
+type TicketMode = "rows" | "tables";
+type RaffleColor = "Red" | "Blue" | "Green" | "Yellow" | "Purple" | "Orange";
+
+type Tenant = {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type User = {
+  id: string;
+  tenantId: string;
   email: string;
-  role: "admin";
+  passwordHash: string;
+  role: Role;
+  isActive: boolean;
+  createdAt: string;
 };
 
 type SquareGame = {
-  id: number;
+  id: string;
+  tenantId: string;
   title: string;
   total: number;
   price: number;
   background?: string;
   sold: number[];
   reserved: number[];
+  createdAt: string;
+  updatedAt: string;
 };
 
-type RaffleColor = "Red" | "Blue" | "Green" | "Yellow" | "Purple" | "Orange";
-
 type RaffleEvent = {
-  id: number;
+  id: string;
+  tenantId: string;
   title: string;
   eventName: string;
   venue: string;
@@ -52,19 +70,20 @@ type RaffleEvent = {
   colors: RaffleColor[];
   soldByColor: Record<RaffleColor, number[]>;
   background?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-type TicketMode = "rows" | "tables";
-
 type TicketTable = {
-  id: number;
+  id: string;
   name: string;
   seats: number;
   sold: number;
 };
 
 type TicketEvent = {
-  id: number;
+  id: string;
+  tenantId: string;
   title: string;
   eventName: string;
   venue: string;
@@ -75,47 +94,37 @@ type TicketEvent = {
   soldSeatIds: string[];
   tables: TicketTable[];
   background?: string;
-};
-
-type SquarePurchase = {
-  id: number;
-  gameId: number;
-  gameTitle: string;
-  buyerName: string;
-  buyerEmail: string;
-  squares: number[];
-  total: number;
   createdAt: string;
+  updatedAt: string;
 };
 
-type RafflePurchase = {
-  id: number;
-  eventId: number;
-  eventTitle: string;
+type Purchase = {
+  id: string;
+  tenantId: string;
+  module: "squares" | "raffle" | "tickets";
+  itemId?: string;
+  itemTitle: string;
   buyerName: string;
   buyerEmail: string;
-  selections: Record<RaffleColor, number[]>;
   quantity: number;
-  subtotal: number;
+  subtotal?: number;
   total: number;
+  details: unknown;
   createdAt: string;
 };
 
-type TicketPurchase = {
-  id: number;
-  eventId: number;
-  eventTitle: string;
-  buyerName: string;
-  buyerEmail: string;
-  mode: TicketMode;
-  seats: string[];
-  tableName?: string;
-  quantity: number;
-  total: number;
-  createdAt: string;
+type AuthPayload = {
+  userId: string;
+  tenantId: string;
+  role: Role;
+  email: string;
 };
 
 const ALL_COLORS: RaffleColor[] = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange"];
+
+function nowIso() {
+  return new Date().toISOString();
+}
 
 function buildInitialSold(): Record<RaffleColor, number[]> {
   return ALL_COLORS.reduce((acc, color) => {
@@ -124,67 +133,136 @@ function buildInitialSold(): Record<RaffleColor, number[]> {
   }, {} as Record<RaffleColor, number[]>);
 }
 
-function nextId() {
-  return Date.now() + Math.floor(Math.random() * 1000);
-}
-
-function signAdminToken(payload: AdminJwtPayload) {
+function signAuthToken(payload: AuthPayload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
-function requireAdmin(
+function requireAuth(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) {
-  const token = req.cookies.admin_token;
+  const token = req.cookies.auth_token;
 
   if (!token) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AdminJwtPayload;
-
-    if (decoded.role !== "admin") {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-
-    (req as any).admin = decoded;
+    const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    (req as any).auth = decoded;
     next();
   } catch {
     return res.status(401).json({ error: "Invalid session" });
   }
 }
 
+function requireAdminOrOwner(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  const auth = (req as any).auth as AuthPayload | undefined;
+
+  if (!auth) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  if (auth.role !== "owner" && auth.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  next();
+}
+
 // --------------------
-// In-memory data
+// In-memory seed data
 // --------------------
 
-let squares: SquareGame[] = [
+const tenantAId = randomUUID();
+const tenantBId = randomUUID();
+
+const tenants: Tenant[] = [
   {
-    id: 1,
+    id: tenantAId,
+    name: "SO Fundraising Demo A",
+    slug: "demo-a",
+    isActive: true,
+    createdAt: nowIso(),
+  },
+  {
+    id: tenantBId,
+    name: "SO Fundraising Demo B",
+    slug: "demo-b",
+    isActive: true,
+    createdAt: nowIso(),
+  },
+];
+
+// Replace these hashes with real generated bcrypt hashes if you want fixed passwords.
+const DEMO_PASSWORD_HASH = bcrypt.hashSync("Password123!", 10);
+
+const users: User[] = [
+  {
+    id: randomUUID(),
+    tenantId: tenantAId,
+    email: "ownerA@example.com",
+    passwordHash: DEMO_PASSWORD_HASH,
+    role: "owner",
+    isActive: true,
+    createdAt: nowIso(),
+  },
+  {
+    id: randomUUID(),
+    tenantId: tenantAId,
+    email: "adminA@example.com",
+    passwordHash: DEMO_PASSWORD_HASH,
+    role: "admin",
+    isActive: true,
+    createdAt: nowIso(),
+  },
+  {
+    id: randomUUID(),
+    tenantId: tenantBId,
+    email: "ownerB@example.com",
+    passwordHash: DEMO_PASSWORD_HASH,
+    role: "owner",
+    isActive: true,
+    createdAt: nowIso(),
+  },
+];
+
+let squareGames: SquareGame[] = [
+  {
+    id: randomUUID(),
+    tenantId: tenantAId,
     title: "Super Bowl Squares",
     total: 100,
     price: 10,
     sold: [3, 8, 14],
     reserved: [5, 11],
     background: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   },
   {
-    id: 2,
-    title: "World Cup Final Squares",
-    total: 120,
-    price: 5,
-    sold: [1, 7, 23],
-    reserved: [4, 15],
+    id: randomUUID(),
+    tenantId: tenantBId,
+    title: "Private Club Squares",
+    total: 64,
+    price: 20,
+    sold: [1, 2],
+    reserved: [],
     background: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   },
 ];
 
-let raffles: RaffleEvent[] = [
+let raffleEvents: RaffleEvent[] = [
   {
-    id: 1,
+    id: randomUUID(),
+    tenantId: tenantAId,
     title: "Main Raffle",
     eventName: "Main Raffle",
     venue: "Club Hall",
@@ -201,12 +279,37 @@ let raffles: RaffleEvent[] = [
       Orange: [],
     },
     background: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  },
+  {
+    id: randomUUID(),
+    tenantId: tenantBId,
+    title: "School Fair Raffle",
+    eventName: "School Fair Raffle",
+    venue: "Gym Hall",
+    price: 1,
+    startNumber: 100,
+    totalTickets: 50,
+    colors: ["Red", "Blue"],
+    soldByColor: {
+      Red: [],
+      Blue: [],
+      Green: [],
+      Yellow: [],
+      Purple: [],
+      Orange: [],
+    },
+    background: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   },
 ];
 
-let tickets: TicketEvent[] = [
+let ticketEvents: TicketEvent[] = [
   {
-    id: 1,
+    id: randomUUID(),
+    tenantId: tenantAId,
     title: "Summer Gala",
     eventName: "Summer Gala",
     venue: "Town Hall",
@@ -217,9 +320,12 @@ let tickets: TicketEvent[] = [
     soldSeatIds: ["A1", "A2", "B5"],
     tables: [],
     background: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   },
   {
-    id: 2,
+    id: randomUUID(),
+    tenantId: tenantBId,
     title: "Charity Dinner",
     eventName: "Charity Dinner",
     venue: "Grand Hotel",
@@ -229,41 +335,54 @@ let tickets: TicketEvent[] = [
     seatsPerRow: 0,
     soldSeatIds: [],
     tables: [
-      { id: 21, name: "Table A", seats: 8, sold: 3 },
-      { id: 22, name: "Table B", seats: 10, sold: 5 },
+      { id: randomUUID(), name: "Table A", seats: 8, sold: 3 },
+      { id: randomUUID(), name: "Table B", seats: 10, sold: 5 },
     ],
     background: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   },
 ];
 
-let squarePurchases: SquarePurchase[] = [];
-let rafflePurchases: RafflePurchase[] = [];
-let ticketPurchases: TicketPurchase[] = [];
+let purchases: Purchase[] = [];
 
 // --------------------
-// Admin auth routes
+// Auth routes
 // --------------------
 
-app.post("/api/admin/login", async (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body ?? {};
 
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password required" });
   }
 
-  if (email !== ADMIN_EMAIL) {
+  const user = users.find((u) => u.email.toLowerCase() === String(email).toLowerCase());
+
+  if (!user || !user.isActive) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  const ok = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+  const tenant = tenants.find((t) => t.id === user.tenantId);
+
+  if (!tenant || !tenant.isActive) {
+    return res.status(403).json({ error: "Tenant account is inactive" });
+  }
+
+  const ok = await bcrypt.compare(password, user.passwordHash);
 
   if (!ok) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  const token = signAdminToken({ email, role: "admin" });
+  const token = signAuthToken({
+    userId: user.id,
+    tenantId: user.tenantId,
+    role: user.role,
+    email: user.email,
+  });
 
-  res.cookie("admin_token", token, {
+  res.cookie("auth_token", token, {
     httpOnly: true,
     secure: false,
     sameSite: "lax",
@@ -271,79 +390,146 @@ app.post("/api/admin/login", async (req, res) => {
   });
 
   return res.json({
-    admin: {
-      email,
-      role: "admin",
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    },
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
     },
   });
 });
 
-app.get("/api/admin/me", requireAdmin, (req, res) => {
-  const admin = (req as any).admin as AdminJwtPayload;
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const user = users.find((u) => u.id === auth.userId);
+  const tenant = tenants.find((t) => t.id === auth.tenantId);
+
+  if (!user || !tenant) {
+    return res.status(404).json({ error: "User or tenant not found" });
+  }
 
   res.json({
-    admin: {
-      email: admin.email,
-      role: admin.role,
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    },
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
     },
   });
 });
 
-app.post("/api/admin/logout", (_req, res) => {
-  res.clearCookie("admin_token");
+app.post("/api/auth/logout", (_req, res) => {
+  res.clearCookie("auth_token");
   res.json({ ok: true });
 });
 
 // --------------------
-// Public read routes
+// Tenant user management
+// Owner/admin can add more users for their own tenant
 // --------------------
 
-app.get("/api/squares", (_req, res) => {
-  res.json(squares);
+app.post("/api/users", requireAuth, requireAdminOrOwner, async (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const { email, password, role } = req.body ?? {};
+
+  if (!email || !password || !role) {
+    return res.status(400).json({ error: "Email, password and role are required" });
+  }
+
+  if (!["owner", "admin", "staff"].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
+  }
+
+  const exists = users.some((u) => u.email.toLowerCase() === String(email).toLowerCase());
+
+  if (exists) {
+    return res.status(409).json({ error: "Email already exists" });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const newUser: User = {
+    id: randomUUID(),
+    tenantId: auth.tenantId,
+    email: String(email).toLowerCase(),
+    passwordHash,
+    role,
+    isActive: true,
+    createdAt: nowIso(),
+  };
+
+  users.push(newUser);
+
+  res.json({
+    id: newUser.id,
+    tenantId: newUser.tenantId,
+    email: newUser.email,
+    role: newUser.role,
+    isActive: newUser.isActive,
+  });
 });
 
-app.get("/api/raffles", (_req, res) => {
-  res.json(raffles);
-});
+app.get("/api/users", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
 
-app.get("/api/tickets", (_req, res) => {
-  res.json(tickets);
-});
+  const tenantUsers = users
+    .filter((u) => u.tenantId === auth.tenantId)
+    .map((u) => ({
+      id: u.id,
+      tenantId: u.tenantId,
+      email: u.email,
+      role: u.role,
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+    }));
 
-app.get("/api/square-purchases", requireAdmin, (_req, res) => {
-  res.json(squarePurchases);
-});
-
-app.get("/api/raffle-purchases", requireAdmin, (_req, res) => {
-  res.json(rafflePurchases);
-});
-
-app.get("/api/ticket-purchases", requireAdmin, (_req, res) => {
-  res.json(ticketPurchases);
+  res.json(tenantUsers);
 });
 
 // --------------------
-// Squares admin routes
+// Squares routes
 // --------------------
 
-app.post("/api/squares", requireAdmin, (req, res) => {
+app.get("/api/squares", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  res.json(squareGames.filter((g) => g.tenantId === auth.tenantId));
+});
+
+app.post("/api/squares", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+
   const item: SquareGame = {
-    id: nextId(),
+    id: randomUUID(),
+    tenantId: auth.tenantId,
     title: req.body.title ?? "New Squares Game",
     total: Number(req.body.total ?? 100),
     price: Number(req.body.price ?? 5),
     background: req.body.background ?? "",
     sold: Array.isArray(req.body.sold) ? req.body.sold : [],
     reserved: Array.isArray(req.body.reserved) ? req.body.reserved : [],
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   };
 
-  squares.push(item);
+  squareGames.push(item);
   res.json(item);
 });
 
-app.put("/api/squares/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  const existing = squares.find((g) => g.id === id);
+app.put("/api/squares/:id", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const id = req.params.id;
+
+  const existing = squareGames.find((g) => g.id === id && g.tenantId === auth.tenantId);
 
   if (!existing) {
     return res.status(404).json({ error: "Squares game not found" });
@@ -353,32 +539,45 @@ app.put("/api/squares/:id", requireAdmin, (req, res) => {
     ...existing,
     ...req.body,
     id,
+    tenantId: auth.tenantId,
+    updatedAt: nowIso(),
   };
 
-  squares = squares.map((g) => (g.id === id ? updated : g));
+  squareGames = squareGames.map((g) => (g.id === id ? updated : g));
   res.json(updated);
 });
 
-app.delete("/api/squares/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  const exists = squares.some((g) => g.id === id);
+app.delete("/api/squares/:id", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const id = req.params.id;
+
+  const exists = squareGames.some((g) => g.id === id && g.tenantId === auth.tenantId);
 
   if (!exists) {
     return res.status(404).json({ error: "Squares game not found" });
   }
 
-  squares = squares.filter((g) => g.id !== id);
-  squarePurchases = squarePurchases.filter((p) => p.gameId !== id);
+  squareGames = squareGames.filter((g) => !(g.id === id && g.tenantId === auth.tenantId));
+  purchases = purchases.filter((p) => !(p.module === "squares" && p.itemId === id && p.tenantId === auth.tenantId));
+
   res.json({ ok: true });
 });
 
 // --------------------
-// Raffle admin routes
+// Raffles routes
 // --------------------
 
-app.post("/api/raffles", requireAdmin, (req, res) => {
+app.get("/api/raffles", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  res.json(raffleEvents.filter((e) => e.tenantId === auth.tenantId));
+});
+
+app.post("/api/raffles", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+
   const item: RaffleEvent = {
-    id: nextId(),
+    id: randomUUID(),
+    tenantId: auth.tenantId,
     title: req.body.title ?? "New Raffle",
     eventName: req.body.eventName ?? "New Raffle",
     venue: req.body.venue ?? "Venue",
@@ -388,15 +587,19 @@ app.post("/api/raffles", requireAdmin, (req, res) => {
     colors: Array.isArray(req.body.colors) ? req.body.colors : ["Red", "Blue"],
     soldByColor: req.body.soldByColor ?? buildInitialSold(),
     background: req.body.background ?? "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   };
 
-  raffles.push(item);
+  raffleEvents.push(item);
   res.json(item);
 });
 
-app.put("/api/raffles/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  const existing = raffles.find((e) => e.id === id);
+app.put("/api/raffles/:id", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const id = req.params.id;
+
+  const existing = raffleEvents.find((e) => e.id === id && e.tenantId === auth.tenantId);
 
   if (!existing) {
     return res.status(404).json({ error: "Raffle not found" });
@@ -406,32 +609,45 @@ app.put("/api/raffles/:id", requireAdmin, (req, res) => {
     ...existing,
     ...req.body,
     id,
+    tenantId: auth.tenantId,
+    updatedAt: nowIso(),
   };
 
-  raffles = raffles.map((e) => (e.id === id ? updated : e));
+  raffleEvents = raffleEvents.map((e) => (e.id === id ? updated : e));
   res.json(updated);
 });
 
-app.delete("/api/raffles/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  const exists = raffles.some((e) => e.id === id);
+app.delete("/api/raffles/:id", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const id = req.params.id;
+
+  const exists = raffleEvents.some((e) => e.id === id && e.tenantId === auth.tenantId);
 
   if (!exists) {
     return res.status(404).json({ error: "Raffle not found" });
   }
 
-  raffles = raffles.filter((e) => e.id !== id);
-  rafflePurchases = rafflePurchases.filter((p) => p.eventId !== id);
+  raffleEvents = raffleEvents.filter((e) => !(e.id === id && e.tenantId === auth.tenantId));
+  purchases = purchases.filter((p) => !(p.module === "raffle" && p.itemId === id && p.tenantId === auth.tenantId));
+
   res.json({ ok: true });
 });
 
 // --------------------
-// Tickets admin routes
+// Tickets routes
 // --------------------
 
-app.post("/api/tickets", requireAdmin, (req, res) => {
+app.get("/api/tickets", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  res.json(ticketEvents.filter((e) => e.tenantId === auth.tenantId));
+});
+
+app.post("/api/tickets", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+
   const item: TicketEvent = {
-    id: nextId(),
+    id: randomUUID(),
+    tenantId: auth.tenantId,
     title: req.body.title ?? "New Event",
     eventName: req.body.eventName ?? "New Event",
     venue: req.body.venue ?? "Venue",
@@ -442,15 +658,19 @@ app.post("/api/tickets", requireAdmin, (req, res) => {
     soldSeatIds: Array.isArray(req.body.soldSeatIds) ? req.body.soldSeatIds : [],
     tables: Array.isArray(req.body.tables) ? req.body.tables : [],
     background: req.body.background ?? "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   };
 
-  tickets.push(item);
+  ticketEvents.push(item);
   res.json(item);
 });
 
-app.put("/api/tickets/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  const existing = tickets.find((e) => e.id === id);
+app.put("/api/tickets/:id", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const id = req.params.id;
+
+  const existing = ticketEvents.find((e) => e.id === id && e.tenantId === auth.tenantId);
 
   if (!existing) {
     return res.status(404).json({ error: "Ticket event not found" });
@@ -460,43 +680,49 @@ app.put("/api/tickets/:id", requireAdmin, (req, res) => {
     ...existing,
     ...req.body,
     id,
+    tenantId: auth.tenantId,
+    updatedAt: nowIso(),
   };
 
-  tickets = tickets.map((e) => (e.id === id ? updated : e));
+  ticketEvents = ticketEvents.map((e) => (e.id === id ? updated : e));
   res.json(updated);
 });
 
-app.delete("/api/tickets/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  const exists = tickets.some((e) => e.id === id);
+app.delete("/api/tickets/:id", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const id = req.params.id;
+
+  const exists = ticketEvents.some((e) => e.id === id && e.tenantId === auth.tenantId);
 
   if (!exists) {
     return res.status(404).json({ error: "Ticket event not found" });
   }
 
-  tickets = tickets.filter((e) => e.id !== id);
-  ticketPurchases = ticketPurchases.filter((p) => p.eventId !== id);
+  ticketEvents = ticketEvents.filter((e) => !(e.id === id && e.tenantId === auth.tenantId));
+  purchases = purchases.filter((p) => !(p.module === "tickets" && p.itemId === id && p.tenantId === auth.tenantId));
+
   res.json({ ok: true });
 });
 
 // --------------------
-// Buyer purchase routes
-// Optional now, but recommended
+// Purchase routes
 // --------------------
 
-app.post("/api/squares/purchase", (req, res) => {
-  const { gameId, buyerName, buyerEmail, squares: requestedSquares } = req.body ?? {};
-  const game = squares.find((g) => g.id === Number(gameId));
+app.post("/api/squares/purchase", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  const { gameId, buyerName, buyerEmail, squares } = req.body ?? {};
+
+  const game = squareGames.find((g) => g.id === gameId && g.tenantId === auth.tenantId);
 
   if (!game) {
     return res.status(404).json({ error: "Squares game not found" });
   }
 
-  if (!buyerName || !buyerEmail || !Array.isArray(requestedSquares) || requestedSquares.length === 0) {
+  if (!buyerName || !buyerEmail || !Array.isArray(squares) || squares.length === 0) {
     return res.status(400).json({ error: "Invalid purchase request" });
   }
 
-  const blocked = requestedSquares.some(
+  const blocked = squares.some(
     (n: number) => game.sold.includes(n) || game.reserved.includes(n) || n < 1 || n > game.total
   );
 
@@ -504,33 +730,34 @@ app.post("/api/squares/purchase", (req, res) => {
     return res.status(409).json({ error: "One or more squares are unavailable" });
   }
 
-  const total = requestedSquares.length * game.price;
-  const createdAt = new Date().toLocaleString();
+  game.sold = [...game.sold, ...squares].sort((a, b) => a - b);
+  game.updatedAt = nowIso();
 
-  game.sold = [...game.sold, ...requestedSquares].sort((a, b) => a - b);
-
-  const purchase: SquarePurchase = {
-    id: nextId(),
-    gameId: game.id,
-    gameTitle: game.title,
+  const purchase: Purchase = {
+    id: randomUUID(),
+    tenantId: auth.tenantId,
+    module: "squares",
+    itemId: game.id,
+    itemTitle: game.title,
     buyerName,
     buyerEmail,
-    squares: [...requestedSquares].sort((a, b) => a - b),
-    total,
-    createdAt,
+    quantity: squares.length,
+    subtotal: squares.length * game.price,
+    total: squares.length * game.price,
+    details: { squares },
+    createdAt: nowIso(),
   };
 
-  squarePurchases.unshift(purchase);
+  purchases.unshift(purchase);
 
-  res.json({
-    purchase,
-    game,
-  });
+  res.json({ purchase, game });
 });
 
-app.post("/api/raffles/purchase", (req, res) => {
+app.post("/api/raffles/purchase", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
   const { eventId, buyerName, buyerEmail, selections, subtotal, total } = req.body ?? {};
-  const event = raffles.find((e) => e.id === Number(eventId));
+
+  const event = raffleEvents.find((e) => e.id === eventId && e.tenantId === auth.tenantId);
 
   if (!event) {
     return res.status(404).json({ error: "Raffle not found" });
@@ -544,11 +771,14 @@ app.post("/api/raffles/purchase", (req, res) => {
     const picked = Array.isArray(selections[color]) ? selections[color] : [];
     const sold = event.soldByColor[color] ?? [];
 
-    const hasBlocked = picked.some(
-      (n: number) => sold.includes(n) || n < event.startNumber || n >= event.startNumber + event.totalTickets
+    const invalid = picked.some(
+      (n: number) =>
+        sold.includes(n) ||
+        n < event.startNumber ||
+        n >= event.startNumber + event.totalTickets
     );
 
-    if (hasBlocked) {
+    if (invalid) {
       return res.status(409).json({ error: `One or more ${color} tickets are unavailable` });
     }
   }
@@ -558,35 +788,38 @@ app.post("/api/raffles/purchase", (req, res) => {
     event.soldByColor[color] = [...(event.soldByColor[color] ?? []), ...picked].sort((a, b) => a - b);
   }
 
+  event.updatedAt = nowIso();
+
   const quantity = ALL_COLORS.reduce((sum, color) => {
     const picked = Array.isArray(selections[color]) ? selections[color] : [];
     return sum + picked.length;
   }, 0);
 
-  const purchase: RafflePurchase = {
-    id: nextId(),
-    eventId: event.id,
-    eventTitle: event.title,
+  const purchase: Purchase = {
+    id: randomUUID(),
+    tenantId: auth.tenantId,
+    module: "raffle",
+    itemId: event.id,
+    itemTitle: event.title,
     buyerName,
     buyerEmail,
-    selections,
     quantity,
     subtotal: Number(subtotal ?? 0),
     total: Number(total ?? 0),
-    createdAt: new Date().toLocaleString(),
+    details: { selections },
+    createdAt: nowIso(),
   };
 
-  rafflePurchases.unshift(purchase);
+  purchases.unshift(purchase);
 
-  res.json({
-    purchase,
-    event,
-  });
+  res.json({ purchase, event });
 });
 
-app.post("/api/tickets/purchase", (req, res) => {
+app.post("/api/tickets/purchase", requireAuth, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
   const { eventId, buyerName, buyerEmail, mode, seats, tableId, quantity } = req.body ?? {};
-  const event = tickets.find((e) => e.id === Number(eventId));
+
+  const event = ticketEvents.find((e) => e.id === eventId && e.tenantId === auth.tenantId);
 
   if (!event) {
     return res.status(404).json({ error: "Ticket event not found" });
@@ -602,35 +835,36 @@ app.post("/api/tickets/purchase", (req, res) => {
     }
 
     const blocked = seats.some((seatId: string) => event.soldSeatIds.includes(seatId));
+
     if (blocked) {
       return res.status(409).json({ error: "One or more seats are unavailable" });
     }
 
     event.soldSeatIds = [...event.soldSeatIds, ...seats].sort();
+    event.updatedAt = nowIso();
 
-    const purchase: TicketPurchase = {
-      id: nextId(),
-      eventId: event.id,
-      eventTitle: event.title,
+    const purchase: Purchase = {
+      id: randomUUID(),
+      tenantId: auth.tenantId,
+      module: "tickets",
+      itemId: event.id,
+      itemTitle: event.title,
       buyerName,
       buyerEmail,
-      mode: "rows",
-      seats,
       quantity: seats.length,
+      subtotal: seats.length * event.price,
       total: seats.length * event.price,
-      createdAt: new Date().toLocaleString(),
+      details: { mode: "rows", seats },
+      createdAt: nowIso(),
     };
 
-    ticketPurchases.unshift(purchase);
+    purchases.unshift(purchase);
 
-    return res.json({
-      purchase,
-      event,
-    });
+    return res.json({ purchase, event });
   }
 
   if (mode === "tables") {
-    const table = event.tables.find((t) => t.id === Number(tableId));
+    const table = event.tables.find((t) => t.id === tableId);
     const qty = Number(quantity ?? 0);
 
     if (!table) {
@@ -642,37 +876,46 @@ app.post("/api/tickets/purchase", (req, res) => {
     }
 
     const available = table.seats - table.sold;
+
     if (qty > available) {
       return res.status(409).json({ error: "Not enough seats available at this table" });
     }
 
     table.sold += qty;
+    event.updatedAt = nowIso();
 
-    const purchase: TicketPurchase = {
-      id: nextId(),
-      eventId: event.id,
-      eventTitle: event.title,
+    const purchase: Purchase = {
+      id: randomUUID(),
+      tenantId: auth.tenantId,
+      module: "tickets",
+      itemId: event.id,
+      itemTitle: event.title,
       buyerName,
       buyerEmail,
-      mode: "tables",
-      seats: [],
-      tableName: table.name,
       quantity: qty,
+      subtotal: qty * event.price,
       total: qty * event.price,
-      createdAt: new Date().toLocaleString(),
+      details: { mode: "tables", tableId: table.id, tableName: table.name },
+      createdAt: nowIso(),
     };
 
-    ticketPurchases.unshift(purchase);
+    purchases.unshift(purchase);
 
-    return res.json({
-      purchase,
-      event,
-    });
+    return res.json({ purchase, event });
   }
 
   return res.status(400).json({ error: "Invalid ticket mode" });
 });
 
+// --------------------
+// Purchases list for current tenant
+// --------------------
+
+app.get("/api/purchases", requireAuth, requireAdminOrOwner, (req, res) => {
+  const auth = (req as any).auth as AuthPayload;
+  res.json(purchases.filter((p) => p.tenantId === auth.tenantId));
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Multi-tenant server running on http://localhost:${PORT}`);
 });
