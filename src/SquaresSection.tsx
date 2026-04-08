@@ -59,6 +59,7 @@ function inputStyle(invalid = false): React.CSSProperties {
     background: invalid ? "rgba(127,29,29,0.18)" : "rgba(2,6,23,0.72)",
     color: "white",
     boxSizing: "border-box",
+    outline: "none",
   };
 }
 
@@ -91,6 +92,7 @@ export default function SquaresSection() {
   const [admin, setAdmin] = useState(true);
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
+
   const [games, setGames] = useState<Game[]>([
     {
       id: 1,
@@ -111,13 +113,17 @@ export default function SquaresSection() {
       background: "",
     },
   ]);
+
   const [activeGameId, setActiveGameId] = useState(1);
+
   const [selectedByGame, setSelectedByGame] = useState<Record<number, number[]>>({
     1: [],
     2: [],
   });
+
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
+
   const [drafts, setDrafts] = useState<Drafts>({
     1: { total: "100", price: "10" },
     2: { total: "120", price: "5" },
@@ -143,16 +149,14 @@ export default function SquaresSection() {
   const hasBlankRequiredValues =
     draft.total.trim() === "" || draft.price.trim() === "";
 
-  const visibleSelected = useMemo(
-    () =>
-      selected.filter(
-        (n) =>
-          n <= game.total &&
-          !game.sold.includes(n) &&
-          !game.reserved.includes(n)
-      ),
-    [selected, game]
-  );
+  const visibleSelected = useMemo(() => {
+    return selected.filter(
+      (n) =>
+        n <= game.total &&
+        !game.sold.includes(n) &&
+        !game.reserved.includes(n)
+    );
+  }, [selected, game]);
 
   const totalCost = visibleSelected.length * priceValue;
   const validNumbers = totalValue > 0 && priceValue > 0;
@@ -168,7 +172,10 @@ export default function SquaresSection() {
     setGames((curr) => curr.map((g) => (g.id === id ? { ...g, ...patch } : g)));
   }
 
-  function setDraftPatch(id: number, patch: Partial<{ total: string; price: string }>) {
+  function setDraftPatch(
+    id: number,
+    patch: Partial<{ total: string; price: string }>
+  ) {
     setDrafts((curr) => ({
       ...curr,
       [id]: { ...(curr[id] ?? { total: "", price: "" }), ...patch },
@@ -272,12 +279,17 @@ export default function SquaresSection() {
     setGames((curr) =>
       curr.map((g) =>
         g.id === game.id
-          ? { ...g, sold: [...g.sold, ...visibleSelected].sort((a, b) => a - b) }
+          ? {
+              ...g,
+              sold: [...g.sold, ...visibleSelected].sort((a, b) => a - b),
+            }
           : g
       )
     );
 
     setSelectedByGame((curr) => ({ ...curr, [game.id]: [] }));
+    setBuyerName("");
+    setBuyerEmail("");
 
     const doc = new jsPDF();
     doc.setFontSize(20);
@@ -477,6 +489,7 @@ export default function SquaresSection() {
                 <input
                   type="number"
                   min={1}
+                  step="0.01"
                   value={draft.price}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -599,14 +612,16 @@ export default function SquaresSection() {
             overflow: "hidden",
           }}
         >
-          <div
-            style={{
-              position: game.background ? "absolute" : "static",
-              inset: game.background ? 0 : undefined,
-              background: game.background ? "rgba(2,6,23,0.72)" : undefined,
-              pointerEvents: "none",
-            }}
-          />
+          {game.background && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "rgba(2,6,23,0.72)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
 
           <div style={{ position: "relative", zIndex: 1 }}>
             <div
@@ -659,6 +674,7 @@ export default function SquaresSection() {
               <div>
                 <label style={labelStyle()}>Buyer email</label>
                 <input
+                  type="email"
                   value={buyerEmail}
                   onChange={(e) => setBuyerEmail(e.target.value)}
                   style={inputStyle(false)}
@@ -780,14 +796,6 @@ export default function SquaresSection() {
                     {money(totalCost)}
                   </div>
                 </div>
-              </div>
-
-              <div style={{ marginTop: 12, fontSize: 12, color: "#94a3b8" }}>
-                canBuy: {String(canBuy)} | name:{" "}
-                {String(buyerName.trim() !== "")} | email:{" "}
-                {String(buyerEmail.trim() !== "")} | selected:{" "}
-                {visibleSelected.length} | blanks:{" "}
-                {String(hasBlankRequiredValues)}
               </div>
 
               <button
