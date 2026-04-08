@@ -1,5 +1,5 @@
 export async function apiFetch(url: string, options: RequestInit = {}) {
-  const res = await fetch(`http://localhost:4000${url}`, {
+  const res = await fetch(url, {
     ...options,
     credentials: "include",
     headers: {
@@ -32,7 +32,7 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
 }
 
 export async function publicApiFetch(url: string, options: RequestInit = {}) {
-  const res = await fetch(`http://localhost:4000${url}`, {
+  const res = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
