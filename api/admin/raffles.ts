@@ -4,6 +4,7 @@ import {
   getRaffleStore,
   normalizeSlug,
   type Raffle,
+  type RaffleStatus,
 } from "../_lib/rafflestore";
 
 function sendJson(
@@ -25,12 +26,15 @@ function readTenantId(req: VercelRequest): string {
   return "demo-a";
 }
 
+function isValidStatus(value: unknown): value is RaffleStatus {
+  return value === "draft" || value === "published" || value === "closed";
+}
+
 export default function handler(req: VercelRequest, res: VercelResponse) {
   const store = getRaffleStore();
+  const tenantId = readTenantId(req);
 
   if (req.method === "GET") {
-    const tenantId = readTenantId(req);
-
     const raffles = store.raffles
       .filter((item: Raffle) => item.tenantId === tenantId)
       .sort((a: Raffle, b: Raffle) => b.createdAt.localeCompare(a.createdAt));
@@ -39,8 +43,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === "POST") {
-    const tenantId = readTenantId(req);
-
     const title =
       typeof req.body?.title === "string" ? req.body.title.trim() : "";
     const description =
@@ -52,7 +54,12 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const slug = normalizeSlug(rawSlug);
     const ticketPrice = Number(req.body?.ticketPrice);
     const maxTickets = Number(req.body?.maxTickets);
-    const isPublished = Boolean(req.body?.isPublished);
+    const endAt =
+      typeof req.body?.endAt === "string" && req.body.endAt.trim()
+        ? req.body.endAt.trim()
+        : null;
+    const status: RaffleStatus = req.body?.isPublished ? "published" : "draft";
+    const isPublished = status === "published";
 
     if (!title) {
       return sendJson(res, 400, { message: "Title is required" });
@@ -88,6 +95,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const now = new Date().toISOString();
+
     const raffle: Raffle = {
       id: createRaffleId(),
       tenantId,
@@ -97,7 +106,10 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       ticketPrice,
       maxTickets,
       isPublished,
-      createdAt: new Date().toISOString(),
+      status,
+      endAt,
+      createdAt: now,
+      updatedAt: now,
     };
 
     store.raffles.unshift(raffle);
@@ -105,6 +117,120 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return sendJson(res, 201, { raffle });
   }
 
-  res.setHeader("Allow", "GET, POST");
+  if (req.method === "PATCH") {
+    const id = typeof req.body?.id === "string" ? req.body.id : "";
+    const raffle = store.raffles.find(
+      (item: Raffle) => item.id === id && item.tenantId === tenantId
+    );
+
+    if (!raffle) {
+      return sendJson(res, 404, { message: "Raffle not found" });
+    }
+
+    const nextTitle =
+      typeof req.body?.title === "string" ? req.body.title.trim() : raffle.title;
+
+    const nextDescription =
+      typeof req.body?.description === "string"
+        ? req.body.description.trim()
+        : raffle.description;
+
+    const nextSlug =
+      typeof req.body?.slug === "string"
+        ? normalizeSlug(req.body.slug)
+        : raffle.slug;
+
+    const nextTicketPrice =
+      req.body?.ticketPrice !== undefined
+        ? Number(req.body.ticketPrice)
+        : raffle.ticketPrice;
+
+    const nextMaxTickets =
+      req.body?.maxTickets !== undefined
+        ? Number(req.body.maxTickets)
+        : raffle.maxTickets;
+
+    const nextEndAt =
+      req.body?.endAt !== undefined
+        ? typeof req.body.endAt === "string" && req.body.endAt.trim()
+          ? req.body.endAt.trim()
+          : null
+        : raffle.endAt;
+
+    const requestedStatus =
+      req.body?.status !== undefined ? req.body.status : raffle.status;
+
+    if (!nextTitle) {
+      return sendJson(res, 400, { message: "Title is required" });
+    }
+
+    if (!nextSlug) {
+      return sendJson(res, 400, { message: "Slug is required" });
+    }
+
+    if (!nextDescription) {
+      return sendJson(res, 400, { message: "Description is required" });
+    }
+
+    if (!Number.isFinite(nextTicketPrice) || nextTicketPrice < 0) {
+      return sendJson(res, 400, {
+        message: "Ticket price must be a valid number",
+      });
+    }
+
+    if (!Number.isInteger(nextMaxTickets) || nextMaxTickets < 1) {
+      return sendJson(res, 400, {
+        message: "Max tickets must be at least 1",
+      });
+    }
+
+    if (!isValidStatus(requestedStatus)) {
+      return sendJson(res, 400, { message: "Invalid raffle status" });
+    }
+
+    const duplicateSlug = store.raffles.some(
+      (item: Raffle) =>
+        item.tenantId === tenantId &&
+        item.slug === nextSlug &&
+        item.id !== raffle.id
+    );
+
+    if (duplicateSlug) {
+      return sendJson(res, 400, {
+        message: "Slug already exists for this tenant",
+      });
+    }
+
+    raffle.title = nextTitle;
+    raffle.description = nextDescription;
+    raffle.slug = nextSlug;
+    raffle.ticketPrice = nextTicketPrice;
+    raffle.maxTickets = nextMaxTickets;
+    raffle.endAt = nextEndAt;
+    raffle.status = requestedStatus;
+    raffle.isPublished = requestedStatus === "published";
+    raffle.updatedAt = new Date().toISOString();
+
+    return sendJson(res, 200, { raffle });
+  }
+
+  if (req.method === "DELETE") {
+    const id = typeof req.body?.id === "string" ? req.body.id : "";
+
+    const index = store.raffles.findIndex(
+      (item: Raffle) => item.id === id && item.tenantId === tenantId
+    );
+
+    if (index === -1) {
+      return sendJson(res, 404, { message: "Raffle not found" });
+    }
+
+    const deleted = store.raffles[index];
+    store.raffles.splice(index, 1);
+
+    return sendJson(res, 200, { raffle: deleted, success: true });
+  }
+
+  res.setHeader("Allow", "GET, POST, PATCH, DELETE");
   return sendJson(res, 405, { message: "Method not allowed" });
 }
