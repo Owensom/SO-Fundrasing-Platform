@@ -2,11 +2,15 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 type PublicRaffle = {
-  id?: string;
-  slug?: string;
-  title?: string;
-  description?: string;
-  tenantId?: string;
+  id: string;
+  tenantId: string;
+  title: string;
+  slug: string;
+  description: string;
+  ticketPrice: number;
+  maxTickets: number;
+  isPublished: boolean;
+  createdAt: string;
 };
 
 export default function PublicRafflePage() {
@@ -27,13 +31,17 @@ export default function PublicRafflePage() {
       }
 
       try {
-        const res = await fetch(`/api/public/raffles/${slug}`);
-
-        if (!res.ok) {
-          throw new Error("Failed to load raffle");
-        }
+        const res = await fetch(`/api/public/raffles/${slug}`, {
+          headers: {
+            "x-tenant-id": "demo-a",
+          },
+        });
 
         const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load raffle");
+        }
 
         if (mounted) {
           setRaffle(data);
@@ -62,7 +70,7 @@ export default function PublicRafflePage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
         <h1>Raffle not available</h1>
         <p>{error}</p>
       </div>
@@ -71,7 +79,7 @@ export default function PublicRafflePage() {
 
   if (!raffle) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
         <h1>Raffle not found</h1>
       </div>
     );
@@ -79,14 +87,24 @@ export default function PublicRafflePage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
-      <h1>{raffle.title || "Untitled Raffle"}</h1>
-      <p>{raffle.description || "No description available."}</p>
+      <h1>{raffle.title}</h1>
+      <p>{raffle.description}</p>
 
-      <div style={{ marginTop: 24, padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
-        <h2>Buyer Area</h2>
-        <p>Tenant: {raffle.tenantId || "Unknown tenant"}</p>
-        <p>Slug: {raffle.slug || slug}</p>
-        <button>Buy Ticket</button>
+      <div
+        style={{
+          marginTop: 24,
+          padding: 20,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          background: "#fff",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Buy Tickets</h2>
+        <p>Ticket Price: £{Number(raffle.ticketPrice).toFixed(2)}</p>
+        <p>Max Tickets: {raffle.maxTickets}</p>
+        <p>Tenant: {raffle.tenantId}</p>
+
+        <button type="button">Buy Ticket</button>
       </div>
     </div>
   );
