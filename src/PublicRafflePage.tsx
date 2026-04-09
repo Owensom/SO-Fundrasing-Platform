@@ -1,56 +1,68 @@
-import { useEffect, useState } from "react";
-import { publicApiFetch } from "./api";
+export async function apiFetch(url: string, options: RequestInit = {}) {
+  const res = await fetch(url, {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
 
-export default function PublicRafflePage() {
-  const [data, setData] = useState<any>(null);
-  const [error, setError] = useState("");
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
 
-  useEffect(() => {
-    load();
-  }, []);
+  if (!res.ok) {
+    let message = "Request failed";
 
-  async function load() {
-    try {
-      const res = await publicApiFetch(
-        "/api/public/raffles/demo-a"
-      );
-      setData(res);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to load");
+    if (isJson) {
+      try {
+        const data = await res.json();
+        message = data.error || message;
+      } catch {
+        // ignore json parse error
+      }
     }
+
+    throw new Error(message);
   }
 
-  if (error) {
-    return <div style={{ color: "red" }}>{error}</div>;
+  if (isJson) {
+    return res.json();
   }
 
-  if (!data) {
-    return <div style={{ color: "white" }}>Loading...</div>;
+  return null;
+}
+
+export async function publicApiFetch(url: string, options: RequestInit = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  if (!res.ok) {
+    let message = "Request failed";
+
+    if (isJson) {
+      try {
+        const data = await res.json();
+        message = data.error || message;
+      } catch {
+        // ignore json parse error
+      }
+    }
+
+    throw new Error(message);
   }
 
-  return (
-    <div style={{ padding: 20, color: "white" }}>
-      <h1>{data.tenant.name}</h1>
+  if (isJson) {
+    return res.json();
+  }
 
-      {data.raffles.length === 0 && (
-        <p>No raffles available</p>
-      )}
-
-      {data.raffles.map((r: any) => (
-        <div
-          key={r.id}
-          style={{
-            border: "1px solid rgba(255,255,255,0.1)",
-            padding: 16,
-            borderRadius: 12,
-            marginBottom: 12,
-          }}
-        >
-          <h2>{r.title}</h2>
-          <p>Price: £{r.price}</p>
-        </div>
-      ))}
-    </div>
-  );
+  return null;
 }
