@@ -17,28 +17,40 @@ function readTenantId(req: VercelRequest) {
 }
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return sendJson(res, 405, { message: "Method not allowed" });
+  try {
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET");
+      return sendJson(res, 405, { message: "Method not allowed" });
+    }
+
+    const tenantId = readTenantId(req);
+    const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
+    const slug = normalizeSlug(rawSlug);
+
+    if (!slug) {
+      return sendJson(res, 400, { message: "Missing raffle slug" });
+    }
+
+    const store = getRaffleStore();
+
+    const raffle = store.raffles.find(
+      (item) => item.tenantId === tenantId && item.slug === slug && item.isPublished
+    );
+
+    if (!raffle) {
+      return sendJson(res, 404, {
+        message: `Raffle not found for tenant "${tenantId}" and slug "${slug}"`,
+      });
+    }
+
+    return sendJson(res, 200, raffle);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown server error";
+
+    return sendJson(res, 500, {
+      message: "Server error loading raffle",
+      error: message,
+    });
   }
-
-  const tenantId = readTenantId(req);
-  const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
-  const slug = normalizeSlug(rawSlug);
-
-  if (!slug) {
-    return sendJson(res, 400, { message: "Missing raffle slug" });
-  }
-
-  const store = getRaffleStore();
-
-  const raffle = store.raffles.find(
-    (item) => item.tenantId === tenantId && item.slug === slug && item.isPublished
-  );
-
-  if (!raffle) {
-    return sendJson(res, 404, { message: "Raffle not found" });
-  }
-
-  return sendJson(res, 200, raffle);
 }
