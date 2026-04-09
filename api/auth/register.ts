@@ -1,63 +1,30 @@
-import { nowIso, slugify, tenants, users } from "../_lib/store";
-
 export default function handler(req: any, res: any) {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const { charityName, email, password } = req.body || {};
+    const body = req.body || {};
+    const charityName = String(body.charityName || "").trim();
+    const email = String(body.email || "").toLowerCase().trim();
+    const password = String(body.password || "");
 
     if (!charityName || !email || !password) {
       return res.status(400).json({ error: "Charity name, email and password are required" });
     }
 
-    const existingUser = users.find(
-      (u) => u.email.toLowerCase() === String(email).toLowerCase()
-    );
-
-    if (existingUser) {
-      return res.status(409).json({ error: "Email already registered" });
-    }
-
-    const baseSlug = slugify(String(charityName));
-    let finalSlug = baseSlug || "charity";
-    let counter = 2;
-
-    while (tenants.some((t) => t.slug === finalSlug)) {
-      finalSlug = `${baseSlug}-${counter}`;
-      counter += 1;
-    }
-
-    const tenantId = `tenant-${Date.now()}`;
-    const userId = `user-${Date.now()}`;
-
-    const tenant = {
-      id: tenantId,
-      name: String(charityName),
-      slug: finalSlug,
-      isActive: true,
-    };
-
-    const user = {
-      id: userId,
-      tenantId,
-      email: String(email).toLowerCase(),
-      password: String(password),
-      role: "owner",
-      isActive: true,
-      createdAt: nowIso(),
-    };
-
-    tenants.push(tenant);
-    users.push(user);
+    const slug = charityName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "charity-demo";
 
     const session = encodeURIComponent(
       JSON.stringify({
-        userId: user.id,
-        tenantId: user.tenantId,
-        email: user.email,
-        role: user.role,
+        userId: "user-new-owner",
+        tenantId: "tenant-new",
+        email,
+        role: "owner",
       })
     );
 
@@ -68,20 +35,20 @@ export default function handler(req: any, res: any) {
 
     return res.status(200).json({
       user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        tenantId: user.tenantId,
+        id: "user-new-owner",
+        email,
+        role: "owner",
+        tenantId: "tenant-new",
       },
       tenant: {
-        id: tenant.id,
-        name: tenant.name,
-        slug: tenant.slug,
+        id: "tenant-new",
+        name: charityName,
+        slug,
       },
     });
   } catch (error: any) {
     return res.status(500).json({
-      error: "Registration failed",
+      error: "Register crashed",
       detail: error?.message || "Unknown error",
     });
   }
