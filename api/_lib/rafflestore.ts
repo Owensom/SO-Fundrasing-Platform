@@ -22,7 +22,19 @@ declare global {
 export function getRaffleStore(): Store {
   if (!globalThis.__raffleStore) {
     globalThis.__raffleStore = {
-      raffles: [],
+      raffles: [
+        {
+          id: "seed_demo_raffle",
+          tenantId: "demo-a",
+          title: "Demo Raffle",
+          slug: "demo-raffle",
+          description: "This is a seeded demo raffle so the public page has data.",
+          ticketPrice: 5,
+          maxTickets: 100,
+          isPublished: true,
+          createdAt: new Date().toISOString(),
+        },
+      ],
     };
   }
 
