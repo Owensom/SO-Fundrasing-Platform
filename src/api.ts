@@ -1,7 +1,7 @@
 export async function apiFetch(url: string, options: RequestInit = {}) {
   const res = await fetch(url, {
     ...options,
-    credentials: "include",
+    credentials: "include", // 🔥 REQUIRED FOR LOGIN COOKIE
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -18,19 +18,13 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
       try {
         const data = await res.json();
         message = data.error || message;
-      } catch {
-        // ignore json parse error
-      }
+      } catch {}
     }
 
     throw new Error(message);
   }
 
-  if (isJson) {
-    return res.json();
-  }
-
-  return null;
+  return isJson ? res.json() : null;
 }
 
 export async function publicApiFetch(url: string, options: RequestInit = {}) {
@@ -52,17 +46,11 @@ export async function publicApiFetch(url: string, options: RequestInit = {}) {
       try {
         const data = await res.json();
         message = data.error || message;
-      } catch {
-        // ignore json parse error
-      }
+      } catch {}
     }
 
     throw new Error(message);
   }
 
-  if (isJson) {
-    return res.json();
-  }
-
-  return null;
+  return isJson ? res.json() : null;
 }
