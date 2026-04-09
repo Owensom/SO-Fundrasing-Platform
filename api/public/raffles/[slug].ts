@@ -1,4 +1,4 @@
-import { raffleEvents, tenants } from "../../_lib/store";
+import { tenants, raffleEvents } from "../../_lib/store";
 
 export default function handler(req: any, res: any) {
   try {
@@ -14,7 +14,7 @@ export default function handler(req: any, res: any) {
       return res.status(404).json({ error: "Tenant not found" });
     }
 
-    const raffles = raffleEvents.filter((event) => event.tenantId === tenant.id);
+    const raffles = raffleEvents.filter((r) => r.tenantId === tenant.id);
 
     return res.status(200).json({
       tenant: {
@@ -24,11 +24,11 @@ export default function handler(req: any, res: any) {
       },
       raffles,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Public raffle route crashed:", error);
     return res.status(500).json({
       error: "Route crashed",
-      detail: error instanceof Error ? error.message : "Unknown error",
+      detail: error?.message || "Unknown error",
     });
   }
 }
