@@ -57,7 +57,11 @@ export default function PublicRafflePage() {
     try {
       setLoading(true);
       setError("");
-      const res = await publicApiFetch("/api/public/raffles/demo-a");
+
+      const res = await publicApiFetch(
+        `${window.location.origin}/api/public/raffles/demo-a`
+      );
+
       setData(res as ApiResponse);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load raffle page");
