@@ -1,12 +1,20 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { ... } from "../../lib/raffleStore";
+import {
+  getRaffleStore,
+  normalizeSlug,
+  type Raffle,
+} from "../../lib/raffleStore";
 
-function sendJson(res: VercelResponse, status: number, payload: unknown) {
+function sendJson(
+  res: VercelResponse,
+  status: number,
+  payload: unknown
+): VercelResponse {
   res.status(status).setHeader("Content-Type", "application/json");
-  res.send(JSON.stringify(payload));
+  return res.send(JSON.stringify(payload));
 }
 
-function readTenantId(req: VercelRequest) {
+function readTenantId(req: VercelRequest): string {
   const headerTenant = req.headers["x-tenant-id"];
 
   if (typeof headerTenant === "string" && headerTenant.trim()) {
@@ -24,7 +32,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const tenantId = readTenantId(req);
-    const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
+    const rawSlug =
+      typeof req.query.slug === "string" ? req.query.slug : "";
     const slug = normalizeSlug(rawSlug);
 
     if (!slug) {
