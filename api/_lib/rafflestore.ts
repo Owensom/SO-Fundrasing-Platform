@@ -28,7 +28,7 @@ export function getRaffleStore(): Store {
           tenantId: "demo-a",
           title: "Demo Raffle",
           slug: "demo-raffle",
-          description: "Demo raffle so your page works",
+          description: "Demo raffle so your public page has data.",
           ticketPrice: 5,
           maxTickets: 100,
           isPublished: true,
@@ -41,7 +41,7 @@ export function getRaffleStore(): Store {
   return globalThis.__raffleStore;
 }
 
-export function normalizeSlug(value: string) {
+export function normalizeSlug(value: string): string {
   return value
     .toLowerCase()
     .trim()
@@ -50,6 +50,6 @@ export function normalizeSlug(value: string) {
     .replace(/-+/g, "-");
 }
 
-export function createRaffleId() {
+export function createRaffleId(): string {
   return `raffle_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
