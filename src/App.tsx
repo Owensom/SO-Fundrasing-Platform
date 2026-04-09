@@ -6,21 +6,13 @@ import TicketsSection from "./TicketsSection";
 import PublicRafflePage from "./PublicRafflePage";
 import { useAuth } from "./useAuth";
 
-type View =
-  | "home"
-  | "login"
-  | "squares"
-  | "raffle"
-  | "tickets"
-  | "public-raffle";
+type View = "home" | "login" | "public-raffle" | "squares" | "raffle" | "tickets";
 
 function navButtonStyle(active: boolean): React.CSSProperties {
   return {
     padding: "10px 16px",
     borderRadius: 12,
-    border: active
-      ? "1px solid rgba(125,211,252,0.35)"
-      : "1px solid rgba(255,255,255,0.10)",
+    border: active ? "1px solid rgba(125,211,252,0.35)" : "1px solid rgba(255,255,255,0.10)",
     background: active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
     color: "white",
     fontWeight: 600,
@@ -31,9 +23,6 @@ function navButtonStyle(active: boolean): React.CSSProperties {
 export default function App() {
   const [view, setView] = useState<View>("home");
   const { user, tenant, isLoggedIn, canManage, loading } = useAuth();
-
-  // change this to your real tenant slug
-  const publicSlug = "brave-ceilidh-25";
 
   return (
     <div
@@ -105,14 +94,11 @@ export default function App() {
               : "You are not logged in."}
           </p>
           <p>{canManage ? "You can manage this private platform." : "Buyer or public mode."}</p>
-          <p>Public buyer testing slug: {publicSlug}</p>
         </div>
       )}
 
       {view === "login" && <Login />}
-
-      {view === "public-raffle" && <PublicRafflePage slug={publicSlug} />}
-
+      {view === "public-raffle" && <PublicRafflePage />}
       {view === "squares" && <SquaresSection />}
       {view === "raffle" && <RaffleSection />}
       {view === "tickets" && <TicketsSection />}
