@@ -26,6 +26,9 @@ export default function handler(req: any, res: any) {
     });
   } catch (error) {
     console.error("Public raffle route crashed:", error);
-    return res.status(500).json({ error: "Route crashed" });
+    return res.status(500).json({
+      error: "Route crashed",
+      detail: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 }
