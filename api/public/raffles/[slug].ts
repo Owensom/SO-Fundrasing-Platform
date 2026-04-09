@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getRaffleStore, normalizeSlug, type Raffle } from "../../lib/raffleStore";
+import { ... } from "../../lib/raffleStore";
 
 function sendJson(res: VercelResponse, status: number, payload: unknown) {
   res.status(status).setHeader("Content-Type", "application/json");
