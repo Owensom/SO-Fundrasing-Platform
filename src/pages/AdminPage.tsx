@@ -11,6 +11,8 @@ type MeResponse = {
   user?: User | null;
 };
 
+type RaffleStatus = "draft" | "published" | "closed";
+
 type Raffle = {
   id: string;
   tenantId: string;
@@ -20,7 +22,10 @@ type Raffle = {
   ticketPrice: number;
   maxTickets: number;
   isPublished: boolean;
+  status: RaffleStatus;
+  endAt: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 type RafflesResponse = {
@@ -32,12 +37,61 @@ type CreateRaffleResponse = {
   message?: string;
 };
 
+type UpdateRaffleResponse = {
+  raffle?: Raffle;
+  message?: string;
+};
+
+type DeleteRaffleResponse = {
+  raffle?: Raffle;
+  success?: boolean;
+  message?: string;
+};
+
+type EditFormState = {
+  title: string;
+  slug: string;
+  description: string;
+  ticketPrice: string;
+  maxTickets: string;
+  endAt: string;
+  status: RaffleStatus;
+};
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function toDateTimeLocalValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "No end date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No end date";
+  return date.toLocaleString();
+}
+
 export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [rafflesLoading, setRafflesLoading] = useState(true);
   const [raffles, setRaffles] = useState<Raffle[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditFormState | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -46,6 +100,7 @@ export default function AdminPage() {
   const [description, setDescription] = useState("");
   const [ticketPrice, setTicketPrice] = useState("5");
   const [maxTickets, setMaxTickets] = useState("100");
+  const [endAt, setEndAt] = useState("");
   const [isPublished, setIsPublished] = useState(true);
 
   const publicUrl = useMemo(() => {
@@ -101,6 +156,9 @@ export default function AdminPage() {
       try {
         const res = await fetch("/api/admin/raffles", {
           credentials: "include",
+          headers: {
+            "x-tenant-id": user.tenantId,
+          },
         });
 
         if (!res.ok) {
@@ -130,15 +188,6 @@ export default function AdminPage() {
     };
   }, [user]);
 
-  function slugify(value: string) {
-    return value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
-  }
-
   function handleTitleChange(value: string) {
     setTitle(value);
 
@@ -158,6 +207,7 @@ export default function AdminPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-tenant-id": user?.tenantId || "demo-a",
         },
         credentials: "include",
         body: JSON.stringify({
@@ -166,6 +216,7 @@ export default function AdminPage() {
           description,
           ticketPrice: Number(ticketPrice),
           maxTickets: Number(maxTickets),
+          endAt: endAt ? new Date(endAt).toISOString() : null,
           isPublished,
         }),
       });
@@ -183,11 +234,158 @@ export default function AdminPage() {
       setDescription("");
       setTicketPrice("5");
       setMaxTickets("100");
+      setEndAt("");
       setIsPublished(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create raffle");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEditing(raffle: Raffle) {
+    setEditingId(raffle.id);
+    setEditForm({
+      title: raffle.title,
+      slug: raffle.slug,
+      description: raffle.description,
+      ticketPrice: String(raffle.ticketPrice),
+      maxTickets: String(raffle.maxTickets),
+      endAt: toDateTimeLocalValue(raffle.endAt),
+      status: raffle.status,
+    });
+    setError("");
+    setSuccess("");
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editForm || !user) return;
+
+    setBusyId(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch("/api/admin/raffles", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": user.tenantId,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          id,
+          title: editForm.title,
+          slug: editForm.slug,
+          description: editForm.description,
+          ticketPrice: Number(editForm.ticketPrice),
+          maxTickets: Number(editForm.maxTickets),
+          endAt: editForm.endAt ? new Date(editForm.endAt).toISOString() : null,
+          status: editForm.status,
+        }),
+      });
+
+      const data: UpdateRaffleResponse = await res.json();
+
+      if (!res.ok || !data.raffle) {
+        throw new Error(data.message || "Failed to update raffle");
+      }
+
+      setRaffles((prev) =>
+        prev.map((item) => (item.id === id ? data.raffle as Raffle : item))
+      );
+      setSuccess("Raffle updated.");
+      cancelEditing();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update raffle");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function quickStatusChange(id: string, status: RaffleStatus) {
+    if (!user) return;
+
+    setBusyId(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch("/api/admin/raffles", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": user.tenantId,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          id,
+          status,
+        }),
+      });
+
+      const data: UpdateRaffleResponse = await res.json();
+
+      if (!res.ok || !data.raffle) {
+        throw new Error(data.message || "Failed to update raffle status");
+      }
+
+      setRaffles((prev) =>
+        prev.map((item) => (item.id === id ? data.raffle as Raffle : item))
+      );
+      setSuccess(`Raffle set to ${status}.`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update raffle status"
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!user) return;
+
+    const confirmed = window.confirm("Delete this raffle?");
+    if (!confirmed) return;
+
+    setBusyId(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch("/api/admin/raffles", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": user.tenantId,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          id,
+        }),
+      });
+
+      const data: DeleteRaffleResponse = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to delete raffle");
+      }
+
+      setRaffles((prev) => prev.filter((item) => item.id !== id));
+      setSuccess("Raffle deleted.");
+      if (editingId === id) {
+        cancelEditing();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete raffle");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -310,6 +508,15 @@ export default function AdminPage() {
               />
             </label>
 
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>End Date</span>
+              <input
+                type="datetime-local"
+                value={endAt}
+                onChange={(e) => setEndAt(e.target.value)}
+              />
+            </label>
+
             <label
               style={{
                 display: "flex",
@@ -387,71 +594,272 @@ export default function AdminPage() {
             <div>No raffles yet.</div>
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
-              {raffles.map((raffle) => (
-                <div
-                  key={raffle.id}
-                  style={{
-                    border: "1px solid #e5e5e5",
-                    borderRadius: 10,
-                    padding: 16,
-                  }}
-                >
+              {raffles.map((raffle) => {
+                const isEditing = editingId === raffle.id;
+                const isBusy = busyId === raffle.id;
+
+                return (
                   <div
+                    key={raffle.id}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      alignItems: "start",
-                      flexWrap: "wrap",
+                      border: "1px solid #e5e5e5",
+                      borderRadius: 10,
+                      padding: 16,
                     }}
                   >
-                    <div>
-                      <h3 style={{ margin: "0 0 8px 0" }}>{raffle.title}</h3>
-                      <div style={{ fontSize: 14, color: "#555" }}>
-                        Slug: {raffle.slug}
+                    {isEditing && editForm ? (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>Title</span>
+                          <input
+                            value={editForm.title}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                title: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>Slug</span>
+                          <input
+                            value={editForm.slug}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                slug: slugify(e.target.value),
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>Description</span>
+                          <textarea
+                            rows={4}
+                            value={editForm.description}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                description: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>Ticket Price</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={editForm.ticketPrice}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                ticketPrice: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>Max Tickets</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={editForm.maxTickets}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                maxTickets: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>End Date</span>
+                          <input
+                            type="datetime-local"
+                            value={editForm.endAt}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                endAt: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span>Status</span>
+                          <select
+                            value={editForm.status}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                status: e.target.value as RaffleStatus,
+                              })
+                            }
+                          >
+                            <option value="draft">Draft</option>
+                            <option value="published">Published</option>
+                            <option value="closed">Closed</option>
+                          </select>
+                        </label>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            flexWrap: "wrap",
+                            marginTop: 4,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(raffle.id)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? "Saving..." : "Save"}
+                          </button>
+                          <button type="button" onClick={cancelEditing} disabled={isBusy}>
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 14, color: "#555" }}>
-                        Tenant: {raffle.tenantId}
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            alignItems: "start",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div>
+                            <h3 style={{ margin: "0 0 8px 0" }}>{raffle.title}</h3>
+                            <div style={{ fontSize: 14, color: "#555" }}>
+                              Slug: {raffle.slug}
+                            </div>
+                            <div style={{ fontSize: 14, color: "#555" }}>
+                              Tenant: {raffle.tenantId}
+                            </div>
+                          </div>
 
-                    <div
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        background: raffle.isPublished ? "#effaf1" : "#f3f4f6",
-                        color: raffle.isPublished ? "#166534" : "#374151",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {raffle.isPublished ? "Published" : "Draft"}
-                    </div>
+                          <div
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 999,
+                              background:
+                                raffle.status === "published"
+                                  ? "#effaf1"
+                                  : raffle.status === "closed"
+                                  ? "#f3f4f6"
+                                  : "#fff7ed",
+                              color:
+                                raffle.status === "published"
+                                  ? "#166534"
+                                  : raffle.status === "closed"
+                                  ? "#374151"
+                                  : "#9a3412",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {raffle.status}
+                          </div>
+                        </div>
+
+                        <p style={{ marginTop: 12 }}>{raffle.description}</p>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 16,
+                            flexWrap: "wrap",
+                            fontSize: 14,
+                            color: "#444",
+                            marginTop: 12,
+                          }}
+                        >
+                          <span>
+                            Ticket Price: £{Number(raffle.ticketPrice).toFixed(2)}
+                          </span>
+                          <span>Max Tickets: {raffle.maxTickets}</span>
+                          <span>Ends: {formatDate(raffle.endAt)}</span>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            flexWrap: "wrap",
+                            marginTop: 14,
+                          }}
+                        >
+                          <a href={`/r/${raffle.slug}`} target="_blank" rel="noreferrer">
+                            <button type="button">Open Public Page</button>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => startEditing(raffle)}
+                            disabled={isBusy}
+                          >
+                            Edit
+                          </button>
+
+                          {raffle.status !== "published" ? (
+                            <button
+                              type="button"
+                              onClick={() => quickStatusChange(raffle.id, "published")}
+                              disabled={isBusy}
+                            >
+                              {isBusy ? "Working..." : "Publish"}
+                            </button>
+                          ) : null}
+
+                          {raffle.status !== "draft" ? (
+                            <button
+                              type="button"
+                              onClick={() => quickStatusChange(raffle.id, "draft")}
+                              disabled={isBusy}
+                            >
+                              {isBusy ? "Working..." : "Unpublish"}
+                            </button>
+                          ) : null}
+
+                          {raffle.status !== "closed" ? (
+                            <button
+                              type="button"
+                              onClick={() => quickStatusChange(raffle.id, "closed")}
+                              disabled={isBusy}
+                            >
+                              {isBusy ? "Working..." : "Close"}
+                            </button>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(raffle.id)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? "Working..." : "Delete"}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-
-                  <p style={{ marginTop: 12 }}>{raffle.description}</p>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 16,
-                      flexWrap: "wrap",
-                      fontSize: 14,
-                      color: "#444",
-                      marginTop: 12,
-                    }}
-                  >
-                    <span>Ticket Price: £{Number(raffle.ticketPrice).toFixed(2)}</span>
-                    <span>Max Tickets: {raffle.maxTickets}</span>
-                  </div>
-
-                  <div style={{ marginTop: 12 }}>
-                    <a href={`/r/${raffle.slug}`} target="_blank" rel="noreferrer">
-                      Open Public Page
-                    </a>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
