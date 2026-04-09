@@ -1,3 +1,5 @@
+export type RaffleStatus = "draft" | "published" | "closed";
+
 export type Raffle = {
   id: string;
   tenantId: string;
@@ -7,7 +9,10 @@ export type Raffle = {
   ticketPrice: number;
   maxTickets: number;
   isPublished: boolean;
+  status: RaffleStatus;
+  endAt: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 type Store = {
@@ -21,6 +26,8 @@ declare global {
 
 export function getRaffleStore(): Store {
   if (!globalThis.__raffleStore) {
+    const now = new Date().toISOString();
+
     globalThis.__raffleStore = {
       raffles: [
         {
@@ -32,7 +39,10 @@ export function getRaffleStore(): Store {
           ticketPrice: 5,
           maxTickets: 100,
           isPublished: true,
-          createdAt: new Date().toISOString(),
+          status: "published",
+          endAt: null,
+          createdAt: now,
+          updatedAt: now,
         },
       ],
     };
