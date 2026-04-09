@@ -28,7 +28,7 @@ export function getRaffleStore(): Store {
           tenantId: "demo-a",
           title: "Demo Raffle",
           slug: "demo-raffle",
-          description: "This is a seeded demo raffle so the public page has data.",
+          description: "Demo raffle so your page works",
           ticketPrice: 5,
           maxTickets: 100,
           isPublished: true,
