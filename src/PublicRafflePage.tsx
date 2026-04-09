@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { publicApiFetch } from "./api";
 
 type RaffleColor = "Red" | "Blue" | "Green" | "Yellow" | "Purple" | "Orange";
 
@@ -50,25 +49,35 @@ export default function PublicRafflePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await fetch("/api/public/raffles/demo-a");
+        const text = await res.text();
+
+        let parsed: ApiResponse | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`Invalid JSON returned: ${text}`);
+        }
+
+        if (!res.ok) {
+          throw new Error((parsed as any)?.error || `Request failed: ${res.status}`);
+        }
+
+        setData(parsed);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load raffle page");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     load();
   }, []);
-
-  async function load() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const res = await publicApiFetch(
-        `${window.location.origin}/api/public/raffles/demo-a`
-      );
-
-      setData(res as ApiResponse);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load raffle page");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   if (loading) {
     return (
