@@ -1,49 +1,44 @@
-export default function handler(req: any, res: any) {
-  try {
-    const slug = String(req.query.slug || "");
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getRaffleStore, normalizeSlug } from "../../../lib/raffleStore";
 
-    if (!slug) {
-      return res.status(400).json({ error: "Missing slug" });
-    }
+function sendJson(res: VercelResponse, status: number, payload: unknown) {
+  res.status(status).setHeader("Content-Type", "application/json");
+  res.send(JSON.stringify(payload));
+}
 
-    if (slug !== "demo-a") {
-      return res.status(404).json({ error: "Tenant not found" });
-    }
+function readTenantId(req: VercelRequest) {
+  const headerTenant = req.headers["x-tenant-id"];
 
-    return res.status(200).json({
-      tenant: {
-        id: "tenant-demo-a",
-        name: "SO Fundraising Demo A",
-        slug: "demo-a",
-      },
-      raffles: [
-        {
-          id: "raffle-1",
-          tenantId: "tenant-demo-a",
-          title: "Main Raffle",
-          eventName: "Main Raffle",
-          venue: "Club Hall",
-          price: 2,
-          startNumber: 1,
-          totalTickets: 100,
-          colors: ["Red", "Blue", "Green", "Yellow"],
-          soldByColor: {
-            Red: [1, 2, 8],
-            Blue: [3, 10],
-            Green: [5],
-            Yellow: [],
-            Purple: [],
-            Orange: [],
-          },
-          background: "",
-        },
-      ],
-    });
-  } catch (error: any) {
-    console.error("Public raffle route crashed:", error);
-    return res.status(500).json({
-      error: "Route crashed",
-      detail: error?.message || "Unknown error",
-    });
+  if (typeof headerTenant === "string" && headerTenant.trim()) {
+    return headerTenant.trim();
   }
+
+  return "demo-a";
+}
+
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return sendJson(res, 405, { message: "Method not allowed" });
+  }
+
+  const tenantId = readTenantId(req);
+  const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
+  const slug = normalizeSlug(rawSlug);
+
+  if (!slug) {
+    return sendJson(res, 400, { message: "Missing raffle slug" });
+  }
+
+  const store = getRaffleStore();
+
+  const raffle = store.raffles.find(
+    (item) => item.tenantId === tenantId && item.slug === slug && item.isPublished
+  );
+
+  if (!raffle) {
+    return sendJson(res, 404, { message: "Raffle not found" });
+  }
+
+  return sendJson(res, 200, raffle);
 }
