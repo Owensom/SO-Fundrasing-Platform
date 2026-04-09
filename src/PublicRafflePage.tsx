@@ -58,6 +58,7 @@ export default function PublicRafflePage() {
         const text = await res.text();
 
         let parsed: ApiResponse | null = null;
+
         try {
           parsed = JSON.parse(text);
         } catch {
