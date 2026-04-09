@@ -1,35 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-type Raffle = {
-  id: string;
-  tenantId: string;
-  title: string;
-  slug: string;
-  description: string;
-  ticketPrice: number;
-  maxTickets: number;
-  isPublished: boolean;
-  createdAt: string;
-};
-
-type Store = {
-  raffles: Raffle[];
-};
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __raffleAdminStore: Store | undefined;
-}
-
-function getStore(): Store {
-  if (!globalThis.__raffleAdminStore) {
-    globalThis.__raffleAdminStore = {
-      raffles: [],
-    };
-  }
-
-  return globalThis.__raffleAdminStore;
-}
+import {
+  createRaffleId,
+  getRaffleStore,
+  normalizeSlug,
+  type Raffle,
+} from "../../lib/raffleStore";
 
 function sendJson(res: VercelResponse, status: number, payload: unknown) {
   res.status(status).setHeader("Content-Type", "application/json");
@@ -38,6 +13,7 @@ function sendJson(res: VercelResponse, status: number, payload: unknown) {
 
 function readTenantId(req: VercelRequest) {
   const headerTenant = req.headers["x-tenant-id"];
+
   if (typeof headerTenant === "string" && headerTenant.trim()) {
     return headerTenant.trim();
   }
@@ -45,20 +21,12 @@ function readTenantId(req: VercelRequest) {
   return "demo-a";
 }
 
-function normalizeSlug(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
-
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  const store = getStore();
+  const store = getRaffleStore();
 
   if (req.method === "GET") {
     const tenantId = readTenantId(req);
+
     const raffles = store.raffles
       .filter((item) => item.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -72,8 +40,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
     const description =
       typeof req.body?.description === "string" ? req.body.description.trim() : "";
-    const slugInput = typeof req.body?.slug === "string" ? req.body.slug.trim() : "";
-    const slug = normalizeSlug(slugInput);
+    const rawSlug = typeof req.body?.slug === "string" ? req.body.slug : "";
+    const slug = normalizeSlug(rawSlug);
     const ticketPrice = Number(req.body?.ticketPrice);
     const maxTickets = Number(req.body?.maxTickets);
     const isPublished = Boolean(req.body?.isPublished);
@@ -107,7 +75,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const raffle: Raffle = {
-      id: `raffle_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: createRaffleId(),
       tenantId,
       title,
       slug,
