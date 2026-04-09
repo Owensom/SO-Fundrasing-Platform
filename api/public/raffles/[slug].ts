@@ -3,7 +3,7 @@ import {
   getRaffleStore,
   normalizeSlug,
   type Raffle,
-} from "../../lib/raffleStore";
+} from "../../_lib/rafflestore";
 
 function sendJson(
   res: VercelResponse,
