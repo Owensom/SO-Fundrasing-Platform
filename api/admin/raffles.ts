@@ -28,8 +28,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const tenantId = readTenantId(req);
 
     const raffles = store.raffles
-      .filter((item) => item.tenantId === tenantId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .filter((item: Raffle) => item.tenantId === tenantId)
+      .sort((a: Raffle, b: Raffle) => b.createdAt.localeCompare(a.createdAt));
 
     return sendJson(res, 200, { raffles });
   }
@@ -67,7 +67,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const duplicateSlug = store.raffles.some(
-      (item) => item.tenantId === tenantId && item.slug === slug
+      (item: Raffle) => item.tenantId === tenantId && item.slug === slug
     );
 
     if (duplicateSlug) {
