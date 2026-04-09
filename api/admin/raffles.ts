@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   createRaffleId,
   getRaffleStore,
+  getSoldTicketCount,
   normalizeSlug,
   type Raffle,
   type RaffleStatus,
@@ -37,7 +38,17 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") {
     const raffles = store.raffles
       .filter((item: Raffle) => item.tenantId === tenantId)
-      .sort((a: Raffle, b: Raffle) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a: Raffle, b: Raffle) => b.createdAt.localeCompare(a.createdAt))
+      .map((raffle: Raffle) => {
+        const soldTickets = getSoldTicketCount(raffle.id);
+        const remainingTickets = Math.max(raffle.maxTickets - soldTickets, 0);
+
+        return {
+          ...raffle,
+          soldTickets,
+          remainingTickets,
+        };
+      });
 
     return sendJson(res, 200, { raffles });
   }
@@ -114,7 +125,13 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 
     store.raffles.unshift(raffle);
 
-    return sendJson(res, 201, { raffle });
+    return sendJson(res, 201, {
+      raffle: {
+        ...raffle,
+        soldTickets: 0,
+        remainingTickets: raffle.maxTickets,
+      },
+    });
   }
 
   if (req.method === "PATCH") {
@@ -201,6 +218,14 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const soldTickets = getSoldTicketCount(raffle.id);
+
+    if (nextMaxTickets < soldTickets) {
+      return sendJson(res, 400, {
+        message: `Max tickets cannot be less than sold tickets (${soldTickets})`,
+      });
+    }
+
     raffle.title = nextTitle;
     raffle.description = nextDescription;
     raffle.slug = nextSlug;
@@ -211,7 +236,13 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     raffle.isPublished = requestedStatus === "published";
     raffle.updatedAt = new Date().toISOString();
 
-    return sendJson(res, 200, { raffle });
+    return sendJson(res, 200, {
+      raffle: {
+        ...raffle,
+        soldTickets,
+        remainingTickets: Math.max(raffle.maxTickets - soldTickets, 0),
+      },
+    });
   }
 
   if (req.method === "DELETE") {
