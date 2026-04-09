@@ -1,18 +1,34 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import {
-  getRaffleStore,
-  getSoldTicketCount,
-  normalizeSlug,
-  type Raffle,
-} from "../../_lib/rafflestore";
 
-function sendJson(
-  res: VercelResponse,
-  status: number,
-  payload: unknown
-): VercelResponse {
+type Raffle = {
+  id: string;
+  tenantId: string;
+  title: string;
+  slug: string;
+  description: string;
+  ticketPrice: number;
+  maxTickets: number;
+  isPublished: boolean;
+  status: "draft" | "published" | "closed";
+  endAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  soldTickets: number;
+  remainingTickets: number;
+};
+
+function sendJson(res: VercelResponse, status: number, payload: unknown) {
   res.status(status).setHeader("Content-Type", "application/json");
   return res.send(JSON.stringify(payload));
+}
+
+function normalizeSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
 }
 
 function readTenantId(req: VercelRequest): string {
@@ -33,17 +49,42 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const tenantId = readTenantId(req);
-    const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
+    const rawSlug =
+      typeof req.query.slug === "string"
+        ? req.query.slug
+        : Array.isArray(req.query.slug)
+        ? req.query.slug[0]
+        : "";
+
     const slug = normalizeSlug(rawSlug);
 
     if (!slug) {
       return sendJson(res, 400, { message: "Missing raffle slug" });
     }
 
-    const store = getRaffleStore();
+    const now = new Date().toISOString();
 
-    const raffle = store.raffles.find(
-      (item: Raffle) =>
+    const raffles: Raffle[] = [
+      {
+        id: "seed_demo_raffle",
+        tenantId: "demo-a",
+        title: "Demo Raffle",
+        slug: "demo-raffle",
+        description: "Demo raffle so your public page has data.",
+        ticketPrice: 5,
+        maxTickets: 100,
+        isPublished: true,
+        status: "published",
+        endAt: null,
+        createdAt: now,
+        updatedAt: now,
+        soldTickets: 0,
+        remainingTickets: 100,
+      },
+    ];
+
+    const raffle = raffles.find(
+      (item) =>
         item.tenantId === tenantId &&
         item.slug === slug &&
         item.status === "published"
@@ -55,21 +96,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const soldTickets = getSoldTicketCount(raffle.id);
-    const remainingTickets = Math.max(raffle.maxTickets - soldTickets, 0);
-
-    return sendJson(res, 200, {
-      ...raffle,
-      soldTickets,
-      remainingTickets,
-    });
+    return sendJson(res, 200, raffle);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown server error";
-
     return sendJson(res, 500, {
       message: "Server error loading raffle",
-      error: message,
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
