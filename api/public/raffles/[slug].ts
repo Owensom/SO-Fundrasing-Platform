@@ -1,3 +1,5 @@
+import { raffleEvents, tenants } from "../../_lib/store";
+
 export default function handler(req: any, res: any) {
   try {
     const slug = String(req.query.slug || "");
@@ -6,38 +8,21 @@ export default function handler(req: any, res: any) {
       return res.status(400).json({ error: "Missing slug" });
     }
 
-    if (slug !== "demo-a") {
+    const tenant = tenants.find((t) => t.slug === slug && t.isActive);
+
+    if (!tenant) {
       return res.status(404).json({ error: "Tenant not found" });
     }
 
+    const raffles = raffleEvents.filter((event) => event.tenantId === tenant.id);
+
     return res.status(200).json({
       tenant: {
-        id: "tenant-demo-a",
-        name: "SO Fundraising Demo A",
-        slug: "demo-a",
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
       },
-      raffles: [
-        {
-          id: "raffle-1",
-          tenantId: "tenant-demo-a",
-          title: "Main Raffle",
-          eventName: "Main Raffle",
-          venue: "Club Hall",
-          price: 2,
-          startNumber: 1,
-          totalTickets: 100,
-          colors: ["Red", "Blue", "Green", "Yellow"],
-          soldByColor: {
-            Red: [1, 2, 8],
-            Blue: [3, 10],
-            Green: [5],
-            Yellow: [],
-            Purple: [],
-            Orange: [],
-          },
-          background: "",
-        },
-      ],
+      raffles,
     });
   } catch (error) {
     console.error("Public raffle route crashed:", error);
