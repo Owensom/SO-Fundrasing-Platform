@@ -15,8 +15,21 @@ export type Raffle = {
   updatedAt: string;
 };
 
+export type Purchase = {
+  id: string;
+  raffleId: string;
+  raffleSlug: string;
+  tenantId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity: number;
+  totalAmount: number;
+  createdAt: string;
+};
+
 type Store = {
   raffles: Raffle[];
+  purchases: Purchase[];
 };
 
 declare global {
@@ -45,6 +58,7 @@ export function getRaffleStore(): Store {
           updatedAt: now,
         },
       ],
+      purchases: [],
     };
   }
 
@@ -62,4 +76,15 @@ export function normalizeSlug(value: string): string {
 
 export function createRaffleId(): string {
   return `raffle_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createPurchaseId(): string {
+  return `purchase_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function getSoldTicketCount(raffleId: string): number {
+  const store = getRaffleStore();
+  return store.purchases
+    .filter((purchase) => purchase.raffleId === raffleId)
+    .reduce((sum, purchase) => sum + purchase.quantity, 0);
 }
