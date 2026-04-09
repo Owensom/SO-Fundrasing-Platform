@@ -34,10 +34,20 @@ export default function PublicRafflePage() {
         const res = await fetch(`/api/public/raffles/${slug}`, {
           headers: {
             "x-tenant-id": "demo-a",
+            Accept: "application/json",
           },
         });
 
-        const data = await res.json();
+        const contentType = res.headers.get("content-type") || "";
+        const rawText = await res.text();
+
+        if (!contentType.includes("application/json")) {
+          throw new Error(
+            `API did not return JSON. Status: ${res.status}. Response: ${rawText.slice(0, 200)}`
+          );
+        }
+
+        const data = JSON.parse(rawText);
 
         if (!res.ok) {
           throw new Error(data.message || "Failed to load raffle");
