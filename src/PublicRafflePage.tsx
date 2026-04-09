@@ -1,200 +1,330 @@
-import React, { useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 
-type RaffleColor = "Red" | "Blue" | "Green" | "Yellow" | "Purple" | "Orange";
-
-type RaffleEvent = {
+type PublicRaffle = {
   id: string;
   tenantId: string;
   title: string;
-  eventName: string;
-  venue: string;
-  price: number;
-  startNumber: number;
-  totalTickets: number;
-  colors: RaffleColor[];
-  soldByColor: Record<RaffleColor, number[]>;
-  background?: string;
-};
-
-type Tenant = {
-  id: string;
-  name: string;
   slug: string;
+  description: string;
+  ticketPrice: number;
+  maxTickets: number;
+  isPublished: boolean;
+  status: "draft" | "published" | "closed";
+  endAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  soldTickets: number;
+  remainingTickets: number;
 };
 
-type ApiResponse = {
-  tenant: Tenant;
-  raffles: RaffleEvent[];
-};
-
-function cardStyle(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(255,255,255,0.07)",
-    backdropFilter: "blur(18px)",
-    WebkitBackdropFilter: "blur(18px)",
-    borderRadius: 28,
-    padding: 24,
-    boxShadow: "0 20px 80px rgba(2,6,23,0.45)",
+type PurchaseResponse = {
+  purchase?: {
+    id: string;
+    buyerName: string;
+    buyerEmail: string;
+    quantity: number;
+    totalAmount: number;
+    createdAt: string;
   };
-}
+  soldTickets?: number;
+  remainingTickets?: number;
+  raffleStatus?: "draft" | "published" | "closed";
+  message?: string;
+};
 
-function money(n: number) {
-  return `£${Number.isFinite(n) ? n.toFixed(2) : "0.00"}`;
+function formatDate(value: string | null) {
+  if (!value) return "No end date";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "No end date";
+  }
+
+  return date.toLocaleString();
 }
 
 export default function PublicRafflePage() {
-  const [data, setData] = useState<ApiResponse | null>(null);
+  const { slug } = useParams();
+
+  const [raffle, setRaffle] = useState<PublicRaffle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [quantity, setQuantity] = useState("1");
+
+  const total = useMemo(() => {
+    if (!raffle) return "0.00";
+    const qty = Number(quantity) || 0;
+    return (qty * raffle.ticketPrice).toFixed(2);
+  }, [quantity, raffle]);
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+
+    async function loadRaffle() {
+      if (!slug) {
+        setError("Missing raffle slug");
+        setLoading(false);
+        return;
+      }
+
       try {
-        setLoading(true);
         setError("");
 
-        const res = await fetch("/api/public/raffles/demo-a");
+        const res = await fetch(`/api/public/raffles/${encodeURIComponent(slug)}`, {
+          method: "GET",
+        });
+
         const text = await res.text();
 
-        let parsed: ApiResponse | null = null;
+        let data: any = null;
 
         try {
-          parsed = JSON.parse(text);
+          data = text ? JSON.parse(text) : null;
         } catch {
-          throw new Error(`Invalid JSON returned: ${text}`);
+          throw new Error(`API did not return JSON. ${text.slice(0, 200)}`);
         }
 
         if (!res.ok) {
-          throw new Error((parsed as any)?.error || `Request failed: ${res.status}`);
+          throw new Error(data?.message || "Failed to load raffle");
         }
 
-        setData(parsed);
+        if (!cancelled) {
+          setRaffle(data);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load raffle page");
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load raffle");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    load();
-  }, []);
+    loadRaffle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  async function handlePurchase(e: FormEvent) {
+    e.preventDefault();
+
+    if (!raffle || !slug) return;
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/public/raffles/${encodeURIComponent(slug)}/purchase`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            buyerName,
+            buyerEmail,
+            quantity: Number(quantity),
+          }),
+        }
+      );
+
+      const text = await res.text();
+
+      let data: PurchaseResponse | null = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(`Purchase API did not return JSON. ${text.slice(0, 200)}`);
+      }
+
+      if (!res.ok || !data?.purchase) {
+        throw new Error(data?.message || "Failed to purchase tickets");
+      }
+
+      setSuccess(
+        `Purchase complete. ${data.purchase.quantity} ticket(s) reserved for ${data.purchase.buyerEmail}. Total £${Number(data.purchase.totalAmount).toFixed(2)}`
+      );
+
+      setBuyerName("");
+      setBuyerEmail("");
+      setQuantity("1");
+
+      setRaffle((prev) =>
+        prev
+          ? {
+              ...prev,
+              soldTickets: data?.soldTickets ?? prev.soldTickets,
+              remainingTickets: data?.remainingTickets ?? prev.remainingTickets,
+              status: data?.raffleStatus ?? prev.status,
+              isPublished: (data?.raffleStatus ?? prev.status) === "published",
+            }
+          : prev
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to purchase tickets");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) {
+    return <div style={{ padding: 24 }}>Loading raffle...</div>;
+  }
+
+  if (error && !raffle) {
     return (
-      <div style={{ minHeight: "100vh", background: "#020617", color: "white", padding: 24 }}>
-        Loading public raffle...
+      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
+        <h1>Raffle not available</h1>
+        <p>{error}</p>
       </div>
     );
   }
 
-  if (error) {
+  if (!raffle) {
     return (
-      <div style={{ minHeight: "100vh", background: "#020617", color: "white", padding: 24 }}>
-        <div style={{ color: "#fda4af" }}>{error}</div>
+      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
+        <h1>Raffle not found</h1>
       </div>
     );
   }
 
-  if (!data) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#020617", color: "white", padding: 24 }}>
-        No raffle data found.
-      </div>
-    );
-  }
+  const isClosed = raffle.status !== "published" || raffle.remainingTickets <= 0;
+  const maxQuantity = Math.max(raffle.remainingTickets, 1);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top, rgba(56,189,248,0.16), transparent 28%), radial-gradient(circle at right, rgba(168,85,247,0.14), transparent 22%), linear-gradient(180deg, #020617 0%, #0f172a 48%, #020617 100%)",
-        color: "white",
-        fontFamily: "Inter, Arial, sans-serif",
-        padding: 24,
-      }}
-    >
-      <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gap: 20 }}>
-        <section style={cardStyle()}>
+    <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
+      <h1>{raffle.title}</h1>
+      <p>{raffle.description}</p>
+
+      <div
+        style={{
+          marginTop: 24,
+          padding: 20,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          background: "#fff",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Raffle Details</h2>
+        <p>Ticket Price: £{Number(raffle.ticketPrice).toFixed(2)}</p>
+        <p>Sold Tickets: {raffle.soldTickets}</p>
+        <p>Remaining Tickets: {raffle.remainingTickets}</p>
+        <p>Ends: {formatDate(raffle.endAt)}</p>
+        <p>Status: {raffle.status}</p>
+      </div>
+
+      <div
+        style={{
+          marginTop: 24,
+          padding: 20,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          background: "#fff",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Buy Tickets</h2>
+
+        {error ? (
           <div
             style={{
-              display: "inline-flex",
-              gap: 8,
-              alignItems: "center",
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.08)",
-              borderRadius: 999,
-              padding: "6px 12px",
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.18em",
-              color: "#bae6fd",
-              marginBottom: 10,
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 8,
+              background: "#fff1f1",
+              color: "#9f1d1d",
             }}
           >
-            Public buyer page
+            {error}
           </div>
+        ) : null}
 
-          <h1 style={{ margin: 0, fontSize: 38, fontWeight: 700, letterSpacing: "-0.03em" }}>
-            {data.tenant.name}
-          </h1>
+        {success ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 8,
+              background: "#effaf1",
+              color: "#166534",
+            }}
+          >
+            {success}
+          </div>
+        ) : null}
 
-          <p style={{ margin: "10px 0 0", color: "#cbd5e1" }}>
-            This is the public raffle page for <strong>{data.tenant.slug}</strong>.
-          </p>
-        </section>
+        {isClosed ? (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              background: "#f3f4f6",
+              color: "#374151",
+            }}
+          >
+            This raffle is closed or sold out.
+          </div>
+        ) : (
+          <form onSubmit={handlePurchase} style={{ display: "grid", gap: 12 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Name</span>
+              <input
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+                required
+              />
+            </label>
 
-        <section style={cardStyle()}>
-          <h2 style={{ marginTop: 0 }}>Available raffles</h2>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Email</span>
+              <input
+                type="email"
+                value={buyerEmail}
+                onChange={(e) => setBuyerEmail(e.target.value)}
+                required
+              />
+            </label>
 
-          {data.raffles.length === 0 ? (
-            <div style={{ color: "#94a3b8" }}>No raffles available.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 14 }}>
-              {data.raffles.map((raffle) => (
-                <div
-                  key={raffle.id}
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(2,6,23,0.55)",
-                    borderRadius: 18,
-                    padding: 18,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 22, fontWeight: 700 }}>{raffle.title}</div>
-                      <div style={{ color: "#cbd5e1", marginTop: 6 }}>
-                        {raffle.eventName} • {raffle.venue}
-                      </div>
-                    </div>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Quantity</span>
+              <input
+                type="number"
+                min="1"
+                max={maxQuantity}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                required
+              />
+            </label>
 
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 700, fontSize: 20 }}>{money(raffle.price)}</div>
-                      <div style={{ color: "#94a3b8", fontSize: 12 }}>per ticket</div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 14, color: "#cbd5e1" }}>
-                    Numbers: {raffle.startNumber} to {raffle.startNumber + raffle.totalTickets - 1}
-                  </div>
-
-                  <div style={{ marginTop: 8, color: "#cbd5e1" }}>
-                    Colours: {raffle.colors.join(", ")}
-                  </div>
-                </div>
-              ))}
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 8,
+                background: "#f7f7f7",
+              }}
+            >
+              Total: £{total}
             </div>
-          )}
-        </section>
+
+            <button type="submit" disabled={saving}>
+              {saving ? "Processing..." : "Buy Tickets"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
