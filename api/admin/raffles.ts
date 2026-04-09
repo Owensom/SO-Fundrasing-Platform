@@ -4,14 +4,18 @@ import {
   getRaffleStore,
   normalizeSlug,
   type Raffle,
-import { ... } from "../lib/raffleStore";
+} from "../lib/raffleStore";
 
-function sendJson(res: VercelResponse, status: number, payload: unknown) {
+function sendJson(
+  res: VercelResponse,
+  status: number,
+  payload: unknown
+): VercelResponse {
   res.status(status).setHeader("Content-Type", "application/json");
-  res.send(JSON.stringify(payload));
+  return res.send(JSON.stringify(payload));
 }
 
-function readTenantId(req: VercelRequest) {
+function readTenantId(req: VercelRequest): string {
   const headerTenant = req.headers["x-tenant-id"];
 
   if (typeof headerTenant === "string" && headerTenant.trim()) {
@@ -37,10 +41,14 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "POST") {
     const tenantId = readTenantId(req);
 
-    const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+    const title =
+      typeof req.body?.title === "string" ? req.body.title.trim() : "";
     const description =
-      typeof req.body?.description === "string" ? req.body.description.trim() : "";
-    const rawSlug = typeof req.body?.slug === "string" ? req.body.slug : "";
+      typeof req.body?.description === "string"
+        ? req.body.description.trim()
+        : "";
+    const rawSlug =
+      typeof req.body?.slug === "string" ? req.body.slug.trim() : "";
     const slug = normalizeSlug(rawSlug);
     const ticketPrice = Number(req.body?.ticketPrice);
     const maxTickets = Number(req.body?.maxTickets);
@@ -59,11 +67,15 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!Number.isFinite(ticketPrice) || ticketPrice < 0) {
-      return sendJson(res, 400, { message: "Ticket price must be a valid number" });
+      return sendJson(res, 400, {
+        message: "Ticket price must be a valid number",
+      });
     }
 
     if (!Number.isInteger(maxTickets) || maxTickets < 1) {
-      return sendJson(res, 400, { message: "Max tickets must be at least 1" });
+      return sendJson(res, 400, {
+        message: "Max tickets must be at least 1",
+      });
     }
 
     const duplicateSlug = store.raffles.some(
@@ -71,7 +83,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     if (duplicateSlug) {
-      return sendJson(res, 400, { message: "Slug already exists for this tenant" });
+      return sendJson(res, 400, {
+        message: "Slug already exists for this tenant",
+      });
     }
 
     const raffle: Raffle = {
