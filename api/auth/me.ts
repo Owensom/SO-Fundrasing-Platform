@@ -1,32 +1,45 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import jwt from "jsonwebtoken";
-import { users, tenants } from "../_lib/store";
+import { tenants, users } from "../_lib/store";
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret";
+function getCookieValue(cookieHeader: string | undefined, name: string) {
+  if (!cookieHeader) return null;
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
-  const cookie = req.headers.cookie || "";
-  const match = cookie.match(/auth_token=([^;]+)/);
-  const token = match?.[1];
+  const parts = cookieHeader.split(";").map((part) => part.trim());
+  const found = parts.find((part) => part.startsWith(`${name}=`));
 
-  if (!token) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
+  if (!found) return null;
 
+  return found.substring(name.length + 1);
+}
+
+export default function handler(req: any, res: any) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string;
-      tenantId: string;
-    };
+    const raw = getCookieValue(req.headers.cookie, "auth_session");
 
-    const user = users.find((u) => u.id === decoded.userId);
-    const tenant = tenants.find((t) => t.id === decoded.tenantId);
-
-    if (!user || !tenant) {
-      return res.status(404).json({ error: "User or tenant not found" });
+    if (!raw) {
+      return res.status(401).json({ error: "Not authenticated" });
     }
 
-    return res.json({
+    let session: any = null;
+
+    try {
+      session = JSON.parse(decodeURIComponent(raw));
+    } catch {
+      return res.status(401).json({ error: "Invalid session" });
+    }
+
+    const user = users.find((u) => u.id === session.userId && u.isActive);
+
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    const tenant = tenants.find((t) => t.id === user.tenantId && t.isActive);
+
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    return res.status(200).json({
       user: {
         id: user.id,
         email: user.email,
@@ -39,7 +52,10 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         slug: tenant.slug,
       },
     });
-  } catch {
-    return res.status(401).json({ error: "Invalid session" });
+  } catch (error: any) {
+    return res.status(500).json({
+      error: "Failed to read session",
+      detail: error?.message || "Unknown error",
+    });
   }
 }
