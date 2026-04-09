@@ -1,4 +1,4 @@
-import { tenants, raffleEvents } from "../../_lib/store";
+import { raffleEvents, tenants } from "../../_lib/store";
 
 export default function handler(req: any, res: any) {
   try {
@@ -8,22 +8,24 @@ export default function handler(req: any, res: any) {
       return res.status(400).json({ error: "Missing slug" });
     }
 
-    const tenant = tenants.find((t: any) => t.slug === slug);
+    const tenant = tenants.find((t) => t.slug === slug && t.isActive);
 
     if (!tenant) {
       return res.status(404).json({ error: "Tenant not found" });
     }
 
-    const raffles = raffleEvents.filter(
-      (r: any) => r.tenantId === tenant.id
-    );
+    const raffles = raffleEvents.filter((event) => event.tenantId === tenant.id);
 
     return res.status(200).json({
-      tenant,
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+      },
       raffles,
     });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server crash" });
+  } catch (error) {
+    console.error("Public raffle route crashed:", error);
+    return res.status(500).json({ error: "Route crashed" });
   }
 }
