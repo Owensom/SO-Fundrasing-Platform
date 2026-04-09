@@ -28,28 +28,20 @@ export default function PublicRafflePage() {
     async function loadRaffle() {
       try {
         const path = window.location.pathname;
-        const rawSlug = path.split("/r/")[1] || "";
-        const slug = rawSlug.split("/")[0].trim();
+        const slug = path.replace("/r/", "").trim();
 
         if (!slug) {
-          throw new Error(`Missing slug from path: ${path}`);
+          throw new Error(`Missing slug. Path was: ${path}`);
         }
 
-        const apiUrl = `${window.location.origin}/api/public/raffles/${slug}`;
-
-        const res = await fetch(apiUrl, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        });
+        const res = await fetch("/api/public/raffles/demo-raffle");
 
         const text = await res.text();
 
         let data: any = null;
 
         try {
-          data = text ? JSON.parse(text) : null;
+          data = JSON.parse(text);
         } catch {
           throw new Error(`API returned non-JSON: ${text.slice(0, 200)}`);
         }
@@ -63,7 +55,7 @@ export default function PublicRafflePage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load raffle");
+          setError(err instanceof Error ? err.message : "Unknown error");
         }
       } finally {
         if (!cancelled) {
@@ -85,7 +77,7 @@ export default function PublicRafflePage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ padding: 24 }}>
         <h1>Raffle not available</h1>
         <p>{error}</p>
         <p>Path: {window.location.pathname}</p>
@@ -95,14 +87,14 @@ export default function PublicRafflePage() {
 
   if (!raffle) {
     return (
-      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
-        <h1>Raffle not found</h1>
+      <div style={{ padding: 24 }}>
+        <h1>No raffle found</h1>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
+    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
       <h1>{raffle.title}</h1>
       <p>{raffle.description}</p>
 
