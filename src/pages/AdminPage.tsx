@@ -26,10 +26,29 @@ type Raffle = {
   endAt: string | null;
   createdAt: string;
   updatedAt: string;
+  soldTickets: number;
+  remainingTickets: number;
+};
+
+type Purchase = {
+  id: string;
+  raffleId: string;
+  raffleSlug: string;
+  raffleTitle: string;
+  tenantId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity: number;
+  totalAmount: number;
+  createdAt: string;
 };
 
 type RafflesResponse = {
   raffles: Raffle[];
+};
+
+type PurchasesResponse = {
+  purchases: Purchase[];
 };
 
 type CreateRaffleResponse = {
@@ -87,7 +106,9 @@ export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [rafflesLoading, setRafflesLoading] = useState(true);
+  const [purchasesLoading, setPurchasesLoading] = useState(true);
   const [raffles, setRaffles] = useState<Raffle[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -147,6 +168,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!user) {
       setRafflesLoading(false);
+      setPurchasesLoading(false);
       return;
     }
 
@@ -181,7 +203,37 @@ export default function AdminPage() {
       }
     }
 
+    async function loadPurchases() {
+      try {
+        const res = await fetch("/api/admin/purchases", {
+          credentials: "include",
+          headers: {
+            "x-tenant-id": user.tenantId,
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load purchases");
+        }
+
+        const data: PurchasesResponse = await res.json();
+
+        if (mounted) {
+          setPurchases(data.purchases ?? []);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Failed to load purchases");
+        }
+      } finally {
+        if (mounted) {
+          setPurchasesLoading(false);
+        }
+      }
+    }
+
     loadRaffles();
+    loadPurchases();
 
     return () => {
       mounted = false;
@@ -297,7 +349,7 @@ export default function AdminPage() {
       }
 
       setRaffles((prev) =>
-        prev.map((item) => (item.id === id ? data.raffle as Raffle : item))
+        prev.map((item) => (item.id === id ? (data.raffle as Raffle) : item))
       );
       setSuccess("Raffle updated.");
       cancelEditing();
@@ -336,7 +388,7 @@ export default function AdminPage() {
       }
 
       setRaffles((prev) =>
-        prev.map((item) => (item.id === id ? data.raffle as Raffle : item))
+        prev.map((item) => (item.id === id ? (data.raffle as Raffle) : item))
       );
       setSuccess(`Raffle set to ${status}.`);
     } catch (err) {
@@ -378,6 +430,7 @@ export default function AdminPage() {
       }
 
       setRaffles((prev) => prev.filter((item) => item.id !== id));
+      setPurchases((prev) => prev.filter((item) => item.raffleId !== id));
       setSuccess("Raffle deleted.");
       if (editingId === id) {
         cancelEditing();
@@ -794,6 +847,8 @@ export default function AdminPage() {
                             Ticket Price: £{Number(raffle.ticketPrice).toFixed(2)}
                           </span>
                           <span>Max Tickets: {raffle.maxTickets}</span>
+                          <span>Sold: {raffle.soldTickets}</span>
+                          <span>Remaining: {raffle.remainingTickets}</span>
                           <span>Ends: {formatDate(raffle.endAt)}</span>
                         </div>
 
@@ -864,6 +919,46 @@ export default function AdminPage() {
           )}
         </section>
       </div>
+
+      <section
+        style={{
+          marginTop: 24,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          padding: 20,
+          background: "#fff",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Purchases</h2>
+
+        {purchasesLoading ? (
+          <div>Loading purchases...</div>
+        ) : purchases.length === 0 ? (
+          <div>No purchases yet.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {purchases.map((purchase) => (
+              <div
+                key={purchase.id}
+                style={{
+                  border: "1px solid #e5e5e5",
+                  borderRadius: 10,
+                  padding: 16,
+                }}
+              >
+                <h3 style={{ margin: "0 0 8px 0" }}>{purchase.raffleTitle}</h3>
+                <div style={{ display: "grid", gap: 4, fontSize: 14 }}>
+                  <div>Buyer: {purchase.buyerName}</div>
+                  <div>Email: {purchase.buyerEmail}</div>
+                  <div>Quantity: {purchase.quantity}</div>
+                  <div>Total: £{Number(purchase.totalAmount).toFixed(2)}</div>
+                  <div>Date: {new Date(purchase.createdAt).toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
