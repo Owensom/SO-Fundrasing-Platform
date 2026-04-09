@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   getRaffleStore,
+  getSoldTicketCount,
   normalizeSlug,
   type Raffle,
 } from "../../_lib/rafflestore";
@@ -54,7 +55,14 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    return sendJson(res, 200, raffle);
+    const soldTickets = getSoldTicketCount(raffle.id);
+    const remainingTickets = Math.max(raffle.maxTickets - soldTickets, 0);
+
+    return sendJson(res, 200, {
+      ...raffle,
+      soldTickets,
+      remainingTickets,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown server error";
