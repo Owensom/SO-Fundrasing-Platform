@@ -32,8 +32,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const tenantId = readTenantId(req);
-    const rawSlug =
-      typeof req.query.slug === "string" ? req.query.slug : "";
+    const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
     const slug = normalizeSlug(rawSlug);
 
     if (!slug) {
@@ -46,7 +45,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       (item: Raffle) =>
         item.tenantId === tenantId &&
         item.slug === slug &&
-        item.isPublished
+        item.status === "published"
     );
 
     if (!raffle) {
