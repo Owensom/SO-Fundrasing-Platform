@@ -7,59 +7,126 @@ type User = {
   tenantId: string;
 };
 
+type MeResponse = {
+  user?: User | null;
+};
+
 export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        setUser(data.user);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    let mounted = true;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load user");
+        }
+
+        const data: MeResponse = await res.json();
+
+        if (mounted) {
+          setUser(data.user ?? null);
+        }
+      } catch {
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadMe();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  if (loading) return <div>Loading admin...</div>;
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
 
-  if (!user) {
-    return <div>You must be logged in.</div>;
+      window.location.href = "/login";
+    } catch {
+      window.location.href = "/login";
+    }
   }
 
-  if (user.role !== "admin") {
-    return <div>Access denied. Admins only.</div>;
+  if (loading) {
+    return <div style={{ padding: 24 }}>Loading admin...</div>;
+  }
+
+  if (!user) {
+    return <div style={{ padding: 24 }}>No active session.</div>;
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Admin Dashboard</h1>
+    <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <h1>Admin Dashboard</h1>
+          <p>
+            Signed in as <strong>{user.email}</strong>
+          </p>
+          <p>Tenant: {user.tenantId}</p>
+          <p>Role: {user.role}</p>
+        </div>
 
-      <p>
-        Logged in as <strong>{user.email}</strong>
-      </p>
-      <p>Tenant: {user.tenantId}</p>
+        <button onClick={handleLogout}>Logout</button>
+      </div>
 
-      <hr />
+      <hr style={{ margin: "24px 0" }} />
 
-      <h2>Tools</h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16,
+        }}
+      >
+        <section style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <h2>Raffles</h2>
+          <p>Create, edit, and manage raffles for this tenant.</p>
+          <button>Create Raffle</button>
+        </section>
 
-      <div style={{ display: "grid", gap: 12, maxWidth: 400 }}>
-        <button onClick={() => alert("TODO: Create raffle")}>
-          Create Raffle
-        </button>
+        <section style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <h2>Orders</h2>
+          <p>Review purchases, payments, and buyer activity.</p>
+          <button>View Orders</button>
+        </section>
 
-        <button onClick={() => alert("TODO: Manage raffles")}>
-          Manage Raffles
-        </button>
+        <section style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <h2>Buyers</h2>
+          <p>Look up entrants and export buyer data later.</p>
+          <button>View Buyers</button>
+        </section>
 
-        <button onClick={() => alert("TODO: View orders")}>
-          View Orders
-        </button>
-
-        <button onClick={() => alert("TODO: Tenant settings")}>
-          Tenant Settings
-        </button>
+        <section style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
+          <h2>Tenant Settings</h2>
+          <p>Update tenant branding and configuration.</p>
+          <button>Open Settings</button>
+        </section>
       </div>
     </div>
   );
