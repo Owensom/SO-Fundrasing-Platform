@@ -24,11 +24,15 @@ create table if not exists raffle_purchases (
   quantity integer not null check (quantity > 0),
   unit_price_cents integer not null check (unit_price_cents >= 0),
   total_price_cents integer not null check (total_price_cents >= 0),
-  created_at timestamptz not null default now()
+  payment_status text not null check (payment_status in ('pending', 'paid', 'failed', 'cancelled')),
+  paid_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_raffles_tenant_slug on raffles (tenant_slug, slug);
 create index if not exists idx_raffle_purchases_raffle on raffle_purchases (tenant_slug, raffle_slug, created_at desc);
+create index if not exists idx_raffle_purchases_status on raffle_purchases (tenant_slug, raffle_slug, payment_status);
 
 insert into raffles (
   id,
