@@ -1,21 +1,16 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import PublicRafflePage from "./PublicRafflePage";
-
-function HomePage() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h1>HOME TEST</h1>
-      <a href="/r/demo-raffle">Go to raffle test</a>
-    </div>
-  );
-}
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import PublicRafflePage from "./pages/PublicRafflePage";
+import AdminRaffleDetailsPage from "./pages/admin/AdminRaffleDetailsPage";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/r/:slug" element={<PublicRafflePage />} />
+        <Route path="/raffles/:slug" element={<PublicRafflePage />} />
+        <Route
+          path="/admin/raffles/:slug"
+          element={<AdminRaffleDetailsPage />}
+        />
       </Routes>
     </BrowserRouter>
   );
