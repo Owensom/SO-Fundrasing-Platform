@@ -1,16 +1,19 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import PublicRafflePage from "./pages/PublicRafflePage";
 
 function HomePage() {
   return (
     <div style={{ padding: 24 }}>
-      <h1>Raffle Platform</h1>
+      <h1>HOME TEST</h1>
+      <a href="/r/demo-raffle">Go to raffle test</a>
+    </div>
+  );
+}
 
-      <div style={{ marginTop: 16 }}>
-        <a href="/r/demo-raffle">
-          <button type="button">Open Demo Raffle</button>
-        </a>
-      </div>
+function PublicRafflePage() {
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>PUBLIC RAFFLE TEST</h1>
+      <p>If you can see this, the route is working.</p>
     </div>
   );
 }
