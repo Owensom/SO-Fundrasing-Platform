@@ -1,4 +1,4 @@
-import { Pool, type PoolClient, type QueryResult } from "pg";
+import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -24,7 +24,7 @@ function getPool(): Pool {
   return globalThis.__platformPgPool;
 }
 
-export async function query<T = unknown>(
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params: unknown[] = []
 ): Promise<QueryResult<T>> {
