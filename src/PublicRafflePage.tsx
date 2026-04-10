@@ -1,23 +1,68 @@
+import { useEffect, useState } from "react";
+
+type Raffle = {
+  title: string;
+  description: string;
+  ticketPrice: number;
+  soldTickets: number;
+  remainingTickets: number;
+  status: string;
+};
+
 export default function PublicRafflePage() {
+  const [raffle, setRaffle] = useState<Raffle | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        // HARD-CODED FIRST (we will make dynamic after)
+        const res = await fetch("/api/public/raffles/demo-raffle");
+
+        if (!res.ok) {
+          throw new Error("Failed to load raffle");
+        }
+
+        const data = await res.json();
+        setRaffle(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
+
+  if (loading) {
+    return <div style={{ padding: 24 }}>Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h1>Error</h1>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (!raffle) {
+    return <div style={{ padding: 24 }}>No data</div>;
+  }
+
   return (
     <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <h1>Demo Raffle</h1>
-      <p>Static test page. This bypasses the API completely.</p>
+      <h1>{raffle.title}</h1>
+      <p>{raffle.description}</p>
 
-      <div
-        style={{
-          marginTop: 24,
-          padding: 20,
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          background: "#fff",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Raffle Details</h2>
-        <p>Ticket Price: £5.00</p>
-        <p>Sold Tickets: 0</p>
-        <p>Remaining Tickets: 100</p>
-        <p>Status: published</p>
+      <div style={{ marginTop: 24 }}>
+        <p>Price: £{raffle.ticketPrice}</p>
+        <p>Sold: {raffle.soldTickets}</p>
+        <p>Remaining: {raffle.remainingTickets}</p>
+        <p>Status: {raffle.status}</p>
       </div>
     </div>
   );
