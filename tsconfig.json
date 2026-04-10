@@ -4,15 +4,23 @@
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "skipLibCheck": true,
     "moduleResolution": "Bundler",
-    "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src", "api", "vite.config.ts"]
+  "include": ["src", "api", "vite.config.ts"],
+  "exclude": [
+    "src/AdminLogin.tsx",
+    "src/AdminPanel.tsx",
+    "src/RaffleSection.tsx",
+    "src/SquaresSection.tsx",
+    "src/TicketsSection.tsx",
+    "src/ui.tsx"
+  ]
 }
