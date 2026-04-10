@@ -1,127 +1,78 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import {
-  createPurchaseId,
-  getRaffleStore,
-  getSoldTicketCount,
-  normalizeSlug,
-  type Purchase,
-  type Raffle,
-} from "../../../_lib/rafflestore";
+import { createPurchase, resolveTenantSlug } from "../../../_lib/raffles-repo";
 
-function sendJson(
-  res: VercelResponse,
-  status: number,
-  payload: unknown
-): VercelResponse {
-  res.status(status).setHeader("Content-Type", "application/json");
-  return res.send(JSON.stringify(payload));
+type PurchaseBody = {
+  name?: unknown;
+  email?: unknown;
+  quantity?: unknown;
+};
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function readTenantId(req: VercelRequest): string {
-  const headerTenant = req.headers["x-tenant-id"];
-
-  if (typeof headerTenant === "string" && headerTenant.trim()) {
-    return headerTenant.trim();
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed." });
   }
 
-  return "demo-a";
-}
+  const tenantSlug = resolveTenantSlug(req);
+  const slug = req.query.slug;
 
-function isValidEmail(value: string): boolean {
-  return /\S+@\S+\.\S+/.test(value);
-}
+  if (typeof slug !== "string" || !slug.trim()) {
+    return res.status(400).json({ error: "Invalid raffle slug." });
+  }
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+  const body = (req.body ?? {}) as PurchaseBody;
+
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const quantity = Number(body.quantity);
+
+  if (!name) {
+    return res.status(400).json({ error: "Name is required." });
+  }
+
+  if (!email || !isValidEmail(email)) {
+    return res.status(400).json({ error: "A valid email is required." });
+  }
+
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return res
+      .status(400)
+      .json({ error: "Quantity must be a whole number greater than 0." });
+  }
+
+  if (quantity > 20) {
+    return res
+      .status(400)
+      .json({ error: "Maximum quantity per purchase is 20." });
+  }
+
   try {
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
-      return sendJson(res, 405, { message: "Method not allowed" });
-    }
-
-    const tenantId = readTenantId(req);
-    const rawSlug = typeof req.query.slug === "string" ? req.query.slug : "";
-    const slug = normalizeSlug(rawSlug);
-
-    if (!slug) {
-      return sendJson(res, 400, { message: "Missing raffle slug" });
-    }
-
-    const buyerName =
-      typeof req.body?.buyerName === "string" ? req.body.buyerName.trim() : "";
-    const buyerEmail =
-      typeof req.body?.buyerEmail === "string" ? req.body.buyerEmail.trim() : "";
-    const quantity = Number(req.body?.quantity);
-
-    if (!buyerName) {
-      return sendJson(res, 400, { message: "Buyer name is required" });
-    }
-
-    if (!buyerEmail || !isValidEmail(buyerEmail)) {
-      return sendJson(res, 400, { message: "Valid buyer email is required" });
-    }
-
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return sendJson(res, 400, { message: "Quantity must be at least 1" });
-    }
-
-    const store = getRaffleStore();
-
-    const raffle = store.raffles.find(
-      (item: Raffle) =>
-        item.tenantId === tenantId &&
-        item.slug === slug &&
-        item.status === "published"
-    );
-
-    if (!raffle) {
-      return sendJson(res, 404, { message: "Published raffle not found" });
-    }
-
-    const soldTickets = getSoldTicketCount(raffle.id);
-    const remainingTickets = Math.max(raffle.maxTickets - soldTickets, 0);
-
-    if (remainingTickets < quantity) {
-      return sendJson(res, 400, {
-        message: `Only ${remainingTickets} ticket(s) remaining`,
-      });
-    }
-
-    const purchase: Purchase = {
-      id: createPurchaseId(),
-      raffleId: raffle.id,
-      raffleSlug: raffle.slug,
-      tenantId,
-      buyerName,
-      buyerEmail,
+    const result = await createPurchase({
+      tenantSlug,
+      raffleSlug: slug,
+      customerName: name,
+      customerEmail: email,
       quantity,
-      totalAmount: Number((quantity * raffle.ticketPrice).toFixed(2)),
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    store.purchases.unshift(purchase);
-
-    const nextSoldTickets = getSoldTicketCount(raffle.id);
-    const nextRemainingTickets = Math.max(raffle.maxTickets - nextSoldTickets, 0);
-
-    if (nextRemainingTickets === 0) {
-      raffle.status = "closed";
-      raffle.isPublished = false;
-      raffle.updatedAt = new Date().toISOString();
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.message });
     }
 
-    return sendJson(res, 201, {
-      purchase,
-      soldTickets: nextSoldTickets,
-      remainingTickets: nextRemainingTickets,
-      raffleStatus: raffle.status,
+    return res.status(201).json({
+      message: "Purchase created successfully.",
+      purchase: result.purchase,
+      raffle: result.raffle,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown server error";
-
-    return sendJson(res, 500, {
-      message: "Server error creating purchase",
-      error: message,
-    });
+    console.error("POST /api/public/raffles/[slug]/purchase failed", error);
+    return res.status(500).json({ error: "Internal server error." });
   }
 }
