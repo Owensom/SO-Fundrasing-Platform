@@ -3,7 +3,7 @@ import {
   getAdminRaffleBySlug,
   listPurchasesForRaffle,
   resolveTenantSlug,
-} from "../../../_lib/raffles-repo";
+} from "../_lib/raffles-repo";
 
 export default async function handler(
   req: VercelRequest,
@@ -41,7 +41,7 @@ export default async function handler(
       },
     });
   } catch (error) {
-    console.error("GET /api/admin/raffles/[slug]/purchases failed", error);
+    console.error("GET /api/admin/raffles failed", error);
     return res.status(500).json({ error: "Internal server error." });
   }
 }
