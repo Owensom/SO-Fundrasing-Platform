@@ -1,309 +1,418 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import type {
+  PublicRaffle,
+  PublicRaffleResponse,
+  PurchaseResponse,
+} from "../types/raffles";
 
-type PublicRaffle = {
-  id: string;
-  tenantId: string;
-  title: string;
-  slug: string;
-  description: string;
-  ticketPrice: number;
-  maxTickets: number;
-  isPublished: boolean;
-  status: "draft" | "published" | "closed";
-  endAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  soldTickets: number;
-  remainingTickets: number;
+type PurchaseFormState = {
+  name: string;
+  email: string;
+  quantity: number;
 };
 
-type PurchaseResponse = {
-  purchase?: {
-    id: string;
-    buyerName: string;
-    buyerEmail: string;
-    quantity: number;
-    totalAmount: number;
-    createdAt: string;
-  };
-  soldTickets?: number;
-  remainingTickets?: number;
-  raffleStatus?: "draft" | "published" | "closed";
-  message?: string;
+const initialFormState: PurchaseFormState = {
+  name: "",
+  email: "",
+  quantity: 1,
 };
-
-function formatDate(value: string | null) {
-  if (!value) return "No end date";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No end date";
-  return date.toLocaleString();
-}
 
 export default function PublicRafflePage() {
   const { slug } = useParams<{ slug: string }>();
 
   const [raffle, setRaffle] = useState<PublicRaffle | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [pageError, setPageError] = useState<string | null>(null);
 
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  const [form, setForm] = useState<PurchaseFormState>(initialFormState);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
 
-  const total = useMemo(() => {
-    if (!raffle) return "0.00";
-    const qty = Number(quantity) || 0;
-    return (qty * raffle.ticketPrice).toFixed(2);
-  }, [quantity, raffle]);
+  const totalPrice = useMemo(() => {
+    if (!raffle) return 0;
+    return raffle.ticketPrice * form.quantity;
+  }, [raffle, form.quantity]);
 
   useEffect(() => {
-    let mounted = true;
+    if (!slug) {
+      setPageError("Missing raffle slug.");
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
 
     async function loadRaffle() {
-      if (!slug) {
-        setError("Missing raffle slug");
-        setLoading(false);
-        return;
-      }
-
       try {
-        const res = await fetch(`/api/public/raffles/${slug}`, {
+        setLoading(true);
+        setPageError(null);
+
+        const response = await fetch(`/api/public/raffles/${slug}`, {
           headers: {
-            "x-tenant-id": "demo-a",
-            Accept: "application/json",
+            "x-tenant-slug": "demo-a",
           },
         });
 
-        const data = await res.json();
+        const data = (await response.json()) as PublicRaffleResponse & {
+          error?: string;
+        };
 
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to load raffle");
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load raffle.");
         }
 
-        if (mounted) {
-          setRaffle(data);
-        }
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "Failed to load raffle");
-        }
+        if (!isMounted) return;
+
+        setRaffle(data.raffle);
+        setForm((current) => ({
+          ...current,
+          quantity:
+            data.raffle.remainingTickets > 0
+              ? Math.min(current.quantity, data.raffle.remainingTickets)
+              : 1,
+        }));
+      } catch (error) {
+        if (!isMounted) return;
+
+        setPageError(
+          error instanceof Error ? error.message : "Failed to load raffle."
+        );
       } finally {
-        if (mounted) {
+        if (isMounted) {
           setLoading(false);
         }
       }
     }
 
-    loadRaffle();
+    void loadRaffle();
 
     return () => {
-      mounted = false;
+      isMounted = false;
     };
   }, [slug]);
 
-  async function handlePurchase(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    if (!raffle || !slug) return;
+    if (!slug || !raffle) return;
 
-    setSaving(true);
-    setError("");
-    setSuccess("");
+    setPurchaseLoading(true);
+    setPurchaseError(null);
+    setPurchaseSuccess(null);
 
     try {
-      const res = await fetch(`/api/public/raffles/${slug}/purchase`, {
+      const response = await fetch(`/api/public/raffles/${slug}/purchase`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-tenant-id": "demo-a",
+          "x-tenant-slug": "demo-a",
         },
         body: JSON.stringify({
-          buyerName,
-          buyerEmail,
-          quantity: Number(quantity),
+          name: form.name,
+          email: form.email,
+          quantity: form.quantity,
         }),
       });
 
-      const data: PurchaseResponse = await res.json();
+      const data = (await response.json()) as PurchaseResponse & {
+        error?: string;
+      };
 
-      if (!res.ok || !data.purchase) {
-        throw new Error(data.message || "Failed to purchase tickets");
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to complete purchase.");
       }
 
-      setSuccess(
-        `Purchase complete. ${data.purchase.quantity} ticket(s) reserved for ${data.purchase.buyerEmail}. Total £${data.purchase.totalAmount.toFixed(2)}`
+      setRaffle(data.raffle);
+      setPurchaseSuccess(
+        `Purchase complete. ${data.purchase.quantity} ticket(s) reserved for ${data.purchase.customerName}.`
       );
-
-      setBuyerName("");
-      setBuyerEmail("");
-      setQuantity("1");
-
-      setRaffle((prev) =>
-        prev
-          ? {
-              ...prev,
-              soldTickets: data.soldTickets ?? prev.soldTickets,
-              remainingTickets: data.remainingTickets ?? prev.remainingTickets,
-              status: data.raffleStatus ?? prev.status,
-              isPublished: (data.raffleStatus ?? prev.status) === "published",
-            }
-          : prev
+      setForm(initialFormState);
+    } catch (error) {
+      setPurchaseError(
+        error instanceof Error ? error.message : "Failed to complete purchase."
       );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to purchase tickets");
     } finally {
-      setSaving(false);
+      setPurchaseLoading(false);
     }
   }
 
   if (loading) {
-    return <div style={{ padding: 24 }}>Loading raffle...</div>;
-  }
-
-  if (error && !raffle) {
     return (
-      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
-        <h1>Raffle not available</h1>
-        <p>{error}</p>
-      </div>
+      <main style={styles.page}>
+        <div style={styles.card}>Loading raffle...</div>
+      </main>
     );
   }
 
-  if (!raffle) {
+  if (pageError || !raffle) {
     return (
-      <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
-        <h1>Raffle not found</h1>
-      </div>
+      <main style={styles.page}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>Raffle unavailable</h1>
+          <p style={styles.errorText}>{pageError || "Raffle not found."}</p>
+        </div>
+      </main>
     );
   }
 
-  const isClosed = raffle.status !== "published" || raffle.remainingTickets <= 0;
-  const maxQuantity = Math.max(raffle.remainingTickets, 1);
+  const purchaseDisabled = raffle.isSoldOut || purchaseLoading;
 
   return (
-    <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
-      <h1>{raffle.title}</h1>
-      <p>{raffle.description}</p>
+    <main style={styles.page}>
+      <div style={styles.layout}>
+        <section style={styles.card}>
+          <p style={styles.eyebrow}>Raffle</p>
+          <h1 style={styles.title}>{raffle.title}</h1>
+          <p style={styles.description}>{raffle.description}</p>
 
-      <div
-        style={{
-          marginTop: 24,
-          padding: 20,
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          background: "#fff",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Raffle Details</h2>
-        <p>Ticket Price: £{Number(raffle.ticketPrice).toFixed(2)}</p>
-        <p>Sold Tickets: {raffle.soldTickets}</p>
-        <p>Remaining Tickets: {raffle.remainingTickets}</p>
-        <p>Ends: {formatDate(raffle.endAt)}</p>
-        <p>Status: {raffle.status}</p>
-      </div>
+          {raffle.imageUrl ? (
+            <img
+              src={raffle.imageUrl}
+              alt={raffle.title}
+              style={styles.image}
+            />
+          ) : null}
 
-      <div
-        style={{
-          marginTop: 24,
-          padding: 20,
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          background: "#fff",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Buy Tickets</h2>
-
-        {error ? (
-          <div
-            style={{
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 8,
-              background: "#fff1f1",
-              color: "#9f1d1d",
-            }}
-          >
-            {error}
+          <div style={styles.statsGrid}>
+            <Stat label="Ticket price" value={`$${raffle.ticketPrice.toFixed(2)}`} />
+            <Stat label="Sold" value={String(raffle.soldTickets)} />
+            <Stat label="Remaining" value={String(raffle.remainingTickets)} />
+            <Stat
+              label="Status"
+              value={raffle.isSoldOut ? "sold out" : raffle.status}
+            />
           </div>
-        ) : null}
+        </section>
 
-        {success ? (
-          <div
-            style={{
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 8,
-              background: "#effaf1",
-              color: "#166534",
-            }}
-          >
-            {success}
-          </div>
-        ) : null}
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>Buy tickets</h2>
 
-        {isClosed ? (
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              background: "#f3f4f6",
-              color: "#374151",
-            }}
-          >
-            This raffle is closed or sold out.
-          </div>
-        ) : (
-          <form onSubmit={handlePurchase} style={{ display: "grid", gap: 12 }}>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>Name</span>
+          {purchaseSuccess ? (
+            <div style={styles.successBox}>{purchaseSuccess}</div>
+          ) : null}
+
+          {purchaseError ? (
+            <div style={styles.errorBox}>{purchaseError}</div>
+          ) : null}
+
+          {raffle.isSoldOut ? (
+            <div style={styles.soldOutBox}>
+              This raffle is sold out. Ticket sales are closed.
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSubmit} style={styles.form}>
+            <label style={styles.label}>
+              Name
               <input
-                value={buyerName}
-                onChange={(e) => setBuyerName(e.target.value)}
+                style={styles.input}
+                type="text"
+                value={form.name}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Jane Doe"
                 required
+                disabled={purchaseDisabled}
               />
             </label>
 
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>Email</span>
+            <label style={styles.label}>
+              Email
               <input
+                style={styles.input}
                 type="email"
-                value={buyerEmail}
-                onChange={(e) => setBuyerEmail(e.target.value)}
+                value={form.email}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="jane@example.com"
                 required
+                disabled={purchaseDisabled}
               />
             </label>
 
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>Quantity</span>
+            <label style={styles.label}>
+              Quantity
               <input
+                style={styles.input}
                 type="number"
-                min="1"
-                max={maxQuantity}
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
+                min={1}
+                max={Math.max(raffle.remainingTickets, 1)}
+                value={form.quantity}
+                onChange={(event) =>
+                  setForm((current) => {
+                    const raw = Number(event.target.value) || 1;
+                    const next = Math.max(
+                      1,
+                      Math.min(raw, Math.max(raffle.remainingTickets, 1))
+                    );
+
+                    return {
+                      ...current,
+                      quantity: next,
+                    };
+                  })
+                }
                 required
+                disabled={purchaseDisabled}
               />
             </label>
 
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 8,
-                background: "#f7f7f7",
-              }}
-            >
-              Total: £{total}
+            <div style={styles.totalRow}>
+              <span>Total</span>
+              <strong>${totalPrice.toFixed(2)}</strong>
             </div>
 
-            <button type="submit" disabled={saving}>
-              {saving ? "Processing..." : "Buy Tickets"}
+            <button type="submit" style={styles.button} disabled={purchaseDisabled}>
+              {purchaseLoading ? "Processing..." : "Buy tickets"}
             </button>
           </form>
-        )}
+        </section>
       </div>
+    </main>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    padding: "32px 16px",
+    background: "#f6f7fb",
+  },
+  layout: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 24,
+  },
+  card: {
+    background: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.06)",
+  },
+  eyebrow: {
+    margin: 0,
+    color: "#5b6475",
+    fontSize: 14,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  title: {
+    margin: "8px 0 16px",
+    fontSize: 32,
+    lineHeight: 1.1,
+  },
+  sectionTitle: {
+    marginTop: 0,
+    marginBottom: 20,
+    fontSize: 24,
+  },
+  description: {
+    marginTop: 0,
+    marginBottom: 20,
+    color: "#334155",
+    lineHeight: 1.6,
+  },
+  image: {
+    width: "100%",
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
+  statCard: {
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: "#64748b",
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: 700,
+  },
+  form: {
+    display: "grid",
+    gap: 16,
+  },
+  label: {
+    display: "grid",
+    gap: 8,
+    fontWeight: 600,
+  },
+  input: {
+    width: "100%",
+    border: "1px solid #d0d7e2",
+    borderRadius: 10,
+    padding: "12px 14px",
+    fontSize: 16,
+  },
+  totalRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    fontSize: 18,
+    padding: "4px 0",
+  },
+  button: {
+    border: 0,
+    borderRadius: 10,
+    padding: "14px 18px",
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+    background: "#111827",
+    color: "#ffffff",
+  },
+  successBox: {
+    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    background: "#ecfdf5",
+    color: "#065f46",
+  },
+  errorBox: {
+    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    background: "#fef2f2",
+    color: "#991b1b",
+  },
+  soldOutBox: {
+    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    background: "#fff7ed",
+    color: "#9a3412",
+  },
+  errorText: {
+    color: "#991b1b",
+  },
+};
