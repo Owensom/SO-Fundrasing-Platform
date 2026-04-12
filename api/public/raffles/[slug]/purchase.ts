@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createPurchase, resolveTenantSlug } from "../../../_lib/raffles-repo";
+import {
+  createPendingPurchase,
+  resolveTenantSlug,
+} from "../../../_lib/raffles-repo";
 
 type PurchaseBody = {
   name?: unknown;
@@ -54,7 +57,7 @@ export default async function handler(
   }
 
   try {
-    const result = await createPurchase({
+    const result = await createPendingPurchase({
       tenantSlug,
       raffleSlug: slug,
       customerName: name,
@@ -67,9 +70,14 @@ export default async function handler(
     }
 
     return res.status(201).json({
-      message: "Purchase created successfully.",
+      message: "Purchase created. Awaiting payment confirmation.",
       purchase: result.purchase,
       raffle: result.raffle,
+      payment: {
+        provider: "mock",
+        status: "pending",
+        confirmUrl: `/api/public/raffles/${slug}/purchase/${result.purchase.id}/confirm`,
+      },
     });
   } catch (error) {
     console.error("POST /api/public/raffles/[slug]/purchase failed", error);
