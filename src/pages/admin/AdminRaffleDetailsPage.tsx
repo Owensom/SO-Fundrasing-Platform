@@ -23,11 +23,14 @@ export default function AdminRaffleDetailsPage() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`/api/admin/raffles/${slug}/purchases`, {
-          headers: {
-            "x-tenant-slug": "demo-a",
-          },
-        });
+        const response = await fetch(
+          `/api/admin/raffles/${encodeURIComponent(slug)}/purchases`,
+          {
+            headers: {
+              "x-tenant-slug": "demo-a",
+            },
+          }
+        );
 
         const json = (await response.json()) as AdminRafflePurchasesResponse & {
           error?: string;
@@ -83,8 +86,14 @@ export default function AdminRaffleDetailsPage() {
       </div>
 
       <div style={styles.summaryGrid}>
-        <SummaryCard label="Total tickets" value={String(data.summary.totalTickets)} />
-        <SummaryCard label="Sold tickets" value={String(data.summary.soldTickets)} />
+        <SummaryCard
+          label="Total tickets"
+          value={String(data.summary.totalTickets)}
+        />
+        <SummaryCard
+          label="Sold tickets"
+          value={String(data.summary.soldTickets)}
+        />
         <SummaryCard
           label="Remaining tickets"
           value={String(data.summary.remainingTickets)}
