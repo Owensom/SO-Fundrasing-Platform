@@ -1,86 +1,96 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import {
-  createPendingPurchase,
-  resolveTenantSlug,
-} from "../../../_lib/raffles-repo";
+import { createPendingPurchase } from "../../../_lib/raffles-repo";
+import { resolveTenantSlug } from "../../../_lib/tenant";
 
 type PurchaseBody = {
-  name?: unknown;
-  email?: unknown;
-  quantity?: unknown;
+  customerName?: string;
+  customerEmail?: string;
+  quantity?: number | string;
 };
 
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function parseQuantity(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed." });
-  }
-
-  const tenantSlug = resolveTenantSlug(req);
-  const slug = req.query.slug;
-
-  if (typeof slug !== "string" || !slug.trim()) {
-    return res.status(400).json({ error: "Invalid raffle slug." });
-  }
-
-  const body = (req.body ?? {}) as PurchaseBody;
-
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  const email = typeof body.email === "string" ? body.email.trim() : "";
-  const quantity = Number(body.quantity);
-
-  if (!name) {
-    return res.status(400).json({ error: "Name is required." });
-  }
-
-  if (!email || !isValidEmail(email)) {
-    return res.status(400).json({ error: "A valid email is required." });
-  }
-
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    return res
-      .status(400)
-      .json({ error: "Quantity must be a whole number greater than 0." });
-  }
-
-  if (quantity > 20) {
-    return res
-      .status(400)
-      .json({ error: "Maximum quantity per purchase is 20." });
-  }
-
   try {
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST");
+      return res.status(405).json({ error: "Method not allowed." });
+    }
+
+    const tenantSlug = resolveTenantSlug(req);
+    const slug = req.query.slug;
+
+    if (typeof slug !== "string" || !slug.trim()) {
+      return res.status(400).json({ error: "Invalid raffle slug." });
+    }
+
+    const body =
+      typeof req.body === "object" && req.body !== null
+        ? (req.body as PurchaseBody)
+        : {};
+
+    const customerName =
+      typeof body.customerName === "string" ? body.customerName.trim() : "";
+    const customerEmail =
+      typeof body.customerEmail === "string" ? body.customerEmail.trim() : "";
+    const quantityValue = parseQuantity(body.quantity);
+
+    if (!customerName) {
+      return res.status(400).json({ error: "Customer name is required." });
+    }
+
+    if (!customerEmail) {
+      return res.status(400).json({ error: "Customer email is required." });
+    }
+
+    if (
+      quantityValue === null ||
+      !Number.isInteger(quantityValue) ||
+      quantityValue <= 0
+    ) {
+      return res.status(400).json({ error: "Quantity must be a whole number." });
+    }
+
     const result = await createPendingPurchase({
       tenantSlug,
       raffleSlug: slug,
-      customerName: name,
-      customerEmail: email,
-      quantity,
+      customerName,
+      customerEmail,
+      quantity: quantityValue,
     });
 
     if (!result.ok) {
       return res.status(result.status).json({ error: result.message });
     }
 
-    return res.status(201).json({
-      message: "Purchase created. Awaiting payment confirmation.",
-      purchase: result.purchase,
-      raffle: result.raffle,
-      payment: {
-        provider: "mock",
-        status: "pending",
-        confirmUrl: `/api/public/raffles/${slug}/purchase/${result.purchase.id}/confirm`,
-      },
+    const purchase = result.purchase;
+    const raffle = result.raffle;
+
+    return res.status(200).json({
+      purchase,
+      raffle,
     });
   } catch (error) {
     console.error("POST /api/public/raffles/[slug]/purchase failed", error);
-    return res.status(500).json({ error: "Internal server error." });
+
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Internal server error.",
+    });
   }
 }
