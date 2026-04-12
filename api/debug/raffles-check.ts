@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { query } from "../_lib/db";
 
 export default async function handler(
   req: VercelRequest,
@@ -11,7 +10,9 @@ export default async function handler(
   }
 
   try {
-    const result = await query<{
+    const dbModule = await import("../_lib/db");
+
+    const result = await dbModule.query<{
       id: string;
       tenant_slug: string;
       slug: string;
