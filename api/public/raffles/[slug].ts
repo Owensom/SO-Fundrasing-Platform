@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getPublicRaffleBySlug } from "../../_lib/raffles-repo";
 import { resolveTenantSlug } from "../../_lib/tenant";
 
 export default async function handler(
@@ -19,7 +18,8 @@ export default async function handler(
   }
 
   try {
-    const raffle = await getPublicRaffleBySlug(tenantSlug, slug);
+    const repo = await import("../../_lib/raffles-repo");
+    const raffle = await repo.getPublicRaffleBySlug(tenantSlug, slug);
 
     if (!raffle) {
       return res.status(404).json({
@@ -29,13 +29,10 @@ export default async function handler(
 
     return res.status(200).json({ raffle });
   } catch (error) {
-    console.error("PUBLIC RAFFLE LOOKUP FAILED", error);
+    console.error("GET /api/public/raffles/[slug] failed", error);
 
     return res.status(500).json({
-      error:
-        error instanceof Error
-          ? `Runtime error: ${error.message}`
-          : "Runtime error",
+      error: error instanceof Error ? error.message : "Unknown runtime error",
       tenantSlug,
       slug,
     });
