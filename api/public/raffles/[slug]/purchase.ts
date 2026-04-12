@@ -64,7 +64,9 @@ export default async function handler(
       !Number.isInteger(quantityValue) ||
       quantityValue <= 0
     ) {
-      return res.status(400).json({ error: "Quantity must be a whole number." });
+      return res.status(400).json({
+        error: "Quantity must be a whole number.",
+      });
     }
 
     const result = await createPendingPurchase({
@@ -75,16 +77,15 @@ export default async function handler(
       quantity: quantityValue,
     });
 
-    if (!result.ok) {
-      return res.status(result.status).json({ error: result.message });
+    if (result.ok === false) {
+      return res.status(result.status ?? 400).json({
+        error: result.message,
+      });
     }
 
-    const purchase = result.purchase;
-    const raffle = result.raffle;
-
     return res.status(200).json({
-      purchase,
-      raffle,
+      purchase: result.purchase,
+      raffle: result.raffle,
     });
   } catch (error) {
     console.error("POST /api/public/raffles/[slug]/purchase failed", error);
