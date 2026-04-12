@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import type { AdminRaffleListResponse } from "../types/raffles";
 
 type AdminUser = {
   id: string;
@@ -6,6 +8,8 @@ type AdminUser = {
   tenantSlug: string;
   role: "admin";
 };
+
+type AdminRaffle = AdminRaffleListResponse["raffles"][number];
 
 export default function AdminPage() {
   const user: AdminUser | null = useMemo(() => {
@@ -17,8 +21,53 @@ export default function AdminPage() {
     };
   }, []);
 
+  const [raffles, setRaffles] = useState<AdminRaffle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const tenantSlug = user?.tenantSlug ?? "demo-a";
   const userEmail = user?.email ?? "Unknown admin";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRaffles() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch("/api/admin/raffles", {
+          headers: {
+            "x-tenant-slug": tenantSlug,
+          },
+        });
+
+        const data = (await response.json()) as AdminRaffleListResponse & {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load raffles.");
+        }
+
+        if (!isMounted) return;
+        setRaffles(data.raffles);
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load raffles.");
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadRaffles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantSlug]);
 
   return (
     <main style={styles.page}>
@@ -27,9 +76,8 @@ export default function AdminPage() {
           <p style={styles.eyebrow}>Admin</p>
           <h1 style={styles.title}>Raffle Admin</h1>
           <p style={styles.description}>
-            This page is now narrowed to the raffle module only so the app stays
-            clean and build-safe while you finish the public raffle purchase
-            flow.
+            Manage raffles for your tenant and drill into raffle performance,
+            ticket counts, and purchases.
           </p>
 
           <div style={styles.metaGrid}>
@@ -41,29 +89,60 @@ export default function AdminPage() {
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>Current admin actions</h2>
-
-          <div style={styles.linkList}>
-            <a
-              href="/admin/raffles/spring-cash-raffle"
-              style={styles.primaryLink}
-            >
-              Open raffle details
-            </a>
-
-            <a
-              href="/raffles/spring-cash-raffle"
-              style={styles.secondaryLink}
-            >
-              Open public raffle page
-            </a>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Raffles</h2>
+            <Link to="/raffles/spring-cash-raffle" style={styles.secondaryLink}>
+              Open public demo
+            </Link>
           </div>
 
-          <p style={styles.note}>
-            This page is intentionally simple for now. It avoids nullable auth
-            issues, keeps the raffle workflow moving, and leaves room for future
-            tickets and squares modules without forcing premature abstractions.
-          </p>
+          {loading ? <p style={styles.note}>Loading raffles...</p> : null}
+          {error ? <p style={styles.error}>{error}</p> : null}
+
+          {!loading && !error && raffles.length === 0 ? (
+            <p style={styles.note}>No raffles found.</p>
+          ) : null}
+
+          {!loading && !error && raffles.length > 0 ? (
+            <div style={styles.tableWrapper}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Title</th>
+                    <th style={styles.th}>Status</th>
+                    <th style={styles.th}>Price</th>
+                    <th style={styles.th}>Sold</th>
+                    <th style={styles.th}>Remaining</th>
+                    <th style={styles.th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {raffles.map((raffle) => (
+                    <tr key={raffle.id}>
+                      <td style={styles.td}>
+                        <div style={styles.raffleTitle}>{raffle.title}</div>
+                        <div style={styles.raffleSlug}>{raffle.slug}</div>
+                      </td>
+                      <td style={styles.td}>
+                        <span style={styles.badge}>{raffle.status}</span>
+                      </td>
+                      <td style={styles.td}>${raffle.ticketPrice.toFixed(2)}</td>
+                      <td style={styles.td}>{raffle.soldTickets}</td>
+                      <td style={styles.td}>{raffle.remainingTickets}</td>
+                      <td style={styles.td}>
+                        <Link
+                          to={`/admin/raffles/${raffle.slug}`}
+                          style={styles.primaryLink}
+                        >
+                          View details
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
       </div>
     </main>
@@ -128,9 +207,15 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.6,
     maxWidth: 800,
   },
-  sectionTitle: {
-    marginTop: 0,
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
     fontSize: 24,
   },
   metaGrid: {
@@ -155,10 +240,42 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#111827",
     wordBreak: "break-word",
   },
-  linkList: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
+  tableWrapper: {
+    overflowX: "auto",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  th: {
+    textAlign: "left",
+    padding: "12px 10px",
+    borderBottom: "1px solid #e5e7eb",
+    color: "#475569",
+    fontSize: 14,
+  },
+  td: {
+    padding: "14px 10px",
+    borderBottom: "1px solid #f1f5f9",
+    verticalAlign: "middle",
+  },
+  raffleTitle: {
+    fontWeight: 700,
+    color: "#111827",
+  },
+  raffleSlug: {
+    fontSize: 13,
+    color: "#64748b",
+    marginTop: 4,
+  },
+  badge: {
+    borderRadius: 999,
+    background: "#111827",
+    color: "#fff",
+    padding: "6px 10px",
+    fontWeight: 700,
+    textTransform: "capitalize",
+    display: "inline-block",
   },
   primaryLink: {
     display: "inline-flex",
@@ -166,7 +283,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     textDecoration: "none",
     borderRadius: 10,
-    padding: "12px 16px",
+    padding: "10px 14px",
     background: "#111827",
     color: "#ffffff",
     fontWeight: 700,
@@ -177,15 +294,19 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     textDecoration: "none",
     borderRadius: 10,
-    padding: "12px 16px",
+    padding: "10px 14px",
     background: "#e5e7eb",
     color: "#111827",
     fontWeight: 700,
   },
   note: {
-    marginTop: 16,
-    marginBottom: 0,
+    margin: 0,
     color: "#475569",
+    lineHeight: 1.6,
+  },
+  error: {
+    margin: 0,
+    color: "#991b1b",
     lineHeight: 1.6,
   },
 };
