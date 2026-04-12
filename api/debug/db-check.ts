@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { query } from "../_lib/db";
 
 export default async function handler(
   req: VercelRequest,
@@ -11,21 +10,13 @@ export default async function handler(
   }
 
   try {
-    const envValue = process.env.DATABASE_URL ?? "";
-    const maskedUrl =
-      envValue.length > 20
-        ? `${envValue.slice(0, 18)}...`
-        : envValue || "(missing)";
-
-    const result = await query<{ now: string }>("select now()::text as now");
+    const dbModule = await import("../_lib/db");
+    const result = await dbModule.query<{ now: string }>(
+      "select now()::text as now"
+    );
 
     return res.status(200).json({
       ok: true,
-      databaseUrlPresent: Boolean(envValue),
-      databaseUrlStartsCorrectly:
-        envValue.startsWith("postgres://") ||
-        envValue.startsWith("postgresql://"),
-      maskedUrl,
       serverTime: result.rows[0]?.now ?? null,
     });
   } catch (error) {
