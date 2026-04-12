@@ -13,6 +13,8 @@ export type PublicRaffle = {
   status: "draft" | "published" | "closed";
 };
 
+export type PaymentStatus = "pending" | "paid" | "failed" | "cancelled";
+
 export type Purchase = {
   id: string;
   tenantSlug: string;
@@ -23,7 +25,10 @@ export type Purchase = {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  paymentStatus: PaymentStatus;
+  paidAt: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type PublicRaffleResponse = {
@@ -34,6 +39,26 @@ export type PurchaseResponse = {
   message: string;
   purchase: Purchase;
   raffle: PublicRaffle;
+  payment: {
+    provider: "mock";
+    status: "pending";
+    confirmUrl: string;
+  };
+};
+
+export type ConfirmPurchaseResponse = {
+  message: string;
+  purchase: Purchase;
+  raffle: PublicRaffle;
+};
+
+export type AdminRaffleListItem = PublicRaffle & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminRaffleListResponse = {
+  raffles: AdminRaffleListItem[];
 };
 
 export type AdminRafflePurchasesResponse = {
@@ -47,5 +72,7 @@ export type AdminRafflePurchasesResponse = {
     remainingTickets: number;
     totalTickets: number;
     purchaseCount: number;
+    paidPurchaseCount: number;
+    pendingPurchaseCount: number;
   };
 };
