@@ -5,17 +5,47 @@ declare global {
   var __platformPgPool: Pool | undefined;
 }
 
-function getPool(): Pool {
-  if (!process.env.DATABASE_URL) {
+function getDatabaseUrl(): string {
+  const value = process.env.DATABASE_URL;
+
+  if (!value || !value.trim()) {
     throw new Error("DATABASE_URL is not configured.");
   }
 
+  const trimmed = value.trim();
+
+  if (
+    trimmed.startsWith('"') ||
+    trimmed.endsWith('"') ||
+    trimmed.startsWith("'") ||
+    trimmed.endsWith("'")
+  ) {
+    throw new Error(
+      "DATABASE_URL appears to include quotes. Remove surrounding quotes in Vercel environment variables."
+    );
+  }
+
+  if (
+    !trimmed.startsWith("postgres://") &&
+    !trimmed.startsWith("postgresql://")
+  ) {
+    throw new Error(
+      "DATABASE_URL must start with postgres:// or postgresql://"
+    );
+  }
+
+  return trimmed;
+}
+
+function getPool(): Pool {
+  const connectionString = getDatabaseUrl();
+
   if (!globalThis.__platformPgPool) {
     globalThis.__platformPgPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       ssl:
-        process.env.DATABASE_URL.includes("localhost") ||
-        process.env.DATABASE_URL.includes("127.0.0.1")
+        connectionString.includes("localhost") ||
+        connectionString.includes("127.0.0.1")
           ? false
           : { rejectUnauthorized: false },
     });
