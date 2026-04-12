@@ -1,35 +1,17 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createPendingPurchase } from "../../../_lib/raffles-repo";
+import {
+  getAdminRaffleBySlug,
+  listPurchasesForRaffle,
+} from "../../../_lib/raffles-repo";
 import { resolveTenantSlug } from "../../../_lib/tenant";
-
-type PurchaseBody = {
-  customerName?: string;
-  customerEmail?: string;
-  quantity?: number | string;
-};
-
-function parseQuantity(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
   try {
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET");
       return res.status(405).json({ error: "Method not allowed." });
     }
 
@@ -40,55 +22,37 @@ export default async function handler(
       return res.status(400).json({ error: "Invalid raffle slug." });
     }
 
-    const body =
-      typeof req.body === "object" && req.body !== null
-        ? (req.body as PurchaseBody)
-        : {};
+    const raffle = await getAdminRaffleBySlug(tenantSlug, slug);
 
-    const customerName =
-      typeof body.customerName === "string" ? body.customerName.trim() : "";
-    const customerEmail =
-      typeof body.customerEmail === "string" ? body.customerEmail.trim() : "";
-    const quantityValue = parseQuantity(body.quantity);
-
-    if (!customerName) {
-      return res.status(400).json({ error: "Customer name is required." });
+    if (!raffle) {
+      return res.status(404).json({ error: "Raffle not found." });
     }
 
-    if (!customerEmail) {
-      return res.status(400).json({ error: "Customer email is required." });
-    }
+    const purchases = await listPurchasesForRaffle(tenantSlug, slug);
 
-    if (
-      quantityValue === null ||
-      !Number.isInteger(quantityValue) ||
-      quantityValue <= 0
-    ) {
-      return res.status(400).json({ error: "Quantity must be a whole number." });
-    }
+    const soldTickets = purchases.reduce((total, purchase) => {
+      return purchase.paymentStatus === "paid"
+        ? total + purchase.quantity
+        : total;
+    }, 0);
 
-    const result = await createPendingPurchase({
-      tenantSlug,
-      raffleSlug: slug,
-      customerName,
-      customerEmail,
-      quantity: quantityValue,
-    });
-
-    if (result.ok === false) {
-      const statusCode = result.status;
-      const message = result.message;
-      return res.status(statusCode).json({ error: message });
-    }
+    const summary = {
+      totalTickets: raffle.totalTickets,
+      soldTickets,
+      remainingTickets: Math.max(raffle.totalTickets - soldTickets, 0),
+      purchaseCount: purchases.length,
+    };
 
     return res.status(200).json({
-      purchase: result.purchase,
-      raffle: result.raffle,
+      raffle,
+      purchases,
+      summary,
     });
   } catch (error) {
-    console.error("POST /api/public/raffles/[slug]/purchase failed", error);
+    console.error("GET /api/admin/raffles/[slug]/purchases failed", error);
 
-    return res.status(500).json({
+    const statusCode: number = 500;
+    return res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Internal server error.",
     });
   }
