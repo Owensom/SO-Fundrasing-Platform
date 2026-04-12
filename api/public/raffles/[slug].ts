@@ -31,9 +31,22 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid raffle slug." });
   }
 
-  return res.status(200).json({
-    ok: true,
-    tenantSlug,
-    slug,
-  });
+  try {
+    const repo = await import("../../_lib/raffles-repo");
+
+    return res.status(200).json({
+      ok: true,
+      tenantSlug,
+      slug,
+      repoLoaded: true,
+      exports: Object.keys(repo),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown import error",
+      tenantSlug,
+      slug,
+      repoLoaded: false,
+    });
+  }
 }
