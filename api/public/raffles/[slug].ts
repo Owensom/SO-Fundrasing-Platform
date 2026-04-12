@@ -32,21 +32,23 @@ export default async function handler(
   }
 
   try {
-    const repo = await import("../../_lib/raffles-repo");
+    const repo = await import("../../_lib/raffles-repo.js");
+    const raffle = await repo.getPublicRaffleBySlug(tenantSlug, slug);
 
-    return res.status(200).json({
-      ok: true,
-      tenantSlug,
-      slug,
-      repoLoaded: true,
-      exports: Object.keys(repo),
-    });
+    if (!raffle) {
+      return res.status(404).json({
+        error: `No public raffle found for tenant="${tenantSlug}" slug="${slug}". Check that the raffle exists and status is "published" or "closed".`,
+      });
+    }
+
+    return res.status(200).json({ raffle });
   } catch (error) {
+    console.error("GET /api/public/raffles/[slug] failed", error);
+
     return res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown import error",
+      error: error instanceof Error ? error.message : "Unknown runtime error",
       tenantSlug,
       slug,
-      repoLoaded: false,
     });
   }
 }
