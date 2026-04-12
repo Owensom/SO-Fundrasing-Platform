@@ -1,5 +1,5 @@
 import type { PoolClient, QueryResultRow } from "pg";
-import { query, withTransaction } from "./db";
+import { query, withTransaction } from "./db.js";
 
 export type RaffleStatus = "draft" | "published" | "closed";
 export type PaymentStatus = "pending" | "paid" | "failed" | "cancelled";
