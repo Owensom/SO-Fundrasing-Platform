@@ -1,8 +1,9 @@
-import type { PoolClient } from "pg";
+import type { PoolClient, QueryResultRow } from "pg";
 import type { VercelRequest } from "@vercel/node";
 import { query, withTransaction } from "./db";
 
 export type RaffleStatus = "draft" | "published" | "closed";
+export type PaymentStatus = "pending" | "paid" | "failed" | "cancelled";
 
 export type PublicRaffle = {
   id: string;
@@ -34,10 +35,13 @@ export type PurchaseRecord = {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  paymentStatus: PaymentStatus;
+  paidAt: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
-type RaffleRow = {
+type RaffleRow = QueryResultRow & {
   id: string;
   tenant_slug: string;
   slug: string;
@@ -52,7 +56,7 @@ type RaffleRow = {
   updated_at: string;
 };
 
-type PurchaseRow = {
+type PurchaseRow = QueryResultRow & {
   id: string;
   tenant_slug: string;
   raffle_id: string;
@@ -62,7 +66,10 @@ type PurchaseRow = {
   quantity: number;
   unit_price_cents: number;
   total_price_cents: number;
+  payment_status: PaymentStatus;
+  paid_at: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 function centsToAmount(cents: number): number {
@@ -107,7 +114,10 @@ function mapPurchase(row: PurchaseRow): PurchaseRecord {
     quantity: row.quantity,
     unitPrice: centsToAmount(row.unit_price_cents),
     totalPrice: centsToAmount(row.total_price_cents),
+    paymentStatus: row.payment_status,
+    paidAt: row.paid_at,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -124,6 +134,22 @@ export function resolveTenantSlug(req: VercelRequest): string {
   }
 
   return "demo-a";
+}
+
+export async function listAdminRaffles(
+  tenantSlug: string
+): Promise<AdminRaffle[]> {
+  const result = await query<RaffleRow>(
+    `
+      select *
+      from raffles
+      where tenant_slug = $1
+      order by created_at desc
+    `,
+    [tenantSlug]
+  );
+
+  return result.rows.map(mapAdminRaffle);
 }
 
 export async function getPublicRaffleBySlug(
@@ -183,7 +209,7 @@ export async function listPurchasesForRaffle(
   return result.rows.map(mapPurchase);
 }
 
-export async function createPurchase(input: {
+export async function createPendingPurchase(input: {
   tenantSlug: string;
   raffleSlug: string;
   customerName: string;
@@ -201,9 +227,133 @@ export async function createPurchase(input: {
         where tenant_slug = $1
           and slug = $2
         limit 1
-        for update
       `,
       [input.tenantSlug, input.raffleSlug]
+    );
+
+    const raffleRow = raffleResult.rows[0];
+
+    if (!raffleRow) {
+      return { ok: false, status: 404, message: "Raffle not found." };
+    }
+
+    if (raffleRow.status !== "published") {
+      return {
+        ok: false,
+        status: 400,
+        message: "Raffle is not open for sales.",
+      };
+    }
+
+    const purchaseId = `purchase_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+
+    const unitPriceCents = raffleRow.ticket_price_cents;
+    const totalPriceCents = unitPriceCents * input.quantity;
+
+    const purchaseInsert = await client.query<PurchaseRow>(
+      `
+        insert into raffle_purchases (
+          id,
+          tenant_slug,
+          raffle_id,
+          raffle_slug,
+          customer_name,
+          customer_email,
+          quantity,
+          unit_price_cents,
+          total_price_cents,
+          payment_status,
+          paid_at,
+          created_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', null, now(), now())
+        returning *
+      `,
+      [
+        purchaseId,
+        input.tenantSlug,
+        raffleRow.id,
+        raffleRow.slug,
+        input.customerName,
+        input.customerEmail.toLowerCase(),
+        input.quantity,
+        unitPriceCents,
+        totalPriceCents,
+      ]
+    );
+
+    return {
+      ok: true,
+      purchase: mapPurchase(purchaseInsert.rows[0]),
+      raffle: mapPublicRaffle(raffleRow),
+    };
+  });
+}
+
+export async function confirmPurchaseAsPaid(input: {
+  tenantSlug: string;
+  raffleSlug: string;
+  purchaseId: string;
+}): Promise<
+  | { ok: true; purchase: PurchaseRecord; raffle: PublicRaffle }
+  | { ok: false; status: number; message: string }
+> {
+  return withTransaction(async (client: PoolClient) => {
+    const purchaseResult = await client.query<PurchaseRow>(
+      `
+        select *
+        from raffle_purchases
+        where id = $1
+          and tenant_slug = $2
+          and raffle_slug = $3
+        limit 1
+        for update
+      `,
+      [input.purchaseId, input.tenantSlug, input.raffleSlug]
+    );
+
+    const purchaseRow = purchaseResult.rows[0];
+
+    if (!purchaseRow) {
+      return { ok: false, status: 404, message: "Purchase not found." };
+    }
+
+    if (purchaseRow.payment_status === "paid") {
+      const raffleResult = await client.query<RaffleRow>(
+        `
+          select *
+          from raffles
+          where id = $1
+          limit 1
+        `,
+        [purchaseRow.raffle_id]
+      );
+
+      const raffleRow = raffleResult.rows[0];
+
+      if (!raffleRow) {
+        return { ok: false, status: 404, message: "Raffle not found." };
+      }
+
+      return {
+        ok: true,
+        purchase: mapPurchase(purchaseRow),
+        raffle: mapPublicRaffle(raffleRow),
+      };
+    }
+
+    const raffleResult = await client.query<RaffleRow>(
+      `
+        select *
+        from raffles
+        where id = $1
+        limit 1
+        for update
+      `,
+      [purchaseRow.raffle_id]
     );
 
     const raffleRow = raffleResult.rows[0];
@@ -236,54 +386,50 @@ export async function createPurchase(input: {
         [raffleRow.id]
       );
 
+      await client.query(
+        `
+          update raffle_purchases
+          set payment_status = 'failed',
+              updated_at = now()
+          where id = $1
+        `,
+        [purchaseRow.id]
+      );
+
       return { ok: false, status: 409, message: "Raffle is sold out." };
     }
 
-    if (input.quantity > remainingTickets) {
+    if (purchaseRow.quantity > remainingTickets) {
+      await client.query(
+        `
+          update raffle_purchases
+          set payment_status = 'failed',
+              updated_at = now()
+          where id = $1
+        `,
+        [purchaseRow.id]
+      );
+
       return {
         ok: false,
-        status: 400,
+        status: 409,
         message: `Only ${remainingTickets} ticket(s) remaining.`,
       };
     }
 
-    const purchaseId = `purchase_${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-
-    const unitPriceCents = raffleRow.ticket_price_cents;
-    const totalPriceCents = unitPriceCents * input.quantity;
-
-    const purchaseInsert = await client.query<PurchaseRow>(
+    const paidPurchaseUpdate = await client.query<PurchaseRow>(
       `
-        insert into raffle_purchases (
-          id,
-          tenant_slug,
-          raffle_id,
-          raffle_slug,
-          customer_name,
-          customer_email,
-          quantity,
-          unit_price_cents,
-          total_price_cents
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        update raffle_purchases
+        set payment_status = 'paid',
+            paid_at = now(),
+            updated_at = now()
+        where id = $1
         returning *
       `,
-      [
-        purchaseId,
-        input.tenantSlug,
-        raffleRow.id,
-        raffleRow.slug,
-        input.customerName,
-        input.customerEmail.toLowerCase(),
-        input.quantity,
-        unitPriceCents,
-        totalPriceCents,
-      ]
+      [purchaseRow.id]
     );
 
-    const nextSoldTickets = raffleRow.sold_tickets + input.quantity;
+    const nextSoldTickets = raffleRow.sold_tickets + purchaseRow.quantity;
     const nextStatus: RaffleStatus =
       nextSoldTickets >= raffleRow.total_tickets ? "closed" : "published";
 
@@ -301,7 +447,7 @@ export async function createPurchase(input: {
 
     return {
       ok: true,
-      purchase: mapPurchase(purchaseInsert.rows[0]),
+      purchase: mapPurchase(paidPurchaseUpdate.rows[0]),
       raffle: mapPublicRaffle(raffleUpdate.rows[0]),
     };
   });
