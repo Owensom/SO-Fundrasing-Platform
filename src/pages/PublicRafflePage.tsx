@@ -12,6 +12,11 @@ type PublicRaffle = {
   status: string;
 };
 
+type PublicRaffleResponse = {
+  raffle: PublicRaffle;
+  error?: string;
+};
+
 export default function PublicRafflePage() {
   const { slug } = useParams<{ slug: string }>();
 
@@ -26,7 +31,7 @@ export default function PublicRafflePage() {
       return;
     }
 
-    const safeSlug = slug;
+    const safeSlug: string = slug;
     let isMounted = true;
 
     async function loadRaffle() {
@@ -43,7 +48,7 @@ export default function PublicRafflePage() {
           }
         );
 
-        const json = await response.json();
+        const json = (await response.json()) as PublicRaffleResponse;
 
         if (!response.ok) {
           throw new Error(json.error || "Failed to load raffle.");
@@ -57,7 +62,9 @@ export default function PublicRafflePage() {
           err instanceof Error ? err.message : "Failed to load raffle."
         );
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
