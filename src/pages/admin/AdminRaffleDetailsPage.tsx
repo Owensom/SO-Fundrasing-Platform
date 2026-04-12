@@ -16,6 +16,7 @@ export default function AdminRaffleDetailsPage() {
       return;
     }
 
+    const safeSlug: string = slug;
     let isMounted = true;
 
     async function loadAdminRaffleDetails() {
@@ -24,7 +25,7 @@ export default function AdminRaffleDetailsPage() {
         setError(null);
 
         const response = await fetch(
-          `/api/admin/raffles/${encodeURIComponent(slug)}/purchases`,
+          `/api/admin/raffles/${encodeURIComponent(safeSlug)}/purchases`,
           {
             headers: {
               "x-tenant-slug": "demo-a",
