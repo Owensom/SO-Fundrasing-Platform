@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
+type Offer = {
+  id: string;
+  label: string;
+  ticketQuantity: number;
+  price: number;
+};
+
 type PublicRaffle = {
   id: string;
   slug: string;
@@ -14,6 +21,7 @@ type PublicRaffle = {
 
 type PublicRaffleResponse = {
   raffle: PublicRaffle;
+  offers: Offer[];
   error?: string;
 };
 
@@ -21,8 +29,10 @@ export default function PublicRafflePage() {
   const { slug } = useParams<{ slug: string }>();
 
   const [raffle, setRaffle] = useState<PublicRaffle | null>(null);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string>("");
 
   useEffect(() => {
     if (!slug) {
@@ -58,6 +68,10 @@ export default function PublicRafflePage() {
 
         if (!isMounted) return;
         setRaffle(json.raffle);
+        setOffers(json.offers || []);
+        if (json.offers && json.offers.length > 0) {
+          setSelectedOfferId(json.offers[0].id);
+        }
       } catch (err) {
         if (!isMounted) return;
         setError(
@@ -96,17 +110,51 @@ export default function PublicRafflePage() {
       <p>{raffle.description}</p>
 
       <p>
-        <strong>Price:</strong> £{raffle.ticketPrice.toFixed(2)}
+        <strong>Single ticket price:</strong> £{raffle.ticketPrice.toFixed(2)}
       </p>
 
       <p>
         <strong>Remaining:</strong> {raffle.remainingTickets}
       </p>
 
+      <h2>Offers</h2>
+
+      {offers.length === 0 ? (
+        <p>No bundle offers available yet.</p>
+      ) : (
+        <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
+          {offers.map((offer) => (
+            <label
+              key={offer.id}
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                padding: 12,
+                border: "1px solid #ddd",
+                borderRadius: 8,
+              }}
+            >
+              <input
+                type="radio"
+                name="offer"
+                value={offer.id}
+                checked={selectedOfferId === offer.id}
+                onChange={() => setSelectedOfferId(offer.id)}
+              />
+              <span>
+                {offer.label} — {offer.ticketQuantity} ticket(s) for £
+                {offer.price.toFixed(2)}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
       {raffle.isSoldOut ? (
         <p style={{ color: "red" }}>Sold out</p>
       ) : (
-        <button>Buy tickets</button>
+        <button>Continue</button>
       )}
     </div>
   );
