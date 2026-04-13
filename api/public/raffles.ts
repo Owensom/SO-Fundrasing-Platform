@@ -15,12 +15,19 @@ function resolveTenantSlug(req: VercelRequest): string {
   return "demo-a";
 }
 
+type ColourSelection = {
+  colourId: string;
+  quantity: number;
+};
+
 type PurchaseBody = {
   action?: string;
   slug?: string;
   customerName?: string;
   customerEmail?: string;
   quantity?: number | string;
+  offerId?: string;
+  colourSelections?: ColourSelection[];
 };
 
 function parseQuantity(value: unknown): number | null {
@@ -152,7 +159,10 @@ export default async function handler(
       const slug = String(body.slug || "").trim();
       const customerName = String(body.customerName || "").trim();
       const customerEmail = String(body.customerEmail || "").trim();
-      const quantity = parseQuantity(body.quantity);
+      const offerId = String(body.offerId || "").trim();
+      const colourSelections = Array.isArray(body.colourSelections)
+        ? body.colourSelections
+        : [];
 
       if (!slug) {
         return res.status(400).json({ error: "Slug is required." });
@@ -166,10 +176,8 @@ export default async function handler(
         return res.status(400).json({ error: "Customer email is required." });
       }
 
-      if (quantity === null || !Number.isInteger(quantity) || quantity <= 0) {
-        return res
-          .status(400)
-          .json({ error: "Quantity must be a whole number." });
+      if (colourSelections.length === 0) {
+        return res.status(400).json({ error: "Please select at least one colour." });
       }
 
       const result = await withTransaction(async (client: any) => {
@@ -209,12 +217,60 @@ export default async function handler(
           };
         }
 
+        let requiredQuantity = 1;
+        let totalAmountCents = raffleRow.single_ticket_price_cents ?? 0;
+        let unitPriceCents = raffleRow.single_ticket_price_cents ?? 0;
+
+        if (offerId && offerId !== "single-ticket") {
+          const offerResult = await client.query(
+            `
+            select id, label, ticket_quantity, price_cents
+            from raffle_offers
+            where id = $1
+              and campaign_id = $2
+              and is_active = true
+            limit 1
+            `,
+            [offerId, raffleRow.id]
+          );
+
+          const offerRow = offerResult.rows[0];
+
+          if (!offerRow) {
+            return { ok: false, status: 400, message: "Selected offer not found." };
+          }
+
+          requiredQuantity = offerRow.ticket_quantity;
+          totalAmountCents = offerRow.price_cents;
+          unitPriceCents = Math.floor(offerRow.price_cents / offerRow.ticket_quantity);
+        }
+
+        const normalizedSelections = colourSelections
+          .map((selection) => ({
+            colourId: String(selection.colourId || "").trim(),
+            quantity: Number(selection.quantity),
+          }))
+          .filter((selection) => selection.colourId && selection.quantity > 0);
+
+        const selectedQuantity = normalizedSelections.reduce(
+          (sum, selection) => sum + selection.quantity,
+          0
+        );
+
+        if (selectedQuantity !== requiredQuantity) {
+          return {
+            ok: false,
+            status: 400,
+            message: `Colour quantities must add up to ${requiredQuantity}.`,
+          };
+        }
+
         const remainingTickets = Math.max(
           raffleRow.total_tickets - raffleRow.sold_tickets,
           0
         );
 
-        if (quantity > remainingTickets) {
+        if (selectedQuantity > remainingTickets) {
           return {
             ok: false,
             status: 409,
@@ -222,9 +278,29 @@ export default async function handler(
           };
         }
 
+        const validColoursResult = await client.query(
+          `
+          select id, name
+          from raffle_colours
+          where campaign_id = $1
+            and is_active = true
+          `,
+          [raffleRow.id]
+        );
+
+        const validColourIds = new Set(validColoursResult.rows.map((row: any) => row.id));
+
+        for (const selection of normalizedSelections) {
+          if (!validColourIds.has(selection.colourId)) {
+            return {
+              ok: false,
+              status: 400,
+              message: "One or more selected colours are invalid.",
+            };
+          }
+        }
+
         const orderId = `order_${Date.now()}`;
-        const unitPriceCents = raffleRow.single_ticket_price_cents ?? 0;
-        const totalAmountCents = unitPriceCents * quantity;
 
         const orderInsert = await client.query(
           `
@@ -265,42 +341,45 @@ export default async function handler(
           ]
         );
 
-        await client.query(
-          `
-          insert into raffle_entries (
-            id,
-            tenant_id,
-            campaign_id,
-            order_id,
-            colour_id,
-            quantity,
-            unit_price_cents,
-            total_price_cents,
-            created_at
-          )
-          select
-            $1,
-            t.id,
-            $2,
-            $3,
-            null,
-            $4,
-            $5,
-            $6,
-            now()
-          from tenants t
-          where t.slug = $7
-          `,
-          [
-            `entry_${Date.now()}`,
-            raffleRow.id,
-            orderId,
-            quantity,
-            unitPriceCents,
-            totalAmountCents,
-            tenantSlug,
-          ]
-        );
+        for (const selection of normalizedSelections) {
+          await client.query(
+            `
+            insert into raffle_entries (
+              id,
+              tenant_id,
+              campaign_id,
+              order_id,
+              colour_id,
+              quantity,
+              unit_price_cents,
+              total_price_cents,
+              created_at
+            )
+            select
+              $1,
+              t.id,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              $7,
+              now()
+            from tenants t
+            where t.slug = $8
+            `,
+            [
+              `entry_${Date.now()}_${selection.colourId}_${selection.quantity}`,
+              raffleRow.id,
+              orderId,
+              selection.colourId,
+              selection.quantity,
+              unitPriceCents,
+              unitPriceCents * selection.quantity,
+              tenantSlug,
+            ]
+          );
+        }
 
         return {
           ok: true,
@@ -308,7 +387,7 @@ export default async function handler(
             id: orderInsert.rows[0].id,
             customerName,
             customerEmail,
-            quantity,
+            quantity: selectedQuantity,
             totalPrice: totalAmountCents / 100,
             paymentStatus: "pending",
           },
@@ -317,7 +396,7 @@ export default async function handler(
             slug: raffleRow.slug,
             title: raffleRow.title,
             description: raffleRow.description,
-            ticketPrice: unitPriceCents / 100,
+            ticketPrice: (raffleRow.single_ticket_price_cents ?? 0) / 100,
             totalTickets: raffleRow.total_tickets,
             soldTickets: raffleRow.sold_tickets,
             remainingTickets,
