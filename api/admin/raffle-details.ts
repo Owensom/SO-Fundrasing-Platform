@@ -63,6 +63,16 @@ export default async function handler(
       return res.status(404).json({ error: "Raffle not found." });
     }
 
+    const offersResult = await query(
+      `
+      select id, label, ticket_quantity, price_cents, is_active, sort_order
+      from raffle_offers
+      where campaign_id = $1
+      order by sort_order asc, created_at asc
+      `,
+      [row.id]
+    );
+
     const purchasesResult = await query(
       `
       select
@@ -146,8 +156,18 @@ export default async function handler(
       updatedAt: row.updated_at,
     };
 
+    const offers = offersResult.rows.map((offer: any) => ({
+      id: offer.id,
+      label: offer.label,
+      ticketQuantity: offer.ticket_quantity,
+      price: offer.price_cents / 100,
+      isActive: offer.is_active,
+      sortOrder: offer.sort_order,
+    }));
+
     return res.status(200).json({
       raffle,
+      offers,
       purchases,
       summary: {
         totalTickets: raffle.totalTickets,
