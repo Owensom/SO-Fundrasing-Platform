@@ -73,6 +73,16 @@ export default async function handler(
       [row.id]
     );
 
+    const coloursResult = await query(
+      `
+      select id, name, hex_value, is_active, sort_order
+      from raffle_colours
+      where campaign_id = $1
+      order by sort_order asc, created_at asc
+      `,
+      [row.id]
+    );
+
     const purchasesResult = await query(
       `
       select
@@ -165,9 +175,18 @@ export default async function handler(
       sortOrder: offer.sort_order,
     }));
 
+    const colours = coloursResult.rows.map((colour: any) => ({
+      id: colour.id,
+      name: colour.name,
+      hexValue: colour.hex_value,
+      isActive: colour.is_active,
+      sortOrder: colour.sort_order,
+    }));
+
     return res.status(200).json({
       raffle,
       offers,
+      colours,
       purchases,
       summary: {
         totalTickets: raffle.totalTickets,
