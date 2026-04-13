@@ -285,6 +285,69 @@ export default async function handler(
         return res.status(200).json({ ok: true });
       }
 
+      if (action === "add-colour") {
+        const slug = String((body as any).slug || "").trim();
+        const name = String((body as any).name || "").trim();
+        const hexValueRaw = String((body as any).hexValue || "").trim();
+
+        if (!slug) {
+          return res.status(400).json({ error: "Slug is required" });
+        }
+
+        if (!name) {
+          return res.status(400).json({ error: "Colour name is required" });
+        }
+
+        const campaignResult = await query(
+          `
+          select c.id
+          from campaigns c
+          where c.slug = $1
+            and c.tenant_id = $2
+            and c.type = 'raffle'
+          limit 1
+          `,
+          [slug, tenant.id]
+        );
+
+        const campaign = campaignResult.rows[0];
+
+        if (!campaign) {
+          return res.status(404).json({ error: "Raffle not found" });
+        }
+
+        const hexValue = hexValueRaw || null;
+
+        await query(
+          `
+          insert into raffle_colours (
+            id,
+            campaign_id,
+            name,
+            hex_value,
+            sort_order,
+            is_active
+          )
+          values ($1, $2, $3, $4, 0, true)
+          `,
+          [`colour_${Date.now()}`, campaign.id, name, hexValue]
+        );
+
+        return res.status(200).json({ ok: true });
+      }
+
+      if (action === "remove-colour") {
+        const colourId = String((body as any).colourId || "").trim();
+
+        if (!colourId) {
+          return res.status(400).json({ error: "Colour ID is required" });
+        }
+
+        await query(`delete from raffle_colours where id = $1`, [colourId]);
+
+        return res.status(200).json({ ok: true });
+      }
+
       return res.status(400).json({ error: "Invalid action" });
     }
 
