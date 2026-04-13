@@ -19,13 +19,14 @@ export default function AdminCreateRafflePage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch("/api/admin/raffles/create", {
+      const response = await fetch("/api/admin/raffles", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-tenant-slug": "demo-a",
         },
         body: JSON.stringify({
+          action: "create",
           title,
           description,
           ticketPrice,
