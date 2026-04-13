@@ -82,6 +82,17 @@ export default async function handler(
         return res.status(404).json({ error: "Raffle not found" });
       }
 
+      const offersResult = await query(
+        `
+        select id, label, ticket_quantity, price_cents, is_active, sort_order
+        from raffle_offers
+        where campaign_id = $1
+          and is_active = true
+        order by sort_order asc, created_at asc
+        `,
+        [row.id]
+      );
+
       const ticketPrice = (row.single_ticket_price_cents ?? 0) / 100;
       const remainingTickets = Math.max(
         (row.total_tickets ?? 0) - (row.sold_tickets ?? 0),
@@ -101,6 +112,12 @@ export default async function handler(
           isSoldOut: remainingTickets === 0,
           status: row.status,
         },
+        offers: offersResult.rows.map((offer: any) => ({
+          id: offer.id,
+          label: offer.label,
+          ticketQuantity: offer.ticket_quantity,
+          price: offer.price_cents / 100,
+        })),
       });
     }
 
