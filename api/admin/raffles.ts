@@ -1,5 +1,3 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-
 type ColourOption = {
   name: string;
   hex: string;
@@ -11,31 +9,31 @@ type OfferOption = {
   entries: number;
 };
 
-type ErrorResponse = {
-  ok: false;
-  error: string;
-};
-
-type SuccessResponse = {
-  ok: true;
-  [key: string]: any;
-};
+type JsonRecord = Record<string, unknown>;
 
 const HEX_RE = /^#([0-9a-fA-F]{6})$/;
 
-function sendMethodNotAllowed(
-  res: NextApiResponse<ErrorResponse>,
-  allowed: string[]
-) {
-  res.setHeader("Allow", allowed.join(", "));
-  return res.status(405).json({
-    ok: false,
-    error: "Method not allowed",
-  });
+function setJson(res: any, status: number, body: unknown) {
+  res.statusCode = status;
+  if (typeof res.setHeader === "function") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+  }
+  res.end(JSON.stringify(body));
+}
+
+function setAllowed(res: any, allowed: string[]) {
+  if (typeof res.setHeader === "function") {
+    res.setHeader("Allow", allowed.join(", "));
+  }
 }
 
 function asTrimmedString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function asOptionalString(value: unknown): string | null {
+  const s = asTrimmedString(value);
+  return s ? s : null;
 }
 
 function asNumber(value: unknown, fallback = 0): number {
@@ -43,15 +41,23 @@ function asNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function parseId(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function getQueryValue(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 function normaliseColours(input: unknown): ColourOption[] {
   if (!Array.isArray(input)) return [];
 
   return input
     .map((item) => {
-      const raw = item as Record<string, unknown>;
-
-      const name = asTrimmedString(raw?.name);
-      const hex = asTrimmedString(raw?.hex);
+      const raw = (item ?? {}) as JsonRecord;
+      const name = asTrimmedString(raw.name);
+      const hex = asTrimmedString(raw.hex);
 
       if (!name || !HEX_RE.test(hex)) {
         return null;
@@ -70,14 +76,13 @@ function normaliseOffers(input: unknown): OfferOption[] {
 
   return input
     .map((item) => {
-      const raw = item as Record<string, unknown>;
-
-      const label = asTrimmedString(raw?.label);
-      const price = asNumber(raw?.price);
-      const entries = asNumber(raw?.entries);
+      const raw = (item ?? {}) as JsonRecord;
+      const label = asTrimmedString(raw.label);
+      const price = asNumber(raw.price);
+      const entries = asNumber(raw.entries);
 
       if (!label) return null;
-      if (price <= 0) return null;
+      if (!(price > 0)) return null;
       if (!Number.isInteger(entries) || entries <= 0) return null;
 
       return {
@@ -89,10 +94,48 @@ function normaliseOffers(input: unknown): OfferOption[] {
     .filter(Boolean) as OfferOption[];
 }
 
-function parseId(value: unknown): number | null {
-  const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) return null;
-  return n;
+async function readBody(req: any): Promise<any> {
+  if (req.body && typeof req.body === "object") {
+    return req.body;
+  }
+
+  const chunks: Uint8Array[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    req.on("data", (chunk: Uint8Array) => chunks.push(chunk));
+    req.on("end", () => resolve());
+    req.on("error", (err: unknown) => reject(err));
+  });
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+async function getDb() {
+  const mod: any = await import("../_lib/db.js");
+
+  const getter =
+    mod.getDb ??
+    mod.default?.getDb ??
+    mod.default;
+
+  if (typeof getter !== "function") {
+    throw new Error(
+      'Could not find a database factory in ../_lib/db.js. Export either "getDb" or a default function.'
+    );
+  }
+
+  return getter();
 }
 
 async function getTenantBySlug(db: any, tenantSlug: string) {
@@ -109,16 +152,12 @@ async function getTenantBySlug(db: any, tenantSlug: string) {
   return result.rows[0] ?? null;
 }
 
-/**
- * Picks the first campaign for the tenant if campaignId is not supplied.
- * This keeps the admin flow moving while auth/real tenant admin is still incomplete.
- */
 async function resolveCampaignIdForTenant(
   db: any,
   tenantId: number,
-  campaignId?: unknown
+  campaignIdInput?: unknown
 ): Promise<number | null> {
-  const explicitCampaignId = parseId(campaignId);
+  const explicitCampaignId = parseId(campaignIdInput);
 
   if (explicitCampaignId) {
     const explicit = await db.query(
@@ -148,19 +187,33 @@ async function resolveCampaignIdForTenant(
   return fallback.rows[0]?.id ?? null;
 }
 
-async function listRaffles(
-  req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse>
-) {
+function mapRaffleRow(row: any) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    campaignId: row.campaign_id,
+    campaignTitle: row.campaign_title ?? null,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    sortOrder: row.sort_order,
+    colours: Array.isArray(row.colours) ? row.colours : [],
+    offers: Array.isArray(row.offers) ? row.offers : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function listRaffles(req: any, res: any) {
   try {
-    const tenantSlug = asTrimmedString(req.query.tenantSlug || "demo-a") || "demo-a";
+    const tenantSlug =
+      asTrimmedString(getQueryValue(req.query?.tenantSlug) ?? "demo-a") || "demo-a";
 
-    const { getDb } = await import("../_lib/db.js");
-    const db = getDb();
-
+    const db = await getDb();
     const tenant = await getTenantBySlug(db, tenantSlug);
+
     if (!tenant) {
-      return res.status(404).json({
+      return setJson(res, 404, {
         ok: false,
         error: `Tenant not found for slug "${tenantSlug}"`,
       });
@@ -192,58 +245,43 @@ async function listRaffles(
       [tenant.id]
     );
 
-    return res.status(200).json({
+    return setJson(res, 200, {
       ok: true,
-      raffles: result.rows.map((row: any) => ({
-        id: row.id,
-        tenantId: row.tenant_id,
-        campaignId: row.campaign_id,
-        campaignTitle: row.campaign_title,
-        title: row.title,
-        description: row.description,
-        status: row.status,
-        sortOrder: row.sort_order,
-        colours: Array.isArray(row.colours) ? row.colours : [],
-        offers: Array.isArray(row.offers) ? row.offers : [],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      })),
+      raffles: result.rows.map(mapRaffleRow),
     });
   } catch (error) {
     console.error("GET /api/admin/raffles error", error);
-    return res.status(500).json({
+    return setJson(res, 500, {
       ok: false,
       error: "Failed to load raffles",
     });
   }
 }
 
-async function createRaffle(
-  req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse>
-) {
+async function createRaffle(req: any, res: any) {
   try {
-    const tenantSlug = asTrimmedString(req.body?.tenantSlug || "demo-a") || "demo-a";
-    const title = asTrimmedString(req.body?.title);
-    const description = asTrimmedString(req.body?.description);
-    const status = asTrimmedString(req.body?.status) || "active";
-    const sortOrder = asNumber(req.body?.sortOrder, 0);
-    const colours = normaliseColours(req.body?.colours);
-    const offers = normaliseOffers(req.body?.offers);
+    const body = await readBody(req);
+
+    const tenantSlug = asTrimmedString(body.tenantSlug || "demo-a") || "demo-a";
+    const title = asTrimmedString(body.title);
+    const description = asOptionalString(body.description);
+    const status = asTrimmedString(body.status) || "active";
+    const sortOrder = asNumber(body.sortOrder, 0);
+    const colours = normaliseColours(body.colours);
+    const offers = normaliseOffers(body.offers);
 
     if (!title) {
-      return res.status(400).json({
+      return setJson(res, 400, {
         ok: false,
         error: "Title is required",
       });
     }
 
-    const { getDb } = await import("../_lib/db.js");
-    const db = getDb();
-
+    const db = await getDb();
     const tenant = await getTenantBySlug(db, tenantSlug);
+
     if (!tenant) {
-      return res.status(404).json({
+      return setJson(res, 404, {
         ok: false,
         error: `Tenant not found for slug "${tenantSlug}"`,
       });
@@ -252,18 +290,18 @@ async function createRaffle(
     const campaignId = await resolveCampaignIdForTenant(
       db,
       tenant.id,
-      req.body?.campaignId
+      body.campaignId
     );
 
     if (!campaignId) {
-      return res.status(400).json({
+      return setJson(res, 400, {
         ok: false,
         error:
           "No campaign found for this tenant. Create a campaign first or pass a valid campaignId.",
       });
     }
 
-    const insertResult = await db.query(
+    const result = await db.query(
       `
       insert into raffle_configs (
         tenant_id,
@@ -295,7 +333,7 @@ async function createRaffle(
         tenant.id,
         campaignId,
         title,
-        description || null,
+        description,
         status,
         sortOrder,
         JSON.stringify(colours),
@@ -303,68 +341,52 @@ async function createRaffle(
       ]
     );
 
-    const raffle = insertResult.rows[0];
-
-    return res.status(201).json({
+    return setJson(res, 201, {
       ok: true,
-      raffle: {
-        id: raffle.id,
-        tenantId: raffle.tenant_id,
-        campaignId: raffle.campaign_id,
-        title: raffle.title,
-        description: raffle.description,
-        status: raffle.status,
-        sortOrder: raffle.sort_order,
-        colours: Array.isArray(raffle.colours) ? raffle.colours : [],
-        offers: Array.isArray(raffle.offers) ? raffle.offers : [],
-        createdAt: raffle.created_at,
-        updatedAt: raffle.updated_at,
-      },
+      raffle: mapRaffleRow(result.rows[0]),
     });
   } catch (error) {
     console.error("POST /api/admin/raffles error", error);
-    return res.status(500).json({
+    return setJson(res, 500, {
       ok: false,
       error: "Failed to create raffle",
     });
   }
 }
 
-async function updateRaffle(
-  req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse>
-) {
+async function updateRaffle(req: any, res: any) {
   try {
-    const id = parseId(req.body?.id);
-    const tenantSlug = asTrimmedString(req.body?.tenantSlug || "demo-a") || "demo-a";
+    const body = await readBody(req);
+
+    const id = parseId(body.id);
+    const tenantSlug = asTrimmedString(body.tenantSlug || "demo-a") || "demo-a";
 
     if (!id) {
-      return res.status(400).json({
+      return setJson(res, 400, {
         ok: false,
         error: "Valid raffle id is required",
       });
     }
 
-    const title = asTrimmedString(req.body?.title);
-    const description = asTrimmedString(req.body?.description);
-    const status = asTrimmedString(req.body?.status) || "active";
-    const sortOrder = asNumber(req.body?.sortOrder, 0);
-    const colours = normaliseColours(req.body?.colours);
-    const offers = normaliseOffers(req.body?.offers);
+    const title = asTrimmedString(body.title);
+    const description = asOptionalString(body.description);
+    const status = asTrimmedString(body.status) || "active";
+    const sortOrder = asNumber(body.sortOrder, 0);
+    const colours = normaliseColours(body.colours);
+    const offers = normaliseOffers(body.offers);
 
     if (!title) {
-      return res.status(400).json({
+      return setJson(res, 400, {
         ok: false,
         error: "Title is required",
       });
     }
 
-    const { getDb } = await import("../_lib/db.js");
-    const db = getDb();
-
+    const db = await getDb();
     const tenant = await getTenantBySlug(db, tenantSlug);
+
     if (!tenant) {
-      return res.status(404).json({
+      return setJson(res, 404, {
         ok: false,
         error: `Tenant not found for slug "${tenantSlug}"`,
       });
@@ -382,17 +404,17 @@ async function updateRaffle(
 
     const existing = existingResult.rows[0];
     if (!existing) {
-      return res.status(404).json({
+      return setJson(res, 404, {
         ok: false,
         error: "Raffle not found",
       });
     }
 
     const resolvedCampaignId =
-      (await resolveCampaignIdForTenant(db, tenant.id, req.body?.campaignId)) ||
+      (await resolveCampaignIdForTenant(db, tenant.id, body.campaignId)) ||
       existing.campaign_id;
 
-    const updateResult = await db.query(
+    const result = await db.query(
       `
       update raffle_configs
       set
@@ -423,7 +445,7 @@ async function updateRaffle(
         tenant.id,
         resolvedCampaignId,
         title,
-        description || null,
+        description,
         status,
         sortOrder,
         JSON.stringify(colours),
@@ -431,62 +453,47 @@ async function updateRaffle(
       ]
     );
 
-    const raffle = updateResult.rows[0];
-
-    return res.status(200).json({
+    return setJson(res, 200, {
       ok: true,
-      raffle: {
-        id: raffle.id,
-        tenantId: raffle.tenant_id,
-        campaignId: raffle.campaign_id,
-        title: raffle.title,
-        description: raffle.description,
-        status: raffle.status,
-        sortOrder: raffle.sort_order,
-        colours: Array.isArray(raffle.colours) ? raffle.colours : [],
-        offers: Array.isArray(raffle.offers) ? raffle.offers : [],
-        createdAt: raffle.created_at,
-        updatedAt: raffle.updated_at,
-      },
+      raffle: mapRaffleRow(result.rows[0]),
     });
   } catch (error) {
     console.error("PUT /api/admin/raffles error", error);
-    return res.status(500).json({
+    return setJson(res, 500, {
       ok: false,
       error: "Failed to update raffle",
     });
   }
 }
 
-async function deleteRaffle(
-  req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse>
-) {
+async function deleteRaffle(req: any, res: any) {
   try {
-    const id = parseId(req.body?.id ?? req.query?.id);
+    const body = await readBody(req);
+
+    const id = parseId(body.id ?? getQueryValue(req.query?.id));
     const tenantSlug =
-      asTrimmedString(req.body?.tenantSlug ?? req.query?.tenantSlug ?? "demo-a") ||
-      "demo-a";
+      asTrimmedString(
+        body.tenantSlug ?? getQueryValue(req.query?.tenantSlug) ?? "demo-a"
+      ) || "demo-a";
 
     if (!id) {
-      return res.status(400).json({
+      return setJson(res, 400, {
         ok: false,
         error: "Valid raffle id is required",
       });
     }
 
-    const { getDb } = await import("../_lib/db.js");
-    const db = getDb();
-
+    const db = await getDb();
     const tenant = await getTenantBySlug(db, tenantSlug);
+
     if (!tenant) {
-      return res.status(404).json({
+      return setJson(res, 404, {
         ok: false,
         error: `Tenant not found for slug "${tenantSlug}"`,
       });
     }
 
-    const deleteResult = await db.query(
+    const result = await db.query(
       `
       delete from raffle_configs
       where id = $1 and tenant_id = $2
@@ -495,45 +502,48 @@ async function deleteRaffle(
       [id, tenant.id]
     );
 
-    if (!deleteResult.rows[0]) {
-      return res.status(404).json({
+    if (!result.rows[0]) {
+      return setJson(res, 404, {
         ok: false,
         error: "Raffle not found",
       });
     }
 
-    return res.status(200).json({
+    return setJson(res, 200, {
       ok: true,
       deletedId: id,
     });
   } catch (error) {
     console.error("DELETE /api/admin/raffles error", error);
-    return res.status(500).json({
+    return setJson(res, 500, {
       ok: false,
       error: "Failed to delete raffle",
     });
   }
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse>
-) {
-  if (req.method === "GET") {
+export default async function handler(req: any, res: any) {
+  const method = String(req.method || "").toUpperCase();
+
+  if (method === "GET") {
     return listRaffles(req, res);
   }
 
-  if (req.method === "POST") {
+  if (method === "POST") {
     return createRaffle(req, res);
   }
 
-  if (req.method === "PUT") {
+  if (method === "PUT") {
     return updateRaffle(req, res);
   }
 
-  if (req.method === "DELETE") {
+  if (method === "DELETE") {
     return deleteRaffle(req, res);
   }
 
-  return sendMethodNotAllowed(res, ["GET", "POST", "PUT", "DELETE"]);
+  setAllowed(res, ["GET", "POST", "PUT", "DELETE"]);
+  return setJson(res, 405, {
+    ok: false,
+    error: "Method not allowed",
+  });
 }
