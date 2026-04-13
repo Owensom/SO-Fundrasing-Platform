@@ -1,425 +1,716 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+type JsonRecord = Record<string, unknown>;
 
-function resolveTenantSlug(req: VercelRequest): string {
-  const headerTenant = req.headers["x-tenant-slug"];
-  const queryTenant = req.query.tenantSlug;
+type ColourOption = {
+  name: string;
+  hex: string;
+};
 
-  if (typeof headerTenant === "string" && headerTenant.trim()) {
-    return headerTenant.trim();
+type EntrySelectionInput = {
+  colourName?: string | null;
+  number?: number | null;
+  autoColour?: boolean;
+  autoNumber?: boolean;
+};
+
+const ALLOWED_CURRENCIES = new Set(["GBP", "USD", "EUR"]);
+const ALLOWED_COLOUR_SELECTION_MODES = new Set(["manual", "automatic", "both"]);
+const ALLOWED_NUMBER_SELECTION_MODES = new Set([
+  "none",
+  "manual",
+  "automatic",
+  "both",
+]);
+
+function setJson(res: any, status: number, body: unknown) {
+  res.statusCode = status;
+  if (typeof res.setHeader === "function") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
   }
-
-  if (typeof queryTenant === "string" && queryTenant.trim()) {
-    return queryTenant.trim();
-  }
-
-  return "demo-a";
+  res.end(JSON.stringify(body));
 }
 
-type ColourSelection = {
-  colourId: string;
-  quantity: number;
-};
-
-type PurchaseBody = {
-  action?: string;
-  slug?: string;
-  customerName?: string;
-  customerEmail?: string;
-  quantity?: number | string;
-  offerId?: string;
-  colourSelections?: ColourSelection[];
-};
-
-function parseQuantity(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
+function setAllowed(res: any, allowed: string[]) {
+  if (typeof res.setHeader === "function") {
+    res.setHeader("Allow", allowed.join(", "));
   }
+}
 
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asOptionalString(value: unknown): string | null {
+  const s = asTrimmedString(value);
+  return s ? s : null;
+}
+
+function asInteger(value: unknown, fallback = 0): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function getQueryValue(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseJsonArrayField(value: any) {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
     }
   }
 
-  return null;
+  return [];
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  const tenantSlug = resolveTenantSlug(req);
+function normaliseCurrencyCode(value: unknown): string {
+  const code = asTrimmedString(value).toUpperCase();
+  return ALLOWED_CURRENCIES.has(code) ? code : "GBP";
+}
+
+function normaliseColourSelectionMode(value: unknown): string {
+  const mode = asTrimmedString(value).toLowerCase();
+  return ALLOWED_COLOUR_SELECTION_MODES.has(mode) ? mode : "both";
+}
+
+function normaliseNumberSelectionMode(value: unknown): string {
+  const mode = asTrimmedString(value).toLowerCase();
+  return ALLOWED_NUMBER_SELECTION_MODES.has(mode) ? mode : "none";
+}
+
+function normaliseColours(input: unknown): ColourOption[] {
+  const rows = parseJsonArrayField(input);
+
+  return rows
+    .map((item) => {
+      const raw = (item ?? {}) as JsonRecord;
+      const name = asTrimmedString(raw.name);
+      const hex = asTrimmedString(raw.hex);
+      if (!name || !hex) return null;
+      return { name, hex };
+    })
+    .filter(Boolean) as ColourOption[];
+}
+
+async function readBody(req: any): Promise<any> {
+  if (req.body && typeof req.body === "object") {
+    return req.body;
+  }
+
+  const chunks: Uint8Array[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    req.on("data", (chunk: Uint8Array) => chunks.push(chunk));
+    req.on("end", () => resolve());
+    req.on("error", (err: unknown) => reject(err));
+  });
+
+  if (chunks.length === 0) return {};
+
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw) return {};
 
   try {
-    const { query, withTransaction } = await import("../_lib/db.js");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
 
-    if (req.method === "GET") {
-      const slug = req.query.slug;
+async function getDb() {
+  const mod: any = await import("../_lib/db.js");
 
-      if (typeof slug !== "string" || !slug.trim()) {
-        return res.status(400).json({ error: "Invalid slug" });
-      }
+  if (typeof mod.getDb === "function") return mod.getDb();
+  if (typeof mod.default?.getDb === "function") return mod.default.getDb();
+  if (mod.db && typeof mod.db.query === "function") return mod.db;
+  if (mod.default && typeof mod.default.query === "function") return mod.default;
 
-      const result = await query(
-        `
-        select
-          c.id,
-          c.slug,
-          c.title,
-          c.description,
-          c.status,
-          rc.single_ticket_price_cents,
-          rc.total_tickets,
-          rc.sold_tickets
-        from campaigns c
-        join tenants t on t.id = c.tenant_id
-        join raffle_configs rc on rc.campaign_id = c.id
-        where t.slug = $1
-          and c.slug = $2
-          and c.type = 'raffle'
-        limit 1
-        `,
-        [tenantSlug, slug]
-      );
+  if (typeof mod.query === "function") {
+    return { query: mod.query.bind(mod) };
+  }
 
-      const row = result.rows[0];
+  if (typeof mod.default?.query === "function") {
+    return { query: mod.default.query.bind(mod.default) };
+  }
 
-      if (!row) {
-        return res.status(404).json({ error: "Raffle not found" });
-      }
+  if (typeof mod.default === "function") {
+    const instance = await mod.default();
+    if (instance && typeof instance.query === "function") return instance;
+  }
 
-      const offersResult = await query(
-        `
-        select id, label, ticket_quantity, price_cents, is_active, sort_order
-        from raffle_offers
-        where campaign_id = $1
-          and is_active = true
-        order by sort_order asc, created_at asc
-        `,
-        [row.id]
-      );
+  if (mod.sql && typeof mod.sql === "function") {
+    return {
+      async query(text: string, params: any[] = []) {
+        return mod.sql(text, params);
+      },
+    };
+  }
 
-      const coloursResult = await query(
-        `
-        select id, name, hex_value, is_active, sort_order
-        from raffle_colours
-        where campaign_id = $1
-          and is_active = true
-        order by sort_order asc, created_at asc
-        `,
-        [row.id]
-      );
+  if (mod.default?.sql && typeof mod.default.sql === "function") {
+    return {
+      async query(text: string, params: any[] = []) {
+        return mod.default.sql(text, params);
+      },
+    };
+  }
 
-      const ticketPrice = (row.single_ticket_price_cents ?? 0) / 100;
-      const remainingTickets = Math.max(
-        (row.total_tickets ?? 0) - (row.sold_tickets ?? 0),
-        0
-      );
+  throw new Error("Unsupported db export shape");
+}
 
-      return res.status(200).json({
-        raffle: {
-          id: row.id,
-          slug: row.slug,
-          title: row.title,
-          description: row.description,
-          ticketPrice,
-          totalTickets: row.total_tickets,
-          soldTickets: row.sold_tickets,
-          remainingTickets,
-          isSoldOut: remainingTickets === 0,
-          status: row.status,
-        },
-        offers: offersResult.rows.map((offer: any) => ({
-          id: offer.id,
-          label: offer.label,
-          ticketQuantity: offer.ticket_quantity,
-          price: offer.price_cents / 100,
-        })),
-        colours: coloursResult.rows.map((colour: any) => ({
-          id: colour.id,
-          name: colour.name,
-          hexValue: colour.hex_value,
-        })),
+function mapPublicRaffle(row: any) {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    heroImageUrl: row.hero_image_url,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    raffleConfig: {
+      campaignId: row.id,
+      singleTicketPriceCents: row.single_ticket_price_cents,
+      totalTickets: row.total_tickets,
+      soldTickets: row.sold_tickets,
+      backgroundImageUrl: row.background_image_url,
+      currencyCode: normaliseCurrencyCode(row.currency_code),
+      colourSelectionMode: normaliseColourSelectionMode(row.colour_selection_mode),
+      numberSelectionMode: normaliseNumberSelectionMode(row.number_selection_mode),
+      numberRangeStart: row.number_range_start,
+      numberRangeEnd: row.number_range_end,
+      colours: normaliseColours(row.colours),
+    },
+  };
+}
+
+async function getRaffleBySlug(db: any, slug: string) {
+  const result = await db.query(
+    `
+    select
+      c.id,
+      c.tenant_id,
+      c.type,
+      c.slug,
+      c.title,
+      c.description,
+      c.hero_image_url,
+      c.status,
+      c.starts_at,
+      c.ends_at,
+      c.created_at,
+      c.updated_at,
+      rc.single_ticket_price_cents,
+      rc.total_tickets,
+      rc.sold_tickets,
+      rc.background_image_url,
+      rc.currency_code,
+      rc.colour_selection_mode,
+      rc.number_selection_mode,
+      rc.number_range_start,
+      rc.number_range_end,
+      rc.colours
+    from campaigns c
+    left join raffle_configs rc
+      on rc.campaign_id = c.id
+    where c.slug = $1
+      and c.type = 'raffle'
+      and c.status = 'published'
+    limit 1
+    `,
+    [slug]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+function pickRandom<T>(items: T[]): T | null {
+  if (!items.length) return null;
+  const index = Math.floor(Math.random() * items.length);
+  return items[index] ?? null;
+}
+
+async function getUsedNumbers(db: any, campaignId: string): Promise<Set<number>> {
+  const result = await db.query(
+    `
+    select selected_number
+    from raffle_entries
+    where campaign_id = $1
+      and selected_number is not null
+    `,
+    [campaignId]
+  );
+
+  return new Set(
+    result.rows
+      .map((row: any) => row.selected_number)
+      .filter((n: unknown) => Number.isInteger(n))
+  );
+}
+
+function buildAllowedNumbers(start: number, end: number): number[] {
+  const out: number[] = [];
+  for (let i = start; i <= end; i++) out.push(i);
+  return out;
+}
+
+function chooseAutoNumber(
+  usedNumbers: Set<number>,
+  numberRangeStart: number,
+  numberRangeEnd: number
+): number | null {
+  const available = buildAllowedNumbers(numberRangeStart, numberRangeEnd).filter(
+    (n) => !usedNumbers.has(n)
+  );
+
+  return pickRandom(available);
+}
+
+function findColourByName(colours: ColourOption[], name: string | null | undefined) {
+  const target = asTrimmedString(name).toLowerCase();
+  return colours.find((c) => c.name.trim().toLowerCase() === target) ?? null;
+}
+
+function validateEntrySelectionsCount(
+  selections: EntrySelectionInput[],
+  quantity: number
+): boolean {
+  return Array.isArray(selections) && selections.length === quantity;
+}
+
+async function getOfferPriceCents(db: any, campaignId: string): Promise<number> {
+  const result = await db.query(
+    `
+    select single_ticket_price_cents
+    from raffle_configs
+    where campaign_id = $1
+    limit 1
+    `,
+    [campaignId]
+  );
+
+  return asInteger(result.rows[0]?.single_ticket_price_cents, 0);
+}
+
+async function createPendingPurchase(
+  db: any,
+  payload: {
+    campaignId: string;
+    tenantId: string;
+    fullName: string;
+    email: string;
+    quantity: number;
+    amountTotalCents: number;
+    currencyCode: string;
+  }
+) {
+  const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  await db.query(
+    `
+    insert into purchases (
+      id,
+      tenant_id,
+      campaign_id,
+      raffle_config_id,
+      full_name,
+      email,
+      quantity,
+      amount_total_cents,
+      currency,
+      status,
+      created_at,
+      updated_at
+    )
+    values ($1, $2, $3, $3, $4, $5, $6, $7, $8, 'pending', now(), now())
+    `,
+    [
+      purchaseId,
+      payload.tenantId,
+      payload.campaignId,
+      payload.fullName,
+      payload.email,
+      payload.quantity,
+      payload.amountTotalCents,
+      payload.currencyCode,
+    ]
+  );
+
+  return purchaseId;
+}
+
+async function insertEntry(
+  db: any,
+  payload: {
+    purchaseId: string;
+    campaignId: string;
+    tenantId: string;
+    selectedColourName: string | null;
+    selectedColourHex: string | null;
+    selectedNumber: number | null;
+    selectionSource: "manual" | "automatic";
+  }
+) {
+  const entryId = `entry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  await db.query(
+    `
+    insert into raffle_entries (
+      id,
+      purchase_id,
+      campaign_id,
+      tenant_id,
+      selected_colour_name,
+      selected_colour_hex,
+      selected_number,
+      selection_source,
+      payment_status,
+      created_at,
+      updated_at
+    )
+    values ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', now(), now())
+    `,
+    [
+      entryId,
+      payload.purchaseId,
+      payload.campaignId,
+      payload.tenantId,
+      payload.selectedColourName,
+      payload.selectedColourHex,
+      payload.selectedNumber,
+      payload.selectionSource,
+    ]
+  );
+
+  return entryId;
+}
+
+async function handleGet(req: any, res: any) {
+  try {
+    const slug = asTrimmedString(getQueryValue(req.query?.slug));
+
+    if (!slug) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "Missing slug",
       });
     }
 
-    if (req.method === "POST") {
-      const body =
-        typeof req.body === "object" && req.body !== null
-          ? (req.body as PurchaseBody)
-          : {};
+    const db = await getDb();
+    const row = await getRaffleBySlug(db, slug);
 
-      const action = String(body.action || "").trim();
+    if (!row) {
+      return setJson(res, 404, {
+        ok: false,
+        error: "Raffle not found",
+      });
+    }
 
-      if (action !== "purchase") {
-        return res.status(400).json({ error: "Invalid action" });
-      }
+    return setJson(res, 200, {
+      ok: true,
+      raffle: mapPublicRaffle(row),
+    });
+  } catch (error: any) {
+    console.error("GET /api/public/raffles error", error);
+    return setJson(res, 500, {
+      ok: false,
+      error: error?.message || "Failed to load raffle",
+      detail: error?.detail || null,
+      code: error?.code || null,
+    });
+  }
+}
 
-      const slug = String(body.slug || "").trim();
-      const customerName = String(body.customerName || "").trim();
-      const customerEmail = String(body.customerEmail || "").trim();
-      const offerId = String(body.offerId || "").trim();
-      const colourSelections = Array.isArray(body.colourSelections)
-        ? body.colourSelections
-        : [];
+async function handlePost(req: any, res: any) {
+  try {
+    const body = await readBody(req);
 
-      if (!slug) {
-        return res.status(400).json({ error: "Slug is required." });
-      }
+    const slug = asTrimmedString(body.slug);
+    const fullName = asTrimmedString(body.fullName ?? body.name);
+    const email = asTrimmedString(body.email);
+    const quantity = asInteger(body.quantity, 0);
+    const entrySelections = Array.isArray(body.entrySelections)
+      ? (body.entrySelections as EntrySelectionInput[])
+      : [];
 
-      if (!customerName) {
-        return res.status(400).json({ error: "Customer name is required." });
-      }
+    if (!slug) {
+      return setJson(res, 400, { ok: false, error: "Missing slug" });
+    }
 
-      if (!customerEmail) {
-        return res.status(400).json({ error: "Customer email is required." });
-      }
+    if (!fullName) {
+      return setJson(res, 400, { ok: false, error: "Name is required" });
+    }
 
-      if (colourSelections.length === 0) {
-        return res.status(400).json({ error: "Please select at least one colour." });
-      }
+    if (!email) {
+      return setJson(res, 400, { ok: false, error: "Email is required" });
+    }
 
-      const result = await withTransaction(async (client: any) => {
-        const raffleResult = await client.query(
-          `
-          select
-            c.id,
-            c.slug,
-            c.title,
-            c.description,
-            c.status,
-            rc.single_ticket_price_cents,
-            rc.total_tickets,
-            rc.sold_tickets
-          from campaigns c
-          join tenants t on t.id = c.tenant_id
-          join raffle_configs rc on rc.campaign_id = c.id
-          where t.slug = $1
-            and c.slug = $2
-            and c.type = 'raffle'
-          limit 1
-          `,
-          [tenantSlug, slug]
-        );
+    if (quantity <= 0) {
+      return setJson(res, 400, { ok: false, error: "Quantity must be greater than 0" });
+    }
 
-        const raffleRow = raffleResult.rows[0];
+    if (!validateEntrySelectionsCount(entrySelections, quantity)) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "entrySelections length must match quantity",
+      });
+    }
 
-        if (!raffleRow) {
-          return { ok: false, status: 404, message: "Raffle not found." };
-        }
+    const db = await getDb();
+    const raffleRow = await getRaffleBySlug(db, slug);
 
-        if (raffleRow.status !== "published") {
-          return {
-            ok: false,
-            status: 400,
-            message: "Raffle is not open for sales.",
-          };
-        }
+    if (!raffleRow) {
+      return setJson(res, 404, { ok: false, error: "Raffle not found" });
+    }
 
-        let requiredQuantity = 1;
-        let totalAmountCents = raffleRow.single_ticket_price_cents ?? 0;
-        let unitPriceCents = raffleRow.single_ticket_price_cents ?? 0;
+    const raffle = mapPublicRaffle(raffleRow);
+    const config = raffle.raffleConfig;
 
-        if (offerId && offerId !== "single-ticket") {
-          const offerResult = await client.query(
-            `
-            select id, label, ticket_quantity, price_cents
-            from raffle_offers
-            where id = $1
-              and campaign_id = $2
-              and is_active = true
-            limit 1
-            `,
-            [offerId, raffleRow.id]
-          );
+    const unitPriceCents = await getOfferPriceCents(db, raffle.id);
+    if (unitPriceCents <= 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "Raffle ticket price is not configured",
+      });
+    }
 
-          const offerRow = offerResult.rows[0];
+    const colours = config.colours || [];
+    const colourMode = config.colourSelectionMode;
+    const numberMode = config.numberSelectionMode;
+    const numberRangeStart = asInteger(config.numberRangeStart, 0);
+    const numberRangeEnd = asInteger(config.numberRangeEnd, 0);
 
-          if (!offerRow) {
-            return { ok: false, status: 400, message: "Selected offer not found." };
-          }
+    const amountTotalCents = unitPriceCents * quantity;
 
-          requiredQuantity = offerRow.ticket_quantity;
-          totalAmountCents = offerRow.price_cents;
-          unitPriceCents = Math.floor(offerRow.price_cents / offerRow.ticket_quantity);
-        }
+    await db.query("begin");
 
-        const normalizedSelections = colourSelections
-          .map((selection) => ({
-            colourId: String(selection.colourId || "").trim(),
-            quantity: Number(selection.quantity),
-          }))
-          .filter((selection) => selection.colourId && selection.quantity > 0);
+    try {
+      const usedNumbers = numberMode === "none"
+        ? new Set<number>()
+        : await getUsedNumbers(db, raffle.id);
 
-        const selectedQuantity = normalizedSelections.reduce(
-          (sum, selection) => sum + selection.quantity,
-          0
-        );
-
-        if (selectedQuantity !== requiredQuantity) {
-          return {
-            ok: false,
-            status: 400,
-            message: `Colour quantities must add up to ${requiredQuantity}.`,
-          };
-        }
-
-        const remainingTickets = Math.max(
-          raffleRow.total_tickets - raffleRow.sold_tickets,
-          0
-        );
-
-        if (selectedQuantity > remainingTickets) {
-          return {
-            ok: false,
-            status: 409,
-            message: `Only ${remainingTickets} ticket(s) remaining.`,
-          };
-        }
-
-        const validColoursResult = await client.query(
-          `
-          select id, name
-          from raffle_colours
-          where campaign_id = $1
-            and is_active = true
-          `,
-          [raffleRow.id]
-        );
-
-        const validColourIds = new Set(validColoursResult.rows.map((row: any) => row.id));
-
-        for (const selection of normalizedSelections) {
-          if (!validColourIds.has(selection.colourId)) {
-            return {
-              ok: false,
-              status: 400,
-              message: "One or more selected colours are invalid.",
-            };
-          }
-        }
-
-        const orderId = `order_${Date.now()}`;
-
-        const orderInsert = await client.query(
-          `
-          insert into orders (
-            id,
-            tenant_id,
-            campaign_id,
-            customer_name,
-            customer_email,
-            total_amount_cents,
-            currency,
-            payment_status,
-            created_at,
-            updated_at
-          )
-          select
-            $1,
-            t.id,
-            $2,
-            $3,
-            $4,
-            $5,
-            'GBP',
-            'pending',
-            now(),
-            now()
-          from tenants t
-          where t.slug = $6
-          returning *
-          `,
-          [
-            orderId,
-            raffleRow.id,
-            customerName,
-            customerEmail.toLowerCase(),
-            totalAmountCents,
-            tenantSlug,
-          ]
-        );
-
-        for (const selection of normalizedSelections) {
-          await client.query(
-            `
-            insert into raffle_entries (
-              id,
-              tenant_id,
-              campaign_id,
-              order_id,
-              colour_id,
-              quantity,
-              unit_price_cents,
-              total_price_cents,
-              created_at
-            )
-            select
-              $1,
-              t.id,
-              $2,
-              $3,
-              $4,
-              $5,
-              $6,
-              $7,
-              now()
-            from tenants t
-            where t.slug = $8
-            `,
-            [
-              `entry_${Date.now()}_${selection.colourId}_${selection.quantity}`,
-              raffleRow.id,
-              orderId,
-              selection.colourId,
-              selection.quantity,
-              unitPriceCents,
-              unitPriceCents * selection.quantity,
-              tenantSlug,
-            ]
-          );
-        }
-
-        return {
-          ok: true,
-          purchase: {
-            id: orderInsert.rows[0].id,
-            customerName,
-            customerEmail,
-            quantity: selectedQuantity,
-            totalPrice: totalAmountCents / 100,
-            paymentStatus: "pending",
-          },
-          raffle: {
-            id: raffleRow.id,
-            slug: raffleRow.slug,
-            title: raffleRow.title,
-            description: raffleRow.description,
-            ticketPrice: (raffleRow.single_ticket_price_cents ?? 0) / 100,
-            totalTickets: raffleRow.total_tickets,
-            soldTickets: raffleRow.sold_tickets,
-            remainingTickets,
-            isSoldOut: remainingTickets === 0,
-            status: raffleRow.status,
-          },
-        };
+      const purchaseId = await createPendingPurchase(db, {
+        campaignId: raffle.id,
+        tenantId: raffleRow.tenant_id,
+        fullName,
+        email,
+        quantity,
+        amountTotalCents,
+        currencyCode: config.currencyCode,
       });
 
-      if ((result as any).ok === false) {
-        return res.status((result as any).status).json({
-          error: (result as any).message,
+      const createdEntries: any[] = [];
+
+      for (let i = 0; i < quantity; i++) {
+        const selection = entrySelections[i] || {};
+        let selectedColourName: string | null = null;
+        let selectedColourHex: string | null = null;
+        let selectedNumber: number | null = null;
+        let selectionSource: "manual" | "automatic" = "manual";
+
+        // Colour logic
+        if (colourMode === "manual") {
+          const chosen = findColourByName(colours, selection.colourName);
+          if (!chosen) {
+            await db.query("rollback");
+            return setJson(res, 400, {
+              ok: false,
+              error: `Entry ${i + 1}: valid colour is required`,
+            });
+          }
+          selectedColourName = chosen.name;
+          selectedColourHex = chosen.hex;
+          selectionSource = "manual";
+        } else if (colourMode === "automatic") {
+          const autoColour = pickRandom(colours);
+          if (!autoColour && colours.length > 0) {
+            await db.query("rollback");
+            return setJson(res, 400, {
+              ok: false,
+              error: `Entry ${i + 1}: could not auto-assign colour`,
+            });
+          }
+          selectedColourName = autoColour?.name ?? null;
+          selectedColourHex = autoColour?.hex ?? null;
+          selectionSource = "automatic";
+        } else if (colourMode === "both") {
+          const wantsAuto = Boolean(selection.autoColour);
+          if (wantsAuto) {
+            const autoColour = pickRandom(colours);
+            if (!autoColour && colours.length > 0) {
+              await db.query("rollback");
+              return setJson(res, 400, {
+                ok: false,
+                error: `Entry ${i + 1}: could not auto-assign colour`,
+              });
+            }
+            selectedColourName = autoColour?.name ?? null;
+            selectedColourHex = autoColour?.hex ?? null;
+            selectionSource = "automatic";
+          } else {
+            const chosen = findColourByName(colours, selection.colourName);
+            if (!chosen) {
+              await db.query("rollback");
+              return setJson(res, 400, {
+                ok: false,
+                error: `Entry ${i + 1}: valid colour is required`,
+              });
+            }
+            selectedColourName = chosen.name;
+            selectedColourHex = chosen.hex;
+            selectionSource = "manual";
+          }
+        }
+
+        // Number logic
+        if (numberMode === "none") {
+          selectedNumber = null;
+        } else if (numberMode === "manual") {
+          const chosenNumber = asInteger(selection.number, 0);
+
+          if (
+            chosenNumber < numberRangeStart ||
+            chosenNumber > numberRangeEnd
+          ) {
+            await db.query("rollback");
+            return setJson(res, 400, {
+              ok: false,
+              error: `Entry ${i + 1}: number must be between ${numberRangeStart} and ${numberRangeEnd}`,
+            });
+          }
+
+          if (usedNumbers.has(chosenNumber)) {
+            await db.query("rollback");
+            return setJson(res, 400, {
+              ok: false,
+              error: `Entry ${i + 1}: number ${chosenNumber} is already taken`,
+            });
+          }
+
+          selectedNumber = chosenNumber;
+          usedNumbers.add(chosenNumber);
+        } else if (numberMode === "automatic") {
+          const autoNumber = chooseAutoNumber(
+            usedNumbers,
+            numberRangeStart,
+            numberRangeEnd
+          );
+
+          if (autoNumber == null) {
+            await db.query("rollback");
+            return setJson(res, 400, {
+              ok: false,
+              error: `Entry ${i + 1}: no numbers available`,
+            });
+          }
+
+          selectedNumber = autoNumber;
+          usedNumbers.add(autoNumber);
+          selectionSource = "automatic";
+        } else if (numberMode === "both") {
+          const wantsAuto = Boolean(selection.autoNumber);
+
+          if (wantsAuto) {
+            const autoNumber = chooseAutoNumber(
+              usedNumbers,
+              numberRangeStart,
+              numberRangeEnd
+            );
+
+            if (autoNumber == null) {
+              await db.query("rollback");
+              return setJson(res, 400, {
+                ok: false,
+                error: `Entry ${i + 1}: no numbers available`,
+              });
+            }
+
+            selectedNumber = autoNumber;
+            usedNumbers.add(autoNumber);
+            selectionSource = "automatic";
+          } else {
+            const chosenNumber = asInteger(selection.number, 0);
+
+            if (
+              chosenNumber < numberRangeStart ||
+              chosenNumber > numberRangeEnd
+            ) {
+              await db.query("rollback");
+              return setJson(res, 400, {
+                ok: false,
+                error: `Entry ${i + 1}: number must be between ${numberRangeStart} and ${numberRangeEnd}`,
+              });
+            }
+
+            if (usedNumbers.has(chosenNumber)) {
+              await db.query("rollback");
+              return setJson(res, 400, {
+                ok: false,
+                error: `Entry ${i + 1}: number ${chosenNumber} is already taken`,
+              });
+            }
+
+            selectedNumber = chosenNumber;
+            usedNumbers.add(chosenNumber);
+          }
+        }
+
+        const entryId = await insertEntry(db, {
+          purchaseId,
+          campaignId: raffle.id,
+          tenantId: raffleRow.tenant_id,
+          selectedColourName,
+          selectedColourHex,
+          selectedNumber,
+          selectionSource,
+        });
+
+        createdEntries.push({
+          id: entryId,
+          selectedColourName,
+          selectedColourHex,
+          selectedNumber,
+          selectionSource,
         });
       }
 
-      return res.status(200).json(result);
-    }
+      await db.query("commit");
 
-    return res.status(405).json({ error: "Method not allowed" });
-  } catch (error) {
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown error",
-      tenantSlug,
+      return setJson(res, 201, {
+        ok: true,
+        purchaseId,
+        amountTotalCents,
+        currencyCode: config.currencyCode,
+        entries: createdEntries,
+      });
+    } catch (innerError) {
+      await db.query("rollback");
+      throw innerError;
+    }
+  } catch (error: any) {
+    console.error("POST /api/public/raffles error", error);
+    return setJson(res, 500, {
+      ok: false,
+      error: error?.message || "Failed to create purchase",
+      detail: error?.detail || null,
+      code: error?.code || null,
     });
   }
+}
+
+export default async function handler(req: any, res: any) {
+  const method = String(req.method || "").toUpperCase();
+
+  if (method === "GET") return handleGet(req, res);
+  if (method === "POST") return handlePost(req, res);
+
+  setAllowed(res, ["GET", "POST"]);
+  return setJson(res, 405, {
+    ok: false,
+    error: "Method not allowed",
+  });
 }
