@@ -1,18 +1,4 @@
-type ColourOption = {
-  name: string;
-  hex: string;
-};
-
-type OfferOption = {
-  label: string;
-  price: number;
-  entries: number;
-};
-
 type JsonRecord = Record<string, unknown>;
-type SchemaMap = Record<string, string | null>;
-
-const HEX_RE = /^#([0-9a-fA-F]{6})$/;
 
 function setJson(res: any, status: number, body: unknown) {
   res.statusCode = status;
@@ -37,84 +23,36 @@ function asOptionalString(value: unknown): string | null {
   return s ? s : null;
 }
 
-function asNumber(value: unknown, fallback = 0): number {
+function asInteger(value: unknown, fallback = 0): number {
   const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function parseId(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : null;
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
 function getQueryValue(value: unknown): unknown {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function qi(identifier: string | null | undefined) {
-  if (!identifier) {
-    throw new Error("Missing SQL identifier");
-  }
-  return `"${identifier.replace(/"/g, `""`)}"`;
-}
-
-function normaliseColours(input: unknown): ColourOption[] {
-  if (!Array.isArray(input)) return [];
-
+function slugify(input: string): string {
   return input
-    .map((item) => {
-      const raw = (item ?? {}) as JsonRecord;
-      const name = asTrimmedString(raw.name);
-      const hex = asTrimmedString(raw.hex);
-
-      if (!name || !HEX_RE.test(hex)) {
-        return null;
-      }
-
-      return {
-        name,
-        hex: hex.toUpperCase(),
-      };
-    })
-    .filter(Boolean) as ColourOption[];
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
 }
 
-function normaliseOffers(input: unknown): OfferOption[] {
-  if (!Array.isArray(input)) return [];
-
-  return input
-    .map((item) => {
-      const raw = (item ?? {}) as JsonRecord;
-      const label = asTrimmedString(raw.label);
-      const price = asNumber(raw.price);
-      const entries = asNumber(raw.entries);
-
-      if (!label) return null;
-      if (!(price > 0)) return null;
-      if (!Number.isInteger(entries) || entries <= 0) return null;
-
-      return {
-        label,
-        price,
-        entries,
-      };
-    })
-    .filter(Boolean) as OfferOption[];
-}
-
-function parseJsonArrayField(value: any) {
-  if (Array.isArray(value)) return value;
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+function randomSuffix(length = 6): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)];
   }
+  return out;
+}
 
-  return [];
+function buildCampaignId(slug: string) {
+  return `campaign_${slug}_${randomSuffix(6)}`;
 }
 
 async function readBody(req: any): Promise<any> {
@@ -184,75 +122,12 @@ async function getDb() {
   );
 }
 
-async function getColumns(db: any, tableName: string): Promise<string[]> {
+async function getTenantBySlug(db: any, tenantSlug: string) {
   const result = await db.query(
     `
-    select column_name
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = $1
-    order by ordinal_position
-    `,
-    [tableName]
-  );
-
-  return result.rows.map((r: any) => String(r.column_name));
-}
-
-function pick(columns: string[], candidates: string[]) {
-  for (const c of candidates) {
-    if (columns.includes(c)) return c;
-  }
-  return null;
-}
-
-async function getSchema(db: any) {
-  const raffleCols = await getColumns(db, "raffle_configs");
-  const campaignCols = await getColumns(db, "campaigns");
-  const tenantCols = await getColumns(db, "tenants");
-
-  const raffle: SchemaMap = {
-    id: pick(raffleCols, ["id", "raffle_config_id", "config_id"]),
-    campaignId: pick(raffleCols, ["campaign_id", "campaign", "campaign_ref"]),
-    title: pick(raffleCols, ["title", "name", "raffle_title", "config_title"]),
-    description: pick(raffleCols, ["description", "details", "summary"]),
-    status: pick(raffleCols, ["status"]),
-    isActive: pick(raffleCols, ["is_active", "active", "enabled"]),
-    sortOrder: pick(raffleCols, ["sort_order", "position", "display_order", "sort"]),
-    colours: pick(raffleCols, ["colours", "colors", "colour_options", "color_options"]),
-    offers: pick(raffleCols, ["offers", "offer_options", "packages"]),
-    createdAt: pick(raffleCols, ["created_at", "createdon", "created"]),
-    updatedAt: pick(raffleCols, ["updated_at", "updatedon", "updated"]),
-  };
-
-  const campaigns: SchemaMap = {
-    id: pick(campaignCols, ["id", "campaign_id"]),
-    tenantId: pick(campaignCols, ["tenant_id", "tenant", "tenant_ref"]),
-    title: pick(campaignCols, ["title", "name", "campaign_title"]),
-  };
-
-  const tenants: SchemaMap = {
-    id: pick(tenantCols, ["id", "tenant_id"]),
-    slug: pick(tenantCols, ["slug", "tenant_slug"]),
-    name: pick(tenantCols, ["name", "tenant_name", "title"]),
-  };
-
-  return { raffleCols, campaignCols, tenantCols, raffle, campaigns, tenants };
-}
-
-async function getTenantBySlug(db: any, tenantSlug: string, schema: any) {
-  if (!schema.tenants.id || !schema.tenants.slug) {
-    throw new Error("Could not resolve tenants.id / tenants.slug columns");
-  }
-
-  const result = await db.query(
-    `
-    select
-      ${qi(schema.tenants.id)} as id,
-      ${qi(schema.tenants.slug)} as slug
-      ${schema.tenants.name ? `, ${qi(schema.tenants.name)} as name` : ""}
+    select id, slug
     from tenants
-    where ${qi(schema.tenants.slug)} = $1
+    where slug = $1
     limit 1
     `,
     [tenantSlug]
@@ -261,71 +136,29 @@ async function getTenantBySlug(db: any, tenantSlug: string, schema: any) {
   return result.rows[0] ?? null;
 }
 
-async function resolveCampaignIdForTenant(
-  db: any,
-  tenantId: number,
-  schema: any,
-  campaignIdInput?: unknown
-): Promise<number | null> {
-  if (!schema.campaigns.id || !schema.campaigns.tenantId) {
-    throw new Error("Could not resolve campaigns.id / campaigns.tenant_id columns");
-  }
-
-  const explicitCampaignId = parseId(campaignIdInput);
-
-  if (explicitCampaignId) {
-    const explicit = await db.query(
-      `
-      select ${qi(schema.campaigns.id)} as id
-      from campaigns
-      where ${qi(schema.campaigns.id)} = $1
-        and ${qi(schema.campaigns.tenantId)} = $2
-      limit 1
-      `,
-      [explicitCampaignId, tenantId]
-    );
-
-    if (explicit.rows[0]?.id) {
-      return explicit.rows[0].id;
-    }
-  }
-
-  const fallback = await db.query(
-    `
-    select ${qi(schema.campaigns.id)} as id
-    from campaigns
-    where ${qi(schema.campaigns.tenantId)} = $1
-    order by ${qi(schema.campaigns.id)} asc
-    limit 1
-    `,
-    [tenantId]
-  );
-
-  return fallback.rows[0]?.id ?? null;
-}
-
-function mapRaffleRow(row: any) {
-  const rawStatus =
-    row.status != null
-      ? row.status
-      : row.is_active != null
-      ? row.is_active
-        ? "active"
-        : "inactive"
-      : null;
-
+function mapRow(row: any) {
   return {
     id: row.id,
-    campaignId: row.campaign_id,
-    campaignTitle: row.campaign_title ?? null,
-    title: row.title ?? "",
-    description: row.description ?? null,
-    status: rawStatus,
-    sortOrder: row.sort_order ?? 0,
-    colours: parseJsonArrayField(row.colours),
-    offers: parseJsonArrayField(row.offers),
-    createdAt: row.created_at ?? null,
-    updatedAt: row.updated_at ?? null,
+    tenantId: row.tenant_id,
+    type: row.type,
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    heroImageUrl: row.hero_image_url,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    raffleConfig: {
+      campaignId: row.id,
+      singleTicketPriceCents: row.single_ticket_price_cents,
+      totalTickets: row.total_tickets,
+      soldTickets: row.sold_tickets,
+      backgroundImageUrl: row.background_image_url,
+      createdAt: row.raffle_created_at,
+      updatedAt: row.raffle_updated_at,
+    },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -335,25 +168,7 @@ async function listRaffles(req: any, res: any) {
       asTrimmedString(getQueryValue(req.query?.tenantSlug) ?? "demo-a") || "demo-a";
 
     const db = await getDb();
-    const schema = await getSchema(db);
-
-    if (!schema.raffle.id || !schema.raffle.campaignId) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve raffle_configs primary key / campaign reference columns",
-        schema,
-      });
-    }
-
-    if (!schema.campaigns.id || !schema.campaigns.tenantId) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve campaigns id / tenant columns",
-        schema,
-      });
-    }
-
-    const tenant = await getTenantBySlug(db, tenantSlug, schema);
+    const tenant = await getTenantBySlug(db, tenantSlug);
 
     if (!tenant) {
       return setJson(res, 404, {
@@ -362,77 +177,40 @@ async function listRaffles(req: any, res: any) {
       });
     }
 
-    const selectTitle = schema.raffle.title
-      ? `rc.${qi(schema.raffle.title)} as title`
-      : `null as title`;
-
-    const selectDescription = schema.raffle.description
-      ? `rc.${qi(schema.raffle.description)} as description`
-      : `null as description`;
-
-    const selectStatus = schema.raffle.status
-      ? `rc.${qi(schema.raffle.status)} as status`
-      : `null as status`;
-
-    const selectIsActive = schema.raffle.isActive
-      ? `rc.${qi(schema.raffle.isActive)} as is_active`
-      : `null as is_active`;
-
-    const selectSortOrder = schema.raffle.sortOrder
-      ? `rc.${qi(schema.raffle.sortOrder)} as sort_order`
-      : `null as sort_order`;
-
-    const selectColours = schema.raffle.colours
-      ? `rc.${qi(schema.raffle.colours)} as colours`
-      : `'[]' as colours`;
-
-    const selectOffers = schema.raffle.offers
-      ? `rc.${qi(schema.raffle.offers)} as offers`
-      : `'[]' as offers`;
-
-    const selectCreatedAt = schema.raffle.createdAt
-      ? `rc.${qi(schema.raffle.createdAt)} as created_at`
-      : `null as created_at`;
-
-    const selectUpdatedAt = schema.raffle.updatedAt
-      ? `rc.${qi(schema.raffle.updatedAt)} as updated_at`
-      : `null as updated_at`;
-
-    const selectCampaignTitle = schema.campaigns.title
-      ? `c.${qi(schema.campaigns.title)} as campaign_title`
-      : `null as campaign_title`;
-
-    const orderBy = schema.raffle.sortOrder
-      ? `coalesce(rc.${qi(schema.raffle.sortOrder)}, 999999) asc`
-      : `rc.${qi(schema.raffle.id)} desc`;
-
     const result = await db.query(
       `
       select
-        rc.${qi(schema.raffle.id)} as id,
-        rc.${qi(schema.raffle.campaignId)} as campaign_id,
-        ${selectTitle},
-        ${selectDescription},
-        ${selectStatus},
-        ${selectIsActive},
-        ${selectSortOrder},
-        ${selectColours},
-        ${selectOffers},
-        ${selectCreatedAt},
-        ${selectUpdatedAt},
-        ${selectCampaignTitle}
-      from raffle_configs rc
-      inner join campaigns c
-        on c.${qi(schema.campaigns.id)} = rc.${qi(schema.raffle.campaignId)}
-      where c.${qi(schema.campaigns.tenantId)} = $1
-      order by ${orderBy}
+        c.id,
+        c.tenant_id,
+        c.type,
+        c.slug,
+        c.title,
+        c.description,
+        c.hero_image_url,
+        c.status,
+        c.starts_at,
+        c.ends_at,
+        c.created_at,
+        c.updated_at,
+        rc.single_ticket_price_cents,
+        rc.total_tickets,
+        rc.sold_tickets,
+        rc.background_image_url,
+        rc.created_at as raffle_created_at,
+        rc.updated_at as raffle_updated_at
+      from campaigns c
+      left join raffle_configs rc
+        on rc.campaign_id = c.id
+      where c.tenant_id = $1
+        and c.type = 'raffle'
+      order by c.created_at desc, c.id desc
       `,
       [tenant.id]
     );
 
     return setJson(res, 200, {
       ok: true,
-      raffles: result.rows.map(mapRaffleRow),
+      raffles: result.rows.map(mapRow),
     });
   } catch (error: any) {
     console.error("GET /api/admin/raffles error", error);
@@ -452,29 +230,26 @@ async function createRaffle(req: any, res: any) {
     const tenantSlug = asTrimmedString(body.tenantSlug || "demo-a") || "demo-a";
     const title = asTrimmedString(body.title);
     const description = asOptionalString(body.description);
-    const status = asTrimmedString(body.status) || "active";
-    const sortOrder = asNumber(body.sortOrder, 0);
-    const colours = normaliseColours(body.colours);
-    const offers = normaliseOffers(body.offers);
+    const heroImageUrl = asOptionalString(body.heroImageUrl ?? body.hero_image_url);
+    const status = asTrimmedString(body.status) || "draft";
+    const startsAt = asOptionalString(body.startsAt ?? body.starts_at);
+    const endsAt = asOptionalString(body.endsAt ?? body.ends_at);
 
-    const db = await getDb();
-    const schema = await getSchema(db);
-
-    if (!schema.raffle.campaignId) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve raffle_configs campaign reference column",
-        schema,
-      });
-    }
-
-    if (!schema.raffle.title) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve raffle_configs title/name column",
-        schema,
-      });
-    }
+    const singleTicketPriceCents = asInteger(
+      body.singleTicketPriceCents ?? body.single_ticket_price_cents,
+      0
+    );
+    const totalTickets = asInteger(
+      body.totalTickets ?? body.total_tickets,
+      0
+    );
+    const soldTickets = asInteger(
+      body.soldTickets ?? body.sold_tickets,
+      0
+    );
+    const backgroundImageUrl = asOptionalString(
+      body.backgroundImageUrl ?? body.background_image_url
+    );
 
     if (!title) {
       return setJson(res, 400, {
@@ -483,7 +258,29 @@ async function createRaffle(req: any, res: any) {
       });
     }
 
-    const tenant = await getTenantBySlug(db, tenantSlug, schema);
+    if (singleTicketPriceCents <= 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "singleTicketPriceCents must be greater than 0",
+      });
+    }
+
+    if (totalTickets <= 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "totalTickets must be greater than 0",
+      });
+    }
+
+    if (soldTickets < 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "soldTickets cannot be negative",
+      });
+    }
+
+    const db = await getDb();
+    const tenant = await getTenantBySlug(db, tenantSlug);
 
     if (!tenant) {
       return setJson(res, 404, {
@@ -492,147 +289,159 @@ async function createRaffle(req: any, res: any) {
       });
     }
 
-    const campaignId = await resolveCampaignIdForTenant(
-      db,
-      tenant.id,
-      schema,
-      body.campaignId
-    );
+    const baseSlug = slugify(asTrimmedString(body.slug) || title);
+    const finalSlug = baseSlug || `raffle-${randomSuffix(6)}`;
 
+    let campaignId = asTrimmedString(body.id ?? body.campaignId);
     if (!campaignId) {
-      return setJson(res, 400, {
-        ok: false,
-        error: `No campaign found for tenant "${tenantSlug}". Create a campaign row first or pass a valid campaignId.`,
+      campaignId = buildCampaignId(finalSlug);
+    }
+
+    await db.query("begin");
+
+    try {
+      const existingCampaign = await db.query(
+        `
+        select id
+        from campaigns
+        where id = $1
+        limit 1
+        `,
+        [campaignId]
+      );
+
+      if (existingCampaign.rows[0]) {
+        await db.query("rollback");
+        return setJson(res, 409, {
+          ok: false,
+          error: `Campaign id already exists: ${campaignId}`,
+        });
+      }
+
+      const existingSlug = await db.query(
+        `
+        select id
+        from campaigns
+        where slug = $1 and tenant_id = $2
+        limit 1
+        `,
+        [finalSlug, tenant.id]
+      );
+
+      if (existingSlug.rows[0]) {
+        await db.query("rollback");
+        return setJson(res, 409, {
+          ok: false,
+          error: `Slug already exists for tenant: ${finalSlug}`,
+        });
+      }
+
+      const campaignInsert = await db.query(
+        `
+        insert into campaigns (
+          id,
+          tenant_id,
+          type,
+          slug,
+          title,
+          description,
+          hero_image_url,
+          status,
+          starts_at,
+          ends_at,
+          created_at,
+          updated_at
+        )
+        values ($1, $2, 'raffle', $3, $4, $5, $6, $7, $8, $9, now(), now())
+        returning
+          id,
+          tenant_id,
+          type,
+          slug,
+          title,
+          description,
+          hero_image_url,
+          status,
+          starts_at,
+          ends_at,
+          created_at,
+          updated_at
+        `,
+        [
+          campaignId,
+          tenant.id,
+          finalSlug,
+          title,
+          description,
+          heroImageUrl,
+          status,
+          startsAt,
+          endsAt,
+        ]
+      );
+
+      await db.query(
+        `
+        insert into raffle_configs (
+          campaign_id,
+          single_ticket_price_cents,
+          total_tickets,
+          sold_tickets,
+          background_image_url,
+          created_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5, now(), now())
+        `,
+        [
+          campaignId,
+          singleTicketPriceCents,
+          totalTickets,
+          soldTickets,
+          backgroundImageUrl,
+        ]
+      );
+
+      await db.query("commit");
+
+      const result = await db.query(
+        `
+        select
+          c.id,
+          c.tenant_id,
+          c.type,
+          c.slug,
+          c.title,
+          c.description,
+          c.hero_image_url,
+          c.status,
+          c.starts_at,
+          c.ends_at,
+          c.created_at,
+          c.updated_at,
+          rc.single_ticket_price_cents,
+          rc.total_tickets,
+          rc.sold_tickets,
+          rc.background_image_url,
+          rc.created_at as raffle_created_at,
+          rc.updated_at as raffle_updated_at
+        from campaigns c
+        left join raffle_configs rc
+          on rc.campaign_id = c.id
+        where c.id = $1
+        limit 1
+        `,
+        [campaignInsert.rows[0].id]
+      );
+
+      return setJson(res, 201, {
+        ok: true,
+        raffle: mapRow(result.rows[0]),
       });
+    } catch (innerError) {
+      await db.query("rollback");
+      throw innerError;
     }
-
-    const columns: string[] = [];
-    const values: any[] = [];
-
-    columns.push(qi(schema.raffle.campaignId));
-    values.push(campaignId);
-
-    columns.push(qi(schema.raffle.title));
-    values.push(title);
-
-    if (schema.raffle.description) {
-      columns.push(qi(schema.raffle.description));
-      values.push(description);
-    }
-
-    if (schema.raffle.status) {
-      columns.push(qi(schema.raffle.status));
-      values.push(status);
-    } else if (schema.raffle.isActive) {
-      columns.push(qi(schema.raffle.isActive));
-      values.push(status === "active");
-    }
-
-    if (schema.raffle.sortOrder) {
-      columns.push(qi(schema.raffle.sortOrder));
-      values.push(sortOrder);
-    }
-
-    if (schema.raffle.colours) {
-      columns.push(qi(schema.raffle.colours));
-      values.push(JSON.stringify(colours));
-    }
-
-    if (schema.raffle.offers) {
-      columns.push(qi(schema.raffle.offers));
-      values.push(JSON.stringify(offers));
-    }
-
-    if (schema.raffle.createdAt) {
-      columns.push(qi(schema.raffle.createdAt));
-    }
-
-    if (schema.raffle.updatedAt) {
-      columns.push(qi(schema.raffle.updatedAt));
-    }
-
-    const placeholders = columns.map((col, idx) => {
-      const unquoted = col.replace(/"/g, "");
-      if (schema.raffle.createdAt && unquoted === schema.raffle.createdAt) {
-        return "now()";
-      }
-      if (schema.raffle.updatedAt && unquoted === schema.raffle.updatedAt) {
-        return "now()";
-      }
-
-      let valueIndex = 0;
-      for (let i = 0; i <= idx; i++) {
-        const current = columns[i].replace(/"/g, "");
-        if (
-          (schema.raffle.createdAt && current === schema.raffle.createdAt) ||
-          (schema.raffle.updatedAt && current === schema.raffle.updatedAt)
-        ) {
-          continue;
-        }
-        valueIndex++;
-      }
-      return `$${valueIndex}`;
-    });
-
-    const returningId = schema.raffle.id
-      ? `${qi(schema.raffle.id)} as id`
-      : `null as id`;
-
-    const returningCampaignId = `${qi(schema.raffle.campaignId)} as campaign_id`;
-    const returningTitle = `${qi(schema.raffle.title)} as title`;
-    const returningDescription = schema.raffle.description
-      ? `${qi(schema.raffle.description)} as description`
-      : `null as description`;
-    const returningStatus = schema.raffle.status
-      ? `${qi(schema.raffle.status)} as status`
-      : `null as status`;
-    const returningIsActive = schema.raffle.isActive
-      ? `${qi(schema.raffle.isActive)} as is_active`
-      : `null as is_active`;
-    const returningSortOrder = schema.raffle.sortOrder
-      ? `${qi(schema.raffle.sortOrder)} as sort_order`
-      : `null as sort_order`;
-    const returningColours = schema.raffle.colours
-      ? `${qi(schema.raffle.colours)} as colours`
-      : `'[]' as colours`;
-    const returningOffers = schema.raffle.offers
-      ? `${qi(schema.raffle.offers)} as offers`
-      : `'[]' as offers`;
-    const returningCreatedAt = schema.raffle.createdAt
-      ? `${qi(schema.raffle.createdAt)} as created_at`
-      : `null as created_at`;
-    const returningUpdatedAt = schema.raffle.updatedAt
-      ? `${qi(schema.raffle.updatedAt)} as updated_at`
-      : `null as updated_at`;
-
-    const result = await db.query(
-      `
-      insert into raffle_configs (
-        ${columns.join(", ")}
-      )
-      values (
-        ${placeholders.join(", ")}
-      )
-      returning
-        ${returningId},
-        ${returningCampaignId},
-        ${returningTitle},
-        ${returningDescription},
-        ${returningStatus},
-        ${returningIsActive},
-        ${returningSortOrder},
-        ${returningColours},
-        ${returningOffers},
-        ${returningCreatedAt},
-        ${returningUpdatedAt}
-      `,
-      values
-    );
-
-    return setJson(res, 201, {
-      ok: true,
-      raffle: mapRaffleRow(result.rows[0]),
-    });
   } catch (error: any) {
     console.error("POST /api/admin/raffles error", error);
     return setJson(res, 500, {
@@ -648,7 +457,7 @@ async function updateRaffle(req: any, res: any) {
   try {
     const body = await readBody(req);
 
-    const id = parseId(body.id);
+    const id = asTrimmedString(body.id ?? body.campaignId);
     const tenantSlug = asTrimmedString(body.tenantSlug || "demo-a") || "demo-a";
 
     if (!id) {
@@ -660,31 +469,57 @@ async function updateRaffle(req: any, res: any) {
 
     const title = asTrimmedString(body.title);
     const description = asOptionalString(body.description);
-    const status = asTrimmedString(body.status) || "active";
-    const sortOrder = asNumber(body.sortOrder, 0);
-    const colours = normaliseColours(body.colours);
-    const offers = normaliseOffers(body.offers);
+    const heroImageUrl = asOptionalString(body.heroImageUrl ?? body.hero_image_url);
+    const status = asTrimmedString(body.status) || "draft";
+    const startsAt = asOptionalString(body.startsAt ?? body.starts_at);
+    const endsAt = asOptionalString(body.endsAt ?? body.ends_at);
+
+    const singleTicketPriceCents = asInteger(
+      body.singleTicketPriceCents ?? body.single_ticket_price_cents,
+      0
+    );
+    const totalTickets = asInteger(
+      body.totalTickets ?? body.total_tickets,
+      0
+    );
+    const soldTickets = asInteger(
+      body.soldTickets ?? body.sold_tickets,
+      0
+    );
+    const backgroundImageUrl = asOptionalString(
+      body.backgroundImageUrl ?? body.background_image_url
+    );
+
+    if (!title) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "Title is required",
+      });
+    }
+
+    if (singleTicketPriceCents <= 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "singleTicketPriceCents must be greater than 0",
+      });
+    }
+
+    if (totalTickets <= 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "totalTickets must be greater than 0",
+      });
+    }
+
+    if (soldTickets < 0) {
+      return setJson(res, 400, {
+        ok: false,
+        error: "soldTickets cannot be negative",
+      });
+    }
 
     const db = await getDb();
-    const schema = await getSchema(db);
-
-    if (!schema.raffle.id || !schema.raffle.campaignId || !schema.raffle.title) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve raffle_configs id / campaign / title columns",
-        schema,
-      });
-    }
-
-    if (!schema.campaigns.id || !schema.campaigns.tenantId) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve campaigns id / tenant columns",
-        schema,
-      });
-    }
-
-    const tenant = await getTenantBySlug(db, tenantSlug, schema);
+    const tenant = await getTenantBySlug(db, tenantSlug);
 
     if (!tenant) {
       return setJson(res, 404, {
@@ -693,134 +528,170 @@ async function updateRaffle(req: any, res: any) {
       });
     }
 
-    const existingResult = await db.query(
+    const existing = await db.query(
       `
-      select
-        rc.${qi(schema.raffle.id)} as id,
-        rc.${qi(schema.raffle.campaignId)} as campaign_id
-      from raffle_configs rc
-      inner join campaigns c
-        on c.${qi(schema.campaigns.id)} = rc.${qi(schema.raffle.campaignId)}
-      where rc.${qi(schema.raffle.id)} = $1
-        and c.${qi(schema.campaigns.tenantId)} = $2
+      select c.id, c.slug
+      from campaigns c
+      where c.id = $1
+        and c.tenant_id = $2
+        and c.type = 'raffle'
       limit 1
       `,
       [id, tenant.id]
     );
 
-    const existing = existingResult.rows[0];
-    if (!existing) {
+    if (!existing.rows[0]) {
       return setJson(res, 404, {
         ok: false,
         error: "Raffle not found",
       });
     }
 
-    const resolvedCampaignId =
-      (await resolveCampaignIdForTenant(db, tenant.id, schema, body.campaignId)) ||
-      existing.campaign_id;
+    const requestedSlug = slugify(asTrimmedString(body.slug) || title);
+    const finalSlug = requestedSlug || existing.rows[0].slug;
 
-    const sets: string[] = [];
-    const values: any[] = [];
-    let i = 1;
-
-    sets.push(`${qi(schema.raffle.campaignId)} = $${i++}`);
-    values.push(resolvedCampaignId);
-
-    sets.push(`${qi(schema.raffle.title)} = $${i++}`);
-    values.push(title);
-
-    if (schema.raffle.description) {
-      sets.push(`${qi(schema.raffle.description)} = $${i++}`);
-      values.push(description);
-    }
-
-    if (schema.raffle.status) {
-      sets.push(`${qi(schema.raffle.status)} = $${i++}`);
-      values.push(status);
-    } else if (schema.raffle.isActive) {
-      sets.push(`${qi(schema.raffle.isActive)} = $${i++}`);
-      values.push(status === "active");
-    }
-
-    if (schema.raffle.sortOrder) {
-      sets.push(`${qi(schema.raffle.sortOrder)} = $${i++}`);
-      values.push(sortOrder);
-    }
-
-    if (schema.raffle.colours) {
-      sets.push(`${qi(schema.raffle.colours)} = $${i++}`);
-      values.push(JSON.stringify(colours));
-    }
-
-    if (schema.raffle.offers) {
-      sets.push(`${qi(schema.raffle.offers)} = $${i++}`);
-      values.push(JSON.stringify(offers));
-    }
-
-    if (schema.raffle.updatedAt) {
-      sets.push(`${qi(schema.raffle.updatedAt)} = now()`);
-    }
-
-    values.push(id);
-
-    const result = await db.query(
+    const conflictingSlug = await db.query(
       `
-      update raffle_configs
-      set ${sets.join(", ")}
-      where ${qi(schema.raffle.id)} = $${i}
-      returning
-        ${qi(schema.raffle.id)} as id,
-        ${qi(schema.raffle.campaignId)} as campaign_id,
-        ${qi(schema.raffle.title)} as title,
-        ${
-          schema.raffle.description
-            ? `${qi(schema.raffle.description)} as description`
-            : `null as description`
-        },
-        ${
-          schema.raffle.status
-            ? `${qi(schema.raffle.status)} as status`
-            : `null as status`
-        },
-        ${
-          schema.raffle.isActive
-            ? `${qi(schema.raffle.isActive)} as is_active`
-            : `null as is_active`
-        },
-        ${
-          schema.raffle.sortOrder
-            ? `${qi(schema.raffle.sortOrder)} as sort_order`
-            : `null as sort_order`
-        },
-        ${
-          schema.raffle.colours
-            ? `${qi(schema.raffle.colours)} as colours`
-            : `'[]' as colours`
-        },
-        ${
-          schema.raffle.offers
-            ? `${qi(schema.raffle.offers)} as offers`
-            : `'[]' as offers`
-        },
-        ${
-          schema.raffle.createdAt
-            ? `${qi(schema.raffle.createdAt)} as created_at`
-            : `null as created_at`
-        },
-        ${
-          schema.raffle.updatedAt
-            ? `${qi(schema.raffle.updatedAt)} as updated_at`
-            : `null as updated_at`
-        }
+      select id
+      from campaigns
+      where slug = $1
+        and tenant_id = $2
+        and id <> $3
+      limit 1
       `,
-      values
+      [finalSlug, tenant.id, id]
     );
 
-    return setJson(res, 200, {
-      ok: true,
-      raffle: mapRaffleRow(result.rows[0]),
-    });
+    if (conflictingSlug.rows[0]) {
+      return setJson(res, 409, {
+        ok: false,
+        error: `Slug already exists for tenant: ${finalSlug}`,
+      });
+    }
+
+    await db.query("begin");
+
+    try {
+      await db.query(
+        `
+        update campaigns
+        set
+          slug = $2,
+          title = $3,
+          description = $4,
+          hero_image_url = $5,
+          status = $6,
+          starts_at = $7,
+          ends_at = $8,
+          updated_at = now()
+        where id = $1
+        `,
+        [
+          id,
+          finalSlug,
+          title,
+          description,
+          heroImageUrl,
+          status,
+          startsAt,
+          endsAt,
+        ]
+      );
+
+      const existingConfig = await db.query(
+        `
+        select campaign_id
+        from raffle_configs
+        where campaign_id = $1
+        limit 1
+        `,
+        [id]
+      );
+
+      if (existingConfig.rows[0]) {
+        await db.query(
+          `
+          update raffle_configs
+          set
+            single_ticket_price_cents = $2,
+            total_tickets = $3,
+            sold_tickets = $4,
+            background_image_url = $5,
+            updated_at = now()
+          where campaign_id = $1
+          `,
+          [
+            id,
+            singleTicketPriceCents,
+            totalTickets,
+            soldTickets,
+            backgroundImageUrl,
+          ]
+        );
+      } else {
+        await db.query(
+          `
+          insert into raffle_configs (
+            campaign_id,
+            single_ticket_price_cents,
+            total_tickets,
+            sold_tickets,
+            background_image_url,
+            created_at,
+            updated_at
+          )
+          values ($1, $2, $3, $4, $5, now(), now())
+          `,
+          [
+            id,
+            singleTicketPriceCents,
+            totalTickets,
+            soldTickets,
+            backgroundImageUrl,
+          ]
+        );
+      }
+
+      await db.query("commit");
+
+      const result = await db.query(
+        `
+        select
+          c.id,
+          c.tenant_id,
+          c.type,
+          c.slug,
+          c.title,
+          c.description,
+          c.hero_image_url,
+          c.status,
+          c.starts_at,
+          c.ends_at,
+          c.created_at,
+          c.updated_at,
+          rc.single_ticket_price_cents,
+          rc.total_tickets,
+          rc.sold_tickets,
+          rc.background_image_url,
+          rc.created_at as raffle_created_at,
+          rc.updated_at as raffle_updated_at
+        from campaigns c
+        left join raffle_configs rc
+          on rc.campaign_id = c.id
+        where c.id = $1
+        limit 1
+        `,
+        [id]
+      );
+
+      return setJson(res, 200, {
+        ok: true,
+        raffle: mapRow(result.rows[0]),
+      });
+    } catch (innerError) {
+      await db.query("rollback");
+      throw innerError;
+    }
   } catch (error: any) {
     console.error("PUT /api/admin/raffles error", error);
     return setJson(res, 500, {
@@ -836,7 +707,7 @@ async function deleteRaffle(req: any, res: any) {
   try {
     const body = await readBody(req);
 
-    const id = parseId(body.id ?? getQueryValue(req.query?.id));
+    const id = asTrimmedString(body.id ?? getQueryValue(req.query?.id));
     const tenantSlug =
       asTrimmedString(
         body.tenantSlug ?? getQueryValue(req.query?.tenantSlug) ?? "demo-a"
@@ -850,25 +721,7 @@ async function deleteRaffle(req: any, res: any) {
     }
 
     const db = await getDb();
-    const schema = await getSchema(db);
-
-    if (!schema.raffle.id || !schema.raffle.campaignId) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve raffle_configs id / campaign columns",
-        schema,
-      });
-    }
-
-    if (!schema.campaigns.id || !schema.campaigns.tenantId) {
-      return setJson(res, 500, {
-        ok: false,
-        error: "Could not resolve campaigns id / tenant columns",
-        schema,
-      });
-    }
-
-    const tenant = await getTenantBySlug(db, tenantSlug, schema);
+    const tenant = await getTenantBySlug(db, tenantSlug);
 
     if (!tenant) {
       return setJson(res, 404, {
@@ -877,46 +730,54 @@ async function deleteRaffle(req: any, res: any) {
       });
     }
 
-    const existingResult = await db.query(
+    const existing = await db.query(
       `
-      select rc.${qi(schema.raffle.id)} as id
-      from raffle_configs rc
-      inner join campaigns c
-        on c.${qi(schema.campaigns.id)} = rc.${qi(schema.raffle.campaignId)}
-      where rc.${qi(schema.raffle.id)} = $1
-        and c.${qi(schema.campaigns.tenantId)} = $2
+      select id
+      from campaigns
+      where id = $1
+        and tenant_id = $2
+        and type = 'raffle'
       limit 1
       `,
       [id, tenant.id]
     );
 
-    if (!existingResult.rows[0]) {
+    if (!existing.rows[0]) {
       return setJson(res, 404, {
         ok: false,
         error: "Raffle not found",
       });
     }
 
-    const result = await db.query(
-      `
-      delete from raffle_configs
-      where ${qi(schema.raffle.id)} = $1
-      returning ${qi(schema.raffle.id)} as id
-      `,
-      [id]
-    );
+    await db.query("begin");
 
-    if (!result.rows[0]) {
-      return setJson(res, 404, {
-        ok: false,
-        error: "Raffle not found",
+    try {
+      await db.query(
+        `
+        delete from raffle_configs
+        where campaign_id = $1
+        `,
+        [id]
+      );
+
+      await db.query(
+        `
+        delete from campaigns
+        where id = $1
+        `,
+        [id]
+      );
+
+      await db.query("commit");
+
+      return setJson(res, 200, {
+        ok: true,
+        deletedId: id,
       });
+    } catch (innerError) {
+      await db.query("rollback");
+      throw innerError;
     }
-
-    return setJson(res, 200, {
-      ok: true,
-      deletedId: result.rows[0].id,
-    });
   } catch (error: any) {
     console.error("DELETE /api/admin/raffles error", error);
     return setJson(res, 500, {
