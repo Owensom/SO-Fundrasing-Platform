@@ -1,30 +1,72 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import ColourOptionsEditor, {
   ColourOption,
 } from "../../../components/admin/ColourOptionsEditor";
 
-type RaffleDetails = {
+type FormState = {
   id: string;
   title: string;
-  description?: string;
+  description: string;
+  slug: string;
+  status: string;
+  ticketPrice: string;
+  totalTickets: string;
+  soldTickets: string;
+  heroImageUrl: string;
+  backgroundImageUrl: string;
+  currencyCode: "GBP" | "USD" | "EUR";
+  colourSelectionMode: "manual" | "automatic" | "both";
+  numberSelectionMode: "none" | "manual" | "automatic" | "both";
+  numberRangeStart: string;
+  numberRangeEnd: string;
   colours: ColourOption[];
 };
+
+const INITIAL_STATE: FormState = {
+  id: "",
+  title: "",
+  description: "",
+  slug: "",
+  status: "published",
+  ticketPrice: "5",
+  totalTickets: "100",
+  soldTickets: "0",
+  heroImageUrl: "",
+  backgroundImageUrl: "",
+  currencyCode: "GBP",
+  colourSelectionMode: "both",
+  numberSelectionMode: "both",
+  numberRangeStart: "1",
+  numberRangeEnd: "200",
+  colours: [],
+};
+
+function currencySymbol(code: string) {
+  if (code === "USD") return "$";
+  if (code === "EUR") return "€";
+  return "£";
+}
 
 export default function AdminRaffleDetailsPage() {
   const router = useRouter();
   const { id } = router.query;
 
+  const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [form, setForm] = useState<RaffleDetails>({
-    id: "",
-    title: "",
-    description: "",
-    colours: [],
-  });
+
+  const showColours = useMemo(
+    () => form.colourSelectionMode === "manual" || form.colourSelectionMode === "both",
+    [form.colourSelectionMode]
+  );
+
+  const showNumberRange = useMemo(
+    () => form.numberSelectionMode !== "none",
+    [form.numberSelectionMode]
+  );
 
   useEffect(() => {
     if (!id || typeof id !== "string") return;
@@ -43,13 +85,35 @@ export default function AdminRaffleDetailsPage() {
           throw new Error(json?.error || "Failed to load raffle");
         }
 
-        const raffle = json?.raffle ?? json;
+        const raffle = json.raffle;
 
         setForm({
           id: raffle.id,
           title: raffle.title || "",
           description: raffle.description || "",
-          colours: Array.isArray(raffle.colours) ? raffle.colours : [],
+          slug: raffle.slug || "",
+          status: raffle.status || "published",
+          ticketPrice: String(
+            Number(raffle?.raffleConfig?.singleTicketPriceCents || 0) / 100
+          ),
+          totalTickets: String(raffle?.raffleConfig?.totalTickets || 0),
+          soldTickets: String(raffle?.raffleConfig?.soldTickets || 0),
+          heroImageUrl: raffle.heroImageUrl || "",
+          backgroundImageUrl: raffle?.raffleConfig?.backgroundImageUrl || "",
+          currencyCode: raffle?.raffleConfig?.currencyCode || "GBP",
+          colourSelectionMode:
+            raffle?.raffleConfig?.colourSelectionMode || "both",
+          numberSelectionMode:
+            raffle?.raffleConfig?.numberSelectionMode || "none",
+          numberRangeStart: raffle?.raffleConfig?.numberRangeStart
+            ? String(raffle.raffleConfig.numberRangeStart)
+            : "1",
+          numberRangeEnd: raffle?.raffleConfig?.numberRangeEnd
+            ? String(raffle.raffleConfig.numberRangeEnd)
+            : "200",
+          colours: Array.isArray(raffle?.raffleConfig?.colours)
+            ? raffle.raffleConfig.colours
+            : [],
         });
       } catch (err: any) {
         setError(err.message || "Failed to load raffle");
@@ -61,10 +125,7 @@ export default function AdminRaffleDetailsPage() {
     load();
   }, [id]);
 
-  function updateField<K extends keyof RaffleDetails>(
-    key: K,
-    value: RaffleDetails[K]
-  ) {
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -80,6 +141,24 @@ export default function AdminRaffleDetailsPage() {
         tenantSlug: "demo-a",
         title: form.title,
         description: form.description,
+        slug: form.slug,
+        status: form.status,
+        ticketPrice: Number(form.ticketPrice),
+        totalTickets: Number(form.totalTickets),
+        soldTickets: Number(form.soldTickets || 0),
+        heroImageUrl: form.heroImageUrl || "",
+        backgroundImageUrl: form.backgroundImageUrl || "",
+        currencyCode: form.currencyCode,
+        colourSelectionMode: form.colourSelectionMode,
+        numberSelectionMode: form.numberSelectionMode,
+        numberRangeStart:
+          form.numberSelectionMode === "none"
+            ? null
+            : Number(form.numberRangeStart),
+        numberRangeEnd:
+          form.numberSelectionMode === "none"
+            ? null
+            : Number(form.numberRangeEnd),
         colours: form.colours
           .filter((c) => c.name.trim() && c.hex.trim())
           .map((c) => ({
@@ -138,17 +217,196 @@ export default function AdminRaffleDetailsPage() {
           <div style={styles.card}>
             <label style={styles.label}>Description</label>
             <textarea
-              value={form.description || ""}
+              value={form.description}
               onChange={(e) => updateField("description", e.target.value)}
               style={styles.textarea}
               rows={4}
             />
           </div>
 
-          <ColourOptionsEditor
-            value={form.colours}
-            onChange={(next) => updateField("colours", next)}
-          />
+          <div style={styles.grid2}>
+            <div style={styles.card}>
+              <label style={styles.label}>Slug</label>
+              <input
+                type="text"
+                value={form.slug}
+                onChange={(e) => updateField("slug", e.target.value)}
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.card}>
+              <label style={styles.label}>Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => updateField("status", e.target.value)}
+                style={styles.input}
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={styles.grid2}>
+            <div style={styles.card}>
+              <label style={styles.label}>Currency</label>
+              <select
+                value={form.currencyCode}
+                onChange={(e) =>
+                  updateField("currencyCode", e.target.value as FormState["currencyCode"])
+                }
+                style={styles.input}
+              >
+                <option value="GBP">£ GBP</option>
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+              </select>
+            </div>
+
+            <div style={styles.card}>
+              <label style={styles.label}>
+                Ticket price ({currencySymbol(form.currencyCode)})
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.ticketPrice}
+                onChange={(e) => updateField("ticketPrice", e.target.value)}
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          <div style={styles.grid2}>
+            <div style={styles.card}>
+              <label style={styles.label}>Total tickets</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={form.totalTickets}
+                onChange={(e) => updateField("totalTickets", e.target.value)}
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.card}>
+              <label style={styles.label}>Sold tickets</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={form.soldTickets}
+                onChange={(e) => updateField("soldTickets", e.target.value)}
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          <div style={styles.grid2}>
+            <div style={styles.card}>
+              <label style={styles.label}>Colour selection</label>
+              <select
+                value={form.colourSelectionMode}
+                onChange={(e) =>
+                  updateField(
+                    "colourSelectionMode",
+                    e.target.value as FormState["colourSelectionMode"]
+                  )
+                }
+                style={styles.input}
+              >
+                <option value="manual">Customer chooses</option>
+                <option value="automatic">Automatic</option>
+                <option value="both">Customer chooses or automatic</option>
+              </select>
+            </div>
+
+            <div style={styles.card}>
+              <label style={styles.label}>Number selection</label>
+              <select
+                value={form.numberSelectionMode}
+                onChange={(e) =>
+                  updateField(
+                    "numberSelectionMode",
+                    e.target.value as FormState["numberSelectionMode"]
+                  )
+                }
+                style={styles.input}
+              >
+                <option value="none">No numbers</option>
+                <option value="manual">Customer chooses</option>
+                <option value="automatic">Automatic</option>
+                <option value="both">Customer chooses or automatic</option>
+              </select>
+            </div>
+          </div>
+
+          {showNumberRange ? (
+            <div style={styles.grid2}>
+              <div style={styles.card}>
+                <label style={styles.label}>Number range start</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.numberRangeStart}
+                  onChange={(e) => updateField("numberRangeStart", e.target.value)}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.card}>
+                <label style={styles.label}>Number range end</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.numberRangeEnd}
+                  onChange={(e) => updateField("numberRangeEnd", e.target.value)}
+                  style={styles.input}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {showColours ? (
+            <ColourOptionsEditor
+              value={form.colours}
+              onChange={(next) => updateField("colours", next)}
+            />
+          ) : (
+            <div style={styles.cardMuted}>
+              Colour selection is automatic only, so no manual colour list is required.
+            </div>
+          )}
+
+          <div style={styles.grid2}>
+            <div style={styles.card}>
+              <label style={styles.label}>Hero image URL</label>
+              <input
+                type="text"
+                value={form.heroImageUrl}
+                onChange={(e) => updateField("heroImageUrl", e.target.value)}
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.card}>
+              <label style={styles.label}>Background image URL</label>
+              <input
+                type="text"
+                value={form.backgroundImageUrl}
+                onChange={(e) =>
+                  updateField("backgroundImageUrl", e.target.value)
+                }
+                style={styles.input}
+              />
+            </div>
+          </div>
 
           <div style={styles.actions}>
             <button type="submit" disabled={saving} style={styles.submitButton}>
@@ -173,7 +431,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
   },
   container: {
-    maxWidth: 960,
+    maxWidth: 980,
     margin: "0 auto",
   },
   heading: {
@@ -185,6 +443,11 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 16,
   },
+  grid2: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
+  },
   card: {
     background: "#fff",
     border: "1px solid #e5e7eb",
@@ -193,6 +456,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
+  },
+  cardMuted: {
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+    color: "#6b7280",
   },
   label: {
     fontWeight: 600,
