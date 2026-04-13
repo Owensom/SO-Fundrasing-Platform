@@ -1,94 +1,59 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import type { AdminRafflePurchasesResponse } from "../../types/raffles";
 
 export default function AdminRaffleDetailsPage() {
-  const { slug } = useParams<{ slug: string }>();
-
   const [data, setData] = useState<AdminRafflePurchasesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const slug = window.location.pathname.split("/").pop();
+
     if (!slug) {
       setError("Missing raffle slug.");
       setLoading(false);
       return;
     }
 
-    const safeSlug: string = slug;
-    let isMounted = true;
-
-    async function loadAdminRaffleDetails() {
+    async function load() {
       try {
-        setLoading(true);
-        setError(null);
-
         const response = await fetch(
-          `/api/admin/raffles/${encodeURIComponent(safeSlug)}/purchases`,
+          `/api/admin/raffles/${slug}/purchases`,
           {
-            headers: {
-              "x-tenant-slug": "demo-a",
-            },
+            headers: { "x-tenant-slug": "demo-a" },
           }
         );
 
-        // 🔒 SAFE PARSING (fixes your JSON error forever)
         const raw = await response.text();
         const contentType = response.headers.get("content-type") || "";
 
-        let json:
-          | (AdminRafflePurchasesResponse & { error?: string })
-          | null = null;
-
+        let json: any = null;
         if (contentType.includes("application/json")) {
-          json = JSON.parse(raw) as AdminRafflePurchasesResponse & {
-            error?: string;
-          };
+          json = JSON.parse(raw);
         }
 
         if (!response.ok) {
-          throw new Error(
-            json?.error || raw || "Failed to load raffle details."
-          );
+          throw new Error(json?.error || raw);
         }
 
-        if (!json) {
-          throw new Error("Admin API did not return JSON.");
-        }
-
-        if (!isMounted) return;
         setData(json);
       } catch (err) {
-        if (!isMounted) return;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load raffle details."
-        );
+        setError(err instanceof Error ? err.message : "Error");
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     }
 
-    void loadAdminRaffleDetails();
+    load();
+  }, []);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [slug]);
-
-  if (loading) {
-    return <div style={styles.page}>Loading admin raffle details...</div>;
-  }
+  if (loading) return <div style={styles.page}>Loading...</div>;
 
   if (error || !data) {
     return (
       <div style={styles.page}>
-        <h1 style={styles.title}>Raffle details</h1>
-        <p style={styles.error}>{error || "Raffle not found."}</p>
+        <h1>Raffle details</h1>
+        <p style={styles.error}>{error || "Not found"}</p>
       </div>
     );
   }
@@ -101,7 +66,15 @@ export default function AdminRaffleDetailsPage() {
           <h1 style={styles.title}>{data.raffle.title}</h1>
           <p style={styles.meta}>Slug: {data.raffle.slug}</p>
         </div>
-        <div style={styles.badge}>{data.raffle.status}</div>
+
+        <div>
+          <a
+            href={`/admin/raffles/${data.raffle.slug}/edit`}
+            style={styles.editButton}
+          >
+            Edit raffle
+          </a>
+        </div>
       </div>
 
       <div style={styles.summaryGrid}>
@@ -114,54 +87,13 @@ export default function AdminRaffleDetailsPage() {
           value={String(data.summary.soldTickets)}
         />
         <SummaryCard
-          label="Remaining tickets"
+          label="Remaining"
           value={String(data.summary.remainingTickets)}
         />
         <SummaryCard
-          label="Purchase count"
+          label="Purchases"
           value={String(data.summary.purchaseCount)}
         />
-      </div>
-
-      <div style={styles.tableCard}>
-        <h2 style={styles.sectionTitle}>Purchases</h2>
-
-        {data.purchases.length === 0 ? (
-          <p style={styles.emptyText}>No purchases yet.</p>
-        ) : (
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Date</th>
-                  <th style={styles.th}>Name</th>
-                  <th style={styles.th}>Email</th>
-                  <th style={styles.th}>Qty</th>
-                  <th style={styles.th}>Unit price</th>
-                  <th style={styles.th}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.purchases.map((purchase) => (
-                  <tr key={purchase.id}>
-                    <td style={styles.td}>
-                      {new Date(purchase.createdAt).toLocaleString()}
-                    </td>
-                    <td style={styles.td}>{purchase.customerName}</td>
-                    <td style={styles.td}>{purchase.customerEmail}</td>
-                    <td style={styles.td}>{purchase.quantity}</td>
-                    <td style={styles.td}>
-                      ${purchase.unitPrice.toFixed(2)}
-                    </td>
-                    <td style={styles.td}>
-                      ${purchase.totalPrice.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -175,9 +107,9 @@ function SummaryCard({
   value: string;
 }) {
   return (
-    <div style={styles.summaryCard}>
-      <div style={styles.summaryLabel}>{label}</div>
-      <div style={styles.summaryValue}>{value}</div>
+    <div style={styles.card}>
+      <div style={styles.label}>{label}</div>
+      <div style={styles.value}>{value}</div>
     </div>
   );
 }
@@ -190,89 +122,45 @@ const styles: Record<string, React.CSSProperties> = {
   },
   header: {
     display: "flex",
-    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 16,
     marginBottom: 24,
   },
   eyebrow: {
-    margin: 0,
     fontSize: 14,
     textTransform: "uppercase",
     color: "#64748b",
-    fontWeight: 700,
   },
   title: {
-    margin: "8px 0",
     fontSize: 32,
   },
   meta: {
-    margin: 0,
     color: "#475569",
   },
-  badge: {
-    borderRadius: 999,
+  editButton: {
+    padding: "10px 14px",
     background: "#111827",
     color: "#fff",
-    padding: "8px 12px",
-    fontWeight: 700,
-    textTransform: "capitalize",
+    borderRadius: 8,
+    textDecoration: "none",
   },
   summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 16,
-    marginBottom: 24,
   },
-  summaryCard: {
+  card: {
     background: "#fff",
-    borderRadius: 16,
     padding: 20,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+    borderRadius: 12,
   },
-  summaryLabel: {
-    fontSize: 13,
+  label: {
     color: "#64748b",
-    marginBottom: 8,
   },
-  summaryValue: {
-    fontSize: 28,
+  value: {
+    fontSize: 24,
     fontWeight: 700,
   },
-  tableCard: {
-    background: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-  },
-  sectionTitle: {
-    marginTop: 0,
-    marginBottom: 16,
-    fontSize: 22,
-  },
-  tableWrapper: {
-    overflowX: "auto",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  th: {
-    textAlign: "left",
-    padding: "12px 10px",
-    borderBottom: "1px solid #e5e7eb",
-    color: "#475569",
-    fontSize: 14,
-  },
-  td: {
-    padding: "12px 10px",
-    borderBottom: "1px solid #f1f5f9",
-  },
   error: {
-    color: "#991b1b",
-    whiteSpace: "pre-wrap",
-  },
-  emptyText: {
-    color: "#64748b",
+    color: "red",
   },
 };
