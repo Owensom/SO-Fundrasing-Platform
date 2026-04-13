@@ -208,6 +208,83 @@ export default async function handler(
         return res.status(200).json({ ok: true });
       }
 
+      if (action === "add-offer") {
+        const slug = String((body as any).slug || "").trim();
+        const label = String((body as any).label || "").trim();
+        const ticketQuantity = Number((body as any).ticketQuantity);
+        const price = Number((body as any).price);
+
+        if (!slug) {
+          return res.status(400).json({ error: "Slug is required" });
+        }
+
+        if (!label) {
+          return res.status(400).json({ error: "Label is required" });
+        }
+
+        if (!Number.isInteger(ticketQuantity) || ticketQuantity <= 0) {
+          return res.status(400).json({ error: "Invalid ticket quantity" });
+        }
+
+        if (!Number.isFinite(price) || price < 0) {
+          return res.status(400).json({ error: "Invalid price" });
+        }
+
+        const campaignResult = await query(
+          `
+          select c.id
+          from campaigns c
+          where c.slug = $1
+            and c.tenant_id = $2
+            and c.type = 'raffle'
+          limit 1
+          `,
+          [slug, tenant.id]
+        );
+
+        const campaign = campaignResult.rows[0];
+
+        if (!campaign) {
+          return res.status(404).json({ error: "Raffle not found" });
+        }
+
+        await query(
+          `
+          insert into raffle_offers (
+            id,
+            campaign_id,
+            label,
+            ticket_quantity,
+            price_cents,
+            sort_order,
+            is_active
+          )
+          values ($1, $2, $3, $4, $5, 0, true)
+          `,
+          [
+            `offer_${Date.now()}`,
+            campaign.id,
+            label,
+            ticketQuantity,
+            Math.round(price * 100),
+          ]
+        );
+
+        return res.status(200).json({ ok: true });
+      }
+
+      if (action === "remove-offer") {
+        const offerId = String((body as any).offerId || "").trim();
+
+        if (!offerId) {
+          return res.status(400).json({ error: "Offer ID is required" });
+        }
+
+        await query(`delete from raffle_offers where id = $1`, [offerId]);
+
+        return res.status(200).json({ ok: true });
+      }
+
       return res.status(400).json({ error: "Invalid action" });
     }
 
