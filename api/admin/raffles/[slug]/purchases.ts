@@ -1,34 +1,46 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import {
-  getAdminRaffleBySlug,
-  listPurchasesForRaffle,
-} from "../../../_lib/raffles-repo";
-import { resolveTenantSlug } from "../../../_lib/tenant";
+
+function resolveTenantSlug(req: VercelRequest): string {
+  const headerTenant = req.headers["x-tenant-slug"];
+  const queryTenant = req.query.tenantSlug;
+
+  if (typeof headerTenant === "string" && headerTenant.trim()) {
+    return headerTenant.trim();
+  }
+
+  if (typeof queryTenant === "string" && queryTenant.trim()) {
+    return queryTenant.trim();
+  }
+
+  return "demo-a";
+}
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed." });
+  }
+
+  const tenantSlug = resolveTenantSlug(req);
+  const slug = req.query.slug;
+
+  if (typeof slug !== "string" || !slug.trim()) {
+    return res.status(400).json({ error: "Invalid raffle slug." });
+  }
+
   try {
-    if (req.method !== "GET") {
-      res.setHeader("Allow", "GET");
-      return res.status(405).json({ error: "Method not allowed." });
-    }
+    const repo = await import("../../../_lib/raffles-repo.js");
 
-    const tenantSlug = resolveTenantSlug(req);
-    const slug = req.query.slug;
-
-    if (typeof slug !== "string" || !slug.trim()) {
-      return res.status(400).json({ error: "Invalid raffle slug." });
-    }
-
-    const raffle = await getAdminRaffleBySlug(tenantSlug, slug);
+    const raffle = await repo.getAdminRaffleBySlug(tenantSlug, slug);
 
     if (!raffle) {
       return res.status(404).json({ error: "Raffle not found." });
     }
 
-    const purchases = await listPurchasesForRaffle(tenantSlug, slug);
+    const purchases = await repo.listPurchasesForRaffle(tenantSlug, slug);
 
     const soldTickets = purchases.reduce((total, purchase) => {
       return purchase.paymentStatus === "paid"
@@ -51,9 +63,10 @@ export default async function handler(
   } catch (error) {
     console.error("GET /api/admin/raffles/[slug]/purchases failed", error);
 
-    const statusCode: number = 500;
-    return res.status(statusCode).json({
-      error: error instanceof Error ? error.message : "Internal server error.",
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown runtime error",
+      tenantSlug,
+      slug,
     });
   }
 }
