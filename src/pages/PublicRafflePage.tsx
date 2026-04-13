@@ -8,6 +8,12 @@ type Offer = {
   price: number;
 };
 
+type Colour = {
+  id: string;
+  name: string;
+  hexValue: string | null;
+};
+
 type PublicRaffle = {
   id: string;
   slug: string;
@@ -22,6 +28,7 @@ type PublicRaffle = {
 type PublicRaffleResponse = {
   raffle: PublicRaffle;
   offers: Offer[];
+  colours: Colour[];
   error?: string;
 };
 
@@ -38,9 +45,13 @@ export default function PublicRafflePage() {
 
   const [raffle, setRaffle] = useState<PublicRaffle | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [colours, setColours] = useState<Colour[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string>("");
+  const [colourQuantities, setColourQuantities] = useState<Record<string, number>>(
+    {}
+  );
 
   useEffect(() => {
     if (!slug) {
@@ -78,6 +89,7 @@ export default function PublicRafflePage() {
 
         setRaffle(json.raffle);
         setOffers(json.offers || []);
+        setColours(json.colours || []);
       } catch (err) {
         if (!isMounted) return;
         setError(
@@ -108,10 +120,13 @@ export default function PublicRafflePage() {
       isSingleTicket: true,
     };
 
-    return [singleTicketOffer, ...offers.map((offer) => ({
-      ...offer,
-      isSingleTicket: false,
-    }))];
+    return [
+      singleTicketOffer,
+      ...offers.map((offer) => ({
+        ...offer,
+        isSingleTicket: false,
+      })),
+    ];
   }, [raffle, offers]);
 
   useEffect(() => {
@@ -120,7 +135,29 @@ export default function PublicRafflePage() {
     }
   }, [displayOffers, selectedOfferId]);
 
-  const selectedOffer = displayOffers.find((offer) => offer.id === selectedOfferId) ?? null;
+  const selectedOffer =
+    displayOffers.find((offer) => offer.id === selectedOfferId) ?? null;
+
+  const selectedColourTotal = Object.values(colourQuantities).reduce(
+    (sum, value) => sum + value,
+    0
+  );
+
+  const requiredQuantity = selectedOffer?.ticketQuantity ?? 0;
+  const colourSelectionValid = requiredQuantity > 0
+    ? selectedColourTotal === requiredQuantity
+    : false;
+
+  function updateColourQuantity(colourId: string, nextValue: number) {
+    setColourQuantities((prev) => ({
+      ...prev,
+      [colourId]: Math.max(0, nextValue),
+    }));
+  }
+
+  useEffect(() => {
+    setColourQuantities({});
+  }, [selectedOfferId]);
 
   if (loading) {
     return <div style={styles.page}>Loading raffle...</div>;
@@ -160,7 +197,7 @@ export default function PublicRafflePage() {
         </div>
 
         <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>Choose tickets</h2>
+          <h2 style={styles.sectionTitle}>Choose an offer</h2>
 
           <div style={styles.offerList}>
             {displayOffers.map((offer) => (
@@ -188,9 +225,66 @@ export default function PublicRafflePage() {
           </div>
         </div>
 
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>Choose colours</h2>
+
+          {colours.length === 0 ? (
+            <p>No colours available yet.</p>
+          ) : (
+            <div style={styles.colourList}>
+              {colours.map((colour) => {
+                const currentValue = colourQuantities[colour.id] ?? 0;
+
+                return (
+                  <div key={colour.id} style={styles.colourCard}>
+                    <div style={styles.colourInfo}>
+                      <span
+                        style={{
+                          ...styles.colourSwatch,
+                          background: colour.hexValue || "#e5e7eb",
+                        }}
+                      />
+                      <span>{colour.name}</span>
+                    </div>
+
+                    <div style={styles.quantityControls}>
+                      <button
+                        type="button"
+                        onClick={() => updateColourQuantity(colour.id, currentValue - 1)}
+                      >
+                        -
+                      </button>
+                      <span style={styles.quantityValue}>{currentValue}</span>
+                      <button
+                        type="button"
+                        onClick={() => updateColourQuantity(colour.id, currentValue + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={styles.selectedBox}>
+            <div style={styles.selectedLabel}>Selection summary</div>
+            <div style={styles.selectedValue}>
+              Selected {selectedColourTotal} of {requiredQuantity} required ticket
+              {requiredQuantity === 1 ? "" : "s"}
+            </div>
+            {!colourSelectionValid && (
+              <div style={styles.validationText}>
+                Your colour quantities must add up to the selected offer quantity.
+              </div>
+            )}
+          </div>
+        </div>
+
         {selectedOffer && (
           <div style={styles.selectedBox}>
-            <div style={styles.selectedLabel}>Selected</div>
+            <div style={styles.selectedLabel}>Selected offer</div>
             <div style={styles.selectedValue}>
               {selectedOffer.label} — {selectedOffer.ticketQuantity} ticket
               {selectedOffer.ticketQuantity === 1 ? "" : "s"} for £
@@ -202,7 +296,16 @@ export default function PublicRafflePage() {
         {raffle.isSoldOut ? (
           <p style={styles.soldOut}>Sold out</p>
         ) : (
-          <button style={styles.button}>Continue</button>
+          <button
+            style={{
+              ...styles.button,
+              opacity: colourSelectionValid ? 1 : 0.5,
+              cursor: colourSelectionValid ? "pointer" : "not-allowed",
+            }}
+            disabled={!colourSelectionValid}
+          >
+            Continue
+          </button>
         )}
       </div>
     </div>
@@ -263,6 +366,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   section: {
     marginTop: 8,
+    marginBottom: 24,
   },
   sectionTitle: {
     margin: "0 0 12px",
@@ -288,6 +392,40 @@ const styles: Record<string, React.CSSProperties> = {
   offerMeta: {
     color: "#475569",
   },
+  colourList: {
+    display: "grid",
+    gap: 12,
+  },
+  colourCard: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 14,
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+  },
+  colourInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  colourSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    display: "inline-block",
+  },
+  quantityControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  quantityValue: {
+    minWidth: 20,
+    textAlign: "center",
+    fontWeight: 700,
+  },
   selectedBox: {
     marginTop: 20,
     background: "#f8fafc",
@@ -302,6 +440,10 @@ const styles: Record<string, React.CSSProperties> = {
   selectedValue: {
     fontWeight: 700,
   },
+  validationText: {
+    marginTop: 8,
+    color: "#b45309",
+  },
   soldOut: {
     marginTop: 20,
     color: "#b91c1c",
@@ -315,7 +457,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#111827",
     color: "#fff",
     fontWeight: 700,
-    cursor: "pointer",
   },
   error: {
     color: "#b91c1c",
