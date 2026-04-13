@@ -1,6 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+type PublicRaffleResponse = {
+  raffle: {
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+    ticketPrice: number;
+    totalTickets: number;
+    soldTickets: number;
+    remainingTickets: number;
+    isSoldOut: boolean;
+    status: string;
+  };
+  error?: string;
+};
+
 export default function AdminEditRafflePage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -16,16 +32,23 @@ export default function AdminEditRafflePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug) {
+      setError("Missing raffle slug.");
+      setLoading(false);
+      return;
+    }
+
+    const safeSlug: string = slug;
 
     async function load() {
       try {
         const res = await fetch(
           `/api/public/raffles?slug=${encodeURIComponent(
-            slug
+            safeSlug
           )}&tenantSlug=demo-a`
         );
-        const json = await res.json();
+
+        const json = (await res.json()) as PublicRaffleResponse;
 
         if (!res.ok) {
           throw new Error(json.error || "Failed to load raffle");
@@ -48,6 +71,11 @@ export default function AdminEditRafflePage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!slug) {
+      setError("Missing raffle slug.");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -76,7 +104,7 @@ export default function AdminEditRafflePage() {
         throw new Error(json.error || "Failed to save");
       }
 
-      navigate(`/admin/raffles/${slug}`);
+      navigate(`/admin/raffles/${encodeURIComponent(slug)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {
