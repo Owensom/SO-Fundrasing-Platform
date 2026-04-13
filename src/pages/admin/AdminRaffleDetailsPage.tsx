@@ -9,6 +9,14 @@ type Offer = {
   sortOrder: number;
 };
 
+type Colour = {
+  id: string;
+  name: string;
+  hexValue: string | null;
+  isActive: boolean;
+  sortOrder: number;
+};
+
 type AdminRafflePurchasesResponse = {
   raffle: {
     id: string;
@@ -25,6 +33,7 @@ type AdminRafflePurchasesResponse = {
     updatedAt?: string;
   };
   offers: Offer[];
+  colours: Colour[];
   purchases: Array<{
     id: string;
     customerName: string;
@@ -52,6 +61,9 @@ export default function AdminRaffleDetailsPage() {
   const [offerLabel, setOfferLabel] = useState("");
   const [offerTicketQuantity, setOfferTicketQuantity] = useState(1);
   const [offerPrice, setOfferPrice] = useState(5);
+
+  const [colourName, setColourName] = useState("");
+  const [colourHexValue, setColourHexValue] = useState("");
 
   const slug = window.location.pathname.split("/").pop();
 
@@ -109,7 +121,14 @@ export default function AdminRaffleDetailsPage() {
 
     if (!slug) return;
 
+    if (!offerLabel.trim()) {
+      setError("Please enter an offer label, for example '3 Tickets'.");
+      return;
+    }
+
     try {
+      setError(null);
+
       const response = await fetch("/api/admin/raffles", {
         method: "POST",
         headers: {
@@ -143,6 +162,8 @@ export default function AdminRaffleDetailsPage() {
 
   async function handleRemoveOffer(offerId: string) {
     try {
+      setError(null);
+
       const response = await fetch("/api/admin/raffles", {
         method: "POST",
         headers: {
@@ -159,6 +180,76 @@ export default function AdminRaffleDetailsPage() {
 
       if (!response.ok) {
         throw new Error(json.error || "Failed to remove offer");
+      }
+
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    }
+  }
+
+  async function handleAddColour(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!slug) return;
+
+    if (!colourName.trim()) {
+      setError("Please enter a colour name.");
+      return;
+    }
+
+    try {
+      setError(null);
+
+      const response = await fetch("/api/admin/raffles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-slug": "demo-a",
+        },
+        body: JSON.stringify({
+          action: "add-colour",
+          slug,
+          name: colourName,
+          hexValue: colourHexValue,
+        }),
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to add colour");
+      }
+
+      setColourName("");
+      setColourHexValue("");
+
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    }
+  }
+
+  async function handleRemoveColour(colourId: string) {
+    try {
+      setError(null);
+
+      const response = await fetch("/api/admin/raffles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-slug": "demo-a",
+        },
+        body: JSON.stringify({
+          action: "remove-colour",
+          colourId,
+        }),
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to remove colour");
       }
 
       await load();
@@ -217,17 +308,73 @@ export default function AdminRaffleDetailsPage() {
       </div>
 
       <div style={styles.section}>
+        <h2>Colours</h2>
+
+        {data.colours.length === 0 ? (
+          <p>No colours yet.</p>
+        ) : (
+          <div style={styles.itemList}>
+            {data.colours.map((colour) => (
+              <div key={colour.id} style={styles.itemCard}>
+                <div style={styles.itemLeft}>
+                  <span
+                    style={{
+                      ...styles.colourSwatch,
+                      background: colour.hexValue || "#e5e7eb",
+                    }}
+                  />
+                  <div>
+                    <strong>{colour.name}</strong>
+                    <div style={styles.smallText}>
+                      {colour.hexValue || "No hex value"}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => void handleRemoveColour(colour.id)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleAddColour} style={styles.form}>
+          <h3>Add colour</h3>
+
+          <div>
+            <label>Name</label>
+            <input
+              value={colourName}
+              onChange={(e) => setColourName(e.target.value)}
+              placeholder="Red"
+            />
+          </div>
+
+          <div>
+            <label>Hex value (optional)</label>
+            <input
+              value={colourHexValue}
+              onChange={(e) => setColourHexValue(e.target.value)}
+              placeholder="#DC2626"
+            />
+          </div>
+
+          <button type="submit">Add colour</button>
+        </form>
+      </div>
+
+      <div style={styles.section}>
         <h2>Offers</h2>
 
         {data.offers.length === 0 ? (
           <p>No offers yet.</p>
         ) : (
-          <div style={styles.offerList}>
+          <div style={styles.itemList}>
             {data.offers.map((offer) => (
-              <div key={offer.id} style={styles.offerCard}>
+              <div key={offer.id} style={styles.itemCard}>
                 <div>
                   <strong>{offer.label}</strong>
-                  <div>
+                  <div style={styles.smallText}>
                     {offer.ticketQuantity} ticket(s) — £{offer.price.toFixed(2)}
                   </div>
                 </div>
@@ -247,6 +394,7 @@ export default function AdminRaffleDetailsPage() {
             <input
               value={offerLabel}
               onChange={(e) => setOfferLabel(e.target.value)}
+              placeholder="3 Tickets"
             />
           </div>
 
@@ -342,19 +490,37 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#fff",
     padding: 20,
     borderRadius: 12,
+    marginBottom: 24,
   },
-  offerList: {
+  itemList: {
     display: "grid",
     gap: 12,
     marginBottom: 24,
   },
-  offerCard: {
+  itemCard: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
     padding: 12,
     border: "1px solid #e5e7eb",
     borderRadius: 8,
+  },
+  itemLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  colourSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    display: "inline-block",
+  },
+  smallText: {
+    color: "#64748b",
+    fontSize: 13,
   },
   form: {
     display: "grid",
