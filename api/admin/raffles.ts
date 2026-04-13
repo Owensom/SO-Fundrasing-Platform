@@ -1,361 +1,539 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { NextApiRequest, NextApiResponse } from "next";
 
-function resolveTenantSlug(req: VercelRequest): string {
-  const headerTenant = req.headers["x-tenant-slug"];
-  const queryTenant = req.query.tenantSlug;
+type ColourOption = {
+  name: string;
+  hex: string;
+};
 
-  if (typeof headerTenant === "string" && headerTenant.trim()) {
-    return headerTenant.trim();
-  }
+type OfferOption = {
+  label: string;
+  price: number;
+  entries: number;
+};
 
-  if (typeof queryTenant === "string" && queryTenant.trim()) {
-    return queryTenant.trim();
-  }
+type ErrorResponse = {
+  ok: false;
+  error: string;
+};
 
-  return "demo-a";
+type SuccessResponse = {
+  ok: true;
+  [key: string]: any;
+};
+
+const HEX_RE = /^#([0-9a-fA-F]{6})$/;
+
+function sendMethodNotAllowed(
+  res: NextApiResponse<ErrorResponse>,
+  allowed: string[]
+) {
+  res.setHeader("Allow", allowed.join(", "));
+  return res.status(405).json({
+    ok: false,
+    error: "Method not allowed",
+  });
 }
 
-function slugify(input: string): string {
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normaliseColours(input: unknown): ColourOption[] {
+  if (!Array.isArray(input)) return [];
+
   return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .map((item) => {
+      const raw = item as Record<string, unknown>;
+
+      const name = asTrimmedString(raw?.name);
+      const hex = asTrimmedString(raw?.hex);
+
+      if (!name || !HEX_RE.test(hex)) {
+        return null;
+      }
+
+      return {
+        name,
+        hex: hex.toUpperCase(),
+      };
+    })
+    .filter(Boolean) as ColourOption[];
+}
+
+function normaliseOffers(input: unknown): OfferOption[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => {
+      const raw = item as Record<string, unknown>;
+
+      const label = asTrimmedString(raw?.label);
+      const price = asNumber(raw?.price);
+      const entries = asNumber(raw?.entries);
+
+      if (!label) return null;
+      if (price <= 0) return null;
+      if (!Number.isInteger(entries) || entries <= 0) return null;
+
+      return {
+        label,
+        price,
+        entries,
+      };
+    })
+    .filter(Boolean) as OfferOption[];
+}
+
+function parseId(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+async function getTenantBySlug(db: any, tenantSlug: string) {
+  const result = await db.query(
+    `
+    select id, slug, name
+    from tenants
+    where slug = $1
+    limit 1
+    `,
+    [tenantSlug]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Picks the first campaign for the tenant if campaignId is not supplied.
+ * This keeps the admin flow moving while auth/real tenant admin is still incomplete.
+ */
+async function resolveCampaignIdForTenant(
+  db: any,
+  tenantId: number,
+  campaignId?: unknown
+): Promise<number | null> {
+  const explicitCampaignId = parseId(campaignId);
+
+  if (explicitCampaignId) {
+    const explicit = await db.query(
+      `
+      select id
+      from campaigns
+      where id = $1 and tenant_id = $2
+      limit 1
+      `,
+      [explicitCampaignId, tenantId]
+    );
+
+    return explicit.rows[0]?.id ?? null;
+  }
+
+  const fallback = await db.query(
+    `
+    select id
+    from campaigns
+    where tenant_id = $1
+    order by id asc
+    limit 1
+    `,
+    [tenantId]
+  );
+
+  return fallback.rows[0]?.id ?? null;
+}
+
+async function listRaffles(
+  req: NextApiRequest,
+  res: NextApiResponse<SuccessResponse | ErrorResponse>
+) {
+  try {
+    const tenantSlug = asTrimmedString(req.query.tenantSlug || "demo-a") || "demo-a";
+
+    const { getDb } = await import("../_lib/db.js");
+    const db = getDb();
+
+    const tenant = await getTenantBySlug(db, tenantSlug);
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        error: `Tenant not found for slug "${tenantSlug}"`,
+      });
+    }
+
+    const result = await db.query(
+      `
+      select
+        rc.id,
+        rc.tenant_id,
+        rc.campaign_id,
+        rc.title,
+        rc.description,
+        rc.status,
+        rc.sort_order,
+        rc.colours,
+        rc.offers,
+        rc.created_at,
+        rc.updated_at,
+        c.title as campaign_title
+      from raffle_configs rc
+      left join campaigns c on c.id = rc.campaign_id
+      where rc.tenant_id = $1
+      order by
+        coalesce(rc.sort_order, 999999) asc,
+        rc.created_at desc,
+        rc.id desc
+      `,
+      [tenant.id]
+    );
+
+    return res.status(200).json({
+      ok: true,
+      raffles: result.rows.map((row: any) => ({
+        id: row.id,
+        tenantId: row.tenant_id,
+        campaignId: row.campaign_id,
+        campaignTitle: row.campaign_title,
+        title: row.title,
+        description: row.description,
+        status: row.status,
+        sortOrder: row.sort_order,
+        colours: Array.isArray(row.colours) ? row.colours : [],
+        offers: Array.isArray(row.offers) ? row.offers : [],
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    });
+  } catch (error) {
+    console.error("GET /api/admin/raffles error", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to load raffles",
+    });
+  }
+}
+
+async function createRaffle(
+  req: NextApiRequest,
+  res: NextApiResponse<SuccessResponse | ErrorResponse>
+) {
+  try {
+    const tenantSlug = asTrimmedString(req.body?.tenantSlug || "demo-a") || "demo-a";
+    const title = asTrimmedString(req.body?.title);
+    const description = asTrimmedString(req.body?.description);
+    const status = asTrimmedString(req.body?.status) || "active";
+    const sortOrder = asNumber(req.body?.sortOrder, 0);
+    const colours = normaliseColours(req.body?.colours);
+    const offers = normaliseOffers(req.body?.offers);
+
+    if (!title) {
+      return res.status(400).json({
+        ok: false,
+        error: "Title is required",
+      });
+    }
+
+    const { getDb } = await import("../_lib/db.js");
+    const db = getDb();
+
+    const tenant = await getTenantBySlug(db, tenantSlug);
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        error: `Tenant not found for slug "${tenantSlug}"`,
+      });
+    }
+
+    const campaignId = await resolveCampaignIdForTenant(
+      db,
+      tenant.id,
+      req.body?.campaignId
+    );
+
+    if (!campaignId) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "No campaign found for this tenant. Create a campaign first or pass a valid campaignId.",
+      });
+    }
+
+    const insertResult = await db.query(
+      `
+      insert into raffle_configs (
+        tenant_id,
+        campaign_id,
+        title,
+        description,
+        status,
+        sort_order,
+        colours,
+        offers,
+        created_at,
+        updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, now(), now())
+      returning
+        id,
+        tenant_id,
+        campaign_id,
+        title,
+        description,
+        status,
+        sort_order,
+        colours,
+        offers,
+        created_at,
+        updated_at
+      `,
+      [
+        tenant.id,
+        campaignId,
+        title,
+        description || null,
+        status,
+        sortOrder,
+        JSON.stringify(colours),
+        JSON.stringify(offers),
+      ]
+    );
+
+    const raffle = insertResult.rows[0];
+
+    return res.status(201).json({
+      ok: true,
+      raffle: {
+        id: raffle.id,
+        tenantId: raffle.tenant_id,
+        campaignId: raffle.campaign_id,
+        title: raffle.title,
+        description: raffle.description,
+        status: raffle.status,
+        sortOrder: raffle.sort_order,
+        colours: Array.isArray(raffle.colours) ? raffle.colours : [],
+        offers: Array.isArray(raffle.offers) ? raffle.offers : [],
+        createdAt: raffle.created_at,
+        updatedAt: raffle.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error("POST /api/admin/raffles error", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to create raffle",
+    });
+  }
+}
+
+async function updateRaffle(
+  req: NextApiRequest,
+  res: NextApiResponse<SuccessResponse | ErrorResponse>
+) {
+  try {
+    const id = parseId(req.body?.id);
+    const tenantSlug = asTrimmedString(req.body?.tenantSlug || "demo-a") || "demo-a";
+
+    if (!id) {
+      return res.status(400).json({
+        ok: false,
+        error: "Valid raffle id is required",
+      });
+    }
+
+    const title = asTrimmedString(req.body?.title);
+    const description = asTrimmedString(req.body?.description);
+    const status = asTrimmedString(req.body?.status) || "active";
+    const sortOrder = asNumber(req.body?.sortOrder, 0);
+    const colours = normaliseColours(req.body?.colours);
+    const offers = normaliseOffers(req.body?.offers);
+
+    if (!title) {
+      return res.status(400).json({
+        ok: false,
+        error: "Title is required",
+      });
+    }
+
+    const { getDb } = await import("../_lib/db.js");
+    const db = getDb();
+
+    const tenant = await getTenantBySlug(db, tenantSlug);
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        error: `Tenant not found for slug "${tenantSlug}"`,
+      });
+    }
+
+    const existingResult = await db.query(
+      `
+      select id, tenant_id, campaign_id
+      from raffle_configs
+      where id = $1 and tenant_id = $2
+      limit 1
+      `,
+      [id, tenant.id]
+    );
+
+    const existing = existingResult.rows[0];
+    if (!existing) {
+      return res.status(404).json({
+        ok: false,
+        error: "Raffle not found",
+      });
+    }
+
+    const resolvedCampaignId =
+      (await resolveCampaignIdForTenant(db, tenant.id, req.body?.campaignId)) ||
+      existing.campaign_id;
+
+    const updateResult = await db.query(
+      `
+      update raffle_configs
+      set
+        campaign_id = $3,
+        title = $4,
+        description = $5,
+        status = $6,
+        sort_order = $7,
+        colours = $8::jsonb,
+        offers = $9::jsonb,
+        updated_at = now()
+      where id = $1 and tenant_id = $2
+      returning
+        id,
+        tenant_id,
+        campaign_id,
+        title,
+        description,
+        status,
+        sort_order,
+        colours,
+        offers,
+        created_at,
+        updated_at
+      `,
+      [
+        id,
+        tenant.id,
+        resolvedCampaignId,
+        title,
+        description || null,
+        status,
+        sortOrder,
+        JSON.stringify(colours),
+        JSON.stringify(offers),
+      ]
+    );
+
+    const raffle = updateResult.rows[0];
+
+    return res.status(200).json({
+      ok: true,
+      raffle: {
+        id: raffle.id,
+        tenantId: raffle.tenant_id,
+        campaignId: raffle.campaign_id,
+        title: raffle.title,
+        description: raffle.description,
+        status: raffle.status,
+        sortOrder: raffle.sort_order,
+        colours: Array.isArray(raffle.colours) ? raffle.colours : [],
+        offers: Array.isArray(raffle.offers) ? raffle.offers : [],
+        createdAt: raffle.created_at,
+        updatedAt: raffle.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error("PUT /api/admin/raffles error", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to update raffle",
+    });
+  }
+}
+
+async function deleteRaffle(
+  req: NextApiRequest,
+  res: NextApiResponse<SuccessResponse | ErrorResponse>
+) {
+  try {
+    const id = parseId(req.body?.id ?? req.query?.id);
+    const tenantSlug =
+      asTrimmedString(req.body?.tenantSlug ?? req.query?.tenantSlug ?? "demo-a") ||
+      "demo-a";
+
+    if (!id) {
+      return res.status(400).json({
+        ok: false,
+        error: "Valid raffle id is required",
+      });
+    }
+
+    const { getDb } = await import("../_lib/db.js");
+    const db = getDb();
+
+    const tenant = await getTenantBySlug(db, tenantSlug);
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        error: `Tenant not found for slug "${tenantSlug}"`,
+      });
+    }
+
+    const deleteResult = await db.query(
+      `
+      delete from raffle_configs
+      where id = $1 and tenant_id = $2
+      returning id
+      `,
+      [id, tenant.id]
+    );
+
+    if (!deleteResult.rows[0]) {
+      return res.status(404).json({
+        ok: false,
+        error: "Raffle not found",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      deletedId: id,
+    });
+  } catch (error) {
+    console.error("DELETE /api/admin/raffles error", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to delete raffle",
+    });
+  }
 }
 
 export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
+  req: NextApiRequest,
+  res: NextApiResponse<SuccessResponse | ErrorResponse>
 ) {
-  const tenantSlug = resolveTenantSlug(req);
-
-  try {
-    const { query } = await import("../_lib/db.js");
-
-    if (req.method === "GET") {
-      const result = await query(
-        `
-        select
-          c.id,
-          c.slug,
-          c.title,
-          c.description,
-          c.status,
-          c.created_at,
-          c.updated_at,
-          rc.single_ticket_price_cents,
-          rc.total_tickets,
-          rc.sold_tickets
-        from campaigns c
-        join tenants t on t.id = c.tenant_id
-        left join raffle_configs rc on rc.campaign_id = c.id
-        where t.slug = $1
-          and c.type = 'raffle'
-        order by c.created_at desc
-        `,
-        [tenantSlug]
-      );
-
-      const raffles = result.rows.map((row: any) => {
-        const remainingTickets = Math.max(
-          (row.total_tickets ?? 0) - (row.sold_tickets ?? 0),
-          0
-        );
-
-        return {
-          id: row.id,
-          tenantSlug,
-          slug: row.slug,
-          title: row.title,
-          description: row.description ?? "",
-          imageUrl: null,
-          ticketPrice: (row.single_ticket_price_cents ?? 0) / 100,
-          totalTickets: row.total_tickets ?? 0,
-          soldTickets: row.sold_tickets ?? 0,
-          remainingTickets,
-          isSoldOut: remainingTickets === 0,
-          status: row.status,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-        };
-      });
-
-      return res.status(200).json({ raffles });
-    }
-
-    if (req.method === "POST") {
-      const body =
-        typeof req.body === "object" && req.body !== null ? req.body : {};
-
-      const action = String((body as any).action || "").trim();
-
-      const tenantResult = await query(
-        `select id from tenants where slug = $1 limit 1`,
-        [tenantSlug]
-      );
-
-      const tenant = tenantResult.rows[0];
-
-      if (!tenant) {
-        return res.status(400).json({ error: "Tenant not found" });
-      }
-
-      if (action === "create") {
-        const title = String((body as any).title || "").trim();
-        const description = String((body as any).description || "").trim();
-        const ticketPrice = Number((body as any).ticketPrice);
-        const totalTickets = Number((body as any).totalTickets);
-
-        if (!title) {
-          return res.status(400).json({ error: "Title is required" });
-        }
-
-        if (!Number.isFinite(ticketPrice) || ticketPrice < 0) {
-          return res.status(400).json({ error: "Invalid ticket price" });
-        }
-
-        if (!Number.isFinite(totalTickets) || totalTickets < 0) {
-          return res.status(400).json({ error: "Invalid total tickets" });
-        }
-
-        const slug = slugify(title);
-        const campaignId = `campaign_${Date.now()}`;
-
-        await query(
-          `
-          insert into campaigns (
-            id, tenant_id, type, slug, title, description, status
-          )
-          values ($1, $2, 'raffle', $3, $4, $5, 'draft')
-          `,
-          [campaignId, tenant.id, slug, title, description]
-        );
-
-        await query(
-          `
-          insert into raffle_configs (
-            campaign_id,
-            single_ticket_price_cents,
-            total_tickets,
-            sold_tickets
-          )
-          values ($1, $2, $3, 0)
-          `,
-          [campaignId, Math.round(ticketPrice * 100), totalTickets]
-        );
-
-        return res.status(200).json({
-          ok: true,
-          slug,
-        });
-      }
-
-      if (action === "update") {
-        const slug = String((body as any).slug || "").trim();
-        const title = String((body as any).title || "").trim();
-        const description = String((body as any).description || "").trim();
-        const ticketPrice = Number((body as any).ticketPrice);
-        const totalTickets = Number((body as any).totalTickets);
-        const status = String((body as any).status || "draft").trim();
-
-        if (!slug) {
-          return res.status(400).json({ error: "Slug is required" });
-        }
-
-        const campaignResult = await query(
-          `
-          select c.id
-          from campaigns c
-          where c.slug = $1
-            and c.tenant_id = $2
-            and c.type = 'raffle'
-          limit 1
-          `,
-          [slug, tenant.id]
-        );
-
-        const campaign = campaignResult.rows[0];
-
-        if (!campaign) {
-          return res.status(404).json({ error: "Raffle not found" });
-        }
-
-        await query(
-          `
-          update campaigns
-          set
-            title = $2,
-            description = $3,
-            status = $4,
-            updated_at = now()
-          where id = $1
-          `,
-          [campaign.id, title, description, status]
-        );
-
-        await query(
-          `
-          update raffle_configs
-          set
-            single_ticket_price_cents = $2,
-            total_tickets = $3,
-            updated_at = now()
-          where campaign_id = $1
-          `,
-          [campaign.id, Math.round(ticketPrice * 100), totalTickets]
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      if (action === "add-offer") {
-        const slug = String((body as any).slug || "").trim();
-        const label = String((body as any).label || "").trim();
-        const ticketQuantity = Number((body as any).ticketQuantity);
-        const price = Number((body as any).price);
-
-        if (!slug) {
-          return res.status(400).json({ error: "Slug is required" });
-        }
-
-        if (!label) {
-          return res.status(400).json({ error: "Label is required" });
-        }
-
-        if (!Number.isInteger(ticketQuantity) || ticketQuantity <= 0) {
-          return res.status(400).json({ error: "Invalid ticket quantity" });
-        }
-
-        if (!Number.isFinite(price) || price < 0) {
-          return res.status(400).json({ error: "Invalid price" });
-        }
-
-        const campaignResult = await query(
-          `
-          select c.id
-          from campaigns c
-          where c.slug = $1
-            and c.tenant_id = $2
-            and c.type = 'raffle'
-          limit 1
-          `,
-          [slug, tenant.id]
-        );
-
-        const campaign = campaignResult.rows[0];
-
-        if (!campaign) {
-          return res.status(404).json({ error: "Raffle not found" });
-        }
-
-        await query(
-          `
-          insert into raffle_offers (
-            id,
-            campaign_id,
-            label,
-            ticket_quantity,
-            price_cents,
-            sort_order,
-            is_active
-          )
-          values ($1, $2, $3, $4, $5, 0, true)
-          `,
-          [
-            `offer_${Date.now()}`,
-            campaign.id,
-            label,
-            ticketQuantity,
-            Math.round(price * 100),
-          ]
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      if (action === "remove-offer") {
-        const offerId = String((body as any).offerId || "").trim();
-
-        if (!offerId) {
-          return res.status(400).json({ error: "Offer ID is required" });
-        }
-
-        await query(`delete from raffle_offers where id = $1`, [offerId]);
-
-        return res.status(200).json({ ok: true });
-      }
-
-      if (action === "add-colour") {
-        const slug = String((body as any).slug || "").trim();
-        const name = String((body as any).name || "").trim();
-        const hexValueRaw = String((body as any).hexValue || "").trim();
-
-        if (!slug) {
-          return res.status(400).json({ error: "Slug is required" });
-        }
-
-        if (!name) {
-          return res.status(400).json({ error: "Colour name is required" });
-        }
-
-        const campaignResult = await query(
-          `
-          select c.id
-          from campaigns c
-          where c.slug = $1
-            and c.tenant_id = $2
-            and c.type = 'raffle'
-          limit 1
-          `,
-          [slug, tenant.id]
-        );
-
-        const campaign = campaignResult.rows[0];
-
-        if (!campaign) {
-          return res.status(404).json({ error: "Raffle not found" });
-        }
-
-        const hexValue = hexValueRaw || null;
-
-        await query(
-          `
-          insert into raffle_colours (
-            id,
-            campaign_id,
-            name,
-            hex_value,
-            sort_order,
-            is_active
-          )
-          values ($1, $2, $3, $4, 0, true)
-          `,
-          [`colour_${Date.now()}`, campaign.id, name, hexValue]
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      if (action === "remove-colour") {
-        const colourId = String((body as any).colourId || "").trim();
-
-        if (!colourId) {
-          return res.status(400).json({ error: "Colour ID is required" });
-        }
-
-        await query(`delete from raffle_colours where id = $1`, [colourId]);
-
-        return res.status(200).json({ ok: true });
-      }
-
-      return res.status(400).json({ error: "Invalid action" });
-    }
-
-    return res.status(405).json({ error: "Method not allowed" });
-  } catch (error) {
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown error",
-      tenantSlug,
-    });
+  if (req.method === "GET") {
+    return listRaffles(req, res);
   }
+
+  if (req.method === "POST") {
+    return createRaffle(req, res);
+  }
+
+  if (req.method === "PUT") {
+    return updateRaffle(req, res);
+  }
+
+  if (req.method === "DELETE") {
+    return deleteRaffle(req, res);
+  }
+
+  return sendMethodNotAllowed(res, ["GET", "POST", "PUT", "DELETE"]);
 }
