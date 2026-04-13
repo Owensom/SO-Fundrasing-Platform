@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import PublicRafflePage from "./pages/PublicRafflePage";
 import AdminRaffleDetailsPage from "./pages/admin/AdminRaffleDetailsPage";
 import AdminPage from "./pages/AdminPage";
+import AdminCreateRafflePage from "./pages/admin/AdminCreateRafflePage";
 
 function HomePage() {
   return (
@@ -29,6 +30,13 @@ function HomePage() {
             >
               Open raffle admin details
             </Link>
+
+            <Link
+              to="/admin/raffles/new"
+              style={styles.secondaryLink}
+            >
+              Create new raffle
+            </Link>
           </div>
         </section>
       </div>
@@ -42,6 +50,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/admin" element={<AdminPage />} />
+
+        {/* ✅ CREATE RAFFLE ROUTE */}
+        <Route
+          path="/admin/raffles/new"
+          element={<AdminCreateRafflePage />}
+        />
+
+        {/* Existing routes */}
         <Route path="/raffles/:slug" element={<PublicRafflePage />} />
         <Route
           path="/admin/raffles/:slug"
