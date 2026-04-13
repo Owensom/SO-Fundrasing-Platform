@@ -39,8 +39,7 @@ export default function ColourOptionsEditor({ value, onChange }: Props) {
   }
 
   function removeColour(index: number) {
-    const next = colours.filter((_, i) => i !== index);
-    onChange(next);
+    onChange(colours.filter((_, i) => i !== index));
   }
 
   function addColour() {
@@ -48,14 +47,13 @@ export default function ColourOptionsEditor({ value, onChange }: Props) {
   }
 
   function addPresetColour(preset: ColourOption) {
-    const alreadyExists = colours.some(
+    const exists = colours.some(
       (c) =>
         c.name.trim().toLowerCase() === preset.name.trim().toLowerCase() &&
         c.hex.toLowerCase() === preset.hex.toLowerCase()
     );
 
-    if (alreadyExists) return;
-
+    if (exists) return;
     onChange([...colours, preset]);
   }
 
@@ -65,7 +63,7 @@ export default function ColourOptionsEditor({ value, onChange }: Props) {
         <div>
           <h3 style={styles.heading}>Colours</h3>
           <p style={styles.subtext}>
-            Add colour names and choose them visually. No hex typing required.
+            Add colour names and pick shades visually.
           </p>
         </div>
 
@@ -83,7 +81,6 @@ export default function ColourOptionsEditor({ value, onChange }: Props) {
               type="button"
               onClick={() => addPresetColour(preset)}
               style={styles.presetButton}
-              title={`Add ${preset.name}`}
             >
               <span
                 style={{
@@ -103,7 +100,7 @@ export default function ColourOptionsEditor({ value, onChange }: Props) {
 
       {colours.length === 0 ? (
         <div style={styles.emptyState}>
-          No colours yet. Click <strong>Add colour</strong> or choose a preset.
+          No colours yet. Add one or use a preset.
         </div>
       ) : (
         <div style={styles.list}>
@@ -253,7 +250,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   row: {
     display: "grid",
-    gridTemplateColumns: "minmax(180px, 1.5fr) 120px 100px minmax(120px, 1fr) auto",
+    gridTemplateColumns:
+      "minmax(180px, 1.5fr) 120px 100px minmax(120px, 1fr) auto",
     gap: 12,
     alignItems: "end",
     padding: 12,
