@@ -3,6 +3,7 @@ import PublicRafflePage from "./pages/PublicRafflePage";
 import AdminRaffleDetailsPage from "./pages/admin/AdminRaffleDetailsPage";
 import AdminPage from "./pages/AdminPage";
 import AdminCreateRafflePage from "./pages/admin/AdminCreateRafflePage";
+import AdminEditRafflePage from "./pages/admin/AdminEditRafflePage";
 
 function HomePage() {
   return (
@@ -49,20 +50,24 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/admin" element={<AdminPage />} />
 
-        {/* ✅ CREATE RAFFLE ROUTE */}
+        {/* ADMIN */}
+        <Route path="/admin" element={<AdminPage />} />
         <Route
           path="/admin/raffles/new"
           element={<AdminCreateRafflePage />}
         />
-
-        {/* Existing routes */}
-        <Route path="/raffles/:slug" element={<PublicRafflePage />} />
         <Route
           path="/admin/raffles/:slug"
           element={<AdminRaffleDetailsPage />}
         />
+        <Route
+          path="/admin/raffles/:slug/edit"
+          element={<AdminEditRafflePage />}
+        />
+
+        {/* PUBLIC */}
+        <Route path="/raffles/:slug" element={<PublicRafflePage />} />
       </Routes>
     </BrowserRouter>
   );
