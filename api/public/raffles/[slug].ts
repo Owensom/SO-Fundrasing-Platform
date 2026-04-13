@@ -27,9 +27,9 @@ export default async function handler(
   }
 
   try {
-    const db = await import("../../_lib/db.js");
+    const { query } = await import("../../_lib/db.js");
 
-    const result = await db.query(
+    const result = await query(
       `
       select
         c.id,
@@ -57,8 +57,9 @@ export default async function handler(
       return res.status(404).json({ error: "Raffle not found" });
     }
 
-    const remaining = Math.max(
-      (row.total_tickets || 0) - (row.sold_tickets || 0),
+    const ticketPrice = (row.single_ticket_price_cents ?? 0) / 100;
+    const remainingTickets = Math.max(
+      (row.total_tickets ?? 0) - (row.sold_tickets ?? 0),
       0
     );
 
@@ -68,19 +69,17 @@ export default async function handler(
         slug: row.slug,
         title: row.title,
         description: row.description,
-        ticketPrice: (row.single_ticket_price_cents || 0) / 100,
-        totalTickets: row.total_tickets || 0,
-        soldTickets: row.sold_tickets || 0,
-        remainingTickets: remaining,
-        isSoldOut: remaining === 0,
+        ticketPrice,
+        totalTickets: row.total_tickets,
+        soldTickets: row.sold_tickets,
+        remainingTickets,
+        isSoldOut: remainingTickets === 0,
         status: row.status,
       },
     });
   } catch (error) {
     return res.status(500).json({
-      error: error instanceof Error ? error.message : "Server error",
-      tenantSlug,
-      slug,
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
