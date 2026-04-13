@@ -229,18 +229,32 @@ async function resolveCampaignIdForTenant(
   return fallback.rows[0]?.id ?? null;
 }
 
+function parseJsonArrayField(value: any) {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
 function mapRaffleRow(row: any) {
   return {
     id: row.id,
-    tenantId: row.tenant_id,
     campaignId: row.campaign_id,
     campaignTitle: row.campaign_title ?? null,
     title: row.title,
     description: row.description,
     status: row.status,
     sortOrder: row.sort_order,
-    colours: Array.isArray(row.colours) ? row.colours : [],
-    offers: Array.isArray(row.offers) ? row.offers : [],
+    colours: parseJsonArrayField(row.colours),
+    offers: parseJsonArrayField(row.offers),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -265,7 +279,6 @@ async function listRaffles(req: any, res: any) {
       `
       select
         rc.id,
-        rc.tenant_id,
         rc.campaign_id,
         rc.title,
         rc.description,
@@ -277,8 +290,8 @@ async function listRaffles(req: any, res: any) {
         rc.updated_at,
         c.title as campaign_title
       from raffle_configs rc
-      left join campaigns c on c.id = rc.campaign_id
-      where rc.tenant_id = $1
+      inner join campaigns c on c.id = rc.campaign_id
+      where c.tenant_id = $1
       order by
         coalesce(rc.sort_order, 999999) asc,
         rc.created_at desc,
@@ -340,15 +353,13 @@ async function createRaffle(req: any, res: any) {
     if (!campaignId) {
       return setJson(res, 400, {
         ok: false,
-        error:
-          `No campaign found for tenant "${tenantSlug}". Create a campaign row first or pass a valid campaignId.`,
+        error: `No campaign found for tenant "${tenantSlug}". Create a campaign row first or pass a valid campaignId.`,
       });
     }
 
     const result = await db.query(
       `
       insert into raffle_configs (
-        tenant_id,
         campaign_id,
         title,
         description,
@@ -359,10 +370,9 @@ async function createRaffle(req: any, res: any) {
         created_at,
         updated_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, now(), now())
+      values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, now(), now())
       returning
         id,
-        tenant_id,
         campaign_id,
         title,
         description,
@@ -374,7 +384,6 @@ async function createRaffle(req: any, res: any) {
         updated_at
       `,
       [
-        tenant.id,
         campaignId,
         title,
         description,
@@ -440,15 +449,20 @@ async function updateRaffle(req: any, res: any) {
 
     const existingResult = await db.query(
       `
-      select id, tenant_id, campaign_id
-      from raffle_configs
-      where id = $1 and tenant_id = $2
+      select
+        rc.id,
+        rc.campaign_id
+      from raffle_configs rc
+      inner join campaigns c on c.id = rc.campaign_id
+      where rc.id = $1
+        and c.tenant_id = $2
       limit 1
       `,
       [id, tenant.id]
     );
 
     const existing = existingResult.rows[0];
+
     if (!existing) {
       return setJson(res, 404, {
         ok: false,
@@ -464,18 +478,17 @@ async function updateRaffle(req: any, res: any) {
       `
       update raffle_configs
       set
-        campaign_id = $3,
-        title = $4,
-        description = $5,
-        status = $6,
-        sort_order = $7,
-        colours = $8::jsonb,
-        offers = $9::jsonb,
+        campaign_id = $2,
+        title = $3,
+        description = $4,
+        status = $5,
+        sort_order = $6,
+        colours = $7::jsonb,
+        offers = $8::jsonb,
         updated_at = now()
-      where id = $1 and tenant_id = $2
+      where id = $1
       returning
         id,
-        tenant_id,
         campaign_id,
         title,
         description,
@@ -488,7 +501,6 @@ async function updateRaffle(req: any, res: any) {
       `,
       [
         id,
-        tenant.id,
         resolvedCampaignId,
         title,
         description,
@@ -541,13 +553,33 @@ async function deleteRaffle(req: any, res: any) {
       });
     }
 
+    const existingResult = await db.query(
+      `
+      select
+        rc.id
+      from raffle_configs rc
+      inner join campaigns c on c.id = rc.campaign_id
+      where rc.id = $1
+        and c.tenant_id = $2
+      limit 1
+      `,
+      [id, tenant.id]
+    );
+
+    if (!existingResult.rows[0]) {
+      return setJson(res, 404, {
+        ok: false,
+        error: "Raffle not found",
+      });
+    }
+
     const result = await db.query(
       `
       delete from raffle_configs
-      where id = $1 and tenant_id = $2
+      where id = $1
       returning id
       `,
-      [id, tenant.id]
+      [id]
     );
 
     if (!result.rows[0]) {
