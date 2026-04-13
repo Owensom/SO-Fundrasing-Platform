@@ -36,7 +36,7 @@ export default function AdminPage() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch("/api/admin/raffles", {
+        const response = await fetch("/api/admin/raffles?tenantSlug=demo-a", {
           headers: {
             "x-tenant-slug": "demo-a",
           },
@@ -86,6 +86,10 @@ export default function AdminPage() {
             <p style={styles.eyebrow}>Admin</p>
             <h1 style={styles.title}>Raffles</h1>
           </div>
+
+          <Link to="/admin/raffles/new" style={styles.primaryLink}>
+            Create raffle
+          </Link>
         </div>
 
         {loading ? (
@@ -145,6 +149,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   header: {
     marginBottom: 24,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
   },
   eyebrow: {
     margin: 0,
