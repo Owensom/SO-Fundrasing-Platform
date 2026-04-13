@@ -32,6 +32,18 @@ type PublicRaffleResponse = {
   error?: string;
 };
 
+type PurchaseResponse = {
+  purchase?: {
+    id: string;
+    customerName: string;
+    customerEmail: string;
+    quantity: number;
+    totalPrice: number;
+    paymentStatus: string;
+  };
+  error?: string;
+};
+
 type DisplayOffer = {
   id: string;
   label: string;
@@ -52,6 +64,10 @@ export default function PublicRafflePage() {
   const [colourQuantities, setColourQuantities] = useState<Record<string, number>>(
     {}
   );
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) {
@@ -144,9 +160,8 @@ export default function PublicRafflePage() {
   );
 
   const requiredQuantity = selectedOffer?.ticketQuantity ?? 0;
-  const colourSelectionValid = requiredQuantity > 0
-    ? selectedColourTotal === requiredQuantity
-    : false;
+  const colourSelectionValid =
+    requiredQuantity > 0 ? selectedColourTotal === requiredQuantity : false;
 
   function updateColourQuantity(colourId: string, nextValue: number) {
     setColourQuantities((prev) => ({
@@ -158,6 +173,58 @@ export default function PublicRafflePage() {
   useEffect(() => {
     setColourQuantities({});
   }, [selectedOfferId]);
+
+  async function handleContinue() {
+    if (!raffle || !slug || !selectedOffer) return;
+
+    try {
+      setSubmitting(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      const colourSelections = Object.entries(colourQuantities)
+        .filter(([, quantity]) => quantity > 0)
+        .map(([colourId, quantity]) => ({
+          colourId,
+          quantity,
+        }));
+
+      const response = await fetch("/api/public/raffles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-slug": "demo-a",
+        },
+        body: JSON.stringify({
+          action: "purchase",
+          slug,
+          offerId: selectedOffer.id,
+          customerName,
+          customerEmail,
+          colourSelections,
+        }),
+      });
+
+      const json = (await response.json()) as PurchaseResponse;
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to create purchase.");
+      }
+
+      setSuccessMessage(
+        `Purchase created: ${json.purchase?.quantity ?? 0} ticket(s), £${
+          json.purchase?.totalPrice.toFixed(2) ?? "0.00"
+        } total.`
+      );
+      setCustomerName("");
+      setCustomerEmail("");
+      setColourQuantities({});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create purchase.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (loading) {
     return <div style={styles.page}>Loading raffle...</div>;
@@ -250,14 +317,18 @@ export default function PublicRafflePage() {
                     <div style={styles.quantityControls}>
                       <button
                         type="button"
-                        onClick={() => updateColourQuantity(colour.id, currentValue - 1)}
+                        onClick={() =>
+                          updateColourQuantity(colour.id, currentValue - 1)
+                        }
                       >
                         -
                       </button>
                       <span style={styles.quantityValue}>{currentValue}</span>
                       <button
                         type="button"
-                        onClick={() => updateColourQuantity(colour.id, currentValue + 1)}
+                        onClick={() =>
+                          updateColourQuantity(colour.id, currentValue + 1)
+                        }
                       >
                         +
                       </button>
@@ -282,6 +353,30 @@ export default function PublicRafflePage() {
           </div>
         </div>
 
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>Your details</h2>
+
+          <div style={styles.formGrid}>
+            <div>
+              <label>Name</label>
+              <input
+                style={styles.input}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label>Email</label>
+              <input
+                style={styles.input}
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
         {selectedOffer && (
           <div style={styles.selectedBox}>
             <div style={styles.selectedLabel}>Selected offer</div>
@@ -293,18 +388,39 @@ export default function PublicRafflePage() {
           </div>
         )}
 
+        {successMessage && <p style={styles.success}>{successMessage}</p>}
+        {error && <p style={styles.error}>{error}</p>}
+
         {raffle.isSoldOut ? (
           <p style={styles.soldOut}>Sold out</p>
         ) : (
           <button
             style={{
               ...styles.button,
-              opacity: colourSelectionValid ? 1 : 0.5,
-              cursor: colourSelectionValid ? "pointer" : "not-allowed",
+              opacity:
+                colourSelectionValid &&
+                customerName.trim() &&
+                customerEmail.trim() &&
+                !submitting
+                  ? 1
+                  : 0.5,
+              cursor:
+                colourSelectionValid &&
+                customerName.trim() &&
+                customerEmail.trim() &&
+                !submitting
+                  ? "pointer"
+                  : "not-allowed",
             }}
-            disabled={!colourSelectionValid}
+            disabled={
+              !colourSelectionValid ||
+              !customerName.trim() ||
+              !customerEmail.trim() ||
+              submitting
+            }
+            onClick={() => void handleContinue()}
           >
-            Continue
+            {submitting ? "Creating purchase..." : "Continue"}
           </button>
         )}
       </div>
@@ -384,81 +500,3 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e5e7eb",
     borderRadius: 12,
     cursor: "pointer",
-  },
-  offerTitle: {
-    fontWeight: 700,
-    marginBottom: 4,
-  },
-  offerMeta: {
-    color: "#475569",
-  },
-  colourList: {
-    display: "grid",
-    gap: 12,
-  },
-  colourCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 14,
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-  },
-  colourInfo: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  colourSwatch: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    border: "1px solid #cbd5e1",
-    display: "inline-block",
-  },
-  quantityControls: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  quantityValue: {
-    minWidth: 20,
-    textAlign: "center",
-    fontWeight: 700,
-  },
-  selectedBox: {
-    marginTop: 20,
-    background: "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-  },
-  selectedLabel: {
-    fontSize: 13,
-    color: "#64748b",
-    marginBottom: 6,
-  },
-  selectedValue: {
-    fontWeight: 700,
-  },
-  validationText: {
-    marginTop: 8,
-    color: "#b45309",
-  },
-  soldOut: {
-    marginTop: 20,
-    color: "#b91c1c",
-    fontWeight: 700,
-  },
-  button: {
-    marginTop: 20,
-    border: 0,
-    borderRadius: 10,
-    padding: "12px 16px",
-    background: "#111827",
-    color: "#fff",
-    fontWeight: 700,
-  },
-  error: {
-    color: "#b91c1c",
-  },
-};
