@@ -51,7 +51,10 @@ function getQueryValue(value: unknown): unknown {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function qi(identifier: string) {
+function qi(identifier: string | null | undefined) {
+  if (!identifier) {
+    throw new Error("Missing SQL identifier");
+  }
   return `"${identifier.replace(/"/g, `""`)}"`;
 }
 
@@ -342,6 +345,14 @@ async function listRaffles(req: any, res: any) {
       });
     }
 
+    if (!schema.campaigns.id || !schema.campaigns.tenantId) {
+      return setJson(res, 500, {
+        ok: false,
+        error: "Could not resolve campaigns id / tenant columns",
+        schema,
+      });
+    }
+
     const tenant = await getTenantBySlug(db, tenantSlug, schema);
 
     if (!tenant) {
@@ -497,48 +508,39 @@ async function createRaffle(req: any, res: any) {
 
     const columns: string[] = [];
     const values: any[] = [];
-    let i = 1;
 
     columns.push(qi(schema.raffle.campaignId));
     values.push(campaignId);
-    i++;
 
     columns.push(qi(schema.raffle.title));
     values.push(title);
-    i++;
 
     if (schema.raffle.description) {
       columns.push(qi(schema.raffle.description));
       values.push(description);
-      i++;
     }
 
     if (schema.raffle.status) {
       columns.push(qi(schema.raffle.status));
       values.push(status);
-      i++;
     } else if (schema.raffle.isActive) {
       columns.push(qi(schema.raffle.isActive));
       values.push(status === "active");
-      i++;
     }
 
     if (schema.raffle.sortOrder) {
       columns.push(qi(schema.raffle.sortOrder));
       values.push(sortOrder);
-      i++;
     }
 
     if (schema.raffle.colours) {
       columns.push(qi(schema.raffle.colours));
       values.push(JSON.stringify(colours));
-      i++;
     }
 
     if (schema.raffle.offers) {
       columns.push(qi(schema.raffle.offers));
       values.push(JSON.stringify(offers));
-      i++;
     }
 
     if (schema.raffle.createdAt) {
@@ -549,22 +551,27 @@ async function createRaffle(req: any, res: any) {
       columns.push(qi(schema.raffle.updatedAt));
     }
 
-    const placeholders = columns.map((_, idx) => {
-      const col = columns[idx].replace(/"/g, "");
-      if (
-        schema.raffle.createdAt &&
-        col === schema.raffle.createdAt
-      ) {
+    const placeholders = columns.map((col, idx) => {
+      const unquoted = col.replace(/"/g, "");
+      if (schema.raffle.createdAt && unquoted === schema.raffle.createdAt) {
         return "now()";
       }
-      if (
-        schema.raffle.updatedAt &&
-        col === schema.raffle.updatedAt
-      ) {
+      if (schema.raffle.updatedAt && unquoted === schema.raffle.updatedAt) {
         return "now()";
       }
-      const actualIndex = values.length >= idx + 1 ? idx + 1 : null;
-      return actualIndex ? `$${actualIndex}` : "null";
+
+      let valueIndex = 0;
+      for (let i = 0; i <= idx; i++) {
+        const current = columns[i].replace(/"/g, "");
+        if (
+          (schema.raffle.createdAt && current === schema.raffle.createdAt) ||
+          (schema.raffle.updatedAt && current === schema.raffle.updatedAt)
+        ) {
+          continue;
+        }
+        valueIndex++;
+      }
+      return `$${valueIndex}`;
     });
 
     const returningId = schema.raffle.id
@@ -665,6 +672,14 @@ async function updateRaffle(req: any, res: any) {
       return setJson(res, 500, {
         ok: false,
         error: "Could not resolve raffle_configs id / campaign / title columns",
+        schema,
+      });
+    }
+
+    if (!schema.campaigns.id || !schema.campaigns.tenantId) {
+      return setJson(res, 500, {
+        ok: false,
+        error: "Could not resolve campaigns id / tenant columns",
         schema,
       });
     }
@@ -841,6 +856,14 @@ async function deleteRaffle(req: any, res: any) {
       return setJson(res, 500, {
         ok: false,
         error: "Could not resolve raffle_configs id / campaign columns",
+        schema,
+      });
+    }
+
+    if (!schema.campaigns.id || !schema.campaigns.tenantId) {
+      return setJson(res, 500, {
+        ok: false,
+        error: "Could not resolve campaigns id / tenant columns",
         schema,
       });
     }
