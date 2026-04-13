@@ -1,6 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { AdminRaffle } from "../types/raffles";
+
+type AdminRaffle = {
+  id: string;
+  tenantSlug: string;
+  slug: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  ticketPrice: number;
+  totalTickets: number;
+  soldTickets: number;
+  remainingTickets: number;
+  isSoldOut: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type AdminRafflesResponse = {
   raffles: AdminRaffle[];
@@ -89,9 +105,7 @@ export default function AdminPage() {
                 <p style={styles.badge}>{raffle.status}</p>
                 <h2 style={styles.cardTitle}>{raffle.title}</h2>
                 <p style={styles.meta}>Slug: {raffle.slug}</p>
-                <p style={styles.meta}>
-                  £{raffle.ticketPrice.toFixed(2)} per ticket
-                </p>
+                <p style={styles.meta}>£{raffle.ticketPrice.toFixed(2)} per ticket</p>
                 <p style={styles.meta}>
                   {raffle.remainingTickets} remaining of {raffle.totalTickets}
                 </p>
