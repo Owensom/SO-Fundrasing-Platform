@@ -93,6 +93,17 @@ export default async function handler(
         [row.id]
       );
 
+      const coloursResult = await query(
+        `
+        select id, name, hex_value, is_active, sort_order
+        from raffle_colours
+        where campaign_id = $1
+          and is_active = true
+        order by sort_order asc, created_at asc
+        `,
+        [row.id]
+      );
+
       const ticketPrice = (row.single_ticket_price_cents ?? 0) / 100;
       const remainingTickets = Math.max(
         (row.total_tickets ?? 0) - (row.sold_tickets ?? 0),
@@ -117,6 +128,11 @@ export default async function handler(
           label: offer.label,
           ticketQuantity: offer.ticket_quantity,
           price: offer.price_cents / 100,
+        })),
+        colours: coloursResult.rows.map((colour: any) => ({
+          id: colour.id,
+          name: colour.name,
+          hexValue: colour.hex_value,
         })),
       });
     }
