@@ -33,12 +33,31 @@ export default function AdminRaffleDetailsPage() {
           }
         );
 
-        const json = (await response.json()) as AdminRafflePurchasesResponse & {
-          error?: string;
-        };
+        const raw = await response.text();
+        const contentType = response.headers.get("content-type") || "";
+
+        let json:
+          | (AdminRafflePurchasesResponse & {
+              error?: string;
+            })
+          | null = null;
+
+        if (contentType.includes("application/json")) {
+          json = JSON.parse(raw) as AdminRafflePurchasesResponse & {
+            error?: string;
+          };
+        }
 
         if (!response.ok) {
-          throw new Error(json.error || "Failed to load raffle details.");
+          throw new Error(
+            json?.error ||
+              raw ||
+              "Failed to load raffle details."
+          );
+        }
+
+        if (!json) {
+          throw new Error("Admin API did not return JSON.");
         }
 
         if (!isMounted) return;
@@ -248,6 +267,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   error: {
     color: "#991b1b",
+    whiteSpace: "pre-wrap",
   },
   emptyText: {
     color: "#64748b",
