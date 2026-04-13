@@ -15,14 +15,15 @@ export default function AdminEditRafflePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load existing raffle
   useEffect(() => {
     if (!slug) return;
 
     async function load() {
       try {
         const res = await fetch(
-          `/api/public/raffles/${slug}?tenantSlug=demo-a`
+          `/api/public/raffles?slug=${encodeURIComponent(
+            slug
+          )}&tenantSlug=demo-a`
         );
         const json = await res.json();
 
@@ -42,7 +43,7 @@ export default function AdminEditRafflePage() {
       }
     }
 
-    load();
+    void load();
   }, [slug]);
 
   async function handleSave(e: React.FormEvent) {
@@ -52,23 +53,22 @@ export default function AdminEditRafflePage() {
       setSaving(true);
       setError(null);
 
-      const res = await fetch(
-        `/api/admin/raffles/${slug}/update`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-tenant-slug": "demo-a",
-          },
-          body: JSON.stringify({
-            title,
-            description,
-            ticketPrice,
-            totalTickets,
-            status,
-          }),
-        }
-      );
+      const res = await fetch(`/api/admin/raffles`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-slug": "demo-a",
+        },
+        body: JSON.stringify({
+          action: "update",
+          slug,
+          title,
+          description,
+          ticketPrice,
+          totalTickets,
+          status,
+        }),
+      });
 
       const json = await res.json();
 
@@ -130,6 +130,7 @@ export default function AdminEditRafflePage() {
             <option value="draft">Draft</option>
             <option value="published">Published</option>
             <option value="closed">Closed</option>
+            <option value="archived">Archived</option>
           </select>
         </div>
 
