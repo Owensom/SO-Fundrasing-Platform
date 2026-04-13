@@ -308,7 +308,9 @@ async function createPendingPurchase(
     currencyCode: string;
   }
 ) {
-  const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const purchaseId = `purchase_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
 
   await db.query(
     `
@@ -470,7 +472,11 @@ async function handlePost(req: any, res: any) {
     const raffle = mapPublicRaffle(raffleRow);
     const config = raffle.raffleConfig;
 
-    const unitPriceCents = await getOfferPriceCents(db, raffle.id);
+    const unitPriceCents = asInteger(
+      raffleRow.single_ticket_price_cents,
+      await getOfferPriceCents(db, raffle.id)
+    );
+
     if (unitPriceCents <= 0) {
       return setJson(res, 400, {
         ok: false,
@@ -489,9 +495,8 @@ async function handlePost(req: any, res: any) {
     await db.query("begin");
 
     try {
-      const usedNumbers = numberMode === "none"
-        ? new Set<number>()
-        : await getUsedNumbers(db, raffle.id);
+      const usedNumbers =
+        numberMode === "none" ? new Set<number>() : await getUsedNumbers(db, raffle.id);
 
       const purchaseId = await createPendingPurchase(db, {
         campaignId: raffle.id,
@@ -512,7 +517,6 @@ async function handlePost(req: any, res: any) {
         let selectedNumber: number | null = null;
         let selectionSource: "manual" | "automatic" = "manual";
 
-        // Colour logic
         if (colourMode === "manual") {
           const chosen = findColourByName(colours, selection.colourName);
           if (!chosen) {
@@ -527,13 +531,6 @@ async function handlePost(req: any, res: any) {
           selectionSource = "manual";
         } else if (colourMode === "automatic") {
           const autoColour = pickRandom(colours);
-          if (!autoColour && colours.length > 0) {
-            await db.query("rollback");
-            return setJson(res, 400, {
-              ok: false,
-              error: `Entry ${i + 1}: could not auto-assign colour`,
-            });
-          }
           selectedColourName = autoColour?.name ?? null;
           selectedColourHex = autoColour?.hex ?? null;
           selectionSource = "automatic";
@@ -541,13 +538,6 @@ async function handlePost(req: any, res: any) {
           const wantsAuto = Boolean(selection.autoColour);
           if (wantsAuto) {
             const autoColour = pickRandom(colours);
-            if (!autoColour && colours.length > 0) {
-              await db.query("rollback");
-              return setJson(res, 400, {
-                ok: false,
-                error: `Entry ${i + 1}: could not auto-assign colour`,
-              });
-            }
             selectedColourName = autoColour?.name ?? null;
             selectedColourHex = autoColour?.hex ?? null;
             selectionSource = "automatic";
@@ -566,16 +556,12 @@ async function handlePost(req: any, res: any) {
           }
         }
 
-        // Number logic
         if (numberMode === "none") {
           selectedNumber = null;
         } else if (numberMode === "manual") {
           const chosenNumber = asInteger(selection.number, 0);
 
-          if (
-            chosenNumber < numberRangeStart ||
-            chosenNumber > numberRangeEnd
-          ) {
+          if (chosenNumber < numberRangeStart || chosenNumber > numberRangeEnd) {
             await db.query("rollback");
             return setJson(res, 400, {
               ok: false,
@@ -635,10 +621,7 @@ async function handlePost(req: any, res: any) {
           } else {
             const chosenNumber = asInteger(selection.number, 0);
 
-            if (
-              chosenNumber < numberRangeStart ||
-              chosenNumber > numberRangeEnd
-            ) {
+            if (chosenNumber < numberRangeStart || chosenNumber > numberRangeEnd) {
               await db.query("rollback");
               return setJson(res, 400, {
                 ok: false,
