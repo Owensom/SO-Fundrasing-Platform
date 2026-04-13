@@ -33,13 +33,12 @@ export default function AdminRaffleDetailsPage() {
           }
         );
 
+        // 🔒 SAFE PARSING (fixes your JSON error forever)
         const raw = await response.text();
         const contentType = response.headers.get("content-type") || "";
 
         let json:
-          | (AdminRafflePurchasesResponse & {
-              error?: string;
-            })
+          | (AdminRafflePurchasesResponse & { error?: string })
           | null = null;
 
         if (contentType.includes("application/json")) {
@@ -50,9 +49,7 @@ export default function AdminRaffleDetailsPage() {
 
         if (!response.ok) {
           throw new Error(
-            json?.error ||
-              raw ||
-              "Failed to load raffle details."
+            json?.error || raw || "Failed to load raffle details."
           );
         }
 
@@ -65,7 +62,9 @@ export default function AdminRaffleDetailsPage() {
       } catch (err) {
         if (!isMounted) return;
         setError(
-          err instanceof Error ? err.message : "Failed to load raffle details."
+          err instanceof Error
+            ? err.message
+            : "Failed to load raffle details."
         );
       } finally {
         if (isMounted) {
@@ -151,8 +150,12 @@ export default function AdminRaffleDetailsPage() {
                     <td style={styles.td}>{purchase.customerName}</td>
                     <td style={styles.td}>{purchase.customerEmail}</td>
                     <td style={styles.td}>{purchase.quantity}</td>
-                    <td style={styles.td}>${purchase.unitPrice.toFixed(2)}</td>
-                    <td style={styles.td}>${purchase.totalPrice.toFixed(2)}</td>
+                    <td style={styles.td}>
+                      ${purchase.unitPrice.toFixed(2)}
+                    </td>
+                    <td style={styles.td}>
+                      ${purchase.totalPrice.toFixed(2)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
