@@ -37,22 +37,17 @@ type EntrySelectionState = {
   number: string;
 };
 
-function currencySymbol(code: string) {
-  if (code === "USD") return "$";
-  if (code === "EUR") return "€";
-  return "£";
-}
-
 function formatMoney(cents: number, currencyCode: string) {
+  const safeCents = Number.isFinite(cents) ? Number(cents) : 0;
   return new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: currencyCode,
-  }).format(cents / 100);
+    currency: currencyCode || "GBP",
+  }).format(safeCents / 100);
 }
 
 function buildEmptyEntry(
-  colourMode: Raffle["raffleConfig"]["colourSelectionMode"],
-  numberMode: Raffle["raffleConfig"]["numberSelectionMode"]
+  colourMode: "manual" | "automatic" | "both",
+  numberMode: "none" | "manual" | "automatic" | "both"
 ): EntrySelectionState {
   return {
     autoColour: colourMode === "automatic",
@@ -64,7 +59,7 @@ function buildEmptyEntry(
 
 export default function PublicRafflePage() {
   const router = useRouter();
-  const { slug } = router.query;
+  const slug = typeof router.query.slug === "string" ? router.query.slug : "";
 
   const [raffle, setRaffle] = useState<Raffle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +73,11 @@ export default function PublicRafflePage() {
   const [entries, setEntries] = useState<EntrySelectionState[]>([]);
 
   useEffect(() => {
-    if (!slug || typeof slug !== "string") return;
+    if (!router.isReady) return;
+    if (!slug) {
+      setLoading(false);
+      return;
+    }
 
     async function load() {
       setLoading(true);
@@ -92,10 +91,15 @@ export default function PublicRafflePage() {
           throw new Error(json?.error || "Failed to load raffle");
         }
 
-        setRaffle(json.raffle);
+        const loaded = json?.raffle;
+        if (!loaded) {
+          throw new Error("Raffle data missing");
+        }
 
-        const colourMode = json.raffle.raffleConfig.colourSelectionMode;
-        const numberMode = json.raffle.raffleConfig.numberSelectionMode;
+        setRaffle(loaded);
+
+        const colourMode = loaded?.raffleConfig?.colourSelectionMode || "both";
+        const numberMode = loaded?.raffleConfig?.numberSelectionMode || "none";
 
         setEntries([buildEmptyEntry(colourMode, numberMode)]);
       } catch (err: any) {
@@ -106,13 +110,13 @@ export default function PublicRafflePage() {
     }
 
     load();
-  }, [slug]);
+  }, [router.isReady, slug]);
 
   useEffect(() => {
     if (!raffle) return;
 
-    const colourMode = raffle.raffleConfig.colourSelectionMode;
-    const numberMode = raffle.raffleConfig.numberSelectionMode;
+    const colourMode = raffle.raffleConfig?.colourSelectionMode || "both";
+    const numberMode = raffle.raffleConfig?.numberSelectionMode || "none";
 
     setEntries((prev) => {
       const next = [...prev];
@@ -130,9 +134,10 @@ export default function PublicRafflePage() {
   }, [quantity, raffle]);
 
   const config = raffle?.raffleConfig;
+
   const totalPrice = useMemo(() => {
     if (!config) return 0;
-    return config.singleTicketPriceCents * quantity;
+    return (config.singleTicketPriceCents || 0) * quantity;
   }, [config, quantity]);
 
   function updateEntry(index: number, patch: Partial<EntrySelectionState>) {
@@ -144,8 +149,8 @@ export default function PublicRafflePage() {
   function renderColourControls(entry: EntrySelectionState, index: number) {
     if (!config) return null;
 
-    const mode = config.colourSelectionMode;
-    const colours = config.colours || [];
+    const mode = config.colourSelectionMode || "both";
+    const colours = Array.isArray(config.colours) ? config.colours : [];
 
     if (mode === "automatic") {
       return <div style={styles.muted}>Colour will be chosen automatically.</div>;
@@ -172,11 +177,6 @@ export default function PublicRafflePage() {
                     style={{
                       ...styles.colourSwatch,
                       backgroundColor: colour.hex,
-                      border:
-                        colour.hex.toLowerCase() === "#ffffff" ||
-                        colour.hex.toLowerCase() === "#f9fafb"
-                          ? "1px solid #d1d5db"
-                          : "1px solid transparent",
                     }}
                   />
                   <span>{colour.name}</span>
@@ -230,11 +230,6 @@ export default function PublicRafflePage() {
                     style={{
                       ...styles.colourSwatch,
                       backgroundColor: colour.hex,
-                      border:
-                        colour.hex.toLowerCase() === "#ffffff" ||
-                        colour.hex.toLowerCase() === "#f9fafb"
-                          ? "1px solid #d1d5db"
-                          : "1px solid transparent",
                     }}
                   />
                   <span>{colour.name}</span>
@@ -250,13 +245,11 @@ export default function PublicRafflePage() {
   function renderNumberControls(entry: EntrySelectionState, index: number) {
     if (!config) return null;
 
-    const mode = config.numberSelectionMode;
+    const mode = config.numberSelectionMode || "none";
     const start = config.numberRangeStart;
     const end = config.numberRangeEnd;
 
-    if (mode === "none") {
-      return null;
-    }
+    if (mode === "none") return null;
 
     if (mode === "automatic") {
       return <div style={styles.muted}>Number will be chosen automatically.</div>;
@@ -266,7 +259,8 @@ export default function PublicRafflePage() {
       return (
         <div style={styles.section}>
           <label style={styles.label}>
-            Choose number{start && end ? ` (${start} to ${end})` : ""}
+            Choose number
+            {start != null && end != null ? ` (${start} to ${end})` : ""}
           </label>
           <input
             type="number"
@@ -322,7 +316,7 @@ export default function PublicRafflePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!raffle) return;
+    if (!raffle || !config) return;
 
     setSubmitting(true);
     setError("");
@@ -364,8 +358,12 @@ export default function PublicRafflePage() {
     }
   }
 
-  if (loading) {
+  if (!router.isReady || loading) {
     return <div style={styles.page}>Loading raffle...</div>;
+  }
+
+  if (!slug) {
+    return <div style={styles.page}>Missing raffle slug.</div>;
   }
 
   if (error && !raffle) {
@@ -380,29 +378,25 @@ export default function PublicRafflePage() {
     <div style={styles.page}>
       <div style={styles.container}>
         <div style={styles.hero}>
-          <h1 style={styles.heading}>{raffle.title}</h1>
+          <h1 style={styles.heading}>{raffle.title || raffle.slug}</h1>
           {raffle.description ? <p style={styles.description}>{raffle.description}</p> : null}
 
           <div style={styles.summaryRow}>
             <div style={styles.summaryCard}>
               <div style={styles.summaryLabel}>Ticket price</div>
               <div style={styles.summaryValue}>
-                {formatMoney(config.singleTicketPriceCents, config.currencyCode)}
+                {formatMoney(config.singleTicketPriceCents || 0, config.currencyCode || "GBP")}
               </div>
             </div>
 
             <div style={styles.summaryCard}>
-              <div style={styles.summaryLabel}>Available</div>
-              <div style={styles.summaryValue}>
-                {Math.max(0, (config.totalTickets || 0) - (config.soldTickets || 0))}
-              </div>
+              <div style={styles.summaryLabel}>Total tickets</div>
+              <div style={styles.summaryValue}>{config.totalTickets ?? 0}</div>
             </div>
 
             <div style={styles.summaryCard}>
-              <div style={styles.summaryLabel}>Currency</div>
-              <div style={styles.summaryValue}>
-                {currencySymbol(config.currencyCode)} {config.currencyCode}
-              </div>
+              <div style={styles.summaryLabel}>Sold</div>
+              <div style={styles.summaryValue}>{config.soldTickets ?? 0}</div>
             </div>
           </div>
         </div>
@@ -453,7 +447,7 @@ export default function PublicRafflePage() {
           <div style={styles.totalCard}>
             <div style={styles.totalLabel}>Total</div>
             <div style={styles.totalValue}>
-              {formatMoney(totalPrice, config.currencyCode)}
+              {formatMoney(totalPrice, config.currencyCode || "GBP")}
             </div>
           </div>
 
@@ -464,11 +458,9 @@ export default function PublicRafflePage() {
           </div>
 
           {error ? <div style={styles.error}>{error}</div> : null}
-
           {success ? (
             <div style={styles.success}>
-              <div>Pending purchase created.</div>
-              <div>Purchase ID: {success.purchaseId}</div>
+              Pending purchase created. Purchase ID: {success.purchaseId}
             </div>
           ) : null}
         </form>
