@@ -1,5 +1,45 @@
 import { useEffect, useState } from "react";
-import type { AdminRafflePurchasesResponse } from "../../types/raffles";
+
+type AdminRafflePurchasesResponse = {
+  raffle: {
+    id: string;
+    tenantSlug?: string;
+    slug: string;
+    title: string;
+    description: string;
+    imageUrl?: string | null;
+    ticketPrice: number;
+    totalTickets: number;
+    soldTickets: number;
+    remainingTickets: number;
+    isSoldOut: boolean;
+    status: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+  purchases: Array<{
+    id: string;
+    tenantSlug?: string;
+    raffleId?: string;
+    raffleSlug?: string;
+    customerName: string;
+    customerEmail: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    paymentStatus: string;
+    paidAt?: string | null;
+    createdAt: string;
+    updatedAt?: string;
+  }>;
+  summary: {
+    totalTickets: number;
+    soldTickets: number;
+    remainingTickets: number;
+    purchaseCount: number;
+  };
+  error?: string;
+};
 
 export default function AdminRaffleDetailsPage() {
   const [data, setData] = useState<AdminRafflePurchasesResponse | null>(null);
@@ -15,11 +55,13 @@ export default function AdminRaffleDetailsPage() {
       return;
     }
 
+    const safeSlug: string = slug;
+
     async function load() {
       try {
         const response = await fetch(
           `/api/admin/raffle-details?slug=${encodeURIComponent(
-            slug
+            safeSlug
           )}&tenantSlug=demo-a`,
           {
             headers: { "x-tenant-slug": "demo-a" },
@@ -29,13 +71,17 @@ export default function AdminRaffleDetailsPage() {
         const raw = await response.text();
         const contentType = response.headers.get("content-type") || "";
 
-        let json: any = null;
+        let json: AdminRafflePurchasesResponse | null = null;
         if (contentType.includes("application/json")) {
-          json = JSON.parse(raw);
+          json = JSON.parse(raw) as AdminRafflePurchasesResponse;
         }
 
         if (!response.ok) {
-          throw new Error(json?.error || raw);
+          throw new Error(json?.error || raw || "Failed to load raffle details");
+        }
+
+        if (!json) {
+          throw new Error("Admin API did not return JSON.");
         }
 
         setData(json);
@@ -71,7 +117,7 @@ export default function AdminRaffleDetailsPage() {
 
         <div>
           <a
-            href={`/admin/raffles/${data.raffle.slug}/edit`}
+            href={`/admin/raffles/${encodeURIComponent(data.raffle.slug)}/edit`}
             style={styles.editButton}
           >
             Edit raffle
