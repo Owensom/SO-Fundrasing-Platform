@@ -1,51 +1,171 @@
 import { useEffect, useState } from "react";
-import type { AdminRafflePurchasesResponse } from "../../types/raffles";
+
+type Offer = {
+  id: string;
+  label: string;
+  ticketQuantity: number;
+  price: number;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+type AdminRafflePurchasesResponse = {
+  raffle: {
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+    ticketPrice: number;
+    totalTickets: number;
+    soldTickets: number;
+    remainingTickets: number;
+    isSoldOut: boolean;
+    status: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+  offers: Offer[];
+  purchases: Array<{
+    id: string;
+    customerName: string;
+    customerEmail: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    paymentStatus: string;
+    createdAt: string;
+  }>;
+  summary: {
+    totalTickets: number;
+    soldTickets: number;
+    remainingTickets: number;
+    purchaseCount: number;
+  };
+  error?: string;
+};
 
 export default function AdminRaffleDetailsPage() {
   const [data, setData] = useState<AdminRafflePurchasesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const slug = window.location.pathname.split("/").pop();
+  const [offerLabel, setOfferLabel] = useState("");
+  const [offerTicketQuantity, setOfferTicketQuantity] = useState(1);
+  const [offerPrice, setOfferPrice] = useState(5);
 
+  const slug = window.location.pathname.split("/").pop();
+
+  async function load() {
+    if (!slug) return;
+
+    const safeSlug = slug;
+
+    try {
+      const response = await fetch(
+        `/api/admin/raffle-details?slug=${encodeURIComponent(
+          safeSlug
+        )}&tenantSlug=demo-a`,
+        {
+          headers: { "x-tenant-slug": "demo-a" },
+        }
+      );
+
+      const raw = await response.text();
+      const contentType = response.headers.get("content-type") || "";
+
+      let json: AdminRafflePurchasesResponse | null = null;
+      if (contentType.includes("application/json")) {
+        json = JSON.parse(raw) as AdminRafflePurchasesResponse;
+      }
+
+      if (!response.ok) {
+        throw new Error(json?.error || raw || "Failed to load raffle details");
+      }
+
+      if (!json) {
+        throw new Error("Admin API did not return JSON.");
+      }
+
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     if (!slug) {
       setError("Missing raffle slug.");
       setLoading(false);
       return;
     }
 
-    async function load() {
-      try {
-        const response = await fetch(
-          `/api/admin/raffles/${slug}/purchases`,
-          {
-            headers: { "x-tenant-slug": "demo-a" },
-          }
-        );
+    void load();
+  }, [slug]);
 
-        const raw = await response.text();
-        const contentType = response.headers.get("content-type") || "";
+  async function handleAddOffer(e: React.FormEvent) {
+    e.preventDefault();
 
-        let json: any = null;
-        if (contentType.includes("application/json")) {
-          json = JSON.parse(raw);
-        }
+    if (!slug) return;
 
-        if (!response.ok) {
-          throw new Error(json?.error || raw);
-        }
+    try {
+      const response = await fetch("/api/admin/raffles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-slug": "demo-a",
+        },
+        body: JSON.stringify({
+          action: "add-offer",
+          slug,
+          label: offerLabel,
+          ticketQuantity: offerTicketQuantity,
+          price: offerPrice,
+        }),
+      });
 
-        setData(json);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error");
-      } finally {
-        setLoading(false);
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to add offer");
       }
-    }
 
-    load();
-  }, []);
+      setOfferLabel("");
+      setOfferTicketQuantity(1);
+      setOfferPrice(5);
+
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    }
+  }
+
+  async function handleRemoveOffer(offerId: string) {
+    try {
+      const response = await fetch("/api/admin/raffles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-slug": "demo-a",
+        },
+        body: JSON.stringify({
+          action: "remove-offer",
+          offerId,
+        }),
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to remove offer");
+      }
+
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    }
+  }
 
   if (loading) return <div style={styles.page}>Loading...</div>;
 
@@ -69,7 +189,7 @@ export default function AdminRaffleDetailsPage() {
 
         <div>
           <a
-            href={`/admin/raffles/${data.raffle.slug}/edit`}
+            href={`/admin/raffles/${encodeURIComponent(data.raffle.slug)}/edit`}
             style={styles.editButton}
           >
             Edit raffle
@@ -94,6 +214,62 @@ export default function AdminRaffleDetailsPage() {
           label="Purchases"
           value={String(data.summary.purchaseCount)}
         />
+      </div>
+
+      <div style={styles.section}>
+        <h2>Offers</h2>
+
+        {data.offers.length === 0 ? (
+          <p>No offers yet.</p>
+        ) : (
+          <div style={styles.offerList}>
+            {data.offers.map((offer) => (
+              <div key={offer.id} style={styles.offerCard}>
+                <div>
+                  <strong>{offer.label}</strong>
+                  <div>
+                    {offer.ticketQuantity} ticket(s) — £{offer.price.toFixed(2)}
+                  </div>
+                </div>
+                <button onClick={() => void handleRemoveOffer(offer.id)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleAddOffer} style={styles.form}>
+          <h3>Add offer</h3>
+
+          <div>
+            <label>Label</label>
+            <input
+              value={offerLabel}
+              onChange={(e) => setOfferLabel(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label>Ticket quantity</label>
+            <input
+              type="number"
+              value={offerTicketQuantity}
+              onChange={(e) => setOfferTicketQuantity(Number(e.target.value))}
+            />
+          </div>
+
+          <div>
+            <label>Price (£)</label>
+            <input
+              type="number"
+              value={offerPrice}
+              onChange={(e) => setOfferPrice(Number(e.target.value))}
+            />
+          </div>
+
+          <button type="submit">Add offer</button>
+        </form>
       </div>
     </div>
   );
@@ -124,6 +300,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     marginBottom: 24,
+    gap: 16,
   },
   eyebrow: {
     fontSize: 14,
@@ -147,6 +324,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 16,
+    marginBottom: 24,
   },
   card: {
     background: "#fff",
@@ -159,6 +337,28 @@ const styles: Record<string, React.CSSProperties> = {
   value: {
     fontSize: 24,
     fontWeight: 700,
+  },
+  section: {
+    background: "#fff",
+    padding: 20,
+    borderRadius: 12,
+  },
+  offerList: {
+    display: "grid",
+    gap: 12,
+    marginBottom: 24,
+  },
+  offerCard: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    border: "1px solid #e5e7eb",
+    borderRadius: 8,
+  },
+  form: {
+    display: "grid",
+    gap: 12,
   },
   error: {
     color: "red",
