@@ -31,7 +31,7 @@ export default async function handler(
   }
 
   try {
-    const { query } = await import("../../../../_lib/db.js");
+    const { query } = await import("../../../_lib/db.js");
 
     const body = req.body;
 
