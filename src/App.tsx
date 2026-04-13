@@ -32,10 +32,7 @@ function HomePage() {
               Open raffle admin details
             </Link>
 
-            <Link
-              to="/admin/raffles/new"
-              style={styles.secondaryLink}
-            >
+            <Link to="/admin/raffles/new" style={styles.secondaryLink}>
               Create new raffle
             </Link>
           </div>
@@ -51,22 +48,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
 
-        {/* ADMIN */}
         <Route path="/admin" element={<AdminPage />} />
-        <Route
-          path="/admin/raffles/new"
-          element={<AdminCreateRafflePage />}
-        />
-        <Route
-          path="/admin/raffles/:slug"
-          element={<AdminRaffleDetailsPage />}
-        />
+        <Route path="/admin/raffles/new" element={<AdminCreateRafflePage />} />
+        <Route path="/admin/raffles/:slug" element={<AdminRaffleDetailsPage />} />
         <Route
           path="/admin/raffles/:slug/edit"
           element={<AdminEditRafflePage />}
         />
 
-        {/* PUBLIC */}
         <Route path="/raffles/:slug" element={<PublicRafflePage />} />
       </Routes>
     </BrowserRouter>
