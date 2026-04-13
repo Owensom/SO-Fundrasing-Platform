@@ -50,7 +50,13 @@ function currencySymbol(code: string) {
 
 export default function AdminRaffleDetailsPage() {
   const router = useRouter();
-  const { id } = router.query;
+
+  const routeId =
+    typeof router.query.id === "string"
+      ? router.query.id
+      : typeof router.query.campaignId === "string"
+      ? router.query.campaignId
+      : "";
 
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
@@ -69,7 +75,11 @@ export default function AdminRaffleDetailsPage() {
   );
 
   useEffect(() => {
-    if (!id || typeof id !== "string") return;
+    if (!router.isReady) return;
+    if (!routeId) {
+      setLoading(false);
+      return;
+    }
 
     async function load() {
       setLoading(true);
@@ -77,7 +87,7 @@ export default function AdminRaffleDetailsPage() {
 
       try {
         const res = await fetch(
-          `/api/admin/raffle-details?id=${encodeURIComponent(id)}&tenantSlug=demo-a`
+          `/api/admin/raffle-details?id=${encodeURIComponent(routeId)}&tenantSlug=demo-a`
         );
         const json = await res.json();
 
@@ -85,10 +95,10 @@ export default function AdminRaffleDetailsPage() {
           throw new Error(json?.error || "Failed to load raffle");
         }
 
-        const raffle = json.raffle;
+        const raffle = json?.raffle;
 
         setForm({
-          id: raffle.id,
+          id: raffle.id || "",
           title: raffle.title || "",
           description: raffle.description || "",
           slug: raffle.slug || "",
@@ -105,12 +115,14 @@ export default function AdminRaffleDetailsPage() {
             raffle?.raffleConfig?.colourSelectionMode || "both",
           numberSelectionMode:
             raffle?.raffleConfig?.numberSelectionMode || "none",
-          numberRangeStart: raffle?.raffleConfig?.numberRangeStart
-            ? String(raffle.raffleConfig.numberRangeStart)
-            : "1",
-          numberRangeEnd: raffle?.raffleConfig?.numberRangeEnd
-            ? String(raffle.raffleConfig.numberRangeEnd)
-            : "200",
+          numberRangeStart:
+            raffle?.raffleConfig?.numberRangeStart != null
+              ? String(raffle.raffleConfig.numberRangeStart)
+              : "1",
+          numberRangeEnd:
+            raffle?.raffleConfig?.numberRangeEnd != null
+              ? String(raffle.raffleConfig.numberRangeEnd)
+              : "200",
           colours: Array.isArray(raffle?.raffleConfig?.colours)
             ? raffle.raffleConfig.colours
             : [],
@@ -123,7 +135,7 @@ export default function AdminRaffleDetailsPage() {
     }
 
     load();
-  }, [id]);
+  }, [router.isReady, routeId]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -189,10 +201,23 @@ export default function AdminRaffleDetailsPage() {
     }
   }
 
-  if (loading) {
+  if (!router.isReady || loading) {
     return (
       <div style={styles.page}>
-        <div style={styles.container}>Loading raffle...</div>
+        <div style={styles.container}>Loading raffle details...</div>
+      </div>
+    );
+  }
+
+  if (!routeId) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.container}>
+          <h1 style={styles.heading}>Raffle details</h1>
+          <div style={styles.error}>
+            Missing raffle id. Open this page from the admin raffle list.
+          </div>
+        </div>
       </div>
     );
   }
@@ -400,9 +425,7 @@ export default function AdminRaffleDetailsPage() {
               <input
                 type="text"
                 value={form.backgroundImageUrl}
-                onChange={(e) =>
-                  updateField("backgroundImageUrl", e.target.value)
-                }
+                onChange={(e) => updateField("backgroundImageUrl", e.target.value)}
                 style={styles.input}
               />
             </div>
@@ -415,9 +438,7 @@ export default function AdminRaffleDetailsPage() {
           </div>
 
           {error ? <div style={styles.error}>{error}</div> : null}
-          {successMessage ? (
-            <div style={styles.success}>{successMessage}</div>
-          ) : null}
+          {successMessage ? <div style={styles.success}>{successMessage}</div> : null}
         </form>
       </div>
     </div>
