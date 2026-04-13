@@ -122,18 +122,60 @@ async function readBody(req: any): Promise<any> {
 async function getDb() {
   const mod: any = await import("../_lib/db.js");
 
-  const getter =
-    mod.getDb ??
-    mod.default?.getDb ??
-    mod.default;
-
-  if (typeof getter !== "function") {
-    throw new Error(
-      'Could not find a database factory in ../_lib/db.js. Export either "getDb" or a default function.'
-    );
+  if (typeof mod.getDb === "function") {
+    return mod.getDb();
   }
 
-  return getter();
+  if (typeof mod.default?.getDb === "function") {
+    return mod.default.getDb();
+  }
+
+  if (mod.db && typeof mod.db.query === "function") {
+    return mod.db;
+  }
+
+  if (mod.default && typeof mod.default.query === "function") {
+    return mod.default;
+  }
+
+  if (typeof mod.query === "function") {
+    return {
+      query: mod.query.bind(mod),
+    };
+  }
+
+  if (typeof mod.default?.query === "function") {
+    return {
+      query: mod.default.query.bind(mod.default),
+    };
+  }
+
+  if (typeof mod.default === "function") {
+    const instance = await mod.default();
+    if (instance && typeof instance.query === "function") {
+      return instance;
+    }
+  }
+
+  if (mod.sql && typeof mod.sql === "function") {
+    return {
+      async query(text: string, params: any[] = []) {
+        return mod.sql(text, params);
+      },
+    };
+  }
+
+  if (mod.default?.sql && typeof mod.default.sql === "function") {
+    return {
+      async query(text: string, params: any[] = []) {
+        return mod.default.sql(text, params);
+      },
+    };
+  }
+
+  throw new Error(
+    "Unsupported ../_lib/db.ts export shape. Expected getDb(), db.query(...), query(...), or sql(...)."
+  );
 }
 
 async function getTenantBySlug(db: any, tenantSlug: string) {
@@ -254,6 +296,8 @@ async function listRaffles(req: any, res: any) {
     return setJson(res, 500, {
       ok: false,
       error: error?.message || "Failed to load raffles",
+      detail: error?.detail || null,
+      code: error?.code || null,
     });
   }
 }
@@ -269,17 +313,6 @@ async function createRaffle(req: any, res: any) {
     const sortOrder = asNumber(body.sortOrder, 0);
     const colours = normaliseColours(body.colours);
     const offers = normaliseOffers(body.offers);
-
-    console.log("create raffle payload", {
-      tenantSlug,
-      title,
-      description,
-      status,
-      sortOrder,
-      coloursCount: colours.length,
-      offersCount: offers.length,
-      campaignId: body.campaignId ?? null,
-    });
 
     if (!title) {
       return setJson(res, 400, {
@@ -304,17 +337,11 @@ async function createRaffle(req: any, res: any) {
       body.campaignId
     );
 
-    console.log("resolved campaignId", {
-      tenantId: tenant.id,
-      requestedCampaignId: body.campaignId ?? null,
-      resolvedCampaignId: campaignId,
-    });
-
     if (!campaignId) {
       return setJson(res, 400, {
         ok: false,
         error:
-          'No campaign found for tenant "demo-a". Either create a campaign row first or pass a valid campaignId.',
+          `No campaign found for tenant "${tenantSlug}". Create a campaign row first or pass a valid campaignId.`,
       });
     }
 
@@ -539,6 +566,8 @@ async function deleteRaffle(req: any, res: any) {
     return setJson(res, 500, {
       ok: false,
       error: error?.message || "Failed to delete raffle",
+      detail: error?.detail || null,
+      code: error?.code || null,
     });
   }
 }
