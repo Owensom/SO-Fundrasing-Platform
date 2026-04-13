@@ -40,7 +40,9 @@ export default function PublicRafflePage() {
         setError(null);
 
         const response = await fetch(
-          `/api/public/raffles/${encodeURIComponent(safeSlug)}`,
+          `/api/public/raffles?slug=${encodeURIComponent(
+            safeSlug
+          )}&tenantSlug=demo-a`,
           {
             headers: {
               "x-tenant-slug": "demo-a",
@@ -94,7 +96,7 @@ export default function PublicRafflePage() {
       <p>{raffle.description}</p>
 
       <p>
-        <strong>Price:</strong> ${raffle.ticketPrice.toFixed(2)}
+        <strong>Price:</strong> £{raffle.ticketPrice.toFixed(2)}
       </p>
 
       <p>
