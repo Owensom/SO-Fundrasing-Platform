@@ -107,9 +107,7 @@ async function readBody(req: any): Promise<any> {
     req.on("error", (err: unknown) => reject(err));
   });
 
-  if (chunks.length === 0) {
-    return {};
-  }
+  if (chunks.length === 0) return {};
 
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw) return {};
@@ -170,7 +168,9 @@ async function resolveCampaignIdForTenant(
       [explicitCampaignId, tenantId]
     );
 
-    return explicit.rows[0]?.id ?? null;
+    if (explicit.rows[0]?.id) {
+      return explicit.rows[0].id;
+    }
   }
 
   const fallback = await db.query(
@@ -249,11 +249,11 @@ async function listRaffles(req: any, res: any) {
       ok: true,
       raffles: result.rows.map(mapRaffleRow),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET /api/admin/raffles error", error);
     return setJson(res, 500, {
       ok: false,
-      error: "Failed to load raffles",
+      error: error?.message || "Failed to load raffles",
     });
   }
 }
@@ -269,6 +269,17 @@ async function createRaffle(req: any, res: any) {
     const sortOrder = asNumber(body.sortOrder, 0);
     const colours = normaliseColours(body.colours);
     const offers = normaliseOffers(body.offers);
+
+    console.log("create raffle payload", {
+      tenantSlug,
+      title,
+      description,
+      status,
+      sortOrder,
+      coloursCount: colours.length,
+      offersCount: offers.length,
+      campaignId: body.campaignId ?? null,
+    });
 
     if (!title) {
       return setJson(res, 400, {
@@ -293,11 +304,17 @@ async function createRaffle(req: any, res: any) {
       body.campaignId
     );
 
+    console.log("resolved campaignId", {
+      tenantId: tenant.id,
+      requestedCampaignId: body.campaignId ?? null,
+      resolvedCampaignId: campaignId,
+    });
+
     if (!campaignId) {
       return setJson(res, 400, {
         ok: false,
         error:
-          "No campaign found for this tenant. Create a campaign first or pass a valid campaignId.",
+          'No campaign found for tenant "demo-a". Either create a campaign row first or pass a valid campaignId.',
       });
     }
 
@@ -345,11 +362,13 @@ async function createRaffle(req: any, res: any) {
       ok: true,
       raffle: mapRaffleRow(result.rows[0]),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("POST /api/admin/raffles error", error);
     return setJson(res, 500, {
       ok: false,
-      error: "Failed to create raffle",
+      error: error?.message || "Failed to create raffle",
+      detail: error?.detail || null,
+      code: error?.code || null,
     });
   }
 }
@@ -457,11 +476,13 @@ async function updateRaffle(req: any, res: any) {
       ok: true,
       raffle: mapRaffleRow(result.rows[0]),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("PUT /api/admin/raffles error", error);
     return setJson(res, 500, {
       ok: false,
-      error: "Failed to update raffle",
+      error: error?.message || "Failed to update raffle",
+      detail: error?.detail || null,
+      code: error?.code || null,
     });
   }
 }
@@ -513,11 +534,11 @@ async function deleteRaffle(req: any, res: any) {
       ok: true,
       deletedId: id,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("DELETE /api/admin/raffles error", error);
     return setJson(res, 500, {
       ok: false,
-      error: "Failed to delete raffle",
+      error: error?.message || "Failed to delete raffle",
     });
   }
 }
@@ -525,21 +546,10 @@ async function deleteRaffle(req: any, res: any) {
 export default async function handler(req: any, res: any) {
   const method = String(req.method || "").toUpperCase();
 
-  if (method === "GET") {
-    return listRaffles(req, res);
-  }
-
-  if (method === "POST") {
-    return createRaffle(req, res);
-  }
-
-  if (method === "PUT") {
-    return updateRaffle(req, res);
-  }
-
-  if (method === "DELETE") {
-    return deleteRaffle(req, res);
-  }
+  if (method === "GET") return listRaffles(req, res);
+  if (method === "POST") return createRaffle(req, res);
+  if (method === "PUT") return updateRaffle(req, res);
+  if (method === "DELETE") return deleteRaffle(req, res);
 
   setAllowed(res, ["GET", "POST", "PUT", "DELETE"]);
   return setJson(res, 405, {
