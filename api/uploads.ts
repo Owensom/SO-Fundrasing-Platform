@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 
+const CALLBACK_URL = "https://so-fundraising-platform.vercel.app/api/uploads";
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -24,17 +26,22 @@ export default async function handler(
           addRandomSuffix: true,
           maximumSizeInBytes: 5 * 1024 * 1024,
           pathname: safePathname,
+          callbackUrl: CALLBACK_URL,
         };
       },
-      onUploadCompleted: async ({ blob }) => {
-        console.log("Upload completed:", blob.url);
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        console.log("Upload completed:", {
+          url: blob.url,
+          pathname: blob.pathname,
+          tokenPayload,
+        });
       },
     });
 
     return res.status(200).json(result);
   } catch (error: any) {
     console.error("api/uploads error:", error);
-    return res.status(500).json({
+    return res.status(400).json({
       error: error?.message || "Upload failed",
     });
   }
