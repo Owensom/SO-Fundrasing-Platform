@@ -1,5 +1,20 @@
 type JsonRecord = Record<string, unknown>;
 
+type ColourOption = {
+  name: string;
+  hex: string;
+};
+
+const HEX_RE = /^#([0-9a-fA-F]{6})$/;
+const ALLOWED_CURRENCIES = new Set(["GBP", "USD", "EUR"]);
+const ALLOWED_COLOUR_SELECTION_MODES = new Set(["manual", "automatic", "both"]);
+const ALLOWED_NUMBER_SELECTION_MODES = new Set([
+  "none",
+  "manual",
+  "automatic",
+  "both",
+]);
+
 function setJson(res: any, status: number, body: unknown) {
   res.statusCode = status;
   if (typeof res.setHeader === "function") {
@@ -53,6 +68,57 @@ function randomSuffix(length = 6): string {
 
 function buildCampaignId(slug: string) {
   return `campaign_${slug}_${randomSuffix(6)}`;
+}
+
+function normaliseCurrencyCode(value: unknown): string {
+  const code = asTrimmedString(value).toUpperCase();
+  return ALLOWED_CURRENCIES.has(code) ? code : "GBP";
+}
+
+function normaliseColourSelectionMode(value: unknown): string {
+  const mode = asTrimmedString(value).toLowerCase();
+  return ALLOWED_COLOUR_SELECTION_MODES.has(mode) ? mode : "both";
+}
+
+function normaliseNumberSelectionMode(value: unknown): string {
+  const mode = asTrimmedString(value).toLowerCase();
+  return ALLOWED_NUMBER_SELECTION_MODES.has(mode) ? mode : "none";
+}
+
+function normaliseColours(input: unknown): ColourOption[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => {
+      const raw = (item ?? {}) as JsonRecord;
+      const name = asTrimmedString(raw.name);
+      const hex = asTrimmedString(raw.hex);
+
+      if (!name || !HEX_RE.test(hex)) {
+        return null;
+      }
+
+      return {
+        name,
+        hex: hex.toUpperCase(),
+      };
+    })
+    .filter(Boolean) as ColourOption[];
+}
+
+function parseJsonArrayField(value: any) {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
 }
 
 async function readBody(req: any): Promise<any> {
@@ -154,6 +220,12 @@ function mapRow(row: any) {
       totalTickets: row.total_tickets,
       soldTickets: row.sold_tickets,
       backgroundImageUrl: row.background_image_url,
+      currencyCode: row.currency_code,
+      colourSelectionMode: row.colour_selection_mode,
+      numberSelectionMode: row.number_selection_mode,
+      numberRangeStart: row.number_range_start,
+      numberRangeEnd: row.number_range_end,
+      colours: parseJsonArrayField(row.colours),
       createdAt: row.raffle_created_at,
       updatedAt: row.raffle_updated_at,
     },
@@ -196,6 +268,12 @@ async function listRaffles(req: any, res: any) {
         rc.total_tickets,
         rc.sold_tickets,
         rc.background_image_url,
+        rc.currency_code,
+        rc.colour_selection_mode,
+        rc.number_selection_mode,
+        rc.number_range_start,
+        rc.number_range_end,
+        rc.colours,
         rc.created_at as raffle_created_at,
         rc.updated_at as raffle_updated_at
       from campaigns c
@@ -232,30 +310,46 @@ async function createRaffle(req: any, res: any) {
     const description = asOptionalString(body.description);
     const heroImageUrl = asOptionalString(body.heroImageUrl ?? body.hero_image_url);
     const status = asTrimmedString(body.status) || "draft";
-    const startsAt = asOptionalString(body.startsAt ?? body.starts_at);
-    const endsAt = asOptionalString(body.endsAt ?? body.ends_at);
 
-    const singleTicketPriceCents = asInteger(
-      body.singleTicketPriceCents ?? body.single_ticket_price_cents,
-      0
-    );
-    const totalTickets = asInteger(
-      body.totalTickets ?? body.total_tickets,
-      0
-    );
-    const soldTickets = asInteger(
-      body.soldTickets ?? body.sold_tickets,
-      0
-    );
+    const rawTicketPrice =
+      body.singleTicketPriceCents ??
+      body.single_ticket_price_cents ??
+      body.ticketPrice ??
+      body.ticket_price ??
+      0;
+
+    let singleTicketPriceCents = asInteger(rawTicketPrice, 0);
+
+    if (
+      body.singleTicketPriceCents == null &&
+      body.single_ticket_price_cents == null &&
+      (body.ticketPrice != null || body.ticket_price != null)
+    ) {
+      singleTicketPriceCents = Math.round(Number(rawTicketPrice) * 100);
+    }
+
+    const totalTickets = asInteger(body.totalTickets ?? body.total_tickets, 0);
+    const soldTickets = asInteger(body.soldTickets ?? body.sold_tickets, 0);
     const backgroundImageUrl = asOptionalString(
       body.backgroundImageUrl ?? body.background_image_url
     );
 
+    const currencyCode = normaliseCurrencyCode(body.currencyCode ?? body.currency_code);
+    const colourSelectionMode = normaliseColourSelectionMode(
+      body.colourSelectionMode ?? body.colour_selection_mode
+    );
+    const numberSelectionMode = normaliseNumberSelectionMode(
+      body.numberSelectionMode ?? body.number_selection_mode
+    );
+    const numberRangeStart = asInteger(
+      body.numberRangeStart ?? body.number_range_start,
+      0
+    );
+    const numberRangeEnd = asInteger(body.numberRangeEnd ?? body.number_range_end, 0);
+    const colours = normaliseColours(body.colours);
+
     if (!title) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "Title is required",
-      });
+      return setJson(res, 400, { ok: false, error: "Title is required" });
     }
 
     if (singleTicketPriceCents <= 0) {
@@ -279,6 +373,23 @@ async function createRaffle(req: any, res: any) {
       });
     }
 
+    if (numberSelectionMode !== "none") {
+      if (numberRangeStart <= 0 || numberRangeEnd <= 0) {
+        return setJson(res, 400, {
+          ok: false,
+          error:
+            "numberRangeStart and numberRangeEnd are required when number selection is enabled",
+        });
+      }
+
+      if (numberRangeEnd < numberRangeStart) {
+        return setJson(res, 400, {
+          ok: false,
+          error: "numberRangeEnd must be greater than or equal to numberRangeStart",
+        });
+      }
+    }
+
     const db = await getDb();
     const tenant = await getTenantBySlug(db, tenantSlug);
 
@@ -297,151 +408,133 @@ async function createRaffle(req: any, res: any) {
       campaignId = buildCampaignId(finalSlug);
     }
 
-    await db.query("begin");
+    const existingCampaign = await db.query(
+      `
+      select id
+      from campaigns
+      where id = $1
+      limit 1
+      `,
+      [campaignId]
+    );
 
-    try {
-      const existingCampaign = await db.query(
-        `
-        select id
-        from campaigns
-        where id = $1
-        limit 1
-        `,
-        [campaignId]
-      );
-
-      if (existingCampaign.rows[0]) {
-        await db.query("rollback");
-        return setJson(res, 409, {
-          ok: false,
-          error: `Campaign id already exists: ${campaignId}`,
-        });
-      }
-
-      const existingSlug = await db.query(
-        `
-        select id
-        from campaigns
-        where slug = $1 and tenant_id = $2
-        limit 1
-        `,
-        [finalSlug, tenant.id]
-      );
-
-      if (existingSlug.rows[0]) {
-        await db.query("rollback");
-        return setJson(res, 409, {
-          ok: false,
-          error: `Slug already exists for tenant: ${finalSlug}`,
-        });
-      }
-
-      const campaignInsert = await db.query(
-        `
-        insert into campaigns (
-          id,
-          tenant_id,
-          type,
-          slug,
-          title,
-          description,
-          hero_image_url,
-          status,
-          starts_at,
-          ends_at,
-          created_at,
-          updated_at
-        )
-        values ($1, $2, 'raffle', $3, $4, $5, $6, $7, $8, $9, now(), now())
-        returning
-          id,
-          tenant_id,
-          type,
-          slug,
-          title,
-          description,
-          hero_image_url,
-          status,
-          starts_at,
-          ends_at,
-          created_at,
-          updated_at
-        `,
-        [
-          campaignId,
-          tenant.id,
-          finalSlug,
-          title,
-          description,
-          heroImageUrl,
-          status,
-          startsAt,
-          endsAt,
-        ]
-      );
-
-      await db.query(
-        `
-        insert into raffle_configs (
-          campaign_id,
-          single_ticket_price_cents,
-          total_tickets,
-          sold_tickets,
-          background_image_url,
-          created_at,
-          updated_at
-        )
-        values ($1, $2, $3, $4, $5, now(), now())
-        `,
-        [
-          campaignId,
-          singleTicketPriceCents,
-          totalTickets,
-          soldTickets,
-          backgroundImageUrl,
-        ]
-      );
-
-      await db.query("commit");
-
-      const result = await db.query(
-        `
-        select
-          c.id,
-          c.tenant_id,
-          c.type,
-          c.slug,
-          c.title,
-          c.description,
-          c.hero_image_url,
-          c.status,
-          c.starts_at,
-          c.ends_at,
-          c.created_at,
-          c.updated_at,
-          rc.single_ticket_price_cents,
-          rc.total_tickets,
-          rc.sold_tickets,
-          rc.background_image_url,
-          rc.created_at as raffle_created_at,
-          rc.updated_at as raffle_updated_at
-        from campaigns c
-        left join raffle_configs rc
-          on rc.campaign_id = c.id
-        where c.id = $1
-        limit 1
-        `,
-        [campaignInsert.rows[0].id]
-      );
-
-      return setJson(res, 201, {
-        ok: true,
-        raffle: mapRow(result.rows[0]),
+    if (existingCampaign.rows[0]) {
+      return setJson(res, 409, {
+        ok: false,
+        error: `Campaign id already exists: ${campaignId}`,
       });
-    } catch (innerError) {
-      await db.query("rollback");
-      throw innerError;
     }
+
+    const existingSlug = await db.query(
+      `
+      select id
+      from campaigns
+      where slug = $1 and tenant_id = $2
+      limit 1
+      `,
+      [finalSlug, tenant.id]
+    );
+
+    if (existingSlug.rows[0]) {
+      return setJson(res, 409, {
+        ok: false,
+        error: `Slug already exists for tenant: ${finalSlug}`,
+      });
+    }
+
+    await db.query(
+      `
+      insert into campaigns (
+        id,
+        tenant_id,
+        type,
+        slug,
+        title,
+        description,
+        hero_image_url,
+        status,
+        created_at,
+        updated_at
+      )
+      values ($1, $2, 'raffle', $3, $4, $5, $6, $7, now(), now())
+      `,
+      [campaignId, tenant.id, finalSlug, title, description, heroImageUrl, status]
+    );
+
+    await db.query(
+      `
+      insert into raffle_configs (
+        campaign_id,
+        single_ticket_price_cents,
+        total_tickets,
+        sold_tickets,
+        background_image_url,
+        currency_code,
+        colour_selection_mode,
+        number_selection_mode,
+        number_range_start,
+        number_range_end,
+        colours,
+        created_at,
+        updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now(), now())
+      `,
+      [
+        campaignId,
+        singleTicketPriceCents,
+        totalTickets,
+        soldTickets,
+        backgroundImageUrl,
+        currencyCode,
+        colourSelectionMode,
+        numberSelectionMode,
+        numberSelectionMode === "none" ? null : numberRangeStart,
+        numberSelectionMode === "none" ? null : numberRangeEnd,
+        JSON.stringify(colours),
+      ]
+    );
+
+    const result = await db.query(
+      `
+      select
+        c.id,
+        c.tenant_id,
+        c.type,
+        c.slug,
+        c.title,
+        c.description,
+        c.hero_image_url,
+        c.status,
+        c.starts_at,
+        c.ends_at,
+        c.created_at,
+        c.updated_at,
+        rc.single_ticket_price_cents,
+        rc.total_tickets,
+        rc.sold_tickets,
+        rc.background_image_url,
+        rc.currency_code,
+        rc.colour_selection_mode,
+        rc.number_selection_mode,
+        rc.number_range_start,
+        rc.number_range_end,
+        rc.colours,
+        rc.created_at as raffle_created_at,
+        rc.updated_at as raffle_updated_at
+      from campaigns c
+      left join raffle_configs rc
+        on rc.campaign_id = c.id
+      where c.id = $1
+      limit 1
+      `,
+      [campaignId]
+    );
+
+    return setJson(res, 201, {
+      ok: true,
+      raffle: mapRow(result.rows[0]),
+    });
   } catch (error: any) {
     console.error("POST /api/admin/raffles error", error);
     return setJson(res, 500, {
@@ -471,30 +564,46 @@ async function updateRaffle(req: any, res: any) {
     const description = asOptionalString(body.description);
     const heroImageUrl = asOptionalString(body.heroImageUrl ?? body.hero_image_url);
     const status = asTrimmedString(body.status) || "draft";
-    const startsAt = asOptionalString(body.startsAt ?? body.starts_at);
-    const endsAt = asOptionalString(body.endsAt ?? body.ends_at);
 
-    const singleTicketPriceCents = asInteger(
-      body.singleTicketPriceCents ?? body.single_ticket_price_cents,
-      0
-    );
-    const totalTickets = asInteger(
-      body.totalTickets ?? body.total_tickets,
-      0
-    );
-    const soldTickets = asInteger(
-      body.soldTickets ?? body.sold_tickets,
-      0
-    );
+    const rawTicketPrice =
+      body.singleTicketPriceCents ??
+      body.single_ticket_price_cents ??
+      body.ticketPrice ??
+      body.ticket_price ??
+      0;
+
+    let singleTicketPriceCents = asInteger(rawTicketPrice, 0);
+
+    if (
+      body.singleTicketPriceCents == null &&
+      body.single_ticket_price_cents == null &&
+      (body.ticketPrice != null || body.ticket_price != null)
+    ) {
+      singleTicketPriceCents = Math.round(Number(rawTicketPrice) * 100);
+    }
+
+    const totalTickets = asInteger(body.totalTickets ?? body.total_tickets, 0);
+    const soldTickets = asInteger(body.soldTickets ?? body.sold_tickets, 0);
     const backgroundImageUrl = asOptionalString(
       body.backgroundImageUrl ?? body.background_image_url
     );
 
+    const currencyCode = normaliseCurrencyCode(body.currencyCode ?? body.currency_code);
+    const colourSelectionMode = normaliseColourSelectionMode(
+      body.colourSelectionMode ?? body.colour_selection_mode
+    );
+    const numberSelectionMode = normaliseNumberSelectionMode(
+      body.numberSelectionMode ?? body.number_selection_mode
+    );
+    const numberRangeStart = asInteger(
+      body.numberRangeStart ?? body.number_range_start,
+      0
+    );
+    const numberRangeEnd = asInteger(body.numberRangeEnd ?? body.number_range_end, 0);
+    const colours = normaliseColours(body.colours);
+
     if (!title) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "Title is required",
-      });
+      return setJson(res, 400, { ok: false, error: "Title is required" });
     }
 
     if (singleTicketPriceCents <= 0) {
@@ -516,6 +625,23 @@ async function updateRaffle(req: any, res: any) {
         ok: false,
         error: "soldTickets cannot be negative",
       });
+    }
+
+    if (numberSelectionMode !== "none") {
+      if (numberRangeStart <= 0 || numberRangeEnd <= 0) {
+        return setJson(res, 400, {
+          ok: false,
+          error:
+            "numberRangeStart and numberRangeEnd are required when number selection is enabled",
+        });
+      }
+
+      if (numberRangeEnd < numberRangeStart) {
+        return setJson(res, 400, {
+          ok: false,
+          error: "numberRangeEnd must be greater than or equal to numberRangeStart",
+        });
+      }
     }
 
     const db = await getDb();
@@ -569,129 +695,139 @@ async function updateRaffle(req: any, res: any) {
       });
     }
 
-    await db.query("begin");
+    await db.query(
+      `
+      update campaigns
+      set
+        slug = $2,
+        title = $3,
+        description = $4,
+        hero_image_url = $5,
+        status = $6,
+        updated_at = now()
+      where id = $1
+      `,
+      [id, finalSlug, title, description, heroImageUrl, status]
+    );
 
-    try {
+    const existingConfig = await db.query(
+      `
+      select campaign_id
+      from raffle_configs
+      where campaign_id = $1
+      limit 1
+      `,
+      [id]
+    );
+
+    if (existingConfig.rows[0]) {
       await db.query(
         `
-        update campaigns
+        update raffle_configs
         set
-          slug = $2,
-          title = $3,
-          description = $4,
-          hero_image_url = $5,
-          status = $6,
-          starts_at = $7,
-          ends_at = $8,
+          single_ticket_price_cents = $2,
+          total_tickets = $3,
+          sold_tickets = $4,
+          background_image_url = $5,
+          currency_code = $6,
+          colour_selection_mode = $7,
+          number_selection_mode = $8,
+          number_range_start = $9,
+          number_range_end = $10,
+          colours = $11::jsonb,
           updated_at = now()
-        where id = $1
+        where campaign_id = $1
         `,
         [
           id,
-          finalSlug,
-          title,
-          description,
-          heroImageUrl,
-          status,
-          startsAt,
-          endsAt,
+          singleTicketPriceCents,
+          totalTickets,
+          soldTickets,
+          backgroundImageUrl,
+          currencyCode,
+          colourSelectionMode,
+          numberSelectionMode,
+          numberSelectionMode === "none" ? null : numberRangeStart,
+          numberSelectionMode === "none" ? null : numberRangeEnd,
+          JSON.stringify(colours),
         ]
       );
-
-      const existingConfig = await db.query(
+    } else {
+      await db.query(
         `
-        select campaign_id
-        from raffle_configs
-        where campaign_id = $1
-        limit 1
+        insert into raffle_configs (
+          campaign_id,
+          single_ticket_price_cents,
+          total_tickets,
+          sold_tickets,
+          background_image_url,
+          currency_code,
+          colour_selection_mode,
+          number_selection_mode,
+          number_range_start,
+          number_range_end,
+          colours,
+          created_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now(), now())
         `,
-        [id]
+        [
+          id,
+          singleTicketPriceCents,
+          totalTickets,
+          soldTickets,
+          backgroundImageUrl,
+          currencyCode,
+          colourSelectionMode,
+          numberSelectionMode,
+          numberSelectionMode === "none" ? null : numberRangeStart,
+          numberSelectionMode === "none" ? null : numberRangeEnd,
+          JSON.stringify(colours),
+        ]
       );
-
-      if (existingConfig.rows[0]) {
-        await db.query(
-          `
-          update raffle_configs
-          set
-            single_ticket_price_cents = $2,
-            total_tickets = $3,
-            sold_tickets = $4,
-            background_image_url = $5,
-            updated_at = now()
-          where campaign_id = $1
-          `,
-          [
-            id,
-            singleTicketPriceCents,
-            totalTickets,
-            soldTickets,
-            backgroundImageUrl,
-          ]
-        );
-      } else {
-        await db.query(
-          `
-          insert into raffle_configs (
-            campaign_id,
-            single_ticket_price_cents,
-            total_tickets,
-            sold_tickets,
-            background_image_url,
-            created_at,
-            updated_at
-          )
-          values ($1, $2, $3, $4, $5, now(), now())
-          `,
-          [
-            id,
-            singleTicketPriceCents,
-            totalTickets,
-            soldTickets,
-            backgroundImageUrl,
-          ]
-        );
-      }
-
-      await db.query("commit");
-
-      const result = await db.query(
-        `
-        select
-          c.id,
-          c.tenant_id,
-          c.type,
-          c.slug,
-          c.title,
-          c.description,
-          c.hero_image_url,
-          c.status,
-          c.starts_at,
-          c.ends_at,
-          c.created_at,
-          c.updated_at,
-          rc.single_ticket_price_cents,
-          rc.total_tickets,
-          rc.sold_tickets,
-          rc.background_image_url,
-          rc.created_at as raffle_created_at,
-          rc.updated_at as raffle_updated_at
-        from campaigns c
-        left join raffle_configs rc
-          on rc.campaign_id = c.id
-        where c.id = $1
-        limit 1
-        `,
-        [id]
-      );
-
-      return setJson(res, 200, {
-        ok: true,
-        raffle: mapRow(result.rows[0]),
-      });
-    } catch (innerError) {
-      await db.query("rollback");
-      throw innerError;
     }
+
+    const result = await db.query(
+      `
+      select
+        c.id,
+        c.tenant_id,
+        c.type,
+        c.slug,
+        c.title,
+        c.description,
+        c.hero_image_url,
+        c.status,
+        c.starts_at,
+        c.ends_at,
+        c.created_at,
+        c.updated_at,
+        rc.single_ticket_price_cents,
+        rc.total_tickets,
+        rc.sold_tickets,
+        rc.background_image_url,
+        rc.currency_code,
+        rc.colour_selection_mode,
+        rc.number_selection_mode,
+        rc.number_range_start,
+        rc.number_range_end,
+        rc.colours,
+        rc.created_at as raffle_created_at,
+        rc.updated_at as raffle_updated_at
+      from campaigns c
+      left join raffle_configs rc
+        on rc.campaign_id = c.id
+      where c.id = $1
+      limit 1
+      `,
+      [id]
+    );
+
+    return setJson(res, 200, {
+      ok: true,
+      raffle: mapRow(result.rows[0]),
+    });
   } catch (error: any) {
     console.error("PUT /api/admin/raffles error", error);
     return setJson(res, 500, {
@@ -749,35 +885,26 @@ async function deleteRaffle(req: any, res: any) {
       });
     }
 
-    await db.query("begin");
+    await db.query(
+      `
+      delete from raffle_configs
+      where campaign_id = $1
+      `,
+      [id]
+    );
 
-    try {
-      await db.query(
-        `
-        delete from raffle_configs
-        where campaign_id = $1
-        `,
-        [id]
-      );
+    await db.query(
+      `
+      delete from campaigns
+      where id = $1
+      `,
+      [id]
+    );
 
-      await db.query(
-        `
-        delete from campaigns
-        where id = $1
-        `,
-        [id]
-      );
-
-      await db.query("commit");
-
-      return setJson(res, 200, {
-        ok: true,
-        deletedId: id,
-      });
-    } catch (innerError) {
-      await db.query("rollback");
-      throw innerError;
-    }
+    return setJson(res, 200, {
+      ok: true,
+      deletedId: id,
+    });
   } catch (error: any) {
     console.error("DELETE /api/admin/raffles error", error);
     return setJson(res, 500, {
