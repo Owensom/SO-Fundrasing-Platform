@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import ColourOptionsEditor, {
   ColourOption,
 } from "../../../components/admin/ColourOptionsEditor";
+import ImageUploadField from "../../../components/admin/ImageUploadField";
 
 type FormState = {
   id: string;
@@ -29,7 +30,7 @@ const INITIAL_STATE: FormState = {
   description: "",
   slug: "",
   status: "published",
-  ticketPrice: "5",
+  ticketPrice: "5.00",
   totalTickets: "100",
   soldTickets: "0",
   heroImageUrl: "",
@@ -48,15 +49,9 @@ function currencySymbol(code: string) {
   return "£";
 }
 
-export default function AdminRaffleDetailsPage() {
+export default function AdminRaffleEditPage() {
   const router = useRouter();
-
-  const routeId =
-    typeof router.query.id === "string"
-      ? router.query.id
-      : typeof router.query.campaignId === "string"
-      ? router.query.campaignId
-      : "";
+  const routeId = typeof router.query.id === "string" ? router.query.id : "";
 
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
@@ -65,7 +60,9 @@ export default function AdminRaffleDetailsPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const showColours = useMemo(
-    () => form.colourSelectionMode === "manual" || form.colourSelectionMode === "both",
+    () =>
+      form.colourSelectionMode === "manual" ||
+      form.colourSelectionMode === "both",
     [form.colourSelectionMode]
   );
 
@@ -74,21 +71,30 @@ export default function AdminRaffleDetailsPage() {
     [form.numberSelectionMode]
   );
 
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
   useEffect(() => {
     if (!router.isReady) return;
     if (!routeId) {
       setLoading(false);
+      setError("Missing raffle id.");
       return;
     }
 
     async function load() {
       setLoading(true);
       setError("");
+      setSuccessMessage("");
 
       try {
         const res = await fetch(
-          `/api/admin/raffle-details?id=${encodeURIComponent(routeId)}&tenantSlug=demo-a`
+          `/api/admin/raffle-details?id=${encodeURIComponent(
+            routeId
+          )}&tenantSlug=demo-a`
         );
+
         const json = await res.json();
 
         if (!res.ok) {
@@ -98,17 +104,17 @@ export default function AdminRaffleDetailsPage() {
         const raffle = json?.raffle;
 
         setForm({
-          id: raffle.id || "",
-          title: raffle.title || "",
-          description: raffle.description || "",
-          slug: raffle.slug || "",
-          status: raffle.status || "published",
+          id: raffle?.id || "",
+          title: raffle?.title || "",
+          description: raffle?.description || "",
+          slug: raffle?.slug || "",
+          status: raffle?.status || "published",
           ticketPrice: String(
             Number(raffle?.raffleConfig?.singleTicketPriceCents || 0) / 100
           ),
           totalTickets: String(raffle?.raffleConfig?.totalTickets || 0),
           soldTickets: String(raffle?.raffleConfig?.soldTickets || 0),
-          heroImageUrl: raffle.heroImageUrl || "",
+          heroImageUrl: raffle?.heroImageUrl || "",
           backgroundImageUrl: raffle?.raffleConfig?.backgroundImageUrl || "",
           currencyCode: raffle?.raffleConfig?.currencyCode || "GBP",
           colourSelectionMode:
@@ -128,7 +134,7 @@ export default function AdminRaffleDetailsPage() {
             : [],
         });
       } catch (err: any) {
-        setError(err.message || "Failed to load raffle");
+        setError(err?.message || "Failed to load raffle");
       } finally {
         setLoading(false);
       }
@@ -136,10 +142,6 @@ export default function AdminRaffleDetailsPage() {
 
     load();
   }, [router.isReady, routeId]);
-
-  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -195,29 +197,16 @@ export default function AdminRaffleDetailsPage() {
 
       setSuccessMessage("Raffle updated successfully.");
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      setError(err?.message || "Something went wrong");
     } finally {
       setSaving(false);
     }
   }
 
-  if (!router.isReady || loading) {
+  if (loading) {
     return (
       <div style={styles.page}>
-        <div style={styles.container}>Loading raffle details...</div>
-      </div>
-    );
-  }
-
-  if (!routeId) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.container}>
-          <h1 style={styles.heading}>Raffle details</h1>
-          <div style={styles.error}>
-            Missing raffle id. Open this page from the admin raffle list.
-          </div>
-        </div>
+        <div style={styles.container}>Loading raffle...</div>
       </div>
     );
   }
@@ -280,7 +269,10 @@ export default function AdminRaffleDetailsPage() {
               <select
                 value={form.currencyCode}
                 onChange={(e) =>
-                  updateField("currencyCode", e.target.value as FormState["currencyCode"])
+                  updateField(
+                    "currencyCode",
+                    e.target.value as FormState["currencyCode"]
+                  )
                 }
                 style={styles.input}
               >
@@ -411,22 +403,18 @@ export default function AdminRaffleDetailsPage() {
 
           <div style={styles.grid2}>
             <div style={styles.card}>
-              <label style={styles.label}>Hero image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Hero image"
                 value={form.heroImageUrl}
-                onChange={(e) => updateField("heroImageUrl", e.target.value)}
-                style={styles.input}
+                onChange={(url) => updateField("heroImageUrl", url)}
               />
             </div>
 
             <div style={styles.card}>
-              <label style={styles.label}>Background image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Background image"
                 value={form.backgroundImageUrl}
-                onChange={(e) => updateField("backgroundImageUrl", e.target.value)}
-                style={styles.input}
+                onChange={(url) => updateField("backgroundImageUrl", url)}
               />
             </div>
           </div>
