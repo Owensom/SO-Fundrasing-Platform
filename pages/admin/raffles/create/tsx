@@ -26,7 +26,7 @@ const INITIAL_STATE: FormState = {
   description: "",
   slug: "",
   status: "published",
-  ticketPrice: "5",
+  ticketPrice: "5.00",
   totalTickets: "100",
   soldTickets: "0",
   heroImageUrl: "",
@@ -52,7 +52,9 @@ export default function AdminCreateRafflePage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const showColours = useMemo(
-    () => form.colourSelectionMode === "manual" || form.colourSelectionMode === "both",
+    () =>
+      form.colourSelectionMode === "manual" ||
+      form.colourSelectionMode === "both",
     [form.colourSelectionMode]
   );
 
@@ -78,7 +80,7 @@ export default function AdminCreateRafflePage() {
         description: form.description,
         slug: form.slug,
         status: form.status,
-        ticketPrice: Number(form.ticketPrice),
+        ticketPrice: Number(form.ticketPrice), // pounds/dollars/euros
         totalTickets: Number(form.totalTickets),
         soldTickets: Number(form.soldTickets || 0),
         heroImageUrl: form.heroImageUrl || "",
