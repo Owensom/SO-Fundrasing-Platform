@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 
+/**
+ * 🚨 CRITICAL: disable body parsing
+ */
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 const CALLBACK_URL = "https://so-fundraising-platform.vercel.app/api/uploads";
 
 export default async function handler(
@@ -29,12 +38,8 @@ export default async function handler(
           callbackUrl: CALLBACK_URL,
         };
       },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        console.log("Upload completed:", {
-          url: blob.url,
-          pathname: blob.pathname,
-          tokenPayload,
-        });
+      onUploadCompleted: async ({ blob }) => {
+        console.log("Upload completed:", blob.url);
       },
     });
 
