@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import ColourOptionsEditor, {
   ColourOption,
 } from "../../../components/admin/ColourOptionsEditor";
+import ImageUploadField from "../../../components/admin/ImageUploadField";
 
 type FormState = {
   title: string;
@@ -45,22 +46,11 @@ function currencySymbol(code: string) {
   return "£";
 }
 
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/['"]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-}
-
 export default function AdminCreateRafflePage() {
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [createdId, setCreatedId] = useState("");
 
   const showColours = useMemo(
     () =>
@@ -83,20 +73,15 @@ export default function AdminCreateRafflePage() {
     setSaving(true);
     setError("");
     setSuccessMessage("");
-    setCreatedId("");
 
     try {
-      const ticketPriceNumber = Number(form.ticketPrice || 0);
-      const singleTicketPriceCents = Math.round(ticketPriceNumber * 100);
-
       const payload = {
         tenantSlug: "demo-a",
         title: form.title,
         description: form.description,
-        slug: form.slug || slugify(form.title),
+        slug: form.slug,
         status: form.status,
-        ticketPrice: ticketPriceNumber,
-        singleTicketPriceCents,
+        ticketPrice: Number(form.ticketPrice),
         totalTickets: Number(form.totalTickets),
         soldTickets: Number(form.soldTickets || 0),
         heroImageUrl: form.heroImageUrl || "",
@@ -135,7 +120,6 @@ export default function AdminCreateRafflePage() {
       }
 
       setSuccessMessage("Raffle created successfully.");
-      setCreatedId(json?.raffle?.id || "");
       setForm(INITIAL_STATE);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -205,10 +189,7 @@ export default function AdminCreateRafflePage() {
               <select
                 value={form.currencyCode}
                 onChange={(e) =>
-                  updateField(
-                    "currencyCode",
-                    e.target.value as FormState["currencyCode"]
-                  )
+                  updateField("currencyCode", e.target.value as FormState["currencyCode"])
                 }
                 style={styles.input}
               >
@@ -339,24 +320,18 @@ export default function AdminCreateRafflePage() {
 
           <div style={styles.grid2}>
             <div style={styles.card}>
-              <label style={styles.label}>Hero image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Hero image"
                 value={form.heroImageUrl}
-                onChange={(e) => updateField("heroImageUrl", e.target.value)}
-                style={styles.input}
-                placeholder="https://..."
+                onChange={(url) => updateField("heroImageUrl", url)}
               />
             </div>
 
             <div style={styles.card}>
-              <label style={styles.label}>Background image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Background image"
                 value={form.backgroundImageUrl}
-                onChange={(e) => updateField("backgroundImageUrl", e.target.value)}
-                style={styles.input}
-                placeholder="https://..."
+                onChange={(url) => updateField("backgroundImageUrl", url)}
               />
             </div>
           </div>
@@ -368,12 +343,8 @@ export default function AdminCreateRafflePage() {
           </div>
 
           {error ? <div style={styles.error}>{error}</div> : null}
-
           {successMessage ? (
-            <div style={styles.success}>
-              <div>{successMessage}</div>
-              {createdId ? <div>Created ID: {createdId}</div> : null}
-            </div>
+            <div style={styles.success}>{successMessage}</div>
           ) : null}
         </form>
       </div>
