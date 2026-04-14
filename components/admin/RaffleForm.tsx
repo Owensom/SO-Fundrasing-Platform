@@ -83,10 +83,9 @@ export default function RaffleForm({
   function addOffer() {
     setForm((prev) => ({
       ...prev,
-      offers: [
-        ...prev.offers,
-        makeEmptyOffer(prev.offers.length),
-      ].map((offer, index) => ({ ...offer, sortOrder: index })),
+      offers: [...prev.offers, makeEmptyOffer(prev.offers.length)].map(
+        (offer, index) => ({ ...offer, sortOrder: index })
+      ),
     }));
   }
 
@@ -232,3 +231,261 @@ export default function RaffleForm({
           <div style={{ marginTop: 16 }}>
             <label style={labelStyle}>Description</label>
             <textarea
+              value={form.description}
+              onChange={(e) => update("description", e.target.value)}
+              style={textareaStyle}
+              placeholder="Describe the raffle"
+              rows={4}
+            />
+          </div>
+        </section>
+
+        <section style={cardStyle}>
+          <RaffleColoursEditor
+            value={form.colours}
+            onChange={(next) => update("colours", next)}
+          />
+        </section>
+
+        <section style={cardStyle}>
+          <div style={sectionHeaderRowStyle}>
+            <h2 style={sectionTitleStyle}>Offers</h2>
+            <button type="button" onClick={addOffer} style={secondaryButtonStyle}>
+              + Add offer
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 16 }}>
+            {form.offers.map((offer, index) => (
+              <div key={offer.id ?? index} style={offerCardStyle}>
+                <div style={grid5Style}>
+                  <div>
+                    <label style={labelStyle}>Name</label>
+                    <input
+                      value={offer.name}
+                      onChange={(e) =>
+                        updateOffer(index, { name: e.target.value })
+                      }
+                      style={inputStyle}
+                      placeholder="3 Tickets"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Price (cents)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={offer.priceCents}
+                      onChange={(e) =>
+                        updateOffer(index, {
+                          priceCents: Number(e.target.value || 0),
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Entry count</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={offer.entryCount}
+                      onChange={(e) =>
+                        updateOffer(index, {
+                          entryCount: Number(e.target.value || 1),
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Sort order</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={offer.sortOrder}
+                      onChange={(e) =>
+                        updateOffer(index, {
+                          sortOrder: Number(e.target.value || 0),
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Active</label>
+                    <select
+                      value={offer.isActive ? "true" : "false"}
+                      onChange={(e) =>
+                        updateOffer(index, {
+                          isActive: e.target.value === "true",
+                        })
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => removeOffer(index)}
+                    style={dangerButtonStyle}
+                    disabled={form.offers.length <= 1}
+                  >
+                    Remove offer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {(error || success) && (
+          <section style={cardStyle}>
+            {error ? (
+              <div style={errorStyle}>{error}</div>
+            ) : (
+              <div style={successStyle}>{success}</div>
+            )}
+          </section>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+          <button type="submit" disabled={isSaving} style={primaryButtonStyle}>
+            {isSaving
+              ? "Saving..."
+              : mode === "create"
+              ? "Create raffle"
+              : "Save changes"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const cardStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 20,
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: 0,
+  marginBottom: 16,
+  fontSize: 20,
+  fontWeight: 700,
+};
+
+const sectionHeaderRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  marginBottom: 16,
+};
+
+const grid2Style: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 16,
+};
+
+const grid5Style: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+  gap: 12,
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: 8,
+  fontSize: 14,
+  fontWeight: 600,
+  color: "#374151",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 40,
+  padding: "0 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  fontSize: 14,
+  boxSizing: "border-box",
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 12,
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  fontSize: 14,
+  boxSizing: "border-box",
+  resize: "vertical",
+};
+
+const offerCardStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 16,
+  background: "#f9fafb",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  height: 42,
+  padding: "0 16px",
+  borderRadius: 10,
+  border: "1px solid #2563eb",
+  background: "#2563eb",
+  color: "#fff",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  height: 40,
+  padding: "0 14px",
+  borderRadius: 10,
+  border: "1px solid #d1d5db",
+  background: "#fff",
+  color: "#111827",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  height: 38,
+  padding: "0 12px",
+  borderRadius: 10,
+  border: "1px solid #dc2626",
+  background: "#fff",
+  color: "#dc2626",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const errorStyle: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 10,
+  background: "#fef2f2",
+  color: "#b91c1c",
+  border: "1px solid #fecaca",
+};
+
+const successStyle: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 10,
+  background: "#ecfdf5",
+  color: "#065f46",
+  border: "1px solid #a7f3d0",
+};
