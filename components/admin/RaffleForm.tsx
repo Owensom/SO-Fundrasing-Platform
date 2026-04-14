@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import RaffleColoursEditor, {
   RaffleColourInput,
 } from "./RaffleColoursEditor";
+import ImageUploadField from "./ImageUploadField";
 
 export type RaffleOfferInput = {
   id?: string;
@@ -19,6 +20,8 @@ export type RaffleFormValues = {
   slug: string;
   description: string;
   status: "draft" | "active" | "archived";
+  heroImageUrl?: string;
+  backgroundImageUrl?: string;
   colours: RaffleColourInput[];
   offers: RaffleOfferInput[];
 };
@@ -51,6 +54,8 @@ export default function RaffleForm({
     slug: initialValues?.slug ?? "",
     description: initialValues?.description ?? "",
     status: initialValues?.status ?? "draft",
+    heroImageUrl: initialValues?.heroImageUrl ?? "",
+    backgroundImageUrl: initialValues?.backgroundImageUrl ?? "",
     colours: initialValues?.colours ?? [],
     offers: initialValues?.offers ?? [makeEmptyOffer(0)],
   });
@@ -133,6 +138,8 @@ export default function RaffleForm({
         slug: form.slug.trim(),
         description: form.description.trim(),
         status: form.status,
+        heroImageUrl: form.heroImageUrl || "",
+        backgroundImageUrl: form.backgroundImageUrl || "",
         colours: form.colours.map((c, index) => ({
           id: c.id,
           name: c.name.trim(),
@@ -241,6 +248,28 @@ export default function RaffleForm({
         </section>
 
         <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Images</h2>
+
+          <div style={grid2Style}>
+            <div>
+              <ImageUploadField
+                label="Hero image"
+                value={form.heroImageUrl || ""}
+                onChange={(url) => update("heroImageUrl", url)}
+              />
+            </div>
+
+            <div>
+              <ImageUploadField
+                label="Background image"
+                value={form.backgroundImageUrl || ""}
+                onChange={(url) => update("backgroundImageUrl", url)}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section style={cardStyle}>
           <RaffleColoursEditor
             value={form.colours}
             onChange={(next) => update("colours", next)}
@@ -250,7 +279,11 @@ export default function RaffleForm({
         <section style={cardStyle}>
           <div style={sectionHeaderRowStyle}>
             <h2 style={sectionTitleStyle}>Offers</h2>
-            <button type="button" onClick={addOffer} style={secondaryButtonStyle}>
+            <button
+              type="button"
+              onClick={addOffer}
+              style={secondaryButtonStyle}
+            >
               + Add offer
             </button>
           </div>
