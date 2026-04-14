@@ -76,13 +76,17 @@ export default function AdminEditRafflePage({ raffleId }: Props) {
       return;
     }
 
+    const currentRaffleId = raffleId;
+
     async function load() {
       setLoading(true);
       setError("");
 
       try {
         const res = await fetch(
-          `/api/admin/raffle-details?id=${encodeURIComponent(raffleId)}&tenantSlug=demo-a`
+          `/api/admin/raffle-details?id=${encodeURIComponent(
+            currentRaffleId
+          )}&tenantSlug=demo-a`
         );
         const json = await res.json();
 
@@ -93,17 +97,17 @@ export default function AdminEditRafflePage({ raffleId }: Props) {
         const raffle = json?.raffle;
 
         setForm({
-          id: raffle.id || "",
-          title: raffle.title || "",
-          description: raffle.description || "",
-          slug: raffle.slug || "",
-          status: raffle.status || "published",
+          id: raffle?.id || "",
+          title: raffle?.title || "",
+          description: raffle?.description || "",
+          slug: raffle?.slug || "",
+          status: raffle?.status || "published",
           ticketPrice: String(
             Number(raffle?.raffleConfig?.singleTicketPriceCents || 0) / 100
           ),
           totalTickets: String(raffle?.raffleConfig?.totalTickets || 0),
           soldTickets: String(raffle?.raffleConfig?.soldTickets || 0),
-          heroImageUrl: raffle.heroImageUrl || "",
+          heroImageUrl: raffle?.heroImageUrl || "",
           backgroundImageUrl: raffle?.raffleConfig?.backgroundImageUrl || "",
           currencyCode: raffle?.raffleConfig?.currencyCode || "GBP",
           colourSelectionMode:
@@ -269,7 +273,10 @@ export default function AdminEditRafflePage({ raffleId }: Props) {
               <select
                 value={form.currencyCode}
                 onChange={(e) =>
-                  updateField("currencyCode", e.target.value as FormState["currencyCode"])
+                  updateField(
+                    "currencyCode",
+                    e.target.value as FormState["currencyCode"]
+                  )
                 }
                 style={styles.input}
               >
