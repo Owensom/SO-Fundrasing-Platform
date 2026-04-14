@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import ColourOptionsEditor, {
   ColourOption,
 } from "../../../components/admin/ColourOptionsEditor";
+import ImageUploadField from "../../../components/admin/ImageUploadField";
 
 type Props = {
   raffleId?: string;
@@ -407,22 +408,18 @@ export default function AdminEditRafflePage({ raffleId }: Props) {
 
           <div style={styles.grid2}>
             <div style={styles.card}>
-              <label style={styles.label}>Hero image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Hero image"
                 value={form.heroImageUrl}
-                onChange={(e) => updateField("heroImageUrl", e.target.value)}
-                style={styles.input}
+                onChange={(url) => updateField("heroImageUrl", url)}
               />
             </div>
 
             <div style={styles.card}>
-              <label style={styles.label}>Background image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Background image"
                 value={form.backgroundImageUrl}
-                onChange={(e) => updateField("backgroundImageUrl", e.target.value)}
-                style={styles.input}
+                onChange={(url) => updateField("backgroundImageUrl", url)}
               />
             </div>
           </div>
