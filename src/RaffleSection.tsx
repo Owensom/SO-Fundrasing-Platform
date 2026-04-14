@@ -1,1168 +1,368 @@
-import { appendLedger } from "./purchaseLedger";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { jsPDF } from "jspdf";
-import { useAuth } from "./useAuth";
-import { apiFetch } from "./api";
+import React, { useMemo, useState } from "react";
 
-type RaffleColor = "Red" | "Blue" | "Green" | "Yellow" | "Purple" | "Orange";
-
-type RaffleEvent = {
+type EntryRecord = {
   id: string;
-  title: string;
-  eventName: string;
-  venue: string;
-  price: number;
-  startNumber: number;
-  totalTickets: number;
-  colors: RaffleColor[];
-  soldByColor: Record<RaffleColor, number[]>;
-  background?: string;
+  colour?: string;
+  number?: number | null;
 };
 
-type Drafts = Record<
-  string,
-  {
-    price: string;
-    startNumber: string;
-    totalTickets: string;
-  }
->;
-
-type SelectedTicketsByEvent = Record<string, Record<RaffleColor, number[]>>;
-
-type RafflePurchase = {
-  id: string;
-  eventId: string;
-  eventTitle: string;
-  buyerName: string;
-  buyerEmail: string;
-  selections: Record<RaffleColor, number[]>;
-  quantity: number;
-  subtotal: number;
-  total: number;
-  createdAt: string;
-};
-
-const ALL_COLORS: RaffleColor[] = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange"];
-
-const OFFER_TIERS = [
-  { quantity: 10, price: 15 },
-  { quantity: 5, price: 8 },
-];
-
-function money(n: number) {
-  return `£${Number.isFinite(n) ? n.toFixed(2) : "0.00"}`;
+function formatDateTime(value: Date) {
+  return value.toLocaleString();
 }
 
-function cardStyle(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(255,255,255,0.07)",
-    backdropFilter: "blur(18px)",
-    WebkitBackdropFilter: "blur(18px)",
-    borderRadius: 28,
-    padding: 24,
-    boxShadow: "0 20px 80px rgba(2,6,23,0.45)",
-  };
-}
+async function generateTicketPdf({
+  raffleTitle,
+  purchaserName,
+  purchaserEmail,
+  totalEntries,
+  entries,
+}: {
+  raffleTitle: string;
+  purchaserName: string;
+  purchaserEmail: string;
+  totalEntries: number;
+  entries: EntryRecord[];
+}) {
+  const { jsPDF } = await import("jspdf");
 
-function inputStyle(invalid = false): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: "14px 16px",
-    borderRadius: 18,
-    border: invalid ? "1px solid rgba(251,113,133,0.45)" : "1px solid rgba(255,255,255,0.10)",
-    background: invalid ? "rgba(127,29,29,0.18)" : "rgba(2,6,23,0.72)",
-    color: "white",
-    boxSizing: "border-box",
-    outline: "none",
-  };
-}
+  const doc = new jsPDF();
 
-function labelStyle(): React.CSSProperties {
-  return {
-    display: "block",
-    marginBottom: 8,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.14em",
-    color: "#94a3b8",
-  };
-}
+  let y = 20;
 
-function chipStyle(active: boolean): React.CSSProperties {
-  return {
-    border: active ? "1px solid rgba(125,211,252,0.35)" : "1px solid rgba(255,255,255,0.10)",
-    background: active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
-    color: "white",
-    borderRadius: 18,
-    padding: "12px 18px",
-    fontWeight: 600,
-    cursor: "pointer",
-  };
-}
+  doc.setFontSize(18);
+  doc.text("Raffle Entry Confirmation", 20, y);
+  y += 10;
 
-function secondaryButtonStyle(): React.CSSProperties {
-  return {
-    borderRadius: 18,
-    padding: "14px 18px",
-    background: "rgba(255,255,255,0.08)",
-    color: "white",
-    fontWeight: 700,
-    border: "1px solid rgba(255,255,255,0.12)",
-    cursor: "pointer",
-  };
-}
+  doc.setFontSize(12);
+  doc.text(`Raffle: ${raffleTitle}`, 20, y);
+  y += 8;
+  doc.text(`Name: ${purchaserName}`, 20, y);
+  y += 8;
+  doc.text(`Email: ${purchaserEmail}`, 20, y);
+  y += 8;
+  doc.text(`Entries: ${totalEntries}`, 20, y);
+  y += 8;
+  doc.text(`Generated: ${formatDateTime(new Date())}`, 20, y);
+  y += 14;
 
-function summaryCardStyle(): React.CSSProperties {
-  return {
-    ...cardStyle(),
-    padding: 16,
-    borderRadius: 20,
-  };
-}
+  doc.setFontSize(13);
+  doc.text("Assigned entries", 20, y);
+  y += 8;
 
-function colorBadgeStyle(color: RaffleColor, active = false): React.CSSProperties {
-  const map: Record<RaffleColor, string> = {
-    Red: "rgba(239,68,68,0.22)",
-    Blue: "rgba(59,130,246,0.22)",
-    Green: "rgba(34,197,94,0.22)",
-    Yellow: "rgba(234,179,8,0.22)",
-    Purple: "rgba(168,85,247,0.22)",
-    Orange: "rgba(249,115,22,0.22)",
-  };
+  doc.setFontSize(11);
 
-  return {
-    border: active ? "1px solid white" : "1px solid rgba(255,255,255,0.10)",
-    background: map[color],
-    color: "white",
-    borderRadius: 18,
-    padding: "12px 16px",
-    fontWeight: 700,
-    cursor: "pointer",
-    textAlign: "center",
-  };
-}
+  if (entries.length === 0) {
+    doc.text("No entry details available.", 20, y);
+    y += 8;
+  } else {
+    entries.forEach((entry, index) => {
+      const parts = [
+        `#${index + 1}`,
+        entry.id ? `ID: ${entry.id}` : "",
+        entry.colour ? `Colour: ${entry.colour}` : "",
+        entry.number != null ? `Number: ${entry.number}` : "",
+      ].filter(Boolean);
 
-function buildInitialSold(): Record<RaffleColor, number[]> {
-  return ALL_COLORS.reduce((acc, color) => {
-    acc[color] = [];
-    return acc;
-  }, {} as Record<RaffleColor, number[]>);
-}
+      doc.text(parts.join("  |  "), 20, y);
+      y += 7;
 
-function buildEmptyColorSelection(): Record<RaffleColor, number[]> {
-  return ALL_COLORS.reduce((acc, color) => {
-    acc[color] = [];
-    return acc;
-  }, {} as Record<RaffleColor, number[]>);
-}
-
-function calculateOfferTotal(quantity: number, singlePrice: number) {
-  const tiers = [...OFFER_TIERS].sort((a, b) => b.quantity - a.quantity);
-
-  let remaining = quantity;
-  let total = 0;
-  const applied: string[] = [];
-
-  for (const tier of tiers) {
-    const count = Math.floor(remaining / tier.quantity);
-    if (count > 0) {
-      total += count * tier.price;
-      remaining -= count * tier.quantity;
-      applied.push(`${count} x ${tier.quantity} for ${money(tier.price)}`);
-    }
-  }
-
-  total += remaining * singlePrice;
-
-  return {
-    total,
-    applied,
-    remainder: remaining,
-  };
-}
-
-export default function RaffleSection() {
-  const { canManage, loading, tenant, isLoggedIn } = useAuth();
-
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
-  const [adminBusy, setAdminBusy] = useState(false);
-  const [adminMessage, setAdminMessage] = useState("");
-  const [eventsLoading, setEventsLoading] = useState(true);
-
-  const [events, setEvents] = useState<RaffleEvent[]>([]);
-  const [activeEventId, setActiveEventId] = useState<string>("");
-
-  const [drafts, setDrafts] = useState<Drafts>({});
-  const [selectedColorByEvent, setSelectedColorByEvent] = useState<Record<string, RaffleColor>>({});
-  const [selectedTicketsByEvent, setSelectedTicketsByEvent] = useState<SelectedTicketsByEvent>({});
-  const [purchases, setPurchases] = useState<RafflePurchase[]>([]);
-  const uploadRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    async function loadEvents() {
-      if (!isLoggedIn) {
-        setEvents([]);
-        setEventsLoading(false);
-        return;
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
       }
-
-      setEventsLoading(true);
-
-      try {
-        const data = await apiFetch("/api/raffles");
-        const loadedEvents = Array.isArray(data) ? data : [];
-
-        setEvents(loadedEvents);
-
-        setDrafts(
-          loadedEvents.reduce((acc: Drafts, event: RaffleEvent) => {
-            acc[event.id] = {
-              price: String(event.price),
-              startNumber: String(event.startNumber),
-              totalTickets: String(event.totalTickets),
-            };
-            return acc;
-          }, {})
-        );
-
-        setSelectedColorByEvent(
-          loadedEvents.reduce((acc: Record<string, RaffleColor>, event: RaffleEvent) => {
-            acc[event.id] = event.colors[0] ?? "Red";
-            return acc;
-          }, {})
-        );
-
-        setSelectedTicketsByEvent(
-          loadedEvents.reduce((acc: SelectedTicketsByEvent, event: RaffleEvent) => {
-            acc[event.id] = buildEmptyColorSelection();
-            return acc;
-          }, {})
-        );
-
-        if (loadedEvents.length > 0) {
-          setActiveEventId((curr) =>
-            curr && loadedEvents.some((e: RaffleEvent) => e.id === curr) ? curr : loadedEvents[0].id
-          );
-        } else {
-          setActiveEventId("");
-        }
-      } catch (err) {
-        setAdminMessage(err instanceof Error ? err.message : "Unable to load raffles.");
-      } finally {
-        setEventsLoading(false);
-      }
-    }
-
-    loadEvents();
-  }, [isLoggedIn]);
-
-  const event = events.find((e) => e.id === activeEventId) ?? events[0];
-
-  if (!event && !eventsLoading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background:
-            "radial-gradient(circle at top, rgba(56,189,248,0.16), transparent 28%), radial-gradient(circle at right, rgba(168,85,247,0.14), transparent 22%), linear-gradient(180deg, #020617 0%, #0f172a 48%, #020617 100%)",
-          color: "white",
-          fontFamily: "Inter, Arial, sans-serif",
-          padding: 24,
-        }}
-      >
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0 }}>Raffle</h2>
-            <p>{isLoggedIn ? "No raffles found for this tenant yet." : "Please log in."}</p>
-          </section>
-        </div>
-      </div>
-    );
-  }
-
-  const draft = event
-    ? drafts[event.id] ?? {
-        price: String(event.price),
-        startNumber: String(event.startNumber),
-        totalTickets: String(event.totalTickets),
-      }
-    : { price: "0", startNumber: "0", totalTickets: "0" };
-
-  const selectedColor = event
-    ? selectedColorByEvent[event.id] ?? event.colors[0] ?? "Red"
-    : "Red";
-
-  const eventSelections = event
-    ? selectedTicketsByEvent[event.id] ?? buildEmptyColorSelection()
-    : buildEmptyColorSelection();
-
-  const selectedTicketsForActiveColor = eventSelections[selectedColor] ?? [];
-  const soldForSelectedColor = event?.soldByColor[selectedColor] ?? [];
-  const availableForSelectedColor = event ? event.totalTickets - soldForSelectedColor.length : 0;
-
-  const visibleTicketNumbers = useMemo(() => {
-    if (!event) return [];
-    return Array.from({ length: event.totalTickets }, (_, i) => event.startNumber + i);
-  }, [event]);
-
-  const totalSelectedCount = useMemo(() => {
-    if (!event) return 0;
-    return event.colors.reduce((sum, color) => {
-      return sum + (eventSelections[color]?.length ?? 0);
-    }, 0);
-  }, [event, eventSelections]);
-
-  const subtotal = event ? totalSelectedCount * event.price : 0;
-  const offer = calculateOfferTotal(totalSelectedCount, event?.price ?? 0);
-  const total = offer.total;
-  const savings = subtotal - total;
-
-  const selectedSummary = useMemo(() => {
-    if (!event) return "None selected";
-
-    const rows = event.colors
-      .map((color) => {
-        const tickets = eventSelections[color] ?? [];
-        if (!tickets.length) return null;
-        return `${color}: ${tickets.join(", ")}`;
-      })
-      .filter(Boolean);
-
-    return rows.length ? rows.join(" • ") : "None selected";
-  }, [event, eventSelections]);
-
-  const priceInvalid = draft.price.trim() === "" || Number(draft.price) <= 0;
-  const startInvalid = draft.startNumber.trim() === "" || Number(draft.startNumber) <= 0;
-  const totalInvalid = draft.totalTickets.trim() === "" || Number(draft.totalTickets) <= 0;
-  const colorsInvalid = event ? event.colors.length === 0 : true;
-  const invalidForCompletion = priceInvalid || startInvalid || totalInvalid || colorsInvalid;
-
-  const canBuy =
-    !!event &&
-    buyerName.trim() !== "" &&
-    buyerEmail.trim() !== "" &&
-    totalSelectedCount > 0 &&
-    !invalidForCompletion;
-
-  function setEventPatch(id: string, patch: Partial<RaffleEvent>) {
-    setEvents((curr) => curr.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-  }
-
-  function setDraftPatch(id: string, patch: Partial<Drafts[string]>) {
-    setDrafts((curr) => ({
-      ...curr,
-      [id]: {
-        ...(curr[id] ?? { price: "", startNumber: "", totalTickets: "" }),
-        ...patch,
-      },
-    }));
-  }
-
-  function ensureEventSelectionExists(eventId: string) {
-    setSelectedTicketsByEvent((curr) => ({
-      ...curr,
-      [eventId]: curr[eventId] ?? buildEmptyColorSelection(),
-    }));
-  }
-
-  async function addEvent() {
-    if (!canManage) return;
-
-    setAdminMessage("");
-    setAdminBusy(true);
-
-    try {
-      const payload = {
-        title: `New Raffle ${events.length + 1}`,
-        eventName: "New Raffle",
-        venue: "Venue",
-        price: 0,
-        startNumber: 0,
-        totalTickets: 0,
-        colors: ["Red", "Blue"],
-        soldByColor: buildInitialSold(),
-        background: "",
-      };
-
-      const saved = await apiFetch("/api/raffles", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      const newEvent: RaffleEvent = {
-        id: saved.id,
-        title: saved.title,
-        eventName: saved.eventName,
-        venue: saved.venue,
-        price: saved.price,
-        startNumber: saved.startNumber,
-        totalTickets: saved.totalTickets,
-        colors: saved.colors ?? ["Red", "Blue"],
-        soldByColor: saved.soldByColor ?? buildInitialSold(),
-        background: saved.background ?? "",
-      };
-
-      setEvents((curr) => [...curr, newEvent]);
-      setDrafts((curr) => ({
-        ...curr,
-        [newEvent.id]: {
-          price: String(newEvent.price),
-          startNumber: String(newEvent.startNumber),
-          totalTickets: String(newEvent.totalTickets),
-        },
-      }));
-      setSelectedColorByEvent((curr) => ({ ...curr, [newEvent.id]: newEvent.colors[0] ?? "Red" }));
-      setSelectedTicketsByEvent((curr) => ({ ...curr, [newEvent.id]: buildEmptyColorSelection() }));
-      setActiveEventId(newEvent.id);
-      setAdminMessage("Raffle created.");
-    } catch (err) {
-      setAdminMessage(err instanceof Error ? err.message : "Unable to add raffle.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
-  async function removeCurrentEvent() {
-    if (!canManage || !event || events.length <= 1) return;
-
-    setAdminMessage("");
-    setAdminBusy(true);
-
-    try {
-      await apiFetch(`/api/raffles/${event.id}`, {
-        method: "DELETE",
-      });
-
-      const remaining = events.filter((e) => e.id !== event.id);
-      setEvents(remaining);
-      setActiveEventId(remaining[0]?.id ?? "");
-
-      setDrafts((curr) => {
-        const next = { ...curr };
-        delete next[event.id];
-        return next;
-      });
-
-      setSelectedColorByEvent((curr) => {
-        const next = { ...curr };
-        delete next[event.id];
-        return next;
-      });
-
-      setSelectedTicketsByEvent((curr) => {
-        const next = { ...curr };
-        delete next[event.id];
-        return next;
-      });
-
-      setAdminMessage("Raffle removed.");
-    } catch (err) {
-      setAdminMessage(err instanceof Error ? err.message : "Unable to remove raffle.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
-  function toggleColor(color: RaffleColor) {
-    if (!event) return;
-    ensureEventSelectionExists(event.id);
-    setSelectedColorByEvent((curr) => ({ ...curr, [event.id]: color }));
-  }
-
-  function toggleTicketNumber(ticketNo: number) {
-    if (!event) return;
-    if (soldForSelectedColor.includes(ticketNo)) return;
-
-    setSelectedTicketsByEvent((curr) => {
-      const existingEventSelections = curr[event.id] ?? buildEmptyColorSelection();
-      const currentColorTickets = existingEventSelections[selectedColor] ?? [];
-
-      const nextTickets = currentColorTickets.includes(ticketNo)
-        ? currentColorTickets.filter((n) => n !== ticketNo)
-        : [...currentColorTickets, ticketNo].sort((a, b) => a - b);
-
-      return {
-        ...curr,
-        [event.id]: {
-          ...existingEventSelections,
-          [selectedColor]: nextTickets,
-        },
-      };
     });
   }
 
-  function clearSelections() {
-    if (!event) return;
-    setSelectedTicketsByEvent((curr) => ({
-      ...curr,
-      [event.id]: buildEmptyColorSelection(),
-    }));
-  }
+  y += 8;
+  doc.setFontSize(10);
+  doc.text("Thank you for supporting the fundraiser.", 20, y);
 
-  function uploadBackground(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!event) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
+  doc.save("raffle-ticket.pdf");
+}
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setEventPatch(event.id, { background: String(reader.result || "") });
-    };
-    reader.readAsDataURL(file);
-  }
+export default function RaffleSection() {
+  const [raffleTitle, setRaffleTitle] = useState("Spring Cash Raffle");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [entriesCount, setEntriesCount] = useState(1);
+  const [colour, setColour] = useState("");
+  const [numberValue, setNumberValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [createdEntries, setCreatedEntries] = useState<EntryRecord[]>([]);
 
-  function toggleAdminColor(color: RaffleColor) {
-    if (!event) return;
+  const totalEntries = useMemo(() => {
+    return Math.max(1, Number(entriesCount) || 1);
+  }, [entriesCount]);
 
-    const exists = event.colors.includes(color);
-    const nextColors = exists ? event.colors.filter((c) => c !== color) : [...event.colors, color];
-    const nextSelected = nextColors.includes(selectedColor) ? selectedColor : nextColors[0] ?? "Red";
+  async function handleCreateAndDownload(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
 
-    setEvents((curr) =>
-      curr.map((e) =>
-        e.id === event.id
-          ? {
-              ...e,
-              colors: nextColors,
-              soldByColor: {
-                ...e.soldByColor,
-                [color]: e.soldByColor[color] ?? [],
-              },
-            }
-          : e
-      )
-    );
-
-    setSelectedColorByEvent((curr) => ({ ...curr, [event.id]: nextSelected }));
-
-    if (exists) {
-      setSelectedTicketsByEvent((curr) => {
-        const currentSelections = curr[event.id] ?? buildEmptyColorSelection();
-        return {
-          ...curr,
-          [event.id]: {
-            ...currentSelections,
-            [color]: [],
-          },
-        };
-      });
+    if (!name.trim()) {
+      setError("Name is required.");
+      return;
     }
-  }
 
-  async function saveCurrentEvent() {
-    if (!canManage || !event) return;
+    if (!email.trim()) {
+      setError("Email is required.");
+      return;
+    }
 
-    setAdminMessage("");
-    setAdminBusy(true);
+    setSubmitting(true);
 
     try {
-      const saved = await apiFetch(`/api/raffles/${event.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          title: event.title,
-          eventName: event.eventName,
-          venue: event.venue,
-          price: event.price,
-          startNumber: event.startNumber,
-          totalTickets: event.totalTickets,
-          colors: event.colors,
-          soldByColor: event.soldByColor,
-          background: event.background ?? "",
-        }),
-      });
-
-      setEvents((curr) => curr.map((e) => (e.id === event.id ? saved : e)));
-      setAdminMessage("Raffle saved.");
-    } catch (err) {
-      setAdminMessage(err instanceof Error ? err.message : "Unable to save raffle.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
-  function downloadReceipt(purchase?: RafflePurchase) {
-    if (!event) return;
-
-    const selections = purchase?.selections ?? eventSelections;
-    const quantity = purchase?.quantity ?? totalSelectedCount;
-    const subtotalValue = purchase?.subtotal ?? subtotal;
-    const totalValue = purchase?.total ?? total;
-    const buyer = purchase?.buyerName ?? buyerName;
-    const email = purchase?.buyerEmail ?? buyerEmail;
-    const createdAt = purchase?.createdAt ?? new Date().toLocaleString();
-
-    const lines = event.colors
-      .map((color) => {
-        const tickets = selections[color] ?? [];
-        if (!tickets.length) return null;
-        return `${color}: ${tickets.join(", ")}`;
-      })
-      .filter(Boolean) as string[];
-
-    const doc = new jsPDF();
-    let y = 22;
-
-    doc.setFontSize(20);
-    doc.text("Raffle Purchase Receipt", 20, y);
-    y += 16;
-
-    doc.setFontSize(12);
-    doc.text(`Raffle: ${event.title}`, 20, y);
-    y += 10;
-    doc.text(`Buyer: ${buyer || "Not entered"}`, 20, y);
-    y += 10;
-    doc.text(`Email: ${email || "Not entered"}`, 20, y);
-    y += 10;
-    doc.text(`Purchased: ${createdAt}`, 20, y);
-    y += 14;
-
-    doc.text(`Quantity: ${quantity}`, 20, y);
-    y += 10;
-    doc.text(`Standard subtotal: ${money(subtotalValue)}`, 20, y);
-    y += 10;
-    doc.text(`Total paid: ${money(totalValue)}`, 20, y);
-    y += 14;
-
-    doc.text("Selections:", 20, y);
-    y += 10;
-
-    if (!lines.length) {
-      doc.text("None", 20, y);
-    } else {
-      lines.forEach((line) => {
-        const wrapped = doc.splitTextToSize(line, 170);
-        doc.text(wrapped, 20, y);
-        y += wrapped.length * 8;
-      });
-    }
-
-    doc.save("buyer-raffle-receipt.pdf");
-  }
-
-  async function buyRaffleTickets() {
-    if (!canBuy || !event) return;
-
-    try {
-      const cleanedSelections = ALL_COLORS.reduce((acc, color) => {
-        acc[color] = [...(eventSelections[color] ?? [])].sort((a, b) => a - b);
-        return acc;
-      }, {} as Record<RaffleColor, number[]>);
-
-      const response = await apiFetch("/api/raffles/purchase", {
-        method: "POST",
-        body: JSON.stringify({
-          eventId: event.id,
-          buyerName: buyerName.trim(),
-          buyerEmail: buyerEmail.trim(),
-          selections: cleanedSelections,
-          subtotal,
-          total,
-        }),
-      });
-
-      const updatedEvent = response.event;
-      const purchaseFromServer = response.purchase;
-
-      const purchase: RafflePurchase = {
-        id: purchaseFromServer.id,
-        eventId: updatedEvent.id,
-        eventTitle: purchaseFromServer.itemTitle ?? event.title,
-        buyerName: purchaseFromServer.buyerName,
-        buyerEmail: purchaseFromServer.buyerEmail,
-        selections: purchaseFromServer.details?.selections ?? cleanedSelections,
-        quantity: purchaseFromServer.quantity,
-        subtotal: purchaseFromServer.subtotal ?? subtotal,
-        total: purchaseFromServer.total,
-        createdAt: purchaseFromServer.createdAt,
-      };
-
-      const description = event.colors
-        .map((color) => {
-          const tickets = purchase.selections[color] ?? [];
-          if (!tickets.length) return null;
-          return `${color}: ${tickets.join(", ")}`;
+      const simulatedEntries: EntryRecord[] = Array.from(
+        { length: totalEntries },
+        (_, index) => ({
+          id: `entry_${Date.now()}_${index + 1}`,
+          colour: colour.trim() || undefined,
+          number: numberValue ? Number(numberValue) + index : null,
         })
-        .filter(Boolean)
-        .join(" | ");
+      );
 
-      appendLedger({
-        id: String(purchase.id),
-        module: "raffle",
-        itemTitle: purchase.eventTitle,
-        buyerName: purchase.buyerName,
-        buyerEmail: purchase.buyerEmail,
-        description,
-        quantity: purchase.quantity,
-        total: purchase.total,
-        createdAt: purchase.createdAt,
+      setCreatedEntries(simulatedEntries);
+
+      await generateTicketPdf({
+        raffleTitle: raffleTitle.trim() || "Raffle",
+        purchaserName: name.trim(),
+        purchaserEmail: email.trim(),
+        totalEntries,
+        entries: simulatedEntries,
       });
 
-      setPurchases((curr) => [purchase, ...curr]);
-      setEvents((curr) => curr.map((e) => (e.id === updatedEvent.id ? updatedEvent : e)));
-      setSelectedTicketsByEvent((curr) => ({
-        ...curr,
-        [event.id]: buildEmptyColorSelection(),
-      }));
-      setBuyerName("");
-      setBuyerEmail("");
-
-      downloadReceipt(purchase);
-    } catch (err) {
-      setAdminMessage(err instanceof Error ? err.message : "Unable to complete raffle purchase.");
+      setSuccess("PDF generated successfully.");
+    } catch (err: any) {
+      setError(err?.message || "Failed to generate PDF.");
+    } finally {
+      setSubmitting(false);
     }
   }
-
-  const eventPurchaseData = event ? purchases.filter((p) => p.eventId === event.id) : [];
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top, rgba(56,189,248,0.16), transparent 28%), radial-gradient(circle at right, rgba(168,85,247,0.14), transparent 22%), linear-gradient(180deg, #020617 0%, #0f172a 48%, #020617 100%)",
-        color: "white",
-        fontFamily: "Inter, Arial, sans-serif",
-        padding: 24,
-      }}
-    >
-      <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gap: 20 }}>
-        <section style={cardStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  gap: 8,
-                  alignItems: "center",
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.08)",
-                  borderRadius: 999,
-                  padding: "6px 12px",
-                  fontSize: 11,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.18em",
-                  color: "#bae6fd",
-                  marginBottom: 10,
-                }}
-              >
-                Premium fundraising suite
-              </div>
-              <h1 style={{ margin: 0, fontSize: 38, fontWeight: 700, letterSpacing: "-0.03em" }}>
-                Raffle Standalone
-              </h1>
-              <p style={{ margin: "10px 0 0", color: "#cbd5e1", maxWidth: 760 }}>
-                Buyers can mix colours in one basket and offer pricing applies across the combined total.
-              </p>
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h1 style={styles.heading}>Raffle PDF Export</h1>
+          <p style={styles.subtext}>
+            This is a compile-safe raffle section with PDF generation enabled.
+          </p>
+
+          <form onSubmit={handleCreateAndDownload} style={styles.form}>
+            <div style={styles.field}>
+              <label style={styles.label}>Raffle title</label>
+              <input
+                value={raffleTitle}
+                onChange={(e) => setRaffleTitle(e.target.value)}
+                style={styles.input}
+                placeholder="Spring Cash Raffle"
+              />
             </div>
 
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,0.10)",
-                background: "rgba(255,255,255,0.08)",
-                borderRadius: 999,
-                padding: "10px 14px",
-                fontSize: 12,
-                color: loading ? "#cbd5e1" : canManage ? "#86efac" : "#cbd5e1",
-              }}
-            >
-              {loading
-                ? "Checking access..."
-                : canManage
-                ? `Managing ${tenant?.name ?? "platform"}`
-                : "Buyer mode"}
-            </div>
-          </div>
-        </section>
-
-        {eventsLoading && (
-          <section style={cardStyle()}>
-            <div>Loading raffles...</div>
-          </section>
-        )}
-
-        {event && (
-          <>
-            <section style={cardStyle()}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-                <div>
-                  <label style={labelStyle()}>Buyer name</label>
-                  <input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} style={inputStyle()} />
-                </div>
-                <div>
-                  <label style={labelStyle()}>Buyer email</label>
-                  <input value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} style={inputStyle()} />
-                </div>
-              </div>
-            </section>
-
-            {!loading && canManage && (
-              <section style={cardStyle()}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0, fontSize: 28 }}>Admin • Raffle</h2>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button onClick={addEvent} disabled={adminBusy} style={chipStyle(false)}>
-                      Add Raffle
-                    </button>
-                    <button onClick={removeCurrentEvent} disabled={adminBusy} style={chipStyle(false)}>
-                      Remove Current
-                    </button>
-                    <button onClick={() => uploadRef.current?.click()} disabled={adminBusy} style={chipStyle(false)}>
-                      Background Image
-                    </button>
-                    <button onClick={saveCurrentEvent} disabled={adminBusy} style={chipStyle(false)}>
-                      Save Raffle
-                    </button>
-                  </div>
-                </div>
-
+            <div style={styles.grid2}>
+              <div style={styles.field}>
+                <label style={styles.label}>Name</label>
                 <input
-                  ref={uploadRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={uploadBackground}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  style={styles.input}
+                  placeholder="Jane Smith"
                 />
-
-                {adminMessage && (
-                  <div
-                    style={{
-                      marginTop: 14,
-                      border: "1px solid rgba(255,255,255,0.10)",
-                      background: "rgba(2,6,23,0.55)",
-                      borderRadius: 16,
-                      padding: 12,
-                      color: "#cbd5e1",
-                    }}
-                  >
-                    {adminMessage}
-                  </div>
-                )}
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                  {events.map((e) => (
-                    <button key={e.id} onClick={() => setActiveEventId(e.id)} style={chipStyle(e.id === event.id)}>
-                      {e.title}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 18 }}>
-                  <div>
-                    <label style={labelStyle()}>Listing title</label>
-                    <input
-                      value={event.title}
-                      onChange={(e) => setEventPatch(event.id, { title: e.target.value })}
-                      style={inputStyle()}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle()}>Event name</label>
-                    <input
-                      value={event.eventName}
-                      onChange={(e) => setEventPatch(event.id, { eventName: e.target.value })}
-                      style={inputStyle()}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle()}>Venue</label>
-                    <input
-                      value={event.venue}
-                      onChange={(e) => setEventPatch(event.id, { venue: e.target.value })}
-                      style={inputStyle()}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle()}>Ticket price</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={draft.price}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setDraftPatch(event.id, { price: v });
-                        if (v.trim() !== "") {
-                          setEventPatch(event.id, { price: Number(v) });
-                        }
-                      }}
-                      style={inputStyle(priceInvalid)}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle()}>Start number</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={draft.startNumber}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setDraftPatch(event.id, { startNumber: v });
-                        if (v.trim() !== "") {
-                          setEventPatch(event.id, { startNumber: Math.max(0, Math.floor(Number(v))) });
-                        }
-                      }}
-                      style={inputStyle(startInvalid)}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle()}>Tickets per color</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={draft.totalTickets}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setDraftPatch(event.id, { totalTickets: v });
-                        if (v.trim() !== "") {
-                          setEventPatch(event.id, { totalTickets: Math.max(0, Math.floor(Number(v))) });
-                        }
-                      }}
-                      style={inputStyle(totalInvalid)}
-                    />
-                  </div>
-
-                  <div style={summaryCardStyle()}>
-                    <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                      Availability
-                    </div>
-                    <div style={{ marginTop: 8, fontWeight: 700, fontSize: 20 }}>
-                      {availableForSelectedColor} available
-                    </div>
-                    <div style={{ marginTop: 6, color: "#cbd5e1", fontSize: 14 }}>
-                      {soldForSelectedColor.length} sold of {event.totalTickets} for {selectedColor}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 18 }}>
-                  <div style={{ ...labelStyle(), marginBottom: 12 }}>Colors to sell</div>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {ALL_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => toggleAdminColor(color)}
-                        style={colorBadgeStyle(color, event.colors.includes(color))}
-                      >
-                        {color}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {invalidForCompletion && (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      border: "1px solid rgba(251,113,133,0.35)",
-                      background: "rgba(127,29,29,0.18)",
-                      borderRadius: 18,
-                      padding: 14,
-                      color: "#fecdd3",
-                    }}
-                  >
-                    Some required values are blank or 0. They are allowed while editing, but must be greater than 0 for completion.
-                  </div>
-                )}
-
-                <div style={{ marginTop: 22 }}>
-                  <h3 style={{ marginTop: 0 }}>Purchase data</h3>
-                  <div style={{ display: "grid", gap: 12 }}>
-                    {eventPurchaseData.length === 0 ? (
-                      <div style={{ color: "#94a3b8" }}>No purchases recorded for this raffle yet.</div>
-                    ) : (
-                      eventPurchaseData.map((purchase) => (
-                        <div
-                          key={purchase.id}
-                          style={{
-                            border: "1px solid rgba(255,255,255,0.10)",
-                            background: "rgba(2,6,23,0.55)",
-                            borderRadius: 18,
-                            padding: 16,
-                          }}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                            <div style={{ fontWeight: 700 }}>{purchase.buyerName}</div>
-                            <div>{money(purchase.total)}</div>
-                          </div>
-                          <div style={{ marginTop: 6, color: "#cbd5e1" }}>{purchase.buyerEmail}</div>
-                          <div style={{ marginTop: 6, color: "#cbd5e1" }}>
-                            {event.colors
-                              .map((color) => {
-                                const nums = purchase.selections[color] ?? [];
-                                return nums.length ? `${color}: ${nums.join(", ")}` : null;
-                              })
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </div>
-                          <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
-                            {purchase.quantity} tickets • subtotal {money(purchase.subtotal)} • paid {money(purchase.total)}
-                          </div>
-                          <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>{purchase.createdAt}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <section
-              style={{
-                ...cardStyle(),
-                backgroundImage: event.background
-                  ? `linear-gradient(rgba(2,6,23,0.78), rgba(2,6,23,0.78)), url(${event.background})`
-                  : undefined,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            >
-              <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: 30 }}>{event.title} • Buyer View</h2>
-              <p style={{ marginTop: 0, marginBottom: 18, color: "#cbd5e1" }}>
-                Select tickets in one colour, switch colours, and keep building the same basket until purchase.
-              </p>
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-                {event.colors.map((color) => {
-                  const count = eventSelections[color]?.length ?? 0;
-                  return (
-                    <button
-                      key={color}
-                      onClick={() => toggleColor(color)}
-                      style={colorBadgeStyle(color, selectedColor === color)}
-                    >
-                      {color}
-                      {count > 0 ? ` (${count})` : ""}
-                    </button>
-                  );
-                })}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(10, minmax(0, 1fr))", gap: 8 }}>
-                {visibleTicketNumbers.map((ticketNo) => {
-                  const isSold = soldForSelectedColor.includes(ticketNo);
-                  const isSelected = selectedTicketsForActiveColor.includes(ticketNo);
+              <div style={styles.field}>
+                <label style={styles.label}>Email</label>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={styles.input}
+                  placeholder="jane@example.com"
+                />
+              </div>
+            </div>
 
-                  return (
-                    <button
-                      key={ticketNo}
-                      type="button"
-                      onClick={() => toggleTicketNumber(ticketNo)}
-                      disabled={isSold}
-                      style={{
-                        aspectRatio: "1 / 1",
-                        borderRadius: 18,
-                        border: isSold
-                          ? "1px solid rgba(251,113,133,0.35)"
-                          : isSelected
-                          ? "1px solid white"
-                          : "1px solid rgba(255,255,255,0.15)",
-                        background: isSold
-                          ? "rgba(244,63,94,0.22)"
-                          : isSelected
-                          ? "white"
-                          : "rgba(15,23,42,0.72)",
-                        color: isSelected ? "#020617" : "white",
-                        fontWeight: 700,
-                        cursor: isSold ? "not-allowed" : "pointer",
-                        opacity: isSold ? 0.82 : 1,
-                      }}
-                    >
-                      {ticketNo}
-                    </button>
-                  );
-                })}
+            <div style={styles.grid3}>
+              <div style={styles.field}>
+                <label style={styles.label}>Entries</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={entriesCount}
+                  onChange={(e) => setEntriesCount(Number(e.target.value || 1))}
+                  style={styles.input}
+                />
               </div>
 
-              <div style={{ marginTop: 10, color: "#94a3b8", fontSize: 12 }}>
-                Your selections are stored per colour and remain in the basket until purchase or clear.
+              <div style={styles.field}>
+                <label style={styles.label}>Colour (optional)</label>
+                <input
+                  value={colour}
+                  onChange={(e) => setColour(e.target.value)}
+                  style={styles.input}
+                  placeholder="Blue"
+                />
               </div>
 
-              <div style={{ marginTop: 18, ...summaryCardStyle() }}>
-                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                  Selected tickets
-                </div>
-
-                <div style={{ marginTop: 8, color: "#e2e8f0" }}>{selectedSummary}</div>
-
-                <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                      Total tickets
-                    </div>
-                    <div style={{ fontWeight: 700 }}>{totalSelectedCount}</div>
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                      Standard subtotal
-                    </div>
-                    <div style={{ fontWeight: 700 }}>{money(subtotal)}</div>
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                      Offer pricing total
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: 22 }}>{money(total)}</div>
-                  </div>
-
-                  {savings > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                      <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8" }}>
-                        Savings
-                      </div>
-                      <div style={{ fontWeight: 700 }}>{money(savings)}</div>
-                    </div>
-                  )}
-
-                  {offer.applied.length > 0 && (
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                      Offer applied: {offer.applied.join(" + ")}
-                      {offer.remainder > 0 ? ` + ${offer.remainder} at ${money(event.price)} each` : ""}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
-                  <button onClick={clearSelections} style={{ ...secondaryButtonStyle(), flex: 1, minWidth: 220 }}>
-                    Clear Selection
-                  </button>
-
-                  <button
-                    onClick={buyRaffleTickets}
-                    disabled={!canBuy}
-                    style={{
-                      flex: 1,
-                      minWidth: 220,
-                      borderRadius: 18,
-                      padding: "14px 18px",
-                      background: canBuy ? "white" : "rgba(255,255,255,0.25)",
-                      color: canBuy ? "#020617" : "#cbd5e1",
-                      fontWeight: 700,
-                      border: "none",
-                      cursor: canBuy ? "pointer" : "not-allowed",
-                    }}
-                  >
-                    Buy Raffle Tickets
-                  </button>
-
-                  <button onClick={() => downloadReceipt()} style={{ ...secondaryButtonStyle(), flex: 1, minWidth: 220 }}>
-                    Download PDF Receipt
-                  </button>
-                </div>
+              <div style={styles.field}>
+                <label style={styles.label}>Number start (optional)</label>
+                <input
+                  type="number"
+                  value={numberValue}
+                  onChange={(e) => setNumberValue(e.target.value)}
+                  style={styles.input}
+                  placeholder="1"
+                />
               </div>
-            </section>
-          </>
-        )}
+            </div>
+
+            <div style={styles.actions}>
+              <button type="submit" disabled={submitting} style={styles.button}>
+                {submitting ? "Generating..." : "Generate PDF"}
+              </button>
+            </div>
+          </form>
+
+          {error ? <div style={styles.error}>{error}</div> : null}
+          {success ? <div style={styles.success}>{success}</div> : null}
+
+          {createdEntries.length > 0 ? (
+            <div style={styles.preview}>
+              <h2 style={styles.previewHeading}>Preview</h2>
+              <div style={styles.entryList}>
+                {createdEntries.map((entry, index) => (
+                  <div key={entry.id} style={styles.entryCard}>
+                    <div style={styles.entryTitle}>Entry {index + 1}</div>
+                    <div style={styles.entryMeta}>ID: {entry.id}</div>
+                    {entry.colour ? (
+                      <div style={styles.entryMeta}>Colour: {entry.colour}</div>
+                    ) : null}
+                    {entry.number != null ? (
+                      <div style={styles.entryMeta}>Number: {entry.number}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f3f4f6",
+    padding: 24,
+  },
+  container: {
+    maxWidth: 900,
+    margin: "0 auto",
+  },
+  card: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 16,
+    padding: 24,
+  },
+  heading: {
+    margin: 0,
+    fontSize: 28,
+  },
+  subtext: {
+    marginTop: 8,
+    color: "#6b7280",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    marginTop: 20,
+  },
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#374151",
+  },
+  input: {
+    height: 42,
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    padding: "0 12px",
+    fontSize: 14,
+  },
+  grid2: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
+  },
+  grid3: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 16,
+  },
+  actions: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  button: {
+    height: 44,
+    padding: "0 16px",
+    borderRadius: 10,
+    border: "1px solid #2563eb",
+    background: "#2563eb",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  error: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #fecaca",
+    background: "#fef2f2",
+    color: "#b91c1c",
+  },
+  success: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #a7f3d0",
+    background: "#ecfdf5",
+    color: "#065f46",
+  },
+  preview: {
+    marginTop: 24,
+  },
+  previewHeading: {
+    margin: "0 0 12px",
+    fontSize: 20,
+  },
+  entryList: {
+    display: "grid",
+    gap: 12,
+  },
+  entryCard: {
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 12,
+    background: "#f9fafb",
+  },
+  entryTitle: {
+    fontWeight: 700,
+    marginBottom: 6,
+  },
+  entryMeta: {
+    color: "#4b5563",
+    fontSize: 14,
+  },
+};
