@@ -1,62 +1,154 @@
-import React from 'react';
-import { Database } from 'lucide-react';
-import { AdminTab, Order } from '../types';
-import { formatMoney } from '../utils';
-import { PremiumCard, SectionChip } from './ui';
+import React from "react";
+import { Database } from "lucide-react";
 
-export function AdminPanel({
-  show,
-  tab,
-  setTab,
-  squareOrders,
-  ticketOrders,
-  raffleOrders,
-}: {
-  show: boolean;
-  tab: AdminTab;
-  setTab: (t: AdminTab) => void;
-  squareOrders: Order[];
-  ticketOrders: Order[];
-  raffleOrders: Order[];
-}) {
-  if (!show) return null;
-  const map = { squares: squareOrders, tickets: ticketOrders, raffle: raffleOrders };
+type Order = {
+  id: string;
+  fullName?: string;
+  email?: string;
+  amountTotalCents: number;
+  currency?: string;
+  status?: string;
+  createdAt?: string;
+};
+
+function formatMoney(cents: number, currency = "GBP") {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency,
+  }).format((cents || 0) / 100);
+}
+
+export default function AdminPanel() {
+  // placeholder data (replace later with real API)
+  const orders: Order[] = [];
+
   return (
-    <PremiumCard>
-      <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <Database className="h-5 w-5 text-sky-300" />
-        Admin purchase data
-      </div>
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        {(['squares', 'tickets', 'raffle'] as AdminTab[]).map((t) => (
-          <SectionChip key={t} active={tab === t} onClick={() => setTab(t)}>
-            {t}
-          </SectionChip>
-        ))}
-      </div>
-      <div className="space-y-3">
-        {map[tab].length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
-            No purchases recorded yet.
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <div style={styles.headerLeft}>
+            <Database size={28} />
+            <h1 style={styles.heading}>Admin Dashboard</h1>
           </div>
-        ) : (
-          map[tab].map((order) => (
-            <div key={order.id} className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 shadow-[0_14px_36px_rgba(2,6,23,0.22)]">
-              <div className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-500">{order.listing}</div>
-              <div className="mb-2 flex justify-between">
-                <div className="font-semibold text-white">{order.buyer}</div>
-                <div className="text-sm text-slate-200">{formatMoney(order.total)}</div>
-              </div>
-              <div className="mb-2 text-sm text-slate-300">{order.email}</div>
-              <div className="grid gap-1 text-sm text-slate-300">
-                {order.lines.map((line, i) => (
-                  <div key={i}>{line}</div>
-                ))}
-              </div>
+        </div>
+
+        <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>Orders</h2>
+
+          {orders.length === 0 ? (
+            <div style={styles.empty}>
+              No orders yet. Purchases will appear here.
             </div>
-          ))
-        )}
+          ) : (
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Name</th>
+                  <th style={styles.th}>Email</th>
+                  <th style={styles.th}>Amount</th>
+                  <th style={styles.th}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr key={order.id}>
+                    <td style={styles.td}>{order.fullName}</td>
+                    <td style={styles.td}>{order.email}</td>
+                    <td style={styles.td}>
+                      {formatMoney(order.amountTotalCents, order.currency)}
+                    </td>
+                    <td style={styles.td}>{order.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>System</h2>
+          <div style={styles.systemGrid}>
+            <div style={styles.systemItem}>
+              <strong>Raffles</strong>
+              <div>Manage raffles from admin pages</div>
+            </div>
+            <div style={styles.systemItem}>
+              <strong>Purchases</strong>
+              <div>Stripe integration coming next</div>
+            </div>
+            <div style={styles.systemItem}>
+              <strong>Tenants</strong>
+              <div>Multi-tenant support active</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </PremiumCard>
+    </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    padding: 24,
+    background: "#f3f4f6",
+    minHeight: "100vh",
+  },
+  container: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  heading: {
+    fontSize: 28,
+    margin: 0,
+  },
+  card: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    marginBottom: 12,
+  },
+  empty: {
+    color: "#6b7280",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  th: {
+    textAlign: "left",
+    padding: 8,
+    borderBottom: "1px solid #e5e7eb",
+  },
+  td: {
+    padding: 8,
+    borderBottom: "1px solid #f3f4f6",
+  },
+  systemGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 16,
+  },
+  systemItem: {
+    padding: 12,
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
+    background: "#f9fafb",
+  },
+};
