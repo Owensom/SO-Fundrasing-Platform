@@ -3,6 +3,10 @@ import ColourOptionsEditor, {
   ColourOption,
 } from "../../../components/admin/ColourOptionsEditor";
 
+type Props = {
+  raffleId?: string;
+};
+
 type FormState = {
   id: string;
   title: string;
@@ -47,24 +51,12 @@ function currencySymbol(code: string) {
   return "£";
 }
 
-function getCurrentRaffleId() {
-  if (typeof window === "undefined") return "";
-
-  const params = new URLSearchParams(window.location.search);
-  const fromQuery = params.get("id") || params.get("campaignId");
-  if (fromQuery) return fromQuery;
-
-  const parts = window.location.pathname.split("/").filter(Boolean);
-  return parts[parts.length - 1] || "";
-}
-
-export default function AdminEditRafflePage() {
+export default function AdminEditRafflePage({ raffleId }: Props) {
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [routeId, setRouteId] = useState("");
 
   const showColours = useMemo(
     () =>
@@ -79,10 +71,7 @@ export default function AdminEditRafflePage() {
   );
 
   useEffect(() => {
-    const id = getCurrentRaffleId();
-    setRouteId(id);
-
-    if (!id) {
+    if (!raffleId) {
       setLoading(false);
       return;
     }
@@ -93,7 +82,7 @@ export default function AdminEditRafflePage() {
 
       try {
         const res = await fetch(
-          `/api/admin/raffle-details?id=${encodeURIComponent(id)}&tenantSlug=demo-a`
+          `/api/admin/raffle-details?id=${encodeURIComponent(raffleId)}&tenantSlug=demo-a`
         );
         const json = await res.json();
 
@@ -141,7 +130,7 @@ export default function AdminEditRafflePage() {
     }
 
     load();
-  }, []);
+  }, [raffleId]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -154,9 +143,6 @@ export default function AdminEditRafflePage() {
     setSuccessMessage("");
 
     try {
-      const ticketPriceNumber = Number(form.ticketPrice || 0);
-      const singleTicketPriceCents = Math.round(ticketPriceNumber * 100);
-
       const payload = {
         id: form.id,
         tenantSlug: "demo-a",
@@ -164,8 +150,7 @@ export default function AdminEditRafflePage() {
         description: form.description,
         slug: form.slug,
         status: form.status,
-        ticketPrice: ticketPriceNumber,
-        singleTicketPriceCents,
+        ticketPrice: Number(form.ticketPrice),
         totalTickets: Number(form.totalTickets),
         soldTickets: Number(form.soldTickets || 0),
         heroImageUrl: form.heroImageUrl || "",
@@ -212,22 +197,15 @@ export default function AdminEditRafflePage() {
   }
 
   if (loading) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.container}>Loading raffle details...</div>
-      </div>
-    );
+    return <div style={styles.page}>Loading raffle...</div>;
   }
 
-  if (!routeId) {
+  if (!raffleId) {
     return (
       <div style={styles.page}>
         <div style={styles.container}>
-          <h1 style={styles.heading}>Raffle details</h1>
-          <div style={styles.error}>
-            Missing raffle id. Open this page from the admin raffle list or use a URL
-            ending with the raffle campaign id.
-          </div>
+          <h1 style={styles.heading}>Edit raffle</h1>
+          <div style={styles.error}>Missing raffle id.</div>
         </div>
       </div>
     );
@@ -291,10 +269,7 @@ export default function AdminEditRafflePage() {
               <select
                 value={form.currencyCode}
                 onChange={(e) =>
-                  updateField(
-                    "currencyCode",
-                    e.target.value as FormState["currencyCode"]
-                  )
+                  updateField("currencyCode", e.target.value as FormState["currencyCode"])
                 }
                 style={styles.input}
               >
@@ -508,4 +483,41 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     border: "1px solid #d1d5db",
     padding: "0 12px",
-    fontSize: 14
+    fontSize: 14,
+  },
+  textarea: {
+    borderRadius: 8,
+    border: "1px solid #d1d5db",
+    padding: 12,
+    fontSize: 14,
+    resize: "vertical",
+  },
+  actions: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  submitButton: {
+    height: 44,
+    padding: "0 16px",
+    borderRadius: 10,
+    border: "1px solid #2563eb",
+    background: "#2563eb",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  error: {
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    padding: 12,
+    borderRadius: 10,
+  },
+  success: {
+    background: "#ecfdf5",
+    border: "1px solid #a7f3d0",
+    color: "#065f46",
+    padding: 12,
+    borderRadius: 10,
+  },
+};
