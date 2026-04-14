@@ -1,29 +1,16 @@
 {
-  "name": "raffle-platform",
+  "name": "so-fundraising-platform",
   "private": true,
-  "type": "module",
+  "version": "1.0.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
-    "jspdf": "^3.0.3",
-    "lucide-react": "^0.511.0",
-    "pg": "^8.16.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "next": "14.2.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "@vercel/blob": "^0.23.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.5.2",
-    "@types/pg": "^8.15.5",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vercel/node": "^5.3.24",
-    "@vitejs/plugin-react": "^4.3.4",
-    "typescript": "^5.9.3",
-    "vite": "^5.4.21"
   }
 }
