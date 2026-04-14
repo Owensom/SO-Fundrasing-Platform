@@ -1,22 +1,10 @@
 import React, { useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
-import type { PutBlobResult } from "@vercel/blob";
 
 type Props = {
   label: string;
   value?: string;
   onChange: (url: string) => void;
 };
-
-function makeSafeFilename(file: File) {
-  const cleanName = file.name
-    .toLowerCase()
-    .replace(/[^a-z0-9.\-_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return `raffles/${Date.now()}-${cleanName || "image"}`;
-}
 
 export default function ImageUploadField({
   label,
@@ -32,12 +20,21 @@ export default function ImageUploadField({
     setError("");
 
     try {
-      const blob: PutBlobResult = await upload(makeSafeFilename(file), file, {
-        access: "public",
-        handleUploadUrl: "/api/uploads",
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
       });
 
-      onChange(blob.url);
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || "Upload failed");
+      }
+
+      onChange(json.url);
     } catch (err: any) {
       console.error("Image upload failed:", err);
       setError(err?.message || "Upload failed");
@@ -65,9 +62,7 @@ export default function ImageUploadField({
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) {
-            handleSelectedFile(file);
-          }
+          if (file) handleSelectedFile(file);
         }}
       />
 
