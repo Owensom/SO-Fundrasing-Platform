@@ -1,1014 +1,452 @@
-type ColourOption = {
-  name: string;
-  hex: string;
+import { query, queryOne } from "./db";
+import { normaliseColours } from "./normalise-colours";
+
+export type RaffleOfferRow = {
+  id: string;
+  raffle_id: string;
+  label: string;
+  price: string | number;
+  ticket_count: number;
+  is_active: boolean;
+  sort_order: number;
 };
 
-type JsonRecord = Record<string, unknown>;
+export type RaffleRow = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  image_url: string | null;
+  draw_at: string | null;
+  ticket_price: string | number | null;
+  max_tickets: number | null;
+  is_active: boolean;
+  available_colours: string[] | null;
+  created_at: string;
+};
 
-const HEX_RE = /^#([0-9a-fA-F]{6})$/;
-const ALLOWED_CURRENCIES = new Set(["GBP", "USD", "EUR"]);
-const ALLOWED_COLOUR_SELECTION_MODES = new Set(["manual", "automatic", "both"]);
-const ALLOWED_NUMBER_SELECTION_MODES = new Set([
-  "none",
-  "manual",
-  "automatic",
-  "both",
-]);
+export type PurchaseRow = {
+  id: string;
+  raffle_id: string;
+  buyer_name: string;
+  buyer_email: string;
+  quantity: number;
+  total_price: string | number;
+  selected_colour: string | null;
+  selected_numbers: number[] | null;
+  created_at: string;
+};
 
-function setJson(res: any, status: number, body: unknown) {
-  res.statusCode = status;
-  if (typeof res.setHeader === "function") {
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-  }
-  res.end(JSON.stringify(body));
-}
+export type RaffleOffer = {
+  id: string;
+  label: string;
+  price: number;
+  tickets: number;
+  is_active: boolean;
+  sort_order: number;
+};
 
-function setAllowed(res: any, allowed: string[]) {
-  if (typeof res.setHeader === "function") {
-    res.setHeader("Allow", allowed.join(", "));
-  }
-}
+export type RaffleSummary = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  image_url: string;
+  draw_at: string | null;
+  ticket_price: number | null;
+  max_tickets: number | null;
+  is_active: boolean;
+  available_colours: string[];
+  created_at: string;
+};
 
-function asTrimmedString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
+export type RaffleDetails = RaffleSummary & {
+  offers: RaffleOffer[];
+};
 
-function asOptionalString(value: unknown): string | null {
-  const s = asTrimmedString(value);
-  return s ? s : null;
-}
+export type Purchase = {
+  id: string;
+  raffle_id: string;
+  buyer_name: string;
+  buyer_email: string;
+  quantity: number;
+  total_price: number;
+  selected_colour: string | null;
+  selected_numbers: number[];
+  created_at: string;
+};
 
-function asInteger(value: unknown, fallback = 0): number {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? Math.trunc(n) : fallback;
-}
+export type CreateRaffleInput = {
+  title: string;
+  slug: string;
+  description?: string;
+  image_url?: string;
+  draw_at?: string | null;
+  ticket_price?: number | null;
+  max_tickets?: number | null;
+  is_active?: boolean;
+  available_colours?: string[];
+  offers?: Array<{
+    label: string;
+    price: number;
+    tickets: number;
+    is_active?: boolean;
+    sort_order?: number;
+  }>;
+};
 
-function getQueryValue(value: unknown): unknown {
-  return Array.isArray(value) ? value[0] : value;
-}
+export type UpdateRaffleInput = CreateRaffleInput;
 
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/['"]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-}
-
-function randomSuffix(length = 6): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < length; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
-}
-
-function buildCampaignId(slug: string) {
-  return `campaign_${slug}_${randomSuffix(6)}`;
-}
-
-function normaliseCurrencyCode(value: unknown): string {
-  const code = asTrimmedString(value).toUpperCase();
-  return ALLOWED_CURRENCIES.has(code) ? code : "GBP";
-}
-
-function normaliseColourSelectionMode(value: unknown): string {
-  const mode = asTrimmedString(value).toLowerCase();
-  return ALLOWED_COLOUR_SELECTION_MODES.has(mode) ? mode : "both";
-}
-
-function normaliseNumberSelectionMode(value: unknown): string {
-  const mode = asTrimmedString(value).toLowerCase();
-  return ALLOWED_NUMBER_SELECTION_MODES.has(mode) ? mode : "none";
-}
-
-function normaliseColours(input: unknown): ColourOption[] {
-  if (!Array.isArray(input)) return [];
-
-  return input
-    .map((item) => {
-      const raw = (item ?? {}) as JsonRecord;
-      const name = asTrimmedString(raw.name);
-      const hex = asTrimmedString(raw.hex);
-
-      if (!name || !HEX_RE.test(hex)) {
-        return null;
-      }
-
-      return {
-        name,
-        hex: hex.toUpperCase(),
-      };
-    })
-    .filter(Boolean) as ColourOption[];
-}
-
-function parseJsonArrayField(value: any) {
-  if (Array.isArray(value)) return value;
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  return [];
-}
-
-async function readBody(req: any): Promise<any> {
-  if (req.body && typeof req.body === "object") {
-    return req.body;
-  }
-
-  const chunks: Uint8Array[] = [];
-
-  await new Promise<void>((resolve, reject) => {
-    req.on("data", (chunk: Uint8Array) => chunks.push(chunk));
-    req.on("end", () => resolve());
-    req.on("error", (err: unknown) => reject(err));
-  });
-
-  if (chunks.length === 0) return {};
-
-  const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw) return {};
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
-
-async function getDb() {
-  const mod: any = await import("../_lib/db.js");
-
-  if (typeof mod.getDb === "function") return mod.getDb();
-  if (typeof mod.default?.getDb === "function") return mod.default.getDb();
-  if (mod.db && typeof mod.db.query === "function") return mod.db;
-  if (mod.default && typeof mod.default.query === "function") return mod.default;
-
-  if (typeof mod.query === "function") {
-    return { query: mod.query.bind(mod) };
-  }
-
-  if (typeof mod.default?.query === "function") {
-    return { query: mod.default.query.bind(mod.default) };
-  }
-
-  if (typeof mod.default === "function") {
-    const instance = await mod.default();
-    if (instance && typeof instance.query === "function") return instance;
-  }
-
-  if (mod.sql && typeof mod.sql === "function") {
-    return {
-      async query(text: string, params: any[] = []) {
-        return mod.sql(text, params);
-      },
-    };
-  }
-
-  if (mod.default?.sql && typeof mod.default.sql === "function") {
-    return {
-      async query(text: string, params: any[] = []) {
-        return mod.default.sql(text, params);
-      },
-    };
-  }
-
-  throw new Error(
-    "Unsupported ../_lib/db.ts export shape. Expected getDb(), db.query(...), query(...), or sql(...)."
-  );
-}
-
-async function getTenantBySlug(db: any, tenantSlug: string) {
-  const result = await db.query(
-    `
-    select id, slug
-    from tenants
-    where slug = $1
-    limit 1
-    `,
-    [tenantSlug]
-  );
-
-  return result.rows[0] ?? null;
-}
-
-function mapRow(row: any) {
+function toOffer(row: RaffleOfferRow): RaffleOffer {
   return {
     id: row.id,
-    tenantId: row.tenant_id,
-    type: row.type,
-    slug: row.slug,
-    title: row.title,
-    description: row.description,
-    heroImageUrl: row.hero_image_url,
-    status: row.status,
-    startsAt: row.starts_at,
-    endsAt: row.ends_at,
-    raffleConfig: {
-      campaignId: row.id,
-      singleTicketPriceCents: row.single_ticket_price_cents,
-      totalTickets: row.total_tickets,
-      soldTickets: row.sold_tickets,
-      backgroundImageUrl: row.background_image_url,
-      currencyCode: row.currency_code,
-      colourSelectionMode: row.colour_selection_mode,
-      numberSelectionMode: row.number_selection_mode,
-      numberRangeStart: row.number_range_start,
-      numberRangeEnd: row.number_range_end,
-      colours: parseJsonArrayField(row.colours),
-      createdAt: row.raffle_created_at,
-      updatedAt: row.raffle_updated_at,
-    },
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    label: row.label,
+    price: Number(row.price),
+    tickets: Number(row.ticket_count),
+    is_active: Boolean(row.is_active),
+    sort_order: Number(row.sort_order ?? 0),
   };
 }
 
-async function listRaffles(req: any, res: any) {
-  try {
-    const tenantSlug =
-      asTrimmedString(getQueryValue(req.query?.tenantSlug) ?? "demo-a") || "demo-a";
-
-    const db = await getDb();
-    const tenant = await getTenantBySlug(db, tenantSlug);
-
-    if (!tenant) {
-      return setJson(res, 404, {
-        ok: false,
-        error: `Tenant not found for slug "${tenantSlug}"`,
-      });
-    }
-
-    const result = await db.query(
-      `
-      select
-        c.id,
-        c.tenant_id,
-        c.type,
-        c.slug,
-        c.title,
-        c.description,
-        c.hero_image_url,
-        c.status,
-        c.starts_at,
-        c.ends_at,
-        c.created_at,
-        c.updated_at,
-        rc.single_ticket_price_cents,
-        rc.total_tickets,
-        rc.sold_tickets,
-        rc.background_image_url,
-        rc.currency_code,
-        rc.colour_selection_mode,
-        rc.number_selection_mode,
-        rc.number_range_start,
-        rc.number_range_end,
-        rc.colours,
-        rc.created_at as raffle_created_at,
-        rc.updated_at as raffle_updated_at
-      from campaigns c
-      left join raffle_configs rc
-        on rc.campaign_id = c.id
-      where c.tenant_id = $1
-        and c.type = 'raffle'
-      order by c.created_at desc, c.id desc
-      `,
-      [tenant.id]
-    );
-
-    return setJson(res, 200, {
-      ok: true,
-      raffles: result.rows.map(mapRow),
-    });
-  } catch (error: any) {
-    console.error("GET /api/admin/raffles error", error);
-    return setJson(res, 500, {
-      ok: false,
-      error: error?.message || "Failed to load raffles",
-      detail: error?.detail || null,
-      code: error?.code || null,
-    });
-  }
+function toRaffleSummary(row: RaffleRow): RaffleSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: row.description ?? "",
+    image_url: row.image_url ?? "",
+    draw_at: row.draw_at ?? null,
+    ticket_price:
+      row.ticket_price === null || row.ticket_price === undefined
+        ? null
+        : Number(row.ticket_price),
+    max_tickets:
+      row.max_tickets === null || row.max_tickets === undefined
+        ? null
+        : Number(row.max_tickets),
+    is_active: Boolean(row.is_active),
+    available_colours: normaliseColours(row.available_colours ?? []),
+    created_at: row.created_at,
+  };
 }
 
-async function createRaffle(req: any, res: any) {
-  try {
-    const body = await readBody(req);
-
-    const tenantSlug = asTrimmedString(body.tenantSlug || "demo-a") || "demo-a";
-    const title = asTrimmedString(body.title);
-    const description = asOptionalString(body.description);
-    const heroImageUrl = asOptionalString(body.heroImageUrl ?? body.hero_image_url);
-    const status = asTrimmedString(body.status) || "draft";
-    const startsAt = asOptionalString(body.startsAt ?? body.starts_at);
-    const endsAt = asOptionalString(body.endsAt ?? body.ends_at);
-
-    const rawTicketPrice =
-      body.singleTicketPriceCents ??
-      body.single_ticket_price_cents ??
-      body.ticketPrice ??
-      body.ticket_price ??
-      0;
-
-    let singleTicketPriceCents = asInteger(rawTicketPrice, 0);
-
-    if (
-      body.singleTicketPriceCents == null &&
-      body.single_ticket_price_cents == null &&
-      (body.ticketPrice != null || body.ticket_price != null)
-    ) {
-      singleTicketPriceCents = Math.round(Number(rawTicketPrice) * 100);
-    }
-
-    const totalTickets = asInteger(
-      body.totalTickets ?? body.total_tickets,
-      0
-    );
-    const soldTickets = asInteger(
-      body.soldTickets ?? body.sold_tickets,
-      0
-    );
-    const backgroundImageUrl = asOptionalString(
-      body.backgroundImageUrl ?? body.background_image_url
-    );
-
-    const currencyCode = normaliseCurrencyCode(
-      body.currencyCode ?? body.currency_code
-    );
-    const colourSelectionMode = normaliseColourSelectionMode(
-      body.colourSelectionMode ?? body.colour_selection_mode
-    );
-    const numberSelectionMode = normaliseNumberSelectionMode(
-      body.numberSelectionMode ?? body.number_selection_mode
-    );
-    const numberRangeStart = asInteger(
-      body.numberRangeStart ?? body.number_range_start,
-      0
-    );
-    const numberRangeEnd = asInteger(
-      body.numberRangeEnd ?? body.number_range_end,
-      0
-    );
-    const colours = normaliseColours(body.colours);
-
-    if (!title) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "Title is required",
-      });
-    }
-
-    if (singleTicketPriceCents <= 0) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "singleTicketPriceCents must be greater than 0",
-      });
-    }
-
-    if (totalTickets <= 0) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "totalTickets must be greater than 0",
-      });
-    }
-
-    if (soldTickets < 0) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "soldTickets cannot be negative",
-      });
-    }
-
-    if (numberSelectionMode !== "none") {
-      if (numberRangeStart <= 0 || numberRangeEnd <= 0) {
-        return setJson(res, 400, {
-          ok: false,
-          error: "numberRangeStart and numberRangeEnd are required when number selection is enabled",
-        });
-      }
-
-      if (numberRangeEnd < numberRangeStart) {
-        return setJson(res, 400, {
-          ok: false,
-          error: "numberRangeEnd must be greater than or equal to numberRangeStart",
-        });
-      }
-    }
-
-    const db = await getDb();
-    const tenant = await getTenantBySlug(db, tenantSlug);
-
-    if (!tenant) {
-      return setJson(res, 404, {
-        ok: false,
-        error: `Tenant not found for slug "${tenantSlug}"`,
-      });
-    }
-
-    const baseSlug = slugify(asTrimmedString(body.slug) || title);
-    const finalSlug = baseSlug || `raffle-${randomSuffix(6)}`;
-
-    let campaignId = asTrimmedString(body.id ?? body.campaignId);
-    if (!campaignId) {
-      campaignId = buildCampaignId(finalSlug);
-    }
-
-    await db.query("begin");
-
-    try {
-      const existingCampaign = await db.query(
-        `
-        select id
-        from campaigns
-        where id = $1
-        limit 1
-        `,
-        [campaignId]
-      );
-
-      if (existingCampaign.rows[0]) {
-        await db.query("rollback");
-        return setJson(res, 409, {
-          ok: false,
-          error: `Campaign id already exists: ${campaignId}`,
-        });
-      }
-
-      const existingSlug = await db.query(
-        `
-        select id
-        from campaigns
-        where slug = $1 and tenant_id = $2
-        limit 1
-        `,
-        [finalSlug, tenant.id]
-      );
-
-      if (existingSlug.rows[0]) {
-        await db.query("rollback");
-        return setJson(res, 409, {
-          ok: false,
-          error: `Slug already exists for tenant: ${finalSlug}`,
-        });
-      }
-
-      await db.query(
-        `
-        insert into campaigns (
-          id,
-          tenant_id,
-          type,
-          slug,
-          title,
-          description,
-          hero_image_url,
-          status,
-          starts_at,
-          ends_at,
-          created_at,
-          updated_at
-        )
-        values ($1, $2, 'raffle', $3, $4, $5, $6, $7, $8, $9, now(), now())
-        `,
-        [
-          campaignId,
-          tenant.id,
-          finalSlug,
-          title,
-          description,
-          heroImageUrl,
-          status,
-          startsAt,
-          endsAt,
-        ]
-      );
-
-      await db.query(
-        `
-        insert into raffle_configs (
-          campaign_id,
-          single_ticket_price_cents,
-          total_tickets,
-          sold_tickets,
-          background_image_url,
-          currency_code,
-          colour_selection_mode,
-          number_selection_mode,
-          number_range_start,
-          number_range_end,
-          colours,
-          created_at,
-          updated_at
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now(), now())
-        `,
-        [
-          campaignId,
-          singleTicketPriceCents,
-          totalTickets,
-          soldTickets,
-          backgroundImageUrl,
-          currencyCode,
-          colourSelectionMode,
-          numberSelectionMode,
-          numberSelectionMode === "none" ? null : numberRangeStart,
-          numberSelectionMode === "none" ? null : numberRangeEnd,
-          JSON.stringify(colours),
-        ]
-      );
-
-      await db.query("commit");
-
-      const result = await db.query(
-        `
-        select
-          c.id,
-          c.tenant_id,
-          c.type,
-          c.slug,
-          c.title,
-          c.description,
-          c.hero_image_url,
-          c.status,
-          c.starts_at,
-          c.ends_at,
-          c.created_at,
-          c.updated_at,
-          rc.single_ticket_price_cents,
-          rc.total_tickets,
-          rc.sold_tickets,
-          rc.background_image_url,
-          rc.currency_code,
-          rc.colour_selection_mode,
-          rc.number_selection_mode,
-          rc.number_range_start,
-          rc.number_range_end,
-          rc.colours,
-          rc.created_at as raffle_created_at,
-          rc.updated_at as raffle_updated_at
-        from campaigns c
-        left join raffle_configs rc
-          on rc.campaign_id = c.id
-        where c.id = $1
-        limit 1
-        `,
-        [campaignId]
-      );
-
-      return setJson(res, 201, {
-        ok: true,
-        raffle: mapRow(result.rows[0]),
-      });
-    } catch (innerError) {
-      await db.query("rollback");
-      throw innerError;
-    }
-  } catch (error: any) {
-    console.error("POST /api/admin/raffles error", error);
-    return setJson(res, 500, {
-      ok: false,
-      error: error?.message || "Failed to create raffle",
-      detail: error?.detail || null,
-      code: error?.code || null,
-    });
-  }
+function toPurchase(row: PurchaseRow): Purchase {
+  return {
+    id: row.id,
+    raffle_id: row.raffle_id,
+    buyer_name: row.buyer_name,
+    buyer_email: row.buyer_email,
+    quantity: Number(row.quantity),
+    total_price: Number(row.total_price),
+    selected_colour: row.selected_colour ?? null,
+    selected_numbers: Array.isArray(row.selected_numbers)
+      ? row.selected_numbers.map(Number)
+      : [],
+    created_at: row.created_at,
+  };
 }
 
-async function updateRaffle(req: any, res: any) {
-  try {
-    const body = await readBody(req);
+export async function listRaffles(): Promise<RaffleSummary[]> {
+  const rows = await query<RaffleRow>(
+    `
+    select
+      id,
+      title,
+      slug,
+      description,
+      image_url,
+      draw_at,
+      ticket_price,
+      max_tickets,
+      is_active,
+      available_colours,
+      created_at
+    from raffles
+    order by created_at desc
+    `,
+  );
 
-    const id = asTrimmedString(body.id ?? body.campaignId);
-    const tenantSlug = asTrimmedString(body.tenantSlug || "demo-a") || "demo-a";
-
-    if (!id) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "Valid raffle id is required",
-      });
-    }
-
-    const title = asTrimmedString(body.title);
-    const description = asOptionalString(body.description);
-    const heroImageUrl = asOptionalString(body.heroImageUrl ?? body.hero_image_url);
-    const status = asTrimmedString(body.status) || "draft";
-    const startsAt = asOptionalString(body.startsAt ?? body.starts_at);
-    const endsAt = asOptionalString(body.endsAt ?? body.ends_at);
-
-    const rawTicketPrice =
-      body.singleTicketPriceCents ??
-      body.single_ticket_price_cents ??
-      body.ticketPrice ??
-      body.ticket_price ??
-      0;
-
-    let singleTicketPriceCents = asInteger(rawTicketPrice, 0);
-
-    if (
-      body.singleTicketPriceCents == null &&
-      body.single_ticket_price_cents == null &&
-      (body.ticketPrice != null || body.ticket_price != null)
-    ) {
-      singleTicketPriceCents = Math.round(Number(rawTicketPrice) * 100);
-    }
-
-    const totalTickets = asInteger(
-      body.totalTickets ?? body.total_tickets,
-      0
-    );
-    const soldTickets = asInteger(
-      body.soldTickets ?? body.sold_tickets,
-      0
-    );
-    const backgroundImageUrl = asOptionalString(
-      body.backgroundImageUrl ?? body.background_image_url
-    );
-
-    const currencyCode = normaliseCurrencyCode(
-      body.currencyCode ?? body.currency_code
-    );
-    const colourSelectionMode = normaliseColourSelectionMode(
-      body.colourSelectionMode ?? body.colour_selection_mode
-    );
-    const numberSelectionMode = normaliseNumberSelectionMode(
-      body.numberSelectionMode ?? body.number_selection_mode
-    );
-    const numberRangeStart = asInteger(
-      body.numberRangeStart ?? body.number_range_start,
-      0
-    );
-    const numberRangeEnd = asInteger(
-      body.numberRangeEnd ?? body.number_range_end,
-      0
-    );
-    const colours = normaliseColours(body.colours);
-
-    if (!title) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "Title is required",
-      });
-    }
-
-    if (singleTicketPriceCents <= 0) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "singleTicketPriceCents must be greater than 0",
-      });
-    }
-
-    if (totalTickets <= 0) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "totalTickets must be greater than 0",
-      });
-    }
-
-    if (soldTickets < 0) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "soldTickets cannot be negative",
-      });
-    }
-
-    if (numberSelectionMode !== "none") {
-      if (numberRangeStart <= 0 || numberRangeEnd <= 0) {
-        return setJson(res, 400, {
-          ok: false,
-          error: "numberRangeStart and numberRangeEnd are required when number selection is enabled",
-        });
-      }
-
-      if (numberRangeEnd < numberRangeStart) {
-        return setJson(res, 400, {
-          ok: false,
-          error: "numberRangeEnd must be greater than or equal to numberRangeStart",
-        });
-      }
-    }
-
-    const db = await getDb();
-    const tenant = await getTenantBySlug(db, tenantSlug);
-
-    if (!tenant) {
-      return setJson(res, 404, {
-        ok: false,
-        error: `Tenant not found for slug "${tenantSlug}"`,
-      });
-    }
-
-    const existing = await db.query(
-      `
-      select c.id, c.slug
-      from campaigns c
-      where c.id = $1
-        and c.tenant_id = $2
-        and c.type = 'raffle'
-      limit 1
-      `,
-      [id, tenant.id]
-    );
-
-    if (!existing.rows[0]) {
-      return setJson(res, 404, {
-        ok: false,
-        error: "Raffle not found",
-      });
-    }
-
-    const requestedSlug = slugify(asTrimmedString(body.slug) || title);
-    const finalSlug = requestedSlug || existing.rows[0].slug;
-
-    const conflictingSlug = await db.query(
-      `
-      select id
-      from campaigns
-      where slug = $1
-        and tenant_id = $2
-        and id <> $3
-      limit 1
-      `,
-      [finalSlug, tenant.id, id]
-    );
-
-    if (conflictingSlug.rows[0]) {
-      return setJson(res, 409, {
-        ok: false,
-        error: `Slug already exists for tenant: ${finalSlug}`,
-      });
-    }
-
-    await db.query("begin");
-
-    try {
-      await db.query(
-        `
-        update campaigns
-        set
-          slug = $2,
-          title = $3,
-          description = $4,
-          hero_image_url = $5,
-          status = $6,
-          starts_at = $7,
-          ends_at = $8,
-          updated_at = now()
-        where id = $1
-        `,
-        [
-          id,
-          finalSlug,
-          title,
-          description,
-          heroImageUrl,
-          status,
-          startsAt,
-          endsAt,
-        ]
-      );
-
-      const existingConfig = await db.query(
-        `
-        select campaign_id
-        from raffle_configs
-        where campaign_id = $1
-        limit 1
-        `,
-        [id]
-      );
-
-      if (existingConfig.rows[0]) {
-        await db.query(
-          `
-          update raffle_configs
-          set
-            single_ticket_price_cents = $2,
-            total_tickets = $3,
-            sold_tickets = $4,
-            background_image_url = $5,
-            currency_code = $6,
-            colour_selection_mode = $7,
-            number_selection_mode = $8,
-            number_range_start = $9,
-            number_range_end = $10,
-            colours = $11::jsonb,
-            updated_at = now()
-          where campaign_id = $1
-          `,
-          [
-            id,
-            singleTicketPriceCents,
-            totalTickets,
-            soldTickets,
-            backgroundImageUrl,
-            currencyCode,
-            colourSelectionMode,
-            numberSelectionMode,
-            numberSelectionMode === "none" ? null : numberRangeStart,
-            numberSelectionMode === "none" ? null : numberRangeEnd,
-            JSON.stringify(colours),
-          ]
-        );
-      } else {
-        await db.query(
-          `
-          insert into raffle_configs (
-            campaign_id,
-            single_ticket_price_cents,
-            total_tickets,
-            sold_tickets,
-            background_image_url,
-            currency_code,
-            colour_selection_mode,
-            number_selection_mode,
-            number_range_start,
-            number_range_end,
-            colours,
-            created_at,
-            updated_at
-          )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now(), now())
-          `,
-          [
-            id,
-            singleTicketPriceCents,
-            totalTickets,
-            soldTickets,
-            backgroundImageUrl,
-            currencyCode,
-            colourSelectionMode,
-            numberSelectionMode,
-            numberSelectionMode === "none" ? null : numberRangeStart,
-            numberSelectionMode === "none" ? null : numberRangeEnd,
-            JSON.stringify(colours),
-          ]
-        );
-      }
-
-      await db.query("commit");
-
-      const result = await db.query(
-        `
-        select
-          c.id,
-          c.tenant_id,
-          c.type,
-          c.slug,
-          c.title,
-          c.description,
-          c.hero_image_url,
-          c.status,
-          c.starts_at,
-          c.ends_at,
-          c.created_at,
-          c.updated_at,
-          rc.single_ticket_price_cents,
-          rc.total_tickets,
-          rc.sold_tickets,
-          rc.background_image_url,
-          rc.currency_code,
-          rc.colour_selection_mode,
-          rc.number_selection_mode,
-          rc.number_range_start,
-          rc.number_range_end,
-          rc.colours,
-          rc.created_at as raffle_created_at,
-          rc.updated_at as raffle_updated_at
-        from campaigns c
-        left join raffle_configs rc
-          on rc.campaign_id = c.id
-        where c.id = $1
-        limit 1
-        `,
-        [id]
-      );
-
-      return setJson(res, 200, {
-        ok: true,
-        raffle: mapRow(result.rows[0]),
-      });
-    } catch (innerError) {
-      await db.query("rollback");
-      throw innerError;
-    }
-  } catch (error: any) {
-    console.error("PUT /api/admin/raffles error", error);
-    return setJson(res, 500, {
-      ok: false,
-      error: error?.message || "Failed to update raffle",
-      detail: error?.detail || null,
-      code: error?.code || null,
-    });
-  }
+  return rows.map(toRaffleSummary);
 }
 
-async function deleteRaffle(req: any, res: any) {
-  try {
-    const body = await readBody(req);
+export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
+  const raffle = await queryOne<RaffleRow>(
+    `
+    select
+      id,
+      title,
+      slug,
+      description,
+      image_url,
+      draw_at,
+      ticket_price,
+      max_tickets,
+      is_active,
+      available_colours,
+      created_at
+    from raffles
+    where id = $1
+    `,
+    [id],
+  );
 
-    const id = asTrimmedString(body.id ?? getQueryValue(req.query?.id));
-    const tenantSlug =
-      asTrimmedString(
-        body.tenantSlug ?? getQueryValue(req.query?.tenantSlug) ?? "demo-a"
-      ) || "demo-a";
+  if (!raffle) return null;
 
-    if (!id) {
-      return setJson(res, 400, {
-        ok: false,
-        error: "Valid raffle id is required",
-      });
-    }
+  const offers = await query<RaffleOfferRow>(
+    `
+    select
+      id,
+      raffle_id,
+      label,
+      price,
+      ticket_count,
+      is_active,
+      sort_order
+    from raffle_offers
+    where raffle_id = $1
+    order by sort_order asc, id asc
+    `,
+    [id],
+  );
 
-    const db = await getDb();
-    const tenant = await getTenantBySlug(db, tenantSlug);
-
-    if (!tenant) {
-      return setJson(res, 404, {
-        ok: false,
-        error: `Tenant not found for slug "${tenantSlug}"`,
-      });
-    }
-
-    const existing = await db.query(
-      `
-      select id
-      from campaigns
-      where id = $1
-        and tenant_id = $2
-        and type = 'raffle'
-      limit 1
-      `,
-      [id, tenant.id]
-    );
-
-    if (!existing.rows[0]) {
-      return setJson(res, 404, {
-        ok: false,
-        error: "Raffle not found",
-      });
-    }
-
-    await db.query("begin");
-
-    try {
-      await db.query(
-        `
-        delete from raffle_configs
-        where campaign_id = $1
-        `,
-        [id]
-      );
-
-      await db.query(
-        `
-        delete from campaigns
-        where id = $1
-        `,
-        [id]
-      );
-
-      await db.query("commit");
-
-      return setJson(res, 200, {
-        ok: true,
-        deletedId: id,
-      });
-    } catch (innerError) {
-      await db.query("rollback");
-      throw innerError;
-    }
-  } catch (error: any) {
-    console.error("DELETE /api/admin/raffles error", error);
-    return setJson(res, 500, {
-      ok: false,
-      error: error?.message || "Failed to delete raffle",
-      detail: error?.detail || null,
-      code: error?.code || null,
-    });
-  }
+  return {
+    ...toRaffleSummary(raffle),
+    offers: offers.map(toOffer),
+  };
 }
 
-export default async function handler(req: any, res: any) {
-  const method = String(req.method || "").toUpperCase();
+export async function getRaffleBySlug(
+  slug: string,
+): Promise<RaffleDetails | null> {
+  const raffle = await queryOne<RaffleRow>(
+    `
+    select
+      id,
+      title,
+      slug,
+      description,
+      image_url,
+      draw_at,
+      ticket_price,
+      max_tickets,
+      is_active,
+      available_colours,
+      created_at
+    from raffles
+    where slug = $1
+      and is_active = true
+    `,
+    [slug],
+  );
 
-  if (method === "GET") return listRaffles(req, res);
-  if (method === "POST") return createRaffle(req, res);
-  if (method === "PUT") return updateRaffle(req, res);
-  if (method === "DELETE") return deleteRaffle(req, res);
+  if (!raffle) return null;
 
-  setAllowed(res, ["GET", "POST", "PUT", "DELETE"]);
-  return setJson(res, 405, {
-    ok: false,
-    error: "Method not allowed",
-  });
+  const offers = await query<RaffleOfferRow>(
+    `
+    select
+      id,
+      raffle_id,
+      label,
+      price,
+      ticket_count,
+      is_active,
+      sort_order
+    from raffle_offers
+    where raffle_id = $1
+      and is_active = true
+    order by sort_order asc, id asc
+    `,
+    [raffle.id],
+  );
+
+  return {
+    ...toRaffleSummary(raffle),
+    offers: offers.map(toOffer),
+  };
+}
+
+export async function createRaffle(
+  input: CreateRaffleInput,
+): Promise<RaffleDetails> {
+  const raffle = await queryOne<RaffleRow>(
+    `
+    insert into raffles (
+      title,
+      slug,
+      description,
+      image_url,
+      draw_at,
+      ticket_price,
+      max_tickets,
+      is_active,
+      available_colours
+    )
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    returning
+      id,
+      title,
+      slug,
+      description,
+      image_url,
+      draw_at,
+      ticket_price,
+      max_tickets,
+      is_active,
+      available_colours,
+      created_at
+    `,
+    [
+      input.title,
+      input.slug,
+      input.description ?? "",
+      input.image_url ?? "",
+      input.draw_at ?? null,
+      input.ticket_price ?? null,
+      input.max_tickets ?? null,
+      input.is_active ?? true,
+      JSON.stringify(normaliseColours(input.available_colours ?? [])),
+    ],
+  );
+
+  if (!raffle) {
+    throw new Error("Failed to create raffle");
+  }
+
+  const offersInput = input.offers ?? [];
+
+  for (let index = 0; index < offersInput.length; index += 1) {
+    const offer = offersInput[index];
+    await query(
+      `
+      insert into raffle_offers (
+        raffle_id,
+        label,
+        price,
+        ticket_count,
+        is_active,
+        sort_order
+      )
+      values ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        raffle.id,
+        offer.label,
+        offer.price,
+        offer.tickets,
+        offer.is_active ?? true,
+        offer.sort_order ?? index,
+      ],
+    );
+  }
+
+  const full = await getRaffleById(raffle.id);
+  if (!full) {
+    throw new Error("Failed to load created raffle");
+  }
+
+  return full;
+}
+
+export async function updateRaffle(
+  id: string,
+  input: UpdateRaffleInput,
+): Promise<RaffleDetails | null> {
+  const updated = await queryOne<RaffleRow>(
+    `
+    update raffles
+    set
+      title = $2,
+      slug = $3,
+      description = $4,
+      image_url = $5,
+      draw_at = $6,
+      ticket_price = $7,
+      max_tickets = $8,
+      is_active = $9,
+      available_colours = $10
+    where id = $1
+    returning
+      id,
+      title,
+      slug,
+      description,
+      image_url,
+      draw_at,
+      ticket_price,
+      max_tickets,
+      is_active,
+      available_colours,
+      created_at
+    `,
+    [
+      id,
+      input.title,
+      input.slug,
+      input.description ?? "",
+      input.image_url ?? "",
+      input.draw_at ?? null,
+      input.ticket_price ?? null,
+      input.max_tickets ?? null,
+      input.is_active ?? true,
+      JSON.stringify(normaliseColours(input.available_colours ?? [])),
+    ],
+  );
+
+  if (!updated) return null;
+
+  await query(`delete from raffle_offers where raffle_id = $1`, [id]);
+
+  const offersInput = input.offers ?? [];
+
+  for (let index = 0; index < offersInput.length; index += 1) {
+    const offer = offersInput[index];
+    await query(
+      `
+      insert into raffle_offers (
+        raffle_id,
+        label,
+        price,
+        ticket_count,
+        is_active,
+        sort_order
+      )
+      values ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        id,
+        offer.label,
+        offer.price,
+        offer.tickets,
+        offer.is_active ?? true,
+        offer.sort_order ?? index,
+      ],
+    );
+  }
+
+  return getRaffleById(id);
+}
+
+export async function listPurchasesByRaffleId(
+  raffleId: string,
+): Promise<Purchase[]> {
+  const rows = await query<PurchaseRow>(
+    `
+    select
+      id,
+      raffle_id,
+      buyer_name,
+      buyer_email,
+      quantity,
+      total_price,
+      selected_colour,
+      selected_numbers,
+      created_at
+    from purchases
+    where raffle_id = $1
+    order by created_at desc
+    `,
+    [raffleId],
+  );
+
+  return rows.map(toPurchase);
 }
