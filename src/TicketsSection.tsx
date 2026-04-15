@@ -5,19 +5,25 @@ import { apiFetch } from "./api";
 
 type Mode = "rows" | "tables";
 
+type TicketTable = {
+  id: string | number;
+  name: string;
+  capacity: number;
+};
+
 type TicketEvent = {
-  id: string;
+  id: string | number;
   title: string;
   venue: string;
   price: number;
   mode: Mode;
   seats: string[];
   soldSeats: string[];
-  tables: { id: string; name: string; capacity: number }[];
+  tables: TicketTable[];
 };
 
 type TicketPurchase = {
-  id: string;
+  id: string | number;
   eventTitle: string;
   buyerName: string;
   buyerEmail: string;
@@ -27,6 +33,11 @@ type TicketPurchase = {
   seats?: string[];
   tableName?: string;
   createdAt: string;
+};
+
+type TicketPurchaseResponse = {
+  purchase: TicketPurchase;
+  event: TicketEvent;
 };
 
 function money(n: number) {
@@ -43,7 +54,7 @@ export default function TicketsSection() {
   const [buyerEmail, setBuyerEmail] = useState("");
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [selectedTable, setSelectedTable] = useState<any>(null);
+  const [selectedTable, setSelectedTable] = useState<TicketTable | null>(null);
   const [quantity, setQuantity] = useState(1);
 
   const [purchases, setPurchases] = useState<TicketPurchase[]>([]);
@@ -52,15 +63,16 @@ export default function TicketsSection() {
     async function load() {
       if (!isLoggedIn) return;
 
-      const data = await apiFetch("/api/tickets");
-      setEvents(data || []);
-      if (data?.length) setActiveEventId(data[0].id);
+      const data = await apiFetch<TicketEvent[]>("/api/tickets");
+      setEvents(data ?? []);
+      if (data.length) setActiveEventId(String(data[0].id));
     }
 
     load();
   }, [isLoggedIn]);
 
-  const event = events.find((e) => e.id === activeEventId);
+  const event =
+    events.find((e) => String(e.id) === String(activeEventId)) ?? null;
 
   const total = useMemo(() => {
     if (!event) return 0;
@@ -120,7 +132,7 @@ export default function TicketsSection() {
   async function buyTickets() {
     if (!event) return;
 
-    const res = await apiFetch("/api/tickets/purchase", {
+    const res = await apiFetch<TicketPurchaseResponse>("/api/tickets/purchase", {
       method: "POST",
       body: JSON.stringify({
         eventId: event.id,
@@ -137,7 +149,7 @@ export default function TicketsSection() {
 
     setPurchases((p) => [purchase, ...p]);
     setEvents((curr) =>
-      curr.map((e) => (e.id === res.event.id ? res.event : e))
+      curr.map((e) => (String(e.id) === String(res.event.id) ? res.event : e))
     );
 
     setSelectedSeats([]);
@@ -177,6 +189,11 @@ export default function TicketsSection() {
                 key={seat}
                 disabled={sold}
                 onClick={() => toggleSeat(seat)}
+                style={{
+                  margin: 4,
+                  opacity: sold ? 0.5 : 1,
+                  fontWeight: selected ? 700 : 400,
+                }}
               >
                 {seat}
               </button>
@@ -188,13 +205,22 @@ export default function TicketsSection() {
       {event.mode === "tables" && (
         <div>
           {event.tables.map((t) => (
-            <button key={t.id} onClick={() => setSelectedTable(t)}>
+            <button
+              key={String(t.id)}
+              onClick={() => setSelectedTable(t)}
+              style={{
+                margin: 4,
+                fontWeight:
+                  String(selectedTable?.id) === String(t.id) ? 700 : 400,
+              }}
+            >
               {t.name}
             </button>
           ))}
 
           <input
             type="number"
+            min={1}
             value={quantity}
             onChange={(e) => setQuantity(Number(e.target.value))}
           />
@@ -209,7 +235,7 @@ export default function TicketsSection() {
         <div>
           <h3>Purchases</h3>
           {purchases.map((p) => (
-            <div key={p.id}>
+            <div key={String(p.id)}>
               {p.buyerName} — {money(p.total)}
             </div>
           ))}
