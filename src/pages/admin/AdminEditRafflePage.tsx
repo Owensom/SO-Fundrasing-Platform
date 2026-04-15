@@ -5,14 +5,15 @@ import type { Raffle, RaffleOffer } from "../../../types/raffles";
 type Props = {
   raffle?: Raffle;
   mode?: "create" | "edit";
+  tenantSlug?: string;
 };
 
 type OfferFormRow = {
   label: string;
-  tickets: number;
-  price: number;
+  ticket_quantity: number;
+  price_cents: number;
   sort_order: number;
-  active: boolean;
+  is_active: boolean;
 };
 
 function slugify(value: string) {
@@ -23,60 +24,70 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function poundsToCents(value: string | number) {
+  const n = typeof value === "number" ? value : Number(value);
+  return Math.round(n * 100);
+}
+
+function centsToPounds(cents: number) {
+  return (cents / 100).toFixed(2);
+}
+
 export default function AdminEditRafflePage({
   raffle,
   mode = "edit",
+  tenantSlug = "",
 }: Props) {
   const isEdit = mode === "edit" && !!raffle?.id;
 
+  const [localTenantSlug, setLocalTenantSlug] = useState(
+    raffle?.tenant_slug ?? tenantSlug ?? ""
+  );
   const [title, setTitle] = useState(raffle?.title ?? "");
   const [slug, setSlug] = useState(raffle?.slug ?? "");
   const [description, setDescription] = useState(raffle?.description ?? "");
   const [imageUrl, setImageUrl] = useState(raffle?.image_url ?? "");
-  const [primaryColor, setPrimaryColor] = useState(
-    raffle?.primary_color ?? "#111111"
-  );
-  const [secondaryColor, setSecondaryColor] = useState(
-    raffle?.secondary_color ?? "#ffffff"
-  );
-  const [minNumber, setMinNumber] = useState(Number(raffle?.min_number ?? 1));
-  const [maxNumber, setMaxNumber] = useState(Number(raffle?.max_number ?? 9999));
   const [ticketPrice, setTicketPrice] = useState(
-    Number(raffle?.ticket_price ?? 1)
+    raffle ? centsToPounds(Number(raffle.ticket_price_cents)) : "1.00"
   );
+  const [totalTickets, setTotalTickets] = useState(
+    Number(raffle?.total_tickets ?? 1000)
+  );
+  const [status, setStatus] = useState(raffle?.status ?? "draft");
 
   const [offers, setOffers] = useState<OfferFormRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Load offers into form
   useEffect(() => {
     if (raffle?.offers?.length) {
       setOffers(
         raffle.offers.map((offer: RaffleOffer, index: number) => ({
           label: offer.label ?? "",
-          tickets: Number(offer.tickets ?? 1),
-          price: Number(offer.price ?? 1),
+          ticket_quantity: Number(offer.ticket_quantity ?? 1),
+          price_cents: Number(offer.price_cents ?? 100),
           sort_order:
             typeof offer.sort_order === "number" ? offer.sort_order : index,
-          active: offer.active ?? true,
+          is_active: offer.is_active ?? true,
         }))
       );
     } else {
       setOffers([
         {
           label: "3 Tickets",
-          tickets: 3,
-          price: 5,
+          ticket_quantity: 3,
+          price_cents: 500,
           sort_order: 0,
-          active: true,
+          is_active: true,
         },
         {
           label: "10 Tickets",
-          tickets: 10,
-          price: 10,
+          ticket_quantity: 10,
+          price_cents: 1500,
           sort_order: 1,
-          active: true,
+          is_active: true,
         },
       ]);
     }
@@ -91,10 +102,10 @@ export default function AdminEditRafflePage({
       ...prev,
       {
         label: "",
-        tickets: 1,
-        price: 1,
+        ticket_quantity: 1,
+        price_cents: 100,
         sort_order: prev.length,
-        active: true,
+        is_active: true,
       },
     ]);
   }
@@ -125,23 +136,27 @@ export default function AdminEditRafflePage({
 
     try {
       const payload = {
+        tenant_slug: localTenantSlug.trim(),
         title: title.trim(),
         slug: resolvedSlug,
         description: description.trim(),
         image_url: imageUrl.trim(),
-        primary_color: primaryColor,
-        secondary_color: secondaryColor,
-        min_number: Number(minNumber),
-        max_number: Number(maxNumber),
-        ticket_price: Number(ticketPrice),
+        ticket_price_cents: poundsToCents(ticketPrice),
+        total_tickets: Number(totalTickets),
+        status: status.trim(),
         offers: offers.map((offer, index) => ({
           label: offer.label.trim() || null,
-          tickets: Number(offer.tickets),
-          price: Number(offer.price),
+          ticket_quantity: Number(offer.ticket_quantity),
+          price_cents: Number(offer.price_cents),
           sort_order: index,
-          active: Boolean(offer.active),
+          is_active: Boolean(offer.is_active),
         })),
       };
+
+      // Validation
+      if (!payload.tenant_slug) {
+        throw new Error("Tenant slug is required");
+      }
 
       if (!payload.title) {
         throw new Error("Title is required");
@@ -151,25 +166,44 @@ export default function AdminEditRafflePage({
         throw new Error("Slug is required");
       }
 
-      if (payload.ticket_price <= 0) {
+      if (
+        !Number.isInteger(payload.ticket_price_cents) ||
+        payload.ticket_price_cents <= 0
+      ) {
         throw new Error("Single ticket price must be greater than 0");
       }
 
+      if (
+        !Number.isInteger(payload.total_tickets) ||
+        payload.total_tickets <= 0
+      ) {
+        throw new Error("Total tickets must be greater than 0");
+      }
+
       for (const offer of payload.offers) {
-        if (!Number.isInteger(offer.tickets) || offer.tickets <= 0) {
+        if (
+          !Number.isInteger(offer.ticket_quantity) ||
+          offer.ticket_quantity <= 0
+        ) {
           throw new Error("Offer ticket quantities must be whole numbers");
         }
-        if (!Number.isFinite(offer.price) || offer.price <= 0) {
+
+        if (
+          !Number.isInteger(offer.price_cents) ||
+          offer.price_cents <= 0
+        ) {
           throw new Error("Offer prices must be greater than 0");
         }
       }
 
       const seen = new Set<number>();
       for (const offer of payload.offers) {
-        if (seen.has(offer.tickets)) {
-          throw new Error(`Duplicate offer for ${offer.tickets} tickets`);
+        if (seen.has(offer.ticket_quantity)) {
+          throw new Error(
+            `Duplicate offer for ${offer.ticket_quantity} tickets`
+          );
         }
-        seen.add(offer.tickets);
+        seen.add(offer.ticket_quantity);
       }
 
       if (isEdit && raffle?.id) {
@@ -191,6 +225,17 @@ export default function AdminEditRafflePage({
       <h1>{isEdit ? "Edit Raffle" : "Create Raffle"}</h1>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 20 }}>
+        {/* Tenant */}
+        <div>
+          <label>Tenant Slug</label>
+          <input
+            value={localTenantSlug}
+            onChange={(e) => setLocalTenantSlug(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        {/* Title */}
         <div>
           <label>Title</label>
           <input
@@ -200,6 +245,7 @@ export default function AdminEditRafflePage({
           />
         </div>
 
+        {/* Slug */}
         <div>
           <label>Slug</label>
           <input
@@ -211,6 +257,7 @@ export default function AdminEditRafflePage({
           <small>Final slug: {resolvedSlug}</small>
         </div>
 
+        {/* Description */}
         <div>
           <label>Description</label>
           <textarea
@@ -221,6 +268,7 @@ export default function AdminEditRafflePage({
           />
         </div>
 
+        {/* Image */}
         <div>
           <label>Image URL</label>
           <input
@@ -230,149 +278,115 @@ export default function AdminEditRafflePage({
           />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label>Primary Color</label>
-            <input
-              type="color"
-              value={primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label>Secondary Color</label>
-            <input
-              type="color"
-              value={secondaryColor}
-              onChange={(e) => setSecondaryColor(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label>Min Number</label>
-            <input
-              type="number"
-              value={minNumber}
-              onChange={(e) => setMinNumber(Number(e.target.value))}
-              style={{ width: "100%", padding: 10 }}
-            />
-          </div>
-
-          <div>
-            <label>Max Number</label>
-            <input
-              type="number"
-              value={maxNumber}
-              onChange={(e) => setMaxNumber(Number(e.target.value))}
-              style={{ width: "100%", padding: 10 }}
-            />
-          </div>
-        </div>
-
+        {/* Price */}
         <div>
-          <label>Single Ticket Price</label>
+          <label>Single Ticket Price (£)</label>
           <input
             type="number"
             step="0.01"
             value={ticketPrice}
-            onChange={(e) => setTicketPrice(Number(e.target.value))}
+            onChange={(e) => setTicketPrice(e.target.value)}
             style={{ width: "100%", padding: 10 }}
           />
         </div>
 
+        {/* Total tickets */}
+        <div>
+          <label>Total Tickets</label>
+          <input
+            type="number"
+            value={totalTickets}
+            onChange={(e) => setTotalTickets(Number(e.target.value))}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        {/* Status */}
+        <div>
+          <label>Status</label>
+          <input
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        {/* Offers */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
               marginBottom: 16,
             }}
           >
-            <h2 style={{ margin: 0 }}>Offer Pricing</h2>
+            <h2>Offer Pricing</h2>
             <button type="button" onClick={addOffer}>
               Add Offer
             </button>
           </div>
 
-          <div style={{ display: "grid", gap: 12 }}>
-            {offers.map((offer, index) => (
-              <div
-                key={index}
-                style={{
-                  border: "1px solid #eee",
-                  borderRadius: 8,
-                  padding: 12,
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr auto auto",
-                  gap: 12,
-                  alignItems: "end",
-                }}
-              >
-                <div>
-                  <label>Label</label>
-                  <input
-                    value={offer.label}
-                    onChange={(e) => updateOffer(index, "label", e.target.value)}
-                    placeholder="e.g. 10 Tickets"
-                    style={{ width: "100%", padding: 10 }}
-                  />
-                </div>
+          {offers.map((offer, index) => (
+            <div
+              key={index}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "2fr 1fr 1fr auto auto",
+                gap: 10,
+                marginBottom: 10,
+              }}
+            >
+              <input
+                placeholder="Label"
+                value={offer.label}
+                onChange={(e) =>
+                  updateOffer(index, "label", e.target.value)
+                }
+              />
 
-                <div>
-                  <label>Tickets</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={offer.tickets}
-                    onChange={(e) =>
-                      updateOffer(index, "tickets", Number(e.target.value))
-                    }
-                    style={{ width: "100%", padding: 10 }}
-                  />
-                </div>
+              <input
+                type="number"
+                value={offer.ticket_quantity}
+                onChange={(e) =>
+                  updateOffer(
+                    index,
+                    "ticket_quantity",
+                    Number(e.target.value)
+                  )
+                }
+              />
 
-                <div>
-                  <label>Price</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={offer.price}
-                    onChange={(e) =>
-                      updateOffer(index, "price", Number(e.target.value))
-                    }
-                    style={{ width: "100%", padding: 10 }}
-                  />
-                </div>
+              <input
+                type="number"
+                step="0.01"
+                value={centsToPounds(offer.price_cents)}
+                onChange={(e) =>
+                  updateOffer(
+                    index,
+                    "price_cents",
+                    poundsToCents(e.target.value)
+                  )
+                }
+              />
 
-                <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={offer.active}
-                    onChange={(e) =>
-                      updateOffer(index, "active", e.target.checked)
-                    }
-                  />
-                  Active
-                </label>
+              <input
+                type="checkbox"
+                checked={offer.is_active}
+                onChange={(e) =>
+                  updateOffer(index, "is_active", e.target.checked)
+                }
+              />
 
-                <button type="button" onClick={() => removeOffer(index)}>
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
+              <button onClick={() => removeOffer(index)}>X</button>
+            </div>
+          ))}
         </div>
 
-        {error ? <div style={{ color: "red" }}>{error}</div> : null}
-        {success ? <div style={{ color: "green" }}>{success}</div> : null}
+        {error && <div style={{ color: "red" }}>{error}</div>}
+        {success && <div style={{ color: "green" }}>{success}</div>}
 
         <button type="submit" disabled={saving}>
-          {saving ? "Saving..." : isEdit ? "Update Raffle" : "Create Raffle"}
+          {saving ? "Saving..." : "Save Raffle"}
         </button>
       </form>
     </div>
