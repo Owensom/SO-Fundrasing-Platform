@@ -14,7 +14,6 @@ export async function apiFetch<T = any>(
 
   const contentType = res.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
-
   const data = isJson ? await res.json() : await res.text();
 
   if (!res.ok) {
@@ -48,6 +47,15 @@ export async function updateRaffle(
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getAdminRaffleDetails(
+  slug: string
+): Promise<{ raffle: Raffle }> {
+  return apiFetch<{ raffle: Raffle }>(
+    `/api/admin/raffle-details?slug=${encodeURIComponent(slug)}`,
+    { method: "GET" }
+  );
 }
 
 export async function getPublicRaffleBySlug(
