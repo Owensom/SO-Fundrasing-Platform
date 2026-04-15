@@ -1,3 +1,168 @@
-export default function PublicRafflePage() {
-  <h1>THIS IS VERSION 2</h1>
+import React, { useEffect, useState } from "react";
+import { getPublicRaffleBySlug } from "./api";
+import type { Raffle, RaffleOffer } from "./types/raffles";
+
+type Props = {
+  slug: string;
+};
+
+export default function PublicRafflePage({ slug }: Props) {
+  const [raffle, setRaffle] = useState<Raffle | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await getPublicRaffleBySlug(slug);
+
+        if (!active) return;
+        setRaffle(data.raffle);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load raffle");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [slug]);
+
+  if (loading) {
+    return <div style={{ padding: 24 }}>Loading raffle...</div>;
+  }
+
+  if (error || !raffle) {
+    return <div style={{ padding: 24 }}>Failed to load raffle</div>;
+  }
+
+  const singlePrice = Number(raffle.ticket_price);
+  const offers = raffle.offers ?? [];
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 24,
+          alignItems: "start",
+        }}
+      >
+        <div>
+          {raffle.image_url ? (
+            <img
+              src={raffle.image_url}
+              alt={raffle.title}
+              style={{
+                width: "100%",
+                borderRadius: 16,
+                display: "block",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                minHeight: 300,
+                border: "1px solid #ddd",
+                borderRadius: 16,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              No image
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h1>{raffle.title}</h1>
+          {raffle.description ? <p>{raffle.description}</p> : null}
+
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 16,
+              padding: 16,
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ opacity: 0.7 }}>Single ticket price</div>
+            <div style={{ fontSize: 28, fontWeight: 700 }}>
+              £{singlePrice.toFixed(2)}
+            </div>
+          </div>
+
+          {offers.length > 0 ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              <h2>Ticket Bundles</h2>
+
+              {offers
+                .filter((offer: RaffleOffer) => offer.active !== false)
+                .map((offer: RaffleOffer, index: number) => {
+                  const price = Number(offer.price);
+                  const tickets = Number(offer.tickets);
+                  const perTicket = price / tickets;
+                  const normalTotal = singlePrice * tickets;
+                  const saving = normalTotal - price;
+
+                  return (
+                    <button
+                      key={offer.id || index}
+                      type="button"
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: "1px solid #ddd",
+                        borderRadius: 16,
+                        padding: 16,
+                        background: "#fff",
+                        cursor: "pointer",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700 }}>
+                          {offer.label || `${tickets} Tickets`}
+                        </div>
+                        <div style={{ opacity: 0.75, marginTop: 4 }}>
+                          {tickets} for £{price.toFixed(2)} · £
+                          {perTicket.toFixed(2)} each
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 700, fontSize: 20 }}>
+                          £{price.toFixed(2)}
+                        </div>
+                        {saving > 0 ? (
+                          <div style={{ color: "green", marginTop: 4 }}>
+                            Save £{saving.toFixed(2)}
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
