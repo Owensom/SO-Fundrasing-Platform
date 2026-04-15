@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createRaffle, updateRaffle } from "../../../api";
-import type { Raffle, RaffleOffer } from "../../../types/raffles";
+import { createRaffle, updateRaffle } from "../../api";
+import type { Raffle, RaffleOffer } from "../../types/raffles";
 
 type Props = {
   raffle?: Raffle;
@@ -60,7 +60,7 @@ export default function AdminEditRafflePage({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load offers into form
+  // Load offers
   useEffect(() => {
     if (raffle?.offers?.length) {
       setOffers(
@@ -154,17 +154,9 @@ export default function AdminEditRafflePage({
       };
 
       // Validation
-      if (!payload.tenant_slug) {
-        throw new Error("Tenant slug is required");
-      }
-
-      if (!payload.title) {
-        throw new Error("Title is required");
-      }
-
-      if (!payload.slug) {
-        throw new Error("Slug is required");
-      }
+      if (!payload.tenant_slug) throw new Error("Tenant slug is required");
+      if (!payload.title) throw new Error("Title is required");
+      if (!payload.slug) throw new Error("Slug is required");
 
       if (
         !Number.isInteger(payload.ticket_price_cents) ||
@@ -180,28 +172,16 @@ export default function AdminEditRafflePage({
         throw new Error("Total tickets must be greater than 0");
       }
 
-      for (const offer of payload.offers) {
-        if (
-          !Number.isInteger(offer.ticket_quantity) ||
-          offer.ticket_quantity <= 0
-        ) {
-          throw new Error("Offer ticket quantities must be whole numbers");
-        }
-
-        if (
-          !Number.isInteger(offer.price_cents) ||
-          offer.price_cents <= 0
-        ) {
-          throw new Error("Offer prices must be greater than 0");
-        }
-      }
-
       const seen = new Set<number>();
       for (const offer of payload.offers) {
+        if (!Number.isInteger(offer.ticket_quantity) || offer.ticket_quantity <= 0) {
+          throw new Error("Offer ticket quantities must be whole numbers");
+        }
+        if (!Number.isInteger(offer.price_cents) || offer.price_cents <= 0) {
+          throw new Error("Offer prices must be greater than 0");
+        }
         if (seen.has(offer.ticket_quantity)) {
-          throw new Error(
-            `Duplicate offer for ${offer.ticket_quantity} tickets`
-          );
+          throw new Error(`Duplicate offer for ${offer.ticket_quantity} tickets`);
         }
         seen.add(offer.ticket_quantity);
       }
@@ -225,169 +205,71 @@ export default function AdminEditRafflePage({
       <h1>{isEdit ? "Edit Raffle" : "Create Raffle"}</h1>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 20 }}>
-        {/* Tenant */}
-        <div>
-          <label>Tenant Slug</label>
-          <input
-            value={localTenantSlug}
-            onChange={(e) => setLocalTenantSlug(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
+        <input placeholder="Tenant Slug" value={localTenantSlug} onChange={(e) => setLocalTenantSlug(e.target.value)} />
+        <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input placeholder="Slug" value={slug} onChange={(e) => setSlug(e.target.value)} />
+        <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <input placeholder="Image URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
 
-        {/* Title */}
-        <div>
-          <label>Title</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
+        <input
+          type="number"
+          step="0.01"
+          value={ticketPrice}
+          onChange={(e) => setTicketPrice(e.target.value)}
+        />
 
-        {/* Slug */}
-        <div>
-          <label>Slug</label>
-          <input
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder="Leave blank to auto-generate"
-            style={{ width: "100%", padding: 10 }}
-          />
-          <small>Final slug: {resolvedSlug}</small>
-        </div>
+        <input
+          type="number"
+          value={totalTickets}
+          onChange={(e) => setTotalTickets(Number(e.target.value))}
+        />
 
-        {/* Description */}
-        <div>
-          <label>Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
+        <input value={status} onChange={(e) => setStatus(e.target.value)} />
 
-        {/* Image */}
-        <div>
-          <label>Image URL</label>
-          <input
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
+        <h2>Offers</h2>
 
-        {/* Price */}
-        <div>
-          <label>Single Ticket Price (£)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={ticketPrice}
-            onChange={(e) => setTicketPrice(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
-
-        {/* Total tickets */}
-        <div>
-          <label>Total Tickets</label>
-          <input
-            type="number"
-            value={totalTickets}
-            onChange={(e) => setTotalTickets(Number(e.target.value))}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
-
-        {/* Status */}
-        <div>
-          <label>Status</label>
-          <input
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
-
-        {/* Offers */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: 16,
-            }}
-          >
-            <h2>Offer Pricing</h2>
-            <button type="button" onClick={addOffer}>
-              Add Offer
+        {offers.map((offer, index) => (
+          <div key={index}>
+            <input
+              value={offer.label}
+              onChange={(e) => updateOffer(index, "label", e.target.value)}
+            />
+            <input
+              type="number"
+              value={offer.ticket_quantity}
+              onChange={(e) =>
+                updateOffer(index, "ticket_quantity", Number(e.target.value))
+              }
+            />
+            <input
+              type="number"
+              step="0.01"
+              value={centsToPounds(offer.price_cents)}
+              onChange={(e) =>
+                updateOffer(index, "price_cents", poundsToCents(e.target.value))
+              }
+            />
+            <input
+              type="checkbox"
+              checked={offer.is_active}
+              onChange={(e) =>
+                updateOffer(index, "is_active", e.target.checked)
+              }
+            />
+            <button type="button" onClick={() => removeOffer(index)}>
+              X
             </button>
           </div>
+        ))}
 
-          {offers.map((offer, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr auto auto",
-                gap: 10,
-                marginBottom: 10,
-              }}
-            >
-              <input
-                placeholder="Label"
-                value={offer.label}
-                onChange={(e) =>
-                  updateOffer(index, "label", e.target.value)
-                }
-              />
-
-              <input
-                type="number"
-                value={offer.ticket_quantity}
-                onChange={(e) =>
-                  updateOffer(
-                    index,
-                    "ticket_quantity",
-                    Number(e.target.value)
-                  )
-                }
-              />
-
-              <input
-                type="number"
-                step="0.01"
-                value={centsToPounds(offer.price_cents)}
-                onChange={(e) =>
-                  updateOffer(
-                    index,
-                    "price_cents",
-                    poundsToCents(e.target.value)
-                  )
-                }
-              />
-
-              <input
-                type="checkbox"
-                checked={offer.is_active}
-                onChange={(e) =>
-                  updateOffer(index, "is_active", e.target.checked)
-                }
-              />
-
-              <button onClick={() => removeOffer(index)}>X</button>
-            </div>
-          ))}
-        </div>
+        <button type="button" onClick={addOffer}>
+          Add Offer
+        </button>
 
         {error && <div style={{ color: "red" }}>{error}</div>}
         {success && <div style={{ color: "green" }}>{success}</div>}
 
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save Raffle"}
-        </button>
+        <button type="submit">{saving ? "Saving..." : "Save Raffle"}</button>
       </form>
     </div>
   );
