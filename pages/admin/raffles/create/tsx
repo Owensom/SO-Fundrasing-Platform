@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import ColourOptionsEditor, {
   ColourOption,
 } from "../../../components/admin/ColourOptionsEditor";
+import ImageUploadField from "../../../components/admin/ImageUploadField";
 
 type FormState = {
   title: string;
@@ -45,11 +46,21 @@ function currencySymbol(code: string) {
   return "£";
 }
 
+function slugify(text: string) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 export default function AdminCreateRafflePage() {
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
 
   const showColours = useMemo(
     () =>
@@ -78,9 +89,9 @@ export default function AdminCreateRafflePage() {
         tenantSlug: "demo-a",
         title: form.title,
         description: form.description,
-        slug: form.slug,
+        slug: slugify(form.slug || form.title),
         status: form.status,
-        ticketPrice: Number(form.ticketPrice), // pounds/dollars/euros
+        ticketPrice: Number(form.ticketPrice),
         totalTickets: Number(form.totalTickets),
         soldTickets: Number(form.soldTickets || 0),
         heroImageUrl: form.heroImageUrl || "",
@@ -120,6 +131,7 @@ export default function AdminCreateRafflePage() {
 
       setSuccessMessage("Raffle created successfully.");
       setForm(INITIAL_STATE);
+      setSlugTouched(false);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -138,7 +150,14 @@ export default function AdminCreateRafflePage() {
             <input
               type="text"
               value={form.title}
-              onChange={(e) => updateField("title", e.target.value)}
+              onChange={(e) => {
+                const nextTitle = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  title: nextTitle,
+                  slug: slugTouched ? prev.slug : slugify(nextTitle),
+                }));
+              }}
               style={styles.input}
               placeholder="Spring Cash Raffle"
               required
@@ -162,10 +181,16 @@ export default function AdminCreateRafflePage() {
               <input
                 type="text"
                 value={form.slug}
-                onChange={(e) => updateField("slug", e.target.value)}
+                onChange={(e) => {
+                  setSlugTouched(true);
+                  updateField("slug", slugify(e.target.value));
+                }}
                 style={styles.input}
                 placeholder="spring-cash-raffle"
               />
+              <div style={styles.helperText}>
+                Public URL: /raffles/{form.slug || "your-raffle-slug"}
+              </div>
             </div>
 
             <div style={styles.card}>
@@ -200,7 +225,7 @@ export default function AdminCreateRafflePage() {
 
             <div style={styles.card}>
               <label style={styles.label}>
-                Ticket price ({currencySymbol(form.currencyCode)})
+                Single ticket price ({currencySymbol(form.currencyCode)})
               </label>
               <input
                 type="number"
@@ -319,26 +344,18 @@ export default function AdminCreateRafflePage() {
 
           <div style={styles.grid2}>
             <div style={styles.card}>
-              <label style={styles.label}>Hero image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Hero image"
                 value={form.heroImageUrl}
-                onChange={(e) => updateField("heroImageUrl", e.target.value)}
-                style={styles.input}
-                placeholder="https://..."
+                onChange={(url) => updateField("heroImageUrl", url)}
               />
             </div>
 
             <div style={styles.card}>
-              <label style={styles.label}>Background image URL</label>
-              <input
-                type="text"
+              <ImageUploadField
+                label="Background image"
                 value={form.backgroundImageUrl}
-                onChange={(e) =>
-                  updateField("backgroundImageUrl", e.target.value)
-                }
-                style={styles.input}
-                placeholder="https://..."
+                onChange={(url) => updateField("backgroundImageUrl", url)}
               />
             </div>
           </div>
@@ -350,9 +367,7 @@ export default function AdminCreateRafflePage() {
           </div>
 
           {error ? <div style={styles.error}>{error}</div> : null}
-          {successMessage ? (
-            <div style={styles.success}>{successMessage}</div>
-          ) : null}
+          {successMessage ? <div style={styles.success}>{successMessage}</div> : null}
         </form>
       </div>
     </div>
@@ -402,6 +417,11 @@ const styles: Record<string, React.CSSProperties> = {
   label: {
     fontWeight: 600,
     fontSize: 14,
+  },
+  helperText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#6b7280",
   },
   input: {
     height: 42,
