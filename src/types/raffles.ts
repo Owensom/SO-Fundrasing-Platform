@@ -1,10 +1,10 @@
 export type RaffleOffer = {
   id?: string;
   label?: string | null;
-  ticket_quantity: number;
+  tickets: number;
   price_cents: number;
   sort_order?: number;
-  is_active?: boolean;
+  active?: boolean;
 };
 
 export type Raffle = {
@@ -34,9 +34,9 @@ export type SaveRafflePayload = {
   status: string;
   offers: {
     label?: string | null;
-    ticket_quantity: number;
+    tickets: number;
     price_cents: number;
     sort_order: number;
-    is_active: boolean;
+    active: boolean;
   }[];
 };
