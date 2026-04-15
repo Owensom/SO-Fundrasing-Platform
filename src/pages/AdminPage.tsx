@@ -87,7 +87,7 @@ export default function AdminPage() {
             <h1 style={styles.title}>Raffles</h1>
           </div>
 
-          <Link to="/admin/raffles/new" style={styles.primaryLink}>
+          <Link to="/admin/raffles/create" style={styles.primaryLink}>
             Create raffle
           </Link>
         </div>
