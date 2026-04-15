@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getPublicRaffleBySlug } from "./api";
-import type { Raffle, RaffleOffer } from "./types/raffles";
+import { getPublicRaffleBySlug } from "../api";
+import type { Raffle, RaffleOffer } from "../types/raffles";
 
 function centsToPounds(cents: number) {
   return (cents / 100).toFixed(2);
