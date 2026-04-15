@@ -1,80 +1,44 @@
-import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
+import { Pool, type QueryResultRow } from "pg";
 
 declare global {
   // eslint-disable-next-line no-var
-  var __platformPgPool: Pool | undefined;
+  var __so_pool__: Pool | undefined;
 }
 
-function getDatabaseUrl(): string {
-  const value = process.env.DATABASE_URL;
+function createPool() {
+  const connectionString = process.env.DATABASE_URL;
 
-  if (!value || !value.trim()) {
-    throw new Error("DATABASE_URL is not configured.");
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set");
   }
 
-  const trimmed = value.trim();
-
-  if (
-    trimmed.startsWith('"') ||
-    trimmed.endsWith('"') ||
-    trimmed.startsWith("'") ||
-    trimmed.endsWith("'")
-  ) {
-    throw new Error(
-      "DATABASE_URL appears to include quotes. Remove surrounding quotes in Vercel environment variables."
-    );
-  }
-
-  if (
-    !trimmed.startsWith("postgres://") &&
-    !trimmed.startsWith("postgresql://")
-  ) {
-    throw new Error(
-      "DATABASE_URL must start with postgres:// or postgresql://"
-    );
-  }
-
-  return trimmed;
+  return new Pool({
+    connectionString,
+    ssl:
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
 }
 
-function getPool(): Pool {
-  const connectionString = getDatabaseUrl();
+export const pool = globalThis.__so_pool__ ?? createPool();
 
-  if (!globalThis.__platformPgPool) {
-    globalThis.__platformPgPool = new Pool({
-      connectionString,
-      ssl:
-        connectionString.includes("localhost") ||
-        connectionString.includes("127.0.0.1")
-          ? false
-          : { rejectUnauthorized: false },
-    });
-  }
-
-  return globalThis.__platformPgPool;
+if (process.env.NODE_ENV !== "production") {
+  globalThis.__so_pool__ = pool;
 }
 
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
-  params: unknown[] = []
-): Promise<QueryResult<T>> {
-  return getPool().query<T>(text, params);
+  params: unknown[] = [],
+): Promise<T[]> {
+  const result = await pool.query<T>(text, params);
+  return result.rows;
 }
 
-export async function withTransaction<T>(
-  callback: (client: PoolClient) => Promise<T>
-): Promise<T> {
-  const client = await getPool().connect();
-
-  try {
-    await client.query("begin");
-    const result = await callback(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
+export async function queryOne<T extends QueryResultRow = QueryResultRow>(
+  text: string,
+  params: unknown[] = [],
+): Promise<T | null> {
+  const rows = await query<T>(text, params);
+  return rows[0] ?? null;
 }
