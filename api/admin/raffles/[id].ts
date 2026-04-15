@@ -18,30 +18,34 @@ function normalizeOffers(input: unknown) {
   const offers = input
     .map((item: any, index: number) => ({
       label: typeof item?.label === "string" ? item.label.trim() : null,
-      tickets: Number(item?.tickets),
-      price: Number(item?.price),
+      ticket_quantity: Number(item?.ticket_quantity ?? item?.tickets),
+      price_cents: Number(item?.price_cents),
       sort_order:
         item?.sort_order !== undefined ? Number(item.sort_order) : index,
-      active: item?.active !== undefined ? Boolean(item.active) : true,
+      is_active: item?.is_active !== undefined ? Boolean(item.is_active) : true,
     }))
-    .filter((offer) => offer.tickets > 0 && offer.price > 0);
+    .filter(
+      (offer) => offer.ticket_quantity > 0 && offer.price_cents > 0
+    );
 
   const seen = new Set<number>();
 
   for (const offer of offers) {
-    if (!Number.isInteger(offer.tickets)) {
-      throw new Error("Each offer.tickets must be a whole number");
+    if (!Number.isInteger(offer.ticket_quantity)) {
+      throw new Error("Each offer.ticket_quantity must be a whole number");
     }
 
-    if (!Number.isFinite(offer.price)) {
-      throw new Error("Each offer.price must be a valid number");
+    if (!Number.isInteger(offer.price_cents) || offer.price_cents <= 0) {
+      throw new Error("Each offer.price_cents must be a positive integer");
     }
 
-    if (seen.has(offer.tickets)) {
-      throw new Error(`Duplicate offer for ${offer.tickets} tickets`);
+    if (seen.has(offer.ticket_quantity)) {
+      throw new Error(
+        `Duplicate offer for ${offer.ticket_quantity} tickets`
+      );
     }
 
-    seen.add(offer.tickets);
+    seen.add(offer.ticket_quantity);
   }
 
   return offers.sort((a, b) => a.sort_order - b.sort_order);
@@ -64,39 +68,38 @@ export default async function handler(req: any, res: any) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
 
+    const tenantSlug = String(body.tenant_slug ?? "").trim();
     const title = String(body.title ?? "").trim();
     const slug = String(body.slug ?? "").trim() || slugify(title);
     const description = String(body.description ?? "").trim();
     const imageUrl = body.image_url ? String(body.image_url) : null;
-    const primaryColor = String(body.primary_color ?? "#111111");
-    const secondaryColor = String(body.secondary_color ?? "#ffffff");
-    const minNumber = Number(body.min_number ?? 1);
-    const maxNumber = Number(body.max_number ?? 9999);
-    const ticketPrice = Number(body.ticket_price ?? 0);
+    const ticketPriceCents = Number(body.ticket_price_cents ?? 0);
+    const totalTickets = Number(body.total_tickets ?? 0);
+    const status = String(body.status ?? "draft").trim();
     const offers = normalizeOffers(body.offers);
 
+    if (!tenantSlug) {
+      return res.status(400).json({ error: "tenant_slug is required" });
+    }
+
     if (!title) {
-      return res.status(400).json({ error: "Title is required" });
+      return res.status(400).json({ error: "title is required" });
     }
 
     if (!slug) {
-      return res.status(400).json({ error: "Slug is required" });
+      return res.status(400).json({ error: "slug is required" });
     }
 
-    if (!Number.isFinite(ticketPrice) || ticketPrice <= 0) {
+    if (!Number.isInteger(ticketPriceCents) || ticketPriceCents <= 0) {
       return res
         .status(400)
-        .json({ error: "ticket_price must be greater than 0" });
+        .json({ error: "ticket_price_cents must be a positive integer" });
     }
 
-    if (
-      !Number.isInteger(minNumber) ||
-      !Number.isInteger(maxNumber) ||
-      minNumber <= 0 ||
-      maxNumber <= 0 ||
-      minNumber >= maxNumber
-    ) {
-      return res.status(400).json({ error: "Invalid number range" });
+    if (!Number.isInteger(totalTickets) || totalTickets <= 0) {
+      return res
+        .status(400)
+        .json({ error: "total_tickets must be a positive integer" });
     }
 
     await client.query("BEGIN");
@@ -105,29 +108,27 @@ export default async function handler(req: any, res: any) {
       `
       UPDATE raffles
       SET
-        title = $1,
+        tenant_slug = $1,
         slug = $2,
-        description = $3,
-        image_url = $4,
-        primary_color = $5,
-        secondary_color = $6,
-        min_number = $7,
-        max_number = $8,
-        ticket_price = $9,
+        title = $3,
+        description = $4,
+        image_url = $5,
+        ticket_price_cents = $6,
+        total_tickets = $7,
+        status = $8,
         updated_at = NOW()
-      WHERE id = $10
+      WHERE id = $9
       RETURNING *
       `,
       [
-        title,
+        tenantSlug,
         slug,
+        title,
         description,
         imageUrl,
-        primaryColor,
-        secondaryColor,
-        minNumber,
-        maxNumber,
-        ticketPrice,
+        ticketPriceCents,
+        totalTickets,
+        status,
         id,
       ]
     );
@@ -139,18 +140,18 @@ export default async function handler(req: any, res: any) {
       return res.status(404).json({ error: "Raffle not found" });
     }
 
-    await client.query(`DELETE FROM raffle_offers WHERE raffle_id = $1`, [id]);
+    await client.query(`DELETE FROM raffle_offers WHERE campaign_id = $1`, [id]);
 
     for (const offer of offers) {
       await client.query(
         `
         INSERT INTO raffle_offers (
-          raffle_id,
+          campaign_id,
           label,
-          tickets,
-          price,
+          ticket_quantity,
+          price_cents,
           sort_order,
-          active,
+          is_active,
           created_at,
           updated_at
         )
@@ -159,10 +160,10 @@ export default async function handler(req: any, res: any) {
         [
           id,
           offer.label,
-          offer.tickets,
-          offer.price,
+          offer.ticket_quantity,
+          offer.price_cents,
           offer.sort_order,
-          offer.active,
+          offer.is_active,
         ]
       );
     }
@@ -172,13 +173,13 @@ export default async function handler(req: any, res: any) {
       SELECT
         id,
         label,
-        tickets,
-        price,
+        ticket_quantity,
+        price_cents,
         sort_order,
-        active
+        is_active
       FROM raffle_offers
-      WHERE raffle_id = $1
-      ORDER BY sort_order ASC, tickets ASC
+      WHERE campaign_id = $1
+      ORDER BY sort_order ASC, ticket_quantity ASC
       `,
       [id]
     );
