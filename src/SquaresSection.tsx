@@ -27,6 +27,11 @@ type Purchase = {
 
 type Drafts = Record<string, { total: string; price: string }>;
 
+type PurchaseResponse = {
+  purchase: Purchase;
+  game: Game;
+};
+
 function clampSquares(n: number) {
   return Math.max(1, Math.min(500, Number.isFinite(n) ? Math.floor(n) : 1));
 }
@@ -119,7 +124,7 @@ export default function SquaresSection() {
       setGamesLoading(true);
 
       try {
-        const data = await apiFetch("/api/squares");
+        const data = await apiFetch<Game[]>("/api/squares");
         const loadedGames = Array.isArray(data) ? data : [];
 
         setGames(loadedGames);
@@ -268,7 +273,7 @@ export default function SquaresSection() {
         background: "",
       };
 
-      const saved = await apiFetch("/api/squares", {
+      const saved = await apiFetch<Game>("/api/squares", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -305,7 +310,7 @@ export default function SquaresSection() {
     setAdminBusy(true);
 
     try {
-      await apiFetch(`/api/squares/${game.id}`, {
+      await apiFetch<{ ok?: boolean }>(`/api/squares/${game.id}`, {
         method: "DELETE",
       });
 
@@ -352,7 +357,7 @@ export default function SquaresSection() {
     setAdminBusy(true);
 
     try {
-      const saved = await apiFetch(`/api/squares/${game.id}`, {
+      const saved = await apiFetch<Game>(`/api/squares/${game.id}`, {
         method: "PUT",
         body: JSON.stringify({
           title: game.title,
@@ -377,7 +382,7 @@ export default function SquaresSection() {
     if (!canBuy || !game) return;
 
     try {
-      const response = await apiFetch("/api/squares/purchase", {
+      const response = await apiFetch<PurchaseResponse>("/api/squares/purchase", {
         method: "POST",
         body: JSON.stringify({
           gameId: game.id,
