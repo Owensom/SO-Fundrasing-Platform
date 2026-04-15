@@ -23,34 +23,30 @@ function normalizeOffers(input: unknown) {
   const offers = input
     .map((item: any, index: number) => ({
       label: typeof item?.label === "string" ? item.label.trim() : null,
-      ticket_quantity: Number(item?.ticket_quantity ?? item?.tickets),
+      tickets: Number(item?.tickets),
       price_cents: Number(item?.price_cents),
       sort_order:
         item?.sort_order !== undefined ? Number(item.sort_order) : index,
-      is_active: item?.is_active !== undefined ? Boolean(item.is_active) : true,
+      active: item?.active !== undefined ? Boolean(item.active) : true,
     }))
-    .filter(
-      (offer) => offer.ticket_quantity > 0 && offer.price_cents > 0
-    );
+    .filter((offer) => offer.tickets > 0 && offer.price_cents > 0);
 
   const seen = new Set<number>();
 
   for (const offer of offers) {
-    if (!Number.isInteger(offer.ticket_quantity)) {
-      throw new Error("Each offer.ticket_quantity must be a whole number");
+    if (!Number.isInteger(offer.tickets)) {
+      throw new Error("Each offer.tickets must be a whole number");
     }
 
     if (!Number.isInteger(offer.price_cents) || offer.price_cents <= 0) {
       throw new Error("Each offer.price_cents must be a positive integer");
     }
 
-    if (seen.has(offer.ticket_quantity)) {
-      throw new Error(
-        `Duplicate offer for ${offer.ticket_quantity} tickets`
-      );
+    if (seen.has(offer.tickets)) {
+      throw new Error(`Duplicate offer for ${offer.tickets} tickets`);
     }
 
-    seen.add(offer.ticket_quantity);
+    seen.add(offer.tickets);
   }
 
   return offers.sort((a, b) => a.sort_order - b.sort_order);
@@ -143,12 +139,12 @@ export default async function handler(req: any, res: any) {
       await client.query(
         `
         INSERT INTO raffle_offers (
-          campaign_id,
+          raffle_id,
           label,
-          ticket_quantity,
+          tickets,
           price_cents,
           sort_order,
-          is_active,
+          active,
           created_at,
           updated_at
         )
@@ -157,10 +153,10 @@ export default async function handler(req: any, res: any) {
         [
           raffle.id,
           offer.label,
-          offer.ticket_quantity,
+          offer.tickets,
           offer.price_cents,
           offer.sort_order,
-          offer.is_active,
+          offer.active,
         ]
       );
     }
@@ -170,13 +166,13 @@ export default async function handler(req: any, res: any) {
       SELECT
         id,
         label,
-        ticket_quantity,
+        tickets,
         price_cents,
         sort_order,
-        is_active
+        active
       FROM raffle_offers
-      WHERE campaign_id = $1
-      ORDER BY sort_order ASC, ticket_quantity ASC
+      WHERE raffle_id = $1
+      ORDER BY sort_order ASC, tickets ASC
       `,
       [raffle.id]
     );
