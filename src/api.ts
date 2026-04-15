@@ -1,56 +1,48 @@
-export async function apiFetch(url: string, options: RequestInit = {}) {
-  const res = await fetch(url, {
-    ...options,
-    credentials: "include", // 🔥 REQUIRED FOR LOGIN COOKIE
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+import type { Raffle, SaveRafflePayload } from "./types/raffles";
 
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
+async function handleJson<T>(res: Response): Promise<T> {
+  const data = await res.json();
 
   if (!res.ok) {
-    let message = "Request failed";
-
-    if (isJson) {
-      try {
-        const data = await res.json();
-        message = data.error || message;
-      } catch {}
-    }
-
-    throw new Error(message);
+    throw new Error(data?.error || "Request failed");
   }
 
-  return isJson ? res.json() : null;
+  return data;
 }
 
-export async function publicApiFetch(url: string, options: RequestInit = {}) {
-  const res = await fetch(url, {
-    ...options,
+export async function createRaffle(
+  payload: SaveRafflePayload
+): Promise<{ raffle: Raffle }> {
+  const res = await fetch("/api/admin/raffles", {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
     },
+    body: JSON.stringify(payload),
   });
 
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
+  return handleJson<{ raffle: Raffle }>(res);
+}
 
-  if (!res.ok) {
-    let message = "Request failed";
+export async function updateRaffle(
+  raffleId: string,
+  payload: SaveRafflePayload
+): Promise<{ raffle: Raffle }> {
+  const res = await fetch(`/api/admin/raffles/${raffleId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 
-    if (isJson) {
-      try {
-        const data = await res.json();
-        message = data.error || message;
-      } catch {}
-    }
+  return handleJson<{ raffle: Raffle }>(res);
+}
 
-    throw new Error(message);
-  }
+export async function getPublicRaffleBySlug(
+  slug: string
+): Promise<{ raffle: Raffle }> {
+  const res = await fetch(`/api/public/raffles/${slug}`);
 
-  return isJson ? res.json() : null;
+  return handleJson<{ raffle: Raffle }>(res);
 }
