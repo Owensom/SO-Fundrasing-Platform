@@ -60,7 +60,6 @@ export default function AdminEditRafflePage({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load offers
   useEffect(() => {
     if (raffle?.offers?.length) {
       setOffers(
@@ -153,7 +152,6 @@ export default function AdminEditRafflePage({
         })),
       };
 
-      // Validation
       if (!payload.tenant_slug) throw new Error("Tenant slug is required");
       if (!payload.title) throw new Error("Title is required");
       if (!payload.slug) throw new Error("Slug is required");
@@ -205,71 +203,175 @@ export default function AdminEditRafflePage({
       <h1>{isEdit ? "Edit Raffle" : "Create Raffle"}</h1>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 20 }}>
-        <input placeholder="Tenant Slug" value={localTenantSlug} onChange={(e) => setLocalTenantSlug(e.target.value)} />
-        <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <input placeholder="Slug" value={slug} onChange={(e) => setSlug(e.target.value)} />
-        <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <input placeholder="Image URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+        <div>
+          <label>Tenant Slug</label>
+          <input
+            value={localTenantSlug}
+            onChange={(e) => setLocalTenantSlug(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
 
-        <input
-          type="number"
-          step="0.01"
-          value={ticketPrice}
-          onChange={(e) => setTicketPrice(e.target.value)}
-        />
+        <div>
+          <label>Title</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
 
-        <input
-          type="number"
-          value={totalTickets}
-          onChange={(e) => setTotalTickets(Number(e.target.value))}
-        />
+        <div>
+          <label>Slug</label>
+          <input
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="Leave blank to auto-generate"
+            style={{ width: "100%", padding: 10 }}
+          />
+          <small>Final slug: {resolvedSlug}</small>
+        </div>
 
-        <input value={status} onChange={(e) => setStatus(e.target.value)} />
+        <div>
+          <label>Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
 
-        <h2>Offers</h2>
+        <div>
+          <label>Image URL</label>
+          <input
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
 
-        {offers.map((offer, index) => (
-          <div key={index}>
-            <input
-              value={offer.label}
-              onChange={(e) => updateOffer(index, "label", e.target.value)}
-            />
-            <input
-              type="number"
-              value={offer.ticket_quantity}
-              onChange={(e) =>
-                updateOffer(index, "ticket_quantity", Number(e.target.value))
-              }
-            />
-            <input
-              type="number"
-              step="0.01"
-              value={centsToPounds(offer.price_cents)}
-              onChange={(e) =>
-                updateOffer(index, "price_cents", poundsToCents(e.target.value))
-              }
-            />
-            <input
-              type="checkbox"
-              checked={offer.is_active}
-              onChange={(e) =>
-                updateOffer(index, "is_active", e.target.checked)
-              }
-            />
-            <button type="button" onClick={() => removeOffer(index)}>
-              X
+        <div>
+          <label>Single Ticket Price (£)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={ticketPrice}
+            onChange={(e) => setTicketPrice(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        <div>
+          <label>Total Tickets</label>
+          <input
+            type="number"
+            value={totalTickets}
+            onChange={(e) => setTotalTickets(Number(e.target.value))}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        <div>
+          <label>Status</label>
+          <input
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 16,
+            }}
+          >
+            <h2 style={{ margin: 0 }}>Offer Pricing</h2>
+            <button type="button" onClick={addOffer}>
+              Add Offer
             </button>
           </div>
-        ))}
 
-        <button type="button" onClick={addOffer}>
-          Add Offer
+          <div style={{ display: "grid", gap: 12 }}>
+            {offers.map((offer, index) => (
+              <div
+                key={index}
+                style={{
+                  border: "1px solid #eee",
+                  borderRadius: 8,
+                  padding: 12,
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr 1fr auto auto",
+                  gap: 12,
+                  alignItems: "end",
+                }}
+              >
+                <div>
+                  <label>Label</label>
+                  <input
+                    value={offer.label}
+                    onChange={(e) => updateOffer(index, "label", e.target.value)}
+                    placeholder="e.g. 10 Tickets"
+                    style={{ width: "100%", padding: 10 }}
+                  />
+                </div>
+
+                <div>
+                  <label>Tickets</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={offer.ticket_quantity}
+                    onChange={(e) =>
+                      updateOffer(index, "ticket_quantity", Number(e.target.value))
+                    }
+                    style={{ width: "100%", padding: 10 }}
+                  />
+                </div>
+
+                <div>
+                  <label>Price (£)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={centsToPounds(offer.price_cents)}
+                    onChange={(e) =>
+                      updateOffer(index, "price_cents", poundsToCents(e.target.value))
+                    }
+                    style={{ width: "100%", padding: 10 }}
+                  />
+                </div>
+
+                <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={offer.is_active}
+                    onChange={(e) =>
+                      updateOffer(index, "is_active", e.target.checked)
+                    }
+                  />
+                  Active
+                </label>
+
+                <button type="button" onClick={() => removeOffer(index)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error ? <div style={{ color: "red" }}>{error}</div> : null}
+        {success ? <div style={{ color: "green" }}>{success}</div> : null}
+
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving..." : isEdit ? "Update Raffle" : "Create Raffle"}
         </button>
-
-        {error && <div style={{ color: "red" }}>{error}</div>}
-        {success && <div style={{ color: "green" }}>{success}</div>}
-
-        <button type="submit">{saving ? "Saving..." : "Save Raffle"}</button>
       </form>
     </div>
   );
