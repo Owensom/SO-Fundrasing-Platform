@@ -1,70 +1,139 @@
-import type { Raffle, SaveRafflePayload } from "./types/raffles";
+import type {
+  Purchase,
+  Raffle,
+  RaffleDetails,
+  SaveRaffleInput,
+} from "./types/raffles";
 
-export async function apiFetch<T = any>(
+type ApiEnvelope<T> = {
+  ok: boolean;
+  item?: T;
+  items?: T[];
+  error?: string;
+};
+
+async function request<T>(
   input: RequestInfo | URL,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(input, {
+  const response = await fetch(input, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(init?.headers || {}),
+      ...(init?.headers ?? {}),
     },
     ...init,
   });
 
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-  const data = isJson ? await res.json() : await res.text();
+  const data = (await response.json().catch(() => null)) as
+    | ApiEnvelope<T>
+    | null;
 
-  if (!res.ok) {
-    const message =
-      typeof data === "object" &&
-      data !== null &&
-      "error" in data &&
-      typeof (data as { error?: unknown }).error === "string"
-        ? (data as { error: string }).error
-        : typeof data === "string"
-        ? data
-        : "Request failed";
-
-    throw new Error(message);
+  if (!response.ok) {
+    throw new Error(data?.error || "Request failed");
   }
 
-  return data as T;
+  return (data as T) ?? ({} as T);
+}
+
+export async function login(email: string, password: string): Promise<{
+  ok: boolean;
+  admin: { email: string };
+}> {
+  return request(`/api/auth?action=login`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logout(): Promise<{ ok: boolean }> {
+  return request(`/api/auth?action=logout`, {
+    method: "POST",
+  });
+}
+
+export async function getMe(): Promise<{
+  ok: boolean;
+  admin: { email: string };
+}> {
+  return request(`/api/auth?action=me`);
+}
+
+export async function listAdminRaffles(): Promise<Raffle[]> {
+  const result = await request<ApiEnvelope<Raffle>>(
+    `/api/admin?resource=raffles`,
+  );
+  return result.items ?? [];
+}
+
+export async function getAdminRaffle(id: string): Promise<RaffleDetails> {
+  const result = await request<ApiEnvelope<RaffleDetails>>(
+    `/api/admin?resource=raffle&id=${encodeURIComponent(id)}`,
+  );
+
+  if (!result.item) {
+    throw new Error("Raffle not found");
+  }
+
+  return result.item;
 }
 
 export async function createRaffle(
-  payload: SaveRafflePayload
-): Promise<{ raffle: Raffle }> {
-  return apiFetch<{ raffle: Raffle }>("/api/admin/raffles", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  input: SaveRaffleInput,
+): Promise<RaffleDetails> {
+  const result = await request<ApiEnvelope<RaffleDetails>>(
+    `/api/admin?resource=raffles`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!result.item) {
+    throw new Error("Failed to create raffle");
+  }
+
+  return result.item;
 }
 
 export async function updateRaffle(
-  raffleId: string,
-  payload: SaveRafflePayload
-): Promise<{ raffle: Raffle }> {
-  return apiFetch<{ raffle: Raffle }>(`/api/admin/raffles/${raffleId}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  id: string,
+  input: SaveRaffleInput,
+): Promise<RaffleDetails> {
+  const result = await request<ApiEnvelope<RaffleDetails>>(
+    `/api/admin?resource=raffle&id=${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!result.item) {
+    throw new Error("Failed to update raffle");
+  }
+
+  return result.item;
 }
 
-export async function getAdminRaffleDetails(
-  slug: string
-): Promise<{ raffle: Raffle }> {
-  return apiFetch<{ raffle: Raffle }>(
-    `/api/admin/raffle-details?slug=${encodeURIComponent(slug)}`,
-    { method: "GET" }
+export async function getRafflePurchases(
+  raffleId: string,
+): Promise<Purchase[]> {
+  const result = await request<ApiEnvelope<Purchase>>(
+    `/api/admin?resource=purchases&raffleId=${encodeURIComponent(raffleId)}`,
   );
+  return result.items ?? [];
 }
 
 export async function getPublicRaffleBySlug(
-  slug: string
-): Promise<{ raffle: Raffle }> {
-  return apiFetch<{ raffle: Raffle }>(`/api/public/raffles/${slug}`, {
-    method: "GET",
-  });
+  slug: string,
+): Promise<RaffleDetails> {
+  const result = await request<ApiEnvelope<RaffleDetails>>(
+    `/api/public?slug=${encodeURIComponent(slug)}`,
+  );
+
+  if (!result.item) {
+    throw new Error("Raffle not found");
+  }
+
+  return result.item;
 }
