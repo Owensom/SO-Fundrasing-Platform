@@ -1,41 +1,42 @@
 export type RaffleOffer = {
   id?: string;
   label?: string | null;
-  tickets: number;
-  price: number | string;
+  ticket_quantity: number;
+  price_cents: number;
   sort_order?: number;
-  active?: boolean;
+  is_active?: boolean;
 };
 
 export type Raffle = {
   id: string;
-  title: string;
+  tenant_slug: string;
   slug: string;
-  description?: string | null;
+  title: string;
+  description: string;
   image_url?: string | null;
-  primary_color?: string | null;
-  secondary_color?: string | null;
-  min_number?: number | null;
-  max_number?: number | null;
-  ticket_price: number | string;
+  ticket_price_cents: number;
+  total_tickets: number;
+  sold_tickets: number;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
   offers?: RaffleOffer[];
 };
 
 export type SaveRafflePayload = {
+  tenant_slug: string;
   title: string;
   slug: string;
-  description?: string;
+  description: string;
   image_url?: string;
-  primary_color?: string;
-  secondary_color?: string;
-  min_number?: number;
-  max_number?: number;
-  ticket_price: number;
+  ticket_price_cents: number;
+  total_tickets: number;
+  status: string;
   offers: {
     label?: string | null;
-    tickets: number;
-    price: number;
+    ticket_quantity: number;
+    price_cents: number;
     sort_order: number;
-    active: boolean;
+    is_active: boolean;
   }[];
 };
