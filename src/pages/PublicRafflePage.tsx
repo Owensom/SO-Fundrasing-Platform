@@ -1,588 +1,170 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { getPublicRaffleBySlug } from "./api";
+import type { Raffle, RaffleOffer } from "./types/raffles";
 
-type Offer = {
-  id: string;
-  label: string;
-  ticketQuantity: number;
-  price: number;
-};
-
-type Colour = {
-  id: string;
-  name: string;
-  hexValue: string | null;
-};
-
-type PublicRaffle = {
-  id: string;
+type Props = {
   slug: string;
-  title: string;
-  description: string;
-  ticketPrice: number;
-  remainingTickets: number;
-  isSoldOut: boolean;
-  status: string;
 };
 
-type PublicRaffleResponse = {
-  raffle: PublicRaffle;
-  offers: Offer[];
-  colours: Colour[];
-  error?: string;
-};
+function centsToPounds(cents: number) {
+  return (cents / 100).toFixed(2);
+}
 
-type DisplayOffer = {
-  id: string;
-  label: string;
-  ticketQuantity: number;
-  price: number;
-  isSingleTicket: boolean;
-};
-
-export default function PublicRafflePage() {
-  const { slug } = useParams<{ slug: string }>();
-
-  const [raffle, setRaffle] = useState<PublicRaffle | null>(null);
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [colours, setColours] = useState<Colour[]>([]);
+export default function PublicRafflePage({ slug }: Props) {
+  const [raffle, setRaffle] = useState<Raffle | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedOfferId, setSelectedOfferId] = useState<string>("");
-  const [colourQuantities, setColourQuantities] = useState<Record<string, number>>(
-    {}
-  );
-
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!slug) {
-      setError("Missing raffle slug.");
-      setLoading(false);
-      return;
-    }
+    let active = true;
 
-    const safeSlug: string = slug;
-    let isMounted = true;
-
-    async function loadRaffle() {
+    async function load() {
       try {
         setLoading(true);
-        setError(null);
-
-        const response = await fetch(
-          `/api/public/raffles?slug=${encodeURIComponent(
-            safeSlug
-          )}&tenantSlug=demo-a`,
-          {
-            headers: {
-              "x-tenant-slug": "demo-a",
-            },
-          }
-        );
-
-        const json = (await response.json()) as PublicRaffleResponse;
-
-        if (!response.ok) {
-          throw new Error(json.error || "Failed to load raffle.");
-        }
-
-        if (!isMounted) return;
-
-        setRaffle(json.raffle);
-        setOffers(json.offers || []);
-        setColours(json.colours || []);
+        setError("");
+        const data = await getPublicRaffleBySlug(slug);
+        if (!active) return;
+        setRaffle(data.raffle);
       } catch (err) {
-        if (!isMounted) return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load raffle."
-        );
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load raffle");
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     }
 
-    void loadRaffle();
+    load();
 
     return () => {
-      isMounted = false;
+      active = false;
     };
   }, [slug]);
 
-  const displayOffers = useMemo<DisplayOffer[]>(() => {
-    if (!raffle) return [];
-
-    const singleTicketOffer: DisplayOffer = {
-      id: "single-ticket",
-      label: "1 Ticket",
-      ticketQuantity: 1,
-      price: raffle.ticketPrice,
-      isSingleTicket: true,
-    };
-
-    return [
-      singleTicketOffer,
-      ...offers.map((offer) => ({
-        ...offer,
-        isSingleTicket: false,
-      })),
-    ];
-  }, [raffle, offers]);
-
-  useEffect(() => {
-    if (displayOffers.length > 0 && !selectedOfferId) {
-      setSelectedOfferId(displayOffers[0].id);
-    }
-  }, [displayOffers, selectedOfferId]);
-
-  const selectedOffer =
-    displayOffers.find((offer) => offer.id === selectedOfferId) ?? null;
-
-  const selectedColourTotal = Object.values(colourQuantities).reduce(
-    (sum, value) => sum + value,
-    0
-  );
-
-  const requiredQuantity = selectedOffer?.ticketQuantity ?? 0;
-  const colourSelectionValid =
-    requiredQuantity > 0 ? selectedColourTotal === requiredQuantity : false;
-
-  function updateColourQuantity(colourId: string, nextValue: number) {
-    setColourQuantities((prev) => ({
-      ...prev,
-      [colourId]: Math.max(0, nextValue),
-    }));
-  }
-
-  useEffect(() => {
-    setColourQuantities({});
-  }, [selectedOfferId]);
-
-  async function handleContinue() {
-    if (!slug || !selectedOffer || !colourSelectionValid) return;
-
-    try {
-      setSubmitting(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const colourSelections = Object.entries(colourQuantities)
-        .filter(([, quantity]) => quantity > 0)
-        .map(([colourId, quantity]) => ({
-          colourId,
-          quantity,
-        }));
-
-      const response = await fetch("/api/public/raffles", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-slug": "demo-a",
-        },
-        body: JSON.stringify({
-          action: "purchase",
-          slug,
-          customerName,
-          customerEmail,
-          offerId: selectedOffer.id,
-          colourSelections,
-        }),
-      });
-
-      const json = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json.error || "Failed to create purchase");
-      }
-
-      setSuccessMessage(
-        `Tickets reserved for ${json.purchase.customerName}. Total: £${json.purchase.totalPrice.toFixed(
-          2
-        )}.`
-      );
-      setCustomerName("");
-      setCustomerEmail("");
-      setColourQuantities({});
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to continue");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   if (loading) {
-    return <div style={styles.page}>Loading raffle...</div>;
+    return <div style={{ padding: 24 }}>Loading raffle...</div>;
   }
 
-  if (error && !raffle) {
-    return (
-      <div style={styles.page}>
-        <h1 style={styles.title}>Raffle unavailable</h1>
-        <p style={styles.error}>{error || "Not found"}</p>
-      </div>
-    );
+  if (error || !raffle) {
+    return <div style={{ padding: 24 }}>Failed to load raffle</div>;
   }
 
-  if (!raffle) {
-    return (
-      <div style={styles.page}>
-        <h1 style={styles.title}>Raffle unavailable</h1>
-      </div>
-    );
-  }
+  const singlePriceCents = Number(raffle.ticket_price_cents);
+  const offers = raffle.offers ?? [];
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <p style={styles.eyebrow}>Public raffle</p>
-        <h1 style={styles.title}>{raffle.title}</h1>
-        <p style={styles.description}>{raffle.description}</p>
-
-        <div style={styles.metaRow}>
-          <div style={styles.metaCard}>
-            <div style={styles.metaLabel}>Single ticket</div>
-            <div style={styles.metaValue}>£{raffle.ticketPrice.toFixed(2)}</div>
-          </div>
-
-          <div style={styles.metaCard}>
-            <div style={styles.metaLabel}>Remaining</div>
-            <div style={styles.metaValue}>{raffle.remainingTickets}</div>
-          </div>
-
-          <div style={styles.metaCard}>
-            <div style={styles.metaLabel}>Status</div>
-            <div style={styles.metaValue}>{raffle.status}</div>
-          </div>
-        </div>
-
-        <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>Choose an offer</h2>
-
-          <div style={styles.offerList}>
-            {displayOffers.map((offer) => (
-              <label key={offer.id} style={styles.offerCard}>
-                <input
-                  type="radio"
-                  name="offer"
-                  value={offer.id}
-                  checked={selectedOfferId === offer.id}
-                  onChange={() => setSelectedOfferId(offer.id)}
-                />
-                <div>
-                  <div style={styles.offerTitle}>
-                    {offer.label}
-                    {offer.isSingleTicket ? " (standard)" : ""}
-                  </div>
-                  <div style={styles.offerMeta}>
-                    {offer.ticketQuantity} ticket
-                    {offer.ticketQuantity === 1 ? "" : "s"} for £
-                    {offer.price.toFixed(2)}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>Choose colours</h2>
-
-          {colours.length === 0 ? (
-            <p>No colours available yet.</p>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 24,
+          alignItems: "start",
+        }}
+      >
+        <div>
+          {raffle.image_url ? (
+            <img
+              src={raffle.image_url}
+              alt={raffle.title}
+              style={{
+                width: "100%",
+                borderRadius: 16,
+                display: "block",
+                objectFit: "cover",
+              }}
+            />
           ) : (
-            <div style={styles.colourList}>
-              {colours.map((colour) => {
-                const currentValue = colourQuantities[colour.id] ?? 0;
-
-                return (
-                  <div key={colour.id} style={styles.colourCard}>
-                    <div style={styles.colourInfo}>
-                      <span
-                        style={{
-                          ...styles.colourSwatch,
-                          background: colour.hexValue || "#e5e7eb",
-                        }}
-                      />
-                      <span>{colour.name}</span>
-                    </div>
-
-                    <div style={styles.quantityControls}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateColourQuantity(colour.id, currentValue - 1)
-                        }
-                      >
-                        -
-                      </button>
-                      <span style={styles.quantityValue}>{currentValue}</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateColourQuantity(colour.id, currentValue + 1)
-                        }
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+            <div
+              style={{
+                width: "100%",
+                minHeight: 300,
+                border: "1px solid #ddd",
+                borderRadius: 16,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              No image
             </div>
           )}
-
-          <div style={styles.selectedBox}>
-            <div style={styles.selectedLabel}>Selection summary</div>
-            <div style={styles.selectedValue}>
-              Selected {selectedColourTotal} of {requiredQuantity} required ticket
-              {requiredQuantity === 1 ? "" : "s"}
-            </div>
-            {!colourSelectionValid && (
-              <div style={styles.validationText}>
-                Your colour quantities must add up to the selected offer quantity.
-              </div>
-            )}
-          </div>
         </div>
 
-        <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>Your details</h2>
+        <div>
+          <h1>{raffle.title}</h1>
+          {raffle.description ? <p>{raffle.description}</p> : null}
 
-          <div style={styles.formGrid}>
-            <div>
-              <label>Name</label>
-              <input
-                style={styles.input}
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Your name"
-              />
-            </div>
-
-            <div>
-              <label>Email</label>
-              <input
-                style={styles.input}
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="you@example.com"
-                type="email"
-              />
-            </div>
-          </div>
-        </div>
-
-        {selectedOffer && (
-          <div style={styles.selectedBox}>
-            <div style={styles.selectedLabel}>Selected offer</div>
-            <div style={styles.selectedValue}>
-              {selectedOffer.label} — {selectedOffer.ticketQuantity} ticket
-              {selectedOffer.ticketQuantity === 1 ? "" : "s"} for £
-              {selectedOffer.price.toFixed(2)}
-            </div>
-          </div>
-        )}
-
-        {error && <p style={styles.error}>{error}</p>}
-        {successMessage && <p style={styles.success}>{successMessage}</p>}
-
-        {raffle.isSoldOut ? (
-          <p style={styles.soldOut}>Sold out</p>
-        ) : (
-          <button
+          <div
             style={{
-              ...styles.button,
-              opacity:
-                colourSelectionValid && customerName && customerEmail && !submitting
-                  ? 1
-                  : 0.5,
-              cursor:
-                colourSelectionValid && customerName && customerEmail && !submitting
-                  ? "pointer"
-                  : "not-allowed",
+              border: "1px solid #ddd",
+              borderRadius: 16,
+              padding: 16,
+              marginBottom: 20,
             }}
-            disabled={
-              !colourSelectionValid ||
-              !customerName.trim() ||
-              !customerEmail.trim() ||
-              submitting
-            }
-            onClick={() => void handleContinue()}
           >
-            {submitting ? "Saving..." : "Continue"}
-          </button>
-        )}
+            <div style={{ opacity: 0.7 }}>Single ticket price</div>
+            <div style={{ fontSize: 28, fontWeight: 700 }}>
+              £{centsToPounds(singlePriceCents)}
+            </div>
+          </div>
+
+          {offers.length > 0 ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              <h2>Ticket Bundles</h2>
+
+              {offers
+                .filter((offer: RaffleOffer) => offer.is_active !== false)
+                .map((offer: RaffleOffer, index: number) => {
+                  const priceCents = Number(offer.price_cents);
+                  const tickets = Number(offer.ticket_quantity);
+                  const perTicketCents = Math.round(priceCents / tickets);
+                  const normalTotalCents = singlePriceCents * tickets;
+                  const savingCents = normalTotalCents - priceCents;
+
+                  return (
+                    <button
+                      key={offer.id || index}
+                      type="button"
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: "1px solid #ddd",
+                        borderRadius: 16,
+                        padding: 16,
+                        background: "#fff",
+                        cursor: "pointer",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700 }}>
+                          {offer.label || `${tickets} Tickets`}
+                        </div>
+                        <div style={{ opacity: 0.75, marginTop: 4 }}>
+                          {tickets} for £{centsToPounds(priceCents)} · £
+                          {centsToPounds(perTicketCents)} each
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 700, fontSize: 20 }}>
+                          £{centsToPounds(priceCents)}
+                        </div>
+                        {savingCents > 0 ? (
+                          <div style={{ color: "green", marginTop: 4 }}>
+                            Save £{centsToPounds(savingCents)}
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f6f7fb",
-    padding: 24,
-  },
-  card: {
-    maxWidth: 720,
-    margin: "0 auto",
-    background: "#fff",
-    borderRadius: 16,
-    padding: 24,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-  },
-  eyebrow: {
-    margin: 0,
-    fontSize: 14,
-    textTransform: "uppercase",
-    color: "#64748b",
-    fontWeight: 700,
-  },
-  title: {
-    margin: "8px 0 12px",
-    fontSize: 32,
-    lineHeight: 1.1,
-  },
-  description: {
-    margin: 0,
-    color: "#334155",
-    lineHeight: 1.6,
-  },
-  metaRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-    marginTop: 20,
-    marginBottom: 24,
-  },
-  metaCard: {
-    background: "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-  },
-  metaLabel: {
-    fontSize: 13,
-    color: "#64748b",
-    marginBottom: 8,
-  },
-  metaValue: {
-    fontSize: 22,
-    fontWeight: 700,
-  },
-  section: {
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    margin: "0 0 12px",
-    fontSize: 22,
-  },
-  offerList: {
-    display: "grid",
-    gap: 12,
-  },
-  offerCard: {
-    display: "flex",
-    gap: 12,
-    alignItems: "flex-start",
-    padding: 14,
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    cursor: "pointer",
-  },
-  offerTitle: {
-    fontWeight: 700,
-    marginBottom: 4,
-  },
-  offerMeta: {
-    color: "#475569",
-  },
-  colourList: {
-    display: "grid",
-    gap: 12,
-  },
-  colourCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 14,
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-  },
-  colourInfo: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  colourSwatch: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    border: "1px solid #cbd5e1",
-    display: "inline-block",
-  },
-  quantityControls: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  quantityValue: {
-    minWidth: 20,
-    textAlign: "center",
-    fontWeight: 700,
-  },
-  selectedBox: {
-    marginTop: 20,
-    background: "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-  },
-  selectedLabel: {
-    fontSize: 13,
-    color: "#64748b",
-    marginBottom: 6,
-  },
-  selectedValue: {
-    fontWeight: 700,
-  },
-  validationText: {
-    marginTop: 8,
-    color: "#b45309",
-  },
-  formGrid: {
-    display: "grid",
-    gap: 12,
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 8,
-    border: "1px solid #cbd5e1",
-    marginTop: 6,
-  },
-  soldOut: {
-    marginTop: 20,
-    color: "#b91c1c",
-    fontWeight: 700,
-  },
-  button: {
-    marginTop: 20,
-    border: 0,
-    borderRadius: 10,
-    padding: "12px 16px",
-    background: "#111827",
-    color: "#fff",
-    fontWeight: 700,
-  },
-  error: {
-    color: "#b91c1c",
-  },
-  success: {
-    color: "#166534",
-  },
-};
