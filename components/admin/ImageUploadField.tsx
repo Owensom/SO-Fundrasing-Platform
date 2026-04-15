@@ -6,6 +6,14 @@ type Props = {
   onChange: (url: string) => void;
 };
 
+function isValidImageUrl(url: string) {
+  try {
+    return Boolean(url && new URL(url));
+  } catch {
+    return false;
+  }
+}
+
 export default function ImageUploadField({
   label,
   value = "",
@@ -28,10 +36,14 @@ export default function ImageUploadField({
         body: formData,
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
 
       if (!res.ok) {
         throw new Error(json?.error || "Upload failed");
+      }
+
+      if (!json?.url || typeof json.url !== "string") {
+        throw new Error("Upload did not return a valid URL");
       }
 
       onChange(json.url);
@@ -47,7 +59,7 @@ export default function ImageUploadField({
     <div style={styles.wrapper}>
       <label style={styles.label}>{label}</label>
 
-      {value ? (
+      {isValidImageUrl(value) ? (
         <div style={styles.previewWrap}>
           <img src={value} alt={label} style={styles.previewImage} />
         </div>
