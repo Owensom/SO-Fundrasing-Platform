@@ -12,7 +12,7 @@ type ApiEnvelope<T> = {
   error?: string;
 };
 
-async function request<T>(
+export async function apiFetch<T = unknown>(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<T> {
@@ -27,13 +27,29 @@ async function request<T>(
 
   const data = (await response.json().catch(() => null)) as
     | ApiEnvelope<T>
+    | T
     | null;
 
   if (!response.ok) {
-    throw new Error(data?.error || "Request failed");
+    const errorMessage =
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof (data as { error?: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : "Request failed";
+
+    throw new Error(errorMessage);
   }
 
-  return (data as T) ?? ({} as T);
+  return data as T;
+}
+
+async function request<T>(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<T> {
+  return apiFetch<T>(input, init);
 }
 
 export async function login(email: string, password: string): Promise<{
