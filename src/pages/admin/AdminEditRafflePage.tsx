@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRaffle, updateRaffle } from "../../api";
-import type { Raffle, RaffleOffer } from "../../types/raffles";
+import type { RaffleDetails, RaffleOffer, SaveRaffleInput } from "../../types/raffles";
 
 type Props = {
-  raffle?: Raffle;
+  raffle?: RaffleDetails;
   mode?: "create" | "edit";
   tenantSlug?: string;
 };
 
 type OfferFormRow = {
   label: string;
-  ticket_quantity: number;
-  price_cents: number;
+  tickets: number;
+  price: number;
   sort_order: number;
   is_active: boolean;
 };
@@ -24,13 +24,11 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function poundsToCents(value: string | number) {
-  const n = typeof value === "number" ? value : Number(value);
-  return Math.round(n * 100);
-}
-
-function centsToPounds(cents: number) {
-  return (cents / 100).toFixed(2);
+function parseColours(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export default function AdminEditRafflePage({
@@ -40,20 +38,22 @@ export default function AdminEditRafflePage({
 }: Props) {
   const isEdit = mode === "edit" && !!raffle?.id;
 
-  const [localTenantSlug, setLocalTenantSlug] = useState(
-    raffle?.tenant_slug ?? tenantSlug ?? ""
-  );
+  const [localTenantSlug] = useState(tenantSlug ?? "");
   const [title, setTitle] = useState(raffle?.title ?? "");
   const [slug, setSlug] = useState(raffle?.slug ?? "");
   const [description, setDescription] = useState(raffle?.description ?? "");
   const [imageUrl, setImageUrl] = useState(raffle?.image_url ?? "");
   const [ticketPrice, setTicketPrice] = useState(
-    raffle ? centsToPounds(Number(raffle.ticket_price_cents)) : "1.00"
+    raffle?.ticket_price != null ? String(raffle.ticket_price) : "1"
   );
-  const [totalTickets, setTotalTickets] = useState(
-    Number(raffle?.total_tickets ?? 1000)
+  const [maxTickets, setMaxTickets] = useState(
+    raffle?.max_tickets != null ? String(raffle.max_tickets) : "1000"
   );
-  const [status, setStatus] = useState(raffle?.status ?? "draft");
+  const [isActive, setIsActive] = useState(raffle?.is_active ?? true);
+  const [drawAt, setDrawAt] = useState(raffle?.draw_at ?? "");
+  const [availableColours, setAvailableColours] = useState(
+    raffle?.available_colours?.join(", ") ?? ""
+  );
 
   const [offers, setOffers] = useState<OfferFormRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -65,8 +65,8 @@ export default function AdminEditRafflePage({
       setOffers(
         raffle.offers.map((offer: RaffleOffer, index: number) => ({
           label: offer.label ?? "",
-          ticket_quantity: Number(offer.ticket_quantity ?? 1),
-          price_cents: Number(offer.price_cents ?? 100),
+          tickets: Number(offer.tickets ?? 1),
+          price: Number(offer.price ?? 1),
           sort_order:
             typeof offer.sort_order === "number" ? offer.sort_order : index,
           is_active: offer.is_active ?? true,
@@ -76,15 +76,15 @@ export default function AdminEditRafflePage({
       setOffers([
         {
           label: "3 Tickets",
-          ticket_quantity: 3,
-          price_cents: 500,
+          tickets: 3,
+          price: 5,
           sort_order: 0,
           is_active: true,
         },
         {
           label: "10 Tickets",
-          ticket_quantity: 10,
-          price_cents: 1500,
+          tickets: 10,
+          price: 15,
           sort_order: 1,
           is_active: true,
         },
@@ -101,8 +101,8 @@ export default function AdminEditRafflePage({
       ...prev,
       {
         label: "",
-        ticket_quantity: 1,
-        price_cents: 100,
+        tickets: 1,
+        price: 1,
         sort_order: prev.length,
         is_active: true,
       },
@@ -134,54 +134,61 @@ export default function AdminEditRafflePage({
     setSuccess("");
 
     try {
-      const payload = {
-        tenant_slug: localTenantSlug.trim(),
+      const parsedTicketPrice = Number(ticketPrice);
+      const parsedMaxTickets =
+        maxTickets.trim() === "" ? null : Number(maxTickets);
+
+      const payload: SaveRaffleInput = {
         title: title.trim(),
         slug: resolvedSlug,
         description: description.trim(),
         image_url: imageUrl.trim(),
-        ticket_price_cents: poundsToCents(ticketPrice),
-        total_tickets: Number(totalTickets),
-        status: status.trim(),
+        draw_at: drawAt.trim() || null,
+        ticket_price: Number.isFinite(parsedTicketPrice) ? parsedTicketPrice : null,
+        max_tickets:
+          parsedMaxTickets !== null && Number.isFinite(parsedMaxTickets)
+            ? parsedMaxTickets
+            : null,
+        is_active: isActive,
+        available_colours: parseColours(availableColours),
         offers: offers.map((offer, index) => ({
-          label: offer.label.trim() || null,
-          ticket_quantity: Number(offer.ticket_quantity),
-          price_cents: Number(offer.price_cents),
+          label: offer.label.trim() || `${offer.tickets} Tickets`,
+          tickets: Number(offer.tickets),
+          price: Number(offer.price),
           sort_order: index,
           is_active: Boolean(offer.is_active),
         })),
       };
 
-      if (!payload.tenant_slug) throw new Error("Tenant slug is required");
       if (!payload.title) throw new Error("Title is required");
       if (!payload.slug) throw new Error("Slug is required");
 
       if (
-        !Number.isInteger(payload.ticket_price_cents) ||
-        payload.ticket_price_cents <= 0
+        payload.ticket_price !== null &&
+        (!Number.isFinite(payload.ticket_price) || payload.ticket_price <= 0)
       ) {
         throw new Error("Single ticket price must be greater than 0");
       }
 
       if (
-        !Number.isInteger(payload.total_tickets) ||
-        payload.total_tickets <= 0
+        payload.max_tickets !== null &&
+        (!Number.isInteger(payload.max_tickets) || payload.max_tickets <= 0)
       ) {
-        throw new Error("Total tickets must be greater than 0");
+        throw new Error("Max tickets must be greater than 0");
       }
 
       const seen = new Set<number>();
-      for (const offer of payload.offers) {
-        if (!Number.isInteger(offer.ticket_quantity) || offer.ticket_quantity <= 0) {
+      for (const offer of payload.offers ?? []) {
+        if (!Number.isInteger(offer.tickets) || offer.tickets <= 0) {
           throw new Error("Offer ticket quantities must be whole numbers");
         }
-        if (!Number.isInteger(offer.price_cents) || offer.price_cents <= 0) {
+        if (!Number.isFinite(offer.price) || offer.price <= 0) {
           throw new Error("Offer prices must be greater than 0");
         }
-        if (seen.has(offer.ticket_quantity)) {
-          throw new Error(`Duplicate offer for ${offer.ticket_quantity} tickets`);
+        if (seen.has(offer.tickets)) {
+          throw new Error(`Duplicate offer for ${offer.tickets} tickets`);
         }
-        seen.add(offer.ticket_quantity);
+        seen.add(offer.tickets);
       }
 
       if (isEdit && raffle?.id) {
@@ -203,14 +210,16 @@ export default function AdminEditRafflePage({
       <h1>{isEdit ? "Edit Raffle" : "Create Raffle"}</h1>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 20 }}>
-        <div>
-          <label>Tenant Slug</label>
-          <input
-            value={localTenantSlug}
-            onChange={(e) => setLocalTenantSlug(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          />
-        </div>
+        {!!localTenantSlug && (
+          <div>
+            <label>Tenant Slug</label>
+            <input
+              value={localTenantSlug}
+              readOnly
+              style={{ width: "100%", padding: 10, opacity: 0.7 }}
+            />
+          </div>
+        )}
 
         <div>
           <label>Title</label>
@@ -256,6 +265,7 @@ export default function AdminEditRafflePage({
           <input
             type="number"
             step="0.01"
+            min={0}
             value={ticketPrice}
             onChange={(e) => setTicketPrice(e.target.value)}
             style={{ width: "100%", padding: 10 }}
@@ -263,23 +273,44 @@ export default function AdminEditRafflePage({
         </div>
 
         <div>
-          <label>Total Tickets</label>
+          <label>Max Tickets</label>
           <input
             type="number"
-            value={totalTickets}
-            onChange={(e) => setTotalTickets(Number(e.target.value))}
+            min={1}
+            value={maxTickets}
+            onChange={(e) => setMaxTickets(e.target.value)}
             style={{ width: "100%", padding: 10 }}
           />
         </div>
 
         <div>
-          <label>Status</label>
+          <label>Draw At</label>
           <input
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            type="datetime-local"
+            value={drawAt}
+            onChange={(e) => setDrawAt(e.target.value)}
             style={{ width: "100%", padding: 10 }}
           />
         </div>
+
+        <div>
+          <label>Available Colours</label>
+          <input
+            value={availableColours}
+            onChange={(e) => setAvailableColours(e.target.value)}
+            placeholder="e.g. red, blue, green"
+            style={{ width: "100%", padding: 10 }}
+          />
+        </div>
+
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+          />
+          Active
+        </label>
 
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
           <div
@@ -325,9 +356,9 @@ export default function AdminEditRafflePage({
                   <input
                     type="number"
                     min={1}
-                    value={offer.ticket_quantity}
+                    value={offer.tickets}
                     onChange={(e) =>
-                      updateOffer(index, "ticket_quantity", Number(e.target.value))
+                      updateOffer(index, "tickets", Number(e.target.value))
                     }
                     style={{ width: "100%", padding: 10 }}
                   />
@@ -339,9 +370,9 @@ export default function AdminEditRafflePage({
                     type="number"
                     min={0}
                     step="0.01"
-                    value={centsToPounds(offer.price_cents)}
+                    value={offer.price}
                     onChange={(e) =>
-                      updateOffer(index, "price_cents", poundsToCents(e.target.value))
+                      updateOffer(index, "price", Number(e.target.value))
                     }
                     style={{ width: "100%", padding: 10 }}
                   />
