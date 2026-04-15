@@ -1,48 +1,59 @@
 import type { Raffle, SaveRafflePayload } from "./types/raffles";
 
-async function handleJson<T>(res: Response): Promise<T> {
-  const data = await res.json();
+export async function apiFetch<T = any>(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<T> {
+  const res = await fetch(input, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    ...init,
+  });
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  const data = isJson ? await res.json() : await res.text();
 
   if (!res.ok) {
-    throw new Error(data?.error || "Request failed");
+    const message =
+      typeof data === "object" && data && "error" in data
+        ? String((data as any).error)
+        : typeof data === "string"
+        ? data
+        : "Request failed";
+
+    throw new Error(message);
   }
 
-  return data;
+  return data as T;
 }
 
 export async function createRaffle(
   payload: SaveRafflePayload
 ): Promise<{ raffle: Raffle }> {
-  const res = await fetch("/api/admin/raffles", {
+  return apiFetch<{ raffle: Raffle }>("/api/admin/raffles", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(payload),
   });
-
-  return handleJson<{ raffle: Raffle }>(res);
 }
 
 export async function updateRaffle(
   raffleId: string,
   payload: SaveRafflePayload
 ): Promise<{ raffle: Raffle }> {
-  const res = await fetch(`/api/admin/raffles/${raffleId}`, {
+  return apiFetch<{ raffle: Raffle }>(`/api/admin/raffles/${raffleId}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(payload),
   });
-
-  return handleJson<{ raffle: Raffle }>(res);
 }
 
 export async function getPublicRaffleBySlug(
   slug: string
 ): Promise<{ raffle: Raffle }> {
-  const res = await fetch(`/api/public/raffles/${slug}`);
-
-  return handleJson<{ raffle: Raffle }>(res);
+  return apiFetch<{ raffle: Raffle }>(`/api/public/raffles/${slug}`, {
+    method: "GET",
+  });
 }
