@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { getPublicRaffleBySlug } from "./api";
-import type { Raffle, RaffleOffer } from "./types/raffles";
-
-type Props = {
-  slug: string;
-};
+import { useParams } from "react-router-dom";
+import { getPublicRaffleBySlug } from "../api";
+import type { Raffle, RaffleOffer } from "../types/raffles";
 
 function centsToPounds(cents: number) {
   return (cents / 100).toFixed(2);
 }
 
-export default function PublicRafflePage({ slug }: Props) {
+export default function PublicRafflePage() {
+  const { slug } = useParams<{ slug: string }>();
+
   const [raffle, setRaffle] = useState<Raffle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -19,10 +18,18 @@ export default function PublicRafflePage({ slug }: Props) {
     let active = true;
 
     async function load() {
+      if (!slug) {
+        setError("Missing raffle slug");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
+
         const data = await getPublicRaffleBySlug(slug);
+
         if (!active) return;
         setRaffle(data.raffle);
       } catch (err) {
@@ -45,7 +52,7 @@ export default function PublicRafflePage({ slug }: Props) {
   }
 
   if (error || !raffle) {
-    return <div style={{ padding: 24 }}>Failed to load raffle</div>;
+    return <div style={{ padding: 24 }}>{error || "Failed to load raffle"}</div>;
   }
 
   const singlePriceCents = Number(raffle.ticket_price_cents);
@@ -113,10 +120,10 @@ export default function PublicRafflePage({ slug }: Props) {
               <h2>Ticket Bundles</h2>
 
               {offers
-                .filter((offer: RaffleOffer) => offer.active !== false)
+                .filter((offer: RaffleOffer) => offer.is_active !== false)
                 .map((offer: RaffleOffer, index: number) => {
                   const priceCents = Number(offer.price_cents);
-                  const tickets = Number(offer.tickets);
+                  const tickets = Number(offer.ticket_quantity);
                   const perTicketCents = Math.round(priceCents / tickets);
                   const normalTotalCents = singlePriceCents * tickets;
                   const savingCents = normalTotalCents - priceCents;
