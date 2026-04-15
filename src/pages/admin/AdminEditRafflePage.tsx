@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createRaffle, updateRaffle } from "../../../api";
-import type { Raffle, RaffleOffer } from "../../../types/raffles";
+import { createRaffle, updateRaffle } from "../../api";
+import type { Raffle, RaffleOffer } from "../../types/raffles";
 
 type Props = {
   raffle?: Raffle;
@@ -10,10 +10,10 @@ type Props = {
 
 type OfferFormRow = {
   label: string;
-  tickets: number;
+  ticket_quantity: number;
   price_cents: number;
   sort_order: number;
-  active: boolean;
+  is_active: boolean;
 };
 
 function slugify(value: string) {
@@ -65,28 +65,28 @@ export default function AdminEditRafflePage({
       setOffers(
         raffle.offers.map((offer: RaffleOffer, index: number) => ({
           label: offer.label ?? "",
-          tickets: Number(offer.tickets ?? 1),
+          ticket_quantity: Number(offer.ticket_quantity ?? 1),
           price_cents: Number(offer.price_cents ?? 100),
           sort_order:
             typeof offer.sort_order === "number" ? offer.sort_order : index,
-          active: offer.active ?? true,
+          is_active: offer.is_active ?? true,
         }))
       );
     } else {
       setOffers([
         {
           label: "3 Tickets",
-          tickets: 3,
+          ticket_quantity: 3,
           price_cents: 500,
           sort_order: 0,
-          active: true,
+          is_active: true,
         },
         {
           label: "10 Tickets",
-          tickets: 10,
+          ticket_quantity: 10,
           price_cents: 1500,
           sort_order: 1,
-          active: true,
+          is_active: true,
         },
       ]);
     }
@@ -101,10 +101,10 @@ export default function AdminEditRafflePage({
       ...prev,
       {
         label: "",
-        tickets: 1,
+        ticket_quantity: 1,
         price_cents: 100,
         sort_order: prev.length,
-        active: true,
+        is_active: true,
       },
     ]);
   }
@@ -145,48 +145,43 @@ export default function AdminEditRafflePage({
         status: status.trim(),
         offers: offers.map((offer, index) => ({
           label: offer.label.trim() || null,
-          tickets: Number(offer.tickets),
+          ticket_quantity: Number(offer.ticket_quantity),
           price_cents: Number(offer.price_cents),
           sort_order: index,
-          active: Boolean(offer.active),
+          is_active: Boolean(offer.is_active),
         })),
       };
 
-      if (!payload.tenant_slug) {
-        throw new Error("Tenant slug is required");
-      }
+      if (!payload.tenant_slug) throw new Error("Tenant slug is required");
+      if (!payload.title) throw new Error("Title is required");
+      if (!payload.slug) throw new Error("Slug is required");
 
-      if (!payload.title) {
-        throw new Error("Title is required");
-      }
-
-      if (!payload.slug) {
-        throw new Error("Slug is required");
-      }
-
-      if (!Number.isInteger(payload.ticket_price_cents) || payload.ticket_price_cents <= 0) {
+      if (
+        !Number.isInteger(payload.ticket_price_cents) ||
+        payload.ticket_price_cents <= 0
+      ) {
         throw new Error("Single ticket price must be greater than 0");
       }
 
-      if (!Number.isInteger(payload.total_tickets) || payload.total_tickets <= 0) {
+      if (
+        !Number.isInteger(payload.total_tickets) ||
+        payload.total_tickets <= 0
+      ) {
         throw new Error("Total tickets must be greater than 0");
       }
 
+      const seen = new Set<number>();
       for (const offer of payload.offers) {
-        if (!Number.isInteger(offer.tickets) || offer.tickets <= 0) {
+        if (!Number.isInteger(offer.ticket_quantity) || offer.ticket_quantity <= 0) {
           throw new Error("Offer ticket quantities must be whole numbers");
         }
         if (!Number.isInteger(offer.price_cents) || offer.price_cents <= 0) {
           throw new Error("Offer prices must be greater than 0");
         }
-      }
-
-      const seen = new Set<number>();
-      for (const offer of payload.offers) {
-        if (seen.has(offer.tickets)) {
-          throw new Error(`Duplicate offer for ${offer.tickets} tickets`);
+        if (seen.has(offer.ticket_quantity)) {
+          throw new Error(`Duplicate offer for ${offer.ticket_quantity} tickets`);
         }
-        seen.add(offer.tickets);
+        seen.add(offer.ticket_quantity);
       }
 
       if (isEdit && raffle?.id) {
@@ -330,9 +325,9 @@ export default function AdminEditRafflePage({
                   <input
                     type="number"
                     min={1}
-                    value={offer.tickets}
+                    value={offer.ticket_quantity}
                     onChange={(e) =>
-                      updateOffer(index, "tickets", Number(e.target.value))
+                      updateOffer(index, "ticket_quantity", Number(e.target.value))
                     }
                     style={{ width: "100%", padding: 10 }}
                   />
@@ -355,9 +350,9 @@ export default function AdminEditRafflePage({
                 <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <input
                     type="checkbox"
-                    checked={offer.active}
+                    checked={offer.is_active}
                     onChange={(e) =>
-                      updateOffer(index, "active", e.target.checked)
+                      updateOffer(index, "is_active", e.target.checked)
                     }
                   />
                   Active
