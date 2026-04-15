@@ -49,6 +49,15 @@ function currencySymbol(code: string) {
   return "£";
 }
 
+function slugify(text: string) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 export default function AdminRaffleEditPage() {
   const router = useRouter();
   const routeId = typeof router.query.id === "string" ? router.query.id : "";
@@ -58,6 +67,7 @@ export default function AdminRaffleEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
 
   const showColours = useMemo(
     () =>
@@ -133,6 +143,8 @@ export default function AdminRaffleEditPage() {
             ? raffle.raffleConfig.colours
             : [],
         });
+
+        setSlugTouched(false);
       } catch (err: any) {
         setError(err?.message || "Failed to load raffle");
       } finally {
@@ -155,7 +167,7 @@ export default function AdminRaffleEditPage() {
         tenantSlug: "demo-a",
         title: form.title,
         description: form.description,
-        slug: form.slug,
+        slug: slugify(form.slug || form.title),
         status: form.status,
         ticketPrice: Number(form.ticketPrice),
         totalTickets: Number(form.totalTickets),
@@ -222,7 +234,14 @@ export default function AdminRaffleEditPage() {
             <input
               type="text"
               value={form.title}
-              onChange={(e) => updateField("title", e.target.value)}
+              onChange={(e) => {
+                const nextTitle = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  title: nextTitle,
+                  slug: slugTouched ? prev.slug : slugify(nextTitle),
+                }));
+              }}
               style={styles.input}
               required
             />
@@ -244,9 +263,15 @@ export default function AdminRaffleEditPage() {
               <input
                 type="text"
                 value={form.slug}
-                onChange={(e) => updateField("slug", e.target.value)}
+                onChange={(e) => {
+                  setSlugTouched(true);
+                  updateField("slug", slugify(e.target.value));
+                }}
                 style={styles.input}
               />
+              <div style={styles.helperText}>
+                Public URL: /raffles/{form.slug || "your-raffle-slug"}
+              </div>
             </div>
 
             <div style={styles.card}>
@@ -284,7 +309,7 @@ export default function AdminRaffleEditPage() {
 
             <div style={styles.card}>
               <label style={styles.label}>
-                Ticket price ({currencySymbol(form.currencyCode)})
+                Single ticket price ({currencySymbol(form.currencyCode)})
               </label>
               <input
                 type="number"
@@ -476,6 +501,11 @@ const styles: Record<string, React.CSSProperties> = {
   label: {
     fontWeight: 600,
     fontSize: 14,
+  },
+  helperText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#6b7280",
   },
   input: {
     height: 42,
