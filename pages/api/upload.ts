@@ -16,18 +16,15 @@ export default async function handler(
   }
 
   try {
-    const filename = req.headers["x-filename"] as string;
+    const filename =
+      (req.headers["x-filename"] as string) || `upload-${Date.now()}`;
 
     const blob = await put(filename, req, {
       access: "public",
     });
 
-    return res.status(200).json({
-      url: blob.url,
-    });
-  } catch (err) {
-    return res.status(500).json({
-      error: "Upload failed",
-    });
+    return res.status(200).json({ url: blob.url });
+  } catch (error) {
+    return res.status(500).json({ error: "Upload failed" });
   }
 }
