@@ -143,9 +143,13 @@ export async function updateRaffle(
 export async function getRafflePurchases(
   raffleId: string,
 ): Promise<Purchase[]> {
-  const result = await request<{ items?: Purchase[]; purchases?: Purchase[] }>(
+  const result = await request<{
+    items?: Purchase[];
+    purchases?: Purchase[];
+  }>(
     `/api/admin?resource=purchases&raffleId=${encodeURIComponent(raffleId)}`,
   );
+
   return result.purchases ?? result.items ?? [];
 }
 
