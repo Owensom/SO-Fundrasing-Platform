@@ -4,8 +4,8 @@ import { useRouter } from "next/router";
 type Offer = {
   id: string;
   label: string;
-  price: number;
-  quantity: number;
+  price: string;
+  quantity: string;
 };
 
 function uid() {
@@ -24,6 +24,12 @@ function slugify(value: string) {
 function money(value: number) {
   if (!Number.isFinite(value)) return "0.00";
   return value.toFixed(2);
+}
+
+function toOptionalNumber(value: string) {
+  if (value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 const colourPresets = [
@@ -49,10 +55,10 @@ const colourPresets = [
 ];
 
 const offerTemplates = [
-  { label: "3 for £5", quantity: 3, price: 5 },
-  { label: "5 for £8", quantity: 5, price: 8 },
-  { label: "10 for £15", quantity: 10, price: 15 },
-  { label: "20 for £25", quantity: 20, price: 25 },
+  { label: "3 for £5", quantity: "3", price: "5" },
+  { label: "5 for £8", quantity: "5", price: "8" },
+  { label: "10 for £15", quantity: "10", price: "15" },
+  { label: "20 for £25", quantity: "20", price: "25" },
 ];
 
 export default function AdminRaffleEditPage() {
@@ -60,16 +66,18 @@ export default function AdminRaffleEditPage() {
   const routeId = typeof router.query.id === "string" ? router.query.id : "";
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
-  const [startNumber, setStartNumber] = useState(1);
-  const [endNumber, setEndNumber] = useState(100);
-  const [ticketPrice, setTicketPrice] = useState(2);
+  const [startNumber, setStartNumber] = useState("");
+  const [endNumber, setEndNumber] = useState("");
+  const [ticketPrice, setTicketPrice] = useState("");
 
   const [autoSlug, setAutoSlug] = useState(false);
 
@@ -80,7 +88,6 @@ export default function AdminRaffleEditPage() {
   useEffect(() => {
     if (!router.isReady) return;
 
-    // Replace with real fetch later
     const timer = setTimeout(() => {
       setTitle("SO Foundation Demo Raffle");
       setSlug("so-foundation-demo-raffle");
@@ -88,12 +95,12 @@ export default function AdminRaffleEditPage() {
         "Edit your raffle details, pricing, offers and available colours from this page."
       );
       setImageUrl("");
-      setStartNumber(1);
-      setEndNumber(200);
-      setTicketPrice(2);
+      setStartNumber("1");
+      setEndNumber("200");
+      setTicketPrice("2");
       setOffers([
-        { id: uid(), label: "5 for £8", quantity: 5, price: 8 },
-        { id: uid(), label: "10 for £15", quantity: 10, price: 15 },
+        { id: uid(), label: "5 for £8", quantity: "5", price: "8" },
+        { id: uid(), label: "10 for £15", quantity: "10", price: "15" },
       ]);
       setColours(["#ef4444", "#3b82f6", "#22c55e"]);
       setIsLoading(false);
@@ -108,25 +115,52 @@ export default function AdminRaffleEditPage() {
     }
   }, [title, autoSlug]);
 
+  const parsedStart = useMemo(() => toOptionalNumber(startNumber), [startNumber]);
+  const parsedEnd = useMemo(() => toOptionalNumber(endNumber), [endNumber]);
+  const parsedTicketPrice = useMemo(
+    () => toOptionalNumber(ticketPrice),
+    [ticketPrice]
+  );
+
   const totalTickets = useMemo(() => {
-    if (!Number.isFinite(startNumber) || !Number.isFinite(endNumber)) return 0;
-    if (endNumber < startNumber) return 0;
-    return endNumber - startNumber + 1;
-  }, [startNumber, endNumber]);
+    if (parsedStart === null || parsedEnd === null) return 0;
+    if (parsedEnd < parsedStart) return 0;
+    return parsedEnd - parsedStart + 1;
+  }, [parsedStart, parsedEnd]);
 
   const expectedRevenue = useMemo(() => {
-    return totalTickets * ticketPrice;
-  }, [totalTickets, ticketPrice]);
+    if (parsedTicketPrice === null) return 0;
+    return totalTickets * parsedTicketPrice;
+  }, [totalTickets, parsedTicketPrice]);
 
   const numbersPreview = useMemo(() => {
-    if (totalTickets <= 0) return [];
+    if (parsedStart === null || totalTickets <= 0) return [];
     const max = Math.min(totalTickets, 24);
-    return Array.from({ length: max }, (_, i) => startNumber + i);
-  }, [startNumber, totalTickets]);
+    return Array.from({ length: max }, (_, i) => parsedStart + i);
+  }, [parsedStart, totalTickets]);
 
   const validOffers = useMemo(() => {
     return offers
-      .filter((o) => o.label.trim() && o.quantity > 0 && o.price >= 0)
+      .map((offer) => {
+        const quantity = toOptionalNumber(offer.quantity);
+        const price = toOptionalNumber(offer.price);
+
+        if (!offer.label.trim() || quantity === null || price === null) return null;
+        if (quantity <= 0 || price < 0) return null;
+
+        return {
+          id: offer.id,
+          label: offer.label.trim(),
+          quantity,
+          price,
+        };
+      })
+      .filter(
+        (
+          offer
+        ): offer is { id: string; label: string; quantity: number; price: number } =>
+          Boolean(offer)
+      )
       .sort((a, b) => a.quantity - b.quantity);
   }, [offers]);
 
@@ -142,14 +176,40 @@ export default function AdminRaffleEditPage() {
     return ranked[0];
   }, [validOffers]);
 
+  const completionErrors = useMemo(() => {
+    const errors: string[] = [];
+
+    if (title.trim() === "") errors.push("Title is required");
+    if (slug.trim() === "") errors.push("Slug is required");
+    if (parsedStart === null) errors.push("Start number is required");
+    if (parsedEnd === null) errors.push("End number is required");
+    if (parsedTicketPrice === null) errors.push("Single ticket price is required");
+
+    if (parsedStart !== null && parsedEnd !== null && parsedEnd < parsedStart) {
+      errors.push("End number must be greater than or equal to start number");
+    }
+
+    if (parsedTicketPrice !== null && parsedTicketPrice < 0) {
+      errors.push("Single ticket price cannot be negative");
+    }
+
+    return errors;
+  }, [title, slug, parsedStart, parsedEnd, parsedTicketPrice]);
+
+  const canComplete = completionErrors.length === 0;
+
   function addBlankOffer() {
     setOffers((prev) => [
       ...prev,
-      { id: uid(), label: "", quantity: 2, price: 0 },
+      { id: uid(), label: "", quantity: "", price: "" },
     ]);
   }
 
-  function addTemplateOffer(template: { label: string; quantity: number; price: number }) {
+  function addTemplateOffer(template: {
+    label: string;
+    quantity: string;
+    price: string;
+  }) {
     setOffers((prev) => [
       ...prev,
       {
@@ -161,11 +221,9 @@ export default function AdminRaffleEditPage() {
     ]);
   }
 
-  function updateOffer(id: string, field: keyof Offer, value: string | number) {
+  function updateOffer(id: string, field: keyof Offer, value: string) {
     setOffers((prev) =>
-      prev.map((offer) =>
-        offer.id === id ? { ...offer, [field]: value } : offer
-      )
+      prev.map((offer) => (offer.id === id ? { ...offer, [field]: value } : offer))
     );
   }
 
@@ -184,29 +242,81 @@ export default function AdminRaffleEditPage() {
     setColours((prev) => prev.filter((c) => c !== colour));
   }
 
-  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setIsSaving(true);
-
-    const payload = {
+  function buildDraftPayload() {
+    return {
       id: routeId,
-      title,
-      slug,
-      description,
-      imageUrl,
-      startNumber,
-      endNumber,
+      title: title.trim(),
+      slug: slug.trim(),
+      description: description.trim(),
+      imageUrl: imageUrl.trim(),
+      startNumber: parsedStart,
+      endNumber: parsedEnd,
       totalTickets,
-      ticketPrice,
+      ticketPrice: parsedTicketPrice,
       offers: validOffers,
       colours,
+      status: "draft",
     };
+  }
 
-    console.log("Update raffle payload:", payload);
+  function buildCompletedPayload() {
+    if (
+      title.trim() === "" ||
+      slug.trim() === "" ||
+      parsedStart === null ||
+      parsedEnd === null ||
+      parsedTicketPrice === null ||
+      parsedEnd < parsedStart ||
+      parsedTicketPrice < 0
+    ) {
+      return null;
+    }
+
+    return {
+      id: routeId,
+      title: title.trim(),
+      slug: slug.trim(),
+      description: description.trim(),
+      imageUrl: imageUrl.trim(),
+      startNumber: parsedStart,
+      endNumber: parsedEnd,
+      totalTickets: parsedEnd - parsedStart + 1,
+      ticketPrice: parsedTicketPrice,
+      offers: validOffers,
+      colours,
+      status: "complete",
+    };
+  }
+
+  async function handleSaveDraft(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setStatusMessage("");
+    setIsSavingDraft(true);
+
+    const payload = buildDraftPayload();
+    console.log("Save draft payload:", payload);
 
     setTimeout(() => {
-      setIsSaving(false);
-      alert("Raffle saved");
+      setIsSavingDraft(false);
+      setStatusMessage("Draft saved");
+    }, 500);
+  }
+
+  async function handleComplete() {
+    setStatusMessage("");
+
+    const payload = buildCompletedPayload();
+    if (!payload) {
+      setStatusMessage("Please complete all required fields before marking complete.");
+      return;
+    }
+
+    setIsCompleting(true);
+    console.log("Complete raffle payload:", payload);
+
+    setTimeout(() => {
+      setIsCompleting(false);
+      setStatusMessage("Raffle marked complete");
     }, 500);
   }
 
@@ -220,13 +330,13 @@ export default function AdminRaffleEditPage() {
 
   return (
     <div style={pageStyle}>
-      <form onSubmit={handleSave}>
+      <form onSubmit={handleSaveDraft}>
         <div style={topBarStyle}>
           <div>
             <div style={eyebrowStyle}>Admin</div>
             <h1 style={pageTitleStyle}>Edit raffle</h1>
             <p style={pageSubtitleStyle}>
-              Update raffle details, pricing, offers, colours and preview.
+              Save partial changes as draft, then complete when everything is ready.
             </p>
             <div style={metaTextStyle}>Raffle: {routeId || "demo-raffle"}</div>
           </div>
@@ -239,21 +349,55 @@ export default function AdminRaffleEditPage() {
             >
               Back
             </button>
+            <button type="submit" style={secondaryButtonStyle} disabled={isSavingDraft}>
+              {isSavingDraft ? "Saving..." : "Save draft"}
+            </button>
             <button
-              type="submit"
+              type="button"
               style={primaryButtonStyle}
-              disabled={isSaving}
+              onClick={handleComplete}
+              disabled={isCompleting}
             >
-              {isSaving ? "Saving..." : "Save changes"}
+              {isCompleting ? "Completing..." : "Complete raffle"}
             </button>
           </div>
         </div>
 
+        {statusMessage ? (
+          <div style={statusBannerStyle}>{statusMessage}</div>
+        ) : null}
+
+        {!canComplete ? (
+          <div style={warningCardStyle}>
+            <div style={warningTitleStyle}>Completion checks</div>
+            <div style={warningListStyle}>
+              {completionErrors.map((error) => (
+                <div key={error}>• {error}</div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={successCardStyle}>Ready to complete</div>
+        )}
+
         <div style={statsGridStyle}>
-          <StatCard label="Ticket range" value={`${startNumber}–${endNumber}`} />
-          <StatCard label="Total tickets" value={`${totalTickets}`} />
-          <StatCard label="Single price" value={`£${money(ticketPrice)}`} />
-          <StatCard label="Max revenue" value={`£${money(expectedRevenue)}`} />
+          <StatCard
+            label="Ticket range"
+            value={
+              parsedStart !== null && parsedEnd !== null
+                ? `${parsedStart}–${parsedEnd}`
+                : "—"
+            }
+          />
+          <StatCard label="Total tickets" value={totalTickets > 0 ? `${totalTickets}` : "—"} />
+          <StatCard
+            label="Single price"
+            value={parsedTicketPrice !== null ? `£${money(parsedTicketPrice)}` : "—"}
+          />
+          <StatCard
+            label="Max revenue"
+            value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
+          />
         </div>
 
         <div style={layoutStyle}>
@@ -269,7 +413,6 @@ export default function AdminRaffleEditPage() {
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Win a signed shirt"
                     style={inputStyle}
-                    required
                   />
                 </Field>
 
@@ -283,7 +426,6 @@ export default function AdminRaffleEditPage() {
                       }}
                       placeholder="win-a-signed-shirt"
                       style={inputStyle}
-                      required
                     />
                     <label style={checkboxLabelStyle}>
                       <input
@@ -323,15 +465,16 @@ export default function AdminRaffleEditPage() {
 
             <SectionCard
               title="Ticket setup"
-              subtitle="Define the number range and base ticket price."
+              subtitle="These can be blank while drafting, but are required for completion."
             >
               <div style={threeColGridStyle}>
                 <Field label="Start number">
                   <input
                     type="number"
                     value={startNumber}
-                    onChange={(e) => setStartNumber(Number(e.target.value))}
+                    onChange={(e) => setStartNumber(e.target.value)}
                     style={inputStyle}
+                    placeholder="1"
                   />
                 </Field>
 
@@ -339,8 +482,9 @@ export default function AdminRaffleEditPage() {
                   <input
                     type="number"
                     value={endNumber}
-                    onChange={(e) => setEndNumber(Number(e.target.value))}
+                    onChange={(e) => setEndNumber(e.target.value)}
                     style={inputStyle}
+                    placeholder="200"
                   />
                 </Field>
 
@@ -350,8 +494,9 @@ export default function AdminRaffleEditPage() {
                     min="0"
                     step="0.01"
                     value={ticketPrice}
-                    onChange={(e) => setTicketPrice(Number(e.target.value))}
+                    onChange={(e) => setTicketPrice(e.target.value)}
                     style={inputStyle}
+                    placeholder="2"
                   />
                 </Field>
               </div>
@@ -360,23 +505,27 @@ export default function AdminRaffleEditPage() {
                 <div>
                   <div style={infoStripLabelStyle}>Range</div>
                   <div style={infoStripValueStyle}>
-                    {startNumber} to {endNumber}
+                    {parsedStart !== null && parsedEnd !== null
+                      ? `${parsedStart} to ${parsedEnd}`
+                      : "—"}
                   </div>
                 </div>
                 <div>
                   <div style={infoStripLabelStyle}>Tickets</div>
-                  <div style={infoStripValueStyle}>{totalTickets}</div>
+                  <div style={infoStripValueStyle}>{totalTickets > 0 ? totalTickets : "—"}</div>
                 </div>
                 <div>
                   <div style={infoStripLabelStyle}>Revenue if sold out</div>
-                  <div style={infoStripValueStyle}>£{money(expectedRevenue)}</div>
+                  <div style={infoStripValueStyle}>
+                    {expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
+                  </div>
                 </div>
               </div>
             </SectionCard>
 
             <SectionCard
               title="Offers"
-              subtitle="Create bundles to encourage larger purchases."
+              subtitle="These can be partially edited. Only valid offers are included on save."
               rightAction={
                 <button
                   type="button"
@@ -408,8 +557,12 @@ export default function AdminRaffleEditPage() {
                   <EmptyState text="No offers added yet." />
                 ) : (
                   offers.map((offer) => {
+                    const quantity = toOptionalNumber(offer.quantity);
+                    const price = toOptionalNumber(offer.price);
                     const pricePerTicket =
-                      offer.quantity > 0 ? offer.price / offer.quantity : 0;
+                      quantity !== null && price !== null && quantity > 0
+                        ? price / quantity
+                        : null;
 
                     return (
                       <div key={offer.id} style={offerCardStyle}>
@@ -431,13 +584,10 @@ export default function AdminRaffleEditPage() {
                               min="1"
                               value={offer.quantity}
                               onChange={(e) =>
-                                updateOffer(
-                                  offer.id,
-                                  "quantity",
-                                  Number(e.target.value)
-                                )
+                                updateOffer(offer.id, "quantity", e.target.value)
                               }
                               style={inputStyle}
+                              placeholder="10"
                             />
                           </Field>
 
@@ -448,13 +598,10 @@ export default function AdminRaffleEditPage() {
                               step="0.01"
                               value={offer.price}
                               onChange={(e) =>
-                                updateOffer(
-                                  offer.id,
-                                  "price",
-                                  Number(e.target.value)
-                                )
+                                updateOffer(offer.id, "price", e.target.value)
                               }
                               style={inputStyle}
+                              placeholder="15"
                             />
                           </Field>
 
@@ -470,8 +617,16 @@ export default function AdminRaffleEditPage() {
                         </div>
 
                         <div style={offerMetaStyle}>
-                          <span>£{money(pricePerTicket)} per ticket</span>
-                          <span>vs base £{money(ticketPrice)} each</span>
+                          <span>
+                            {pricePerTicket !== null
+                              ? `£${money(pricePerTicket)} per ticket`
+                              : "Incomplete offer"}
+                          </span>
+                          <span>
+                            {parsedTicketPrice !== null
+                              ? `vs base £${money(parsedTicketPrice)} each`
+                              : "Base price not set"}
+                          </span>
                         </div>
                       </div>
                     );
@@ -575,7 +730,7 @@ export default function AdminRaffleEditPage() {
                 <div
                   style={{
                     ...previewHeroStyle,
-                    background: imageUrl
+                    background: imageUrl.trim()
                       ? `center / cover no-repeat url(${imageUrl})`
                       : "linear-gradient(135deg, #dbeafe 0%, #ede9fe 50%, #fce7f3 100%)",
                   }}
@@ -594,9 +749,26 @@ export default function AdminRaffleEditPage() {
                   </p>
 
                   <div style={previewMetaGridStyle}>
-                    <PreviewStat label="Numbers" value={`${startNumber}–${endNumber}`} />
-                    <PreviewStat label="Tickets" value={`${totalTickets}`} />
-                    <PreviewStat label="Single" value={`£${money(ticketPrice)}`} />
+                    <PreviewStat
+                      label="Numbers"
+                      value={
+                        parsedStart !== null && parsedEnd !== null
+                          ? `${parsedStart}–${parsedEnd}`
+                          : "—"
+                      }
+                    />
+                    <PreviewStat
+                      label="Tickets"
+                      value={totalTickets > 0 ? `${totalTickets}` : "—"}
+                    />
+                    <PreviewStat
+                      label="Single"
+                      value={
+                        parsedTicketPrice !== null
+                          ? `£${money(parsedTicketPrice)}`
+                          : "—"
+                      }
+                    />
                     <PreviewStat label="Offers" value={`${validOffers.length}`} />
                   </div>
 
@@ -629,7 +801,7 @@ export default function AdminRaffleEditPage() {
                   <div style={{ marginTop: 18 }}>
                     <div style={previewSectionTitleStyle}>Offers</div>
                     {validOffers.length === 0 ? (
-                      <div style={mutedTextStyle}>No offers added</div>
+                      <div style={mutedTextStyle}>No valid offers added</div>
                     ) : (
                       <div style={{ display: "grid", gap: 8 }}>
                         {validOffers.map((offer) => (
@@ -663,14 +835,11 @@ export default function AdminRaffleEditPage() {
               </div>
             </SectionCard>
 
-            <SectionCard
-              title="Pricing insight"
-              subtitle="Quick commercial summary."
-            >
+            <SectionCard title="Pricing insight" subtitle="Quick commercial summary.">
               <div style={{ display: "grid", gap: 12 }}>
                 <InsightRow
                   label="Base sell-out value"
-                  value={`£${money(expectedRevenue)}`}
+                  value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
                 />
                 <InsightRow
                   label="Best offer"
@@ -684,8 +853,12 @@ export default function AdminRaffleEditPage() {
                 />
                 <InsightRow label="Colours available" value={`${colours.length}`} />
                 <InsightRow
-                  label="Configured offers"
+                  label="Configured valid offers"
                   value={`${validOffers.length}`}
+                />
+                <InsightRow
+                  label="Completion status"
+                  value={canComplete ? "Ready" : "Incomplete"}
                 />
               </div>
             </SectionCard>
@@ -838,6 +1011,46 @@ const topActionsStyle: React.CSSProperties = {
   display: "flex",
   gap: 12,
   alignItems: "center",
+};
+
+const statusBannerStyle: React.CSSProperties = {
+  marginBottom: 16,
+  background: "#ecfeff",
+  color: "#155e75",
+  border: "1px solid #a5f3fc",
+  borderRadius: 14,
+  padding: "12px 14px",
+  fontWeight: 700,
+};
+
+const warningCardStyle: React.CSSProperties = {
+  marginBottom: 16,
+  background: "#fff7ed",
+  color: "#9a3412",
+  border: "1px solid #fdba74",
+  borderRadius: 14,
+  padding: 16,
+};
+
+const warningTitleStyle: React.CSSProperties = {
+  fontWeight: 800,
+  marginBottom: 8,
+};
+
+const warningListStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 4,
+  fontSize: 14,
+};
+
+const successCardStyle: React.CSSProperties = {
+  marginBottom: 16,
+  background: "#ecfdf5",
+  color: "#166534",
+  border: "1px solid #86efac",
+  borderRadius: 14,
+  padding: 16,
+  fontWeight: 800,
 };
 
 const statsGridStyle: React.CSSProperties = {
