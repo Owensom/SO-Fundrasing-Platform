@@ -19,13 +19,14 @@ export default async function handler(
     }
 
     const slug = getQueryValue(req, "slug");
+    const tenantSlug = getQueryValue(req, "tenantSlug") ?? "demo-a";
 
     if (!slug) {
       sendBadRequest(res, "Missing slug");
       return;
     }
 
-    const raffle = await getRaffleBySlug(slug);
+    const raffle = await getRaffleBySlug(tenantSlug, slug);
 
     if (!raffle) {
       sendNotFound(res, "Raffle not found");
