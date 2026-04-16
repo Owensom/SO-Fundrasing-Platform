@@ -43,12 +43,6 @@ const INITIAL_STATE: FormState = {
   colours: [],
 };
 
-function currencySymbol(code: string) {
-  if (code === "USD") return "$";
-  if (code === "EUR") return "€";
-  return "£";
-}
-
 function slugify(text: string) {
   return String(text || "")
     .toLowerCase()
@@ -56,33 +50,6 @@ function slugify(text: string) {
     .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
-}
-
-async function parseResponse(response: Response): Promise<any> {
-  const raw = await response.text();
-  const contentType = response.headers.get("content-type") || "";
-
-  let json: any = null;
-
-  if (contentType.includes("application/json")) {
-    try {
-      json = JSON.parse(raw);
-    } catch {
-      json = null;
-    }
-  }
-
-  if (!response.ok) {
-    throw new Error(json?.error || raw || "Request failed");
-  }
-
-  if (!json) {
-    throw new Error(
-      raw || "API returned HTML instead of JSON. Check the API route."
-    );
-  }
-
-  return json;
 }
 
 export default function AdminRaffleEditPage() {
@@ -112,28 +79,46 @@ export default function AdminRaffleEditPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  // ✅ AUTO-SYNC LOGIC
+  useEffect(() => {
+    if (!showNumberRange) return;
+
+    const start = Number(form.numberRangeStart || "1");
+    const end = Number(form.numberRangeEnd || "0");
+
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+    if (end < start) return;
+
+    const total = end - start + 1;
+
+    if (String(total) !== form.totalTickets) {
+      setForm((prev) => ({
+        ...prev,
+        totalTickets: String(total),
+      }));
+    }
+  }, [
+    form.numberRangeStart,
+    form.numberRangeEnd,
+    showNumberRange,
+  ]);
+
   useEffect(() => {
     if (!router.isReady) return;
-
     if (!routeId) {
       setLoading(false);
-      setError("Missing raffle id.");
       return;
     }
 
     async function load() {
-      setLoading(true);
-      setError("");
-      setSuccessMessage("");
-
       try {
-        const response = await fetch(
+        const res = await fetch(
           `/api/admin/raffle-details?id=${encodeURIComponent(
             routeId
           )}&tenantSlug=demo-a`
         );
 
-        const json = await parseResponse(response);
+        const json = await res.json();
         const raffle = json?.raffle;
 
         setForm({
@@ -162,9 +147,7 @@ export default function AdminRaffleEditPage() {
             raffle?.raffleConfig?.numberRangeEnd != null
               ? String(raffle.raffleConfig.numberRangeEnd)
               : "200",
-          colours: Array.isArray(raffle?.raffleConfig?.colours)
-            ? raffle.raffleConfig.colours
-            : [],
+          colours: raffle?.raffleConfig?.colours || [],
         });
 
         setSlugTouched(false);
@@ -208,23 +191,21 @@ export default function AdminRaffleEditPage() {
           form.numberSelectionMode === "none"
             ? null
             : Number(form.numberRangeEnd),
-        colours: form.colours
-          .filter((c) => c.name.trim() && c.hex.trim())
-          .map((c) => ({
-            name: c.name.trim(),
-            hex: c.hex.trim(),
-          })),
+        colours: form.colours,
       };
 
-      const response = await fetch("/api/admin/raffles", {
+      const res = await fetch("/api/admin/raffles", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      await parseResponse(response);
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to update raffle");
+      }
+
       setSuccessMessage("Raffle updated successfully.");
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
@@ -233,338 +214,59 @@ export default function AdminRaffleEditPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.container}>Loading raffle...</div>
-      </div>
-    );
-  }
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <h1 style={styles.heading}>Edit raffle</h1>
+    <div style={{ padding: 24 }}>
+      <h1>Edit raffle</h1>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.card}>
-            <label style={styles.label}>Title</label>
+      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
+        <input
+          value={form.title}
+          onChange={(e) => {
+            const next = e.target.value;
+            setForm((prev) => ({
+              ...prev,
+              title: next,
+              slug: slugTouched ? prev.slug : slugify(next),
+            }));
+          }}
+        />
+
+        {showNumberRange && (
+          <>
             <input
-              type="text"
-              value={form.title}
-              onChange={(e) => {
-                const nextTitle = e.target.value;
-                setForm((prev) => ({
-                  ...prev,
-                  title: nextTitle,
-                  slug: slugTouched ? prev.slug : slugify(nextTitle),
-                }));
-              }}
-              style={styles.input}
-              required
+              type="number"
+              value={form.numberRangeStart}
+              onChange={(e) =>
+                updateField("numberRangeStart", e.target.value)
+              }
             />
-          </div>
 
-          <div style={styles.card}>
-            <label style={styles.label}>Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => updateField("description", e.target.value)}
-              style={styles.textarea}
-              rows={4}
+            <input
+              type="number"
+              value={form.numberRangeEnd}
+              onChange={(e) =>
+                updateField("numberRangeEnd", e.target.value)
+              }
             />
-          </div>
+          </>
+        )}
 
-          <div style={styles.grid2}>
-            <div style={styles.card}>
-              <label style={styles.label}>Slug</label>
-              <input
-                type="text"
-                value={form.slug}
-                onChange={(e) => {
-                  setSlugTouched(true);
-                  updateField("slug", slugify(e.target.value));
-                }}
-                style={styles.input}
-              />
-              <div style={styles.helperText}>
-                Public URL: /raffles/{form.slug || "your-raffle-slug"}
-              </div>
-            </div>
+        {/* 🔒 Disabled when using numbers */}
+        <input
+          type="number"
+          value={form.totalTickets}
+          disabled={showNumberRange}
+        />
 
-            <div style={styles.card}>
-              <label style={styles.label}>Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => updateField("status", e.target.value)}
-                style={styles.input}
-              >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="archived">Archived</option>
-              </select>
-            </div>
-          </div>
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving..." : "Save"}
+        </button>
 
-          <div style={styles.grid2}>
-            <div style={styles.card}>
-              <label style={styles.label}>Currency</label>
-              <select
-                value={form.currencyCode}
-                onChange={(e) =>
-                  updateField(
-                    "currencyCode",
-                    e.target.value as FormState["currencyCode"]
-                  )
-                }
-                style={styles.input}
-              >
-                <option value="GBP">£ GBP</option>
-                <option value="USD">$ USD</option>
-                <option value="EUR">€ EUR</option>
-              </select>
-            </div>
-
-            <div style={styles.card}>
-              <label style={styles.label}>
-                Single ticket price ({currencySymbol(form.currencyCode)})
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.ticketPrice}
-                onChange={(e) => updateField("ticketPrice", e.target.value)}
-                style={styles.input}
-              />
-            </div>
-          </div>
-
-          <div style={styles.grid2}>
-            <div style={styles.card}>
-              <label style={styles.label}>Total tickets</label>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={form.totalTickets}
-                onChange={(e) => updateField("totalTickets", e.target.value)}
-                style={styles.input}
-              />
-            </div>
-
-            <div style={styles.card}>
-              <label style={styles.label}>Sold tickets</label>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.soldTickets}
-                onChange={(e) => updateField("soldTickets", e.target.value)}
-                style={styles.input}
-              />
-            </div>
-          </div>
-
-          <div style={styles.grid2}>
-            <div style={styles.card}>
-              <label style={styles.label}>Colour selection</label>
-              <select
-                value={form.colourSelectionMode}
-                onChange={(e) =>
-                  updateField(
-                    "colourSelectionMode",
-                    e.target.value as FormState["colourSelectionMode"]
-                  )
-                }
-                style={styles.input}
-              >
-                <option value="manual">Customer chooses</option>
-                <option value="automatic">Automatic</option>
-                <option value="both">Customer chooses or automatic</option>
-              </select>
-            </div>
-
-            <div style={styles.card}>
-              <label style={styles.label}>Number selection</label>
-              <select
-                value={form.numberSelectionMode}
-                onChange={(e) =>
-                  updateField(
-                    "numberSelectionMode",
-                    e.target.value as FormState["numberSelectionMode"]
-                  )
-                }
-                style={styles.input}
-              >
-                <option value="none">No numbers</option>
-                <option value="manual">Customer chooses</option>
-                <option value="automatic">Automatic</option>
-                <option value="both">Customer chooses or automatic</option>
-              </select>
-            </div>
-          </div>
-
-          {showNumberRange ? (
-            <div style={styles.grid2}>
-              <div style={styles.card}>
-                <label style={styles.label}>Number range start</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={form.numberRangeStart}
-                  onChange={(e) => updateField("numberRangeStart", e.target.value)}
-                  style={styles.input}
-                />
-              </div>
-
-              <div style={styles.card}>
-                <label style={styles.label}>Number range end</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={form.numberRangeEnd}
-                  onChange={(e) => updateField("numberRangeEnd", e.target.value)}
-                  style={styles.input}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {showColours ? (
-            <ColourOptionsEditor
-              value={form.colours}
-              onChange={(next) => updateField("colours", next)}
-            />
-          ) : (
-            <div style={styles.cardMuted}>
-              Colour selection is automatic only, so no manual colour list is required.
-            </div>
-          )}
-
-          <div style={styles.grid2}>
-            <div style={styles.card}>
-              <ImageUploadField
-                label="Hero image"
-                value={form.heroImageUrl}
-                onChange={(url) => updateField("heroImageUrl", url)}
-              />
-            </div>
-
-            <div style={styles.card}>
-              <ImageUploadField
-                label="Background image"
-                value={form.backgroundImageUrl}
-                onChange={(url) => updateField("backgroundImageUrl", url)}
-              />
-            </div>
-          </div>
-
-          <div style={styles.actions}>
-            <button type="submit" disabled={saving} style={styles.submitButton}>
-              {saving ? "Saving..." : "Save changes"}
-            </button>
-          </div>
-
-          {error ? <div style={styles.error}>{error}</div> : null}
-          {successMessage ? <div style={styles.success}>{successMessage}</div> : null}
-        </form>
-      </div>
+        {error && <div style={{ color: "red" }}>{error}</div>}
+        {successMessage && <div style={{ color: "green" }}>{successMessage}</div>}
+      </form>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    padding: 24,
-    background: "#f3f4f6",
-    minHeight: "100vh",
-  },
-  container: {
-    maxWidth: 980,
-    margin: "0 auto",
-  },
-  heading: {
-    marginBottom: 20,
-    fontSize: 28,
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 16,
-  },
-  card: {
-    background: "#fff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  cardMuted: {
-    background: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: 16,
-    color: "#6b7280",
-  },
-  label: {
-    fontWeight: 600,
-    fontSize: 14,
-  },
-  helperText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  input: {
-    height: 42,
-    borderRadius: 8,
-    border: "1px solid #d1d5db",
-    padding: "0 12px",
-    fontSize: 14,
-  },
-  textarea: {
-    borderRadius: 8,
-    border: "1px solid #d1d5db",
-    padding: 12,
-    fontSize: 14,
-    resize: "vertical",
-  },
-  actions: {
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  submitButton: {
-    height: 44,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid #2563eb",
-    background: "#2563eb",
-    color: "#fff",
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-  error: {
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#b91c1c",
-    padding: 12,
-    borderRadius: 10,
-  },
-  success: {
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-    color: "#065f46",
-    padding: 12,
-    borderRadius: 10,
-  },
-};
