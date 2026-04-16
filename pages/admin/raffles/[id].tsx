@@ -92,7 +92,7 @@ export default function AdminRaffleEditPage() {
       setTitle("SO Foundation Demo Raffle");
       setSlug("so-foundation-demo-raffle");
       setDescription(
-        "Edit your raffle details, pricing, offers and available colours from this page."
+        "Each colour creates another full ticket range. Example: if the range is 1 to 200 and you add 3 colours, buyers can choose Red 25, Blue 25 and Green 25 as separate tickets."
       );
       setImageUrl("");
       setStartNumber("1");
@@ -117,27 +117,30 @@ export default function AdminRaffleEditPage() {
 
   const parsedStart = useMemo(() => toOptionalNumber(startNumber), [startNumber]);
   const parsedEnd = useMemo(() => toOptionalNumber(endNumber), [endNumber]);
-  const parsedTicketPrice = useMemo(
-    () => toOptionalNumber(ticketPrice),
-    [ticketPrice]
-  );
+  const parsedTicketPrice = useMemo(() => toOptionalNumber(ticketPrice), [ticketPrice]);
 
-  const totalTickets = useMemo(() => {
+  const numbersPerColour = useMemo(() => {
     if (parsedStart === null || parsedEnd === null) return 0;
     if (parsedEnd < parsedStart) return 0;
     return parsedEnd - parsedStart + 1;
   }, [parsedStart, parsedEnd]);
+
+  const colourCount = colours.length;
+
+  const totalTickets = useMemo(() => {
+    return numbersPerColour * colourCount;
+  }, [numbersPerColour, colourCount]);
 
   const expectedRevenue = useMemo(() => {
     if (parsedTicketPrice === null) return 0;
     return totalTickets * parsedTicketPrice;
   }, [totalTickets, parsedTicketPrice]);
 
-  const numbersPreview = useMemo(() => {
-    if (parsedStart === null || totalTickets <= 0) return [];
-    const max = Math.min(totalTickets, 24);
+  const numberPreview = useMemo(() => {
+    if (parsedStart === null || numbersPerColour <= 0) return [];
+    const max = Math.min(numbersPerColour, 12);
     return Array.from({ length: max }, (_, i) => parsedStart + i);
-  }, [parsedStart, totalTickets]);
+  }, [parsedStart, numbersPerColour]);
 
   const validOffers = useMemo(() => {
     return offers
@@ -184,6 +187,7 @@ export default function AdminRaffleEditPage() {
     if (parsedStart === null) errors.push("Start number is required");
     if (parsedEnd === null) errors.push("End number is required");
     if (parsedTicketPrice === null) errors.push("Single ticket price is required");
+    if (colours.length === 0) errors.push("At least one colour is required");
 
     if (parsedStart !== null && parsedEnd !== null && parsedEnd < parsedStart) {
       errors.push("End number must be greater than or equal to start number");
@@ -194,22 +198,15 @@ export default function AdminRaffleEditPage() {
     }
 
     return errors;
-  }, [title, slug, parsedStart, parsedEnd, parsedTicketPrice]);
+  }, [title, slug, parsedStart, parsedEnd, parsedTicketPrice, colours.length]);
 
   const canComplete = completionErrors.length === 0;
 
   function addBlankOffer() {
-    setOffers((prev) => [
-      ...prev,
-      { id: uid(), label: "", quantity: "", price: "" },
-    ]);
+    setOffers((prev) => [...prev, { id: uid(), label: "", quantity: "", price: "" }]);
   }
 
-  function addTemplateOffer(template: {
-    label: string;
-    quantity: string;
-    price: string;
-  }) {
+  function addTemplateOffer(template: { label: string; quantity: string; price: string }) {
     setOffers((prev) => [
       ...prev,
       {
@@ -251,6 +248,8 @@ export default function AdminRaffleEditPage() {
       imageUrl: imageUrl.trim(),
       startNumber: parsedStart,
       endNumber: parsedEnd,
+      numbersPerColour,
+      colourCount,
       totalTickets,
       ticketPrice: parsedTicketPrice,
       offers: validOffers,
@@ -267,7 +266,8 @@ export default function AdminRaffleEditPage() {
       parsedEnd === null ||
       parsedTicketPrice === null ||
       parsedEnd < parsedStart ||
-      parsedTicketPrice < 0
+      parsedTicketPrice < 0 ||
+      colours.length === 0
     ) {
       return null;
     }
@@ -280,7 +280,9 @@ export default function AdminRaffleEditPage() {
       imageUrl: imageUrl.trim(),
       startNumber: parsedStart,
       endNumber: parsedEnd,
-      totalTickets: parsedEnd - parsedStart + 1,
+      numbersPerColour,
+      colourCount,
+      totalTickets,
       ticketPrice: parsedTicketPrice,
       offers: validOffers,
       colours,
@@ -336,17 +338,13 @@ export default function AdminRaffleEditPage() {
             <div style={eyebrowStyle}>Admin</div>
             <h1 style={pageTitleStyle}>Edit raffle</h1>
             <p style={pageSubtitleStyle}>
-              Save partial changes as draft, then complete when everything is ready.
+              Each colour creates another full number range.
             </p>
             <div style={metaTextStyle}>Raffle: {routeId || "demo-raffle"}</div>
           </div>
 
           <div style={topActionsStyle}>
-            <button
-              type="button"
-              style={ghostButtonStyle}
-              onClick={() => router.back()}
-            >
+            <button type="button" style={ghostButtonStyle} onClick={() => router.back()}>
               Back
             </button>
             <button type="submit" style={secondaryButtonStyle} disabled={isSavingDraft}>
@@ -363,9 +361,7 @@ export default function AdminRaffleEditPage() {
           </div>
         </div>
 
-        {statusMessage ? (
-          <div style={statusBannerStyle}>{statusMessage}</div>
-        ) : null}
+        {statusMessage ? <div style={statusBannerStyle}>{statusMessage}</div> : null}
 
         {!canComplete ? (
           <div style={warningCardStyle}>
@@ -381,23 +377,10 @@ export default function AdminRaffleEditPage() {
         )}
 
         <div style={statsGridStyle}>
-          <StatCard
-            label="Ticket range"
-            value={
-              parsedStart !== null && parsedEnd !== null
-                ? `${parsedStart}–${parsedEnd}`
-                : "—"
-            }
-          />
+          <StatCard label="Numbers per colour" value={numbersPerColour > 0 ? `${numbersPerColour}` : "—"} />
+          <StatCard label="Colours" value={`${colourCount}`} />
           <StatCard label="Total tickets" value={totalTickets > 0 ? `${totalTickets}` : "—"} />
-          <StatCard
-            label="Single price"
-            value={parsedTicketPrice !== null ? `£${money(parsedTicketPrice)}` : "—"}
-          />
-          <StatCard
-            label="Max revenue"
-            value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
-          />
+          <StatCard label="Max revenue" value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"} />
         </div>
 
         <div style={layoutStyle}>
@@ -465,7 +448,7 @@ export default function AdminRaffleEditPage() {
 
             <SectionCard
               title="Ticket setup"
-              subtitle="These can be blank while drafting, but are required for completion."
+              subtitle="Each colour duplicates this full number range."
             >
               <div style={threeColGridStyle}>
                 <Field label="Start number">
@@ -503,141 +486,23 @@ export default function AdminRaffleEditPage() {
 
               <div style={infoStripStyle}>
                 <div>
-                  <div style={infoStripLabelStyle}>Range</div>
-                  <div style={infoStripValueStyle}>
-                    {parsedStart !== null && parsedEnd !== null
-                      ? `${parsedStart} to ${parsedEnd}`
-                      : "—"}
-                  </div>
+                  <div style={infoStripLabelStyle}>Numbers per colour</div>
+                  <div style={infoStripValueStyle}>{numbersPerColour > 0 ? numbersPerColour : "—"}</div>
                 </div>
                 <div>
-                  <div style={infoStripLabelStyle}>Tickets</div>
+                  <div style={infoStripLabelStyle}>Colours</div>
+                  <div style={infoStripValueStyle}>{colourCount}</div>
+                </div>
+                <div>
+                  <div style={infoStripLabelStyle}>Total tickets</div>
                   <div style={infoStripValueStyle}>{totalTickets > 0 ? totalTickets : "—"}</div>
                 </div>
-                <div>
-                  <div style={infoStripLabelStyle}>Revenue if sold out</div>
-                  <div style={infoStripValueStyle}>
-                    {expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
-                  </div>
-                </div>
               </div>
             </SectionCard>
 
             <SectionCard
-              title="Offers"
-              subtitle="These can be partially edited. Only valid offers are included on save."
-              rightAction={
-                <button
-                  type="button"
-                  style={secondaryButtonStyle}
-                  onClick={addBlankOffer}
-                >
-                  Add custom offer
-                </button>
-              }
-            >
-              <div style={{ marginBottom: 16 }}>
-                <div style={subtleLabelStyle}>Quick templates</div>
-                <div style={templateRowStyle}>
-                  {offerTemplates.map((template) => (
-                    <button
-                      key={template.label}
-                      type="button"
-                      style={templateButtonStyle}
-                      onClick={() => addTemplateOffer(template)}
-                    >
-                      {template.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 12 }}>
-                {offers.length === 0 ? (
-                  <EmptyState text="No offers added yet." />
-                ) : (
-                  offers.map((offer) => {
-                    const quantity = toOptionalNumber(offer.quantity);
-                    const price = toOptionalNumber(offer.price);
-                    const pricePerTicket =
-                      quantity !== null && price !== null && quantity > 0
-                        ? price / quantity
-                        : null;
-
-                    return (
-                      <div key={offer.id} style={offerCardStyle}>
-                        <div style={offerGridStyle}>
-                          <Field label="Label">
-                            <input
-                              value={offer.label}
-                              onChange={(e) =>
-                                updateOffer(offer.id, "label", e.target.value)
-                              }
-                              placeholder="e.g. 10 for £15"
-                              style={inputStyle}
-                            />
-                          </Field>
-
-                          <Field label="Quantity">
-                            <input
-                              type="number"
-                              min="1"
-                              value={offer.quantity}
-                              onChange={(e) =>
-                                updateOffer(offer.id, "quantity", e.target.value)
-                              }
-                              style={inputStyle}
-                              placeholder="10"
-                            />
-                          </Field>
-
-                          <Field label="Price (£)">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={offer.price}
-                              onChange={(e) =>
-                                updateOffer(offer.id, "price", e.target.value)
-                              }
-                              style={inputStyle}
-                              placeholder="15"
-                            />
-                          </Field>
-
-                          <div style={{ display: "flex", alignItems: "end" }}>
-                            <button
-                              type="button"
-                              style={dangerButtonStyle}
-                              onClick={() => removeOffer(offer.id)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-
-                        <div style={offerMetaStyle}>
-                          <span>
-                            {pricePerTicket !== null
-                              ? `£${money(pricePerTicket)} per ticket`
-                              : "Incomplete offer"}
-                          </span>
-                          <span>
-                            {parsedTicketPrice !== null
-                              ? `vs base £${money(parsedTicketPrice)} each`
-                              : "Base price not set"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Colours"
-              subtitle="Choose the colours buyers can assign to their selections."
+              title="Colour boards"
+              subtitle="Each colour below creates another full ticket set."
             >
               <div style={{ display: "grid", gap: 18 }}>
                 <div>
@@ -682,7 +547,7 @@ export default function AdminRaffleEditPage() {
                 </div>
 
                 <div>
-                  <div style={subtleLabelStyle}>Selected colours</div>
+                  <div style={subtleLabelStyle}>Selected colour boards</div>
                   {colours.length === 0 ? (
                     <EmptyState text="No colours selected." />
                   ) : (
@@ -701,9 +566,8 @@ export default function AdminRaffleEditPage() {
                                   : "1px solid transparent",
                             }}
                           />
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>
-                            {colour}
-                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{colour}</span>
+                          <span style={chipMetaTextStyle}>{numbersPerColour > 0 ? `${numbersPerColour} tickets` : "set"}</span>
                           <button
                             type="button"
                             onClick={() => removeColour(colour)}
@@ -716,6 +580,108 @@ export default function AdminRaffleEditPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Offers"
+              subtitle="These can be partially edited. Only valid offers are included on save."
+              rightAction={
+                <button type="button" style={secondaryButtonStyle} onClick={addBlankOffer}>
+                  Add custom offer
+                </button>
+              }
+            >
+              <div style={{ marginBottom: 16 }}>
+                <div style={subtleLabelStyle}>Quick templates</div>
+                <div style={templateRowStyle}>
+                  {offerTemplates.map((template) => (
+                    <button
+                      key={template.label}
+                      type="button"
+                      style={templateButtonStyle}
+                      onClick={() => addTemplateOffer(template)}
+                    >
+                      {template.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                {offers.length === 0 ? (
+                  <EmptyState text="No offers added yet." />
+                ) : (
+                  offers.map((offer) => {
+                    const quantity = toOptionalNumber(offer.quantity);
+                    const price = toOptionalNumber(offer.price);
+                    const pricePerTicket =
+                      quantity !== null && price !== null && quantity > 0
+                        ? price / quantity
+                        : null;
+
+                    return (
+                      <div key={offer.id} style={offerCardStyle}>
+                        <div style={offerGridStyle}>
+                          <Field label="Label">
+                            <input
+                              value={offer.label}
+                              onChange={(e) => updateOffer(offer.id, "label", e.target.value)}
+                              placeholder="e.g. 10 for £15"
+                              style={inputStyle}
+                            />
+                          </Field>
+
+                          <Field label="Quantity">
+                            <input
+                              type="number"
+                              min="1"
+                              value={offer.quantity}
+                              onChange={(e) => updateOffer(offer.id, "quantity", e.target.value)}
+                              style={inputStyle}
+                              placeholder="10"
+                            />
+                          </Field>
+
+                          <Field label="Price (£)">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={offer.price}
+                              onChange={(e) => updateOffer(offer.id, "price", e.target.value)}
+                              style={inputStyle}
+                              placeholder="15"
+                            />
+                          </Field>
+
+                          <div style={{ display: "flex", alignItems: "end" }}>
+                            <button
+                              type="button"
+                              style={dangerButtonStyle}
+                              onClick={() => removeOffer(offer.id)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+
+                        <div style={offerMetaStyle}>
+                          <span>
+                            {pricePerTicket !== null
+                              ? `£${money(pricePerTicket)} per ticket`
+                              : "Incomplete offer"}
+                          </span>
+                          <span>
+                            {parsedTicketPrice !== null
+                              ? `vs base £${money(parsedTicketPrice)} each`
+                              : "Base price not set"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </SectionCard>
           </div>
@@ -737,9 +703,7 @@ export default function AdminRaffleEditPage() {
                 >
                   <div style={previewHeroOverlayStyle}>
                     <div style={previewSlugStyle}>/r/{slug || "your-slug"}</div>
-                    <div style={previewTitleStyle}>
-                      {title || "Your raffle title"}
-                    </div>
+                    <div style={previewTitleStyle}>{title || "Your raffle title"}</div>
                   </div>
                 </div>
 
@@ -750,52 +714,48 @@ export default function AdminRaffleEditPage() {
 
                   <div style={previewMetaGridStyle}>
                     <PreviewStat
-                      label="Numbers"
-                      value={
-                        parsedStart !== null && parsedEnd !== null
-                          ? `${parsedStart}–${parsedEnd}`
-                          : "—"
-                      }
+                      label="Per colour"
+                      value={numbersPerColour > 0 ? `${numbersPerColour}` : "—"}
                     />
+                    <PreviewStat label="Colours" value={`${colourCount}`} />
                     <PreviewStat
-                      label="Tickets"
+                      label="Total tickets"
                       value={totalTickets > 0 ? `${totalTickets}` : "—"}
                     />
                     <PreviewStat
                       label="Single"
-                      value={
-                        parsedTicketPrice !== null
-                          ? `£${money(parsedTicketPrice)}`
-                          : "—"
-                      }
+                      value={parsedTicketPrice !== null ? `£${money(parsedTicketPrice)}` : "—"}
                     />
-                    <PreviewStat label="Offers" value={`${validOffers.length}`} />
                   </div>
 
                   <div style={{ marginTop: 18 }}>
-                    <div style={previewSectionTitleStyle}>Available colours</div>
-                    <div style={previewSwatchesStyle}>
-                      {colours.length === 0 ? (
-                        <div style={mutedTextStyle}>No colours selected</div>
-                      ) : (
-                        colours.map((colour) => (
-                          <div
-                            key={colour}
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 999,
-                              background: colour,
-                              border:
-                                colour === "#ffffff"
-                                  ? "1px solid #d1d5db"
-                                  : "1px solid transparent",
-                            }}
-                            title={colour}
-                          />
-                        ))
-                      )}
-                    </div>
+                    <div style={previewSectionTitleStyle}>Colour boards</div>
+                    {colours.length === 0 ? (
+                      <div style={mutedTextStyle}>No colours selected</div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {colours.map((colour) => (
+                          <div key={colour} style={boardPreviewRowStyle}>
+                            <div
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: 999,
+                                background: colour,
+                                border:
+                                  colour === "#ffffff"
+                                    ? "1px solid #d1d5db"
+                                    : "1px solid transparent",
+                              }}
+                            />
+                            <span style={{ fontWeight: 700 }}>{colour}</span>
+                            <span style={{ color: "#6b7280", marginLeft: "auto" }}>
+                              {numbersPerColour > 0 ? `${numbersPerColour} tickets` : "set"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 18 }}>
@@ -815,19 +775,38 @@ export default function AdminRaffleEditPage() {
                   </div>
 
                   <div style={{ marginTop: 18 }}>
-                    <div style={previewSectionTitleStyle}>
-                      Number selection preview
-                    </div>
-                    <div style={previewNumbersGridStyle}>
-                      {numbersPreview.map((n) => (
-                        <div key={n} style={previewNumberStyle}>
-                          {n}
-                        </div>
-                      ))}
-                    </div>
-                    {totalTickets > numbersPreview.length && (
-                      <div style={{ ...mutedTextStyle, marginTop: 8 }}>
-                        + {totalTickets - numbersPreview.length} more tickets
+                    <div style={previewSectionTitleStyle}>Number preview per colour</div>
+                    {colours.length === 0 ? (
+                      <div style={mutedTextStyle}>Add a colour to create a board</div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 14 }}>
+                        {colours.slice(0, 3).map((colour) => (
+                          <div key={colour}>
+                            <div style={boardPreviewHeaderStyle}>
+                              <div
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 999,
+                                  background: colour,
+                                  border:
+                                    colour === "#ffffff"
+                                      ? "1px solid #d1d5db"
+                                      : "1px solid transparent",
+                                }}
+                              />
+                              <span>{colour}</span>
+                            </div>
+
+                            <div style={previewNumbersGridStyle}>
+                              {numberPreview.map((n) => (
+                                <div key={`${colour}-${n}`} style={previewNumberStyle}>
+                                  {n}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -838,6 +817,15 @@ export default function AdminRaffleEditPage() {
             <SectionCard title="Pricing insight" subtitle="Quick commercial summary.">
               <div style={{ display: "grid", gap: 12 }}>
                 <InsightRow
+                  label="Numbers per colour"
+                  value={numbersPerColour > 0 ? `${numbersPerColour}` : "—"}
+                />
+                <InsightRow label="Colour boards" value={`${colourCount}`} />
+                <InsightRow
+                  label="Total ticket inventory"
+                  value={totalTickets > 0 ? `${totalTickets}` : "—"}
+                />
+                <InsightRow
                   label="Base sell-out value"
                   value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
                 />
@@ -845,20 +833,9 @@ export default function AdminRaffleEditPage() {
                   label="Best offer"
                   value={
                     bestOffer
-                      ? `${bestOffer.label} (£${money(
-                          bestOffer.price / bestOffer.quantity
-                        )}/ticket)`
+                      ? `${bestOffer.label} (£${money(bestOffer.price / bestOffer.quantity)}/ticket)`
                       : "None"
                   }
-                />
-                <InsightRow label="Colours available" value={`${colours.length}`} />
-                <InsightRow
-                  label="Configured valid offers"
-                  value={`${validOffers.length}`}
-                />
-                <InsightRow
-                  label="Completion status"
-                  value={canComplete ? "Ready" : "Incomplete"}
                 />
               </div>
             </SectionCard>
@@ -1316,6 +1293,11 @@ const selectedColourChipStyle: React.CSSProperties = {
   background: "#ffffff",
 };
 
+const chipMetaTextStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6b7280",
+};
+
 const chipRemoveButtonStyle: React.CSSProperties = {
   border: "none",
   background: "transparent",
@@ -1407,12 +1389,6 @@ const previewSectionTitleStyle: React.CSSProperties = {
   letterSpacing: 0.5,
 };
 
-const previewSwatchesStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  flexWrap: "wrap",
-};
-
 const previewOfferStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -1423,6 +1399,26 @@ const previewOfferStyle: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   color: "#111827",
   fontSize: 14,
+};
+
+const boardPreviewRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "10px 12px",
+  borderRadius: 12,
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+};
+
+const boardPreviewHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#111827",
+  marginBottom: 8,
 };
 
 const previewNumbersGridStyle: React.CSSProperties = {
