@@ -1,14 +1,17 @@
 import React, { useMemo, useState } from "react";
+import type { TicketRef } from "../types/raffles";
+import {
+  hasTicket,
+  makeTicket,
+  removeTicket,
+  sortTickets,
+  ticketKey,
+} from "../lib/tickets";
 
 type Offer = {
   label: string;
   price: number;
   quantity: number;
-};
-
-type TicketSelection = {
-  colour: string;
-  number: number;
 };
 
 const demoRaffle = {
@@ -21,17 +24,25 @@ const demoRaffle = {
     { label: "10 for £15", price: 15, quantity: 10 },
   ] as Offer[],
   colours: ["#ef4444", "#3b82f6", "#22c55e"],
-};
 
-function selectionKey(colour: string, number: number) {
-  return `${colour}__${number}`;
-}
+  sold: [
+    { colour: "#ef4444", number: 5 },
+    { colour: "#ef4444", number: 12 },
+    { colour: "#3b82f6", number: 12 },
+    { colour: "#22c55e", number: 25 },
+  ] as TicketRef[],
+
+  reserved: [
+    { colour: "#ef4444", number: 7 },
+    { colour: "#3b82f6", number: 20 },
+  ] as TicketRef[],
+};
 
 export default function PublicRafflePage() {
   const [activeColour, setActiveColour] = useState<string>(
     demoRaffle.colours[0] || ""
   );
-  const [selectedTickets, setSelectedTickets] = useState<TicketSelection[]>([]);
+  const [selectedTickets, setSelectedTickets] = useState<TicketRef[]>([]);
 
   const numbers = useMemo(() => {
     return Array.from(
@@ -44,26 +55,30 @@ export default function PublicRafflePage() {
     return numbers.length * demoRaffle.colours.length;
   }, [numbers.length]);
 
+  function isSold(colour: string, number: number) {
+    return hasTicket(demoRaffle.sold, makeTicket(colour, number));
+  }
+
+  function isReserved(colour: string, number: number) {
+    return hasTicket(demoRaffle.reserved, makeTicket(colour, number));
+  }
+
+  function isUnavailable(colour: string, number: number) {
+    return isSold(colour, number) || isReserved(colour, number);
+  }
+
   function isSelected(colour: string, number: number) {
-    return selectedTickets.some(
-      (ticket) => ticket.colour === colour && ticket.number === number
-    );
+    return hasTicket(selectedTickets, makeTicket(colour, number));
   }
 
   function toggleTicket(colour: string, number: number) {
-    setSelectedTickets((prev) => {
-      const exists = prev.some(
-        (ticket) => ticket.colour === colour && ticket.number === number
-      );
+    const ticket = makeTicket(colour, number);
 
-      if (exists) {
-        return prev.filter(
-          (ticket) => !(ticket.colour === colour && ticket.number === number)
-        );
-      }
+    if (isUnavailable(colour, number)) return;
 
-      return [...prev, { colour, number }];
-    });
+    setSelectedTickets((prev) =>
+      hasTicket(prev, ticket) ? removeTicket(prev, ticket) : [...prev, ticket]
+    );
   }
 
   function calculateTotal() {
@@ -88,6 +103,25 @@ export default function PublicRafflePage() {
   const ticketsForActiveColour = selectedTickets.filter(
     (ticket) => ticket.colour === activeColour
   );
+
+  const selectedByColour = useMemo(() => {
+    const grouped = new Map<string, TicketRef[]>();
+
+    for (const colour of demoRaffle.colours) {
+      grouped.set(colour, []);
+    }
+
+    for (const ticket of selectedTickets) {
+      const current = grouped.get(ticket.colour) || [];
+      grouped.set(ticket.colour, [...current, ticket]);
+    }
+
+    for (const [colour, items] of grouped.entries()) {
+      grouped.set(colour, sortTickets(items));
+    }
+
+    return grouped;
+  }, [selectedTickets]);
 
   return (
     <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
@@ -114,7 +148,7 @@ export default function PublicRafflePage() {
       <div style={{ marginTop: 28 }}>
         <h2>Choose colour board</h2>
         <p style={{ color: "#6b7280", marginTop: 6 }}>
-          Each colour is a separate full ticket range. You can choose the same number in different colours.
+          Each colour is a separate full ticket range.
         </p>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
@@ -169,26 +203,57 @@ export default function PublicRafflePage() {
         >
           {numbers.map((n) => {
             const selected = isSelected(activeColour, n);
+            const sold = isSold(activeColour, n);
+            const reserved = isReserved(activeColour, n);
+
+            let background = "#f3f4f6";
+            let color = "#111827";
+            let border = "1px solid #d1d5db";
+            let cursor: "pointer" | "not-allowed" = "pointer";
+
+            if (sold) {
+              background = "#111827";
+              color = "#ffffff";
+              border = "1px solid #111827";
+              cursor = "not-allowed";
+            } else if (reserved) {
+              background = "#e5e7eb";
+              color = "#6b7280";
+              border = "1px solid #d1d5db";
+              cursor = "not-allowed";
+            } else if (selected) {
+              background = activeColour || "#111827";
+              color = "#ffffff";
+              border = "2px solid #111827";
+            }
 
             return (
               <button
-                key={selectionKey(activeColour, n)}
+                key={ticketKey({ colour: activeColour, number: n })}
                 type="button"
                 onClick={() => toggleTicket(activeColour, n)}
+                disabled={sold || reserved}
                 style={{
                   padding: "12px 8px",
                   borderRadius: 10,
-                  border: selected ? "2px solid #111827" : "1px solid #d1d5db",
-                  background: selected ? activeColour || "#111827" : "#f3f4f6",
-                  color: selected ? "#fff" : "#111827",
-                  cursor: "pointer",
+                  border,
+                  background,
+                  color,
+                  cursor,
                   fontWeight: 700,
                 }}
+                title={sold ? "Sold" : reserved ? "Reserved" : `${activeColour} ${n}`}
               >
                 {n}
               </button>
             );
           })}
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", gap: 16, color: "#6b7280", fontSize: 14 }}>
+          <span>Sold = black</span>
+          <span>Reserved = grey</span>
+          <span>Available = selectable</span>
         </div>
       </div>
 
@@ -216,10 +281,7 @@ export default function PublicRafflePage() {
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
               {demoRaffle.colours.map((colour) => {
-                const items = selectedTickets
-                  .filter((ticket) => ticket.colour === colour)
-                  .sort((a, b) => a.number - b.number);
-
+                const items = selectedByColour.get(colour) || [];
                 if (items.length === 0) return null;
 
                 return (
@@ -257,7 +319,7 @@ export default function PublicRafflePage() {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {items.map((ticket) => (
                         <button
-                          key={selectionKey(ticket.colour, ticket.number)}
+                          key={ticketKey(ticket)}
                           type="button"
                           onClick={() => toggleTicket(ticket.colour, ticket.number)}
                           style={{
