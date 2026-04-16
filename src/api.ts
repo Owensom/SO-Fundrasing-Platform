@@ -25,10 +25,18 @@ export async function apiFetch<T = unknown>(
     ...init,
   });
 
-  const data = (await response.json().catch(() => null)) as
-    | ApiEnvelope<T>
-    | T
-    | null;
+  const raw = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+
+  let data: ApiEnvelope<T> | T | null = null;
+
+  if (contentType.includes("application/json")) {
+    try {
+      data = JSON.parse(raw) as ApiEnvelope<T> | T;
+    } catch {
+      data = null;
+    }
+  }
 
   if (!response.ok) {
     const errorMessage =
@@ -37,9 +45,15 @@ export async function apiFetch<T = unknown>(
       "error" in data &&
       typeof (data as { error?: unknown }).error === "string"
         ? (data as { error: string }).error
-        : "Request failed";
+        : raw || "Request failed";
 
     throw new Error(errorMessage);
+  }
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      raw || "API did not return JSON. It may be returning an HTML page instead."
+    );
   }
 
   return data as T;
