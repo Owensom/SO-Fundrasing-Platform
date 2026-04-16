@@ -163,10 +163,26 @@ export default function RaffleForm({
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      const raw = await res.text();
+      const contentType = res.headers.get("content-type") || "";
+
+      let json: any = null;
+      if (contentType.includes("application/json")) {
+        try {
+          json = JSON.parse(raw);
+        } catch {
+          json = null;
+        }
+      }
 
       if (!res.ok) {
-        throw new Error(json?.error || "Failed to save raffle");
+        throw new Error(json?.error || raw || "Failed to save raffle");
+      }
+
+      if (!json) {
+        throw new Error(
+          raw || "API did not return JSON. It may be returning HTML instead."
+        );
       }
 
       setSuccess(mode === "create" ? "Raffle created." : "Raffle updated.");
