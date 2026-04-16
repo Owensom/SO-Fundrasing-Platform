@@ -1,5 +1,4 @@
-```tsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 type Offer = {
   label: string;
@@ -21,12 +20,14 @@ const demoRaffle = {
 
 export default function PublicRafflePage() {
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
-  const [selectedColour, setSelectedColour] = useState<string | null>(null);
+  const [selectedColour, setSelectedColour] = useState<string>("");
 
-  const numbers = Array.from(
-    { length: demoRaffle.endNumber - demoRaffle.startNumber + 1 },
-    (_, i) => demoRaffle.startNumber + i
-  );
+  const numbers = useMemo(() => {
+    return Array.from(
+      { length: demoRaffle.endNumber - demoRaffle.startNumber + 1 },
+      (_, i) => demoRaffle.startNumber + i
+    );
+  }, []);
 
   function toggleNumber(n: number) {
     setSelectedNumbers((prev) =>
@@ -50,62 +51,101 @@ export default function PublicRafflePage() {
     }
 
     total += remaining * demoRaffle.ticketPrice;
-
     return total;
   }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
       <h1>{demoRaffle.title}</h1>
 
-      {/* COLOURS */}
-      <h3>Select Colour</h3>
-      <div style={{ display: "flex", gap: 10 }}>
-        {demoRaffle.colours.map((c) => (
-          <div
-            key={c}
-            onClick={() => setSelectedColour(c)}
-            style={{
-              width: 40,
-              height: 40,
-              background: c,
-              border: selectedColour === c ? "3px solid black" : "1px solid #ccc",
-              cursor: "pointer",
-            }}
-          />
-        ))}
+      <div style={{ marginTop: 24 }}>
+        <h2>Select Colour</h2>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {demoRaffle.colours.map((colour) => (
+            <button
+              key={colour}
+              type="button"
+              onClick={() => setSelectedColour(colour)}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                border:
+                  selectedColour === colour ? "3px solid #111" : "1px solid #ccc",
+                background: colour,
+                cursor: "pointer",
+              }}
+              aria-label={`Select ${colour}`}
+              title={colour}
+            />
+          ))}
+        </div>
+        <p style={{ marginTop: 12 }}>
+          Selected colour: <strong>{selectedColour || "None"}</strong>
+        </p>
       </div>
 
-      {/* NUMBERS */}
-      <h3>Pick Numbers</h3>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(10, 1fr)",
-        gap: 5,
-      }}>
-        {numbers.map((n) => (
-          <div
-            key={n}
-            onClick={() => toggleNumber(n)}
-            style={{
-              padding: 10,
-              textAlign: "center",
-              background: selectedNumbers.includes(n) ? "black" : "#eee",
-              color: selectedNumbers.includes(n) ? "white" : "black",
-              cursor: "pointer",
-            }}
-          >
-            {n}
-          </div>
-        ))}
+      <div style={{ marginTop: 32 }}>
+        <h2>Pick Numbers</h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
+            gap: 8,
+          }}
+        >
+          {numbers.map((n) => {
+            const selected = selectedNumbers.includes(n);
+
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => toggleNumber(n)}
+                style={{
+                  padding: "12px 8px",
+                  borderRadius: 8,
+                  border: "1px solid #ccc",
+                  background: selected ? "#111" : "#f3f3f3",
+                  color: selected ? "#fff" : "#111",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* SUMMARY */}
-      <h3>Summary</h3>
-      <p>Numbers: {selectedNumbers.join(", ") || "None"}</p>
-      <p>Colour: {selectedColour || "None"}</p>
-      <p>Total: £{calculateTotal()}</p>
+      <div style={{ marginTop: 32 }}>
+        <h2>Offers</h2>
+        <ul>
+          <li>Single ticket: £{demoRaffle.ticketPrice}</li>
+          {demoRaffle.offers.map((offer) => (
+            <li key={offer.label}>
+              {offer.label} — £{offer.price}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <h2>Summary</h2>
+        <p>
+          Selected numbers:{" "}
+          <strong>
+            {selectedNumbers.length > 0 ? selectedNumbers.join(", ") : "None"}
+          </strong>
+        </p>
+        <p>
+          Selected colour: <strong>{selectedColour || "None"}</strong>
+        </p>
+        <p>
+          Total: <strong>£{calculateTotal()}</strong>
+        </p>
+      </div>
     </div>
   );
 }
-```
