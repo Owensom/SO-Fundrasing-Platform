@@ -1,179 +1,235 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import {
+  createRaffle,
+  listRaffles,
+  updateRaffle,
+  type CreateRaffleInput,
+  type UpdateRaffleInput,
+} from "../../../api/_lib/raffles-repo";
 
-type RaffleRecord = {
-  id: string;
-  tenantSlug: string;
-  slug: string;
-  title: string;
-  description: string;
-  status: string;
-  heroImageUrl: string;
-  raffleConfig: {
-    singleTicketPriceCents: number;
-    totalTickets: number;
-    soldTickets: number;
-    backgroundImageUrl: string;
-    currencyCode: "GBP" | "USD" | "EUR";
-    colourSelectionMode: "manual" | "automatic" | "both";
-    numberSelectionMode: "none" | "manual" | "automatic" | "both";
-    numberRangeStart: number | null;
-    numberRangeEnd: number | null;
-    colours: Array<{ name: string; hex: string }>;
-  };
-  createdAt: string;
-  updatedAt: string;
-};
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  try {
+    if (req.method === "GET") {
+      const items = await listRaffles();
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __raffles_store__: RaffleRecord[] | undefined;
-}
+      const raffles = items.map((item) => ({
+        id: item.id,
+        tenantSlug: "demo-a",
+        slug: item.slug,
+        title: item.title,
+        description: item.description,
+        imageUrl: item.image_url || null,
+        ticketPrice: item.ticket_price ?? 0,
+        totalTickets: item.max_tickets ?? 0,
+        soldTickets: 0,
+        remainingTickets: item.max_tickets ?? 0,
+        isSoldOut: false,
+        status: item.is_active ? "published" : "draft",
+        createdAt: item.created_at,
+        updatedAt: item.created_at,
+      }));
 
-function getStore(): RaffleRecord[] {
-  if (!global.__raffles_store__) {
-    global.__raffles_store__ = [];
-  }
-  return global.__raffles_store__;
-}
-
-function mapListItem(raffle: RaffleRecord) {
-  const totalTickets = raffle.raffleConfig.totalTickets;
-  const soldTickets = raffle.raffleConfig.soldTickets;
-
-  return {
-    id: raffle.id,
-    tenantSlug: raffle.tenantSlug,
-    slug: raffle.slug,
-    title: raffle.title,
-    description: raffle.description,
-    imageUrl: raffle.heroImageUrl || null,
-    ticketPrice: raffle.raffleConfig.singleTicketPriceCents / 100,
-    totalTickets,
-    soldTickets,
-    remainingTickets: Math.max(totalTickets - soldTickets, 0),
-    isSoldOut: soldTickets >= totalTickets,
-    status: raffle.status,
-    createdAt: raffle.createdAt,
-    updatedAt: raffle.updatedAt,
-  };
-}
-
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const store = getStore();
-
-  if (req.method === "GET") {
-    const tenantSlug =
-      typeof req.query.tenantSlug === "string" ? req.query.tenantSlug : "";
-
-    const raffles = tenantSlug
-      ? store.filter((r) => r.tenantSlug === tenantSlug)
-      : store;
-
-    return res.status(200).json({
-      raffles: raffles.map(mapListItem),
-    });
-  }
-
-  if (req.method === "POST") {
-    const body = req.body ?? {};
-
-    if (!body.title || !String(body.title).trim()) {
-      return res.status(400).json({ error: "Title is required" });
+      return res.status(200).json({ raffles });
     }
 
-    if (!body.slug || !String(body.slug).trim()) {
-      return res.status(400).json({ error: "Slug is required" });
+    if (req.method === "POST") {
+      const body = req.body ?? {};
+
+      const input: CreateRaffleInput = {
+        title: String(body.title || "").trim(),
+        slug: String(body.slug || "").trim(),
+        description: String(body.description || ""),
+        image_url: String(body.heroImageUrl || body.imageUrl || ""),
+        draw_at: null,
+        ticket_price:
+          body.ticketPrice == null ? null : Number(body.ticketPrice),
+        max_tickets:
+          body.totalTickets == null ? null : Number(body.totalTickets),
+        is_active:
+          String(body.status || "published") === "published" ||
+          body.is_active === true,
+        available_colours: Array.isArray(body.colours)
+          ? body.colours.map((c: any) => String(c.name || c).trim()).filter(Boolean)
+          : Array.isArray(body.available_colours)
+          ? body.available_colours.map((c: any) => String(c).trim()).filter(Boolean)
+          : [],
+        offers: Array.isArray(body.offers)
+          ? body.offers.map((offer: any, index: number) => ({
+              label: String(offer.label || offer.name || "").trim(),
+              price:
+                offer.price != null
+                  ? Number(offer.price)
+                  : Number(offer.priceCents || 0) / 100,
+              tickets:
+                offer.tickets != null
+                  ? Number(offer.tickets)
+                  : Number(offer.entryCount || 0),
+              is_active:
+                offer.is_active != null
+                  ? Boolean(offer.is_active)
+                  : Boolean(offer.isActive ?? true),
+              sort_order:
+                offer.sort_order != null
+                  ? Number(offer.sort_order)
+                  : offer.sortOrder != null
+                  ? Number(offer.sortOrder)
+                  : index,
+            }))
+          : [],
+      };
+
+      if (!input.title) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+
+      if (!input.slug) {
+        return res.status(400).json({ error: "Slug is required" });
+      }
+
+      const created = await createRaffle(input);
+
+      return res.status(201).json({
+        raffle: {
+          id: created.id,
+          title: created.title,
+          slug: created.slug,
+          description: created.description,
+          status: created.is_active ? "published" : "draft",
+          heroImageUrl: created.image_url || "",
+          raffleConfig: {
+            singleTicketPriceCents: Math.round((created.ticket_price ?? 0) * 100),
+            totalTickets: created.max_tickets ?? 0,
+            soldTickets: 0,
+            backgroundImageUrl: "",
+            currencyCode: "GBP",
+            colourSelectionMode: "both",
+            numberSelectionMode: "none",
+            numberRangeStart: null,
+            numberRangeEnd: null,
+            colours: (created.available_colours || []).map((name) => ({
+              name,
+              hex: "#3B82F6",
+            })),
+          },
+          offers: created.offers.map((offer) => ({
+            id: offer.id,
+            name: offer.label,
+            priceCents: Math.round(offer.price * 100),
+            entryCount: offer.tickets,
+            sortOrder: offer.sort_order,
+            isActive: offer.is_active,
+          })),
+        },
+      });
     }
 
-    const now = new Date().toISOString();
+    if (req.method === "PUT") {
+      const body = req.body ?? {};
+      const id = String(body.id || "").trim();
 
-    const record: RaffleRecord = {
-      id: crypto.randomUUID(),
-      tenantSlug: String(body.tenantSlug || "demo-a"),
-      slug: String(body.slug).trim(),
-      title: String(body.title).trim(),
-      description: String(body.description || ""),
-      status: String(body.status || "published"),
-      heroImageUrl: String(body.heroImageUrl || ""),
-      raffleConfig: {
-        singleTicketPriceCents: Math.round(Number(body.ticketPrice || 0) * 100),
-        totalTickets: Number(body.totalTickets || 0),
-        soldTickets: Number(body.soldTickets || 0),
-        backgroundImageUrl: String(body.backgroundImageUrl || ""),
-        currencyCode: body.currencyCode || "GBP",
-        colourSelectionMode: body.colourSelectionMode || "both",
-        numberSelectionMode: body.numberSelectionMode || "none",
-        numberRangeStart:
-          body.numberRangeStart == null ? null : Number(body.numberRangeStart),
-        numberRangeEnd:
-          body.numberRangeEnd == null ? null : Number(body.numberRangeEnd),
-        colours: Array.isArray(body.colours) ? body.colours : [],
-      },
-      createdAt: now,
-      updatedAt: now,
-    };
+      if (!id) {
+        return res.status(400).json({ error: "Missing raffle id" });
+      }
 
-    store.push(record);
+      const input: UpdateRaffleInput = {
+        title: String(body.title || "").trim(),
+        slug: String(body.slug || "").trim(),
+        description: String(body.description || ""),
+        image_url: String(body.heroImageUrl || body.imageUrl || ""),
+        draw_at: null,
+        ticket_price:
+          body.ticketPrice == null ? null : Number(body.ticketPrice),
+        max_tickets:
+          body.totalTickets == null ? null : Number(body.totalTickets),
+        is_active:
+          String(body.status || "published") === "published" ||
+          body.is_active === true,
+        available_colours: Array.isArray(body.colours)
+          ? body.colours.map((c: any) => String(c.name || c).trim()).filter(Boolean)
+          : Array.isArray(body.available_colours)
+          ? body.available_colours.map((c: any) => String(c).trim()).filter(Boolean)
+          : [],
+        offers: Array.isArray(body.offers)
+          ? body.offers.map((offer: any, index: number) => ({
+              label: String(offer.label || offer.name || "").trim(),
+              price:
+                offer.price != null
+                  ? Number(offer.price)
+                  : Number(offer.priceCents || 0) / 100,
+              tickets:
+                offer.tickets != null
+                  ? Number(offer.tickets)
+                  : Number(offer.entryCount || 0),
+              is_active:
+                offer.is_active != null
+                  ? Boolean(offer.is_active)
+                  : Boolean(offer.isActive ?? true),
+              sort_order:
+                offer.sort_order != null
+                  ? Number(offer.sort_order)
+                  : offer.sortOrder != null
+                  ? Number(offer.sortOrder)
+                  : index,
+            }))
+          : [],
+      };
 
-    return res.status(201).json({
-      raffle: record,
-    });
-  }
+      if (!input.title) {
+        return res.status(400).json({ error: "Title is required" });
+      }
 
-  if (req.method === "PUT") {
-    const body = req.body ?? {};
-    const id = String(body.id || "");
+      if (!input.slug) {
+        return res.status(400).json({ error: "Slug is required" });
+      }
 
-    const index = store.findIndex((r) => r.id === id);
-    if (index === -1) {
-      return res.status(404).json({ error: "Raffle not found" });
+      const updated = await updateRaffle(id, input);
+
+      if (!updated) {
+        return res.status(404).json({ error: "Raffle not found" });
+      }
+
+      return res.status(200).json({
+        raffle: {
+          id: updated.id,
+          title: updated.title,
+          slug: updated.slug,
+          description: updated.description,
+          status: updated.is_active ? "published" : "draft",
+          heroImageUrl: updated.image_url || "",
+          raffleConfig: {
+            singleTicketPriceCents: Math.round((updated.ticket_price ?? 0) * 100),
+            totalTickets: updated.max_tickets ?? 0,
+            soldTickets: 0,
+            backgroundImageUrl: "",
+            currencyCode: "GBP",
+            colourSelectionMode: "both",
+            numberSelectionMode: "none",
+            numberRangeStart: null,
+            numberRangeEnd: null,
+            colours: (updated.available_colours || []).map((name) => ({
+              name,
+              hex: "#3B82F6",
+            })),
+          },
+          offers: updated.offers.map((offer) => ({
+            id: offer.id,
+            name: offer.label,
+            priceCents: Math.round(offer.price * 100),
+            entryCount: offer.tickets,
+            sortOrder: offer.sort_order,
+            isActive: offer.is_active,
+          })),
+        },
+      });
     }
 
-    const existing = store[index];
-
-    const updated: RaffleRecord = {
-      ...existing,
-      tenantSlug: String(body.tenantSlug || existing.tenantSlug),
-      slug: String(body.slug || existing.slug).trim(),
-      title: String(body.title || existing.title).trim(),
-      description: String(body.description || existing.description),
-      status: String(body.status || existing.status),
-      heroImageUrl: String(body.heroImageUrl || ""),
-      raffleConfig: {
-        singleTicketPriceCents: Math.round(
-          Number(body.ticketPrice ?? existing.raffleConfig.singleTicketPriceCents / 100) * 100
-        ),
-        totalTickets: Number(body.totalTickets ?? existing.raffleConfig.totalTickets),
-        soldTickets: Number(body.soldTickets ?? existing.raffleConfig.soldTickets),
-        backgroundImageUrl: String(
-          body.backgroundImageUrl ?? existing.raffleConfig.backgroundImageUrl
-        ),
-        currencyCode: body.currencyCode || existing.raffleConfig.currencyCode,
-        colourSelectionMode:
-          body.colourSelectionMode || existing.raffleConfig.colourSelectionMode,
-        numberSelectionMode:
-          body.numberSelectionMode || existing.raffleConfig.numberSelectionMode,
-        numberRangeStart:
-          body.numberRangeStart == null
-            ? null
-            : Number(body.numberRangeStart),
-        numberRangeEnd:
-          body.numberRangeEnd == null
-            ? null
-            : Number(body.numberRangeEnd),
-        colours: Array.isArray(body.colours)
-          ? body.colours
-          : existing.raffleConfig.colours,
-      },
-      updatedAt: new Date().toISOString(),
-    };
-
-    store[index] = updated;
-
-    return res.status(200).json({
-      raffle: updated,
+    return res.status(405).json({ error: "Method not allowed" });
+  } catch (error: any) {
+    return res.status(500).json({
+      error: error?.message || "Internal server error",
     });
   }
-
-  return res.status(405).json({ error: "Method not allowed" });
 }
