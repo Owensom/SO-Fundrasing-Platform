@@ -163,7 +163,7 @@ export async function listRaffles(): Promise<RaffleSummary[]> {
       created_at
     from raffles
     order by created_at desc
-    `,
+    `
   );
 
   return rows.map(toRaffleSummary);
@@ -187,7 +187,7 @@ export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
     from raffles
     where id = $1
     `,
-    [id],
+    [id]
   );
 
   if (!raffle) return null;
@@ -206,7 +206,7 @@ export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
     where raffle_id = $1
     order by sort_order asc, id asc
     `,
-    [id],
+    [id]
   );
 
   return {
@@ -216,7 +216,7 @@ export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
 }
 
 export async function getRaffleBySlug(
-  slug: string,
+  slug: string
 ): Promise<RaffleDetails | null> {
   const raffle = await queryOne<RaffleRow>(
     `
@@ -234,9 +234,8 @@ export async function getRaffleBySlug(
       created_at
     from raffles
     where slug = $1
-      and is_active = true
     `,
-    [slug],
+    [slug]
   );
 
   if (!raffle) return null;
@@ -253,10 +252,9 @@ export async function getRaffleBySlug(
       sort_order
     from raffle_offers
     where raffle_id = $1
-      and is_active = true
     order by sort_order asc, id asc
     `,
-    [raffle.id],
+    [raffle.id]
   );
 
   return {
@@ -266,7 +264,7 @@ export async function getRaffleBySlug(
 }
 
 export async function createRaffle(
-  input: CreateRaffleInput,
+  input: CreateRaffleInput
 ): Promise<RaffleDetails> {
   const raffle = await queryOne<RaffleRow>(
     `
@@ -304,8 +302,8 @@ export async function createRaffle(
       input.ticket_price ?? null,
       input.max_tickets ?? null,
       input.is_active ?? true,
-      JSON.stringify(normaliseColours(input.available_colours ?? [])),
-    ],
+      normaliseColours(input.available_colours ?? []),
+    ]
   );
 
   if (!raffle) {
@@ -335,7 +333,7 @@ export async function createRaffle(
         offer.tickets,
         offer.is_active ?? true,
         offer.sort_order ?? index,
-      ],
+      ]
     );
   }
 
@@ -349,7 +347,7 @@ export async function createRaffle(
 
 export async function updateRaffle(
   id: string,
-  input: UpdateRaffleInput,
+  input: UpdateRaffleInput
 ): Promise<RaffleDetails | null> {
   const updated = await queryOne<RaffleRow>(
     `
@@ -388,8 +386,8 @@ export async function updateRaffle(
       input.ticket_price ?? null,
       input.max_tickets ?? null,
       input.is_active ?? true,
-      JSON.stringify(normaliseColours(input.available_colours ?? [])),
-    ],
+      normaliseColours(input.available_colours ?? []),
+    ]
   );
 
   if (!updated) return null;
@@ -419,7 +417,7 @@ export async function updateRaffle(
         offer.tickets,
         offer.is_active ?? true,
         offer.sort_order ?? index,
-      ],
+      ]
     );
   }
 
@@ -427,7 +425,7 @@ export async function updateRaffle(
 }
 
 export async function listPurchasesByRaffleId(
-  raffleId: string,
+  raffleId: string
 ): Promise<Purchase[]> {
   const rows = await query<PurchaseRow>(
     `
@@ -445,7 +443,7 @@ export async function listPurchasesByRaffleId(
     where raffle_id = $1
     order by created_at desc
     `,
-    [raffleId],
+    [raffleId]
   );
 
   return rows.map(toPurchase);
