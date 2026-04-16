@@ -68,6 +68,7 @@ export default function AdminRaffleEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
 
   const [title, setTitle] = useState("");
@@ -92,7 +93,7 @@ export default function AdminRaffleEditPage() {
       setTitle("SO Foundation Demo Raffle");
       setSlug("so-foundation-demo-raffle");
       setDescription(
-        "Each colour creates another full ticket range. Example: if the range is 1 to 200 and you add 3 colours, buyers can choose Red 25, Blue 25 and Green 25 as separate tickets."
+        "Each colour creates another full ticket range. Example: if the range is 1 to 200 and you add 3 colours, buyers can choose Red 25, Blue 25 and Green 25 as separate tickets.",
       );
       setImageUrl("");
       setStartNumber("1");
@@ -117,7 +118,10 @@ export default function AdminRaffleEditPage() {
 
   const parsedStart = useMemo(() => toOptionalNumber(startNumber), [startNumber]);
   const parsedEnd = useMemo(() => toOptionalNumber(endNumber), [endNumber]);
-  const parsedTicketPrice = useMemo(() => toOptionalNumber(ticketPrice), [ticketPrice]);
+  const parsedTicketPrice = useMemo(
+    () => toOptionalNumber(ticketPrice),
+    [ticketPrice],
+  );
 
   const numbersPerColour = useMemo(() => {
     if (parsedStart === null || parsedEnd === null) return 0;
@@ -160,9 +164,9 @@ export default function AdminRaffleEditPage() {
       })
       .filter(
         (
-          offer
+          offer,
         ): offer is { id: string; label: string; quantity: number; price: number } =>
-          Boolean(offer)
+          Boolean(offer),
       )
       .sort((a, b) => a.quantity - b.quantity);
   }, [offers]);
@@ -206,7 +210,11 @@ export default function AdminRaffleEditPage() {
     setOffers((prev) => [...prev, { id: uid(), label: "", quantity: "", price: "" }]);
   }
 
-  function addTemplateOffer(template: { label: string; quantity: string; price: string }) {
+  function addTemplateOffer(template: {
+    label: string;
+    quantity: string;
+    price: string;
+  }) {
     setOffers((prev) => [
       ...prev,
       {
@@ -220,7 +228,7 @@ export default function AdminRaffleEditPage() {
 
   function updateOffer(id: string, field: keyof Offer, value: string) {
     setOffers((prev) =>
-      prev.map((offer) => (offer.id === id ? { ...offer, [field]: value } : offer))
+      prev.map((offer) => (offer.id === id ? { ...offer, [field]: value } : offer)),
     );
   }
 
@@ -237,6 +245,40 @@ export default function AdminRaffleEditPage() {
 
   function removeColour(colour: string) {
     setColours((prev) => prev.filter((c) => c !== colour));
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setStatusMessage("");
+    setIsUploadingImage(true);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          "x-filename": file.name,
+        },
+        body: file,
+      });
+
+      const data = (await res.json()) as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      setImageUrl(data.url);
+      setStatusMessage("Background image uploaded");
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Upload failed",
+      );
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = "";
+    }
   }
 
   function buildDraftPayload() {
@@ -377,10 +419,19 @@ export default function AdminRaffleEditPage() {
         )}
 
         <div style={statsGridStyle}>
-          <StatCard label="Numbers per colour" value={numbersPerColour > 0 ? `${numbersPerColour}` : "—"} />
+          <StatCard
+            label="Numbers per colour"
+            value={numbersPerColour > 0 ? `${numbersPerColour}` : "—"}
+          />
           <StatCard label="Colours" value={`${colourCount}`} />
-          <StatCard label="Total tickets" value={totalTickets > 0 ? `${totalTickets}` : "—"} />
-          <StatCard label="Max revenue" value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"} />
+          <StatCard
+            label="Total tickets"
+            value={totalTickets > 0 ? `${totalTickets}` : "—"}
+          />
+          <StatCard
+            label="Max revenue"
+            value={expectedRevenue > 0 ? `£${money(expectedRevenue)}` : "—"}
+          />
         </div>
 
         <div style={layoutStyle}>
@@ -435,13 +486,53 @@ export default function AdminRaffleEditPage() {
               </div>
 
               <div style={{ marginTop: 18 }}>
-                <Field label="Image URL">
-                  <input
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    style={inputStyle}
-                  />
+                <Field label="Background image">
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      style={inputStyle}
+                    />
+
+                    {isUploadingImage ? (
+                      <div style={uploadingCardStyle}>Uploading image…</div>
+                    ) : null}
+
+                    {imageUrl ? (
+                      <div
+                        style={{
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          background: "#f9fafb",
+                        }}
+                      >
+                        <img
+                          src={imageUrl}
+                          alt="Background preview"
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: 220,
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={emptyStateStyle}>No image uploaded yet.</div>
+                    )}
+
+                    {imageUrl ? (
+                      <button
+                        type="button"
+                        style={ghostButtonStyle}
+                        onClick={() => setImageUrl("")}
+                      >
+                        Remove image
+                      </button>
+                    ) : null}
+                  </div>
                 </Field>
               </div>
             </SectionCard>
@@ -487,7 +578,9 @@ export default function AdminRaffleEditPage() {
               <div style={infoStripStyle}>
                 <div>
                   <div style={infoStripLabelStyle}>Numbers per colour</div>
-                  <div style={infoStripValueStyle}>{numbersPerColour > 0 ? numbersPerColour : "—"}</div>
+                  <div style={infoStripValueStyle}>
+                    {numbersPerColour > 0 ? numbersPerColour : "—"}
+                  </div>
                 </div>
                 <div>
                   <div style={infoStripLabelStyle}>Colours</div>
@@ -495,7 +588,9 @@ export default function AdminRaffleEditPage() {
                 </div>
                 <div>
                   <div style={infoStripLabelStyle}>Total tickets</div>
-                  <div style={infoStripValueStyle}>{totalTickets > 0 ? totalTickets : "—"}</div>
+                  <div style={infoStripValueStyle}>
+                    {totalTickets > 0 ? totalTickets : "—"}
+                  </div>
                 </div>
               </div>
             </SectionCard>
@@ -567,7 +662,9 @@ export default function AdminRaffleEditPage() {
                             }}
                           />
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{colour}</span>
-                          <span style={chipMetaTextStyle}>{numbersPerColour > 0 ? `${numbersPerColour} tickets` : "set"}</span>
+                          <span style={chipMetaTextStyle}>
+                            {numbersPerColour > 0 ? `${numbersPerColour} tickets` : "set"}
+                          </span>
                           <button
                             type="button"
                             onClick={() => removeColour(colour)}
@@ -626,7 +723,9 @@ export default function AdminRaffleEditPage() {
                           <Field label="Label">
                             <input
                               value={offer.label}
-                              onChange={(e) => updateOffer(offer.id, "label", e.target.value)}
+                              onChange={(e) =>
+                                updateOffer(offer.id, "label", e.target.value)
+                              }
                               placeholder="e.g. 10 for £15"
                               style={inputStyle}
                             />
@@ -637,7 +736,9 @@ export default function AdminRaffleEditPage() {
                               type="number"
                               min="1"
                               value={offer.quantity}
-                              onChange={(e) => updateOffer(offer.id, "quantity", e.target.value)}
+                              onChange={(e) =>
+                                updateOffer(offer.id, "quantity", e.target.value)
+                              }
                               style={inputStyle}
                               placeholder="10"
                             />
@@ -649,7 +750,9 @@ export default function AdminRaffleEditPage() {
                               min="0"
                               step="0.01"
                               value={offer.price}
-                              onChange={(e) => updateOffer(offer.id, "price", e.target.value)}
+                              onChange={(e) =>
+                                updateOffer(offer.id, "price", e.target.value)
+                              }
                               style={inputStyle}
                               placeholder="15"
                             />
@@ -724,7 +827,9 @@ export default function AdminRaffleEditPage() {
                     />
                     <PreviewStat
                       label="Single"
-                      value={parsedTicketPrice !== null ? `£${money(parsedTicketPrice)}` : "—"}
+                      value={
+                        parsedTicketPrice !== null ? `£${money(parsedTicketPrice)}` : "—"
+                      }
                     />
                   </div>
 
@@ -833,7 +938,9 @@ export default function AdminRaffleEditPage() {
                   label="Best offer"
                   value={
                     bestOffer
-                      ? `${bestOffer.label} (£${money(bestOffer.price / bestOffer.quantity)}/ticket)`
+                      ? `${bestOffer.label} (£${money(
+                          bestOffer.price / bestOffer.quantity,
+                        )}/ticket)`
                       : "None"
                   }
                 />
@@ -1324,7 +1431,8 @@ const previewHeroStyle: React.CSSProperties = {
 const previewHeroOverlayStyle: React.CSSProperties = {
   width: "100%",
   padding: 18,
-  background: "linear-gradient(180deg, rgba(17,24,39,0) 0%, rgba(17,24,39,0.7) 100%)",
+  background:
+    "linear-gradient(180deg, rgba(17,24,39,0) 0%, rgba(17,24,39,0.7) 100%)",
 };
 
 const previewSlugStyle: React.CSSProperties = {
@@ -1457,4 +1565,13 @@ const emptyStateStyle: React.CSSProperties = {
   padding: 16,
   color: "#6b7280",
   background: "#fafafa",
+};
+
+const uploadingCardStyle: React.CSSProperties = {
+  border: "1px solid #bfdbfe",
+  borderRadius: 12,
+  padding: 14,
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontWeight: 700,
 };
