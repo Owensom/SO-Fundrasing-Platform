@@ -63,6 +63,16 @@ export type CreateRaffleInput = {
 
 export type UpdateRaffleInput = CreateRaffleInput;
 
+export type Purchase = {
+  id: string;
+  raffle_id: string;
+  buyer_name: string;
+  buyer_email: string;
+  quantity: number;
+  total_price: number;
+  created_at: string;
+};
+
 function toRaffleSummary(row: RaffleRow): RaffleSummary {
   return {
     id: row.id,
@@ -305,4 +315,10 @@ export async function updateRaffle(
     ...toRaffleSummary(updated),
     offers: [],
   };
+}
+
+export async function listPurchasesByRaffleId(
+  _raffleId: string
+): Promise<Purchase[]> {
+  return [];
 }
