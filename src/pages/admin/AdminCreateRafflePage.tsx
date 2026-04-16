@@ -1,5 +1,4 @@
-```tsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 type Offer = {
   label: string;
@@ -13,40 +12,44 @@ export default function AdminCreateRafflePage() {
   const [startNumber, setStartNumber] = useState(1);
   const [endNumber, setEndNumber] = useState(100);
   const [ticketPrice, setTicketPrice] = useState(1);
-
   const [offers, setOffers] = useState<Offer[]>([]);
   const [colours, setColours] = useState<string[]>([]);
+  const [colourInput, setColourInput] = useState("");
 
-  const totalTickets = endNumber - startNumber + 1;
+  const totalTickets = useMemo(() => {
+    if (endNumber < startNumber) return 0;
+    return endNumber - startNumber + 1;
+  }, [startNumber, endNumber]);
 
   function addOffer() {
-    setOffers([
-      ...offers,
-      { label: "", price: 0, quantity: 1 },
-    ]);
+    setOffers((prev) => [...prev, { label: "", price: 0, quantity: 1 }]);
   }
 
-  function updateOffer(index: number, field: keyof Offer, value: any) {
-    const updated = [...offers];
-    (updated[index] as any)[field] = value;
-    setOffers(updated);
+  function updateOffer(index: number, field: keyof Offer, value: string | number) {
+    setOffers((prev) =>
+      prev.map((offer, i) =>
+        i === index ? { ...offer, [field]: value } : offer
+      )
+    );
   }
 
   function removeOffer(index: number) {
-    setOffers(offers.filter((_, i) => i !== index));
+    setOffers((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function addColour(colour: string) {
-    if (!colour) return;
-    if (colours.includes(colour)) return;
-    setColours([...colours, colour]);
+  function addColour() {
+    const value = colourInput.trim();
+    if (!value) return;
+    if (colours.includes(value)) return;
+    setColours((prev) => [...prev, value]);
+    setColourInput("");
   }
 
   function removeColour(colour: string) {
-    setColours(colours.filter((c) => c !== colour));
+    setColours((prev) => prev.filter((c) => c !== colour));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const payload = {
@@ -60,123 +63,206 @@ export default function AdminCreateRafflePage() {
       colours,
     };
 
-    console.log("CREATE RAFFLE:", payload);
-
-    // TODO: wire to API
+    console.log("Create raffle payload:", payload);
+    alert("Create page restored. API wiring comes next.");
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: "40px auto" }}>
+    <div style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
       <h1>Create Raffle</h1>
 
       <form onSubmit={handleSubmit}>
-        {/* BASIC INFO */}
-        <div>
-          <label>Title</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-
-        <div>
-          <label>Slug</label>
-          <input value={slug} onChange={(e) => setSlug(e.target.value)} required />
-        </div>
-
-        {/* TICKET RANGE */}
-        <h3>Tickets</h3>
-
-        <div>
-          <label>Start Number</label>
-          <input
-            type="number"
-            value={startNumber}
-            onChange={(e) => setStartNumber(Number(e.target.value))}
-          />
-        </div>
-
-        <div>
-          <label>End Number</label>
-          <input
-            type="number"
-            value={endNumber}
-            onChange={(e) => setEndNumber(Number(e.target.value))}
-          />
-        </div>
-
-        <p><strong>Total Tickets: {totalTickets}</strong></p>
-
-        <div>
-          <label>Single Ticket Price</label>
-          <input
-            type="number"
-            value={ticketPrice}
-            onChange={(e) => setTicketPrice(Number(e.target.value))}
-          />
-        </div>
-
-        {/* OFFERS */}
-        <h3>Offers</h3>
-
-        {offers.map((offer, i) => (
-          <div key={i} style={{ border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
+        <div style={{ display: "grid", gap: 16 }}>
+          <div>
+            <label htmlFor="title">Title</label>
+            <br />
             <input
-              placeholder="Label (e.g. 5 for £4)"
-              value={offer.label}
-              onChange={(e) => updateOffer(i, "label", e.target.value)}
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={{ width: "100%", padding: 10 }}
+              required
             />
-            <input
-              type="number"
-              placeholder="Price"
-              value={offer.price}
-              onChange={(e) => updateOffer(i, "price", Number(e.target.value))}
-            />
-            <input
-              type="number"
-              placeholder="Quantity"
-              value={offer.quantity}
-              onChange={(e) => updateOffer(i, "quantity", Number(e.target.value))}
-            />
-            <button type="button" onClick={() => removeOffer(i)}>Remove</button>
           </div>
-        ))}
 
-        <button type="button" onClick={addOffer}>
-          Add Offer
-        </button>
-
-        {/* COLOURS */}
-        <h3>Colours</h3>
-
-        <input
-          type="text"
-          placeholder="Add colour (e.g. red or #ff0000)"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addColour((e.target as HTMLInputElement).value);
-              (e.target as HTMLInputElement).value = "";
-            }
-          }}
-        />
-
-        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-          {colours.map((c) => (
-            <div
-              key={c}
-              onClick={() => removeColour(c)}
-              style={{
-                width: 30,
-                height: 30,
-                background: c,
-                cursor: "pointer",
-              }}
+          <div>
+            <label htmlFor="slug">Slug</label>
+            <br />
+            <input
+              id="slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              style={{ width: "100%", padding: 10 }}
+              required
             />
-          ))}
-        </div>
+          </div>
 
-        <br />
-        <button type="submit">Create Raffle</button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div>
+              <label htmlFor="startNumber">Start Number</label>
+              <br />
+              <input
+                id="startNumber"
+                type="number"
+                value={startNumber}
+                onChange={(e) => setStartNumber(Number(e.target.value))}
+                style={{ width: "100%", padding: 10 }}
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="endNumber">End Number</label>
+              <br />
+              <input
+                id="endNumber"
+                type="number"
+                value={endNumber}
+                onChange={(e) => setEndNumber(Number(e.target.value))}
+                style={{ width: "100%", padding: 10 }}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <strong>Total tickets: {totalTickets}</strong>
+          </div>
+
+          <div>
+            <label htmlFor="ticketPrice">Single Ticket Price</label>
+            <br />
+            <input
+              id="ticketPrice"
+              type="number"
+              min="0"
+              step="0.01"
+              value={ticketPrice}
+              onChange={(e) => setTicketPrice(Number(e.target.value))}
+              style={{ width: "100%", padding: 10 }}
+              required
+            />
+          </div>
+
+          <div>
+            <h2>Offers</h2>
+            <div style={{ display: "grid", gap: 12 }}>
+              {offers.map((offer, index) => (
+                <div
+                  key={index}
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: 8,
+                    padding: 12,
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 1fr auto",
+                    gap: 12,
+                    alignItems: "end",
+                  }}
+                >
+                  <div>
+                    <label>Label</label>
+                    <br />
+                    <input
+                      value={offer.label}
+                      onChange={(e) =>
+                        updateOffer(index, "label", e.target.value)
+                      }
+                      style={{ width: "100%", padding: 10 }}
+                      placeholder="e.g. 5 for £4"
+                    />
+                  </div>
+
+                  <div>
+                    <label>Price</label>
+                    <br />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={offer.price}
+                      onChange={(e) =>
+                        updateOffer(index, "price", Number(e.target.value))
+                      }
+                      style={{ width: "100%", padding: 10 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label>Quantity</label>
+                    <br />
+                    <input
+                      type="number"
+                      min="1"
+                      value={offer.quantity}
+                      onChange={(e) =>
+                        updateOffer(index, "quantity", Number(e.target.value))
+                      }
+                      style={{ width: "100%", padding: 10 }}
+                    />
+                  </div>
+
+                  <button type="button" onClick={() => removeOffer(index)}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <button type="button" onClick={addOffer}>
+                Add Offer
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <h2>Colours</h2>
+
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <input
+                value={colourInput}
+                onChange={(e) => setColourInput(e.target.value)}
+                placeholder="e.g. red or #ff0000"
+                style={{ padding: 10, minWidth: 240 }}
+              />
+              <button type="button" onClick={addColour}>
+                Add Colour
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap",
+                marginTop: 16,
+              }}
+            >
+              {colours.map((colour) => (
+                <button
+                  key={colour}
+                  type="button"
+                  onClick={() => removeColour(colour)}
+                  title={`Remove ${colour}`}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    border: "1px solid #ccc",
+                    background: colour,
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <button type="submit">Create Raffle</button>
+          </div>
+        </div>
       </form>
     </div>
   );
 }
-```
