@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import { updateRaffle } from "../../../src/api";
 
 type Offer = {
   id: string;
@@ -338,12 +339,33 @@ export default function AdminRaffleEditPage() {
     setIsSavingDraft(true);
 
     const payload = buildDraftPayload();
-    console.log("Save draft payload:", payload);
 
-    setTimeout(() => {
-      setIsSavingDraft(false);
+    try {
+      await updateRaffle(routeId, {
+        title: payload.title || "",
+        slug: payload.slug || "",
+        description: payload.description || "",
+        imageUrl: payload.imageUrl || "",
+        startNumber: payload.startNumber ?? 0,
+        endNumber: payload.endNumber ?? 0,
+        numbersPerColour: payload.numbersPerColour ?? 0,
+        colourCount: payload.colourCount ?? 0,
+        totalTickets: payload.totalTickets ?? 0,
+        ticketPrice: payload.ticketPrice ?? 0,
+        offers: payload.offers ?? [],
+        colours: payload.colours ?? [],
+        sold: [],
+        reserved: [],
+      });
+
       setStatusMessage("Draft saved");
-    }, 500);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to save draft",
+      );
+    } finally {
+      setIsSavingDraft(false);
+    }
   }
 
   async function handleComplete() {
@@ -356,12 +378,37 @@ export default function AdminRaffleEditPage() {
     }
 
     setIsCompleting(true);
-    console.log("Complete raffle payload:", payload);
 
-    setTimeout(() => {
-      setIsCompleting(false);
+    try {
+      await updateRaffle(routeId, {
+        title: payload.title,
+        slug: payload.slug,
+        description: payload.description,
+        imageUrl: payload.imageUrl,
+        startNumber: payload.startNumber,
+        endNumber: payload.endNumber,
+        numbersPerColour: payload.numbersPerColour,
+        colourCount: payload.colourCount,
+        totalTickets: payload.totalTickets,
+        ticketPrice: payload.ticketPrice,
+        offers: payload.offers,
+        colours: payload.colours,
+        sold: [],
+        reserved: [],
+      });
+
       setStatusMessage("Raffle marked complete");
-    }, 500);
+
+      if (payload.slug) {
+        router.push(`/r/${payload.slug}`);
+      }
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to complete raffle",
+      );
+    } finally {
+      setIsCompleting(false);
+    }
   }
 
   if (isLoading) {
