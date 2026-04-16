@@ -8,6 +8,7 @@ type PublicRaffle = {
   title: string;
   description: string;
   image_url: string;
+  background_image_url?: string;
   ticket_price: number;
   total_tickets: number;
   sold_tickets: number;
@@ -15,6 +16,12 @@ type PublicRaffle = {
   status: string;
   created_at: string;
   updated_at: string;
+  currency_code?: string;
+  colour_selection_mode?: string;
+  number_selection_mode?: string;
+  number_range_start?: number | null;
+  number_range_end?: number | null;
+  colours?: Array<{ name: string; hex: string }>;
   offers: Array<{
     id?: string;
     label: string;
@@ -31,8 +38,9 @@ type ApiResponse = {
   error?: string;
 };
 
-function money(value: number) {
-  return `£${value.toFixed(2)}`;
+function money(value: number, currency = "GBP") {
+  const symbol = currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
+  return `${symbol}${value.toFixed(2)}`;
 }
 
 export default function PublicRafflePage() {
@@ -120,6 +128,8 @@ export default function PublicRafflePage() {
     );
   }
 
+  const activeOffers = raffle.offers.filter((offer) => offer.is_active);
+
   return (
     <div style={styles.page}>
       <div style={styles.container}>
@@ -130,7 +140,9 @@ export default function PublicRafflePage() {
           <div style={styles.metaGrid}>
             <div style={styles.metaCard}>
               <div style={styles.metaLabel}>Single ticket price</div>
-              <div style={styles.metaValue}>{money(raffle.ticket_price)}</div>
+              <div style={styles.metaValue}>
+                {money(raffle.ticket_price, raffle.currency_code)}
+              </div>
             </div>
 
             <div style={styles.metaCard}>
@@ -146,26 +158,38 @@ export default function PublicRafflePage() {
             </div>
           </div>
 
-          {raffle.offers.length > 0 ? (
+          {activeOffers.length > 0 && (
             <div style={{ marginTop: 24 }}>
               <h2 style={styles.sectionHeading}>Offers</h2>
-
               <div style={styles.offerGrid}>
-                {raffle.offers.map((offer, index) => (
-                  <div key={offer.id ?? index} style={styles.offerCard}>
+                {activeOffers.map((offer) => (
+                  <div key={offer.id ?? `${offer.label}-${offer.sort_order}`} style={styles.offerCard}>
                     <div style={styles.offerTitle}>{offer.label}</div>
                     <div style={styles.offerSub}>{offer.tickets} tickets</div>
-                    <div style={styles.offerPrice}>{money(offer.price)}</div>
+                    <div style={styles.offerPrice}>
+                      {money(offer.price, raffle.currency_code)}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : (
+          )}
+
+          {raffle.colours && raffle.colours.length > 0 && (
             <div style={{ marginTop: 24 }}>
-              <h2 style={styles.sectionHeading}>Entry</h2>
-              <div style={styles.metaCard}>
-                <div style={styles.metaLabel}>Price per ticket</div>
-                <div style={styles.metaValue}>{money(raffle.ticket_price)}</div>
+              <h2 style={styles.sectionHeading}>Available colours</h2>
+              <div style={styles.colourGrid}>
+                {raffle.colours.map((colour) => (
+                  <div key={`${colour.name}-${colour.hex}`} style={styles.colourChip}>
+                    <span
+                      style={{
+                        ...styles.swatch,
+                        backgroundColor: colour.hex,
+                      }}
+                    />
+                    <span>{colour.name}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -259,5 +283,26 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 24,
     fontWeight: 800,
     color: "#111827",
+  },
+  colourGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  colourChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#f9fafb",
+  },
+  swatch: {
+    width: 16,
+    height: 16,
+    borderRadius: 999,
+    display: "inline-block",
+    border: "1px solid #d1d5db",
   },
 };
