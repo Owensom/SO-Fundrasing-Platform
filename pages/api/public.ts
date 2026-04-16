@@ -1,43 +1,36 @@
-import { getRaffleBySlug } from "./_lib/raffles-repo";
-import {
-  getQueryValue,
-  sendBadRequest,
-  sendNotFound,
-  sendServerError,
-  type ApiRequest,
-  type ApiResponse,
-} from "./_lib/http";
+import type { NextApiRequest, NextApiResponse } from "next";
+import { getRaffleBySlug } from "../../api/_lib/raffles-repo";
 
 export default async function handler(
-  req: ApiRequest,
-  res: ApiResponse,
-): Promise<void> {
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   try {
     if (req.method !== "GET") {
-      res.status(405).json({ error: "Method not allowed" });
-      return;
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const slug = getQueryValue(req, "slug");
-    const tenantSlug = getQueryValue(req, "tenantSlug") ?? "demo-a";
+    const slug = typeof req.query.slug === "string" ? req.query.slug : "";
+    const tenantSlug =
+      typeof req.query.tenantSlug === "string" ? req.query.tenantSlug : "demo-a";
 
     if (!slug) {
-      sendBadRequest(res, "Missing slug");
-      return;
+      return res.status(400).json({ error: "Missing slug" });
     }
 
     const raffle = await getRaffleBySlug(tenantSlug, slug);
 
     if (!raffle) {
-      sendNotFound(res, "Raffle not found");
-      return;
+      return res.status(404).json({ error: "Raffle not found" });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       ok: true,
       item: raffle,
     });
-  } catch (error) {
-    sendServerError(res, error);
+  } catch (error: any) {
+    return res.status(500).json({
+      error: error?.message || "Internal server error",
+    });
   }
 }
