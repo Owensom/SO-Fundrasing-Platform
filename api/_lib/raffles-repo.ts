@@ -1,325 +1,108 @@
-import { query, queryOne } from "./db";
+import type { NextApiRequest, NextApiResponse } from "next";
+import {
+  createRaffle,
+  listRaffles,
+  updateRaffle,
+} from "../../../api/_lib/raffles-repo";
 
-export type RaffleRow = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string;
-  image_url: string | null;
-  ticket_price_cents: number;
-  total_tickets: number;
-  sold_tickets: number;
-  status: "draft" | "published" | "closed";
-  created_at: string;
-  updated_at: string;
-};
+type RaffleStatus = "draft" | "published" | "closed";
 
-export type RaffleSummary = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string;
-  image_url: string;
-  ticket_price: number;
-  total_tickets: number;
-  sold_tickets: number;
-  remaining_tickets: number;
-  status: "draft" | "published" | "closed";
-  created_at: string;
-  updated_at: string;
-};
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  try {
+    if (req.method === "GET") {
+      const tenantSlug =
+        typeof req.query.tenantSlug === "string" ? req.query.tenantSlug : "demo-a";
 
-export type RaffleDetails = RaffleSummary & {
-  offers: Array<{
-    id?: string;
-    label: string;
-    price: number;
-    tickets: number;
-    is_active: boolean;
-    sort_order: number;
-  }>;
-};
+      const raffles = await listRaffles(tenantSlug);
 
-export type CreateRaffleInput = {
-  tenant_slug: string;
-  title: string;
-  slug: string;
-  description?: string;
-  image_url?: string;
-  ticket_price?: number | null;
-  total_tickets?: number | null;
-  sold_tickets?: number | null;
-  status?: "draft" | "published" | "closed";
-  offers?: Array<{
-    label: string;
-    price: number;
-    tickets: number;
-    is_active?: boolean;
-    sort_order?: number;
-  }>;
-};
+      return res.status(200).json({
+        raffles: raffles.map((item) => ({
+          id: item.id,
+          tenantSlug: item.tenant_slug,
+          slug: item.slug,
+          title: item.title,
+          description: item.description,
+          imageUrl: item.image_url || null,
+          currency: (item as any).currency || "GBP",
+          ticketPrice: item.ticket_price,
+          totalTickets: item.total_tickets,
+          soldTickets: item.sold_tickets,
+          remainingTickets: item.remaining_tickets,
+          isSoldOut: item.remaining_tickets <= 0,
+          status: item.status,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        })),
+      });
+    }
 
-export type UpdateRaffleInput = CreateRaffleInput;
+    if (req.method === "POST") {
+      const body = req.body ?? {};
 
-export type Purchase = {
-  id: string;
-  raffle_id: string;
-  buyer_name: string;
-  buyer_email: string;
-  quantity: number;
-  total_price: number;
-  created_at: string;
-};
+      const created = await createRaffle({
+        tenant_slug: String(body.tenantSlug || "demo-a"),
+        title: String(body.title || "").trim(),
+        slug: String(body.slug || "").trim(),
+        description: String(body.description || ""),
+        image_url: String(body.heroImageUrl || body.imageUrl || ""),
+        ticket_price: Number(body.ticketPrice || 0),
+        total_tickets: Number(body.totalTickets || 0),
+        sold_tickets: Number(body.soldTickets || 0),
+        status: String(body.status || "published") as RaffleStatus,
+      });
 
-function toRaffleSummary(row: RaffleRow): RaffleSummary {
-  return {
-    id: row.id,
-    tenant_slug: row.tenant_slug,
-    slug: row.slug,
-    title: row.title,
-    description: row.description ?? "",
-    image_url: row.image_url ?? "",
-    ticket_price: Number(row.ticket_price_cents) / 100,
-    total_tickets: Number(row.total_tickets),
-    sold_tickets: Number(row.sold_tickets),
-    remaining_tickets: Math.max(
-      Number(row.total_tickets) - Number(row.sold_tickets),
-      0
-    ),
-    status: row.status,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
-}
+      return res.status(201).json({ raffle: created });
+    }
 
-export async function listRaffles(
-  tenantSlug?: string
-): Promise<RaffleSummary[]> {
-  const rows = tenantSlug
-    ? await query<RaffleRow>(
-        `
-        select
-          id,
-          tenant_slug,
-          slug,
-          title,
-          description,
-          image_url,
-          ticket_price_cents,
-          total_tickets,
-          sold_tickets,
-          status,
-          created_at,
-          updated_at
-        from raffles
-        where tenant_slug = $1
-        order by created_at desc
-        `,
-        [tenantSlug]
-      )
-    : await query<RaffleRow>(
-        `
-        select
-          id,
-          tenant_slug,
-          slug,
-          title,
-          description,
-          image_url,
-          ticket_price_cents,
-          total_tickets,
-          sold_tickets,
-          status,
-          created_at,
-          updated_at
-        from raffles
-        order by created_at desc
-        `
-      );
+    if (req.method === "PUT") {
+      const body = req.body ?? {};
+      const requestedId = String(body.id || "").trim();
+      const tenantSlug = String(body.tenantSlug || "demo-a").trim();
+      const slug = String(body.slug || "").trim();
 
-  return rows.map(toRaffleSummary);
-}
+      if (!requestedId && !slug) {
+        return res.status(400).json({ error: "Missing raffle id or slug" });
+      }
 
-export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
-  const raffle = await queryOne<RaffleRow>(
-    `
-    select
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      created_at,
-      updated_at
-    from raffles
-    where id = $1
-    `,
-    [id]
-  );
+      const payload = {
+        tenant_slug: tenantSlug,
+        title: String(body.title || "").trim(),
+        slug,
+        description: String(body.description || ""),
+        image_url: String(body.heroImageUrl || body.imageUrl || ""),
+        ticket_price: Number(body.ticketPrice || 0),
+        total_tickets: Number(body.totalTickets || 0),
+        sold_tickets: Number(body.soldTickets || 0),
+        status: String(body.status || "published") as RaffleStatus,
+      };
 
-  if (!raffle) return null;
+      // 1) Try updating with the provided id first
+      let updated = requestedId ? await updateRaffle(requestedId, payload) : null;
 
-  return {
-    ...toRaffleSummary(raffle),
-    offers: [],
-  };
-}
+      // 2) If that failed, find the real raffle by slug for this tenant and retry
+      if (!updated && slug) {
+        const raffles = await listRaffles(tenantSlug);
+        const matched = raffles.find((item) => item.slug === slug);
 
-export async function getRaffleBySlug(
-  tenantSlug: string,
-  slug: string
-): Promise<RaffleDetails | null> {
-  const raffle = await queryOne<RaffleRow>(
-    `
-    select
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      created_at,
-      updated_at
-    from raffles
-    where tenant_slug = $1
-      and slug = $2
-    `,
-    [tenantSlug, slug]
-  );
+        if (matched?.id) {
+          updated = await updateRaffle(String(matched.id), payload);
+        }
+      }
 
-  if (!raffle) return null;
+      if (!updated) {
+        return res.status(404).json({ error: "Raffle not found" });
+      }
 
-  return {
-    ...toRaffleSummary(raffle),
-    offers: [],
-  };
-}
+      return res.status(200).json({ raffle: updated });
+    }
 
-export async function createRaffle(
-  input: CreateRaffleInput
-): Promise<RaffleDetails> {
-  const raffle = await queryOne<RaffleRow>(
-    `
-    insert into raffles (
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status
-    )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    returning
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      created_at,
-      updated_at
-    `,
-    [
-      crypto.randomUUID(),
-      input.tenant_slug,
-      input.slug,
-      input.title,
-      input.description ?? "",
-      input.image_url ?? "",
-      input.ticket_price != null ? Math.round(input.ticket_price * 100) : 0,
-      input.total_tickets ?? 0,
-      input.sold_tickets ?? 0,
-      input.status ?? "published",
-    ]
-  );
-
-  if (!raffle) {
-    throw new Error("Failed to create raffle");
+    return res.status(405).json({ error: "Method not allowed" });
+  } catch (error: any) {
+    return res.status(500).json({
+      error: error?.message || "Internal server error",
+    });
   }
-
-  return {
-    ...toRaffleSummary(raffle),
-    offers: [],
-  };
-}
-
-export async function updateRaffle(
-  id: string,
-  input: UpdateRaffleInput
-): Promise<RaffleDetails | null> {
-  const updated = await queryOne<RaffleRow>(
-    `
-    update raffles
-    set
-      tenant_slug = $2,
-      slug = $3,
-      title = $4,
-      description = $5,
-      image_url = $6,
-      ticket_price_cents = $7,
-      total_tickets = $8,
-      sold_tickets = $9,
-      status = $10,
-      updated_at = now()
-    where id = $1
-       or (tenant_slug = $2 and slug = $3)
-    returning
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      created_at,
-      updated_at
-    `,
-    [
-      id,
-      input.tenant_slug,
-      input.slug,
-      input.title,
-      input.description ?? "",
-      input.image_url ?? "",
-      input.ticket_price != null ? Math.round(input.ticket_price * 100) : 0,
-      input.total_tickets ?? 0,
-      input.sold_tickets ?? 0,
-      input.status ?? "published",
-    ]
-  );
-
-  if (!updated) return null;
-
-  return {
-    ...toRaffleSummary(updated),
-    offers: [],
-  };
-}
-
-export async function listPurchasesByRaffleId(
-  _raffleId: string
-): Promise<Purchase[]> {
-  return [];
 }
