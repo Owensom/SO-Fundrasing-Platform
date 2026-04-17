@@ -19,7 +19,8 @@ function currencySymbol(currency: CurrencyCode) {
 }
 
 function formatCurrency(value: number, currency: CurrencyCode) {
-  return `${currencySymbol(currency)}${value.toFixed(2)}`;
+  const safe = Number.isFinite(value) ? value : 0;
+  return `${currencySymbol(currency)}${safe.toFixed(2)}`;
 }
 
 export default function PublicRafflePage() {
@@ -46,8 +47,25 @@ export default function PublicRafflePage() {
 
         if (cancelled) return;
 
-        setRaffle(data);
-        setActiveColour(data.colours?.[0] || "");
+        const normalised: RaffleDetails = {
+          ...data,
+          imageUrl: (data as any).imageUrl ?? (data as any).image_url ?? "",
+          ticketPrice:
+            (data as any).ticketPrice ??
+            (data as any).ticket_price ??
+            0,
+          totalTickets:
+            (data as any).totalTickets ??
+            (data as any).total_tickets ??
+            0,
+          colours: Array.isArray((data as any).colours) ? (data as any).colours : [],
+          offers: Array.isArray((data as any).offers) ? (data as any).offers : [],
+          sold: Array.isArray((data as any).sold) ? (data as any).sold : [],
+          reserved: Array.isArray((data as any).reserved) ? (data as any).reserved : [],
+        };
+
+        setRaffle(normalised);
+        setActiveColour(normalised.colours?.[0] || "");
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load raffle");
@@ -63,10 +81,18 @@ export default function PublicRafflePage() {
     };
   }, [router.isReady, slug]);
 
-  const currency = (raffle?.currency as CurrencyCode) || "GBP";
+  const currency = ((raffle?.currency as CurrencyCode) || "GBP") as CurrencyCode;
 
   const numbers = useMemo(() => {
     if (!raffle) return [];
+    if (
+      typeof raffle.startNumber !== "number" ||
+      typeof raffle.endNumber !== "number" ||
+      raffle.endNumber < raffle.startNumber
+    ) {
+      return [];
+    }
+
     return Array.from(
       { length: raffle.endNumber - raffle.startNumber + 1 },
       (_, i) => raffle.startNumber + i,
@@ -75,7 +101,7 @@ export default function PublicRafflePage() {
 
   const totalTickets = useMemo(() => {
     if (!raffle) return 0;
-    return numbers.length * raffle.colours.length;
+    return numbers.length * (raffle.colours?.length || 0);
   }, [raffle, numbers.length]);
 
   function isSold(colour: string, number: number) {
@@ -112,18 +138,22 @@ export default function PublicRafflePage() {
     let remaining = selectedTickets.length;
     let total = 0;
 
-    const sortedOffers = [...raffle.offers].sort(
-      (a, b) => b.quantity - a.quantity,
+    const sortedOffers = [...(raffle.offers || [])].sort(
+      (a, b) => (b.quantity ?? 0) - (a.quantity ?? 0),
     );
 
     for (const offer of sortedOffers) {
-      while (remaining >= offer.quantity) {
-        total += offer.price;
-        remaining -= offer.quantity;
+      const qty = Number(offer.quantity || 0);
+      const price = Number(offer.price || 0);
+      if (qty <= 0) continue;
+
+      while (remaining >= qty) {
+        total += price;
+        remaining -= qty;
       }
     }
 
-    total += remaining * raffle.ticketPrice;
+    total += remaining * Number(raffle.ticketPrice || 0);
     return total;
   }
 
@@ -136,7 +166,7 @@ export default function PublicRafflePage() {
 
     if (!raffle) return grouped;
 
-    for (const colour of raffle.colours) {
+    for (const colour of raffle.colours || []) {
       grouped.set(colour, []);
     }
 
@@ -183,11 +213,11 @@ export default function PublicRafflePage() {
 
       <div style={statsGridStyle}>
         <SummaryCard label="Numbers per colour" value={`${numbers.length}`} />
-        <SummaryCard label="Colours" value={`${raffle.colours.length}`} />
+        <SummaryCard label="Colours" value={`${raffle.colours?.length || 0}`} />
         <SummaryCard label="Total tickets" value={`${totalTickets}`} />
         <SummaryCard
           label="Single price"
-          value={formatCurrency(raffle.ticketPrice, currency)}
+          value={formatCurrency(Number(raffle.ticketPrice || 0), currency)}
         />
       </div>
 
@@ -201,7 +231,7 @@ export default function PublicRafflePage() {
             </p>
 
             <div style={colourTabsStyle}>
-              {raffle.colours.map((colour) => {
+              {(raffle.colours || []).map((colour) => {
                 const active = activeColour === colour;
                 const count = selectedTickets.filter((t) => t.colour === colour).length;
 
@@ -321,12 +351,12 @@ export default function PublicRafflePage() {
               <div style={{ display: "grid", gap: 8 }}>
                 <div style={offerRowStyle}>
                   <span>Single ticket</span>
-                  <strong>{formatCurrency(raffle.ticketPrice, currency)}</strong>
+                  <strong>{formatCurrency(Number(raffle.ticketPrice || 0), currency)}</strong>
                 </div>
-                {raffle.offers.map((offer, index) => (
+                {(raffle.offers || []).map((offer, index) => (
                   <div key={`${offer.label}-${index}`} style={offerRowStyle}>
                     <span>{offer.label}</span>
-                    <strong>{formatCurrency(offer.price, currency)}</strong>
+                    <strong>{formatCurrency(Number(offer.price || 0), currency)}</strong>
                   </div>
                 ))}
               </div>
@@ -340,7 +370,7 @@ export default function PublicRafflePage() {
               <div style={emptyStateStyle}>No tickets selected yet.</div>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                {raffle.colours.map((colour) => {
+                {(raffle.colours || []).map((colour) => {
                   const items = selectedByColour.get(colour) || [];
                   if (items.length === 0) return null;
 
