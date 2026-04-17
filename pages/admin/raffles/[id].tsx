@@ -107,7 +107,10 @@ export default function AdminRaffleEditPage() {
   const [customColour, setCustomColour] = useState("#8b5cf6");
 
   useEffect(() => {
-    if (!router.isReady || !routeId) return;
+    if (!router.isReady || !routeId) {
+      setIsLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -117,31 +120,22 @@ export default function AdminRaffleEditPage() {
 
       try {
         const raffles = await listAdminRaffles();
-
         if (cancelled) return;
 
         const matched = raffles.find(
-          (raffle) => String(raffle.id) === routeId || raffle.slug === routeId,
+          (raffle) =>
+            String(raffle.id) === String(routeId) ||
+            String(raffle.slug) === String(routeId),
         );
 
         if (!matched?.id) {
           setExistingRaffleId("");
-          setTitle("");
-          setSlug(routeId.includes("-") ? routeId : "");
-          setDescription("");
-          setImageUrl("");
-          setStartNumber("");
-          setEndNumber("");
-          setTicketPrice("");
-          setCurrency("GBP");
-          setOffers([]);
-          setColours([]);
-          setStatusMessage("Raffle not found in storage yet. Saving will create it.");
+          setStatusMessage("Raffle not found yet. Saving will create it.");
+          setIsLoading(false);
           return;
         }
 
         const raffle = await getAdminRaffle(String(matched.id));
-
         if (cancelled) return;
 
         setExistingRaffleId(String(raffle.id ?? matched.id));
@@ -169,21 +163,11 @@ export default function AdminRaffleEditPage() {
           })),
         );
         setColours(raffle.colours ?? []);
-      } catch {
+      } catch (error) {
         if (cancelled) return;
-
-        setExistingRaffleId("");
-        setTitle("");
-        setSlug(routeId.includes("-") ? routeId : "");
-        setDescription("");
-        setImageUrl("");
-        setStartNumber("");
-        setEndNumber("");
-        setTicketPrice("");
-        setCurrency("GBP");
-        setOffers([]);
-        setColours([]);
-        setStatusMessage("Raffle not found in storage yet. Saving will create it.");
+        setStatusMessage(
+          error instanceof Error ? error.message : "Failed to load raffle",
+        );
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -401,8 +385,8 @@ export default function AdminRaffleEditPage() {
     const matched = raffles.find(
       (raffle) =>
         String(raffle.id) === routeId ||
-        raffle.slug === routeId ||
-        raffle.slug === input.slug,
+        String(raffle.slug) === routeId ||
+        String(raffle.slug) === input.slug,
     );
 
     if (matched?.id) {
@@ -433,7 +417,7 @@ export default function AdminRaffleEditPage() {
 
       const savedId = saved.id ? String(saved.id) : "";
       if (savedId && savedId !== routeId) {
-        router.replace(`/admin/raffles/${savedId}`);
+        router.replace(`/admin/raffles/${saved.slug || savedId}`);
       }
     } catch (error) {
       setStatusMessage(
@@ -456,12 +440,14 @@ export default function AdminRaffleEditPage() {
 
     try {
       const saved = await persistRaffle();
-      setStatusMessage("Raffle marked complete");
-
       const publicSlug = saved.slug || slug;
-      if (publicSlug) {
-        router.push(`/r/${publicSlug}`);
+
+      if (!publicSlug) {
+        throw new Error("Missing public slug");
       }
+
+      setStatusMessage("Raffle marked complete");
+      router.push(`/r/${publicSlug}`);
     } catch (error) {
       setStatusMessage(
         error instanceof Error ? error.message : "Failed to complete raffle",
