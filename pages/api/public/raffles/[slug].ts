@@ -45,28 +45,112 @@ async function tableExists(tableName: string) {
   return Boolean(result.rows[0]?.exists);
 }
 
-function normaliseColour(colour: RawColour, index: number) {
+function titleCase(value: string) {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normaliseHex(value?: string | null) {
+  if (!value) return null;
+  const hex = String(value).trim().toLowerCase();
+  return /^#?[0-9a-f]{6}$/i.test(hex) ? (hex.startsWith("#") ? hex : `#${hex}`) : null;
+}
+
+function nameFromHex(hex?: string | null) {
+  const value = normaliseHex(hex);
+  if (!value) return null;
+
+  const known: Record<string, string> = {
+    "#dc2626": "Red",
+    "#ef4444": "Red",
+    "#b91c1c": "Red",
+    "#2563eb": "Blue",
+    "#3b82f6": "Blue",
+    "#1d4ed8": "Blue",
+    "#16a34a": "Green",
+    "#22c55e": "Green",
+    "#15803d": "Green",
+    "#eab308": "Yellow",
+    "#facc15": "Yellow",
+    "#ca8a04": "Yellow",
+    "#f97316": "Orange",
+    "#ea580c": "Orange",
+    "#fb923c": "Orange",
+    "#9333ea": "Purple",
+    "#a855f7": "Purple",
+    "#7e22ce": "Purple",
+    "#ec4899": "Pink",
+    "#db2777": "Pink",
+    "#f472b6": "Pink",
+    "#111827": "Black",
+    "#000000": "Black",
+    "#ffffff": "White",
+    "#f8fafc": "White",
+    "#e5e7eb": "Grey",
+    "#9ca3af": "Grey",
+    "#6b7280": "Grey",
+  };
+
+  return known[value] ?? null;
+}
+
+function deriveDisplayColourName(colour: RawColour, index: number) {
   if (typeof colour === "string") {
-    return {
-      id: colour,
-      name: colour,
-      hex: null,
-      sortOrder: index,
-    };
+    const asHexName = nameFromHex(colour);
+    if (asHexName) return asHexName;
+    return titleCase(colour);
   }
 
-  const fallbackName =
+  const explicit =
     colour?.name ||
     colour?.label ||
-    colour?.value ||
-    colour?.id ||
-    `Colour ${index + 1}`;
+    colour?.value;
 
+  if (explicit && !/^#?[0-9a-f]{6}$/i.test(String(explicit).trim())) {
+    return titleCase(String(explicit));
+  }
+
+  const fromId = colour?.id ? titleCase(String(colour.id)) : null;
+  const fromHex = nameFromHex(colour?.hex ?? (typeof explicit === "string" ? explicit : null));
+
+  return fromHex || fromId || `Colour ${index + 1}`;
+}
+
+function deriveColourId(colour: RawColour, index: number) {
+  if (typeof colour === "string") {
+    const hex = normaliseHex(colour);
+    return hex ?? colour;
+  }
+
+  return (
+    colour?.id ??
+    normaliseHex(colour?.hex ?? null) ??
+    colour?.value ??
+    colour?.name ??
+    `colour-${index}`
+  );
+}
+
+function deriveColourHex(colour: RawColour) {
+  if (typeof colour === "string") {
+    return normaliseHex(colour);
+  }
+
+  return normaliseHex(colour?.hex ?? null) ?? normaliseHex(colour?.value ?? null);
+}
+
+function normaliseColour(colour: RawColour, index: number) {
   return {
-    id: colour?.id ?? `colour-${index}`,
-    name: String(fallbackName),
-    hex: colour?.hex ?? null,
-    sortOrder: Number(colour?.sortOrder ?? index),
+    id: String(deriveColourId(colour, index)),
+    name: deriveDisplayColourName(colour, index),
+    hex: deriveColourHex(colour),
+    sortOrder:
+      typeof colour === "string"
+        ? index
+        : Number(colour?.sortOrder ?? index),
   };
 }
 
