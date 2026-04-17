@@ -1,18 +1,5 @@
-import { randomUUID } from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getBestPrice } from "../../../../../src/lib/rafflePricing";
-import { db } from "../../../../../src/server/db";
-import type {
-  RaffleOffer,
-  ReserveTicketsRequest,
-  ReserveTicketsResponse,
-  TicketSelection,
-} from "../../../../../src/types/raffles";
-
-type ErrorResponse = {
-  error: string;
-  details?: string;
-};
+import { db } from "../../../../src/server/db";
 
 type RawColour =
   | string
@@ -42,29 +29,8 @@ type ConfigJson = {
   offers?: RawOffer[];
 };
 
-function makeTicketKey(colour: string, number: number) {
-  return `${colour}::${number}`;
-}
-
-function normaliseColourName(colour: RawColour, index: number) {
-  if (typeof colour === "string") {
-    return colour;
-  }
-
-  return String(
-    colour?.name ||
-      colour?.label ||
-      colour?.value ||
-      colour?.id ||
-      `Colour ${index + 1}`,
-  );
-}
-
-async function tableExists(
-  client: { query: (sql: string, params?: unknown[]) => Promise<any> },
-  tableName: string,
-) {
-  const result = await client.query(
+async function tableExists(tableName: string) {
+  const result = await db.query(
     `
     select exists (
       select 1
@@ -79,11 +45,33 @@ async function tableExists(
   return Boolean(result.rows[0]?.exists);
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<ReserveTicketsResponse | ErrorResponse>,
-) {
-  if (req.method !== "POST") {
+function normaliseColour(colour: RawColour, index: number) {
+  if (typeof colour === "string") {
+    return {
+      id: colour,
+      name: colour,
+      hex: null,
+      sortOrder: index,
+    };
+  }
+
+  const fallbackName =
+    colour?.name ||
+    colour?.label ||
+    colour?.value ||
+    colour?.id ||
+    `Colour ${index + 1}`;
+
+  return {
+    id: colour?.id ?? `colour-${index}`,
+    name: String(fallbackName),
+    hex: colour?.hex ?? null,
+    sortOrder: Number(colour?.sortOrder ?? index),
+  };
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
@@ -94,85 +82,27 @@ export default async function handler(
     return res.status(400).json({ error: "Missing slug" });
   }
 
-  const body = req.body as ReserveTicketsRequest | undefined;
-  const buyerName = body?.buyerName?.trim();
-  const buyerEmail = body?.buyerEmail?.trim().toLowerCase();
-  const tickets = Array.isArray(body?.tickets) ? body.tickets : [];
-
-  if (!buyerName) {
-    return res.status(400).json({ error: "Buyer name is required" });
-  }
-
-  if (!buyerEmail) {
-    return res.status(400).json({ error: "Buyer email is required" });
-  }
-
-  if (tickets.length === 0) {
-    return res.status(400).json({ error: "At least one ticket is required" });
-  }
-
-  const dedupedMap = new Map<string, TicketSelection>();
-
-  for (const ticket of tickets) {
-    if (!ticket?.colour || !Number.isInteger(ticket?.number)) {
-      return res.status(400).json({ error: "Invalid ticket selection" });
-    }
-
-    dedupedMap.set(makeTicketKey(ticket.colour, ticket.number), {
-      colour: ticket.colour,
-      number: ticket.number,
-    });
-  }
-
-  const cleanTickets = Array.from(dedupedMap.values());
-  const client = await db.connect();
-
   try {
-    await client.query("begin");
-
-    const hasReservationsTable = await tableExists(client, "raffle_ticket_reservations");
-    const hasSalesTable = await tableExists(client, "raffle_ticket_sales");
-
-    if (!hasReservationsTable) {
-      await client.query("rollback");
-      return res.status(500).json({
-        error: "Reservation table is missing",
-        details: "raffle_ticket_reservations does not exist",
-      });
-    }
-
-    if (!hasSalesTable) {
-      await client.query("rollback");
-      return res.status(500).json({
-        error: "Sales table is missing",
-        details: "raffle_ticket_sales does not exist",
-      });
-    }
-
-    await client.query(`
-      delete from raffle_ticket_reservations
-      where expires_at <= now()
-    `);
-
-    const raffleResult = await client.query(
+    const raffleResult = await db.query(
       `
       select
-        id::text,
-        slug,
-        title,
-        ticket_price_cents,
-        currency,
-        status,
-        config_json
-      from raffles
-      where slug = $1
+        r.id::text,
+        r.slug,
+        r.title,
+        r.description,
+        r.image_url,
+        r.ticket_price_cents,
+        r.currency,
+        r.status,
+        r.config_json
+      from raffles r
+      where r.slug = $1
       limit 1
       `,
       [slug],
     );
 
     if (raffleResult.rowCount === 0) {
-      await client.query("rollback");
       return res.status(404).json({ error: "Raffle not found" });
     }
 
@@ -182,15 +112,13 @@ export default async function handler(
     const startNumber = Number(config.startNumber ?? 1);
     const endNumber = Number(config.endNumber ?? 1);
 
-    const allowedColours = new Set<string>(
-      Array.isArray(config.colours)
-        ? config.colours.map((colour, index) => normaliseColourName(colour, index))
-        : [],
-    );
+    const colours = Array.isArray(config.colours)
+      ? config.colours.map((colour, index) => normaliseColour(colour, index))
+      : [];
 
-    const offers: RaffleOffer[] = Array.isArray(config.offers)
+    const offers = Array.isArray(config.offers)
       ? config.offers.map((offer, index) => ({
-          id: String(offer.id ?? `offer-${index}`),
+          id: offer.id ?? `${raffle.id}-offer-${index}`,
           label: String(offer.label ?? `Offer ${index + 1}`),
           quantity: Number(offer.quantity ?? 0),
           price:
@@ -202,134 +130,80 @@ export default async function handler(
         }))
       : [];
 
-    for (const ticket of cleanTickets) {
-      if (allowedColours.size > 0 && !allowedColours.has(ticket.colour)) {
-        await client.query("rollback");
-        return res.status(400).json({
-          error: `Invalid colour: ${ticket.colour}`,
-        });
-      }
+    let reservedTickets: Array<{ colour: string; number: number }> = [];
+    let soldTickets: Array<{ colour: string; number: number }> = [];
 
-      if (ticket.number < startNumber || ticket.number > endNumber) {
-        await client.query("rollback");
-        return res.status(400).json({
-          error: `Ticket ${ticket.number} is outside the valid range`,
-        });
-      }
-    }
+    const hasReservationsTable = await tableExists("raffle_ticket_reservations");
+    const hasSalesTable = await tableExists("raffle_ticket_sales");
 
-    const soldResult = await client.query(
-      `
-      select colour, ticket_number
-      from raffle_ticket_sales
-      where raffle_id = $1
-      `,
-      [raffle.id],
-    );
-
-    const reservedResult = await client.query(
-      `
-      select colour, ticket_number
-      from raffle_ticket_reservations
-      where raffle_id = $1
-        and expires_at > now()
-      `,
-      [raffle.id],
-    );
-
-    const unavailable = new Set<string>();
-
-    for (const row of soldResult.rows) {
-      unavailable.add(makeTicketKey(String(row.colour), Number(row.ticket_number)));
-    }
-
-    for (const row of reservedResult.rows) {
-      unavailable.add(makeTicketKey(String(row.colour), Number(row.ticket_number)));
-    }
-
-    for (const ticket of cleanTickets) {
-      if (unavailable.has(makeTicketKey(ticket.colour, ticket.number))) {
-        await client.query("rollback");
-        return res.status(409).json({
-          error: `Ticket ${ticket.colour} #${ticket.number} is no longer available`,
-        });
-      }
-    }
-
-    const pricing = getBestPrice(
-      cleanTickets.length,
-      Number(raffle.ticket_price_cents ?? 0) / 100,
-      offers,
-    );
-
-    const reservationGroupId = randomUUID();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-    for (const ticket of cleanTickets) {
-      await client.query(
+    if (hasReservationsTable) {
+      const reservedResult = await db.query(
         `
-        insert into raffle_ticket_reservations (
-          id,
-          reservation_group_id,
-          raffle_id,
+        select
           colour,
-          ticket_number,
-          buyer_name,
-          buyer_email,
-          expires_at
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+          ticket_number
+        from raffle_ticket_reservations
+        where raffle_id = $1
+          and expires_at > now()
         `,
-        [
-          randomUUID(),
-          reservationGroupId,
-          raffle.id,
-          ticket.colour,
-          ticket.number,
-          buyerName,
-          buyerEmail,
-          expiresAt.toISOString(),
-        ],
+        [raffle.id],
       );
+
+      reservedTickets = reservedResult.rows.map((row) => ({
+        colour: String(row.colour),
+        number: Number(row.ticket_number),
+      }));
     }
 
-    await client.query("commit");
+    if (hasSalesTable) {
+      const soldResult = await db.query(
+        `
+        select
+          colour,
+          ticket_number
+        from raffle_ticket_sales
+        where raffle_id = $1
+        `,
+        [raffle.id],
+      );
+
+      soldTickets = soldResult.rows.map((row) => ({
+        colour: String(row.colour),
+        number: Number(row.ticket_number),
+      }));
+    }
+
+    const isPublicStatus =
+      raffle.status === "active" ||
+      raffle.status === "published";
 
     return res.status(200).json({
       ok: true,
-      reservationGroupId,
-      expiresAt: expiresAt.toISOString(),
-      checkoutDraft: {
-        raffleId: raffle.id,
-        raffleSlug: raffle.slug,
-        raffleTitle: raffle.title,
-        buyerName,
-        buyerEmail,
-        tickets: cleanTickets,
-        quantity: cleanTickets.length,
+      raffle: {
+        id: raffle.id,
+        slug: raffle.slug,
+        title: raffle.title,
+        description: raffle.description ?? null,
+        imageUrl: raffle.image_url ?? null,
+        image_url: raffle.image_url ?? null,
+        startNumber,
+        endNumber,
         currency: raffle.currency,
-        subtotal: pricing.subtotal,
-        discount: pricing.discount,
-        total: pricing.total,
-        pricingBreakdown: {
-          singlesCount: pricing.singlesCount,
-          singlesTotal: pricing.singlesTotal,
-          appliedOffers: pricing.appliedOffers,
-        },
+        ticketPrice: Number(raffle.ticket_price_cents ?? 0) / 100,
+        isActive: isPublicStatus,
+        is_active: isPublicStatus,
+        colours,
+        offers,
+        reservedTickets,
+        soldTickets,
       },
     });
   } catch (error) {
-    try {
-      await client.query("rollback");
-    } catch {}
-
-    console.error("POST /api/public/raffles/[slug]/reserve failed", error);
+    console.error("GET /api/public/raffles/[slug] failed", error);
 
     return res.status(500).json({
       error: "Internal server error",
       details: error instanceof Error ? error.message : String(error),
     });
-  } finally {
-    client.release();
   }
 }
