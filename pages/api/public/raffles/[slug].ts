@@ -1,15 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { db } from "../../../../src/server/db";
-import type { PublicRaffleResponse } from "../../../../src/types/raffles";
 
-type ErrorResponse = {
-  error: string;
-};
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<PublicRaffleResponse | ErrorResponse>,
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -142,6 +134,10 @@ export default async function handler(
     });
   } catch (error) {
     console.error("GET /api/public/raffles/[slug] failed", error);
-    return res.status(500).json({ error: "Internal server error" });
+
+    return res.status(500).json({
+      error: "Internal server error",
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 }
