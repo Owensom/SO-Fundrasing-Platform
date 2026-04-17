@@ -21,12 +21,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         r.slug,
         r.title,
         r.description,
-        r.start_number,
-        r.end_number,
+        r."startNumber" as "startNumber",
+        r."endNumber" as "endNumber",
         r.currency,
-        r.ticket_price,
-        r.image_url,
-        r.is_active
+        r."ticketPrice" as "ticketPrice",
+        r."imageUrl" as "imageUrl",
+        r."isActive" as "isActive"
       from raffles r
       where r.slug = $1
       limit 1
@@ -46,10 +46,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         rc.id::text,
         rc.name,
         rc.hex,
-        coalesce(rc.sort_order, 0) as sort_order
+        coalesce(rc."sortOrder", 0) as "sortOrder"
       from raffle_colours rc
-      where rc.raffle_id = $1
-      order by coalesce(rc.sort_order, 0), rc.name
+      where rc."raffleId" = $1
+      order by coalesce(rc."sortOrder", 0), rc.name
       `,
       [raffle.id],
     );
@@ -61,11 +61,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ro.label,
         ro.quantity,
         ro.price,
-        coalesce(ro.is_active, true) as is_active,
-        coalesce(ro.sort_order, 0) as sort_order
+        coalesce(ro."isActive", true) as "isActive",
+        coalesce(ro."sortOrder", 0) as "sortOrder"
       from raffle_offers ro
-      where ro.raffle_id = $1
-      order by coalesce(ro.sort_order, 0), ro.quantity
+      where ro."raffleId" = $1
+      order by coalesce(ro."sortOrder", 0), ro.quantity
       `,
       [raffle.id],
     );
@@ -74,10 +74,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `
       select
         colour,
-        ticket_number
+        "ticketNumber" as "ticketNumber"
       from raffle_ticket_reservations
-      where raffle_id = $1
-        and expires_at > now()
+      where "raffleId" = $1
+        and "expiresAt" > now()
       `,
       [raffle.id],
     );
@@ -86,9 +86,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `
       select
         colour,
-        ticket_number
+        "ticketNumber" as "ticketNumber"
       from raffle_ticket_sales
-      where raffle_id = $1
+      where "raffleId" = $1
       `,
       [raffle.id],
     );
@@ -100,35 +100,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         slug: raffle.slug,
         title: raffle.title,
         description: raffle.description ?? null,
-        imageUrl: raffle.image_url ?? null,
-        image_url: raffle.image_url ?? null,
-        startNumber: Number(raffle.start_number),
-        endNumber: Number(raffle.end_number),
+        imageUrl: raffle.imageUrl ?? null,
+        image_url: raffle.imageUrl ?? null,
+        startNumber: Number(raffle.startNumber),
+        endNumber: Number(raffle.endNumber),
         currency: raffle.currency,
-        ticketPrice: Number(raffle.ticket_price),
-        isActive: Boolean(raffle.is_active),
-        is_active: Boolean(raffle.is_active),
+        ticketPrice: Number(raffle.ticketPrice),
+        isActive: Boolean(raffle.isActive),
+        is_active: Boolean(raffle.isActive),
         colours: coloursResult.rows.map((row) => ({
           id: row.id,
           name: row.name,
           hex: row.hex,
-          sortOrder: Number(row.sort_order),
+          sortOrder: Number(row.sortOrder),
         })),
         offers: offersResult.rows.map((row) => ({
           id: row.id,
           label: row.label,
           quantity: Number(row.quantity),
           price: Number(row.price),
-          isActive: Boolean(row.is_active),
-          sortOrder: Number(row.sort_order),
+          isActive: Boolean(row.isActive),
+          sortOrder: Number(row.sortOrder),
         })),
         reservedTickets: reservedResult.rows.map((row) => ({
           colour: row.colour,
-          number: Number(row.ticket_number),
+          number: Number(row.ticketNumber),
         })),
         soldTickets: soldResult.rows.map((row) => ({
           colour: row.colour,
-          number: Number(row.ticket_number),
+          number: Number(row.ticketNumber),
         })),
       },
     });
