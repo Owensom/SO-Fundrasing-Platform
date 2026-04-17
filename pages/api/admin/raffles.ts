@@ -5,6 +5,14 @@ import {
   updateRaffle,
 } from "../../../api/_lib/raffles-repo";
 
+type RaffleStatus = "draft" | "published" | "closed";
+type CurrencyCode = "GBP" | "USD" | "EUR";
+
+function normalizeCurrency(value: unknown): CurrencyCode {
+  if (value === "USD" || value === "EUR") return value;
+  return "GBP";
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -24,6 +32,7 @@ export default async function handler(
           title: item.title,
           description: item.description,
           imageUrl: item.image_url || null,
+          currency: normalizeCurrency((item as any).currency),
           ticketPrice: item.ticket_price,
           totalTickets: item.total_tickets,
           soldTickets: item.sold_tickets,
@@ -45,13 +54,19 @@ export default async function handler(
         slug: String(body.slug || "").trim(),
         description: String(body.description || ""),
         image_url: String(body.heroImageUrl || body.imageUrl || ""),
+        currency: normalizeCurrency(body.currency),
         ticket_price: Number(body.ticketPrice || 0),
         total_tickets: Number(body.totalTickets || 0),
         sold_tickets: Number(body.soldTickets || 0),
-        status: String(body.status || "published") as "draft" | "published" | "closed",
-      });
+        status: String(body.status || "published") as RaffleStatus,
+      } as any);
 
-      return res.status(201).json({ raffle: created });
+      return res.status(201).json({
+        raffle: {
+          ...created,
+          currency: normalizeCurrency((created as any).currency ?? body.currency),
+        },
+      });
     }
 
     if (req.method === "PUT") {
@@ -62,23 +77,32 @@ export default async function handler(
         return res.status(400).json({ error: "Missing raffle id" });
       }
 
-      const updated = await updateRaffle(id, {
-        tenant_slug: String(body.tenantSlug || "demo-a"),
-        title: String(body.title || "").trim(),
-        slug: String(body.slug || "").trim(),
-        description: String(body.description || ""),
-        image_url: String(body.heroImageUrl || body.imageUrl || ""),
-        ticket_price: Number(body.ticketPrice || 0),
-        total_tickets: Number(body.totalTickets || 0),
-        sold_tickets: Number(body.soldTickets || 0),
-        status: String(body.status || "published") as "draft" | "published" | "closed",
-      });
+      const updated = await updateRaffle(
+        id,
+        {
+          tenant_slug: String(body.tenantSlug || "demo-a"),
+          title: String(body.title || "").trim(),
+          slug: String(body.slug || "").trim(),
+          description: String(body.description || ""),
+          image_url: String(body.heroImageUrl || body.imageUrl || ""),
+          currency: normalizeCurrency(body.currency),
+          ticket_price: Number(body.ticketPrice || 0),
+          total_tickets: Number(body.totalTickets || 0),
+          sold_tickets: Number(body.soldTickets || 0),
+          status: String(body.status || "published") as RaffleStatus,
+        } as any
+      );
 
       if (!updated) {
         return res.status(404).json({ error: "Raffle not found" });
       }
 
-      return res.status(200).json({ raffle: updated });
+      return res.status(200).json({
+        raffle: {
+          ...updated,
+          currency: normalizeCurrency((updated as any).currency ?? body.currency),
+        },
+      });
     }
 
     return res.status(405).json({ error: "Method not allowed" });
