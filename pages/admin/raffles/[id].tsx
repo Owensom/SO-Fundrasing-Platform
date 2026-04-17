@@ -391,17 +391,27 @@ export default function AdminRaffleEditPage() {
     const input = buildPayloadBase();
 
     if (existingRaffleId) {
-      return updateRaffle(existingRaffleId, input);
+      const updated = await updateRaffle(existingRaffleId, input);
+      setExistingRaffleId(String(updated.id ?? existingRaffleId));
+      return updated;
     }
 
     const raffles = await listAdminRaffles();
+
     const matched = raffles.find(
-      (raffle) => raffle.slug === input.slug || String(raffle.id) === routeId,
+      (raffle) =>
+        String(raffle.id) === routeId ||
+        raffle.slug === routeId ||
+        raffle.slug === input.slug,
     );
 
     if (matched?.id) {
-      setExistingRaffleId(String(matched.id));
-      return updateRaffle(String(matched.id), input);
+      const realId = String(matched.id);
+      setExistingRaffleId(realId);
+
+      const updated = await updateRaffle(realId, input);
+      setExistingRaffleId(String(updated.id ?? realId));
+      return updated;
     }
 
     const created = await createRaffle(input);
