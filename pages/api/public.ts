@@ -1,44 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getRaffleBySlug } from "../../api/_lib/raffles-repo";
+import {
+  createRaffle,
+  listRaffles,
+  updateRaffle,
+} from "../../../api/_lib/raffles-repo";
 
-type Offer = {
-  id?: string;
-  label: string;
-  price: number;
-  quantity: number;
-};
+type RaffleStatus = "draft" | "published" | "closed";
+type CurrencyCode = "GBP" | "USD" | "EUR";
 
-type TicketRef = {
-  colour: string;
-  number: number;
-};
-
-type PublicRaffleResponse = {
-  id: string;
-  tenantSlug: string;
-  slug: string;
-  title: string;
-  description: string;
-  imageUrl: string | null;
-  currency: "GBP" | "USD" | "EUR";
-  ticketPrice: number;
-  totalTickets: number;
-  soldTickets: number;
-  remainingTickets: number;
-  status: "draft" | "published" | "closed";
-  createdAt: string;
-  updatedAt: string;
-  startNumber: number;
-  endNumber: number;
-  numbersPerColour: number;
-  colourCount: number;
-  colours: string[];
-  offers: Offer[];
-  sold: TicketRef[];
-  reserved: TicketRef[];
-};
-
-function normalizeCurrency(value: unknown): "GBP" | "USD" | "EUR" {
+function normalizeCurrency(value: unknown): CurrencyCode {
   if (value === "USD" || value === "EUR") return value;
   return "GBP";
 }
@@ -53,129 +23,158 @@ function toStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function toOffers(value: unknown): Offer[] {
+function normalizeOffers(value: unknown) {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item, index): Offer | null => {
+    .map((item, index) => {
       if (!item || typeof item !== "object") return null;
 
       const offer = item as Record<string, unknown>;
-      const label = typeof offer.label === "string" ? offer.label : "";
+      const label = typeof offer.label === "string" ? offer.label.trim() : "";
       const quantity = toNumber(offer.quantity ?? offer.tickets, 0);
       const price = toNumber(offer.price, 0);
 
-      if (!label.trim() || quantity <= 0 || price < 0) return null;
-
-      const id =
-        typeof offer.id === "string" && offer.id.trim()
-          ? offer.id
-          : `offer-${index}`;
+      if (!label || quantity <= 0 || price < 0) return null;
 
       return {
-        id,
-        label: label.trim(),
+        id:
+          typeof offer.id === "string" && offer.id.trim()
+            ? offer.id
+            : `offer-${index}`,
+        label,
         quantity,
+        tickets: quantity,
         price,
+        is_active:
+          typeof offer.is_active === "boolean" ? offer.is_active : true,
+        sort_order: toNumber(offer.sort_order, index),
       };
     })
-    .filter((item): item is Offer => item !== null);
+    .filter(Boolean);
 }
 
-function toTickets(value: unknown): TicketRef[] {
+function normalizeTickets(value: unknown) {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item): TicketRef | null => {
+    .map((item) => {
       if (!item || typeof item !== "object") return null;
 
       const ticket = item as Record<string, unknown>;
-      const colour = typeof ticket.colour === "string" ? ticket.colour : "";
+      const colour =
+        typeof ticket.colour === "string" ? ticket.colour.trim() : "";
       const number = toNumber(ticket.number, NaN);
 
       if (!colour || !Number.isFinite(number)) return null;
 
       return { colour, number };
     })
-    .filter((item): item is TicketRef => item !== null);
+    .filter(Boolean);
 }
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse,
+  res: NextApiResponse
 ) {
   try {
-    if (req.method !== "GET") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    const slug =
-      typeof req.query.slug === "string" ? req.query.slug.trim() : "";
-
     const tenantSlug =
       typeof req.query.tenantSlug === "string"
         ? req.query.tenantSlug
-        : "demo-a";
+        : typeof req.body?.tenantSlug === "string"
+          ? req.body.tenantSlug
+          : "demo-a";
 
-    if (!slug) {
-      return res.status(400).json({ error: "Missing slug" });
+    if (req.method === "GET") {
+      const raffles = await listRaffles(tenantSlug);
+
+      return res.status(200).json({
+        raffles: raffles.map((item) => ({
+          id: item.id,
+          tenantSlug: item.tenant_slug,
+          slug: item.slug,
+          title: item.title,
+          description: item.description,
+          imageUrl: item.image_url || null,
+          currency: item.currency || "GBP",
+          ticketPrice: item.ticket_price,
+          totalTickets: item.total_tickets,
+          soldTickets: item.sold_tickets,
+          remainingTickets: item.remaining_tickets,
+          status: item.status,
+          config: item.config_json || {},
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        })),
+      });
     }
 
-    const raffle = await getRaffleBySlug(tenantSlug, slug);
+    if (req.method === "POST") {
+      const body = req.body ?? {};
 
-    if (!raffle) {
-      return res.status(404).json({ error: "Raffle not found" });
+      const created = await createRaffle({
+        tenant_slug: tenantSlug,
+        title: String(body.title || "").trim(),
+        slug: String(body.slug || "").trim(),
+        description: String(body.description || ""),
+        image_url: String(body.imageUrl || body.heroImageUrl || ""),
+        currency: normalizeCurrency(body.currency),
+        ticket_price: toNumber(body.ticketPrice, 0),
+        total_tickets: toNumber(body.totalTickets, 0),
+        sold_tickets: toNumber(body.soldTickets, 0),
+        status: String(body.status || "draft") as RaffleStatus,
+
+        startNumber: toNumber(body.startNumber, 0),
+        endNumber: toNumber(body.endNumber, 0),
+        numbersPerColour: toNumber(body.numbersPerColour, 0),
+        colourCount: toNumber(body.colourCount, 0),
+        colours: toStringArray(body.colours),
+        offers: normalizeOffers(body.offers),
+        sold: normalizeTickets(body.sold),
+        reserved: normalizeTickets(body.reserved),
+      });
+
+      return res.status(201).json({ raffle: created });
     }
 
-    const config =
-      raffle &&
-      typeof (raffle as any).config_json === "object" &&
-      (raffle as any).config_json
-        ? ((raffle as any).config_json as Record<string, unknown>)
-        : {};
+    if (req.method === "PUT") {
+      const body = req.body ?? {};
+      const id = String(body.id || "").trim();
 
-    const startNumber = toNumber(config.startNumber, 1);
-    const endNumber = toNumber(config.endNumber, 0);
-    const colours = toStringArray(config.colours);
-    const offers = toOffers(config.offers);
-    const sold = toTickets(config.sold);
-    const reserved = toTickets(config.reserved);
+      if (!id) {
+        return res.status(400).json({ error: "Missing raffle id" });
+      }
 
-    const numbersPerColour =
-      endNumber >= startNumber ? endNumber - startNumber + 1 : 0;
+      const updated = await updateRaffle(id, {
+        tenant_slug: tenantSlug,
+        title: String(body.title || "").trim(),
+        slug: String(body.slug || "").trim(),
+        description: String(body.description || ""),
+        image_url: String(body.imageUrl || body.heroImageUrl || ""),
+        currency: normalizeCurrency(body.currency),
+        ticket_price: toNumber(body.ticketPrice, 0),
+        total_tickets: toNumber(body.totalTickets, 0),
+        sold_tickets: toNumber(body.soldTickets, 0),
+        status: String(body.status || "draft") as RaffleStatus,
 
-    const item: PublicRaffleResponse = {
-      id: String((raffle as any).id ?? ""),
-      tenantSlug: String((raffle as any).tenant_slug ?? tenantSlug),
-      slug: String((raffle as any).slug ?? slug),
-      title: String((raffle as any).title ?? ""),
-      description: String((raffle as any).description ?? ""),
-      imageUrl:
-        typeof (raffle as any).image_url === "string"
-          ? (raffle as any).image_url
-          : null,
-      currency: normalizeCurrency((raffle as any).currency),
-      ticketPrice: toNumber((raffle as any).ticket_price, 0),
-      totalTickets: toNumber((raffle as any).total_tickets, 0),
-      soldTickets: toNumber((raffle as any).sold_tickets, 0),
-      remainingTickets: toNumber((raffle as any).remaining_tickets, 0),
-      status: ((raffle as any).status || "draft") as
-        | "draft"
-        | "published"
-        | "closed",
-      createdAt: String((raffle as any).created_at ?? ""),
-      updatedAt: String((raffle as any).updated_at ?? ""),
-      startNumber,
-      endNumber,
-      numbersPerColour,
-      colourCount: colours.length,
-      colours,
-      offers,
-      sold,
-      reserved,
-    };
+        startNumber: toNumber(body.startNumber, 0),
+        endNumber: toNumber(body.endNumber, 0),
+        numbersPerColour: toNumber(body.numbersPerColour, 0),
+        colourCount: toNumber(body.colourCount, 0),
+        colours: toStringArray(body.colours),
+        offers: normalizeOffers(body.offers),
+        sold: normalizeTickets(body.sold),
+        reserved: normalizeTickets(body.reserved),
+      });
 
-    return res.status(200).json({ item });
+      if (!updated) {
+        return res.status(404).json({ error: "Raffle not found" });
+      }
+
+      return res.status(200).json({ raffle: updated });
+    }
+
+    return res.status(405).json({ error: "Method not allowed" });
   } catch (error: any) {
     return res.status(500).json({
       error: error?.message || "Internal server error",
