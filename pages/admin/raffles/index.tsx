@@ -76,57 +76,74 @@ export default function AdminRafflesIndexPage() {
           </Link>
         </div>
 
-        {loading ? <div style={styles.card}>Loading raffles...</div> : null}
+        {loading && <div style={styles.card}>Loading raffles...</div>}
 
-        {!loading && error ? <div style={styles.error}>{error}</div> : null}
+        {!loading && error && <div style={styles.error}>{error}</div>}
 
-        {!loading && !error && raffles.length === 0 ? (
+        {!loading && !error && raffles.length === 0 && (
           <div style={styles.card}>No raffles found yet.</div>
-        ) : null}
+        )}
 
-        {!loading && !error && raffles.length > 0 ? (
+        {!loading && !error && raffles.length > 0 && (
           <div style={styles.list}>
             {raffles.map((raffle) => (
               <div key={raffle.id} style={styles.card}>
                 <div style={styles.cardHeader}>
                   <div style={styles.cardHeaderLeft}>
-                    <h2 style={styles.cardTitle}>{raffle.title || raffle.slug}</h2>
+                    <h2 style={styles.cardTitle}>
+                      {raffle.title || raffle.slug}
+                    </h2>
 
                     <div style={styles.metaRow}>
-                      <span style={styles.badge}>{raffle.status || "draft"}</span>
-                      <span style={styles.metaText}>Slug: {raffle.slug}</span>
-                      <span style={styles.metaText}>ID: {raffle.id}</span>
+                      <span style={styles.badge}>
+                        {raffle.status || "draft"}
+                      </span>
+                      <span style={styles.metaText}>
+                        Slug: {raffle.slug}
+                      </span>
+                      <span style={styles.metaText}>
+                        ID: {raffle.id}
+                      </span>
                     </div>
                   </div>
 
                   <Link
-                    href={`/admin/raffles/${encodeURIComponent(raffle.slug || raffle.id)}`}
+                    href={`/admin/raffles/${encodeURIComponent(
+                      raffle.slug || raffle.id
+                    )}`}
                     style={styles.editButton}
                   >
                     Open
                   </Link>
                 </div>
 
-                {raffle.description ? (
+                {raffle.description && (
                   <p style={styles.description}>{raffle.description}</p>
-                ) : null}
+                )}
 
                 <div style={styles.statsRow}>
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Ticket price</div>
                     <div style={styles.statValue}>
-                      {formatMoney(raffle.ticketPrice, raffle.currency || "GBP")}
+                      {formatMoney(
+                        raffle.ticketPrice,
+                        raffle.currency || "GBP"
+                      )}
                     </div>
                   </div>
 
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Total tickets</div>
-                    <div style={styles.statValue}>{raffle.totalTickets ?? 0}</div>
+                    <div style={styles.statValue}>
+                      {raffle.totalTickets ?? 0}
+                    </div>
                   </div>
 
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Sold</div>
-                    <div style={styles.statValue}>{raffle.soldTickets ?? 0}</div>
+                    <div style={styles.statValue}>
+                      {raffle.soldTickets ?? 0}
+                    </div>
                   </div>
                 </div>
 
@@ -145,7 +162,7 @@ export default function AdminRafflesIndexPage() {
               </div>
             ))}
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );
@@ -203,7 +220,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardHeaderLeft: {
     flex: 1,
-    minWidth: 0,
   },
   cardTitle: {
     margin: 0,
@@ -217,7 +233,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   badge: {
-    display: "inline-block",
     padding: "4px 8px",
     borderRadius: 999,
     background: "#eef2ff",
@@ -231,4 +246,60 @@ const styles: Record<string, React.CSSProperties> = {
   },
   editButton: {
     display: "inline-flex",
-    alignItems: "center
+    alignItems: "center",
+    justifyContent: "center",
+    height: 38,
+    padding: "0 12px",
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    color: "#111827",
+    textDecoration: "none",
+    fontWeight: 600,
+  },
+  description: {
+    color: "#4b5563",
+    marginTop: 12,
+  },
+  statsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 12,
+    marginTop: 16,
+  },
+  statBox: {
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
+    padding: 12,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  statValue: {
+    marginTop: 4,
+    fontSize: 20,
+    fontWeight: 700,
+  },
+  footerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  footerText: {
+    color: "#6b7280",
+  },
+  publicLink: {
+    color: "#2563eb",
+    fontWeight: 600,
+    textDecoration: "none",
+  },
+  error: {
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    padding: 12,
+    borderRadius: 10,
+  },
+};
