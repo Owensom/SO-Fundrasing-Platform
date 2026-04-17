@@ -25,11 +25,11 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const raffleIdParam = req.query.raffleId;
-  const raffleId = Array.isArray(raffleIdParam) ? raffleIdParam[0] : raffleIdParam;
+  const slugParam = req.query.slug;
+  const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
 
-  if (!raffleId) {
-    return res.status(400).json({ error: "Missing raffle id" });
+  if (!slug) {
+    return res.status(400).json({ error: "Missing slug" });
   }
 
   const body = req.body as ReserveTicketsRequest;
@@ -84,10 +84,10 @@ export default async function handler(
         currency,
         ticket_price
       from raffles
-      where id = $1
+      where slug = $1
       limit 1
       `,
-      [raffleId],
+      [slug],
     );
 
     if (raffleResult.rowCount === 0) {
@@ -96,6 +96,7 @@ export default async function handler(
     }
 
     const raffle = raffleResult.rows[0];
+    const raffleId = raffle.id as string;
 
     const coloursResult = await client.query(
       `
@@ -251,7 +252,7 @@ export default async function handler(
     });
   } catch (error) {
     await client.query("rollback");
-    console.error("POST /api/public/raffles/[raffleId]/reserve failed", error);
+    console.error("POST /api/public/raffles/[slug]/reserve failed", error);
     return res.status(500).json({ error: "Internal server error" });
   } finally {
     client.release();
