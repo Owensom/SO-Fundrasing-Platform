@@ -14,28 +14,50 @@ type ErrorResponse = {
   details?: string;
 };
 
+type RawColour =
+  | string
+  | {
+      id?: string;
+      name?: string;
+      label?: string;
+      value?: string;
+      hex?: string | null;
+      sortOrder?: number;
+    };
+
+type RawOffer = {
+  id?: string;
+  label?: string;
+  quantity?: number;
+  price?: number;
+  priceCents?: number;
+  isActive?: boolean;
+  sortOrder?: number;
+};
+
 type ConfigJson = {
   startNumber?: number;
   endNumber?: number;
-  colours?: Array<{
-    id?: string;
-    name: string;
-    hex?: string | null;
-    sortOrder?: number;
-  }>;
-  offers?: Array<{
-    id?: string;
-    label: string;
-    quantity: number;
-    price?: number;
-    priceCents?: number;
-    isActive?: boolean;
-    sortOrder?: number;
-  }>;
+  colours?: RawColour[];
+  offers?: RawOffer[];
 };
 
 function makeTicketKey(colour: string, number: number) {
   return `${colour}::${number}`;
+}
+
+function normaliseColourName(colour: RawColour, index: number) {
+  if (typeof colour === "string") {
+    return colour;
+  }
+
+  return String(
+    colour?.name ||
+      colour?.label ||
+      colour?.value ||
+      colour?.id ||
+      `Colour ${index + 1}`,
+  );
 }
 
 async function tableExists(
@@ -162,7 +184,7 @@ export default async function handler(
 
     const allowedColours = new Set<string>(
       Array.isArray(config.colours)
-        ? config.colours.map((colour) => String(colour.name))
+        ? config.colours.map((colour, index) => normaliseColourName(colour, index))
         : [],
     );
 
