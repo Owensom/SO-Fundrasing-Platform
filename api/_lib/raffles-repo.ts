@@ -281,6 +281,7 @@ export async function updateRaffle(
       status = $10,
       updated_at = now()
     where id = $1
+       or (tenant_slug = $2 and slug = $3)
     returning
       id,
       tenant_slug,
