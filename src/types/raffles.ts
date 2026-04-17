@@ -3,6 +3,8 @@ export type TicketRef = {
   number: number;
 };
 
+export type CurrencyCode = "GBP" | "USD" | "EUR";
+
 export type RaffleOffer = {
   id?: string;
   label: string;
@@ -35,6 +37,7 @@ export type Raffle = {
   colourCount: number;
   totalTickets: number;
 
+  currency: CurrencyCode;
   ticketPrice: number;
   offers: RaffleOffer[];
   colours: string[];
@@ -61,6 +64,7 @@ export type SaveRaffleInput = {
   colourCount: number;
   totalTickets: number;
 
+  currency: CurrencyCode;
   ticketPrice: number;
   offers: RaffleOffer[];
   colours: string[];
