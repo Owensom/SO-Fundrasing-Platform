@@ -45,12 +45,19 @@ export type Raffle = {
   id: string;
   slug: string;
   title: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  image_url?: string | null;
   startNumber: number;
   endNumber: number;
   currency: string;
   ticketPrice: number;
   colours: RaffleColour[];
   offers: RaffleOffer[];
+  isActive?: boolean;
+  is_active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type RaffleDetails = Raffle & {
@@ -63,10 +70,13 @@ export type PublicRaffle = RaffleDetails;
 export type SaveRaffleInput = {
   slug: string;
   title: string;
+  description?: string | null;
+  imageUrl?: string | null;
   startNumber: number;
   endNumber: number;
   currency: string;
   ticketPrice: number;
+  isActive?: boolean;
   colours: Array<{
     id?: string;
     name: string;
