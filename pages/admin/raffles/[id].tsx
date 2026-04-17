@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { createRaffle, getAdminRaffle, updateRaffle } from "../../../src/api";
+import {
+  createRaffle,
+  getAdminRaffle,
+  listAdminRaffles,
+  updateRaffle,
+} from "../../../src/api";
 
 type Offer = {
   id: string;
@@ -71,7 +76,7 @@ export default function AdminRaffleEditPage() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [existingRaffleId, setExistingRaffleId] = useState<string>("");
+  const [existingRaffleId, setExistingRaffleId] = useState("");
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -98,11 +103,34 @@ export default function AdminRaffleEditPage() {
       setStatusMessage("");
 
       try {
-        const raffle = await getAdminRaffle(routeId);
+        const raffles = await listAdminRaffles();
 
         if (cancelled) return;
 
-        setExistingRaffleId(String(raffle.id ?? routeId));
+        const matched = raffles.find(
+          (raffle) => String(raffle.id) === routeId || raffle.slug === routeId,
+        );
+
+        if (!matched?.id) {
+          setExistingRaffleId("");
+          setTitle("");
+          setSlug(routeId.includes("-") ? routeId : "");
+          setDescription("");
+          setImageUrl("");
+          setStartNumber("");
+          setEndNumber("");
+          setTicketPrice("");
+          setOffers([]);
+          setColours([]);
+          setStatusMessage("Raffle not found in storage yet. Saving will create it.");
+          return;
+        }
+
+        const raffle = await getAdminRaffle(String(matched.id));
+
+        if (cancelled) return;
+
+        setExistingRaffleId(String(raffle.id ?? matched.id));
         setTitle(raffle.title ?? "");
         setSlug(raffle.slug ?? "");
         setDescription(raffle.description ?? "");
@@ -129,10 +157,9 @@ export default function AdminRaffleEditPage() {
       } catch {
         if (cancelled) return;
 
-        // New / missing raffle fallback: leave editable blank state
         setExistingRaffleId("");
         setTitle("");
-        setSlug("");
+        setSlug(routeId.includes("-") ? routeId : "");
         setDescription("");
         setImageUrl("");
         setStartNumber("");
@@ -348,6 +375,16 @@ export default function AdminRaffleEditPage() {
 
     if (existingRaffleId) {
       return updateRaffle(existingRaffleId, input);
+    }
+
+    const raffles = await listAdminRaffles();
+    const matched = raffles.find(
+      (raffle) => raffle.slug === input.slug || String(raffle.id) === routeId,
+    );
+
+    if (matched?.id) {
+      setExistingRaffleId(String(matched.id));
+      return updateRaffle(String(matched.id), input);
     }
 
     const created = await createRaffle(input);
