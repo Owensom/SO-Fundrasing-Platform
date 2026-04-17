@@ -18,9 +18,9 @@ export default async function handler(
       typeof req.query.tenantSlug === "string" ? req.query.tenantSlug : "demo-a";
 
     // Important: do not hard-error when id is missing
-    if (!id) {
-      return res.status(200).json({ raffle: null });
-    }
+   if (!id) {
+  return res.status(200).json({ raffle: null, debug: "raffle-details-no-id-ok" });
+}
 
     let raffle = await getRaffleById(id);
 
