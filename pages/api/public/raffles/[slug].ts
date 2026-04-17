@@ -21,6 +21,22 @@ type ConfigJson = {
   }>;
 };
 
+async function tableExists(tableName: string) {
+  const result = await db.query(
+    `
+    select exists (
+      select 1
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = $1
+    ) as exists
+    `,
+    [tableName],
+  );
+
+  return Boolean(result.rows[0]?.exists);
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -86,28 +102,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }))
       : [];
 
-    const reservedResult = await db.query(
-      `
-      select
-        colour,
-        "ticketNumber" as "ticketNumber"
-      from raffle_ticket_reservations
-      where "raffleId" = $1
-        and "expiresAt" > now()
-      `,
-      [raffle.id],
-    );
+    let reservedTickets: Array<{ colour: string; number: number }> = [];
+    let soldTickets: Array<{ colour: string; number: number }> = [];
 
-    const soldResult = await db.query(
-      `
-      select
-        colour,
-        "ticketNumber" as "ticketNumber"
-      from raffle_ticket_sales
-      where "raffleId" = $1
-      `,
-      [raffle.id],
-    );
+    const hasReservationsTable = await tableExists("raffle_ticket_reservations");
+    const hasSalesTable = await tableExists("raffle_ticket_sales");
+
+    if (hasReservationsTable) {
+      const reservedResult = await db.query(
+        `
+        select
+          colour,
+          ticket_number
+        from raffle_ticket_reservations
+        where raffle_id = $1
+          and expires_at > now()
+        `,
+        [raffle.id],
+      );
+
+      reservedTickets = reservedResult.rows.map((row) => ({
+        colour: row.colour,
+        number: Number(row.ticket_number),
+      }));
+    }
+
+    if (hasSalesTable) {
+      const soldResult = await db.query(
+        `
+        select
+          colour,
+          ticket_number
+        from raffle_ticket_sales
+        where raffle_id = $1
+        `,
+        [raffle.id],
+      );
+
+      soldTickets = soldResult.rows.map((row) => ({
+        colour: row.colour,
+        number: Number(row.ticket_number),
+      }));
+    }
 
     return res.status(200).json({
       ok: true,
@@ -126,14 +162,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         is_active: raffle.status === "active",
         colours,
         offers,
-        reservedTickets: reservedResult.rows.map((row) => ({
-          colour: row.colour,
-          number: Number(row.ticketNumber),
-        })),
-        soldTickets: soldResult.rows.map((row) => ({
-          colour: row.colour,
-          number: Number(row.ticketNumber),
-        })),
+        reservedTickets,
+        soldTickets,
       },
     });
   } catch (error) {
