@@ -1,7 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import { getPublicRaffleBySlug } from "../api";
-import type { RaffleDetails, TicketRef } from "../types/raffles";
+import React, { useMemo, useState } from "react";
+import type { TicketRef } from "../types/raffles";
 import {
   hasTicket,
   makeTicket,
@@ -10,67 +8,59 @@ import {
   ticketKey,
 } from "../lib/tickets";
 
-export default function PublicRafflePage() {
-  const { slug = "" } = useParams();
+type Offer = {
+  label: string;
+  price: number;
+  quantity: number;
+};
 
-  const [raffle, setRaffle] = useState<RaffleDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeColour, setActiveColour] = useState("");
+const demoRaffle = {
+  title: "SO Foundation Demo Raffle",
+  startNumber: 1,
+  endNumber: 200,
+  ticketPrice: 2,
+  offers: [
+    { label: "5 for £8", price: 8, quantity: 5 },
+    { label: "10 for £15", price: 15, quantity: 10 },
+  ] as Offer[],
+  colours: ["#ef4444", "#3b82f6", "#22c55e"],
+
+  sold: [
+    { colour: "#ef4444", number: 5 },
+    { colour: "#ef4444", number: 12 },
+    { colour: "#3b82f6", number: 12 },
+    { colour: "#22c55e", number: 25 },
+  ] as TicketRef[],
+
+  reserved: [
+    { colour: "#ef4444", number: 7 },
+    { colour: "#3b82f6", number: 20 },
+  ] as TicketRef[],
+};
+
+export default function PublicRafflePage() {
+  const [activeColour, setActiveColour] = useState<string>(
+    demoRaffle.colours[0] || ""
+  );
   const [selectedTickets, setSelectedTickets] = useState<TicketRef[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const data = await getPublicRaffleBySlug(slug);
-
-        if (cancelled) return;
-
-        setRaffle(data);
-        setActiveColour(data.colours[0] || "");
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load raffle");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    if (slug) {
-      load();
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
   const numbers = useMemo(() => {
-    if (!raffle) return [];
     return Array.from(
-      { length: raffle.endNumber - raffle.startNumber + 1 },
-      (_, i) => raffle.startNumber + i,
+      { length: demoRaffle.endNumber - demoRaffle.startNumber + 1 },
+      (_, i) => demoRaffle.startNumber + i
     );
-  }, [raffle]);
+  }, []);
 
   const totalTickets = useMemo(() => {
-    if (!raffle) return 0;
-    return numbers.length * raffle.colours.length;
-  }, [raffle, numbers.length]);
+    return numbers.length * demoRaffle.colours.length;
+  }, [numbers.length]);
 
   function isSold(colour: string, number: number) {
-    return raffle ? hasTicket(raffle.sold || [], makeTicket(colour, number)) : false;
+    return hasTicket(demoRaffle.sold, makeTicket(colour, number));
   }
 
   function isReserved(colour: string, number: number) {
-    return raffle
-      ? hasTicket(raffle.reserved || [], makeTicket(colour, number))
-      : false;
+    return hasTicket(demoRaffle.reserved, makeTicket(colour, number));
   }
 
   function isUnavailable(colour: string, number: number) {
@@ -87,18 +77,16 @@ export default function PublicRafflePage() {
     if (isUnavailable(colour, number)) return;
 
     setSelectedTickets((prev) =>
-      hasTicket(prev, ticket) ? removeTicket(prev, ticket) : [...prev, ticket],
+      hasTicket(prev, ticket) ? removeTicket(prev, ticket) : [...prev, ticket]
     );
   }
 
   function calculateTotal() {
-    if (!raffle) return 0;
-
     let remaining = selectedTickets.length;
     let total = 0;
 
-    const sortedOffers = [...raffle.offers].sort(
-      (a, b) => b.quantity - a.quantity,
+    const sortedOffers = [...demoRaffle.offers].sort(
+      (a, b) => b.quantity - a.quantity
     );
 
     for (const offer of sortedOffers) {
@@ -108,20 +96,18 @@ export default function PublicRafflePage() {
       }
     }
 
-    total += remaining * raffle.ticketPrice;
+    total += remaining * demoRaffle.ticketPrice;
     return total;
   }
 
   const ticketsForActiveColour = selectedTickets.filter(
-    (ticket) => ticket.colour === activeColour,
+    (ticket) => ticket.colour === activeColour
   );
 
   const selectedByColour = useMemo(() => {
     const grouped = new Map<string, TicketRef[]>();
 
-    if (!raffle) return grouped;
-
-    for (const colour of raffle.colours) {
+    for (const colour of demoRaffle.colours) {
       grouped.set(colour, []);
     }
 
@@ -135,22 +121,11 @@ export default function PublicRafflePage() {
     }
 
     return grouped;
-  }, [raffle, selectedTickets]);
-
-  if (loading) {
-    return <div style={{ padding: 24 }}>Loading raffle…</div>;
-  }
-
-  if (error || !raffle) {
-    return <div style={{ padding: 24 }}>Error: {error || "Raffle not found"}</div>;
-  }
+  }, [selectedTickets]);
 
   return (
     <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
-      <h1>{raffle.title}</h1>
-      {raffle.description ? (
-        <p style={{ color: "#6b7280" }}>{raffle.description}</p>
-      ) : null}
+      <h1>{demoRaffle.title}</h1>
 
       <div
         style={{
@@ -165,15 +140,19 @@ export default function PublicRafflePage() {
         }}
       >
         <SummaryCard label="Numbers per colour" value={`${numbers.length}`} />
-        <SummaryCard label="Colours" value={`${raffle.colours.length}`} />
+        <SummaryCard label="Colours" value={`${demoRaffle.colours.length}`} />
         <SummaryCard label="Total tickets" value={`${totalTickets}`} />
-        <SummaryCard label="Single price" value={`£${raffle.ticketPrice}`} />
+        <SummaryCard label="Single price" value={`£${demoRaffle.ticketPrice}`} />
       </div>
 
       <div style={{ marginTop: 28 }}>
         <h2>Choose colour board</h2>
+        <p style={{ color: "#6b7280", marginTop: 6 }}>
+          Each colour is a separate full ticket range.
+        </p>
+
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
-          {raffle.colours.map((colour) => {
+          {demoRaffle.colours.map((colour) => {
             const active = activeColour === colour;
             const count = selectedTickets.filter((t) => t.colour === colour).length;
 
@@ -263,11 +242,18 @@ export default function PublicRafflePage() {
                   cursor,
                   fontWeight: 700,
                 }}
+                title={sold ? "Sold" : reserved ? "Reserved" : `${activeColour} ${n}`}
               >
                 {n}
               </button>
             );
           })}
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", gap: 16, color: "#6b7280", fontSize: 14 }}>
+          <span>Sold = black</span>
+          <span>Reserved = grey</span>
+          <span>Available = selectable</span>
         </div>
       </div>
 
@@ -294,7 +280,7 @@ export default function PublicRafflePage() {
             <p style={{ color: "#6b7280" }}>No tickets selected yet.</p>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
-              {raffle.colours.map((colour) => {
+              {demoRaffle.colours.map((colour) => {
                 const items = selectedByColour.get(colour) || [];
                 if (items.length === 0) return null;
 
@@ -368,15 +354,21 @@ export default function PublicRafflePage() {
 
           <div style={{ display: "grid", gap: 10 }}>
             <SummaryRow label="Active colour" value={activeColour || "—"} />
-            <SummaryRow
-              label="Selected on this colour"
-              value={`${ticketsForActiveColour.length}`}
-            />
-            <SummaryRow
-              label="Total selected tickets"
-              value={`${selectedTickets.length}`}
-            />
+            <SummaryRow label="Selected on this colour" value={`${ticketsForActiveColour.length}`} />
+            <SummaryRow label="Total selected tickets" value={`${selectedTickets.length}`} />
             <SummaryRow label="Total price" value={`£${calculateTotal()}`} />
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Offers</div>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <li>Single ticket: £{demoRaffle.ticketPrice}</li>
+              {demoRaffle.offers.map((offer) => (
+                <li key={offer.label}>
+                  {offer.label} — £{offer.price}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
