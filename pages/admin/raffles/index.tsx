@@ -7,21 +7,21 @@ type Raffle = {
   title: string;
   description?: string | null;
   status?: string | null;
-  heroImageUrl?: string | null;
-  raffleConfig?: {
-    singleTicketPriceCents?: number;
-    totalTickets?: number;
-    soldTickets?: number;
-    currencyCode?: string;
-  };
+  imageUrl?: string | null;
+  ticketPrice?: number;
+  totalTickets?: number;
+  soldTickets?: number;
+  remainingTickets?: number;
+  currency?: string;
 };
 
-function formatMoney(cents: number | undefined, currencyCode = "GBP") {
-  const safeCents = Number.isFinite(cents) ? Number(cents) : 0;
+function formatMoney(amount: number | undefined, currencyCode = "GBP") {
+  const safeAmount = Number.isFinite(amount) ? Number(amount) : 0;
+
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: currencyCode || "GBP",
-  }).format(safeCents / 100);
+  }).format(safeAmount);
 }
 
 export default function AdminRafflesIndexPage() {
@@ -30,6 +30,8 @@ export default function AdminRafflesIndexPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setLoading(true);
       setError("");
@@ -42,15 +44,25 @@ export default function AdminRafflesIndexPage() {
           throw new Error(json?.error || "Failed to load raffles");
         }
 
-        setRaffles(Array.isArray(json?.raffles) ? json.raffles : []);
+        if (!cancelled) {
+          setRaffles(Array.isArray(json?.raffles) ? json.raffles : []);
+        }
       } catch (err: any) {
-        setError(err.message || "Failed to load raffles");
+        if (!cancelled) {
+          setError(err.message || "Failed to load raffles");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -58,6 +70,7 @@ export default function AdminRafflesIndexPage() {
       <div style={styles.container}>
         <div style={styles.headerRow}>
           <h1 style={styles.heading}>Raffles</h1>
+
           <Link href="/admin/raffles/create" style={styles.createButton}>
             Create raffle
           </Link>
@@ -76,16 +89,18 @@ export default function AdminRafflesIndexPage() {
             {raffles.map((raffle) => (
               <div key={raffle.id} style={styles.card}>
                 <div style={styles.cardHeader}>
-                  <div>
+                  <div style={styles.cardHeaderLeft}>
                     <h2 style={styles.cardTitle}>{raffle.title || raffle.slug}</h2>
+
                     <div style={styles.metaRow}>
                       <span style={styles.badge}>{raffle.status || "draft"}</span>
                       <span style={styles.metaText}>Slug: {raffle.slug}</span>
+                      <span style={styles.metaText}>ID: {raffle.id}</span>
                     </div>
                   </div>
 
                   <Link
-                    href={`/admin/raffles/${encodeURIComponent(raffle.id)}`}
+                    href={`/admin/raffles/${encodeURIComponent(raffle.slug || raffle.id)}`}
                     style={styles.editButton}
                   >
                     Open
@@ -100,26 +115,32 @@ export default function AdminRafflesIndexPage() {
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Ticket price</div>
                     <div style={styles.statValue}>
-                      {formatMoney(
-                        raffle.raffleConfig?.singleTicketPriceCents,
-                        raffle.raffleConfig?.currencyCode || "GBP"
-                      )}
+                      {formatMoney(raffle.ticketPrice, raffle.currency || "GBP")}
                     </div>
                   </div>
 
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Total tickets</div>
-                    <div style={styles.statValue}>
-                      {raffle.raffleConfig?.totalTickets ?? 0}
-                    </div>
+                    <div style={styles.statValue}>{raffle.totalTickets ?? 0}</div>
                   </div>
 
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Sold</div>
-                    <div style={styles.statValue}>
-                      {raffle.raffleConfig?.soldTickets ?? 0}
-                    </div>
+                    <div style={styles.statValue}>{raffle.soldTickets ?? 0}</div>
                   </div>
+                </div>
+
+                <div style={styles.footerRow}>
+                  <span style={styles.footerText}>
+                    Remaining: {raffle.remainingTickets ?? 0}
+                  </span>
+
+                  <Link
+                    href={`/r/${encodeURIComponent(raffle.slug)}`}
+                    style={styles.publicLink}
+                  >
+                    View public page
+                  </Link>
                 </div>
               </div>
             ))}
@@ -180,6 +201,10 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     gap: 16,
   },
+  cardHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
   cardTitle: {
     margin: 0,
     fontSize: 22,
@@ -216,6 +241,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#111827",
     textDecoration: "none",
     fontWeight: 600,
+    flexShrink: 0,
   },
   description: {
     color: "#4b5563",
@@ -242,6 +268,22 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 4,
     fontSize: 20,
     fontWeight: 700,
+  },
+  footerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 16,
+    gap: 12,
+  },
+  footerText: {
+    color: "#6b7280",
+    fontSize: 14,
+  },
+  publicLink: {
+    color: "#2563eb",
+    fontWeight: 600,
+    textDecoration: "none",
   },
   error: {
     background: "#fef2f2",
