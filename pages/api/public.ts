@@ -57,34 +57,36 @@ function toOffers(value: unknown): Offer[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item, index) => {
+    .map((item, index): Offer | null => {
       if (!item || typeof item !== "object") return null;
 
       const offer = item as Record<string, unknown>;
       const label = typeof offer.label === "string" ? offer.label : "";
-      const quantity = toNumber(offer.quantity, 0);
+      const quantity = toNumber(offer.quantity ?? offer.tickets, 0);
       const price = toNumber(offer.price, 0);
 
       if (!label.trim() || quantity <= 0 || price < 0) return null;
 
+      const id =
+        typeof offer.id === "string" && offer.id.trim()
+          ? offer.id
+          : `offer-${index}`;
+
       return {
-        id:
-          typeof offer.id === "string" && offer.id.trim()
-            ? offer.id
-            : `offer-${index}`,
+        id,
         label: label.trim(),
         quantity,
         price,
       };
     })
-    .filter((item): item is Offer => Boolean(item));
+    .filter((item): item is Offer => item !== null);
 }
 
 function toTickets(value: unknown): TicketRef[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item) => {
+    .map((item): TicketRef | null => {
       if (!item || typeof item !== "object") return null;
 
       const ticket = item as Record<string, unknown>;
@@ -95,7 +97,7 @@ function toTickets(value: unknown): TicketRef[] {
 
       return { colour, number };
     })
-    .filter((item): item is TicketRef => Boolean(item));
+    .filter((item): item is TicketRef => item !== null);
 }
 
 export default async function handler(
@@ -126,7 +128,9 @@ export default async function handler(
     }
 
     const config =
-      raffle && typeof (raffle as any).config_json === "object" && (raffle as any).config_json
+      raffle &&
+      typeof (raffle as any).config_json === "object" &&
+      (raffle as any).config_json
         ? ((raffle as any).config_json as Record<string, unknown>)
         : {};
 
