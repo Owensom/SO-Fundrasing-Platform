@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { updateRaffle } from "../../../src/api";
+import { createRaffle, getAdminRaffle, updateRaffle } from "../../../src/api";
 
 type Offer = {
   id: string;
@@ -71,6 +71,7 @@ export default function AdminRaffleEditPage() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [existingRaffleId, setExistingRaffleId] = useState<string>("");
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -88,27 +89,68 @@ export default function AdminRaffleEditPage() {
   const [customColour, setCustomColour] = useState("#8b5cf6");
 
   useEffect(() => {
-    if (!router.isReady) return;
+    if (!router.isReady || !routeId) return;
 
-    const timer = setTimeout(() => {
-      setTitle("SO Foundation Demo Raffle");
-      setSlug("so-foundation-demo-raffle");
-      setDescription(
-        "Each colour creates another full ticket range. Example: if the range is 1 to 200 and you add 3 colours, buyers can choose Red 25, Blue 25 and Green 25 as separate tickets.",
-      );
-      setImageUrl("");
-      setStartNumber("1");
-      setEndNumber("200");
-      setTicketPrice("2");
-      setOffers([
-        { id: uid(), label: "5 for £8", quantity: "5", price: "8" },
-        { id: uid(), label: "10 for £15", quantity: "10", price: "15" },
-      ]);
-      setColours(["#ef4444", "#3b82f6", "#22c55e"]);
-      setIsLoading(false);
-    }, 200);
+    let cancelled = false;
 
-    return () => clearTimeout(timer);
+    async function load() {
+      setIsLoading(true);
+      setStatusMessage("");
+
+      try {
+        const raffle = await getAdminRaffle(routeId);
+
+        if (cancelled) return;
+
+        setExistingRaffleId(String(raffle.id ?? routeId));
+        setTitle(raffle.title ?? "");
+        setSlug(raffle.slug ?? "");
+        setDescription(raffle.description ?? "");
+        setImageUrl(raffle.imageUrl ?? "");
+        setStartNumber(
+          raffle.startNumber !== undefined ? String(raffle.startNumber) : "",
+        );
+        setEndNumber(
+          raffle.endNumber !== undefined ? String(raffle.endNumber) : "",
+        );
+        setTicketPrice(
+          raffle.ticketPrice !== undefined ? String(raffle.ticketPrice) : "",
+        );
+        setOffers(
+          (raffle.offers ?? []).map((offer) => ({
+            id: offer.id ? String(offer.id) : uid(),
+            label: offer.label ?? "",
+            quantity:
+              offer.quantity !== undefined ? String(offer.quantity) : "",
+            price: offer.price !== undefined ? String(offer.price) : "",
+          })),
+        );
+        setColours(raffle.colours ?? []);
+      } catch {
+        if (cancelled) return;
+
+        // New / missing raffle fallback: leave editable blank state
+        setExistingRaffleId("");
+        setTitle("");
+        setSlug("");
+        setDescription("");
+        setImageUrl("");
+        setStartNumber("");
+        setEndNumber("");
+        setTicketPrice("");
+        setOffers([]);
+        setColours([]);
+        setStatusMessage("Raffle not found in storage yet. Saving will create it.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router.isReady, routeId]);
 
   useEffect(() => {
@@ -282,55 +324,38 @@ export default function AdminRaffleEditPage() {
     }
   }
 
-  function buildDraftPayload() {
+  function buildPayloadBase() {
     return {
-      id: routeId,
       title: title.trim(),
       slug: slug.trim(),
       description: description.trim(),
       imageUrl: imageUrl.trim(),
-      startNumber: parsedStart,
-      endNumber: parsedEnd,
+      startNumber: parsedStart ?? 0,
+      endNumber: parsedEnd ?? 0,
       numbersPerColour,
       colourCount,
       totalTickets,
-      ticketPrice: parsedTicketPrice,
+      ticketPrice: parsedTicketPrice ?? 0,
       offers: validOffers,
       colours,
-      status: "draft",
+      sold: [],
+      reserved: [],
     };
   }
 
-  function buildCompletedPayload() {
-    if (
-      title.trim() === "" ||
-      slug.trim() === "" ||
-      parsedStart === null ||
-      parsedEnd === null ||
-      parsedTicketPrice === null ||
-      parsedEnd < parsedStart ||
-      parsedTicketPrice < 0 ||
-      colours.length === 0
-    ) {
-      return null;
+  async function persistRaffle() {
+    const input = buildPayloadBase();
+
+    if (existingRaffleId) {
+      return updateRaffle(existingRaffleId, input);
     }
 
-    return {
-      id: routeId,
-      title: title.trim(),
-      slug: slug.trim(),
-      description: description.trim(),
-      imageUrl: imageUrl.trim(),
-      startNumber: parsedStart,
-      endNumber: parsedEnd,
-      numbersPerColour,
-      colourCount,
-      totalTickets,
-      ticketPrice: parsedTicketPrice,
-      offers: validOffers,
-      colours,
-      status: "complete",
-    };
+    const created = await createRaffle(input);
+    const newId = created.id ? String(created.id) : "";
+    if (newId) {
+      setExistingRaffleId(newId);
+    }
+    return created;
   }
 
   async function handleSaveDraft(e: React.FormEvent<HTMLFormElement>) {
@@ -338,27 +363,14 @@ export default function AdminRaffleEditPage() {
     setStatusMessage("");
     setIsSavingDraft(true);
 
-    const payload = buildDraftPayload();
-
     try {
-      await updateRaffle(routeId, {
-        title: payload.title || "",
-        slug: payload.slug || "",
-        description: payload.description || "",
-        imageUrl: payload.imageUrl || "",
-        startNumber: payload.startNumber ?? 0,
-        endNumber: payload.endNumber ?? 0,
-        numbersPerColour: payload.numbersPerColour ?? 0,
-        colourCount: payload.colourCount ?? 0,
-        totalTickets: payload.totalTickets ?? 0,
-        ticketPrice: payload.ticketPrice ?? 0,
-        offers: payload.offers ?? [],
-        colours: payload.colours ?? [],
-        sold: [],
-        reserved: [],
-      });
-
+      const saved = await persistRaffle();
       setStatusMessage("Draft saved");
+
+      const savedId = saved.id ? String(saved.id) : "";
+      if (savedId && savedId !== routeId) {
+        router.replace(`/admin/raffles/${savedId}`);
+      }
     } catch (error) {
       setStatusMessage(
         error instanceof Error ? error.message : "Failed to save draft",
@@ -371,8 +383,7 @@ export default function AdminRaffleEditPage() {
   async function handleComplete() {
     setStatusMessage("");
 
-    const payload = buildCompletedPayload();
-    if (!payload) {
+    if (!canComplete) {
       setStatusMessage("Please complete all required fields before marking complete.");
       return;
     }
@@ -380,27 +391,12 @@ export default function AdminRaffleEditPage() {
     setIsCompleting(true);
 
     try {
-      await updateRaffle(routeId, {
-        title: payload.title,
-        slug: payload.slug,
-        description: payload.description,
-        imageUrl: payload.imageUrl,
-        startNumber: payload.startNumber,
-        endNumber: payload.endNumber,
-        numbersPerColour: payload.numbersPerColour,
-        colourCount: payload.colourCount,
-        totalTickets: payload.totalTickets,
-        ticketPrice: payload.ticketPrice,
-        offers: payload.offers,
-        colours: payload.colours,
-        sold: [],
-        reserved: [],
-      });
-
+      const saved = await persistRaffle();
       setStatusMessage("Raffle marked complete");
 
-      if (payload.slug) {
-        router.push(`/r/${payload.slug}`);
+      const publicSlug = saved.slug || slug;
+      if (publicSlug) {
+        router.push(`/r/${publicSlug}`);
       }
     } catch (error) {
       setStatusMessage(
@@ -429,7 +425,9 @@ export default function AdminRaffleEditPage() {
             <p style={pageSubtitleStyle}>
               Each colour creates another full number range.
             </p>
-            <div style={metaTextStyle}>Raffle: {routeId || "demo-raffle"}</div>
+            <div style={metaTextStyle}>
+              Raffle: {existingRaffleId || routeId || "new"}
+            </div>
           </div>
 
           <div style={topActionsStyle}>
