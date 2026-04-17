@@ -19,12 +19,29 @@ export type TicketSelection = {
   number: number;
 };
 
+export type TicketRef = TicketSelection;
+
 export type ReservedOrSoldTicket = {
   colour: string;
   number: number;
 };
 
-export type PublicRaffle = {
+export type Purchase = {
+  id: string;
+  raffleId: string;
+  buyerName: string;
+  buyerEmail: string;
+  tickets: TicketSelection[];
+  quantity: number;
+  subtotal: number;
+  discount: number;
+  total: number;
+  currency: string;
+  status?: string;
+  createdAt?: string;
+};
+
+export type Raffle = {
   id: string;
   slug: string;
   title: string;
@@ -34,8 +51,36 @@ export type PublicRaffle = {
   ticketPrice: number;
   colours: RaffleColour[];
   offers: RaffleOffer[];
+};
+
+export type RaffleDetails = Raffle & {
   reservedTickets: ReservedOrSoldTicket[];
   soldTickets: ReservedOrSoldTicket[];
+};
+
+export type PublicRaffle = RaffleDetails;
+
+export type SaveRaffleInput = {
+  slug: string;
+  title: string;
+  startNumber: number;
+  endNumber: number;
+  currency: string;
+  ticketPrice: number;
+  colours: Array<{
+    id?: string;
+    name: string;
+    hex?: string | null;
+    sortOrder?: number;
+  }>;
+  offers: Array<{
+    id?: string;
+    label: string;
+    quantity: number;
+    price: number;
+    isActive?: boolean;
+    sortOrder?: number;
+  }>;
 };
 
 export type PublicRaffleResponse = {
