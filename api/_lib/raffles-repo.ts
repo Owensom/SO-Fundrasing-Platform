@@ -1,5 +1,7 @@
 import { query, queryOne } from "./db";
 
+type CurrencyCode = "GBP" | "USD" | "EUR";
+
 export type RaffleRow = {
   id: string;
   tenant_slug: string;
@@ -7,6 +9,7 @@ export type RaffleRow = {
   title: string;
   description: string;
   image_url: string | null;
+  currency: CurrencyCode | null;
   ticket_price_cents: number;
   total_tickets: number;
   sold_tickets: number;
@@ -22,6 +25,7 @@ export type RaffleSummary = {
   title: string;
   description: string;
   image_url: string;
+  currency: CurrencyCode;
   ticket_price: number;
   total_tickets: number;
   sold_tickets: number;
@@ -48,6 +52,7 @@ export type CreateRaffleInput = {
   slug: string;
   description?: string;
   image_url?: string;
+  currency?: CurrencyCode;
   ticket_price?: number | null;
   total_tickets?: number | null;
   sold_tickets?: number | null;
@@ -73,6 +78,11 @@ export type Purchase = {
   created_at: string;
 };
 
+function normalizeCurrency(value: unknown): CurrencyCode {
+  if (value === "USD" || value === "EUR") return value;
+  return "GBP";
+}
+
 function toRaffleSummary(row: RaffleRow): RaffleSummary {
   return {
     id: row.id,
@@ -81,6 +91,7 @@ function toRaffleSummary(row: RaffleRow): RaffleSummary {
     title: row.title,
     description: row.description ?? "",
     image_url: row.image_url ?? "",
+    currency: normalizeCurrency(row.currency),
     ticket_price: Number(row.ticket_price_cents) / 100,
     total_tickets: Number(row.total_tickets),
     sold_tickets: Number(row.sold_tickets),
@@ -107,6 +118,7 @@ export async function listRaffles(
           title,
           description,
           image_url,
+          currency,
           ticket_price_cents,
           total_tickets,
           sold_tickets,
@@ -128,6 +140,7 @@ export async function listRaffles(
           title,
           description,
           image_url,
+          currency,
           ticket_price_cents,
           total_tickets,
           sold_tickets,
@@ -152,6 +165,7 @@ export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
       title,
       description,
       image_url,
+      currency,
       ticket_price_cents,
       total_tickets,
       sold_tickets,
@@ -185,6 +199,7 @@ export async function getRaffleBySlug(
       title,
       description,
       image_url,
+      currency,
       ticket_price_cents,
       total_tickets,
       sold_tickets,
@@ -218,12 +233,13 @@ export async function createRaffle(
       title,
       description,
       image_url,
+      currency,
       ticket_price_cents,
       total_tickets,
       sold_tickets,
       status
     )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     returning
       id,
       tenant_slug,
@@ -231,6 +247,7 @@ export async function createRaffle(
       title,
       description,
       image_url,
+      currency,
       ticket_price_cents,
       total_tickets,
       sold_tickets,
@@ -245,6 +262,7 @@ export async function createRaffle(
       input.title,
       input.description ?? "",
       input.image_url ?? "",
+      normalizeCurrency(input.currency),
       input.ticket_price != null ? Math.round(input.ticket_price * 100) : 0,
       input.total_tickets ?? 0,
       input.sold_tickets ?? 0,
@@ -275,10 +293,11 @@ export async function updateRaffle(
       title = $4,
       description = $5,
       image_url = $6,
-      ticket_price_cents = $7,
-      total_tickets = $8,
-      sold_tickets = $9,
-      status = $10,
+      currency = $7,
+      ticket_price_cents = $8,
+      total_tickets = $9,
+      sold_tickets = $10,
+      status = $11,
       updated_at = now()
     where id = $1
        or (tenant_slug = $2 and slug = $3)
@@ -289,6 +308,7 @@ export async function updateRaffle(
       title,
       description,
       image_url,
+      currency,
       ticket_price_cents,
       total_tickets,
       sold_tickets,
@@ -303,6 +323,7 @@ export async function updateRaffle(
       input.title,
       input.description ?? "",
       input.image_url ?? "",
+      normalizeCurrency(input.currency),
       input.ticket_price != null ? Math.round(input.ticket_price * 100) : 0,
       input.total_tickets ?? 0,
       input.sold_tickets ?? 0,
