@@ -1,6 +1,6 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import PublicRafflePage from "../../components/PublicRafflePage";
+import PublicRafflePage from "../../src/components/PublicRafflePage";
 
 export default function PublicRaffleRoutePage() {
   const router = useRouter();
