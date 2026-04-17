@@ -18,7 +18,7 @@ export default async function handler(
       typeof req.query.tenantSlug === "string" ? req.query.tenantSlug : "demo-a";
 
     if (!id) {
-      return res.status(400).json({ error: "Missing raffle id" });
+      return res.status(200).json({ raffle: null });
     }
 
     let raffle = await getRaffleById(id);
@@ -27,11 +27,7 @@ export default async function handler(
       raffle = await getRaffleBySlug(tenantSlug, id);
     }
 
-    if (!raffle) {
-      return res.status(404).json({ error: "Raffle not found" });
-    }
-
-    return res.status(200).json({ raffle });
+    return res.status(200).json({ raffle: raffle ?? null });
   } catch (error: any) {
     return res.status(500).json({
       error: error?.message || "Internal server error",
