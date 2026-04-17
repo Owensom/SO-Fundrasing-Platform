@@ -38,7 +38,10 @@ function makeTicketKey(colour: string, number: number) {
   return `${colour}::${number}`;
 }
 
-async function tableExists(client: { query: Function }, tableName: string) {
+async function tableExists(
+  client: { query: (sql: string, params?: unknown[]) => Promise<any> },
+  tableName: string,
+) {
   const result = await client.query(
     `
     select exists (
@@ -294,7 +297,10 @@ export default async function handler(
       },
     });
   } catch (error) {
-    await client.query("rollback");
+    try {
+      await client.query("rollback");
+    } catch {}
+
     console.error("POST /api/public/raffles/[slug]/reserve failed", error);
 
     return res.status(500).json({
