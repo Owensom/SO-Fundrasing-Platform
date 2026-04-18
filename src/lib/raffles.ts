@@ -27,6 +27,26 @@ export type RaffleConfig = {
   numbersPerColour?: number;
 };
 
+export type PublicRaffle = {
+  id: string;
+  tenant_slug: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  ticket_price_cents: number;
+  total_tickets: number;
+  sold_tickets: number;
+  status: RaffleStatus;
+  currency: string;
+  config: RaffleConfig;
+};
+
+export type TicketSelection = {
+  number: number;
+  colourId?: string | null;
+};
+
 export function normalizeStatus(value: unknown): RaffleStatus {
   if (value === "published") return "published";
   if (value === "completed") return "completed";
@@ -51,7 +71,6 @@ export function parseConfig(input: unknown): RaffleConfig {
         .map((item, index) => {
           const colour = item as Record<string, unknown>;
           const id = asString(colour.id, `colour-${index + 1}`);
-
           return {
             id,
             name: asString(colour.name, id),
@@ -66,7 +85,6 @@ export function parseConfig(input: unknown): RaffleConfig {
     ? obj.offers
         .map((item, index) => {
           const offer = item as Record<string, unknown>;
-
           return {
             id: asString(offer.id, `offer-${index + 1}`),
             label: asString(offer.label, `Offer ${index + 1}`),
@@ -90,6 +108,10 @@ export function parseConfig(input: unknown): RaffleConfig {
     colourCount: asOptionalInt(obj.colourCount),
     numbersPerColour: asOptionalInt(obj.numbersPerColour),
   };
+}
+
+export function buildSelectionKey(selection: TicketSelection): string {
+  return `${selection.colourId ?? "none"}:${selection.number}`;
 }
 
 function safeJsonParse(input: string): unknown {
