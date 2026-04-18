@@ -56,10 +56,10 @@ function errorResponse(error: unknown) {
   );
 }
 
-export async function GET(_: Request, { params }: Params) {
+export async function GET(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-    await requireRaffleAdminAccess(id);
+    await requireRaffleAdminAccess(id, request);
 
     const rows = await sql`
       select
@@ -107,7 +107,7 @@ export async function GET(_: Request, { params }: Params) {
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-    await requireRaffleAdminAccess(id);
+    await requireRaffleAdminAccess(id, req);
 
     const body = (await req.json()) as UpdateBody;
 
@@ -189,10 +189,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-    await requireRaffleAdminAccess(id);
+    await requireRaffleAdminAccess(id, req);
 
     await sql`
       delete from raffle_ticket_reservations
