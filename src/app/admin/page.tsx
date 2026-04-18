@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 export default async function AdminHomePage() {
   const session = await auth();
@@ -9,16 +10,22 @@ export default async function AdminHomePage() {
     redirect("/admin/login");
   }
 
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  if (!session.user.tenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
       <h1>Admin</h1>
 
       <p>
-        Signed in as <strong>{session.user.email}</strong>
+        Tenant: <strong>{tenantSlug}</strong>
       </p>
 
       <p>
-        Tenants: <strong>{session.user.tenantSlugs.join(", ")}</strong>
+        Signed in as <strong>{session.user.email}</strong>
       </p>
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
