@@ -1,16 +1,37 @@
-import type { VercelRequest } from "@vercel/node";
+type HeaderValue = string | string[] | undefined;
 
-export function resolveTenantSlug(req: VercelRequest): string {
-  const headerTenant = req.headers["x-tenant-slug"];
-  const queryTenant = req.query.tenantSlug;
+type RequestLike = {
+  headers: Record<string, HeaderValue>;
+};
 
-  if (typeof headerTenant === "string" && headerTenant.trim()) {
-    return headerTenant.trim();
+function firstHeader(value: HeaderValue): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
   }
 
-  if (typeof queryTenant === "string" && queryTenant.trim()) {
-    return queryTenant.trim();
+  return typeof value === "string" ? value : "";
+}
+
+function parseHost(host: string): string {
+  return host.split(":")[0].trim().toLowerCase();
+}
+
+export function resolveTenantSlug(req: RequestLike): string {
+  const headerTenant = firstHeader(req.headers["x-tenant-slug"]).trim();
+  if (headerTenant) {
+    return headerTenant.toLowerCase();
   }
 
-  return "demo-a";
+  const host = parseHost(firstHeader(req.headers.host));
+  if (!host) {
+    return "default";
+  }
+
+  const parts = host.split(".").filter(Boolean);
+
+  if (parts.length >= 3) {
+    return parts[0];
+  }
+
+  return "default";
 }
