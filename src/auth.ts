@@ -80,6 +80,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: String(user.email),
           name: user.name ? String(user.name) : null,
           tenantSlugs,
+          emailVerified: null,
         };
       },
     }),
@@ -96,14 +97,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      session.user = {
-        id: String(token.userId ?? ""),
-        email: String(token.email ?? ""),
-        name: token.name ? String(token.name) : null,
-        tenantSlugs: Array.isArray(token.tenantSlugs)
-          ? token.tenantSlugs.map((value) => String(value))
-          : [],
-      };
+      session.user.id = String(token.userId ?? "");
+      session.user.email = String(token.email ?? "");
+      session.user.name = token.name ? String(token.name) : null;
+      session.user.tenantSlugs = Array.isArray(token.tenantSlugs)
+        ? token.tenantSlugs.map((value) => String(value))
+        : [];
 
       return session;
     },
