@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db";
+import { getTenantSlugFromRequest } from "@/lib/tenant";
 
 function makeId(prefix: string) {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -31,10 +32,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const hostTenantSlug = getTenantSlugFromRequest(req);
+  const requestedTenantSlug = String(body.tenantSlug ?? "").trim().toLowerCase();
+  const tenantSlug =
+    requestedTenantSlug || hostTenantSlug || "default";
+
   const email = String(body.email ?? "").trim().toLowerCase();
   const password = String(body.password ?? "");
   const name = String(body.name ?? "").trim();
-  const tenantSlug = String(body.tenantSlug ?? "").trim();
 
   if (!email || !password || !tenantSlug) {
     return NextResponse.json(
