@@ -65,8 +65,15 @@ export function extractTenantSlugFromHost(
   return resolved.kind === "tenant" ? resolved.tenantSlug : null;
 }
 
-export function getTenantSlugFromHeaders(): string | null {
+export function getTenantSlugFromHeaders(): string {
   const headerStore = headers();
   const host = headerStore.get("host");
+  return extractTenantSlugFromHost(host) || "";
+}
+
+export function getTenantSlugFromRequest(
+  request: Request | { headers: Headers },
+): string | null {
+  const host = request.headers.get("host");
   return extractTenantSlugFromHost(host);
 }
