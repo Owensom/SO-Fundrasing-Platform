@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 export type ResolvedTenant =
   | {
       kind: "root";
@@ -14,7 +16,9 @@ function normalizeHostname(hostname: string) {
   return hostname.split(":")[0].toLowerCase();
 }
 
-export function resolveTenantFromHost(hostHeader: string | null | undefined): ResolvedTenant {
+export function resolveTenantFromHost(
+  hostHeader: string | null | undefined,
+): ResolvedTenant {
   const hostname = normalizeHostname(hostHeader || "");
 
   if (!hostname) {
@@ -52,4 +56,17 @@ export function resolveTenantFromHost(hostHeader: string | null | undefined): Re
     hostname,
     tenantSlug: null,
   };
+}
+
+export function extractTenantSlugFromHost(
+  hostHeader: string | null | undefined,
+): string | null {
+  const resolved = resolveTenantFromHost(hostHeader);
+  return resolved.kind === "tenant" ? resolved.tenantSlug : null;
+}
+
+export function getTenantSlugFromHeaders(): string | null {
+  const headerStore = headers();
+  const host = headerStore.get("host");
+  return extractTenantSlugFromHost(host);
 }
