@@ -51,6 +51,7 @@ export function parseConfig(input: unknown): RaffleConfig {
         .map((item, index) => {
           const colour = item as Record<string, unknown>;
           const id = asString(colour.id, `colour-${index + 1}`);
+
           return {
             id,
             name: asString(colour.name, id),
@@ -65,6 +66,7 @@ export function parseConfig(input: unknown): RaffleConfig {
     ? obj.offers
         .map((item, index) => {
           const offer = item as Record<string, unknown>;
+
           return {
             id: asString(offer.id, `offer-${index + 1}`),
             label: asString(offer.label, `Offer ${index + 1}`),
