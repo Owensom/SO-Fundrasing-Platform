@@ -22,6 +22,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof credentials?.email === "string"
             ? credentials.email.trim().toLowerCase()
             : "";
+
         const password =
           typeof credentials?.password === "string"
             ? credentials.password
@@ -61,12 +62,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const isValid = await bcrypt.compare(password, String(user.password_hash));
+
         if (!isValid) {
           return null;
         }
 
         const tenantSlugs = Array.isArray(user.tenant_slugs)
-          ? user.tenant_slugs.map((value) => String(value))
+          ? user.tenant_slugs.map((value: unknown) => String(value))
           : [];
 
         if (tenantSlugs.length === 0) {
@@ -87,27 +89,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.userId = user.id;
         token.tenantSlugs = user.tenantSlugs;
-        if (user.email) token.email = user.email;
-        if (user.name) token.name = user.name;
+        token.email = user.email ?? "";
+        token.name = user.name ?? null;
       }
 
       return token;
     },
     async session({ session, token }) {
-      if (!session.user) {
-        session.user = {
-          id: "",
-          email: "",
-          tenantSlugs: [],
-        };
-      }
-
-      session.user.id = String(token.userId ?? "");
-      session.user.email = String(token.email ?? "");
-      session.user.name = token.name ? String(token.name) : null;
-      session.user.tenantSlugs = Array.isArray(token.tenantSlugs)
-        ? token.tenantSlugs.map((value) => String(value))
-        : [];
+      session.user = {
+        id: String(token.userId ?? ""),
+        email: String(token.email ?? ""),
+        name: token.name ? String(token.name) : null,
+        tenantSlugs: Array.isArray(token.tenantSlugs)
+          ? token.tenantSlugs.map((value) => String(value))
+          : [],
+      };
 
       return session;
     },
