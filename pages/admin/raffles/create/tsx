@@ -1,5 +1,0 @@
-import AdminCreateRafflePage from "../../../src/pages/admin/AdminCreateRafflePage";
-
-export default function CreateRafflePage() {
-  return <AdminCreateRafflePage mode="create" />;
-}
