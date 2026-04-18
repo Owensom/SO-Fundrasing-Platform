@@ -1,73 +1,55 @@
-import { headers } from "next/headers";
+export type ResolvedTenant =
+  | {
+      kind: "root";
+      hostname: string;
+      tenantSlug: null;
+    }
+  | {
+      kind: "tenant";
+      hostname: string;
+      tenantSlug: string;
+    };
 
-const DEFAULT_TENANT_SLUG = "default";
-
-function cleanHost(input: string): string {
-  return input.split(":")[0].trim().toLowerCase();
+function normalizeHostname(hostname: string) {
+  return hostname.split(":")[0].toLowerCase();
 }
 
-function getRootDomain(): string {
-  return (process.env.ROOT_DOMAIN || "").trim().toLowerCase();
-}
+export function resolveTenantFromHost(hostHeader: string | null | undefined): ResolvedTenant {
+  const hostname = normalizeHostname(hostHeader || "");
 
-export function extractTenantSlugFromHost(host: string): string {
-  const cleanedHost = cleanHost(host);
-  if (!cleanedHost) {
-    return DEFAULT_TENANT_SLUG;
+  if (!hostname) {
+    return {
+      kind: "root",
+      hostname: "",
+      tenantSlug: null,
+    };
   }
 
-  const rootDomain = getRootDomain();
-
-  if (cleanedHost === "localhost" || cleanedHost.endsWith(".localhost")) {
-    const parts = cleanedHost.split(".").filter(Boolean);
-
-    if (parts.length >= 2) {
-      return parts[0];
-    }
-
-    return DEFAULT_TENANT_SLUG;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return {
+      kind: "root",
+      hostname,
+      tenantSlug: null,
+    };
   }
 
-  if (
-    cleanedHost.endsWith(".vercel.app") ||
-    cleanedHost.endsWith(".now.sh")
-  ) {
-    const parts = cleanedHost.split(".").filter(Boolean);
+  const parts = hostname.split(".");
 
-    if (parts.length >= 3) {
-      return parts[0];
-    }
+  if (parts.length >= 3) {
+    const subdomain = parts[0];
 
-    return DEFAULT_TENANT_SLUG;
-  }
-
-  if (rootDomain) {
-    if (cleanedHost === rootDomain) {
-      return DEFAULT_TENANT_SLUG;
-    }
-
-    if (cleanedHost.endsWith(`.${rootDomain}`)) {
-      const subdomain = cleanedHost.slice(0, -(rootDomain.length + 1)).trim();
-      const firstPart = subdomain.split(".").filter(Boolean)[0];
-
-      if (firstPart) {
-        return firstPart;
-      }
+    if (subdomain && subdomain !== "www") {
+      return {
+        kind: "tenant",
+        hostname,
+        tenantSlug: subdomain,
+      };
     }
   }
 
-  return DEFAULT_TENANT_SLUG;
-}
-
-export async function getTenantSlugFromHeaders(): Promise<string> {
-  const h = await headers();
-  const forwardedHost = h.get("x-forwarded-host");
-  const host = h.get("host");
-  return extractTenantSlugFromHost(forwardedHost || host || "");
-}
-
-export function getTenantSlugFromRequest(request: Request): string {
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const host = request.headers.get("host");
-  return extractTenantSlugFromHost(forwardedHost || host || "");
+  return {
+    kind: "root",
+    hostname,
+    tenantSlug: null,
+  };
 }
