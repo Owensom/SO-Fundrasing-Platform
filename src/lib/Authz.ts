@@ -15,6 +15,7 @@ export async function requireTenantAccess(tenantSlug: string) {
   const session = await requireAdminSession();
 
   const allowed = session.user.tenantSlugs.includes(tenantSlug);
+
   if (!allowed) {
     throw new Error("FORBIDDEN");
   }
