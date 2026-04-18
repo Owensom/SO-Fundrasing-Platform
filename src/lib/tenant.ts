@@ -73,7 +73,7 @@ export function getTenantSlugFromHeaders(): string {
 
 export function getTenantSlugFromRequest(
   request: Request | { headers: Headers },
-): string | null {
+): string {
   const host = request.headers.get("host");
-  return extractTenantSlugFromHost(host);
+  return extractTenantSlugFromHost(host) || "";
 }
