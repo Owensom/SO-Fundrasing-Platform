@@ -284,6 +284,8 @@ export default function PublicRafflePage({ slug }: Props) {
     }
   }
 
+  const backgroundImage = raffle?.imageUrl || raffle?.image_url || "";
+
   if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
@@ -291,16 +293,35 @@ export default function PublicRafflePage({ slug }: Props) {
 
   return (
     <div style={styles.page}>
+      <div
+        style={{
+          ...styles.hero,
+          ...(backgroundImage
+            ? {
+                backgroundImage: `linear-gradient(rgba(15,23,42,0.55), rgba(15,23,42,0.55)), url("${backgroundImage}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+              }
+            : {
+                background:
+                  "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)",
+              }),
+        }}
+      >
+        <div style={styles.heroInner}>
+          <h1 style={styles.heroTitle}>{raffle.title}</h1>
+          {raffle.description ? (
+            <p style={styles.heroDescription}>{raffle.description}</p>
+          ) : null}
+          <p style={styles.heroMeta}>
+            Tickets {raffle.startNumber}–{raffle.endNumber} •{" "}
+            {formatCurrency(raffle.ticketPrice, raffle.currency)}
+          </p>
+        </div>
+      </div>
+
       <div style={styles.container}>
-        <h1 style={styles.title}>{raffle.title}</h1>
-
-        {raffle.description ? <p style={styles.description}>{raffle.description}</p> : null}
-
-        <p style={styles.meta}>
-          Tickets {raffle.startNumber}–{raffle.endNumber} •{" "}
-          {formatCurrency(raffle.ticketPrice, raffle.currency)}
-        </p>
-
         {raffle.colours.length > 0 ? (
           <>
             <h2 style={styles.heading}>Choose colour</h2>
@@ -424,7 +445,35 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f8fafc",
-    padding: 24,
+  },
+  hero: {
+    minHeight: 320,
+    display: "flex",
+    alignItems: "flex-end",
+    padding: "32px 24px",
+  },
+  heroInner: {
+    maxWidth: 1100,
+    width: "100%",
+    margin: "0 auto",
+    color: "#ffffff",
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: 40,
+    lineHeight: 1.1,
+  },
+  heroDescription: {
+    marginTop: 12,
+    maxWidth: 760,
+    fontSize: 18,
+    lineHeight: 1.5,
+    color: "rgba(255,255,255,0.92)",
+  },
+  heroMeta: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "rgba(255,255,255,0.88)",
   },
   container: {
     maxWidth: 1100,
@@ -433,21 +482,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 16,
     padding: 24,
     boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
+    marginTop: -32,
+    position: "relative",
   },
   wrap: {
     padding: 24,
-  },
-  title: {
-    marginTop: 0,
-    marginBottom: 8,
-    fontSize: 32,
-  },
-  description: {
-    color: "#475569",
-  },
-  meta: {
-    color: "#475569",
-    marginBottom: 20,
   },
   heading: {
     marginTop: 24,
@@ -463,6 +502,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     padding: "10px 16px",
     fontWeight: 700,
+    cursor: "pointer",
   },
   numberGrid: {
     display: "grid",
