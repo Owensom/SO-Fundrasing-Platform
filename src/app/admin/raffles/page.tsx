@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { sql } from "@/lib/db";
 import { normalizeStatus } from "@/lib/raffles";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 type RaffleRow = {
   id: string;
@@ -20,15 +21,10 @@ export default async function AdminRafflesPage() {
     redirect("/admin/login");
   }
 
-  const tenantSlugs = session.user.tenantSlugs;
+  const tenantSlug = await getTenantSlugFromHeaders();
 
-  if (tenantSlugs.length === 0) {
-    return (
-      <div style={{ maxWidth: 960, margin: "40px auto", padding: 24 }}>
-        <h1>Raffles</h1>
-        <p>No tenant access found for this account.</p>
-      </div>
-    );
+  if (!session.user.tenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
   }
 
   const rows = (await sql`
@@ -40,13 +36,17 @@ export default async function AdminRafflesPage() {
       status,
       updated_at
     from raffles
-    where tenant_slug = any(${tenantSlugs}::text[])
+    where tenant_slug = ${tenantSlug}
     order by updated_at desc
   `) as RaffleRow[];
 
   return (
     <div style={{ maxWidth: 960, margin: "40px auto", padding: 24 }}>
       <h1>Raffles</h1>
+
+      <p>
+        Tenant: <strong>{tenantSlug}</strong>
+      </p>
 
       <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
         {rows.map((raffle) => (
@@ -63,11 +63,15 @@ export default async function AdminRafflesPage() {
             <div>
               <strong>{raffle.title}</strong>
             </div>
-            <div>Tenant: {raffle.tenant_slug}</div>
             <div>Slug: {raffle.slug}</div>
             <div>Status: {normalizeStatus(raffle.status)}</div>
             <div>
               <Link href={`/admin/raffles/${raffle.id}/edit`}>Edit</Link>
+            </div>
+            <div>
+              <Link href={`/r/${raffle.slug}`} target="_blank">
+                Open public page
+              </Link>
             </div>
           </div>
         ))}
