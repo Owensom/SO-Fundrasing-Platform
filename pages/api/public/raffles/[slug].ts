@@ -151,6 +151,33 @@ function normaliseColour(colour: RawColour, index: number) {
   };
 }
 
+function normaliseStatus(rawStatus: unknown) {
+  const status = String(rawStatus ?? "").trim().toLowerCase();
+
+  if (
+    status === "published" ||
+    status === "active" ||
+    status === "live" ||
+    status === "open" ||
+    status === "public"
+  ) {
+    return "published";
+  }
+
+  if (
+    status === "completed" ||
+    status === "complete" ||
+    status === "closed" ||
+    status === "ended" ||
+    status === "finished" ||
+    status === "drawn"
+  ) {
+    return "completed";
+  }
+
+  return "draft";
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -220,9 +247,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (hasReservationsTable) {
       const reservedResult = await db.query(
         `
-        select
-          colour,
-          ticket_number
+        select colour, ticket_number
         from raffle_ticket_reservations
         where raffle_id = $1
           and expires_at > now()
@@ -239,9 +264,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (hasSalesTable) {
       const soldResult = await db.query(
         `
-        select
-          colour,
-          ticket_number
+        select colour, ticket_number
         from raffle_ticket_sales
         where raffle_id = $1
         `,
@@ -254,11 +277,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }));
     }
 
-    const status = String(raffle.status ?? "").toLowerCase();
-    const isPublicStatus =
-      status === "active" ||
-      status === "published" ||
-      status === "completed";
+    const status = normaliseStatus(raffle.status);
 
     return res.status(200).json({
       ok: true,
@@ -274,8 +293,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         currency: raffle.currency,
         ticketPrice: Number(raffle.ticket_price_cents ?? 0) / 100,
         status,
-        isActive: isPublicStatus,
-        is_active: isPublicStatus,
+        isActive: status === "published" || status === "completed",
+        is_active: status === "published" || status === "completed",
         colours,
         offers,
         reservedTickets,
