@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { sql } from "@/lib/db";
+import { getTenantSlugFromHeaders, getTenantSlugFromRequest } from "@/lib/tenant";
 
 export async function requireAdminSession() {
   const session = await auth();
@@ -11,20 +12,43 @@ export async function requireAdminSession() {
   return session;
 }
 
+export async function requireCurrentTenantAccess() {
+  const session = await requireAdminSession();
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  if (!session.user.tenantSlugs.includes(tenantSlug)) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return {
+    session,
+    tenantSlug,
+  };
+}
+
 export async function requireTenantAccess(tenantSlug: string) {
   const session = await requireAdminSession();
 
-  const allowed = session.user.tenantSlugs.includes(tenantSlug);
-
-  if (!allowed) {
+  if (!session.user.tenantSlugs.includes(tenantSlug)) {
     throw new Error("FORBIDDEN");
   }
 
   return session;
 }
 
-export async function requireRaffleAdminAccess(raffleId: string) {
+export async function requireRaffleAdminAccess(
+  raffleId: string,
+  request?: Request,
+) {
   const session = await requireAdminSession();
+
+  const currentTenantSlug = request
+    ? getTenantSlugFromRequest(request)
+    : await getTenantSlugFromHeaders();
+
+  if (!session.user.tenantSlugs.includes(currentTenantSlug)) {
+    throw new Error("FORBIDDEN");
+  }
 
   const rows = await sql`
     select id, tenant_slug
@@ -38,17 +62,18 @@ export async function requireRaffleAdminAccess(raffleId: string) {
   }
 
   const raffle = rows[0];
-  const tenantSlug = String(raffle.tenant_slug);
+  const raffleTenantSlug = String(raffle.tenant_slug);
 
-  if (!session.user.tenantSlugs.includes(tenantSlug)) {
+  if (raffleTenantSlug !== currentTenantSlug) {
     throw new Error("FORBIDDEN");
   }
 
   return {
     session,
+    tenantSlug: currentTenantSlug,
     raffle: {
       id: String(raffle.id),
-      tenant_slug: tenantSlug,
+      tenant_slug: raffleTenantSlug,
     },
   };
 }
