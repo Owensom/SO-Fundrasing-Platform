@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 type Raffle = {
   id: string;
   title: string;
@@ -11,12 +13,21 @@ type Raffle = {
 };
 
 async function getRaffle(slug: string): Promise<Raffle | null> {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/raffles/${slug}`,
-    { cache: "no-store" }
-  );
+  const h = headers();
+  const host = h.get("host");
 
-  if (!res.ok) return null;
+  if (!host) {
+    return null;
+  }
+
+  const protocol = host.includes("localhost") ? "http" : "https";
+  const url = `${protocol}://${host}/api/raffles/${slug}`;
+
+  const res = await fetch(url, { cache: "no-store" });
+
+  if (!res.ok) {
+    return null;
+  }
 
   const data = await res.json();
   return data.raffle ?? null;
@@ -33,7 +44,7 @@ export default async function PublicRafflePage({ params }: PageProps) {
 
   if (!raffle) {
     return (
-      <main style={{ padding: 40 }}>
+      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
         <h1>Raffle not found</h1>
       </main>
     );
@@ -41,29 +52,29 @@ export default async function PublicRafflePage({ params }: PageProps) {
 
   if (raffle.status !== "published") {
     return (
-      <main style={{ padding: 40 }}>
+      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
         <h1>This raffle is not published</h1>
       </main>
     );
   }
 
-  const remaining = raffle.total_tickets - raffle.sold_tickets;
+  const remaining = Math.max(raffle.total_tickets - raffle.sold_tickets, 0);
 
   return (
     <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
       <h1>{raffle.title}</h1>
 
-      {raffle.image_url && (
+      {raffle.image_url ? (
         <img
           src={raffle.image_url}
           alt={raffle.title}
-          style={{ width: "100%", marginBottom: 20 }}
+          style={{ width: "100%", height: "auto", marginBottom: 20 }}
         />
-      )}
+      ) : null}
 
       <p>{raffle.description}</p>
 
-      <hr />
+      <hr style={{ margin: "24px 0" }} />
 
       <p>
         <strong>Price:</strong>{" "}
