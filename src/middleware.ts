@@ -4,24 +4,32 @@ import { extractTenantSlugFromHost } from "@/lib/tenant";
 function getSessionTenantSlugs(request: NextRequest): string[] {
   const raw = request.headers.get("x-tenant-slugs");
 
-  if (!raw) {
-    return [];
-  }
+  if (!raw) return [];
 
   return raw
     .split(",")
-    .map((value) => value.trim())
+    .map((v) => v.trim())
     .filter(Boolean);
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
   const host = request.headers.get("host");
   const tenantSlug = extractTenantSlugFromHost(host) || "";
 
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAdminApiPath =
     pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+
+  // ✅ CRITICAL FIX — allow login + setup pages through
+  const isPublicAdminPath =
+    pathname.startsWith("/admin/login") ||
+    pathname.startsWith("/admin/setup");
+
+  if (isPublicAdminPath) {
+    return NextResponse.next();
+  }
 
   if (!isAdminPath && !isAdminApiPath) {
     return NextResponse.next();
