@@ -1,36 +1,34 @@
 import { headers } from "next/headers";
 
-type Raffle = {
-  id: string;
-  title: string;
-  description: string;
-  image_url: string;
-  ticket_price_cents: number;
-  total_tickets: number;
-  sold_tickets: number;
-  status: string;
-  currency: string;
+type ApiResponse = {
+  ok: boolean;
+  raffle?: {
+    id: string;
+    tenant_slug: string;
+    slug: string;
+    title: string;
+    description: string;
+    image_url: string;
+    currency: string;
+    ticket_price?: number;
+    total_tickets: number;
+    sold_tickets: number;
+    remaining_tickets?: number;
+    status: string;
+  };
+  error?: string;
+  debug?: unknown;
 };
 
-async function getRaffle(slug: string): Promise<Raffle | null> {
-  const h = headers();
-  const host = h.get("host");
-
-  if (!host) {
-    return null;
-  }
-
+async function getRaffle(slug: string): Promise<ApiResponse> {
+  const headerStore = headers();
+  const host = headerStore.get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
   const url = `${protocol}://${host}/api/raffles/${slug}`;
 
   const res = await fetch(url, { cache: "no-store" });
-
-  if (!res.ok) {
-    return null;
-  }
-
-  const data = await res.json();
-  return data.raffle ?? null;
+  const data = (await res.json()) as ApiResponse;
+  return data;
 }
 
 type PageProps = {
@@ -40,25 +38,40 @@ type PageProps = {
 };
 
 export default async function PublicRafflePage({ params }: PageProps) {
-  const raffle = await getRaffle(params.slug);
+  const data = await getRaffle(params.slug);
 
-  if (!raffle) {
+  if (!data.ok) {
     return (
       <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
         <h1>Raffle not found</h1>
+        <pre style={{ whiteSpace: "pre-wrap" }}>
+          {JSON.stringify(data, null, 2)}
+        </pre>
       </main>
     );
   }
+
+  if (!data.raffle) {
+    return (
+      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
+        <h1>No raffle payload returned</h1>
+        <pre style={{ whiteSpace: "pre-wrap" }}>
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      </main>
+    );
+  }
+
+  const raffle = data.raffle;
 
   if (raffle.status !== "published") {
     return (
       <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
         <h1>This raffle is not published</h1>
+        <p>{raffle.title}</p>
       </main>
     );
   }
-
-  const remaining = Math.max(raffle.total_tickets - raffle.sold_tickets, 0);
 
   return (
     <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
@@ -77,8 +90,15 @@ export default async function PublicRafflePage({ params }: PageProps) {
       <hr style={{ margin: "24px 0" }} />
 
       <p>
-        <strong>Price:</strong>{" "}
-        {(raffle.ticket_price_cents / 100).toFixed(2)} {raffle.currency}
+        <strong>Tenant:</strong> {raffle.tenant_slug}
+      </p>
+
+      <p>
+        <strong>Slug:</strong> {raffle.slug}
+      </p>
+
+      <p>
+        <strong>Price:</strong> {raffle.ticket_price ?? 0} {raffle.currency}
       </p>
 
       <p>
@@ -90,7 +110,7 @@ export default async function PublicRafflePage({ params }: PageProps) {
       </p>
 
       <p>
-        <strong>Remaining:</strong> {remaining}
+        <strong>Remaining:</strong> {raffle.remaining_tickets ?? 0}
       </p>
     </main>
   );
