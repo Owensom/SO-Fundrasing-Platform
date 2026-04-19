@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { getRaffleBySlug } from "../../../../api/_lib/raffles-repo";
+import { getRaffleBySlug } from "../../../../../api/_lib/raffles-repo";
 
 type RouteContext = {
   params: {
