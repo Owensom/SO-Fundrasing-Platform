@@ -2,58 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db";
 
-function normalize(value: unknown) {
-  return String(value ?? "").trim();
-}
-
-function acceptedSecrets(raw: string) {
-  const envValue = normalize(raw);
-  const set = new Set<string>();
-
-  if (!envValue) return [];
-
-  set.add(envValue);
-
-  const prefix = "ADMIN_BOOTSTRAP_SECRET=";
-  if (envValue.startsWith(prefix)) {
-    set.add(envValue.slice(prefix.length).trim());
-  }
-
-  return Array.from(set);
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const secret = normalize(body?.secret);
-    const tenantSlug = normalize(body?.tenantSlug);
-    const email = normalize(body?.email).toLowerCase();
+    const secret = String(body?.secret ?? "").trim();
+    const tenantSlug = String(body?.tenantSlug ?? "").trim();
+    const email = String(body?.email ?? "").trim().toLowerCase();
     const password = String(body?.password ?? "");
-    const name = normalize(body?.name);
+    const name = String(body?.name ?? "").trim();
 
-    const envRaw = process.env.ADMIN_BOOTSTRAP_SECRET;
+    const expectedSecret = String(process.env.ADMIN_BOOTSTRAP_SECRET ?? "").trim();
 
-    if (!envRaw) {
+    if (!expectedSecret) {
       return NextResponse.json(
         { ok: false, error: "Missing ADMIN_BOOTSTRAP_SECRET" },
         { status: 500 },
       );
     }
 
-    const allowed = acceptedSecrets(envRaw);
-
-    if (!allowed.includes(secret)) {
+    if (secret !== expectedSecret) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Invalid setup secret",
-          debug: {
-            submitted: secret,
-            submittedLength: secret.length,
-            acceptedLengths: allowed.map((v) => v.length),
-          },
-        },
+        { ok: false, error: "Invalid setup secret" },
         { status: 401 },
       );
     }
@@ -65,11 +35,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = await sql`
+    // 🔴 GET TENANT ID FROM SLUG
+    const tenants = await sql`
       select id
-      from admin_users
-      where lower(email) = ${email}
+      from tenants
+      where slug = ${tenantSlug}
       limit 1
+    `;
+
+    if (tenants.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant not found" },
+        { status: 404 },
+      );
+    }
+
+    const tenantId = tenants[0].id;
+
+    // check existing user
+    const existing = await sql`
+      select id from admin_users where lower(email) = ${email} limit 1
     `;
 
     if (existing.length > 0) {
@@ -82,9 +67,11 @@ export async function POST(request: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
 
+    // ✅ INSERT WITH tenant_id
     await sql`
       insert into admin_users (
         id,
+        tenant_id,
         email,
         name,
         full_name,
@@ -93,6 +80,7 @@ export async function POST(request: NextRequest) {
       )
       values (
         ${userId},
+        ${tenantId},
         ${email},
         ${name},
         ${name},
@@ -101,6 +89,7 @@ export async function POST(request: NextRequest) {
       )
     `;
 
+    // link to tenant (used by auth)
     await sql`
       insert into admin_user_tenants (
         admin_user_id,
