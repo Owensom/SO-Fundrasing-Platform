@@ -22,12 +22,15 @@ export function middleware(request: NextRequest) {
   const isAdminApiPath =
     pathname === "/api/admin" || pathname.startsWith("/api/admin/");
 
-  // ✅ CRITICAL FIX — allow login + setup pages through
-  const isPublicAdminPath =
+  const isPublicAdminPage =
     pathname.startsWith("/admin/login") ||
     pathname.startsWith("/admin/setup");
 
-  if (isPublicAdminPath) {
+  const isPublicAdminApi =
+    pathname === "/api/admin/setup" ||
+    pathname.startsWith("/api/admin/setup/");
+
+  if (isPublicAdminPage || isPublicAdminApi) {
     return NextResponse.next();
   }
 
