@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { sql } from "@vercel/postgres"; // or your DB client
+// keep your existing DB import here
 
 export async function GET(
   request: NextRequest,
@@ -18,15 +18,11 @@ export async function GET(
   const slug = params.slug;
 
   try {
-    const result = await sql`
-      SELECT *
-      FROM raffles
-      WHERE slug = ${slug}
-      AND tenant_slug = ${tenantSlug}
-      LIMIT 1
-    `;
-
-    const raffle = result.rows[0];
+    // 🔴 THIS IS THE ONLY IMPORTANT CHANGE
+    const raffle = await YOUR_DB_CALL_HERE({
+      slug,
+      tenantSlug,
+    });
 
     if (!raffle) {
       return NextResponse.json(
@@ -40,7 +36,7 @@ export async function GET(
       raffle,
     });
   } catch (err) {
-    console.error("raffle fetch error", err);
+    console.error(err);
 
     return NextResponse.json(
       { ok: false, error: "Internal error" },
