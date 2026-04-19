@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 type RaffleItem = {
@@ -29,11 +29,22 @@ type ApiResponse = {
 
 async function getAdminRaffles(): Promise<RaffleItem[]> {
   const headerStore = headers();
+  const cookieStore = cookies();
+
   const host = headerStore.get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
-  const url = `${protocol}://${host}/api/admin/raffles`;
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
 
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(`${protocol}://${host}/api/admin/raffles`, {
+    cache: "no-store",
+    headers: {
+      cookie: cookieHeader,
+    },
+  });
+
   const data = (await res.json()) as ApiResponse;
 
   if (!res.ok || !data.ok || !data.items) {
