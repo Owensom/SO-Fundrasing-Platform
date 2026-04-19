@@ -37,6 +37,16 @@ export function resolveTenantFromHost(
     };
   }
 
+  // Temporary migration/testing rule:
+  // map the main Vercel project hostname to demo-a
+  if (hostname === "so-fundraising-platform.vercel.app") {
+    return {
+      kind: "tenant",
+      hostname,
+      tenantSlug: "demo-a",
+    };
+  }
+
   const parts = hostname.split(".");
 
   if (parts.length >= 3) {
