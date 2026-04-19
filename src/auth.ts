@@ -36,7 +36,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           select
             u.id,
             u.email,
-            u.name,
+            coalesce(u.name, u.full_name, '') as name,
             u.password_hash,
             u.is_active,
             coalesce(
@@ -47,7 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           left join admin_user_tenants aut
             on aut.admin_user_id = u.id
           where lower(u.email) = ${email}
-          group by u.id, u.email, u.name, u.password_hash, u.is_active
+          group by u.id, u.email, u.name, u.full_name, u.password_hash, u.is_active
           limit 1
         `;
 
@@ -58,6 +58,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = users[0];
 
         if (!user.is_active) {
+          return null;
+        }
+
+        if (!user.password_hash) {
           return null;
         }
 
@@ -89,7 +93,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.userId = user.id;
-        token.tenantSlugs = user.tenantSlugs;
+        token.tenantSlugs = Array.isArray(user.tenantSlugs)
+          ? user.tenantSlugs.map((value) => String(value))
+          : [];
         token.email = user.email ?? "";
         token.name = user.name ?? null;
       }
