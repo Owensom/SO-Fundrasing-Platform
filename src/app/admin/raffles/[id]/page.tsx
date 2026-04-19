@@ -38,6 +38,7 @@ async function getRaffle(id: string): Promise<{
 
   const host = headerStore.get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
+
   const cookieHeader = cookieStore
     .getAll()
     .map((cookie) => `${cookie.name}=${cookie.value}`)
@@ -57,7 +58,7 @@ async function getRaffle(id: string): Promise<{
   } catch {
     return {
       raffle: null,
-      error: `Invalid JSON response (${res.status})`,
+      error: `Invalid JSON (${res.status})`,
     };
   }
 
@@ -85,6 +86,7 @@ export default async function AdminRaffleDetailsPage({
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
@@ -110,7 +112,7 @@ export default async function AdminRaffleDetailsPage({
             padding: 24,
           }}
         >
-          <h1 style={{ marginTop: 0 }}>Raffle details</h1>
+          <h1>Raffle details</h1>
           <p>Could not load raffle.</p>
           <p>
             ID: <strong>{params.id}</strong>
@@ -135,8 +137,6 @@ export default async function AdminRaffleDetailsPage({
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: 16,
-              alignItems: "flex-start",
               marginBottom: 20,
             }}
           >
@@ -152,7 +152,6 @@ export default async function AdminRaffleDetailsPage({
                 padding: "6px 10px",
                 borderRadius: 9999,
                 border: "1px solid #d1d5db",
-                fontSize: 14,
               }}
             >
               {raffle.status}
@@ -196,24 +195,22 @@ export default async function AdminRaffleDetailsPage({
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
               Description
             </div>
             <div>{raffle.description || "No description"}</div>
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
               Config JSON
             </div>
             <pre
               style={{
                 background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
                 padding: 16,
+                borderRadius: 12,
                 overflowX: "auto",
-                whiteSpace: "pre-wrap",
               }}
             >
               {JSON.stringify(raffle.config_json ?? {}, null, 2)}
@@ -222,6 +219,9 @@ export default async function AdminRaffleDetailsPage({
 
           <div style={{ display: "flex", gap: 16 }}>
             <Link href={`/r/${raffle.slug}`}>View public page</Link>
+            <Link href={`/admin/raffles/${raffle.id}/edit`}>
+              Edit raffle
+            </Link>
           </div>
         </div>
       )}
