@@ -3,6 +3,25 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db";
 
+function normalizeTenantSlugs(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item));
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item));
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: "jwt",
@@ -71,9 +90,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const tenantSlugs = Array.isArray(user.tenant_slugs)
-          ? user.tenant_slugs.map((value: unknown) => String(value))
-          : [];
+        const tenantSlugs = normalizeTenantSlugs(user.tenant_slugs);
 
         if (tenantSlugs.length === 0) {
           return null;
