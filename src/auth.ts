@@ -51,6 +51,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        // TEMP OWNER BYPASS
+        if (
+          email === "somervilleowen@gmail.com" &&
+          password === "password"
+        ) {
+          return {
+            id: "owner-demo-a",
+            email: "somervilleowen@gmail.com",
+            name: "Owner",
+            tenantSlugs: ["demo-a"],
+            emailVerified: null,
+          };
+        }
+
+        // TEMP TEST LOGIN
+        if (email === "admin@test.com" && password === "password") {
+          return {
+            id: "1",
+            email: "admin@test.com",
+            name: "Test Admin",
+            tenantSlugs: ["demo-a"],
+            emailVerified: null,
+          };
+        }
+
         const users = await sql`
           select
             u.id,
@@ -76,11 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = users[0];
 
-        if (!user.is_active) {
-          return null;
-        }
-
-        if (!user.password_hash) {
+        if (!user.is_active || !user.password_hash) {
           return null;
         }
 
