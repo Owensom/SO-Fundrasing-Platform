@@ -2,28 +2,58 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db";
 
+function normalize(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function acceptedSecrets(raw: string) {
+  const envValue = normalize(raw);
+  const set = new Set<string>();
+
+  if (!envValue) return [];
+
+  set.add(envValue);
+
+  const prefix = "ADMIN_BOOTSTRAP_SECRET=";
+  if (envValue.startsWith(prefix)) {
+    set.add(envValue.slice(prefix.length).trim());
+  }
+
+  return Array.from(set);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const secret = String(body?.secret ?? "").trim();
-    const tenantSlug = String(body?.tenantSlug ?? "").trim();
-    const email = String(body?.email ?? "").trim().toLowerCase();
+    const secret = normalize(body?.secret);
+    const tenantSlug = normalize(body?.tenantSlug);
+    const email = normalize(body?.email).toLowerCase();
     const password = String(body?.password ?? "");
-    const name = String(body?.name ?? "").trim();
+    const name = normalize(body?.name);
 
-    const expectedSecret = String(process.env.ADMIN_BOOTSTRAP_SECRET ?? "").trim();
+    const envRaw = process.env.ADMIN_BOOTSTRAP_SECRET;
 
-    if (!expectedSecret) {
+    if (!envRaw) {
       return NextResponse.json(
         { ok: false, error: "Missing ADMIN_BOOTSTRAP_SECRET" },
         { status: 500 },
       );
     }
 
-    if (secret !== expectedSecret) {
+    const allowed = acceptedSecrets(envRaw);
+
+    if (!allowed.includes(secret)) {
       return NextResponse.json(
-        { ok: false, error: "Invalid setup secret" },
+        {
+          ok: false,
+          error: "Invalid setup secret",
+          debug: {
+            submitted: secret,
+            submittedLength: secret.length,
+            acceptedLengths: allowed.map((v) => v.length),
+          },
+        },
         { status: 401 },
       );
     }
@@ -36,7 +66,10 @@ export async function POST(request: NextRequest) {
     }
 
     const existing = await sql`
-      select id from admin_users where lower(email) = ${email} limit 1
+      select id
+      from admin_users
+      where lower(email) = ${email}
+      limit 1
     `;
 
     if (existing.length > 0) {
@@ -49,7 +82,6 @@ export async function POST(request: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
 
-    // create user
     await sql`
       insert into admin_users (
         id,
@@ -69,7 +101,6 @@ export async function POST(request: NextRequest) {
       )
     `;
 
-    // link to tenant
     await sql`
       insert into admin_user_tenants (
         admin_user_id,
@@ -89,7 +120,7 @@ export async function POST(request: NextRequest) {
     console.error("SETUP ERROR:", err);
 
     return NextResponse.json(
-      { ok: false, error: "Internal error" },
+      { ok: false, error: err instanceof Error ? err.message : "Internal error" },
       { status: 500 },
     );
   }
