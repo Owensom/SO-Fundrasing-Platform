@@ -8,9 +8,6 @@ type Session = {
   };
 };
 
-/**
- * Ensures the current session has access to the tenant
- */
 export async function requireTenantAccess(
   session: Session | null,
   request?: Request | { headers: Headers },
@@ -19,11 +16,10 @@ export async function requireTenantAccess(
     throw new Error("UNAUTHENTICATED");
   }
 
-  // Always resolve tenant as a string (never null)
   const currentTenantSlug =
     (request
       ? getTenantSlugFromRequest(request)
-      : await getTenantSlugFromHeaders()) || "";
+      : getTenantSlugFromHeaders()) || "";
 
   if (!currentTenantSlug) {
     throw new Error("NO_TENANT");
