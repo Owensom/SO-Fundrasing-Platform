@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "../../../../../api/_lib/db";
+import bcrypt from "bcryptjs";
+import { sql } from "@/lib/db";
 
 function normalizeSecret(value: unknown): string {
   return String(value ?? "").trim();
@@ -14,7 +15,6 @@ function buildAcceptedSecrets(rawEnvValue: string): string[] {
   accepted.add(trimmed);
 
   const prefix = "ADMIN_BOOTSTRAP_SECRET=";
-
   if (trimmed.startsWith(prefix)) {
     accepted.add(trimmed.slice(prefix.length).trim());
   }
@@ -42,7 +42,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { secret, email, password, name, tenantSlug } = body || {};
+    const secret = normalizeSecret(body?.secret);
+    const tenantSlug = String(body?.tenantSlug ?? "").trim();
+    const email = String(body?.email ?? "").trim().toLowerCase();
+    const password = String(body?.password ?? "");
+    const name = String(body?.name ?? "").trim();
 
     const expectedSecretRaw = process.env.ADMIN_BOOTSTRAP_SECRET;
 
@@ -53,74 +57,77 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const submittedSecret = normalizeSecret(secret);
     const acceptedSecrets = buildAcceptedSecrets(expectedSecretRaw);
 
-    if (!acceptedSecrets.includes(submittedSecret)) {
+    if (!acceptedSecrets.includes(secret)) {
       return NextResponse.json(
         { ok: false, error: "Invalid setup secret" },
         { status: 401 },
       );
     }
 
-    if (!email || !password || !tenantSlug) {
+    if (!tenantSlug || !email || !password || !name) {
       return NextResponse.json(
         { ok: false, error: "Missing required fields" },
         { status: 400 },
       );
     }
 
-    const existing = await query<{ id: string }>(
-      `
+    const existingUsers = await sql`
       select id
       from admin_users
-      where tenant_slug = $1
+      where lower(email) = ${email}
       limit 1
-      `,
-      [tenantSlug],
-    );
+    `;
 
-    if (existing.length > 0) {
+    if (existingUsers.length > 0) {
       return NextResponse.json(
-        { ok: false, error: "Admin already exists for this tenant" },
+        { ok: false, error: "Admin user already exists for this email" },
         { status: 400 },
       );
     }
 
-    await query(
-      `
+    const passwordHash = await bcrypt.hash(password, 10);
+    const adminUserId = crypto.randomUUID();
+
+    await sql`
       insert into admin_users (
         id,
-        tenant_slug,
         email,
-        password_hash,
         name,
-        created_at
+        password_hash,
+        is_active
       )
-      values ($1, $2, $3, crypt($4, gen_salt('bf')), $5, now())
-      `,
-      [
-        crypto.randomUUID(),
-        String(tenantSlug).trim(),
-        String(email).toLowerCase().trim(),
-        String(password),
-        String(name ?? "").trim(),
-      ],
-    );
+      values (
+        ${adminUserId},
+        ${email},
+        ${name},
+        ${passwordHash},
+        true
+      )
+    `;
+
+    await sql`
+      insert into admin_user_tenants (
+        admin_user_id,
+        tenant_slug
+      )
+      values (
+        ${adminUserId},
+        ${tenantSlug}
+      )
+    `;
 
     return NextResponse.json({
       ok: true,
-      message: "Admin created",
+      message: "Admin created. You can now sign in at /admin/login.",
     });
   } catch (error) {
     const message = getErrorMessage(error);
     console.error("SETUP ERROR:", error);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: `Internal error: ${message}`,
-      },
+      { ok: false, error: `Internal error: ${message}` },
       { status: 500 },
     );
   }
