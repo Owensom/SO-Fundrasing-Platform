@@ -1,18 +1,47 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { sql } from "@/lib/db";
-import { normalizeStatus } from "@/lib/raffles";
+import { headers } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
-type RaffleRow = {
+type RaffleItem = {
   id: string;
   tenant_slug: string;
   slug: string;
   title: string;
+  description: string;
+  image_url: string;
+  currency: string;
+  ticket_price: number;
+  total_tickets: number;
+  sold_tickets: number;
+  remaining_tickets: number;
   status: string;
+  created_at: string;
   updated_at: string;
 };
+
+type ApiResponse = {
+  ok: boolean;
+  items?: RaffleItem[];
+  error?: string;
+};
+
+async function getAdminRaffles(): Promise<RaffleItem[]> {
+  const headerStore = headers();
+  const host = headerStore.get("host") || "";
+  const protocol = host.includes("localhost") ? "http" : "https";
+  const url = `${protocol}://${host}/api/admin/raffles`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  const data = (await res.json()) as ApiResponse;
+
+  if (!res.ok || !data.ok || !data.items) {
+    return [];
+  }
+
+  return data.items;
+}
 
 export default async function AdminRafflesPage() {
   const session = await auth();
@@ -22,60 +51,139 @@ export default async function AdminRafflesPage() {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
 
-  if (!session.user.tenantSlugs.includes(tenantSlug)) {
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const rows = (await sql`
-    select
-      id,
-      tenant_slug,
-      slug,
-      title,
-      status,
-      updated_at
-    from raffles
-    where tenant_slug = ${tenantSlug}
-    order by updated_at desc
-  `) as RaffleRow[];
+  const raffles = await getAdminRaffles();
 
   return (
-    <div style={{ maxWidth: 960, margin: "40px auto", padding: 24 }}>
-      <h1>Raffles</h1>
+    <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 16px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 24,
+          gap: 16,
+        }}
+      >
+        <div>
+          <h1 style={{ margin: 0 }}>Manage raffles</h1>
+          <p style={{ margin: "8px 0 0" }}>
+            Tenant: <strong>{tenantSlug}</strong>
+          </p>
+        </div>
 
-      <p>
-        Tenant: <strong>{tenantSlug}</strong>
-      </p>
-
-      <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
-        {rows.map((raffle) => (
-          <div
-            key={raffle.id}
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 14,
-              padding: 16,
-              display: "grid",
-              gap: 8,
-            }}
-          >
-            <div>
-              <strong>{raffle.title}</strong>
-            </div>
-            <div>Slug: {raffle.slug}</div>
-            <div>Status: {normalizeStatus(raffle.status)}</div>
-            <div>
-              <Link href={`/admin/raffles/${raffle.id}/edit`}>Edit</Link>
-            </div>
-            <div>
-              <Link href={`/r/${raffle.slug}`} target="_blank">
-                Open public page
-              </Link>
-            </div>
-          </div>
-        ))}
+        <Link
+          href="/admin/raffles/new"
+          style={{
+            display: "inline-block",
+            padding: "12px 18px",
+            borderRadius: 9999,
+            background: "#1683f8",
+            color: "#fff",
+            textDecoration: "none",
+            fontWeight: 600,
+          }}
+        >
+          Create raffle
+        </Link>
       </div>
-    </div>
+
+      {raffles.length === 0 ? (
+        <div
+          style={{
+            padding: 24,
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            background: "#fff",
+          }}
+        >
+          No raffles yet.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 16 }}>
+          {raffles.map((raffle) => (
+            <div
+              key={raffle.id}
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 16,
+                padding: 20,
+                background: "#fff",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <h2 style={{ margin: 0 }}>{raffle.title}</h2>
+                  <p style={{ margin: "8px 0 0", color: "#4b5563" }}>
+                    /r/{raffle.slug}
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 9999,
+                    border: "1px solid #d1d5db",
+                    fontSize: 14,
+                  }}
+                >
+                  {raffle.status}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: 12,
+                  marginTop: 16,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>Price</div>
+                  <div>
+                    {raffle.ticket_price} {raffle.currency}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>Total</div>
+                  <div>{raffle.total_tickets}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>Sold</div>
+                  <div>{raffle.sold_tickets}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>Remaining</div>
+                  <div>{raffle.remaining_tickets}</div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 16, marginTop: 20 }}>
+                <Link href={`/r/${raffle.slug}`}>View public page</Link>
+                <Link href={`/admin/raffles/${raffle.id}`}>Open details</Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
   );
 }
