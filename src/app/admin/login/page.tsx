@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { signIn } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 type LoginPageProps = {
@@ -22,6 +24,29 @@ export default async function AdminLoginPage({
 }: LoginPageProps) {
   const tenantSlug = await getTenantSlugFromHeaders();
   const errorMessage = getErrorMessage(searchParams?.error);
+
+  async function loginAction(formData: FormData) {
+    "use server";
+
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      redirect("/admin/login?error=invalid_credentials");
+    }
+
+    try {
+      await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+    } catch {
+      redirect("/admin/login?error=invalid_credentials");
+    }
+
+    redirect("/admin");
+  }
 
   return (
     <main
@@ -66,13 +91,7 @@ export default async function AdminLoginPage({
           </p>
         ) : null}
 
-        <form action="/api/auth/login" method="post">
-          <input
-            type="hidden"
-            name="tenantSlug"
-            value={tenantSlug || ""}
-          />
-
+        <form action={loginAction}>
           <input
             type="email"
             name="email"
