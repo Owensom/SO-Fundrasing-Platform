@@ -71,28 +71,19 @@ export default async function AdminLoginPage({
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
-        <h1
-          style={{
-            fontSize: 44,
-            lineHeight: 1.1,
-            margin: 0,
-            marginBottom: 16,
-            fontWeight: 700,
-            color: "#111827",
-          }}
-        >
+        <h1 style={{ fontSize: 44, marginBottom: 16 }}>
           Admin login
         </h1>
 
-        <p style={{ margin: "0 0 16px", color: "#374151", fontSize: 20 }}>
+        <p style={{ marginBottom: 16 }}>
           Site: <strong>{tenantSlug || "unknown"}</strong>
         </p>
 
-        {errorMessage ? (
-          <p style={{ margin: "0 0 16px", color: "#dc2626", fontSize: 16 }}>
+        {errorMessage && (
+          <p style={{ color: "red", marginBottom: 16 }}>
             {errorMessage}
           </p>
-        ) : null}
+        )}
 
         <form action={loginAction}>
           <input
@@ -100,16 +91,7 @@ export default async function AdminLoginPage({
             name="email"
             placeholder="Email"
             required
-            style={{
-              width: "100%",
-              height: 48,
-              borderRadius: 10,
-              border: "1px solid #d1d5db",
-              padding: "0 14px",
-              fontSize: 16,
-              marginBottom: 12,
-              boxSizing: "border-box",
-            }}
+            style={{ width: "100%", marginBottom: 12, height: 48 }}
           />
 
           <input
@@ -117,16 +99,7 @@ export default async function AdminLoginPage({
             name="password"
             placeholder="Password"
             required
-            style={{
-              width: "100%",
-              height: 48,
-              borderRadius: 10,
-              border: "1px solid #d1d5db",
-              padding: "0 14px",
-              fontSize: 16,
-              marginBottom: 16,
-              boxSizing: "border-box",
-            }}
+            style={{ width: "100%", marginBottom: 16, height: 48 }}
           />
 
           <button
@@ -134,13 +107,10 @@ export default async function AdminLoginPage({
             style={{
               width: "100%",
               height: 48,
-              borderRadius: 9999,
-              border: "none",
               background: "#1683f8",
-              color: "#ffffff",
-              fontSize: 16,
-              fontWeight: 600,
-              cursor: "pointer",
+              color: "#fff",
+              border: "none",
+              borderRadius: 9999,
             }}
           >
             Sign in
