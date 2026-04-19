@@ -1,44 +1,47 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { extractTenantSlugFromHost } from "@/lib/tenant";
 
-export default auth((req) => {
-  const pathname = req.nextUrl.pathname;
-  const host =
-    req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
-  const tenantSlug = extractTenantSlugFromHost(host);
-  const isLoggedIn = !!req.auth;
+function getSessionTenantSlugs(request: NextRequest): string[] {
+  const raw = request.headers.get("x-tenant-slugs");
 
-  const isAdminPath = pathname.startsWith("/admin");
-  const isAdminApiPath = pathname.startsWith("/api/admin");
-  const isPublicAdminPath =
-    pathname === "/admin/login" || pathname === "/admin/setup";
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const host = request.headers.get("host");
+  const tenantSlug = extractTenantSlugFromHost(host) || "";
+
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isAdminApiPath =
+    pathname === "/api/admin" || pathname.startsWith("/api/admin/");
 
   if (!isAdminPath && !isAdminApiPath) {
     return NextResponse.next();
   }
 
-  if (isPublicAdminPath) {
-    return NextResponse.next();
-  }
-
-  if (!isLoggedIn) {
+  if (!tenantSlug) {
     if (isAdminApiPath) {
       return NextResponse.json(
-        { ok: false, error: "Unauthenticated" },
-        { status: 401 },
+        { ok: false, error: "Tenant not found" },
+        { status: 404 },
       );
     }
 
-    const loginUrl = new URL("/admin/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-
-    return NextResponse.redirect(loginUrl);
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.searchParams.set("error", "tenant_not_found");
+    return NextResponse.redirect(url);
   }
 
-  const sessionTenantSlugs = Array.isArray(req.auth?.user?.tenantSlugs)
-    ? req.auth!.user!.tenantSlugs
-    : [];
+  const sessionTenantSlugs = getSessionTenantSlugs(request);
 
   if (!sessionTenantSlugs.includes(tenantSlug)) {
     if (isAdminApiPath) {
@@ -48,14 +51,14 @@ export default auth((req) => {
       );
     }
 
-    const forbiddenUrl = new URL("/admin/login", req.url);
-    forbiddenUrl.searchParams.set("error", "tenant_access_denied");
-
-    return NextResponse.redirect(forbiddenUrl);
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/admin/login";
+    loginUrl.searchParams.set("error", "tenant_access_denied");
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: ["/admin/:path*", "/api/admin/:path*"],
