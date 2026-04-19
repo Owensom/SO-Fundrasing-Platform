@@ -29,7 +29,7 @@ export default async function NewRafflePage() {
       <form
         action="/api/admin/raffles"
         method="post"
-        style={{ display: "grid", gap: 12, marginTop: 24, maxWidth: 640 }}
+        style={{ display: "grid", gap: 12, marginTop: 24, maxWidth: 720 }}
       >
         <input type="hidden" name="tenantSlug" value={tenantSlug} />
 
@@ -74,7 +74,11 @@ export default async function NewRafflePage() {
 
         <label>
           <div style={{ marginBottom: 6 }}>Currency</div>
-          <select name="currency" defaultValue="EUR" style={{ width: "100%", padding: 12 }}>
+          <select
+            name="currency"
+            defaultValue="EUR"
+            style={{ width: "100%", padding: 12 }}
+          >
             <option value="EUR">EUR</option>
             <option value="GBP">GBP</option>
             <option value="USD">USD</option>
@@ -106,8 +110,61 @@ export default async function NewRafflePage() {
         </label>
 
         <label>
+          <div style={{ marginBottom: 6 }}>Start number</div>
+          <input
+            name="startNumber"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue="1"
+            style={{ width: "100%", padding: 12 }}
+          />
+        </label>
+
+        <label>
+          <div style={{ marginBottom: 6 }}>End number</div>
+          <input
+            name="endNumber"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue="10"
+            style={{ width: "100%", padding: 12 }}
+          />
+        </label>
+
+        <label>
+          <div style={{ marginBottom: 6 }}>Colours (comma separated)</div>
+          <input
+            name="colours"
+            defaultValue="Red,Blue"
+            style={{ width: "100%", padding: 12 }}
+            placeholder="Red,Blue"
+          />
+        </label>
+
+        <label>
+          <div style={{ marginBottom: 6 }}>
+            Offers JSON
+          </div>
+          <textarea
+            name="offers"
+            rows={6}
+            defaultValue={`[
+  { "label": "3 for 12", "price": 12, "quantity": 3 },
+  { "label": "5 for 18", "price": 18, "quantity": 5 }
+]`}
+            style={{ width: "100%", padding: 12, fontFamily: "monospace" }}
+          />
+        </label>
+
+        <label>
           <div style={{ marginBottom: 6 }}>Status</div>
-          <select name="status" defaultValue="draft" style={{ width: "100%", padding: 12 }}>
+          <select
+            name="status"
+            defaultValue="draft"
+            style={{ width: "100%", padding: 12 }}
+          >
             <option value="draft">draft</option>
             <option value="published">published</option>
             <option value="closed">closed</option>
