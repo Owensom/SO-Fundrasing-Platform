@@ -42,15 +42,13 @@ export default auth((req) => {
     return NextResponse.redirect(url);
   }
 
-  const sessionTenantSlugs = Array.isArray(req.auth?.user?.tenantSlugs)
-    ? req.auth.user.tenantSlugs.map((value) => String(value))
-    : [];
-
-  if (sessionTenantSlugs.length === 0 || !sessionTenantSlugs.includes(tenantSlug)) {
+  // Only require that a user is logged in here.
+  // Tenant membership is enforced inside the actual admin pages/APIs.
+  if (!req.auth?.user) {
     if (isAdminApiPath) {
       return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 },
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
       );
     }
 
