@@ -22,17 +22,27 @@ function buildAcceptedSecrets(rawEnvValue: string): string[] {
   return Array.from(accepted);
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const {
-      secret,
-      email,
-      password,
-      name,
-      tenantSlug,
-    } = body || {};
+    const { secret, email, password, name, tenantSlug } = body || {};
 
     const expectedSecretRaw = process.env.ADMIN_BOOTSTRAP_SECRET;
 
@@ -48,14 +58,7 @@ export async function POST(request: NextRequest) {
 
     if (!acceptedSecrets.includes(submittedSecret)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Invalid setup secret",
-          debug: {
-            submittedLength: submittedSecret.length,
-            acceptedLengths: acceptedSecrets.map((value) => value.length),
-          },
-        },
+        { ok: false, error: "Invalid setup secret" },
         { status: 401 },
       );
     }
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = await query(
+    const existing = await query<{ id: string }>(
       `
       select id
       from admin_users
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
       `,
       [
         crypto.randomUUID(),
-        tenantSlug,
+        String(tenantSlug).trim(),
         String(email).toLowerCase().trim(),
         String(password),
         String(name ?? "").trim(),
@@ -110,10 +113,14 @@ export async function POST(request: NextRequest) {
       message: "Admin created",
     });
   } catch (error) {
+    const message = getErrorMessage(error);
     console.error("SETUP ERROR:", error);
 
     return NextResponse.json(
-      { ok: false, error: "Internal error" },
+      {
+        ok: false,
+        error: `Internal error: ${message}`,
+      },
       { status: 500 },
     );
   }
