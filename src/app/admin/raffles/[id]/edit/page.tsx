@@ -164,9 +164,6 @@ export default async function EditRafflePage({
         method="post"
         style={{ display: "grid", gap: 12, marginTop: 24, maxWidth: 720 }}
       >
-        <input type="hidden" name="_method" value="PUT" />
-        <input type="hidden" name="tenantSlug" value={tenantSlug} />
-
         <label>
           <div style={{ marginBottom: 6 }}>Title</div>
           <input
