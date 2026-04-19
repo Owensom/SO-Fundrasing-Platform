@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-// keep your existing DB import here
+import { getRaffleBySlug } from "../../../../api/_lib/raffles-repo";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { slug: string } },
-) {
+type RouteContext = {
+  params: {
+    slug: string;
+  };
+};
+
+export async function GET(request: NextRequest, context: RouteContext) {
   const tenantSlug = getTenantSlugFromRequest(request);
 
   if (!tenantSlug) {
@@ -15,14 +18,10 @@ export async function GET(
     );
   }
 
-  const slug = params.slug;
+  const slug = context.params.slug;
 
   try {
-    // 🔴 THIS IS THE ONLY IMPORTANT CHANGE
-    const raffle = await YOUR_DB_CALL_HERE({
-      slug,
-      tenantSlug,
-    });
+    const raffle = await getRaffleBySlug(tenantSlug, slug);
 
     if (!raffle) {
       return NextResponse.json(
@@ -35,8 +34,8 @@ export async function GET(
       ok: true,
       raffle,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("GET /api/raffles/[slug] failed", error);
 
     return NextResponse.json(
       { ok: false, error: "Internal error" },
