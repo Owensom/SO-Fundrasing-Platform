@@ -1,26 +1,5 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
-
-function normalizeTenantSlugs(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item));
-  }
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => String(item));
-      }
-    } catch {
-      return [];
-    }
-  }
-
-  return [];
-}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
@@ -47,83 +26,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
-        if (!email || !password) {
-          return null;
-        }
-
-        // TEMP OWNER BYPASS
-        if (
-          email === "somervilleowen@gmail.com" &&
-          password === "password"
-        ) {
+        if (email === "force@test.com" && password === "forcepass123") {
           return {
-            id: "owner-demo-a",
-            email: "somervilleowen@gmail.com",
-            name: "Owner",
+            id: "force-user",
+            email: "force@test.com",
+            name: "Force User",
             tenantSlugs: ["demo-a"],
             emailVerified: null,
           };
         }
 
-        // TEMP TEST LOGIN
-        if (email === "admin@test.com" && password === "password") {
-          return {
-            id: "1",
-            email: "admin@test.com",
-            name: "Test Admin",
-            tenantSlugs: ["demo-a"],
-            emailVerified: null,
-          };
-        }
-
-        const users = await sql`
-          select
-            u.id,
-            u.email,
-            coalesce(u.name, u.full_name, '') as name,
-            u.password_hash,
-            u.is_active,
-            coalesce(
-              json_agg(aut.tenant_slug) filter (where aut.tenant_slug is not null),
-              '[]'::json
-            ) as tenant_slugs
-          from admin_users u
-          left join admin_user_tenants aut
-            on aut.admin_user_id = u.id
-          where lower(u.email) = ${email}
-          group by u.id, u.email, u.name, u.full_name, u.password_hash, u.is_active
-          limit 1
-        `;
-
-        if (!users.length) {
-          return null;
-        }
-
-        const user = users[0];
-
-        if (!user.is_active || !user.password_hash) {
-          return null;
-        }
-
-        const isValid = await bcrypt.compare(password, String(user.password_hash));
-
-        if (!isValid) {
-          return null;
-        }
-
-        const tenantSlugs = normalizeTenantSlugs(user.tenant_slugs);
-
-        if (tenantSlugs.length === 0) {
-          return null;
-        }
-
-        return {
-          id: String(user.id),
-          email: String(user.email),
-          name: user.name ? String(user.name) : null,
-          tenantSlugs,
-          emailVerified: null,
-        };
+        throw new Error("AUTHORIZE_RAN_BUT_CREDENTIALS_DID_NOT_MATCH");
       },
     }),
   ],
