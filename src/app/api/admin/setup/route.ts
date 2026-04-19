@@ -1,120 +1,92 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
-import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { query } from "../../../../../api/_lib/db";
 
-function makeId(prefix: string) {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json()) as {
-    secret?: string;
-    email?: string;
-    password?: string;
-    name?: string;
-    tenantSlug?: string;
-  };
+    const {
+      secret,
+      email,
+      password,
+      name,
+      tenantSlug,
+    } = body || {};
 
-  const bootstrapSecret = process.env.ADMIN_BOOTSTRAP_SECRET;
+    const expectedSecret = process.env.ADMIN_BOOTSTRAP_SECRET;
 
-  if (!bootstrapSecret) {
+    if (!expectedSecret) {
+      return NextResponse.json(
+        { ok: false, error: "Missing ADMIN_BOOTSTRAP_SECRET" },
+        { status: 500 },
+      );
+    }
+
+    // 🔴 IMPORTANT FIX — trim both sides
+    if ((secret || "").trim() !== expectedSecret.trim()) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid setup secret" },
+        { status: 401 },
+      );
+    }
+
+    if (!email || !password || !tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    // Check if admin already exists for this tenant
+    const existing = await query(
+      `
+      select id
+      from admin_users
+      where tenant_slug = $1
+      limit 1
+      `,
+      [tenantSlug],
+    );
+
+    if (existing.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: "Admin already exists for this tenant" },
+        { status: 400 },
+      );
+    }
+
+    // Insert admin user
+    await query(
+      `
+      insert into admin_users (
+        id,
+        tenant_slug,
+        email,
+        password_hash,
+        name,
+        created_at
+      )
+      values ($1, $2, $3, crypt($4, gen_salt('bf')), $5, now())
+      `,
+      [
+        crypto.randomUUID(),
+        tenantSlug,
+        email.toLowerCase(),
+        password,
+        name || "",
+      ],
+    );
+
+    return NextResponse.json({
+      ok: true,
+      message: "Admin created",
+    });
+  } catch (error) {
+    console.error("SETUP ERROR:", error);
+
     return NextResponse.json(
-      { ok: false, error: "Missing ADMIN_BOOTSTRAP_SECRET" },
+      { ok: false, error: "Internal error" },
       { status: 500 },
     );
   }
-
-  if (!body.secret || body.secret !== bootstrapSecret) {
-    return NextResponse.json(
-      { ok: false, error: "Invalid setup secret" },
-      { status: 403 },
-    );
-  }
-
-  const hostTenantSlug = getTenantSlugFromRequest(req);
-  const requestedTenantSlug = String(body.tenantSlug ?? "").trim().toLowerCase();
-  const tenantSlug =
-    requestedTenantSlug || hostTenantSlug || "default";
-
-  const email = String(body.email ?? "").trim().toLowerCase();
-  const password = String(body.password ?? "");
-  const name = String(body.name ?? "").trim();
-
-  if (!email || !password || !tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Email, password, and tenant slug are required" },
-      { status: 400 },
-    );
-  }
-
-  if (password.length < 8) {
-    return NextResponse.json(
-      { ok: false, error: "Password must be at least 8 characters" },
-      { status: 400 },
-    );
-  }
-
-  const existingUsers = await sql`
-    select id
-    from admin_users
-    where lower(email) = ${email}
-    limit 1
-  `;
-
-  if (existingUsers.length) {
-    return NextResponse.json(
-      { ok: false, error: "Admin user already exists" },
-      { status: 409 },
-    );
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-  const userId = makeId("admin");
-
-  await sql`
-    insert into admin_users (
-      id,
-      email,
-      password_hash,
-      name,
-      is_active,
-      created_at,
-      updated_at
-    )
-    values (
-      ${userId},
-      ${email},
-      ${passwordHash},
-      ${name || null},
-      true,
-      now(),
-      now()
-    )
-  `;
-
-  await sql`
-    insert into admin_user_tenants (
-      admin_user_id,
-      tenant_slug,
-      role,
-      created_at
-    )
-    values (
-      ${userId},
-      ${tenantSlug},
-      'owner',
-      now()
-    )
-  `;
-
-  return NextResponse.json({
-    ok: true,
-    user: {
-      id: userId,
-      email,
-      name: name || null,
-      tenantSlug,
-    },
-  });
 }
