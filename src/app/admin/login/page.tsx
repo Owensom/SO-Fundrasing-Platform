@@ -39,13 +39,11 @@ export default async function AdminLoginPage({
       await signIn("credentials", {
         email,
         password,
-        redirect: false,
+        redirectTo: "/admin",
       });
     } catch {
       redirect("/admin/login?error=invalid_credentials");
     }
-
-    redirect("/admin");
   }
 
   return (
