@@ -16,7 +16,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // 🔥 TEMP TEST LOGIN (no database)
         if (
           credentials?.email === "admin@test.com" &&
           credentials?.password === "password"
@@ -25,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: "1",
             email: "admin@test.com",
             name: "Test Admin",
-            tenantSlugs: ["test"],
+            tenantSlugs: ["demo-a"],
             emailVerified: null,
           };
         }
