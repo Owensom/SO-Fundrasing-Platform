@@ -8,6 +8,29 @@ type RouteContext = {
   };
 };
 
+function parseNumber(value: FormDataEntryValue | string | null | undefined, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function parseColours(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseOffers(value: string) {
+  if (!value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   const tenantSlug = getTenantSlugFromRequest(request);
   const id = context.params.id;
@@ -42,6 +65,108 @@ export async function GET(request: NextRequest, context: RouteContext) {
     });
   } catch (error) {
     console.error("GET raffle failed:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+  const id = context.params.id;
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const existing = await getRaffleById(id);
+
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, error: "Raffle not found" },
+        { status: 404 },
+      );
+    }
+
+    if (existing.tenant_slug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Forbidden" },
+        { status: 403 },
+      );
+    }
+
+    const formData = await request.formData();
+
+    const title = String(formData.get("title") ?? "").trim();
+    const slug = String(formData.get("slug") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const image_url = String(formData.get("image_url") ?? "").trim();
+    const currency = String(formData.get("currency") ?? existing.currency);
+    const status = String(formData.get("status") ?? existing.status);
+    const ticket_price = parseNumber(formData.get("ticket_price"), existing.ticket_price);
+    const total_tickets = parseNumber(formData.get("total_tickets"), existing.total_tickets);
+    const startNumber = parseNumber(
+      formData.get("startNumber"),
+      Number((existing.config_json as Record<string, unknown> | undefined)?.startNumber ?? 0),
+    );
+    const endNumber = parseNumber(
+      formData.get("endNumber"),
+      Number((existing.config_json as Record<string, unknown> | undefined)?.endNumber ?? 0),
+    );
+
+    const colours = parseColours(String(formData.get("colours") ?? ""));
+    const offers = parseOffers(String(formData.get("offers") ?? "[]"));
+
+    const updated = await updateRaffle(id, {
+      tenant_slug: tenantSlug,
+      title: title || existing.title,
+      slug: slug || existing.slug,
+      description,
+      image_url,
+      currency: currency as "GBP" | "USD" | "EUR",
+      ticket_price,
+      total_tickets,
+      sold_tickets: existing.sold_tickets,
+      status: status as "draft" | "published" | "closed",
+      startNumber,
+      endNumber,
+      numbersPerColour:
+        colours.length > 0 && endNumber >= startNumber
+          ? endNumber - startNumber + 1
+          : Number(
+              (existing.config_json as Record<string, unknown> | undefined)
+                ?.numbersPerColour ?? 0,
+            ),
+      colourCount: colours.length,
+      colours,
+      offers,
+      sold:
+        ((existing.config_json as Record<string, unknown> | undefined)
+          ?.sold as Array<{ colour: string; number: number }> | undefined) ?? [],
+      reserved:
+        ((existing.config_json as Record<string, unknown> | undefined)
+          ?.reserved as Array<{ colour: string; number: number }> | undefined) ?? [],
+    });
+
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Update failed" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.redirect(
+      new URL(`/admin/raffles/${id}`, request.url),
+      { status: 303 },
+    );
+  } catch (error) {
+    console.error("POST raffle update failed:", error);
 
     return NextResponse.json(
       { ok: false, error: "Internal error" },
