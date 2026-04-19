@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { getRaffleById, updateRaffle } from "@/api/_lib/raffles-repo";
+import { getRaffleById, updateRaffle } from "../../../../../../api/_lib/raffles-repo";
 
 type RouteContext = {
   params: {
@@ -80,6 +80,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       );
     }
 
+    const config = (existing.config_json ?? {}) as Record<string, unknown>;
+
     const updated = await updateRaffle(id, {
       tenant_slug: tenantSlug,
       title: String(body?.title ?? existing.title),
@@ -100,7 +102,46 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           ? Number(body.sold_tickets)
           : Number(existing.sold_tickets),
       status: body?.status ?? existing.status,
-      config_json: existing.config_json ?? {},
+      startNumber:
+        body?.startNumber != null
+          ? Number(body.startNumber)
+          : Number(config.startNumber ?? 0),
+      endNumber:
+        body?.endNumber != null
+          ? Number(body.endNumber)
+          : Number(config.endNumber ?? 0),
+      numbersPerColour:
+        body?.numbersPerColour != null
+          ? Number(body.numbersPerColour)
+          : Number(config.numbersPerColour ?? 0),
+      colourCount:
+        body?.colourCount != null
+          ? Number(body.colourCount)
+          : Number(config.colourCount ?? 0),
+      colours: Array.isArray(body?.colours)
+        ? body.colours
+        : Array.isArray(config.colours)
+          ? (config.colours as string[])
+          : [],
+      offers: Array.isArray(body?.offers)
+        ? body.offers
+        : Array.isArray(config.offers)
+          ? (config.offers as Array<{
+              id?: string;
+              label: string;
+              price: number;
+              quantity?: number;
+              tickets?: number;
+              is_active?: boolean;
+              sort_order?: number;
+            }>)
+          : [],
+      sold: Array.isArray(config.sold)
+        ? (config.sold as Array<{ colour: string; number: number }>)
+        : [],
+      reserved: Array.isArray(config.reserved)
+        ? (config.reserved as Array<{ colour: string; number: number }>)
+        : [],
     });
 
     if (!updated) {
