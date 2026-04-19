@@ -1,6 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../api/_lib/db";
 
+function normalizeSecret(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function buildAcceptedSecrets(rawEnvValue: string): string[] {
+  const trimmed = normalizeSecret(rawEnvValue);
+  const accepted = new Set<string>();
+
+  if (!trimmed) return [];
+
+  accepted.add(trimmed);
+
+  const prefix = "ADMIN_BOOTSTRAP_SECRET=";
+
+  if (trimmed.startsWith(prefix)) {
+    accepted.add(trimmed.slice(prefix.length).trim());
+  }
+
+  return Array.from(accepted);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -13,19 +34,28 @@ export async function POST(request: NextRequest) {
       tenantSlug,
     } = body || {};
 
-    const expectedSecret = process.env.ADMIN_BOOTSTRAP_SECRET;
+    const expectedSecretRaw = process.env.ADMIN_BOOTSTRAP_SECRET;
 
-    if (!expectedSecret) {
+    if (!expectedSecretRaw) {
       return NextResponse.json(
         { ok: false, error: "Missing ADMIN_BOOTSTRAP_SECRET" },
         { status: 500 },
       );
     }
 
-    // 🔴 IMPORTANT FIX — trim both sides
-    if ((secret || "").trim() !== expectedSecret.trim()) {
+    const submittedSecret = normalizeSecret(secret);
+    const acceptedSecrets = buildAcceptedSecrets(expectedSecretRaw);
+
+    if (!acceptedSecrets.includes(submittedSecret)) {
       return NextResponse.json(
-        { ok: false, error: "Invalid setup secret" },
+        {
+          ok: false,
+          error: "Invalid setup secret",
+          debug: {
+            submittedLength: submittedSecret.length,
+            acceptedLengths: acceptedSecrets.map((value) => value.length),
+          },
+        },
         { status: 401 },
       );
     }
@@ -37,7 +67,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if admin already exists for this tenant
     const existing = await query(
       `
       select id
@@ -55,7 +84,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert admin user
     await query(
       `
       insert into admin_users (
@@ -71,9 +99,9 @@ export async function POST(request: NextRequest) {
       [
         crypto.randomUUID(),
         tenantSlug,
-        email.toLowerCase(),
-        password,
-        name || "",
+        String(email).toLowerCase().trim(),
+        String(password),
+        String(name ?? "").trim(),
       ],
     );
 
