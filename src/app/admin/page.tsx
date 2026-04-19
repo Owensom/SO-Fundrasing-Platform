@@ -11,26 +11,56 @@ export default async function AdminHomePage() {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
 
-  if (!session.user.tenantSlugs.includes(tenantSlug)) {
-    redirect("/admin/login?error=tenant_access_denied");
-  }
+  const hasAccess = sessionTenantSlugs.includes(tenantSlug);
 
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
       <h1>Admin</h1>
 
       <p>
-        Tenant: <strong>{tenantSlug}</strong>
+        Tenant from host: <strong>{tenantSlug || "(empty)"}</strong>
       </p>
 
       <p>
-        Signed in as <strong>{session.user.email}</strong>
+        Signed in as: <strong>{session.user.email}</strong>
       </p>
 
-      <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-        <Link href="/admin/raffles">Manage raffles</Link>
-      </div>
+      <p>
+        Session tenant slugs:{" "}
+        <strong>
+          {sessionTenantSlugs.length > 0
+            ? sessionTenantSlugs.join(", ")
+            : "(none)"}
+        </strong>
+      </p>
+
+      <p>
+        Access check: <strong>{hasAccess ? "allowed" : "denied"}</strong>
+      </p>
+
+      {hasAccess ? (
+        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+          <Link href="/admin/raffles">Manage raffles</Link>
+        </div>
+      ) : (
+        <div
+          style={{
+            marginTop: 24,
+            padding: 16,
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            background: "#fff7ed",
+          }}
+        >
+          <p style={{ margin: 0 }}>
+            Tenant membership is not matching yet.
+          </p>
+        </div>
+      )}
 
       <form
         action={async () => {
