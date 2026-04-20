@@ -1,44 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { getRaffleBySlug } from "../../../../../api/_lib/raffles-repo";
+import { query } from "../../../../../api/_lib/db";
 
-type RouteContext = {
-  params: {
-    slug: string;
-  };
-};
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { slug: string } }
+) {
+  const { slug } = params;
 
-export async function GET(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const slug = context.params.slug;
+  const raffle = await query(
+    `
+    select *
+    from raffles
+    where slug = $1
+    limit 1
+    `,
+    [slug]
+  );
 
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
+  if (!raffle.length) {
+    return NextResponse.json({ ok: false, error: "Not found" });
   }
 
-  try {
-    const raffle = await getRaffleBySlug(tenantSlug, slug);
+  const raffleId = raffle[0].id;
 
-    if (!raffle) {
-      return NextResponse.json(
-        { ok: false, error: "Raffle not found" },
-        { status: 404 },
-      );
-    }
+  // sold tickets
+  const sold = await query(
+    `
+    select ticket_number, colour
+    from raffle_ticket_sales
+    where raffle_id = $1
+    `,
+    [raffleId]
+  );
 
-    return NextResponse.json({
-      ok: true,
-      raffle,
-    });
-  } catch (error) {
-    console.error("GET /api/raffles/[slug] failed", error);
+  // active reservations only (not expired)
+  const reserved = await query(
+    `
+    select ticket_number, colour
+    from raffle_ticket_reservations
+    where raffle_id = $1
+      and status = 'reserved'
+      and expires_at > now()
+    `,
+    [raffleId]
+  );
 
-    return NextResponse.json(
-      { ok: false, error: "Internal error" },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json({
+    ok: true,
+    raffle: raffle[0],
+    sold,
+    reserved,
+  });
 }
