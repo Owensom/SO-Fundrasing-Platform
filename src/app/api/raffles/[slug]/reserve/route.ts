@@ -1,237 +1,105 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query, queryOne } from "../../../../../../api/_lib/db";
+import { query, queryOne } from "../../../../../api/_lib/db";
+import { calculateOfferTotal } from "../../../../../api/_lib/pricing";
 
 export const runtime = "nodejs";
 
 type RaffleRow = {
   id: string;
-  tenant_slug: string;
   slug: string;
-  title: string;
-  currency: string | null;
   ticket_price_cents: number;
-  total_tickets: number;
-  sold_tickets: number;
-  status: string;
-  config_json: {
-    startNumber?: number;
-    endNumber?: number;
-    colours?: string[];
-    sold?: Array<{ colour: string; number: number }>;
-    reserved?: Array<{ colour: string; number: number }>;
-  } | null;
+  config_json: any;
 };
 
-type ReservationOrSaleRow = {
+type ExistingReservation = {
   ticket_number: number;
   colour: string | null;
 };
 
-function makeUuid() {
-  return crypto.randomUUID();
-}
-
-function normalizeColour(value: unknown): string {
-  return typeof value === "string" && value.trim() ? value.trim() : "default";
-}
-
-function normalizeSelectedTickets(value: unknown) {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-
-      const row = item as Record<string, unknown>;
-      const ticketNumber = Number(row.ticket_number ?? row.number);
-      const colour = normalizeColour(row.colour);
-
-      if (!Number.isInteger(ticketNumber) || ticketNumber <= 0) return null;
-
-      return {
-        ticket_number: ticketNumber,
-        colour,
-      };
-    })
-    .filter(Boolean) as Array<{ ticket_number: number; colour: string }>;
-}
-
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ slug: string }> },
-) {
+export async function POST(req: NextRequest) {
   try {
-    const { slug } = await context.params;
-    const body = await request.json();
+    const body = await req.json();
 
-    const buyerName =
-      typeof body.buyerName === "string" ? body.buyerName.trim() : "";
-    const buyerEmail =
-      typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
-    const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
+    const { buyerName, buyerEmail, selectedTickets } = body;
 
-    if (!buyerName) {
+    if (!buyerName || !buyerEmail || !Array.isArray(selectedTickets)) {
       return NextResponse.json(
-        { ok: false, error: "Buyer name is required" },
-        { status: 400 },
+        { ok: false, error: "Invalid input" },
+        { status: 400 }
       );
     }
 
-    if (!buyerEmail) {
-      return NextResponse.json(
-        { ok: false, error: "Buyer email is required" },
-        { status: 400 },
-      );
-    }
-
-    if (!selectedTickets.length) {
-      return NextResponse.json(
-        { ok: false, error: "At least one ticket must be selected" },
-        { status: 400 },
-      );
-    }
+    const slug = req.nextUrl.pathname.split("/").slice(-2)[0];
 
     const raffle = await queryOne<RaffleRow>(
       `
-      select
-        id,
-        tenant_slug,
-        slug,
-        title,
-        currency,
-        ticket_price_cents,
-        total_tickets,
-        sold_tickets,
-        status,
-        config_json
+      select id, slug, ticket_price_cents, config_json
       from raffles
       where slug = $1
-      limit 1
       `,
-      [slug],
+      [slug]
     );
 
     if (!raffle) {
       return NextResponse.json(
         { ok: false, error: "Raffle not found" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
-    if (raffle.status !== "published") {
-      return NextResponse.json(
-        { ok: false, error: "Raffle is not published" },
-        { status: 400 },
-      );
-    }
+    // ✅ Normalize offers
+    const offers = (raffle.config_json?.offers || [])
+      .filter((o: any) => o.is_active !== false)
+      .map((o: any) => ({
+        label: o.label,
+        quantity: Number(o.quantity || o.tickets),
+        price: Number(o.price),
+      }))
+      .filter((o: any) => o.quantity > 0 && o.price >= 0);
 
-    const ticketPriceCents = Number(raffle.ticket_price_cents || 0);
+    // ✅ Calculate correct total (SERVER SIDE)
+    const totalAmountCents = calculateOfferTotal(
+      selectedTickets.length,
+      raffle.ticket_price_cents,
+      offers
+    );
 
-    if (ticketPriceCents <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid raffle ticket price" },
-        { status: 400 },
-      );
-    }
+    // Spread evenly across tickets
+    const unitPriceCents = Math.round(
+      totalAmountCents / selectedTickets.length
+    );
 
-    const startNumber = Number(raffle.config_json?.startNumber || 1);
-    const endNumber =
-      Number(raffle.config_json?.endNumber || raffle.total_tickets || 0) ||
-      raffle.total_tickets;
+    const reservationToken = crypto.randomUUID();
+    const reservationGroupId = crypto.randomUUID();
 
-    for (const ticket of selectedTickets) {
-      if (
-        !Number.isInteger(ticket.ticket_number) ||
-        ticket.ticket_number < startNumber ||
-        ticket.ticket_number > endNumber
-      ) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `Ticket ${ticket.ticket_number} is outside the allowed range`,
-          },
-          { status: 400 },
-        );
-      }
-    }
-
-    const duplicateCheck = new Set<string>();
-
-    for (const ticket of selectedTickets) {
-      const key = `${ticket.colour}::${ticket.ticket_number}`;
-
-      if (duplicateCheck.has(key)) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `Duplicate ticket selection: ${ticket.ticket_number} (${ticket.colour})`,
-          },
-          { status: 400 },
-        );
-      }
-
-      duplicateCheck.add(key);
-    }
-
-    const existingReservations = await query<ReservationOrSaleRow>(
+    // Check availability
+    const existing = await query<ExistingReservation>(
       `
       select ticket_number, colour
       from raffle_ticket_reservations
       where raffle_id = $1
-        and status = 'reserved'
-        and expires_at > now()
+        and status in ('reserved', 'sold')
       `,
-      [raffle.id],
+      [raffle.id]
     );
 
-    const existingSales = await query<ReservationOrSaleRow>(
-      `
-      select ticket_number, colour
-      from raffle_ticket_sales
-      where raffle_id = $1
-      `,
-      [raffle.id],
-    );
-
-    const reservedKeys = new Set(
-      existingReservations.map(
-        (row) => `${row.colour || "default"}::${row.ticket_number}`,
-      ),
-    );
-
-    const soldKeys = new Set(
-      existingSales.map(
-        (row) => `${row.colour || "default"}::${row.ticket_number}`,
-      ),
+    const taken = new Set(
+      existing.map(
+        (r) => `${r.colour || "default"}-${r.ticket_number}`
+      )
     );
 
     for (const ticket of selectedTickets) {
-      const key = `${ticket.colour}::${ticket.ticket_number}`;
-
-      if (reservedKeys.has(key)) {
+      const key = `${ticket.colour || "default"}-${ticket.ticket_number}`;
+      if (taken.has(key)) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: `Ticket ${ticket.ticket_number} (${ticket.colour}) is already reserved`,
-          },
-          { status: 409 },
-        );
-      }
-
-      if (soldKeys.has(key)) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `Ticket ${ticket.ticket_number} (${ticket.colour}) is already sold`,
-          },
-          { status: 409 },
+          { ok: false, error: "Ticket already reserved or sold" },
+          { status: 400 }
         );
       }
     }
 
-    const reservationToken = makeUuid();
-    const reservationGroupId = makeUuid();
-
+    // Insert reservations
     for (const ticket of selectedTickets) {
       await query(
         `
@@ -246,36 +114,26 @@ export async function POST(
           expires_at,
           reservation_token,
           unit_price_cents,
-          checkout_session_id,
-          payment_id,
-          status
-        ) values (
-          $1::uuid,
-          $2::uuid,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
+          status,
+          created_at
+        )
+        values (
+          $1,$2,$3,$4,$5,$6,$7,
           now() + interval '15 minutes',
-          $8,
-          $9,
-          null,
-          null,
-          'reserved'
+          $8,$9,'reserved', now()
         )
         `,
         [
-          makeUuid(),
+          crypto.randomUUID(),
           reservationGroupId,
           raffle.id,
-          ticket.colour,
+          ticket.colour || "default",
           ticket.ticket_number,
           buyerName,
           buyerEmail,
           reservationToken,
-          ticketPriceCents,
-        ],
+          unitPriceCents,
+        ]
       );
     }
 
@@ -283,18 +141,14 @@ export async function POST(
       ok: true,
       reservationToken,
       raffleId: raffle.id,
-      currency: (raffle.currency || "GBP").toUpperCase(),
-      ticketPriceCents,
-      quantity: selectedTickets.length,
-      totalAmountCents: selectedTickets.length * ticketPriceCents,
-      expiresInMinutes: 15,
-      selectedTickets,
+      totalAmountCents,
     });
-  } catch (error) {
-    console.error("reserve route error", error);
+  } catch (err) {
+    console.error("reserve error", err);
+
     return NextResponse.json(
-      { ok: false, error: "Failed to reserve tickets" },
-      { status: 500 },
+      { ok: false, error: "Reservation failed" },
+      { status: 500 }
     );
   }
 }
