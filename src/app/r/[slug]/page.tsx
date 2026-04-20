@@ -1,4 +1,6 @@
-import { headers } from "next/headers";
+"use client";
+
+import { useEffect, useState } from "react";
 
 type TicketState = {
   ticket_number: number;
@@ -7,7 +9,6 @@ type TicketState = {
 
 type Raffle = {
   id: string;
-  tenant_slug: string;
   slug: string;
   title: string;
   description: string;
@@ -16,7 +17,6 @@ type Raffle = {
   ticket_price?: number;
   total_tickets: number;
   sold_tickets: number;
-  remaining_tickets?: number;
   status: string;
 };
 
@@ -25,103 +25,144 @@ type ApiResponse = {
   raffle?: Raffle;
   sold?: TicketState[];
   reserved?: TicketState[];
-  error?: string;
 };
 
-async function getRaffle(slug: string): Promise<ApiResponse> {
-  const headerStore = headers();
-  const host = headerStore.get("host") || "";
-  const protocol = host.includes("localhost") ? "http" : "https";
+export default function PublicRafflePage({
+  params,
+}: {
+  params: { slug: string };
+}) {
+  const [raffle, setRaffle] = useState<Raffle | null>(null);
+  const [sold, setSold] = useState<TicketState[]>([]);
+  const [reserved, setReserved] = useState<TicketState[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const url = `${protocol}://${host}/api/raffles/${slug}`;
+  const colour = "default";
 
-  const res = await fetch(url, { cache: "no-store" });
-  return (await res.json()) as ApiResponse;
-}
+  useEffect(() => {
+    fetch(`/api/raffles/${params.slug}`)
+      .then((res) => res.json())
+      .then((data: ApiResponse) => {
+        if (data.ok && data.raffle) {
+          setRaffle(data.raffle);
+          setSold(data.sold || []);
+          setReserved(data.reserved || []);
+        }
+      });
+  }, [params.slug]);
 
-type PageProps = {
-  params: {
-    slug: string;
-  };
-};
-
-export default async function PublicRafflePage({ params }: PageProps) {
-  const data = await getRaffle(params.slug);
-
-  if (!data.ok || !data.raffle) {
-    return (
-      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
-        <h1>Raffle not found</h1>
-      </main>
-    );
+  if (!raffle) {
+    return <div style={{ padding: 20 }}>Loading...</div>;
   }
-
-  const raffle = data.raffle;
 
   if (raffle.status !== "published") {
-    return (
-      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
-        <h1>This raffle is not published</h1>
-      </main>
-    );
+    return <div style={{ padding: 20 }}>Not available</div>;
   }
 
-  // 🔑 Build availability sets
   const soldSet = new Set(
-    (data.sold || []).map((t) => `${t.colour}-${t.ticket_number}`)
+    sold.map((t) => `${t.colour}-${t.ticket_number}`)
   );
 
   const reservedSet = new Set(
-    (data.reserved || []).map((t) => `${t.colour}-${t.ticket_number}`)
+    reserved.map((t) => `${t.colour}-${t.ticket_number}`)
   );
 
-  // simple number range (adjust later if using config_json)
   const numbers = Array.from(
     { length: raffle.total_tickets },
     (_, i) => i + 1
   );
 
-  const colour = "default"; // simplify for now
+  function toggleTicket(number: number) {
+    setSelected((prev) =>
+      prev.includes(number)
+        ? prev.filter((n) => n !== number)
+        : [...prev, number]
+    );
+  }
+
+  async function handleCheckout() {
+    if (!selected.length) return;
+
+    setLoading(true);
+
+    try {
+      // STEP 1: reserve tickets
+      const reserveRes = await fetch(
+        `/api/raffles/${raffle.slug}/reserve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tickets: selected.map((n) => ({
+              ticket_number: n,
+              colour,
+            })),
+            buyer_name: "Guest",
+            buyer_email: "guest@example.com",
+          }),
+        }
+      );
+
+      const reserveData = await reserveRes.json();
+
+      if (!reserveData.ok) {
+        alert("Reservation failed");
+        setLoading(false);
+        return;
+      }
+
+      // STEP 2: create Stripe checkout
+      const checkoutRes = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservation_token: reserveData.reservation_token,
+        }),
+      });
+
+      const checkoutData = await checkoutRes.json();
+
+      if (!checkoutData.url) {
+        alert("Checkout failed");
+        setLoading(false);
+        return;
+      }
+
+      // STEP 3: redirect to Stripe
+      window.location.href = checkoutData.url;
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
+    }
+
+    setLoading(false);
+  }
 
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
       <h1>{raffle.title}</h1>
 
-      {raffle.image_url ? (
+      {raffle.image_url && (
         <img
           src={raffle.image_url}
-          alt={raffle.title}
           style={{ width: "100%", marginBottom: 20 }}
         />
-      ) : null}
+      )}
 
       <p>{raffle.description}</p>
 
-      <hr style={{ margin: "24px 0" }} />
-
       <p>
-        <strong>Price:</strong> {raffle.ticket_price ?? 0}{" "}
-        {raffle.currency}
+        <strong>Price:</strong> {raffle.ticket_price} {raffle.currency}
       </p>
 
-      <p>
-        <strong>Total tickets:</strong> {raffle.total_tickets}
-      </p>
-
-      <p>
-        <strong>Sold:</strong> {raffle.sold_tickets}
-      </p>
-
-      <hr style={{ margin: "24px 0" }} />
-
-      <h2>Select a ticket</h2>
+      <h2>Select tickets</h2>
 
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(10, 1fr)",
           gap: 8,
-          marginTop: 16,
         }}
       >
         {numbers.map((number) => {
@@ -130,11 +171,13 @@ export default async function PublicRafflePage({ params }: PageProps) {
           const isSold = soldSet.has(key);
           const isReserved = reservedSet.has(key);
           const isUnavailable = isSold || isReserved;
+          const isSelected = selected.includes(number);
 
           return (
             <button
               key={number}
               disabled={isUnavailable}
+              onClick={() => toggleTicket(number)}
               style={{
                 padding: 10,
                 border: "1px solid #ccc",
@@ -143,10 +186,11 @@ export default async function PublicRafflePage({ params }: PageProps) {
                   ? "#000"
                   : isReserved
                   ? "#999"
+                  : isSelected
+                  ? "#4caf50"
                   : "#fff",
-                color: isUnavailable ? "#fff" : "#000",
+                color: isUnavailable || isSelected ? "#fff" : "#000",
                 cursor: isUnavailable ? "not-allowed" : "pointer",
-                opacity: isUnavailable ? 0.5 : 1,
               }}
             >
               {number}
@@ -157,11 +201,23 @@ export default async function PublicRafflePage({ params }: PageProps) {
 
       <div style={{ marginTop: 20 }}>
         <p>
-          <strong>Legend:</strong>
+          Selected: {selected.length > 0 ? selected.join(", ") : "None"}
         </p>
-        <p>⬜ Available</p>
-        <p>⬛ Sold</p>
-        <p>⬜ Grey = Reserved</p>
+
+        <button
+          onClick={handleCheckout}
+          disabled={!selected.length || loading}
+          style={{
+            padding: "12px 20px",
+            background: "#0070f3",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
+        >
+          {loading ? "Processing..." : "Checkout"}
+        </button>
       </div>
     </main>
   );
