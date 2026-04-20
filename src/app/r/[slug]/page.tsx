@@ -1,14 +1,20 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { headers } from "next/headers";
+import RaffleClient from "./RaffleClient";
 
 type TicketState = {
   ticket_number: number;
   colour: string;
 };
 
+type RaffleConfig = {
+  startNumber?: number;
+  endNumber?: number;
+  colours?: string[];
+};
+
 type Raffle = {
   id: string;
+  tenant_slug: string;
   slug: string;
   title: string;
   description: string;
@@ -17,7 +23,9 @@ type Raffle = {
   ticket_price?: number;
   total_tickets: number;
   sold_tickets: number;
+  remaining_tickets?: number;
   status: string;
+  config_json?: RaffleConfig;
 };
 
 type ApiResponse = {
@@ -25,198 +33,58 @@ type ApiResponse = {
   raffle?: Raffle;
   sold?: TicketState[];
   reserved?: TicketState[];
+  error?: string;
 };
 
-export default function PublicRafflePage({
+async function getRaffle(slug: string): Promise<ApiResponse> {
+  const headerStore = await headers();
+  const host = headerStore.get("host") || "";
+  const protocol = host.includes("localhost") ? "http" : "https";
+
+  await fetch(`${protocol}://${host}/api/raffles/cleanup`, {
+    method: "POST",
+    cache: "no-store",
+  }).catch(() => null);
+
+  const res = await fetch(`${protocol}://${host}/api/raffles/${slug}`, {
+    cache: "no-store",
+  });
+
+  return (await res.json()) as ApiResponse;
+}
+
+export default async function PublicRafflePage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const [raffle, setRaffle] = useState<Raffle | null>(null);
-  const [sold, setSold] = useState<TicketState[]>([]);
-  const [reserved, setReserved] = useState<TicketState[]>([]);
-  const [selected, setSelected] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { slug } = await params;
+  const data = await getRaffle(slug);
 
-  const colour = "default";
-
-  useEffect(() => {
-    fetch(`/api/raffles/${params.slug}`)
-      .then((res) => res.json())
-      .then((data: ApiResponse) => {
-        if (data.ok && data.raffle) {
-          setRaffle(data.raffle);
-          setSold(data.sold || []);
-          setReserved(data.reserved || []);
-        }
-      });
-  }, [params.slug]);
-
-  if (!raffle) {
-    return <div style={{ padding: 20 }}>Loading...</div>;
-  }
-
-  if (raffle.status !== "published") {
-    return <div style={{ padding: 20 }}>Not available</div>;
-  }
-
-  const soldSet = new Set(
-    sold.map((t) => `${t.colour}-${t.ticket_number}`)
-  );
-
-  const reservedSet = new Set(
-    reserved.map((t) => `${t.colour}-${t.ticket_number}`)
-  );
-
-  const numbers = Array.from(
-    { length: raffle.total_tickets },
-    (_, i) => i + 1
-  );
-
-  function toggleTicket(number: number) {
-    setSelected((prev) =>
-      prev.includes(number)
-        ? prev.filter((n) => n !== number)
-        : [...prev, number]
+  if (!data.ok || !data.raffle) {
+    return (
+      <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+        <h1>Raffle not found</h1>
+      </main>
     );
   }
 
-  async function handleCheckout() {
-    if (!raffle || !selected.length) return;
-
-    setLoading(true);
-
-    try {
-      const reserveRes = await fetch(
-        `/api/raffles/${raffle.slug}/reserve`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tickets: selected.map((n) => ({
-              ticket_number: n,
-              colour,
-            })),
-            buyer_name: "Guest",
-            buyer_email: "guest@example.com",
-          }),
-        }
-      );
-
-      const reserveData = await reserveRes.json();
-
-      if (!reserveData.ok) {
-        alert("Reservation failed");
-        setLoading(false);
-        return;
-      }
-
-      const checkoutRes = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reservation_token: reserveData.reservation_token,
-        }),
-      });
-
-      const checkoutData = await checkoutRes.json();
-
-      if (!checkoutData.url) {
-        alert("Checkout failed");
-        setLoading(false);
-        return;
-      }
-
-      window.location.href = checkoutData.url;
-    } catch (err) {
-      console.error(err);
-      alert("Something went wrong");
-    }
-
-    setLoading(false);
+  if (data.raffle.status !== "published") {
+    return (
+      <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+        <h1>This raffle is not published</h1>
+      </main>
+    );
   }
 
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <h1>{raffle.title}</h1>
-
-      {raffle.image_url && (
-        <img
-          src={raffle.image_url}
-          alt={raffle.title}
-          style={{ width: "100%", marginBottom: 20 }}
-        />
-      )}
-
-      <p>{raffle.description}</p>
-
-      <p>
-        <strong>Price:</strong> {raffle.ticket_price} {raffle.currency}
-      </p>
-
-      <h2>Select tickets</h2>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(10, 1fr)",
-          gap: 8,
-        }}
-      >
-        {numbers.map((number) => {
-          const key = `${colour}-${number}`;
-
-          const isSold = soldSet.has(key);
-          const isReserved = reservedSet.has(key);
-          const isUnavailable = isSold || isReserved;
-          const isSelected = selected.includes(number);
-
-          return (
-            <button
-              key={number}
-              disabled={isUnavailable}
-              onClick={() => toggleTicket(number)}
-              style={{
-                padding: 10,
-                border: "1px solid #ccc",
-                borderRadius: 6,
-                background: isSold
-                  ? "#000"
-                  : isReserved
-                  ? "#999"
-                  : isSelected
-                  ? "#4caf50"
-                  : "#fff",
-                color: isUnavailable || isSelected ? "#fff" : "#000",
-                cursor: isUnavailable ? "not-allowed" : "pointer",
-              }}
-            >
-              {number}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <p>
-          Selected: {selected.length > 0 ? selected.join(", ") : "None"}
-        </p>
-
-        <button
-          onClick={handleCheckout}
-          disabled={!selected.length || loading}
-          style={{
-            padding: "12px 20px",
-            background: "#0070f3",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-          }}
-        >
-          {loading ? "Processing..." : "Checkout"}
-        </button>
-      </div>
+      <h1>{data.raffle.title}</h1>
+      <RaffleClient
+        raffle={data.raffle}
+        sold={data.sold || []}
+        reserved={data.reserved || []}
+      />
     </main>
   );
 }
