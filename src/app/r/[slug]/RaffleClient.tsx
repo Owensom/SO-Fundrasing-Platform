@@ -54,10 +54,6 @@ type CheckoutResponse = {
   error?: string;
 };
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
 export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -143,8 +139,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
         },
       ];
     });
-
-    setError("");
   }
 
   function removeSelectedTicket(ticket: SelectedTicket) {
@@ -167,32 +161,14 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       setError("");
       setSuccess(null);
 
-      const trimmedName = buyerName.trim();
-      const trimmedEmail = buyerEmail.trim();
-
-      if (!trimmedName || !trimmedEmail) {
-        setError("Name and email are required");
-        return;
-      }
-
-      if (!isValidEmail(trimmedEmail)) {
-        setError("Enter a valid email address");
-        return;
-      }
-
-      if (selectedTickets.length === 0) {
-        setError("Please select at least one ticket");
-        return;
-      }
-
       const response = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          buyerName: trimmedName,
-          buyerEmail: trimmedEmail,
+          buyerName,
+          buyerEmail,
           selectedTickets,
         }),
       });
@@ -205,17 +181,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
       setSuccess(data);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Reservation failed";
-
-      if (
-        message.toLowerCase().includes("already reserved") ||
-        message.toLowerCase().includes("already sold")
-      ) {
-        setError("Some selected tickets are no longer available. Please refresh and try again.");
-      } else {
-        setError(message);
-      }
+      setError(err instanceof Error ? err.message : "Reservation failed");
     } finally {
       setLoading(false);
     }
@@ -296,7 +262,11 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             value={buyerName}
             onChange={(e) => setBuyerName(e.target.value)}
             disabled={isLocked}
-            style={{ width: "100%", padding: 10, opacity: isLocked ? 0.7 : 1 }}
+            style={{
+              width: "100%",
+              padding: 10,
+              opacity: isLocked ? 0.7 : 1,
+            }}
           />
         </label>
 
@@ -307,7 +277,11 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             disabled={isLocked}
-            style={{ width: "100%", padding: 10, opacity: isLocked ? 0.7 : 1 }}
+            style={{
+              width: "100%",
+              padding: 10,
+              opacity: isLocked ? 0.7 : 1,
+            }}
           />
         </label>
       </div>
@@ -453,9 +427,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             <strong>Reservation token:</strong> {success.reservationToken}
           </p>
           <p>Your tickets are locked for 15 minutes.</p>
-          <p>
-            <strong>Buyer:</strong> {buyerName} ({buyerEmail})
-          </p>
           <button
             type="button"
             onClick={goToStripeCheckout}
