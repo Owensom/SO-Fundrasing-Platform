@@ -54,6 +54,10 @@ type CheckoutResponse = {
   error?: string;
 };
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -65,6 +69,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<ReserveResponse | null>(null);
+
+  const isLocked = !!success?.ok;
 
   const colours =
     raffle.config_json?.colours && raffle.config_json.colours.length > 0
@@ -106,6 +112,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
   }, [selectedTickets, ticketPrice]);
 
   function toggleTicket(ticketNumber: number) {
+    if (isLocked) return;
+
     const key = `${selectedColour}-${ticketNumber}`;
 
     if (soldSet.has(key) || reservedSet.has(key)) return;
@@ -135,9 +143,13 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
         },
       ];
     });
+
+    setError("");
   }
 
   function removeSelectedTicket(ticket: SelectedTicket) {
+    if (isLocked) return;
+
     setSelectedTickets((prev) =>
       prev.filter(
         (t) =>
@@ -155,14 +167,32 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       setError("");
       setSuccess(null);
 
+      const trimmedName = buyerName.trim();
+      const trimmedEmail = buyerEmail.trim();
+
+      if (!trimmedName || !trimmedEmail) {
+        setError("Name and email are required");
+        return;
+      }
+
+      if (!isValidEmail(trimmedEmail)) {
+        setError("Enter a valid email address");
+        return;
+      }
+
+      if (selectedTickets.length === 0) {
+        setError("Please select at least one ticket");
+        return;
+      }
+
       const response = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          buyerName,
-          buyerEmail,
+          buyerName: trimmedName,
+          buyerEmail: trimmedEmail,
           selectedTickets,
         }),
       });
@@ -175,7 +205,17 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
       setSuccess(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reservation failed");
+      const message =
+        err instanceof Error ? err.message : "Reservation failed";
+
+      if (
+        message.toLowerCase().includes("already reserved") ||
+        message.toLowerCase().includes("already sold")
+      ) {
+        setError("Some selected tickets are no longer available. Please refresh and try again.");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -255,7 +295,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           <input
             value={buyerName}
             onChange={(e) => setBuyerName(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
+            disabled={isLocked}
+            style={{ width: "100%", padding: 10, opacity: isLocked ? 0.7 : 1 }}
           />
         </label>
 
@@ -265,7 +306,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             type="email"
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
+            disabled={isLocked}
+            style={{ width: "100%", padding: 10, opacity: isLocked ? 0.7 : 1 }}
           />
         </label>
       </div>
@@ -279,14 +321,15 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
                 key={colour}
                 type="button"
                 onClick={() => setSelectedColour(colour)}
+                disabled={isLocked}
                 style={{
                   padding: "10px 14px",
                   borderRadius: 8,
                   border: "1px solid #ccc",
-                  background:
-                    selectedColour === colour ? "#111" : "#fff",
+                  background: selectedColour === colour ? "#111" : "#fff",
                   color: selectedColour === colour ? "#fff" : "#111",
-                  cursor: "pointer",
+                  cursor: isLocked ? "not-allowed" : "pointer",
+                  opacity: isLocked ? 0.7 : 1,
                 }}
               >
                 {colour}
@@ -314,7 +357,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             <button
               key={key}
               type="button"
-              disabled={isUnavailable}
+              disabled={isUnavailable || isLocked}
               onClick={() => toggleTicket(number)}
               style={{
                 padding: 10,
@@ -328,8 +371,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
                       ? "#16a34a"
                       : "#fff",
                 color: isUnavailable || isSelected ? "#fff" : "#000",
-                cursor: isUnavailable ? "not-allowed" : "pointer",
-                opacity: isUnavailable ? 0.6 : 1,
+                cursor: isUnavailable || isLocked ? "not-allowed" : "pointer",
+                opacity: isUnavailable || isLocked ? 0.6 : 1,
               }}
             >
               {number}
@@ -367,6 +410,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
                 <button
                   type="button"
                   onClick={() => removeSelectedTicket(ticket)}
+                  disabled={isLocked}
                   style={{ marginLeft: 8 }}
                 >
                   Remove
@@ -409,6 +453,9 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             <strong>Reservation token:</strong> {success.reservationToken}
           </p>
           <p>Your tickets are locked for 15 minutes.</p>
+          <p>
+            <strong>Buyer:</strong> {buyerName} ({buyerEmail})
+          </p>
           <button
             type="button"
             onClick={goToStripeCheckout}
