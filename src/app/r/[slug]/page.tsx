@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import RaffleClient from "./RaffleClient";
 
 type Raffle = {
   id: string;
@@ -22,7 +23,7 @@ type ApiResponse = {
 };
 
 async function getRaffle(slug: string): Promise<ApiResponse> {
-  const headerStore = headers();
+  const headerStore = await headers();
   const host = headerStore.get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
   const url = `${protocol}://${host}/api/raffles/${slug}`;
@@ -32,13 +33,14 @@ async function getRaffle(slug: string): Promise<ApiResponse> {
 }
 
 type PageProps = {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 };
 
 export default async function PublicRafflePage({ params }: PageProps) {
-  const data = await getRaffle(params.slug);
+  const { slug } = await params;
+  const data = await getRaffle(slug);
 
   if (!data.ok || !data.raffle) {
     return (
@@ -61,34 +63,7 @@ export default async function PublicRafflePage({ params }: PageProps) {
   return (
     <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
       <h1>{raffle.title}</h1>
-
-      {raffle.image_url ? (
-        <img
-          src={raffle.image_url}
-          alt={raffle.title}
-          style={{ width: "100%", height: "auto", marginBottom: 20 }}
-        />
-      ) : null}
-
-      <p>{raffle.description}</p>
-
-      <hr style={{ margin: "24px 0" }} />
-
-      <p>
-        <strong>Price:</strong> {raffle.ticket_price ?? 0} {raffle.currency}
-      </p>
-
-      <p>
-        <strong>Total tickets:</strong> {raffle.total_tickets}
-      </p>
-
-      <p>
-        <strong>Sold:</strong> {raffle.sold_tickets}
-      </p>
-
-      <p>
-        <strong>Remaining:</strong> {raffle.remaining_tickets ?? 0}
-      </p>
+      <RaffleClient raffle={raffle} />
     </main>
   );
 }
