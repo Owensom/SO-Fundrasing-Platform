@@ -1,10 +1,6 @@
 import Stripe from "stripe";
 
-type PageProps = {
-  searchParams: {
-    session_id?: string;
-  };
-};
+export const dynamic = "force-dynamic";
 
 function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -13,49 +9,73 @@ function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
 
-function formatMoney(amount: number | null | undefined, currency: string | null | undefined) {
+function formatMoney(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+) {
   if (typeof amount !== "number") return "";
+
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
     currency: (currency || "GBP").toUpperCase(),
   }).format(amount / 100);
 }
 
-export default async function CheckoutSuccessPage({ searchParams }: PageProps) {
-  const sessionId = searchParams.session_id;
+export default async function CheckoutSuccessPage({
+  searchParams,
+}: {
+  searchParams: { session_id?: string };
+}) {
+  const sessionId = searchParams?.session_id;
 
   if (!sessionId) {
-    return <div style={{ padding: 20 }}>Missing session ID</div>;
+    return (
+      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
+        <h1>Missing session ID</h1>
+      </main>
+    );
   }
 
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  try {
+    const stripe = getStripe();
 
-  return (
-    <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
-      <h1>Payment successful</h1>
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-      <p>
-        <strong>Amount:</strong>{" "}
-        {formatMoney(session.amount_total, session.currency)}
-      </p>
+    return (
+      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
+        <h1>Payment successful</h1>
 
-      <p>
-        <strong>Status:</strong> {session.payment_status}
-      </p>
+        <p>
+          <strong>Amount:</strong>{" "}
+          {formatMoney(session.amount_total, session.currency)}
+        </p>
 
-      <p>
-        <strong>Email:</strong> {session.customer_details?.email}
-      </p>
+        <p>
+          <strong>Status:</strong> {session.payment_status}
+        </p>
 
-      <p>
-        <strong>Name:</strong> {session.customer_details?.name}
-      </p>
+        <p>
+          <strong>Email:</strong> {session.customer_details?.email || "—"}
+        </p>
 
-      <p>
-        <strong>Reservation:</strong>{" "}
-        {session.metadata?.reservation_token}
-      </p>
-    </main>
-  );
+        <p>
+          <strong>Name:</strong> {session.customer_details?.name || "—"}
+        </p>
+
+        <p>
+          <strong>Reservation:</strong>{" "}
+          {session.metadata?.reservation_token || "—"}
+        </p>
+      </main>
+    );
+  } catch (err) {
+    console.error(err);
+
+    return (
+      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
+        <h1>Payment received</h1>
+        <p>Could not load Stripe session details.</p>
+      </main>
+    );
+  }
 }
