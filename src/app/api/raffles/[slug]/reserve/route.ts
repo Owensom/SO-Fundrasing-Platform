@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/neon";
+import { query, queryOne } from "../../../../../api/_lib/db";
 
 export const runtime = "nodejs";
 
@@ -22,7 +22,7 @@ type RaffleRow = {
   } | null;
 };
 
-type ReservationRow = {
+type ReservationOrSaleRow = {
   ticket_number: number;
   colour: string | null;
 };
@@ -41,6 +41,7 @@ function normalizeSelectedTickets(value: unknown) {
   return value
     .map((item) => {
       if (!item || typeof item !== "object") return null;
+
       const row = item as Record<string, unknown>;
       const ticketNumber = Number(row.ticket_number ?? row.number);
       const colour = normalizeColour(row.colour);
@@ -90,7 +91,8 @@ export async function POST(
       );
     }
 
-    const raffleRows = await sql`
+    const raffle = await queryOne<RaffleRow>(
+      `
       select
         id,
         tenant_slug,
@@ -103,11 +105,11 @@ export async function POST(
         status,
         config_json
       from raffles
-      where slug = ${slug}
+      where slug = $1
       limit 1
-    `;
-
-    const raffle = raffleRows[0] as RaffleRow | undefined;
+      `,
+      [slug],
+    );
 
     if (!raffle) {
       return NextResponse.json(
@@ -124,6 +126,7 @@ export async function POST(
     }
 
     const ticketPriceCents = Number(raffle.ticket_price_cents || 0);
+
     if (ticketPriceCents <= 0) {
       return NextResponse.json(
         { ok: false, error: "Invalid raffle ticket price" },
@@ -153,8 +156,10 @@ export async function POST(
     }
 
     const duplicateCheck = new Set<string>();
+
     for (const ticket of selectedTickets) {
       const key = `${ticket.colour}::${ticket.ticket_number}`;
+
       if (duplicateCheck.has(key)) {
         return NextResponse.json(
           {
@@ -164,28 +169,40 @@ export async function POST(
           { status: 400 },
         );
       }
+
       duplicateCheck.add(key);
     }
 
-    const existingReservations = (await sql`
+    const existingReservations = await query<ReservationOrSaleRow>(
+      `
       select ticket_number, colour
       from raffle_ticket_reservations
-      where raffle_id = ${raffle.id}
+      where raffle_id = $1
         and status = 'reserved'
         and expires_at > now()
-    `) as ReservationRow[];
+      `,
+      [raffle.id],
+    );
 
-    const existingSales = (await sql`
+    const existingSales = await query<ReservationOrSaleRow>(
+      `
       select ticket_number, colour
       from raffle_ticket_sales
-      where raffle_id = ${raffle.id}
-    `) as ReservationRow[];
+      where raffle_id = $1
+      `,
+      [raffle.id],
+    );
 
     const reservedKeys = new Set(
-      existingReservations.map((row) => `${row.colour || "default"}::${row.ticket_number}`),
+      existingReservations.map(
+        (row) => `${row.colour || "default"}::${row.ticket_number}`,
+      ),
     );
+
     const soldKeys = new Set(
-      existingSales.map((row) => `${row.colour || "default"}::${row.ticket_number}`),
+      existingSales.map(
+        (row) => `${row.colour || "default"}::${row.ticket_number}`,
+      ),
     );
 
     for (const ticket of selectedTickets) {
@@ -216,7 +233,8 @@ export async function POST(
     const reservationGroupId = makeUuid();
 
     for (const ticket of selectedTickets) {
-      await sql`
+      await query(
+        `
         insert into raffle_ticket_reservations (
           id,
           reservation_group_id,
@@ -232,21 +250,33 @@ export async function POST(
           payment_id,
           status
         ) values (
-          ${makeUuid()}::uuid,
-          ${reservationGroupId}::uuid,
-          ${raffle.id},
-          ${ticket.colour},
-          ${ticket.ticket_number},
-          ${buyerName},
-          ${buyerEmail},
+          $1::uuid,
+          $2::uuid,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
           now() + interval '15 minutes',
-          ${reservationToken},
-          ${ticketPriceCents},
+          $8,
+          $9,
           null,
           null,
           'reserved'
         )
-      `;
+        `,
+        [
+          makeUuid(),
+          reservationGroupId,
+          raffle.id,
+          ticket.colour,
+          ticket.ticket_number,
+          buyerName,
+          buyerEmail,
+          reservationToken,
+          ticketPriceCents,
+        ],
+      );
     }
 
     return NextResponse.json({
