@@ -50,24 +50,6 @@ export default function SuccessPage() {
       .then((res) => res.json())
       .then((res: SessionResponse) => {
         setData(res);
-
-        if (res.ok && res.reservation_token) {
-          setTicketLoading(true);
-
-          fetch(`/api/raffles/by-reservation?token=${res.reservation_token}`)
-            .then((ticketRes) => ticketRes.json())
-            .then((ticketData: TicketsResponse) => {
-              if (ticketData.ok && Array.isArray(ticketData.tickets)) {
-                setTickets(ticketData.tickets);
-              }
-            })
-            .catch((err) => {
-              console.error("ticket lookup failed", err);
-            })
-            .finally(() => {
-              setTicketLoading(false);
-            });
-        }
       })
       .catch((err) => {
         console.error("session lookup failed", err);
@@ -76,6 +58,50 @@ export default function SuccessPage() {
         setLoading(false);
       });
   }, [session_id]);
+
+  useEffect(() => {
+    if (!data?.ok || !data.reservation_token) return;
+
+    let attempts = 0;
+    let cancelled = false;
+
+    async function loadTickets() {
+      setTicketLoading(true);
+
+      while (!cancelled && attempts < 8) {
+        attempts += 1;
+
+        try {
+          const res = await fetch(
+            `/api/raffles/by-reservation?token=${data.reservation_token}`,
+          );
+          const ticketData = (await res.json()) as TicketsResponse;
+
+          if (
+            ticketData.ok &&
+            Array.isArray(ticketData.tickets) &&
+            ticketData.tickets.length > 0
+          ) {
+            setTickets(ticketData.tickets);
+            setTicketLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error("ticket lookup failed", err);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+
+      setTicketLoading(false);
+    }
+
+    loadTickets();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.ok, data?.reservation_token]);
 
   if (!session_id) {
     return (
