@@ -62,6 +62,7 @@ export default function SuccessPage() {
   useEffect(() => {
     if (!data?.ok || !data.reservation_token) return;
 
+    const reservationToken = data.reservation_token;
     let attempts = 0;
     let cancelled = false;
 
@@ -73,7 +74,7 @@ export default function SuccessPage() {
 
         try {
           const res = await fetch(
-            `/api/raffles/by-reservation?token=${data.reservation_token}`,
+            `/api/raffles/by-reservation?token=${reservationToken}`,
           );
           const ticketData = (await res.json()) as TicketsResponse;
 
@@ -101,7 +102,7 @@ export default function SuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [data?.ok, data?.reservation_token]);
+  }, [data]);
 
   if (!session_id) {
     return (
