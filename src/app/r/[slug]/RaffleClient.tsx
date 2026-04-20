@@ -34,12 +34,19 @@ type ReserveResponse = {
   error?: string;
 };
 
+type CheckoutResponse = {
+  ok: boolean;
+  url?: string;
+  error?: string;
+};
+
 export default function RaffleClient({ raffle }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [ticketInput, setTicketInput] = useState("");
   const [selectedTickets, setSelectedTickets] = useState<SelectedTicket[]>([]);
   const [loading, setLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<ReserveResponse | null>(null);
 
@@ -51,6 +58,7 @@ export default function RaffleClient({ raffle }: Props) {
 
   function addTicket() {
     const value = Number(ticketInput);
+
     if (!Number.isInteger(value) || value <= 0) {
       setError("Enter a valid ticket number");
       return;
@@ -108,6 +116,40 @@ export default function RaffleClient({ raffle }: Props) {
       setError(err instanceof Error ? err.message : "Reservation failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function goToStripeCheckout() {
+    try {
+      if (!success?.reservationToken || !success?.raffleId) {
+        throw new Error("Missing reservation details");
+      }
+
+      setCheckoutLoading(true);
+      setError("");
+
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          raffleId: success.raffleId,
+          reservationToken: success.reservationToken,
+        }),
+      });
+
+      const data = (await response.json()) as CheckoutResponse;
+
+      if (!response.ok || !data.ok || !data.url) {
+        throw new Error(data.error || "Failed to create Stripe Checkout");
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
+    } finally {
+      setCheckoutLoading(false);
     }
   }
 
@@ -205,23 +247,25 @@ export default function RaffleClient({ raffle }: Props) {
         </div>
       ) : null}
 
-      <div style={{ marginTop: 20 }}>
-        <button
-          type="button"
-          onClick={reserveTickets}
-          disabled={loading || selectedTickets.length === 0}
-          style={{
-            padding: "12px 16px",
-            background: "black",
-            color: "white",
-            border: "none",
-            cursor: "pointer",
-            opacity: loading || selectedTickets.length === 0 ? 0.6 : 1,
-          }}
-        >
-          {loading ? "Reserving..." : "Reserve tickets"}
-        </button>
-      </div>
+      {!success?.ok ? (
+        <div style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            onClick={reserveTickets}
+            disabled={loading || selectedTickets.length === 0}
+            style={{
+              padding: "12px 16px",
+              background: "black",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+              opacity: loading || selectedTickets.length === 0 ? 0.6 : 1,
+            }}
+          >
+            {loading ? "Reserving..." : "Reserve tickets"}
+          </button>
+        </div>
+      ) : null}
 
       {error ? (
         <p style={{ color: "red", marginTop: 12 }}>{error}</p>
@@ -233,10 +277,23 @@ export default function RaffleClient({ raffle }: Props) {
           <p>
             <strong>Reservation token:</strong> {success.reservationToken}
           </p>
-          <p>
-            Your tickets are locked temporarily and ready for Stripe Checkout in
-            the next stage.
-          </p>
+          <p>Your tickets are locked for 15 minutes.</p>
+          <button
+            type="button"
+            onClick={goToStripeCheckout}
+            disabled={checkoutLoading}
+            style={{
+              marginTop: 12,
+              padding: "12px 16px",
+              background: "#635bff",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+              opacity: checkoutLoading ? 0.6 : 1,
+            }}
+          >
+            {checkoutLoading ? "Redirecting..." : "Pay with Stripe"}
+          </button>
         </div>
       ) : null}
     </div>
