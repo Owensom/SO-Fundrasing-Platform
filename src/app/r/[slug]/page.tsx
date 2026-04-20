@@ -82,12 +82,11 @@ export default function PublicRafflePage({
   }
 
   async function handleCheckout() {
-    if (!selected.length) return;
+    if (!raffle || !selected.length) return;
 
     setLoading(true);
 
     try {
-      // STEP 1: reserve tickets
       const reserveRes = await fetch(
         `/api/raffles/${raffle.slug}/reserve`,
         {
@@ -112,7 +111,6 @@ export default function PublicRafflePage({
         return;
       }
 
-      // STEP 2: create Stripe checkout
       const checkoutRes = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,7 +127,6 @@ export default function PublicRafflePage({
         return;
       }
 
-      // STEP 3: redirect to Stripe
       window.location.href = checkoutData.url;
     } catch (err) {
       console.error(err);
@@ -146,6 +143,7 @@ export default function PublicRafflePage({
       {raffle.image_url && (
         <img
           src={raffle.image_url}
+          alt={raffle.title}
           style={{ width: "100%", marginBottom: 20 }}
         />
       )}
