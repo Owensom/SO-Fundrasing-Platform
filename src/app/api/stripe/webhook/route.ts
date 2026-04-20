@@ -120,8 +120,7 @@ export async function POST(request: NextRequest) {
       [session.id],
     );
 
-    const paymentId =
-      existingPayment[0]?.id ?? crypto.randomUUID();
+    const paymentId = existingPayment[0]?.id ?? crypto.randomUUID();
 
     if (!existingPayment.length) {
       await query(
@@ -169,6 +168,8 @@ export async function POST(request: NextRequest) {
     }
 
     for (const r of reservations) {
+      const reservationIdText = r.id;
+
       const existingSale = await query<ExistingSaleRow>(
         `
         select reservation_id
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
         where reservation_id = $1
         limit 1
         `,
-        [r.id],
+        [reservationIdText],
       );
 
       if (!existingSale.length) {
@@ -195,13 +196,13 @@ export async function POST(request: NextRequest) {
             currency,
             sold_at
           ) values (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()
+            $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()
           )
           `,
           [
             crypto.randomUUID(),
             r.raffle_id,
-            r.id,
+            reservationIdText,
             paymentId,
             session.id,
             typeof session.payment_intent === "string"
