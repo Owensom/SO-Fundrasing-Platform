@@ -74,6 +74,30 @@ async function getRaffle(id: string): Promise<{
   };
 }
 
+function statusBadgeStyle(status: string) {
+  if (status === "published") {
+    return {
+      background: "#ecfdf5",
+      border: "1px solid #86efac",
+      color: "#166534",
+    };
+  }
+
+  if (status === "draft") {
+    return {
+      background: "#fff7ed",
+      border: "1px solid #fdba74",
+      color: "#9a3412",
+    };
+  }
+
+  return {
+    background: "#f3f4f6",
+    border: "1px solid #d1d5db",
+    color: "#374151",
+  };
+}
+
 export default async function AdminRaffleDetailsPage({
   params,
 }: {
@@ -137,7 +161,10 @@ export default async function AdminRaffleDetailsPage({
             style={{
               display: "flex",
               justifyContent: "space-between",
+              gap: 16,
+              alignItems: "flex-start",
               marginBottom: 20,
+              flexWrap: "wrap",
             }}
           >
             <div>
@@ -151,7 +178,8 @@ export default async function AdminRaffleDetailsPage({
               style={{
                 padding: "6px 10px",
                 borderRadius: 9999,
-                border: "1px solid #d1d5db",
+                fontSize: 14,
+                ...statusBadgeStyle(raffle.status),
               }}
             >
               {raffle.status}
@@ -217,11 +245,68 @@ export default async function AdminRaffleDetailsPage({
             </pre>
           </div>
 
-          <div style={{ display: "flex", gap: 16 }}>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <Link href={`/r/${raffle.slug}`}>View public page</Link>
             <Link href={`/admin/raffles/${raffle.id}/edit`}>
               Edit raffle
             </Link>
+
+            {raffle.status !== "published" ? (
+              <form action={`/api/admin/raffles/${raffle.id}/status`} method="post">
+                <input type="hidden" name="status" value="published" />
+                <button
+                  type="submit"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 9999,
+                    border: "1px solid #86efac",
+                    background: "#ecfdf5",
+                    color: "#166534",
+                    cursor: "pointer",
+                  }}
+                >
+                  Publish
+                </button>
+              </form>
+            ) : null}
+
+            {raffle.status !== "draft" ? (
+              <form action={`/api/admin/raffles/${raffle.id}/status`} method="post">
+                <input type="hidden" name="status" value="draft" />
+                <button
+                  type="submit"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 9999,
+                    border: "1px solid #fdba74",
+                    background: "#fff7ed",
+                    color: "#9a3412",
+                    cursor: "pointer",
+                  }}
+                >
+                  Move to draft
+                </button>
+              </form>
+            ) : null}
+
+            {raffle.status !== "closed" ? (
+              <form action={`/api/admin/raffles/${raffle.id}/status`} method="post">
+                <input type="hidden" name="status" value="closed" />
+                <button
+                  type="submit"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 9999,
+                    border: "1px solid #d1d5db",
+                    background: "#f3f4f6",
+                    color: "#374151",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close raffle
+                </button>
+              </form>
+            ) : null}
           </div>
         </div>
       )}
