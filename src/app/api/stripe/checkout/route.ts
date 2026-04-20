@@ -38,6 +38,7 @@ function getStripe() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
     const raffleId =
       typeof body.raffleId === "string" ? body.raffleId.trim() : "";
     const reservationToken =
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
     const raffle = rows[0];
     const currency = (raffle.currency || "GBP").toLowerCase();
 
+    // This is now the authoritative backend total, already offer-adjusted
     const totalAmountCents = rows.reduce(
       (sum, row) => sum + Number(row.unit_price_cents || 0),
       0,
@@ -157,9 +159,11 @@ export async function POST(request: NextRequest) {
       ok: true,
       sessionId: session.id,
       url: session.url,
+      totalAmountCents,
     });
   } catch (error) {
     console.error("stripe checkout create error", error);
+
     return NextResponse.json(
       { ok: false, error: "Failed to create checkout session" },
       { status: 500 },
