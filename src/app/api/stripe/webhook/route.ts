@@ -4,6 +4,18 @@ import { query } from "../../../../../../api/_lib/db";
 
 export const runtime = "nodejs";
 
+type ReservationRow = {
+  id: string;
+  raffle_id: string;
+  reservation_token: string;
+  ticket_number: number;
+  colour: string | null;
+  buyer_email: string | null;
+  unit_price_cents: number;
+  status: string;
+  tenant_slug: string;
+};
+
 function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is required");
@@ -14,29 +26,80 @@ function getStripe() {
 export async function POST(request: NextRequest) {
   try {
     const stripe = getStripe();
+    const signature = request.headers.get("stripe-signature");
 
-    const body = await request.json();
+    if (!signature) {
+      return NextResponse.json(
+        { ok: false, error: "Missing stripe signature" },
+        { status: 400 },
+      );
+    }
 
-    if (body.type !== "checkout.session.completed") {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      return NextResponse.json(
+        { ok: false, error: "Missing STRIPE_WEBHOOK_SECRET" },
+        { status: 500 },
+      );
+    }
+
+    const rawBody = await request.text();
+
+    const event = stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET,
+    );
+
+    if (
+      event.type !== "checkout.session.completed" &&
+      event.type !== "checkout.session.async_payment_succeeded"
+    ) {
       return NextResponse.json({ ok: true });
     }
 
-    const session = body.data.object;
+    const session = event.data.object as Stripe.Checkout.Session;
 
     const reservationToken = session.metadata?.reservation_token;
     const raffleId = session.metadata?.raffle_id;
 
     if (!reservationToken || !raffleId) {
-      return NextResponse.json({ ok: false }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Missing reservation metadata" },
+        { status: 400 },
+      );
     }
 
-    const reservations = await query<any>(
+    const existingPayment = await query<{ id: string }>(
       `
-      select *
-      from raffle_ticket_reservations
-      where raffle_id = $1
-        and reservation_token = $2
-        and status = 'reserved'
+      select id
+      from raffle_payments
+      where stripe_checkout_session_id = $1
+      limit 1
+      `,
+      [session.id],
+    );
+
+    if (existingPayment.length) {
+      return NextResponse.json({ ok: true });
+    }
+
+    const reservations = await query<ReservationRow>(
+      `
+      select
+        r.id,
+        r.raffle_id,
+        r.reservation_token,
+        r.ticket_number,
+        r.colour,
+        r.buyer_email,
+        r.unit_price_cents,
+        r.status,
+        ra.tenant_slug
+      from raffle_ticket_reservations r
+      join raffles ra on ra.id = r.raffle_id
+      where r.raffle_id = $1
+        and r.reservation_token = $2
+      order by r.ticket_number asc
       `,
       [raffleId, reservationToken],
     );
@@ -46,13 +109,12 @@ export async function POST(request: NextRequest) {
     }
 
     const total = reservations.reduce(
-      (sum: number, r: any) => sum + Number(r.unit_price_cents || 0),
+      (sum, row) => sum + Number(row.unit_price_cents || 0),
       0,
     );
 
-    const feePercent = Number(process.env.PLATFORM_FEE_PERCENT || 10);
-    const fee = Math.round(total * (feePercent / 100));
-
+    const feePercent = Number(process.env.PLATFORM_FEE_PERCENT || "10");
+    const platformFee = Math.round(total * (feePercent / 100));
     const paymentId = crypto.randomUUID();
 
     await query(
@@ -69,22 +131,32 @@ export async function POST(request: NextRequest) {
         gross_amount_cents,
         platform_fee_cents,
         net_amount_cents,
-        customer_email
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        customer_email,
+        customer_name,
+        metadata_json
+      ) values (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb
+      )
       `,
       [
         paymentId,
-        reservations[0].tenant_slug || "",
+        reservations[0].tenant_slug,
         raffleId,
         reservationToken,
         session.id,
-        session.payment_intent,
-        "paid",
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : null,
+        session.payment_status || "paid",
         (session.currency || "gbp").toUpperCase(),
         total,
-        fee,
-        total - fee,
-        session.customer_details?.email || null,
+        platformFee,
+        total - platformFee,
+        session.customer_details?.email ||
+          reservations[0].buyer_email ||
+          null,
+        session.customer_details?.name || null,
+        JSON.stringify(session.metadata || {}),
       ],
     );
 
@@ -99,10 +171,13 @@ export async function POST(request: NextRequest) {
           stripe_checkout_session_id,
           stripe_payment_intent_id,
           ticket_number,
-          colour,
+          colour_id,
           amount_cents,
-          currency
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          currency,
+          sold_at
+        ) values (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()
+        )
         `,
         [
           crypto.randomUUID(),
@@ -110,7 +185,9 @@ export async function POST(request: NextRequest) {
           r.id,
           paymentId,
           session.id,
-          session.payment_intent,
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : null,
           r.ticket_number,
           r.colour,
           r.unit_price_cents,
@@ -133,7 +210,9 @@ export async function POST(request: NextRequest) {
       `
       update raffles
       set sold_tickets = (
-        select count(*) from raffle_ticket_sales where raffle_id = $1
+        select count(*)
+        from raffle_ticket_sales
+        where raffle_id = $1
       )
       where id = $1
       `,
@@ -141,8 +220,11 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("webhook error", err);
-    return NextResponse.json({ ok: false }, { status: 500 });
+  } catch (error) {
+    console.error("stripe webhook error", error);
+    return NextResponse.json(
+      { ok: false, error: "Webhook failed" },
+      { status: 500 },
+    );
   }
 }
