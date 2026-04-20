@@ -2,6 +2,17 @@
 
 import { useMemo, useState } from "react";
 
+type TicketState = {
+  ticket_number: number;
+  colour: string;
+};
+
+type RaffleConfig = {
+  startNumber?: number;
+  endNumber?: number;
+  colours?: string[];
+};
+
 type Raffle = {
   id: string;
   tenant_slug: string;
@@ -15,10 +26,13 @@ type Raffle = {
   sold_tickets: number;
   remaining_tickets?: number;
   status: string;
+  config_json?: RaffleConfig;
 };
 
 type Props = {
   raffle: Raffle;
+  sold: TicketState[];
+  reserved: TicketState[];
 };
 
 type SelectedTicket = {
@@ -40,15 +54,50 @@ type CheckoutResponse = {
   error?: string;
 };
 
-export default function RaffleClient({ raffle }: Props) {
+export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
-  const [ticketInput, setTicketInput] = useState("");
+  const [selectedColour, setSelectedColour] = useState(
+    raffle.config_json?.colours?.[0] || "default",
+  );
   const [selectedTickets, setSelectedTickets] = useState<SelectedTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<ReserveResponse | null>(null);
+
+  const colours =
+    raffle.config_json?.colours && raffle.config_json.colours.length > 0
+      ? raffle.config_json.colours
+      : ["default"];
+
+  const startNumber = Number(raffle.config_json?.startNumber || 1);
+  const endNumber =
+    Number(
+      raffle.config_json?.endNumber ||
+        raffle.total_tickets ||
+        startNumber + raffle.total_tickets - 1,
+    ) || raffle.total_tickets;
+
+  const ticketNumbers = Array.from(
+    { length: Math.max(endNumber - startNumber + 1, 0) },
+    (_, i) => startNumber + i,
+  );
+
+  const soldSet = useMemo(
+    () => new Set(sold.map((t) => `${t.colour}-${t.ticket_number}`)),
+    [sold],
+  );
+
+  const reservedSet = useMemo(
+    () => new Set(reserved.map((t) => `${t.colour}-${t.ticket_number}`)),
+    [reserved],
+  );
+
+  const selectedSet = useMemo(
+    () => new Set(selectedTickets.map((t) => `${t.colour}-${t.ticket_number}`)),
+    [selectedTickets],
+  );
 
   const ticketPrice = Number(raffle.ticket_price || 0);
 
@@ -56,34 +105,47 @@ export default function RaffleClient({ raffle }: Props) {
     return selectedTickets.length * ticketPrice;
   }, [selectedTickets, ticketPrice]);
 
-  function addTicket() {
-    const value = Number(ticketInput);
+  function toggleTicket(ticketNumber: number) {
+    const key = `${selectedColour}-${ticketNumber}`;
 
-    if (!Number.isInteger(value) || value <= 0) {
-      setError("Enter a valid ticket number");
-      return;
-    }
+    if (soldSet.has(key) || reservedSet.has(key)) return;
 
-    const exists = selectedTickets.some(
-      (ticket) => ticket.ticket_number === value && ticket.colour === "default",
-    );
+    setSelectedTickets((prev) => {
+      const exists = prev.some(
+        (ticket) =>
+          ticket.ticket_number === ticketNumber &&
+          ticket.colour === selectedColour,
+      );
 
-    if (exists) {
-      setError("That ticket is already selected");
-      return;
-    }
+      if (exists) {
+        return prev.filter(
+          (ticket) =>
+            !(
+              ticket.ticket_number === ticketNumber &&
+              ticket.colour === selectedColour
+            ),
+        );
+      }
 
-    setSelectedTickets((prev) => [
-      ...prev,
-      { ticket_number: value, colour: "default" },
-    ]);
-    setTicketInput("");
-    setError("");
+      return [
+        ...prev,
+        {
+          ticket_number: ticketNumber,
+          colour: selectedColour,
+        },
+      ];
+    });
   }
 
-  function removeTicket(ticketNumber: number) {
+  function removeSelectedTicket(ticket: SelectedTicket) {
     setSelectedTickets((prev) =>
-      prev.filter((ticket) => ticket.ticket_number !== ticketNumber),
+      prev.filter(
+        (t) =>
+          !(
+            t.ticket_number === ticket.ticket_number &&
+            t.colour === ticket.colour
+          ),
+      ),
     );
   }
 
@@ -187,7 +249,7 @@ export default function RaffleClient({ raffle }: Props) {
 
       <h2>Select tickets</h2>
 
-      <div style={{ display: "grid", gap: 12, maxWidth: 420 }}>
+      <div style={{ display: "grid", gap: 12, maxWidth: 420, marginBottom: 20 }}>
         <label>
           <div style={{ marginBottom: 6 }}>Name</div>
           <input
@@ -206,33 +268,105 @@ export default function RaffleClient({ raffle }: Props) {
             style={{ width: "100%", padding: 10 }}
           />
         </label>
+      </div>
 
-        <label>
-          <div style={{ marginBottom: 6 }}>Ticket number</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="number"
-              value={ticketInput}
-              onChange={(e) => setTicketInput(e.target.value)}
-              style={{ flex: 1, padding: 10 }}
-            />
-            <button type="button" onClick={addTicket} style={{ padding: "10px 14px" }}>
-              Add
-            </button>
+      {colours.length > 1 ? (
+        <div style={{ marginBottom: 20 }}>
+          <h3>Choose a colour</h3>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {colours.map((colour) => (
+              <button
+                key={colour}
+                type="button"
+                onClick={() => setSelectedColour(colour)}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  border: "1px solid #ccc",
+                  background:
+                    selectedColour === colour ? "#111" : "#fff",
+                  color: selectedColour === colour ? "#fff" : "#111",
+                  cursor: "pointer",
+                }}
+              >
+                {colour}
+              </button>
+            ))}
           </div>
-        </label>
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(10, 1fr)",
+          gap: 8,
+        }}
+      >
+        {ticketNumbers.map((number) => {
+          const key = `${selectedColour}-${number}`;
+          const isSold = soldSet.has(key);
+          const isReserved = reservedSet.has(key);
+          const isUnavailable = isSold || isReserved;
+          const isSelected = selectedSet.has(key);
+
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={isUnavailable}
+              onClick={() => toggleTicket(number)}
+              style={{
+                padding: 10,
+                border: "1px solid #ccc",
+                borderRadius: 6,
+                background: isSold
+                  ? "#000"
+                  : isReserved
+                    ? "#999"
+                    : isSelected
+                      ? "#16a34a"
+                      : "#fff",
+                color: isUnavailable || isSelected ? "#fff" : "#000",
+                cursor: isUnavailable ? "not-allowed" : "pointer",
+                opacity: isUnavailable ? 0.6 : 1,
+              }}
+            >
+              {number}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <p>
+          <strong>Current colour:</strong> {selectedColour}
+        </p>
+
+        <p>
+          <strong>Selected:</strong>{" "}
+          {selectedTickets.length
+            ? selectedTickets
+                .map((t) => `${t.ticket_number} (${t.colour})`)
+                .join(", ")
+            : "None"}
+        </p>
+
+        <p>
+          <strong>Total:</strong> {total.toFixed(2)} {raffle.currency}
+        </p>
       </div>
 
       {selectedTickets.length ? (
-        <div style={{ marginTop: 20 }}>
-          <h3>Selected tickets</h3>
+        <div style={{ marginTop: 12 }}>
+          <h3>Basket</h3>
           <ul>
             {selectedTickets.map((ticket) => (
               <li key={`${ticket.colour}-${ticket.ticket_number}`}>
-                #{ticket.ticket_number}{" "}
+                #{ticket.ticket_number} ({ticket.colour}){" "}
                 <button
                   type="button"
-                  onClick={() => removeTicket(ticket.ticket_number)}
+                  onClick={() => removeSelectedTicket(ticket)}
                   style={{ marginLeft: 8 }}
                 >
                   Remove
@@ -240,10 +374,6 @@ export default function RaffleClient({ raffle }: Props) {
               </li>
             ))}
           </ul>
-
-          <p>
-            <strong>Total:</strong> {total.toFixed(2)} {raffle.currency}
-          </p>
         </div>
       ) : null}
 
@@ -255,10 +385,11 @@ export default function RaffleClient({ raffle }: Props) {
             disabled={loading || selectedTickets.length === 0}
             style={{
               padding: "12px 16px",
-              background: "black",
-              color: "white",
+              background: "#111",
+              color: "#fff",
               border: "none",
               cursor: "pointer",
+              borderRadius: 8,
               opacity: loading || selectedTickets.length === 0 ? 0.6 : 1,
             }}
           >
@@ -286,9 +417,10 @@ export default function RaffleClient({ raffle }: Props) {
               marginTop: 12,
               padding: "12px 16px",
               background: "#635bff",
-              color: "white",
+              color: "#fff",
               border: "none",
               cursor: "pointer",
+              borderRadius: 8,
               opacity: checkoutLoading ? 0.6 : 1,
             }}
           >
