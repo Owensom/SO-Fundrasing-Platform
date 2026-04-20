@@ -20,7 +20,6 @@ type Ticket = {
 type TicketsResponse = {
   ok?: boolean;
   tickets?: Ticket[];
-  error?: string;
 };
 
 function formatMoney(amount?: number, currency?: string) {
@@ -41,6 +40,7 @@ export default function SuccessPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketLoading, setTicketLoading] = useState(false);
 
+  // Load Stripe session
   useEffect(() => {
     if (!session_id || typeof session_id !== "string") return;
 
@@ -59,10 +59,12 @@ export default function SuccessPage() {
       });
   }, [session_id]);
 
+  // Load tickets (with retry)
   useEffect(() => {
     if (!data?.ok || !data.reservation_token) return;
 
     const reservationToken = data.reservation_token;
+
     let attempts = 0;
     let cancelled = false;
 
@@ -70,12 +72,13 @@ export default function SuccessPage() {
       setTicketLoading(true);
 
       while (!cancelled && attempts < 8) {
-        attempts += 1;
+        attempts++;
 
         try {
           const res = await fetch(
-            `/api/raffles/by-reservation?token=${reservationToken}`,
+            `/api/raffles/by-reservation?token=${reservationToken}`
           );
+
           const ticketData = (await res.json()) as TicketsResponse;
 
           if (
@@ -91,7 +94,8 @@ export default function SuccessPage() {
           console.error("ticket lookup failed", err);
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // wait 1.5s before retry
+        await new Promise((r) => setTimeout(r, 1500));
       }
 
       setTicketLoading(false);
@@ -165,14 +169,14 @@ export default function SuccessPage() {
           <p>Loading ticket numbers...</p>
         ) : tickets.length > 0 ? (
           <ul>
-            {tickets.map((ticket) => (
-              <li key={`${ticket.colour}-${ticket.ticket_number}`}>
-                #{ticket.ticket_number} ({ticket.colour})
+            {tickets.map((t) => (
+              <li key={`${t.colour}-${t.ticket_number}`}>
+                #{t.ticket_number} ({t.colour})
               </li>
             ))}
           </ul>
         ) : (
-          <p>No ticket numbers could be loaded yet.</p>
+          <p>No ticket numbers available.</p>
         )}
       </div>
     </main>
