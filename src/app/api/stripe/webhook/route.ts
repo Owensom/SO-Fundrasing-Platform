@@ -16,6 +16,14 @@ type ReservationRow = {
   tenant_slug: string;
 };
 
+type ExistingPaymentRow = {
+  id: string;
+};
+
+type ExistingSaleRow = {
+  reservation_id: string | null;
+};
+
 function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is required");
@@ -69,20 +77,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingPayment = await query<{ id: string }>(
-      `
-      select id
-      from raffle_payments
-      where stripe_checkout_session_id = $1
-      limit 1
-      `,
-      [session.id],
-    );
-
-    if (existingPayment.length) {
-      return NextResponse.json({ ok: true });
-    }
-
     const reservations = await query<ReservationRow>(
       `
       select
@@ -115,85 +109,111 @@ export async function POST(request: NextRequest) {
 
     const feePercent = Number(process.env.PLATFORM_FEE_PERCENT || "10");
     const platformFee = Math.round(total * (feePercent / 100));
-    const paymentId = crypto.randomUUID();
 
-    await query(
+    const existingPayment = await query<ExistingPaymentRow>(
       `
-      insert into raffle_payments (
-        id,
-        tenant_slug,
-        raffle_id,
-        reservation_token,
-        stripe_checkout_session_id,
-        stripe_payment_intent_id,
-        payment_status,
-        currency,
-        gross_amount_cents,
-        platform_fee_cents,
-        net_amount_cents,
-        customer_email,
-        customer_name,
-        metadata_json
-      ) values (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb
-      )
+      select id
+      from raffle_payments
+      where stripe_checkout_session_id = $1
+      limit 1
       `,
-      [
-        paymentId,
-        reservations[0].tenant_slug,
-        raffleId,
-        reservationToken,
-        session.id,
-        typeof session.payment_intent === "string"
-          ? session.payment_intent
-          : null,
-        session.payment_status || "paid",
-        (session.currency || "gbp").toUpperCase(),
-        total,
-        platformFee,
-        total - platformFee,
-        session.customer_details?.email ||
-          reservations[0].buyer_email ||
-          null,
-        session.customer_details?.name || null,
-        JSON.stringify(session.metadata || {}),
-      ],
+      [session.id],
     );
 
-    for (const r of reservations) {
+    const paymentId =
+      existingPayment[0]?.id ?? crypto.randomUUID();
+
+    if (!existingPayment.length) {
       await query(
         `
-        insert into raffle_ticket_sales (
+        insert into raffle_payments (
           id,
+          tenant_slug,
           raffle_id,
-          reservation_id,
-          payment_id,
+          reservation_token,
           stripe_checkout_session_id,
           stripe_payment_intent_id,
-          ticket_number,
-          colour_id,
-          amount_cents,
+          payment_status,
           currency,
-          sold_at
+          gross_amount_cents,
+          platform_fee_cents,
+          net_amount_cents,
+          customer_email,
+          customer_name,
+          metadata_json
         ) values (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb
         )
         `,
         [
-          crypto.randomUUID(),
-          r.raffle_id,
-          r.id,
           paymentId,
+          reservations[0].tenant_slug,
+          raffleId,
+          reservationToken,
           session.id,
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : null,
-          r.ticket_number,
-          r.colour,
-          r.unit_price_cents,
+          session.payment_status || "paid",
           (session.currency || "gbp").toUpperCase(),
+          total,
+          platformFee,
+          total - platformFee,
+          session.customer_details?.email ||
+            reservations[0].buyer_email ||
+            null,
+          session.customer_details?.name || null,
+          JSON.stringify(session.metadata || {}),
         ],
       );
+    }
+
+    for (const r of reservations) {
+      const existingSale = await query<ExistingSaleRow>(
+        `
+        select reservation_id
+        from raffle_ticket_sales
+        where reservation_id = $1
+        limit 1
+        `,
+        [r.id],
+      );
+
+      if (!existingSale.length) {
+        await query(
+          `
+          insert into raffle_ticket_sales (
+            id,
+            raffle_id,
+            reservation_id,
+            payment_id,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            ticket_number,
+            colour,
+            amount_cents,
+            currency,
+            sold_at
+          ) values (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()
+          )
+          `,
+          [
+            crypto.randomUUID(),
+            r.raffle_id,
+            r.id,
+            paymentId,
+            session.id,
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : null,
+            r.ticket_number,
+            r.colour || "default",
+            r.unit_price_cents,
+            (session.currency || "gbp").toUpperCase(),
+          ],
+        );
+      }
     }
 
     await query(
