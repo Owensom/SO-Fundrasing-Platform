@@ -1,18 +1,15 @@
 import Stripe from "stripe";
 
-type SearchParams = Promise<{
-  session_id?: string;
-}>;
-
 type PageProps = {
-  searchParams: SearchParams;
+  searchParams: {
+    session_id?: string;
+  };
 };
 
 function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is required");
   }
-
   return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
 
@@ -25,92 +22,40 @@ function formatMoney(amount: number | null | undefined, currency: string | null 
 }
 
 export default async function CheckoutSuccessPage({ searchParams }: PageProps) {
-  const { session_id } = await searchParams;
+  const sessionId = searchParams.session_id;
 
-  if (!session_id) {
-    return (
-      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
-        <h1>Payment confirmation unavailable</h1>
-        <p>Missing Stripe session ID.</p>
-      </main>
-    );
+  if (!sessionId) {
+    return <div style={{ padding: 20 }}>Missing session ID</div>;
   }
 
-  try {
-    const stripe = getStripe();
+  const stripe = getStripe();
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    const session = await stripe.checkout.sessions.retrieve(session_id, {
-      expand: ["payment_intent"],
-    });
+  return (
+    <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
+      <h1>Payment successful</h1>
 
-    return (
-      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 12,
-            padding: 24,
-            background: "#fff",
-          }}
-        >
-          <h1 style={{ marginTop: 0 }}>Payment successful</h1>
+      <p>
+        <strong>Amount:</strong>{" "}
+        {formatMoney(session.amount_total, session.currency)}
+      </p>
 
-          <p>Thank you. Your payment has been received.</p>
+      <p>
+        <strong>Status:</strong> {session.payment_status}
+      </p>
 
-          <hr style={{ margin: "20px 0" }} />
+      <p>
+        <strong>Email:</strong> {session.customer_details?.email}
+      </p>
 
-          <p>
-            <strong>Amount paid:</strong>{" "}
-            {formatMoney(session.amount_total, session.currency)}
-          </p>
+      <p>
+        <strong>Name:</strong> {session.customer_details?.name}
+      </p>
 
-          <p>
-            <strong>Payment status:</strong> {session.payment_status}
-          </p>
-
-          <p>
-            <strong>Name:</strong> {session.customer_details?.name || "—"}
-          </p>
-
-          <p>
-            <strong>Email:</strong> {session.customer_details?.email || "—"}
-          </p>
-
-          <p>
-            <strong>Reservation token:</strong>{" "}
-            {session.metadata?.reservation_token || "—"}
-          </p>
-
-          <p>
-            <strong>Checkout session:</strong> {session.id}
-          </p>
-
-          <p>
-            <strong>Payment intent:</strong>{" "}
-            {typeof session.payment_intent === "string"
-              ? session.payment_intent
-              : session.payment_intent?.id || "—"}
-          </p>
-
-          <hr style={{ margin: "20px 0" }} />
-
-          <p style={{ marginBottom: 0 }}>
-            Your tickets have been marked as sold once the Stripe webhook completes.
-          </p>
-        </div>
-      </main>
-    );
-  } catch (error) {
-    console.error("checkout success page error", error);
-
-    return (
-      <main style={{ maxWidth: 800, margin: "40px auto", padding: 16 }}>
-        <h1>Payment received</h1>
-        <p>
-          Your payment appears to have completed, but the confirmation details
-          could not be loaded.
-        </p>
-      </main>
-    );
-  }
+      <p>
+        <strong>Reservation:</strong>{" "}
+        {session.metadata?.reservation_token}
+      </p>
+    </main>
+  );
 }
