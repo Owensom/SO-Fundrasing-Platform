@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query, queryOne } from "../../../../../api/_lib/db";
+import { query, queryOne } from "../../../../../../api/_lib/db";
 
 export const runtime = "nodejs";
 
