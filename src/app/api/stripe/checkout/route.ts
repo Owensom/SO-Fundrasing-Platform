@@ -4,7 +4,7 @@ import { getRaffleById } from "@/lib/raffles";
 import { queryOne } from "@/lib/db";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2023-10-16",
 });
 
 type CheckoutBody = {
@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
 
     const raffle = await getRaffleById(raffleId);
 
-    // 🔴 CRITICAL: BLOCK checkout if not published
     if (!raffle || raffle.status !== "published") {
       return NextResponse.json(
         { ok: false, error: "This raffle is closed." },
@@ -118,9 +117,7 @@ export async function POST(request: NextRequest) {
             currency: raffle.currency.toLowerCase(),
             product_data: {
               name: raffle.title,
-              description: `${quantity} ticket${
-                quantity > 1 ? "s" : ""
-              }`,
+              description: `${quantity} ticket${quantity > 1 ? "s" : ""}`,
             },
             unit_amount: unitAmount,
           },
