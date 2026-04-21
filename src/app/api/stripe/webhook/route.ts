@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { query } from "@/lib/db";
+import { sendReceiptEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type ReservationRow = {
   id: string;
@@ -11,9 +13,11 @@ type ReservationRow = {
   ticket_number: number;
   colour: string | null;
   buyer_email: string | null;
+  buyer_name: string | null;
   unit_price_cents: number;
   status: string;
   tenant_slug: string;
+  raffle_title: string;
 };
 
 type ExistingPaymentRow = {
@@ -87,9 +91,11 @@ export async function POST(request: NextRequest) {
         r.ticket_number,
         r.colour,
         r.buyer_email,
+        r.buyer_name,
         r.unit_price_cents,
         r.status,
-        ra.tenant_slug
+        ra.tenant_slug,
+        ra.title as raffle_title
       from raffle_ticket_reservations r
       join raffles ra on ra.id = r.raffle_id
       where r.raffle_id = $1
@@ -162,7 +168,9 @@ export async function POST(request: NextRequest) {
           session.customer_details?.email ||
             reservations[0].buyer_email ||
             null,
-          session.customer_details?.name || null,
+          session.customer_details?.name ||
+            reservations[0].buyer_name ||
+            null,
           JSON.stringify(session.metadata || {}),
         ],
       );
@@ -212,16 +220,16 @@ export async function POST(request: NextRequest) {
             null,
             $3,
             $4,
-            null,
             $5,
-            now(),
             $6,
+            now(),
             $7,
             $8,
             $9,
             $10,
             $11,
             $12,
+            $13,
             now()
           )
           `,
@@ -230,6 +238,7 @@ export async function POST(request: NextRequest) {
             r.raffle_id,
             colourValue,
             r.ticket_number,
+            r.buyer_name,
             r.buyer_email,
             reservationIdText,
             paymentId,
@@ -267,6 +276,30 @@ export async function POST(request: NextRequest) {
       `,
       [raffleId],
     );
+
+    try {
+      const buyerEmail =
+        session.customer_details?.email || reservations[0].buyer_email || "";
+      const buyerName =
+        session.customer_details?.name || reservations[0].buyer_name || null;
+
+      if (buyerEmail) {
+        await sendReceiptEmail({
+          to: buyerEmail,
+          name: buyerName,
+          raffleTitle: reservations[0].raffle_title,
+          tickets: reservations.map((r) => ({
+            ticket_number: r.ticket_number,
+            colour: r.colour || "default",
+          })),
+          amountCents: total,
+          currency: (session.currency || "gbp").toUpperCase(),
+          reservationToken,
+        });
+      }
+    } catch (emailError) {
+      console.error("receipt email send failed", emailError);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
