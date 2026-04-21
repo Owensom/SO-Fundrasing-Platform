@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { query } from "../../../../../api/_lib/db";
+import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -89,7 +89,6 @@ export async function POST(request: NextRequest) {
     const raffle = rows[0];
     const currency = (raffle.currency || "GBP").toLowerCase();
 
-    // This is now the authoritative backend total, already offer-adjusted
     const totalAmountCents = rows.reduce(
       (sum, row) => sum + Number(row.unit_price_cents || 0),
       0,
