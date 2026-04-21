@@ -1,40 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "../../../../../api/_lib/db";
+import { query } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { slug } = params;
+  const { slug } = await params;
 
-  const raffle = await query(
+  const raffleRows = await query<any>(
     `
     select *
     from raffles
     where slug = $1
     limit 1
     `,
-    [slug]
+    [slug],
   );
 
-  if (!raffle.length) {
-    return NextResponse.json({ ok: false, error: "Not found" });
+  if (!raffleRows.length) {
+    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
   }
 
-  const raffleId = raffle[0].id;
+  const raffle = raffleRows[0];
+  const raffleId = raffle.id;
 
-  // sold tickets
-  const sold = await query(
+  const sold = await query<{ ticket_number: number; colour: string | null }>(
     `
     select ticket_number, colour
     from raffle_ticket_sales
     where raffle_id = $1
     `,
-    [raffleId]
+    [raffleId],
   );
 
-  // active reservations only (not expired)
-  const reserved = await query(
+  const reserved = await query<{ ticket_number: number; colour: string | null }>(
     `
     select ticket_number, colour
     from raffle_ticket_reservations
@@ -42,13 +43,19 @@ export async function GET(
       and status = 'reserved'
       and expires_at > now()
     `,
-    [raffleId]
+    [raffleId],
   );
 
   return NextResponse.json({
     ok: true,
-    raffle: raffle[0],
-    sold,
-    reserved,
+    raffle,
+    sold: sold.map((t) => ({
+      ticket_number: t.ticket_number,
+      colour: t.colour || "default",
+    })),
+    reserved: reserved.map((t) => ({
+      ticket_number: t.ticket_number,
+      colour: t.colour || "default",
+    })),
   });
 }
