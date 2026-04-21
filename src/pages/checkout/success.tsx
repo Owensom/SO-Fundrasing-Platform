@@ -39,8 +39,8 @@ export default function SuccessPage() {
   const [data, setData] = useState<SessionResponse | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketLoading, setTicketLoading] = useState(false);
+  const [ticketLookupDone, setTicketLookupDone] = useState(false);
 
-  // Load Stripe session
   useEffect(() => {
     if (!session_id || typeof session_id !== "string") return;
 
@@ -59,24 +59,22 @@ export default function SuccessPage() {
       });
   }, [session_id]);
 
-  // Load tickets (with retry)
   useEffect(() => {
     if (!data?.ok || !data.reservation_token) return;
 
     const reservationToken = data.reservation_token;
-
     let attempts = 0;
     let cancelled = false;
 
     async function loadTickets() {
       setTicketLoading(true);
 
-      while (!cancelled && attempts < 8) {
-        attempts++;
+      while (!cancelled && attempts < 6) {
+        attempts += 1;
 
         try {
           const res = await fetch(
-            `/api/raffles/by-reservation?token=${reservationToken}`
+            `/api/raffles/by-reservation?token=${reservationToken}`,
           );
 
           const ticketData = (await res.json()) as TicketsResponse;
@@ -88,17 +86,18 @@ export default function SuccessPage() {
           ) {
             setTickets(ticketData.tickets);
             setTicketLoading(false);
+            setTicketLookupDone(true);
             return;
           }
         } catch (err) {
           console.error("ticket lookup failed", err);
         }
 
-        // wait 1.5s before retry
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 1200));
       }
 
       setTicketLoading(false);
+      setTicketLookupDone(true);
     }
 
     loadTickets();
@@ -175,6 +174,8 @@ export default function SuccessPage() {
               </li>
             ))}
           </ul>
+        ) : ticketLookupDone ? (
+          <p>Your payment succeeded. Ticket numbers will appear shortly in admin records.</p>
         ) : (
           <p>No ticket numbers available.</p>
         )}
