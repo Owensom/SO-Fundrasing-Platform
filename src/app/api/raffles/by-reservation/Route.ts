@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "../../../../../api/_lib/db";
+import { query } from "@/lib/db";
 
 type SoldTicketRow = {
   ticket_number: number;
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       `
       select
         s.ticket_number,
-        s.colour
+        coalesce(s.colour, s.colour_id, 'default') as colour
       from raffle_ticket_sales s
       join raffle_ticket_reservations r
         on s.reservation_id = r.id::text
