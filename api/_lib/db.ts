@@ -1,1 +1,1 @@
-import { query, queryOne } from "./db";
+export * from "../../src/lib/db";
