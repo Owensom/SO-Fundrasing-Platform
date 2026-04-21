@@ -1,839 +1,260 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { getBestPrice } from "../lib/rafflePricing";
-import type { TicketSelection } from "../types/raffles";
+import { NextRequest, NextResponse } from "next/server";
+import { query, queryOne } from "@/lib/db";
+import { getRaffleBySlug } from "@/lib/raffles";
 
-type Props = {
-  slug: string;
+type ReserveBody = {
+  tenantSlug?: string;
+  quantity?: number;
+  selectedTickets?: Array<{
+    ticket_number?: number;
+    number?: number;
+    colour?: string | null;
+  }>;
+  buyerName?: string;
+  buyerEmail?: string;
 };
 
-type RaffleColour = {
+type ReservedOrSoldRow = {
+  ticket_number: number;
+  colour: string | null;
+};
+
+type InsertedReservationRow = {
   id: string;
-  name: string;
-  hex?: string | null;
-  sortOrder?: number;
+  reservation_token: string;
+  expires_at: string;
 };
 
-type RaffleOffer = {
-  id: string;
-  label: string;
-  quantity: number;
-  price: number;
-  isActive: boolean;
-  sortOrder?: number;
-};
+function normalizeSelectedTickets(
+  value: unknown
+): Array<{ ticket_number: number; colour: string | null }> {
+  if (!Array.isArray(value)) return [];
 
-type SafeRaffleStatus = "draft" | "published" | "closed" | "drawn";
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const ticketNumber = Number(row.ticket_number ?? row.number);
+      const colour =
+        typeof row.colour === "string" && row.colour.trim()
+          ? row.colour.trim()
+          : null;
 
-type SafeRaffle = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  startNumber: number;
-  endNumber: number;
-  currency: string;
-  ticketPrice: number;
-  status: SafeRaffleStatus;
-  colours: RaffleColour[];
-  offers: RaffleOffer[];
-  reservedTickets: Array<{ colour: string; number: number }>;
-  soldTickets: Array<{ colour: string; number: number }>;
-  winnerTicketNumber: number | null;
-  winnerColour: string | null;
-  drawnAt: string | null;
-};
+      if (!Number.isInteger(ticketNumber)) return null;
 
-function makeTicketKey(colour: string, number: number) {
-  return `${colour}::${number}`;
+      return { ticket_number: ticketNumber, colour };
+    })
+    .filter(Boolean) as Array<{ ticket_number: number; colour: string | null }>;
 }
 
-function formatCurrency(value: number, currency: string) {
+function hasDuplicateTickets(
+  tickets: Array<{ ticket_number: number; colour: string | null }>
+) {
+  const seen = new Set<string>();
+
+  for (const ticket of tickets) {
+    const key = `${ticket.ticket_number}::${ticket.colour ?? ""}`;
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+
+  return false;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { slug: string } }
+) {
   try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: currency || "EUR",
-    }).format(Number.isFinite(value) ? value : 0);
-  } catch {
-    return `${currency || "EUR"} ${(Number.isFinite(value) ? value : 0).toFixed(2)}`;
-  }
-}
+    const body = (await request.json()) as ReserveBody;
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
+    const tenantSlug =
+      typeof body.tenantSlug === "string" ? body.tenantSlug.trim() : "";
+    const slug = params.slug;
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleString();
-}
-
-function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
-  const status = String(rawStatus ?? "").trim().toLowerCase();
-
-  if (
-    status === "published" ||
-    status === "active" ||
-    status === "live" ||
-    status === "open" ||
-    status === "public"
-  ) {
-    return "published";
-  }
-
-  if (status === "drawn") {
-    return "drawn";
-  }
-
-  if (
-    status === "closed" ||
-    status === "ended" ||
-    status === "finished"
-  ) {
-    return "closed";
-  }
-
-  return "draft";
-}
-
-function toSafeRaffle(input: any): SafeRaffle {
-  const raw = input ?? {};
-  const colours = Array.isArray(raw.colours) ? raw.colours : [];
-  const offers = Array.isArray(raw.offers) ? raw.offers : [];
-  const reservedTickets = Array.isArray(raw.reservedTickets) ? raw.reservedTickets : [];
-  const soldTickets = Array.isArray(raw.soldTickets) ? raw.soldTickets : [];
-
-  const startNumber = Number(raw.startNumber);
-  const endNumber = Number(raw.endNumber);
-
-  const rawWinnerTicketNumber =
-    raw.winnerTicketNumber ?? raw.winner_ticket_number;
-  const winnerTicketNumber = Number(rawWinnerTicketNumber);
-
-  return {
-    id: String(raw.id ?? ""),
-    slug: String(raw.slug ?? ""),
-    title: String(raw.title ?? "Raffle"),
-    description: String(raw.description ?? ""),
-    imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
-    startNumber: Number.isFinite(startNumber) ? startNumber : 1,
-    endNumber: Number.isFinite(endNumber) ? endNumber : 1,
-    currency: String(raw.currency ?? "EUR"),
-    ticketPrice: Number.isFinite(Number(raw.ticketPrice))
-      ? Number(raw.ticketPrice)
-      : 0,
-    status: normaliseFrontendStatus(raw.status),
-    colours: colours.map((c: any, index: number) => ({
-      id: String(c?.id ?? `colour-${index}`),
-      name: String(c?.name ?? `Colour ${index + 1}`),
-      hex: c?.hex ? String(c.hex) : null,
-      sortOrder: Number.isFinite(Number(c?.sortOrder))
-        ? Number(c.sortOrder)
-        : index,
-    })),
-    offers: offers.map((o: any, index: number) => ({
-      id: String(o?.id ?? `offer-${index}`),
-      label: String(o?.label ?? `Offer ${index + 1}`),
-      quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
-      price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
-      isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
-      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
-        ? Number(o?.sortOrder ?? o?.sort_order)
-        : index,
-    })),
-    reservedTickets: reservedTickets.map((t: any) => ({
-      colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
-    })),
-    soldTickets: soldTickets.map((t: any) => ({
-      colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
-    })),
-    winnerTicketNumber: Number.isFinite(winnerTicketNumber)
-      ? winnerTicketNumber
-      : null,
-    winnerColour:
-      raw.winnerColour ?? raw.winner_colour
-        ? String(raw.winnerColour ?? raw.winner_colour)
-        : null,
-    drawnAt:
-      raw.drawnAt ?? raw.drawn_at
-        ? String(raw.drawnAt ?? raw.drawn_at)
-        : null,
-  };
-}
-
-export default function PublicRafflePage({ slug }: Props) {
-  const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [selectedColour, setSelectedColour] = useState("");
-  const [basket, setBasket] = useState<TicketSelection[]>([]);
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
-  const [reservationMessage, setReservationMessage] = useState("");
-
-  useEffect(() => {
-    if (!slug) return;
-
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError("");
-        setReservationMessage("");
-
-        const response = await fetch(
-          `/api/public/raffles/${encodeURIComponent(slug)}`
-        );
-        const text = await response.text();
-
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw new Error(`API did not return JSON: ${text.slice(0, 120)}`);
-        }
-
-        if (!response.ok) {
-          throw new Error(parsed?.error || "Failed to load raffle");
-        }
-
-        const safe = toSafeRaffle(parsed?.raffle);
-
-        if (!cancelled) {
-          setRaffle(safe);
-          setSelectedColour(safe.colours[0]?.name ?? "");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load raffle");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+    if (!tenantSlug || !slug) {
+      return NextResponse.json(
+        { ok: false, error: "Missing tenant or raffle slug." },
+        { status: 400 }
+      );
     }
 
-    load();
+    const raffle = await getRaffleBySlug(tenantSlug, slug);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
-  const availability = useMemo(() => {
-    const sold = new Set<string>();
-    const reserved = new Set<string>();
-
-    if (!raffle) return { sold, reserved };
-
-    for (const t of raffle.soldTickets) {
-      sold.add(makeTicketKey(t.colour, t.number));
+    if (!raffle || raffle.status !== "published") {
+      return NextResponse.json(
+        { ok: false, error: "This raffle is not open for reservations." },
+        { status: 400 }
+      );
     }
 
-    for (const t of raffle.reservedTickets) {
-      reserved.add(makeTicketKey(t.colour, t.number));
+    const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
+    const quantity =
+      typeof body.quantity === "number" ? Math.max(0, Math.floor(body.quantity)) : 0;
+
+    if (selectedTickets.length === 0 && quantity <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "No tickets selected." },
+        { status: 400 }
+      );
     }
 
-    return { sold, reserved };
-  }, [raffle]);
-
-  const basketKeys = useMemo(() => {
-    return new Set(basket.map((t) => makeTicketKey(t.colour, t.number)));
-  }, [basket]);
-
-  const visibleNumbers = useMemo(() => {
-    if (!raffle) return [];
-    if (!Number.isFinite(raffle.startNumber) || !Number.isFinite(raffle.endNumber)) return [];
-    if (raffle.endNumber < raffle.startNumber) return [];
-
-    const out: number[] = [];
-    for (let n = raffle.startNumber; n <= raffle.endNumber; n += 1) {
-      out.push(n);
+    if (selectedTickets.length > 0 && hasDuplicateTickets(selectedTickets)) {
+      return NextResponse.json(
+        { ok: false, error: "Duplicate tickets selected." },
+        { status: 400 }
+      );
     }
-    return out;
-  }, [raffle]);
 
-  const isPublished = raffle?.status === "published";
-  const isClosed = raffle?.status === "closed";
-  const isDrawn = raffle?.status === "drawn";
-  const isDraft = raffle?.status === "draft";
-  const canReserve = Boolean(raffle && isPublished);
+    if (selectedTickets.length > 0 && quantity > 0 && selectedTickets.length !== quantity) {
+      return NextResponse.json(
+        { ok: false, error: "Selected ticket count does not match quantity." },
+        { status: 400 }
+      );
+    }
 
-  const pricing = useMemo(() => {
-    if (!raffle) return getBestPrice(0, 0, []);
-    return getBestPrice(
-      basket.length,
-      raffle.ticketPrice,
-      isPublished ? raffle.offers.filter((o) => o.isActive) : []
+    const requestedQuantity =
+      selectedTickets.length > 0 ? selectedTickets.length : quantity;
+
+    const remainingTickets = Math.max(
+      Number(raffle.total_tickets) - Number(raffle.sold_tickets),
+      0
     );
-  }, [basket.length, raffle, isPublished]);
 
-  function toggleTicket(number: number) {
-    if (!raffle || !selectedColour || !canReserve) return;
+    if (requestedQuantity > remainingTickets) {
+      return NextResponse.json(
+        { ok: false, error: "Not enough tickets remaining." },
+        { status: 400 }
+      );
+    }
 
-    const key = makeTicketKey(selectedColour, number);
-    if (availability.sold.has(key) || availability.reserved.has(key)) return;
+    if (selectedTickets.length > 0) {
+      const valuesSql = selectedTickets
+        .map((_, index) => {
+          const base = index * 2;
+          return `($${base + 2}, $${base + 3})`;
+        })
+        .join(", ");
 
-    setBasket((current) => {
-      const exists = current.some(
-        (ticket) => ticket.colour === selectedColour && ticket.number === number
+      const soldOrReserved = await query<ReservedOrSoldRow>(
+        `
+        with requested(ticket_number, colour) as (
+          values ${valuesSql}
+        )
+        select ticket_number, colour
+        from (
+          select rtrt.ticket_number, rtrt.colour
+          from raffle_ticket_reservations_tickets rtrt
+          inner join raffle_ticket_reservations rtr
+            on rtr.id = rtrt.reservation_id
+          where rtrt.raffle_id = $1
+            and rtr.expires_at > now()
+
+          union all
+
+          select rts.ticket_number, rts.colour
+          from raffle_ticket_sales rts
+          where rts.raffle_id = $1
+        ) taken
+        inner join requested req
+          on req.ticket_number = taken.ticket_number
+         and coalesce(req.colour, '') = coalesce(taken.colour, '')
+        `,
+        [
+          raffle.id,
+          ...selectedTickets.flatMap((ticket) => [
+            ticket.ticket_number,
+            ticket.colour,
+          ]),
+        ]
       );
 
-      if (exists) {
-        return current.filter(
-          (ticket) => !(ticket.colour === selectedColour && ticket.number === number)
-        );
-      }
-
-      return [...current, { colour: selectedColour, number }].sort((a, b) => {
-        if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
-        return a.number - b.number;
-      });
-    });
-  }
-
-  function removeFromBasket(ticket: TicketSelection) {
-    setBasket((current) =>
-      current.filter(
-        (item) => !(item.colour === ticket.colour && item.number === ticket.number)
-      )
-    );
-  }
-
-  async function reserveTickets() {
-    if (!raffle || !canReserve) return;
-
-    try {
-      setSaving(true);
-      setError("");
-      setReservationMessage("");
-
-      if (!buyerName.trim()) throw new Error("Please enter your name.");
-      if (!buyerEmail.trim()) throw new Error("Please enter your email.");
-      if (basket.length === 0) throw new Error("Please select at least one ticket.");
-
-      const response = await fetch(
-        `/api/public/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+      if (soldOrReserved.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "One or more selected tickets are no longer available.",
+            unavailable: soldOrReserved,
           },
-          body: JSON.stringify({
-            buyerName: buyerName.trim(),
-            buyerEmail: buyerEmail.trim(),
-            tickets: basket,
-          }),
-        }
-      );
-
-      const text = await response.text();
-
-      let parsed: any = null;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new Error(`Reserve API did not return JSON: ${text.slice(0, 120)}`);
+          { status: 409 }
+        );
       }
-
-      if (!response.ok) {
-        throw new Error(parsed?.error || "Reserve failed");
-      }
-
-      setReservationMessage(`Reserved until ${parsed?.expiresAt ?? ""}`);
-      setBasket([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Reserve failed");
-    } finally {
-      setSaving(false);
     }
+
+    const reservation = await queryOne<InsertedReservationRow>(
+      `
+      insert into raffle_ticket_reservations (
+        id,
+        raffle_id,
+        reservation_token,
+        quantity,
+        expires_at,
+        created_at
+      )
+      values (
+        gen_random_uuid()::text,
+        $1,
+        gen_random_uuid()::text,
+        $2,
+        now() + interval '15 minutes',
+        now()
+      )
+      returning id, reservation_token, expires_at
+      `,
+      [raffle.id, requestedQuantity]
+    );
+
+    if (!reservation) {
+      return NextResponse.json(
+        { ok: false, error: "Failed to create reservation." },
+        { status: 500 }
+      );
+    }
+
+    if (selectedTickets.length > 0) {
+      for (const ticket of selectedTickets) {
+        await query(
+          `
+          insert into raffle_ticket_reservations_tickets (
+            id,
+            reservation_id,
+            raffle_id,
+            ticket_number,
+            colour,
+            created_at
+          )
+          values (
+            gen_random_uuid()::text,
+            $1,
+            $2,
+            $3,
+            $4,
+            now()
+          )
+          `,
+          [
+            reservation.id,
+            raffle.id,
+            ticket.ticket_number,
+            ticket.colour,
+          ]
+        );
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      reservationToken: reservation.reservation_token,
+      expiresAt: reservation.expires_at,
+      quantity: requestedQuantity,
+      selectedTickets,
+    });
+  } catch (error) {
+    console.error("raffle reserve error", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Internal server error." },
+      { status: 500 }
+    );
   }
-
-  if (!slug) {
-    return <div style={styles.wrap}>Loading…</div>;
-  }
-
-  if (loading) {
-    return <div style={styles.wrap}>Loading raffle…</div>;
-  }
-
-  if (error && !raffle) {
-    return <div style={styles.wrap}>{error}</div>;
-  }
-
-  if (!raffle) {
-    return <div style={styles.wrap}>Raffle not found.</div>;
-  }
-
-  const backgroundImage = raffle.imageUrl;
-
-  return (
-    <div style={styles.page}>
-      <div
-        style={{
-          ...styles.hero,
-          ...(backgroundImage
-            ? {
-                backgroundImage: `linear-gradient(rgba(15,23,42,0.55), rgba(15,23,42,0.55)), url("${backgroundImage}")`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-              }
-            : {
-                background:
-                  "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)",
-              }),
-        }}
-      >
-        <div style={styles.heroInner}>
-          <h1 style={styles.heroTitle}>{raffle.title}</h1>
-          {raffle.description ? (
-            <p style={styles.heroDescription}>{raffle.description}</p>
-          ) : null}
-          <p style={styles.heroMeta}>
-            Tickets {raffle.startNumber}–{raffle.endNumber} •{" "}
-            {formatCurrency(raffle.ticketPrice, raffle.currency)}
-          </p>
-
-          {isDrawn ? (
-            <div style={styles.statusDrawn}>Winner Drawn</div>
-          ) : isClosed ? (
-            <div style={styles.statusClosed}>Closed</div>
-          ) : isPublished ? (
-            <div style={styles.statusPublished}>Published</div>
-          ) : (
-            <div style={styles.statusDraft}>Draft</div>
-          )}
-        </div>
-      </div>
-
-      <div style={styles.container}>
-        {isDrawn ? (
-          <div style={styles.winnerCard}>
-            <div style={styles.winnerTitle}>Winner Drawn</div>
-            <div style={styles.winnerGrid}>
-              <div style={styles.winnerBox}>
-                <div style={styles.winnerLabel}>Winning ticket</div>
-                <div style={styles.winnerValue}>
-                  {raffle.winnerTicketNumber != null
-                    ? `#${raffle.winnerTicketNumber}`
-                    : "—"}
-                </div>
-              </div>
-
-              <div style={styles.winnerBox}>
-                <div style={styles.winnerLabel}>Winning colour</div>
-                <div style={styles.winnerValueSmall}>
-                  {raffle.winnerColour || "—"}
-                </div>
-              </div>
-
-              <div style={styles.winnerBox}>
-                <div style={styles.winnerLabel}>Drawn at</div>
-                <div style={styles.winnerValueSmall}>
-                  {formatDateTime(raffle.drawnAt)}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isClosed ? (
-          <div style={styles.noticeDark}>
-            This raffle is now closed. Reservations and payments are no longer available.
-          </div>
-        ) : null}
-
-        {isDraft ? (
-          <div style={styles.notice}>
-            This raffle is not published yet.
-          </div>
-        ) : null}
-
-        {raffle.colours.length > 0 ? (
-          <>
-            <h2 style={styles.heading}>Choose colour</h2>
-            <div style={styles.colourRow}>
-              {raffle.colours.map((colour) => (
-                <button
-                  key={colour.id}
-                  type="button"
-                  onClick={() => setSelectedColour(colour.name)}
-                  disabled={!canReserve}
-                  style={{
-                    ...styles.colourButton,
-                    background:
-                      selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
-                    color:
-                      selectedColour === colour.name ? "#ffffff" : "#111827",
-                    opacity: canReserve ? 1 : 0.75,
-                    cursor: canReserve ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {colour.name}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div style={styles.notice}>No colours configured yet.</div>
-        )}
-
-        <h2 style={styles.heading}>Choose numbers</h2>
-
-        {selectedColour ? (
-          <div style={styles.numberGrid}>
-            {visibleNumbers.map((number) => {
-              const key = makeTicketKey(selectedColour, number);
-              const isSold = availability.sold.has(key);
-              const isReserved = availability.reserved.has(key);
-              const isSelected = basketKeys.has(key);
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleTicket(number)}
-                  disabled={isSold || isReserved || !canReserve}
-                  style={{
-                    ...styles.numberButton,
-                    background: isSelected
-                      ? "#2563eb"
-                      : isSold
-                        ? "#111827"
-                        : isReserved
-                          ? "#f59e0b"
-                          : "#ffffff",
-                    color: isSelected || isSold || isReserved ? "#ffffff" : "#111827",
-                    cursor:
-                      isSold || isReserved || !canReserve
-                        ? "not-allowed"
-                        : "pointer",
-                    opacity: canReserve ? 1 : 0.75,
-                  }}
-                >
-                  {number}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={styles.notice}>Select a colour to view available numbers.</div>
-        )}
-
-        <h2 style={styles.heading}>Basket</h2>
-
-        {basket.length === 0 ? (
-          <div style={styles.notice}>No tickets selected yet.</div>
-        ) : (
-          <div style={styles.basket}>
-            {basket.map((ticket) => (
-              <div key={makeTicketKey(ticket.colour, ticket.number)} style={styles.basketRow}>
-                <span>
-                  {ticket.colour} #{ticket.number}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeFromBasket(ticket)}
-                  style={styles.removeButton}
-                  disabled={!canReserve}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={styles.totalBox}>
-          <div>Tickets: {pricing.quantity}</div>
-          <div>Total: {formatCurrency(pricing.total, raffle.currency)}</div>
-        </div>
-
-        <h2 style={styles.heading}>Your details</h2>
-
-        <div style={styles.form}>
-          <input
-            value={buyerName}
-            onChange={(e) => setBuyerName(e.target.value)}
-            placeholder="Your name"
-            style={styles.input}
-            disabled={!canReserve}
-          />
-          <input
-            value={buyerEmail}
-            onChange={(e) => setBuyerEmail(e.target.value)}
-            placeholder="Your email"
-            type="email"
-            style={styles.input}
-            disabled={!canReserve}
-          />
-          <button
-            type="button"
-            onClick={reserveTickets}
-            disabled={saving || basket.length === 0 || !canReserve}
-            style={{
-              ...styles.primaryButton,
-              opacity: saving || basket.length === 0 || !canReserve ? 0.6 : 1,
-              cursor:
-                saving || basket.length === 0 || !canReserve
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {isDrawn
-              ? "Winner Drawn"
-              : isClosed
-                ? "Closed"
-                : isDraft
-                  ? "Not Published"
-                  : saving
-                    ? "Reserving..."
-                    : "Reserve tickets"}
-          </button>
-        </div>
-
-        {reservationMessage ? <div style={styles.success}>{reservationMessage}</div> : null}
-        {error ? <div style={styles.error}>{error}</div> : null}
-      </div>
-    </div>
-  );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-  },
-  hero: {
-    minHeight: 320,
-    display: "flex",
-    alignItems: "flex-end",
-    padding: "32px 24px",
-  },
-  heroInner: {
-    maxWidth: 1100,
-    width: "100%",
-    margin: "0 auto",
-    color: "#ffffff",
-  },
-  heroTitle: {
-    margin: 0,
-    fontSize: 40,
-    lineHeight: 1.1,
-  },
-  heroDescription: {
-    marginTop: 12,
-    maxWidth: 760,
-    fontSize: 18,
-    lineHeight: 1.5,
-    color: "rgba(255,255,255,0.92)",
-  },
-  heroMeta: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "rgba(255,255,255,0.88)",
-  },
-  statusPublished: {
-    display: "inline-block",
-    marginTop: 14,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(34,197,94,0.2)",
-    border: "1px solid rgba(34,197,94,0.5)",
-    color: "#dcfce7",
-    fontWeight: 700,
-  },
-  statusClosed: {
-    display: "inline-block",
-    marginTop: 14,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(249,115,22,0.18)",
-    border: "1px solid rgba(249,115,22,0.5)",
-    color: "#ffedd5",
-    fontWeight: 700,
-  },
-  statusDrawn: {
-    display: "inline-block",
-    marginTop: 14,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(16,185,129,0.2)",
-    border: "1px solid rgba(16,185,129,0.5)",
-    color: "#d1fae5",
-    fontWeight: 700,
-  },
-  statusDraft: {
-    display: "inline-block",
-    marginTop: 14,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(245,158,11,0.2)",
-    border: "1px solid rgba(245,158,11,0.45)",
-    color: "#fef3c7",
-    fontWeight: 700,
-  },
-  container: {
-    maxWidth: 1100,
-    margin: "0 auto",
-    background: "#ffffff",
-    borderRadius: 16,
-    padding: 24,
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
-    marginTop: -32,
-    position: "relative",
-  },
-  wrap: {
-    padding: 24,
-  },
-  heading: {
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  colourRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  colourButton: {
-    border: "none",
-    borderRadius: 999,
-    padding: "10px 16px",
-    fontWeight: 700,
-  },
-  numberGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(64px, 1fr))",
-    gap: 8,
-  },
-  numberButton: {
-    height: 48,
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontWeight: 700,
-  },
-  basket: {
-    display: "grid",
-    gap: 8,
-  },
-  basketRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-  },
-  removeButton: {
-    border: "none",
-    background: "transparent",
-    color: "#dc2626",
-    fontWeight: 700,
-  },
-  totalBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 6,
-    fontWeight: 700,
-  },
-  form: {
-    display: "grid",
-    gap: 12,
-  },
-  input: {
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontSize: 16,
-  },
-  primaryButton: {
-    height: 48,
-    border: "none",
-    borderRadius: 10,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 700,
-    fontSize: 16,
-  },
-  notice: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    color: "#475569",
-  },
-  noticeDark: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    color: "#e2e8f0",
-  },
-  winnerCard: {
-    display: "grid",
-    gap: 14,
-    padding: 18,
-    borderRadius: 14,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-    marginBottom: 8,
-  },
-  winnerTitle: {
-    fontSize: 22,
-    fontWeight: 800,
-    color: "#065f46",
-  },
-  winnerGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-  },
-  winnerBox: {
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #d1fae5",
-  },
-  winnerLabel: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 6,
-  },
-  winnerValue: {
-    fontSize: 28,
-    fontWeight: 800,
-    color: "#111827",
-  },
-  winnerValueSmall: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "#111827",
-  },
-  success: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-  },
-  error: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-  },
-};
