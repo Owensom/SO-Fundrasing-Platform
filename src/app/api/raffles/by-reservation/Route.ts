@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const raffle = await query<RaffleRow>(
+    const raffles = await query<RaffleRow>(
       `
       select config_json
       from raffles
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
     );
 
     const colourLookup = buildColourLookup(
-      normaliseColours(raffle[0]?.config_json?.colours),
+      normaliseColours(raffles[0]?.config_json?.colours),
     );
 
     return NextResponse.json({
@@ -163,7 +163,7 @@ export async function GET(req: NextRequest) {
       }),
     });
   } catch (error) {
-    console.error("by-reservation error", error);
+    console.error("by-reservation route error", error);
 
     return NextResponse.json(
       { ok: false, error: "Failed to load tickets" },
