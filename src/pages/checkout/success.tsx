@@ -9,7 +9,6 @@ type SessionResponse = {
   email?: string;
   name?: string;
   reservation_token?: string;
-  error?: string;
 };
 
 type Ticket = {
@@ -39,7 +38,6 @@ export default function SuccessPage() {
   const [data, setData] = useState<SessionResponse | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketLoading, setTicketLoading] = useState(false);
-  const [ticketLookupDone, setTicketLookupDone] = useState(false);
 
   useEffect(() => {
     if (!session_id || typeof session_id !== "string") return;
@@ -63,48 +61,21 @@ export default function SuccessPage() {
     if (!data?.ok || !data.reservation_token) return;
 
     const reservationToken = data.reservation_token;
-    let attempts = 0;
-    let cancelled = false;
+    setTicketLoading(true);
 
-    async function loadTickets() {
-      setTicketLoading(true);
-
-      while (!cancelled && attempts < 6) {
-        attempts += 1;
-
-        try {
-          const res = await fetch(
-            `/api/raffles/by-reservation?token=${reservationToken}`,
-          );
-
-          const ticketData = (await res.json()) as TicketsResponse;
-
-          if (
-            ticketData.ok &&
-            Array.isArray(ticketData.tickets) &&
-            ticketData.tickets.length > 0
-          ) {
-            setTickets(ticketData.tickets);
-            setTicketLoading(false);
-            setTicketLookupDone(true);
-            return;
-          }
-        } catch (err) {
-          console.error("ticket lookup failed", err);
+    fetch(`/api/raffles/by-reservation?token=${reservationToken}`)
+      .then((res) => res.json())
+      .then((res: TicketsResponse) => {
+        if (res.ok && Array.isArray(res.tickets)) {
+          setTickets(res.tickets);
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-      }
-
-      setTicketLoading(false);
-      setTicketLookupDone(true);
-    }
-
-    loadTickets();
-
-    return () => {
-      cancelled = true;
-    };
+      })
+      .catch((err) => {
+        console.error("ticket lookup failed", err);
+      })
+      .finally(() => {
+        setTicketLoading(false);
+      });
   }, [data]);
 
   if (!session_id) {
@@ -174,10 +145,8 @@ export default function SuccessPage() {
               </li>
             ))}
           </ul>
-        ) : ticketLookupDone ? (
-          <p>Your payment succeeded. Ticket numbers will appear shortly in admin records.</p>
         ) : (
-          <p>No ticket numbers available.</p>
+          <p>No ticket numbers found for this reservation.</p>
         )}
       </div>
     </main>
