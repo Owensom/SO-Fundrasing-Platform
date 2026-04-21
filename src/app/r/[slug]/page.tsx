@@ -1,4 +1,4 @@
-import PublicRafflePage from "@/components/PublicRafflePage";
+import { PublicRafflePage } from "@/components/PublicRafflePage";
 
 type PageProps = {
   params: {
