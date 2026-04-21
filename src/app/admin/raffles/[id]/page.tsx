@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getRaffleById } from "@/lib/raffles";
-import { getAdminSession } from "@/lib/admin-auth";
 import RaffleAdminActions from "./RaffleAdminActions";
 
 type PageProps = {
@@ -64,19 +64,15 @@ function statusStyles(status: "draft" | "published" | "closed" | "drawn") {
 }
 
 export default async function AdminRafflePage({ params }: PageProps) {
-  const admin = await getAdminSession();
+  const session = await auth();
 
-  if (!admin) {
+  if (!session) {
     redirect("/admin/login");
   }
 
   const raffle = await getRaffleById(params.id);
 
   if (!raffle) {
-    notFound();
-  }
-
-  if (admin.tenant_slug && raffle.tenant_slug !== admin.tenant_slug) {
     notFound();
   }
 
@@ -92,7 +88,14 @@ export default async function AdminRafflePage({ params }: PageProps) {
         gap: 20,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
         <div style={{ display: "grid", gap: 10 }}>
           <Link
             href="/admin"
@@ -116,7 +119,14 @@ export default async function AdminRafflePage({ params }: PageProps) {
             {raffle.title}
           </h1>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <span
               style={{
                 ...badgeStyle,
@@ -139,7 +149,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}
+        >
           <Link
             href={`/r/${raffle.slug}`}
             target="_blank"
