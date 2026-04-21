@@ -28,6 +28,7 @@ function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is required");
   }
+
   return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
 
@@ -181,37 +182,64 @@ export async function POST(request: NextRequest) {
       );
 
       if (!existingSale.length) {
+        const saleId = crypto.randomUUID();
+        const colourValue = r.colour || "default";
+
         await query(
           `
           insert into raffle_ticket_sales (
             id,
             raffle_id,
+            reservation_group_id,
+            purchase_reference,
+            colour,
+            ticket_number,
+            buyer_name,
+            buyer_email,
+            created_at,
             reservation_id,
             payment_id,
             stripe_checkout_session_id,
             stripe_payment_intent_id,
-            ticket_number,
-            colour,
             amount_cents,
             currency,
+            colour_id,
             sold_at
           ) values (
-            $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()
+            $1::uuid,
+            $2,
+            null,
+            null,
+            $3,
+            $4,
+            null,
+            $5,
+            now(),
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12,
+            now()
           )
           `,
           [
-            crypto.randomUUID(),
+            saleId,
             r.raffle_id,
+            colourValue,
+            r.ticket_number,
+            r.buyer_email,
             reservationIdText,
             paymentId,
             session.id,
             typeof session.payment_intent === "string"
               ? session.payment_intent
               : null,
-            r.ticket_number,
-            r.colour || "default",
             r.unit_price_cents,
             (session.currency || "gbp").toUpperCase(),
+            colourValue,
           ],
         );
       }
@@ -243,6 +271,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("stripe webhook error", error);
+
     return NextResponse.json(
       { ok: false, error: "Webhook failed" },
       { status: 500 },
