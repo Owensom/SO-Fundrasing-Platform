@@ -1,171 +1,150 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { query } from "@/lib/db";
+import { getRaffleById } from "@/lib/raffles";
+import { queryOne } from "@/lib/db";
 
-export const runtime = "nodejs";
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+});
+
+type CheckoutBody = {
+  raffleId?: string;
+  reservationToken?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+};
 
 type ReservationRow = {
   id: string;
   raffle_id: string;
   reservation_token: string;
-  ticket_number: number;
-  colour: string | null;
-  unit_price_cents: number;
-  status: string;
+  quantity: number;
   expires_at: string;
-  title: string;
-  slug: string;
-  tenant_slug: string;
-  currency: string | null;
 };
-
-function getAppUrl() {
-  const value = process.env.NEXT_PUBLIC_APP_URL;
-  if (!value) {
-    throw new Error("NEXT_PUBLIC_APP_URL is required");
-  }
-  return value.replace(/\/$/, "");
-}
-
-function getStripe() {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    throw new Error("STRIPE_SECRET_KEY is required");
-  }
-
-  return new Stripe(process.env.STRIPE_SECRET_KEY);
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as CheckoutBody;
 
     const raffleId =
-      typeof body.raffleId === "string" ? body.raffleId.trim() : "";
+      typeof body.raffleId === "string" ? body.raffleId : "";
     const reservationToken =
       typeof body.reservationToken === "string"
-        ? body.reservationToken.trim()
+        ? body.reservationToken
         : "";
 
     if (!raffleId || !reservationToken) {
       return NextResponse.json(
-        { ok: false, error: "raffleId and reservationToken are required" },
-        { status: 400 },
+        { ok: false, error: "Missing raffleId or reservationToken." },
+        { status: 400 }
       );
     }
 
-    const rows = await query<ReservationRow>(
+    const raffle = await getRaffleById(raffleId);
+
+    // 🔴 CRITICAL: BLOCK checkout if not published
+    if (!raffle || raffle.status !== "published") {
+      return NextResponse.json(
+        { ok: false, error: "This raffle is closed." },
+        { status: 400 }
+      );
+    }
+
+    const reservation = await queryOne<ReservationRow>(
       `
       select
-        r.id,
-        r.raffle_id,
-        r.reservation_token,
-        r.ticket_number,
-        r.colour,
-        r.unit_price_cents,
-        r.status,
-        r.expires_at,
-        ra.title,
-        ra.slug,
-        ra.tenant_slug,
-        ra.currency
-      from raffle_ticket_reservations r
-      join raffles ra on ra.id = r.raffle_id
-      where r.raffle_id = $1
-        and r.reservation_token = $2
-        and r.status = 'reserved'
-        and r.expires_at > now()
-      order by r.ticket_number asc
+        id,
+        raffle_id,
+        reservation_token,
+        quantity,
+        expires_at
+      from raffle_ticket_reservations
+      where reservation_token = $1
+        and raffle_id = $2
       `,
-      [raffleId, reservationToken],
+      [reservationToken, raffleId]
     );
 
-    if (!rows.length) {
+    if (!reservation) {
       return NextResponse.json(
-        { ok: false, error: "No active reservations found for checkout" },
-        { status: 400 },
+        { ok: false, error: "Reservation not found." },
+        { status: 404 }
       );
     }
 
-    const raffle = rows[0];
-    const currency = (raffle.currency || "GBP").toLowerCase();
-
-    const totalAmountCents = rows.reduce(
-      (sum, row) => sum + Number(row.unit_price_cents || 0),
-      0,
-    );
-
-    if (totalAmountCents <= 0) {
+    if (new Date(reservation.expires_at).getTime() < Date.now()) {
       return NextResponse.json(
-        { ok: false, error: "Invalid reservation total" },
-        { status: 400 },
+        { ok: false, error: "Reservation expired." },
+        { status: 400 }
       );
     }
 
-    const ticketSummary = rows
-      .map((row) => `${row.ticket_number}${row.colour ? `-${row.colour}` : ""}`)
-      .join(", ");
+    const quantity = Number(reservation.quantity);
 
-    const stripe = getStripe();
-    const appUrl = getAppUrl();
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid reservation quantity." },
+        { status: 400 }
+      );
+    }
+
+    const ticketPrice = Number(raffle.ticket_price);
+
+    if (!Number.isFinite(ticketPrice) || ticketPrice <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid ticket price." },
+        { status: 400 }
+      );
+    }
+
+    const unitAmount = Math.round(ticketPrice * 100);
+
+    const successUrl =
+      typeof body.successUrl === "string" && body.successUrl
+        ? body.successUrl
+        : `${process.env.NEXT_PUBLIC_APP_URL}/success`;
+
+    const cancelUrl =
+      typeof body.cancelUrl === "string" && body.cancelUrl
+        ? body.cancelUrl
+        : `${process.env.NEXT_PUBLIC_APP_URL}/r/${raffle.slug}`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/r/${raffle.slug}?checkout=cancelled`,
-      client_reference_id: reservationToken,
-      customer_creation: "always",
-      metadata: {
-        raffle_id: raffle.raffle_id,
-        tenant_slug: raffle.tenant_slug,
-        reservation_token: reservationToken,
-      },
-      payment_intent_data: {
-        metadata: {
-          raffle_id: raffle.raffle_id,
-          tenant_slug: raffle.tenant_slug,
-          reservation_token: reservationToken,
-        },
-      },
+      payment_method_types: ["card"],
       line_items: [
         {
-          quantity: 1,
           price_data: {
-            currency,
-            unit_amount: totalAmountCents,
+            currency: raffle.currency.toLowerCase(),
             product_data: {
-              name: `${raffle.title} tickets`,
-              description: `${rows.length} ticket(s): ${ticketSummary}`.slice(
-                0,
-                500,
-              ),
+              name: raffle.title,
+              description: `${quantity} ticket${
+                quantity > 1 ? "s" : ""
+              }`,
             },
+            unit_amount: unitAmount,
           },
+          quantity,
         },
       ],
+      metadata: {
+        raffle_id: raffle.id,
+        reservation_token: reservation.reservation_token,
+      },
+      success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl,
     });
-
-    await query(
-      `
-      update raffle_ticket_reservations
-      set checkout_session_id = $3
-      where raffle_id = $1
-        and reservation_token = $2
-      `,
-      [raffleId, reservationToken, session.id],
-    );
 
     return NextResponse.json({
       ok: true,
-      sessionId: session.id,
       url: session.url,
-      totalAmountCents,
     });
   } catch (error) {
-    console.error("stripe checkout create error", error);
+    console.error("stripe checkout error", error);
 
     return NextResponse.json(
-      { ok: false, error: "Failed to create checkout session" },
-      { status: 500 },
+      { ok: false, error: "Internal server error." },
+      { status: 500 }
     );
   }
 }
