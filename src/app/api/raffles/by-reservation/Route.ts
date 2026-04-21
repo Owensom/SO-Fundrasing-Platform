@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type TicketRow = {
   ticket_number: number;
   colour: string | null;
-  status: string;
 };
 
 export async function GET(req: NextRequest) {
@@ -20,30 +20,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 🔥 ALWAYS read from reservations (source of truth)
     const tickets = await query<TicketRow>(
       `
       select
         ticket_number,
-        colour,
-        status
+        colour
       from raffle_ticket_reservations
       where reservation_token = $1
       order by ticket_number asc
       `,
       [token],
     );
-
-    if (!tickets.length) {
-      return NextResponse.json({ ok: true, tickets: [] });
-    }
-
-    // Only return if payment has happened
-    const isSold = tickets.every((t) => t.status === "sold");
-
-    if (!isSold) {
-      return NextResponse.json({ ok: true, tickets: [] });
-    }
 
     return NextResponse.json({
       ok: true,
