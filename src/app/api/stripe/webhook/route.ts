@@ -18,6 +18,18 @@ type ReservationRow = {
   status: string;
   tenant_slug: string;
   raffle_title: string;
+  raffle_config_json: {
+    colours?: Array<
+      | string
+      | {
+          id?: string;
+          value?: string;
+          name?: string;
+          label?: string;
+          hex?: string;
+        }
+    >;
+  } | null;
 };
 
 type ExistingPaymentRow = {
@@ -28,12 +40,94 @@ type ExistingSaleRow = {
   reservation_id: string | null;
 };
 
+type NormalisedColour = {
+  value: string;
+  label: string;
+  hex?: string;
+};
+
 function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is required");
   }
 
   return new Stripe(process.env.STRIPE_SECRET_KEY);
+}
+
+function titleCase(input: string) {
+  return input
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\w\S*/g, (txt) => {
+      return txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase();
+    });
+}
+
+function looksLikeHexColour(value: string) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
+}
+
+function normaliseColours(colours: unknown): NormalisedColour[] {
+  if (!Array.isArray(colours)) return [];
+
+  return colours
+    .map((colour) => {
+      if (typeof colour === "string") {
+        const trimmed = colour.trim();
+        if (!trimmed) return null;
+
+        return {
+          value: trimmed.toLowerCase(),
+          label: looksLikeHexColour(trimmed)
+            ? trimmed.toUpperCase()
+            : titleCase(trimmed),
+          hex: looksLikeHexColour(trimmed) ? trimmed.toLowerCase() : undefined,
+        };
+      }
+
+      if (!colour || typeof colour !== "object") return null;
+
+      const rawValue =
+        colour.value ||
+        colour.id ||
+        colour.name ||
+        colour.label ||
+        colour.hex ||
+        "default";
+
+      const value = String(rawValue).trim().toLowerCase();
+      if (!value) return null;
+
+      const labelSource =
+        colour.name ||
+        colour.label ||
+        (looksLikeHexColour(value) ? value.toUpperCase() : titleCase(value));
+
+      const hex =
+        typeof colour.hex === "string" && looksLikeHexColour(colour.hex)
+          ? colour.hex.toLowerCase()
+          : looksLikeHexColour(value)
+            ? value.toLowerCase()
+            : undefined;
+
+      return {
+        value,
+        label: String(labelSource).trim() || "Default",
+        hex,
+      };
+    })
+    .filter(Boolean) as NormalisedColour[];
+}
+
+function buildColourLookup(colours: NormalisedColour[]) {
+  const lookup = new Map<string, string>();
+
+  for (const colour of colours) {
+    lookup.set(colour.value.toLowerCase(), colour.label);
+    if (colour.hex) lookup.set(colour.hex.toLowerCase(), colour.label);
+  }
+
+  return lookup;
 }
 
 export async function POST(request: NextRequest) {
@@ -95,7 +189,8 @@ export async function POST(request: NextRequest) {
         r.unit_price_cents,
         r.status,
         ra.tenant_slug,
-        ra.title as raffle_title
+        ra.title as raffle_title,
+        ra.config_json as raffle_config_json
       from raffle_ticket_reservations r
       join raffles ra on ra.id = r.raffle_id
       where r.raffle_id = $1
@@ -284,14 +379,21 @@ export async function POST(request: NextRequest) {
         session.customer_details?.name || reservations[0].buyer_name || null;
 
       if (buyerEmail) {
+        const colourLookup = buildColourLookup(
+          normaliseColours(reservations[0].raffle_config_json?.colours),
+        );
+
         await sendReceiptEmail({
           to: buyerEmail,
           name: buyerName,
           raffleTitle: reservations[0].raffle_title,
-          tickets: reservations.map((r) => ({
-            ticket_number: r.ticket_number,
-            colour: r.colour || "default",
-          })),
+          tickets: reservations.map((r) => {
+            const rawColour = (r.colour || "default").toLowerCase();
+            return {
+              ticket_number: r.ticket_number,
+              colour: colourLookup.get(rawColour) || r.colour || "Default",
+            };
+          }),
           amountCents: total,
           currency: (session.currency || "gbp").toUpperCase(),
           reservationToken,
