@@ -1,12 +1,12 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import {
   closeRaffle,
   getRaffleById,
   getSoldTicketsForDraw,
   setRaffleWinner,
 } from "@/lib/raffles";
-import { getAdminSession } from "@/lib/admin-auth";
 
 type Body = {
   action?: "close" | "draw";
@@ -17,9 +17,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const admin = await getAdminSession();
+    const session = await auth();
 
-    if (!admin) {
+    if (!session) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
         { status: 401 }
@@ -45,12 +45,8 @@ export async function POST(
       );
     }
 
-    if (admin.tenant_slug && raffle.tenant_slug !== admin.tenant_slug) {
-      return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    const userEmail =
+      typeof session.user?.email === "string" ? session.user.email : null;
 
     if (body.action === "close") {
       if (raffle.status !== "published") {
@@ -104,7 +100,7 @@ export async function POST(
         ticketNumber: winner.ticket_number,
         colour: winner.colour,
         saleId: winner.sale_id,
-        drawnBy: admin.email ?? null,
+        drawnBy: userEmail,
       });
 
       if (!updated) {
