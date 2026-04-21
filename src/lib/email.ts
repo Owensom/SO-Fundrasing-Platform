@@ -49,9 +49,7 @@ export async function sendReceiptEmail(params: {
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
       <h2 style="margin-top:0;">Payment successful</h2>
-
       <p>Hi ${name || "there"},</p>
-
       <p>Thank you for your purchase. Your raffle receipt is below.</p>
 
       <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:20px 0;">
@@ -66,10 +64,7 @@ export async function sendReceiptEmail(params: {
       </ul>
 
       <p style="margin-top:24px;">Please keep this email as your receipt.</p>
-
-      <p style="margin-top:24px;font-size:12px;color:#666;">
-        This is an automated email confirmation.
-      </p>
+      <p style="margin-top:24px;font-size:12px;color:#666;">This is an automated email confirmation.</p>
     </div>
   `;
 
