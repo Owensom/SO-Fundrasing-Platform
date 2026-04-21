@@ -18,7 +18,7 @@ export default function RaffleAdminActions({
   const [loadingAction, setLoadingAction] = useState<"close" | "draw" | null>(
     null
   );
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
 
   async function runAction(action: "close" | "draw") {
     const confirmMessage =
