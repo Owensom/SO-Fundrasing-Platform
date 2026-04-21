@@ -14,11 +14,6 @@ type SaleRow = {
   colour_id: string | null;
 };
 
-type ReservationRow = {
-  ticket_number: number;
-  colour: string | null;
-};
-
 export async function GET(req: NextRequest) {
   try {
     const token = req.nextUrl.searchParams.get("token");
@@ -40,48 +35,31 @@ export async function GET(req: NextRequest) {
       [token],
     );
 
-    if (payment) {
-      const sales = await query<SaleRow>(
-        `
-        select
-          ticket_number,
-          colour,
-          colour_id
-        from raffle_ticket_sales
-        where payment_id = $1
-        order by ticket_number asc
-        `,
-        [payment.id],
-      );
-
-      if (sales.length > 0) {
-        return NextResponse.json({
-          ok: true,
-          tickets: sales.map((t) => ({
-            ticket_number: t.ticket_number,
-            colour: t.colour || t.colour_id || "default",
-          })),
-        });
-      }
+    if (!payment) {
+      return NextResponse.json({
+        ok: true,
+        tickets: [],
+      });
     }
 
-    const reservations = await query<ReservationRow>(
+    const sales = await query<SaleRow>(
       `
       select
         ticket_number,
-        colour
-      from raffle_ticket_reservations
-      where reservation_token = $1
+        colour,
+        colour_id
+      from raffle_ticket_sales
+      where payment_id = $1
       order by ticket_number asc
       `,
-      [token],
+      [payment.id],
     );
 
     return NextResponse.json({
       ok: true,
-      tickets: reservations.map((t) => ({
-        ticket_number: t.ticket_number,
-        colour: t.colour || "default",
+      tickets: sales.map((ticket) => ({
+        ticket_number: ticket.ticket_number,
+        colour: ticket.colour || ticket.colour_id || "default",
       })),
     });
   } catch (error) {
