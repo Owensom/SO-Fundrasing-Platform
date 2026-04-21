@@ -22,6 +22,8 @@ type RaffleOffer = {
   sortOrder?: number;
 };
 
+type SafeRaffleStatus = "draft" | "published" | "closed" | "drawn";
+
 type SafeRaffle = {
   id: string;
   slug: string;
@@ -32,11 +34,14 @@ type SafeRaffle = {
   endNumber: number;
   currency: string;
   ticketPrice: number;
-  status: "draft" | "published" | "completed";
+  status: SafeRaffleStatus;
   colours: RaffleColour[];
   offers: RaffleOffer[];
   reservedTickets: Array<{ colour: string; number: number }>;
   soldTickets: Array<{ colour: string; number: number }>;
+  winnerTicketNumber: number | null;
+  winnerColour: string | null;
+  drawnAt: string | null;
 };
 
 function makeTicketKey(colour: string, number: number) {
@@ -54,7 +59,16 @@ function formatCurrency(value: number, currency: string) {
   }
 }
 
-function normaliseFrontendStatus(rawStatus: unknown): "draft" | "published" | "completed" {
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString();
+}
+
+function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
   const status = String(rawStatus ?? "").trim().toLowerCase();
 
   if (
@@ -67,15 +81,16 @@ function normaliseFrontendStatus(rawStatus: unknown): "draft" | "published" | "c
     return "published";
   }
 
+  if (status === "drawn") {
+    return "drawn";
+  }
+
   if (
-    status === "completed" ||
-    status === "complete" ||
     status === "closed" ||
     status === "ended" ||
-    status === "finished" ||
-    status === "drawn"
+    status === "finished"
   ) {
-    return "completed";
+    return "closed";
   }
 
   return "draft";
@@ -91,6 +106,10 @@ function toSafeRaffle(input: any): SafeRaffle {
   const startNumber = Number(raw.startNumber);
   const endNumber = Number(raw.endNumber);
 
+  const rawWinnerTicketNumber =
+    raw.winnerTicketNumber ?? raw.winner_ticket_number;
+  const winnerTicketNumber = Number(rawWinnerTicketNumber);
+
   return {
     id: String(raw.id ?? ""),
     slug: String(raw.slug ?? ""),
@@ -100,21 +119,27 @@ function toSafeRaffle(input: any): SafeRaffle {
     startNumber: Number.isFinite(startNumber) ? startNumber : 1,
     endNumber: Number.isFinite(endNumber) ? endNumber : 1,
     currency: String(raw.currency ?? "EUR"),
-    ticketPrice: Number.isFinite(Number(raw.ticketPrice)) ? Number(raw.ticketPrice) : 0,
+    ticketPrice: Number.isFinite(Number(raw.ticketPrice))
+      ? Number(raw.ticketPrice)
+      : 0,
     status: normaliseFrontendStatus(raw.status),
     colours: colours.map((c: any, index: number) => ({
       id: String(c?.id ?? `colour-${index}`),
       name: String(c?.name ?? `Colour ${index + 1}`),
       hex: c?.hex ? String(c.hex) : null,
-      sortOrder: Number.isFinite(Number(c?.sortOrder)) ? Number(c.sortOrder) : index,
+      sortOrder: Number.isFinite(Number(c?.sortOrder))
+        ? Number(c.sortOrder)
+        : index,
     })),
     offers: offers.map((o: any, index: number) => ({
       id: String(o?.id ?? `offer-${index}`),
       label: String(o?.label ?? `Offer ${index + 1}`),
       quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
       price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
-      isActive: Boolean(o?.isActive ?? true),
-      sortOrder: Number.isFinite(Number(o?.sortOrder)) ? Number(o.sortOrder) : index,
+      isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
+      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
+        ? Number(o?.sortOrder ?? o?.sort_order)
+        : index,
     })),
     reservedTickets: reservedTickets.map((t: any) => ({
       colour: String(t?.colour ?? ""),
@@ -124,6 +149,17 @@ function toSafeRaffle(input: any): SafeRaffle {
       colour: String(t?.colour ?? ""),
       number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
     })),
+    winnerTicketNumber: Number.isFinite(winnerTicketNumber)
+      ? winnerTicketNumber
+      : null,
+    winnerColour:
+      raw.winnerColour ?? raw.winner_colour
+        ? String(raw.winnerColour ?? raw.winner_colour)
+        : null,
+    drawnAt:
+      raw.drawnAt ?? raw.drawn_at
+        ? String(raw.drawnAt ?? raw.drawn_at)
+        : null,
   };
 }
 
@@ -149,7 +185,9 @@ export default function PublicRafflePage({ slug }: Props) {
         setError("");
         setReservationMessage("");
 
-        const response = await fetch(`/api/public/raffles/${encodeURIComponent(slug)}`);
+        const response = await fetch(
+          `/api/public/raffles/${encodeURIComponent(slug)}`
+        );
         const text = await response.text();
 
         let parsed: any = null;
@@ -221,7 +259,9 @@ export default function PublicRafflePage({ slug }: Props) {
   }, [raffle]);
 
   const isPublished = raffle?.status === "published";
-  const isCompleted = raffle?.status === "completed";
+  const isClosed = raffle?.status === "closed";
+  const isDrawn = raffle?.status === "drawn";
+  const isDraft = raffle?.status === "draft";
   const canReserve = Boolean(raffle && isPublished);
 
   const pricing = useMemo(() => {
@@ -229,9 +269,9 @@ export default function PublicRafflePage({ slug }: Props) {
     return getBestPrice(
       basket.length,
       raffle.ticketPrice,
-      isCompleted ? [] : raffle.offers.filter((o) => o.isActive),
+      isPublished ? raffle.offers.filter((o) => o.isActive) : []
     );
-  }, [basket.length, raffle, isCompleted]);
+  }, [basket.length, raffle, isPublished]);
 
   function toggleTicket(number: number) {
     if (!raffle || !selectedColour || !canReserve) return;
@@ -241,12 +281,12 @@ export default function PublicRafflePage({ slug }: Props) {
 
     setBasket((current) => {
       const exists = current.some(
-        (ticket) => ticket.colour === selectedColour && ticket.number === number,
+        (ticket) => ticket.colour === selectedColour && ticket.number === number
       );
 
       if (exists) {
         return current.filter(
-          (ticket) => !(ticket.colour === selectedColour && ticket.number === number),
+          (ticket) => !(ticket.colour === selectedColour && ticket.number === number)
         );
       }
 
@@ -260,8 +300,8 @@ export default function PublicRafflePage({ slug }: Props) {
   function removeFromBasket(ticket: TicketSelection) {
     setBasket((current) =>
       current.filter(
-        (item) => !(item.colour === ticket.colour && item.number === ticket.number),
-      ),
+        (item) => !(item.colour === ticket.colour && item.number === ticket.number)
+      )
     );
   }
 
@@ -277,17 +317,20 @@ export default function PublicRafflePage({ slug }: Props) {
       if (!buyerEmail.trim()) throw new Error("Please enter your email.");
       if (basket.length === 0) throw new Error("Please select at least one ticket.");
 
-      const response = await fetch(`/api/public/raffles/${encodeURIComponent(raffle.slug)}/reserve`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          buyerName: buyerName.trim(),
-          buyerEmail: buyerEmail.trim(),
-          tickets: basket,
-        }),
-      });
+      const response = await fetch(
+        `/api/public/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            buyerName: buyerName.trim(),
+            buyerEmail: buyerEmail.trim(),
+            tickets: basket,
+          }),
+        }
+      );
 
       const text = await response.text();
 
@@ -357,8 +400,10 @@ export default function PublicRafflePage({ slug }: Props) {
             {formatCurrency(raffle.ticketPrice, raffle.currency)}
           </p>
 
-          {isCompleted ? (
-            <div style={styles.statusCompleted}>Completed</div>
+          {isDrawn ? (
+            <div style={styles.statusDrawn}>Winner Drawn</div>
+          ) : isClosed ? (
+            <div style={styles.statusClosed}>Closed</div>
           ) : isPublished ? (
             <div style={styles.statusPublished}>Published</div>
           ) : (
@@ -368,13 +413,43 @@ export default function PublicRafflePage({ slug }: Props) {
       </div>
 
       <div style={styles.container}>
-        {isCompleted ? (
-          <div style={styles.noticeDark}>
-            This raffle is completed. You can view it, but reservations are closed.
+        {isDrawn ? (
+          <div style={styles.winnerCard}>
+            <div style={styles.winnerTitle}>Winner Drawn</div>
+            <div style={styles.winnerGrid}>
+              <div style={styles.winnerBox}>
+                <div style={styles.winnerLabel}>Winning ticket</div>
+                <div style={styles.winnerValue}>
+                  {raffle.winnerTicketNumber != null
+                    ? `#${raffle.winnerTicketNumber}`
+                    : "—"}
+                </div>
+              </div>
+
+              <div style={styles.winnerBox}>
+                <div style={styles.winnerLabel}>Winning colour</div>
+                <div style={styles.winnerValueSmall}>
+                  {raffle.winnerColour || "—"}
+                </div>
+              </div>
+
+              <div style={styles.winnerBox}>
+                <div style={styles.winnerLabel}>Drawn at</div>
+                <div style={styles.winnerValueSmall}>
+                  {formatDateTime(raffle.drawnAt)}
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
 
-        {!isCompleted && !isPublished ? (
+        {isClosed ? (
+          <div style={styles.noticeDark}>
+            This raffle is now closed. Reservations and payments are no longer available.
+          </div>
+        ) : null}
+
+        {isDraft ? (
           <div style={styles.notice}>
             This raffle is not published yet.
           </div>
@@ -392,8 +467,10 @@ export default function PublicRafflePage({ slug }: Props) {
                   disabled={!canReserve}
                   style={{
                     ...styles.colourButton,
-                    background: selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
-                    color: selectedColour === colour.name ? "#ffffff" : "#111827",
+                    background:
+                      selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
+                    color:
+                      selectedColour === colour.name ? "#ffffff" : "#111827",
                     opacity: canReserve ? 1 : 0.75,
                     cursor: canReserve ? "pointer" : "not-allowed",
                   }}
@@ -433,7 +510,10 @@ export default function PublicRafflePage({ slug }: Props) {
                           ? "#f59e0b"
                           : "#ffffff",
                     color: isSelected || isSold || isReserved ? "#ffffff" : "#111827",
-                    cursor: isSold || isReserved || !canReserve ? "not-allowed" : "pointer",
+                    cursor:
+                      isSold || isReserved || !canReserve
+                        ? "not-allowed"
+                        : "pointer",
                     opacity: canReserve ? 1 : 0.75,
                   }}
                 >
@@ -500,10 +580,21 @@ export default function PublicRafflePage({ slug }: Props) {
             style={{
               ...styles.primaryButton,
               opacity: saving || basket.length === 0 || !canReserve ? 0.6 : 1,
-              cursor: saving || basket.length === 0 || !canReserve ? "not-allowed" : "pointer",
+              cursor:
+                saving || basket.length === 0 || !canReserve
+                  ? "not-allowed"
+                  : "pointer",
             }}
           >
-            {isCompleted ? "Completed" : saving ? "Reserving..." : "Reserve tickets"}
+            {isDrawn
+              ? "Winner Drawn"
+              : isClosed
+                ? "Closed"
+                : isDraft
+                  ? "Not Published"
+                  : saving
+                    ? "Reserving..."
+                    : "Reserve tickets"}
           </button>
         </div>
 
@@ -558,14 +649,24 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#dcfce7",
     fontWeight: 700,
   },
-  statusCompleted: {
+  statusClosed: {
     display: "inline-block",
     marginTop: 14,
     padding: "8px 12px",
     borderRadius: 999,
-    background: "rgba(148,163,184,0.22)",
-    border: "1px solid rgba(226,232,240,0.5)",
-    color: "#f8fafc",
+    background: "rgba(249,115,22,0.18)",
+    border: "1px solid rgba(249,115,22,0.5)",
+    color: "#ffedd5",
+    fontWeight: 700,
+  },
+  statusDrawn: {
+    display: "inline-block",
+    marginTop: 14,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(16,185,129,0.2)",
+    border: "1px solid rgba(16,185,129,0.5)",
+    color: "#d1fae5",
     fontWeight: 700,
   },
   statusDraft: {
@@ -678,6 +779,46 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#0f172a",
     border: "1px solid #1e293b",
     color: "#e2e8f0",
+  },
+  winnerCard: {
+    display: "grid",
+    gap: 14,
+    padding: 18,
+    borderRadius: 14,
+    background: "#ecfdf5",
+    border: "1px solid #a7f3d0",
+    marginBottom: 8,
+  },
+  winnerTitle: {
+    fontSize: 22,
+    fontWeight: 800,
+    color: "#065f46",
+  },
+  winnerGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+  },
+  winnerBox: {
+    padding: 14,
+    borderRadius: 12,
+    background: "#ffffff",
+    border: "1px solid #d1fae5",
+  },
+  winnerLabel: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginBottom: 6,
+  },
+  winnerValue: {
+    fontSize: 28,
+    fontWeight: 800,
+    color: "#111827",
+  },
+  winnerValueSmall: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#111827",
   },
   success: {
     marginTop: 16,
