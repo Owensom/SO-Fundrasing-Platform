@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { query, queryOne } from "./db";
 
 type CurrencyCode = "GBP" | "USD" | "EUR";
@@ -27,6 +28,8 @@ type RaffleConfig = {
   }>;
 };
 
+export type RaffleStatus = "draft" | "published" | "closed" | "drawn";
+
 export type RaffleRow = {
   id: string;
   tenant_slug: string;
@@ -38,8 +41,13 @@ export type RaffleRow = {
   ticket_price_cents: number;
   total_tickets: number;
   sold_tickets: number;
-  status: "draft" | "published" | "closed";
+  status: RaffleStatus;
   config_json: RaffleConfig | null;
+  winner_ticket_number: number | null;
+  winner_colour: string | null;
+  winner_sale_id: string | null;
+  drawn_at: string | null;
+  drawn_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,8 +64,13 @@ export type RaffleSummary = {
   total_tickets: number;
   sold_tickets: number;
   remaining_tickets: number;
-  status: "draft" | "published" | "closed";
+  status: RaffleStatus;
   config_json: RaffleConfig;
+  winner_ticket_number: number | null;
+  winner_colour: string | null;
+  winner_sale_id: string | null;
+  drawn_at: string | null;
+  drawn_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -83,7 +96,7 @@ export type CreateRaffleInput = {
   ticket_price?: number | null;
   total_tickets?: number | null;
   sold_tickets?: number | null;
-  status?: "draft" | "published" | "closed";
+  status?: RaffleStatus;
   startNumber?: number | null;
   endNumber?: number | null;
   numbersPerColour?: number | null;
@@ -120,6 +133,12 @@ export type Purchase = {
   created_at: string;
 };
 
+export type SoldTicketForDraw = {
+  sale_id: string;
+  ticket_number: number;
+  colour: string | null;
+};
+
 function normalizeCurrency(value: unknown): CurrencyCode {
   if (value === "USD" || value === "EUR") return value;
   return "GBP";
@@ -144,10 +163,7 @@ function normalizeOffers(value: unknown) {
 
       const offer = item as Record<string, unknown>;
       const label = typeof offer.label === "string" ? offer.label.trim() : "";
-      const quantity = toFiniteNumber(
-        offer.quantity ?? offer.tickets,
-        0,
-      );
+      const quantity = toFiniteNumber(offer.quantity ?? offer.tickets, 0);
       const price = toFiniteNumber(offer.price, 0);
       const is_active =
         typeof offer.is_active === "boolean" ? offer.is_active : true;
@@ -232,6 +248,12 @@ function toRaffleSummary(row: RaffleRow): RaffleSummary {
       row.config_json && typeof row.config_json === "object"
         ? row.config_json
         : {},
+    winner_ticket_number:
+      row.winner_ticket_number != null ? Number(row.winner_ticket_number) : null,
+    winner_colour: row.winner_colour ?? null,
+    winner_sale_id: row.winner_sale_id ?? null,
+    drawn_at: row.drawn_at ?? null,
+    drawn_by: row.drawn_by ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -254,6 +276,28 @@ function toRaffleDetails(row: RaffleRow): RaffleDetails {
   };
 }
 
+const RAFFLE_SELECT = `
+  id,
+  tenant_slug,
+  slug,
+  title,
+  description,
+  image_url,
+  currency,
+  ticket_price_cents,
+  total_tickets,
+  sold_tickets,
+  status,
+  config_json,
+  winner_ticket_number,
+  winner_colour,
+  winner_sale_id,
+  drawn_at,
+  drawn_by,
+  created_at,
+  updated_at
+`;
+
 export async function listRaffles(
   tenantSlug?: string
 ): Promise<RaffleSummary[]> {
@@ -261,20 +305,7 @@ export async function listRaffles(
     ? await query<RaffleRow>(
         `
         select
-          id,
-          tenant_slug,
-          slug,
-          title,
-          description,
-          image_url,
-          currency,
-          ticket_price_cents,
-          total_tickets,
-          sold_tickets,
-          status,
-          config_json,
-          created_at,
-          updated_at
+          ${RAFFLE_SELECT}
         from raffles
         where tenant_slug = $1
         order by created_at desc
@@ -284,20 +315,7 @@ export async function listRaffles(
     : await query<RaffleRow>(
         `
         select
-          id,
-          tenant_slug,
-          slug,
-          title,
-          description,
-          image_url,
-          currency,
-          ticket_price_cents,
-          total_tickets,
-          sold_tickets,
-          status,
-          config_json,
-          created_at,
-          updated_at
+          ${RAFFLE_SELECT}
         from raffles
         order by created_at desc
         `
@@ -310,20 +328,7 @@ export async function getRaffleById(id: string): Promise<RaffleDetails | null> {
   const raffle = await queryOne<RaffleRow>(
     `
     select
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      currency,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      config_json,
-      created_at,
-      updated_at
+      ${RAFFLE_SELECT}
     from raffles
     where id = $1
     `,
@@ -342,20 +347,7 @@ export async function getRaffleBySlug(
   const raffle = await queryOne<RaffleRow>(
     `
     select
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      currency,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      config_json,
-      created_at,
-      updated_at
+      ${RAFFLE_SELECT}
     from raffles
     where tenant_slug = $1
       and slug = $2
@@ -391,20 +383,7 @@ export async function createRaffle(
     )
     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
     returning
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      currency,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      config_json,
-      created_at,
-      updated_at
+      ${RAFFLE_SELECT}
     `,
     [
       crypto.randomUUID(),
@@ -454,20 +433,7 @@ export async function updateRaffle(
     where id = $1
        or (tenant_slug = $2 and slug = $3)
     returning
-      id,
-      tenant_slug,
-      slug,
-      title,
-      description,
-      image_url,
-      currency,
-      ticket_price_cents,
-      total_tickets,
-      sold_tickets,
-      status,
-      config_json,
-      created_at,
-      updated_at
+      ${RAFFLE_SELECT}
     `,
     [
       id,
@@ -482,6 +448,81 @@ export async function updateRaffle(
       input.sold_tickets ?? 0,
       input.status ?? "published",
       JSON.stringify(config),
+    ]
+  );
+
+  if (!updated) return null;
+
+  return toRaffleDetails(updated);
+}
+
+export async function closeRaffle(id: string): Promise<RaffleDetails | null> {
+  const updated = await queryOne<RaffleRow>(
+    `
+    update raffles
+    set
+      status = 'closed',
+      updated_at = now()
+    where id = $1
+      and status = 'published'
+    returning
+      ${RAFFLE_SELECT}
+    `,
+    [id]
+  );
+
+  if (!updated) return null;
+
+  return toRaffleDetails(updated);
+}
+
+export async function getSoldTicketsForDraw(
+  raffleId: string
+): Promise<SoldTicketForDraw[]> {
+  return query<SoldTicketForDraw>(
+    `
+    select
+      id as sale_id,
+      ticket_number,
+      colour
+    from raffle_ticket_sales
+    where raffle_id = $1
+    order by created_at asc
+    `,
+    [raffleId]
+  );
+}
+
+export async function setRaffleWinner(args: {
+  raffleId: string;
+  ticketNumber: number;
+  colour: string | null;
+  saleId: string;
+  drawnBy: string | null;
+}): Promise<RaffleDetails | null> {
+  const updated = await queryOne<RaffleRow>(
+    `
+    update raffles
+    set
+      status = 'drawn',
+      winner_ticket_number = $2,
+      winner_colour = $3,
+      winner_sale_id = $4,
+      drawn_at = now(),
+      drawn_by = $5,
+      updated_at = now()
+    where id = $1
+      and status = 'closed'
+      and drawn_at is null
+    returning
+      ${RAFFLE_SELECT}
+    `,
+    [
+      args.raffleId,
+      args.ticketNumber,
+      args.colour,
+      args.saleId,
+      args.drawnBy,
     ]
   );
 
