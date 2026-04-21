@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type TicketRow = {
+type PaymentRow = {
+  id: string;
+};
+
+type SaleRow = {
+  ticket_number: number;
+  colour: string | null;
+  colour_id: string | null;
+};
+
+type ReservationRow = {
   ticket_number: number;
   colour: string | null;
 };
@@ -20,7 +30,42 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const tickets = await query<TicketRow>(
+    const payment = await queryOne<PaymentRow>(
+      `
+      select id
+      from raffle_payments
+      where reservation_token = $1
+      limit 1
+      `,
+      [token],
+    );
+
+    if (payment) {
+      const sales = await query<SaleRow>(
+        `
+        select
+          ticket_number,
+          colour,
+          colour_id
+        from raffle_ticket_sales
+        where payment_id = $1
+        order by ticket_number asc
+        `,
+        [payment.id],
+      );
+
+      if (sales.length > 0) {
+        return NextResponse.json({
+          ok: true,
+          tickets: sales.map((t) => ({
+            ticket_number: t.ticket_number,
+            colour: t.colour || t.colour_id || "default",
+          })),
+        });
+      }
+    }
+
+    const reservations = await query<ReservationRow>(
       `
       select
         ticket_number,
@@ -34,7 +79,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      tickets: tickets.map((t) => ({
+      tickets: reservations.map((t) => ({
         ticket_number: t.ticket_number,
         colour: t.colour || "default",
       })),
