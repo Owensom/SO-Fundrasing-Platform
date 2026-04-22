@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { query } from "@/lib/db";
@@ -87,25 +88,27 @@ function normaliseColours(colours: unknown): NormalisedColour[] {
 
       if (!colour || typeof colour !== "object") return null;
 
+      const row = colour as Record<string, unknown>;
+
       const rawValue =
-        colour.value ||
-        colour.id ||
-        colour.name ||
-        colour.label ||
-        colour.hex ||
+        row.value ||
+        row.id ||
+        row.name ||
+        row.label ||
+        row.hex ||
         "default";
 
       const value = String(rawValue).trim().toLowerCase();
       if (!value) return null;
 
       const labelSource =
-        colour.name ||
-        colour.label ||
+        row.name ||
+        row.label ||
         (looksLikeHexColour(value) ? value.toUpperCase() : titleCase(value));
 
       const hex =
-        typeof colour.hex === "string" && looksLikeHexColour(colour.hex)
-          ? colour.hex.toLowerCase()
+        typeof row.hex === "string" && looksLikeHexColour(row.hex)
+          ? row.hex.toLowerCase()
           : looksLikeHexColour(value)
             ? value.toLowerCase()
             : undefined;
@@ -204,6 +207,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    const customerEmail =
+      session.customer_details?.email ||
+      session.customer_email ||
+      reservations[0].buyer_email ||
+      null;
+
+    const customerName =
+      session.customer_details?.name ||
+      reservations[0].buyer_name ||
+      null;
+
     const total = reservations.reduce(
       (sum, row) => sum + Number(row.unit_price_cents || 0),
       0,
@@ -260,16 +274,25 @@ export async function POST(request: NextRequest) {
           total,
           platformFee,
           total - platformFee,
-          session.customer_details?.email ||
-            reservations[0].buyer_email ||
-            null,
-          session.customer_details?.name ||
-            reservations[0].buyer_name ||
-            null,
+          customerEmail,
+          customerName,
           JSON.stringify(session.metadata || {}),
         ],
       );
     }
+
+    // Keep reservation records in sync with actual Stripe buyer details
+    await query(
+      `
+      update raffle_ticket_reservations
+      set
+        buyer_email = coalesce($3, buyer_email),
+        buyer_name = coalesce($4, buyer_name)
+      where raffle_id = $1
+        and reservation_token = $2
+      `,
+      [raffleId, reservationToken, customerEmail, customerName],
+    );
 
     for (const r of reservations) {
       const reservationIdText = r.id;
@@ -333,8 +356,8 @@ export async function POST(request: NextRequest) {
             r.raffle_id,
             colourValue,
             r.ticket_number,
-            r.buyer_name,
-            r.buyer_email,
+            customerName,
+            customerEmail,
             reservationIdText,
             paymentId,
             session.id,
@@ -373,19 +396,14 @@ export async function POST(request: NextRequest) {
     );
 
     try {
-      const buyerEmail =
-        session.customer_details?.email || reservations[0].buyer_email || "";
-      const buyerName =
-        session.customer_details?.name || reservations[0].buyer_name || null;
-
-      if (buyerEmail) {
+      if (customerEmail) {
         const colourLookup = buildColourLookup(
           normaliseColours(reservations[0].raffle_config_json?.colours),
         );
 
         await sendReceiptEmail({
-          to: buyerEmail,
-          name: buyerName,
+          to: customerEmail,
+          name: customerName,
           raffleTitle: reservations[0].raffle_title,
           tickets: reservations.map((r) => {
             const rawColour = (r.colour || "default").toLowerCase();
