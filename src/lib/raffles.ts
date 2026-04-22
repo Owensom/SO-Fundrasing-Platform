@@ -248,7 +248,7 @@ export async function getSoldTicketsForDraw(
     select
       ticket_number::text as sale_id,
       ticket_number,
-      colour
+      null::text as colour
     from raffle_ticket_sales
     where raffle_id = $1
     order by ticket_number asc
