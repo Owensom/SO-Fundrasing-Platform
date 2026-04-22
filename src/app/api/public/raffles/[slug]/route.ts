@@ -8,7 +8,6 @@ export async function GET(
 ) {
   return NextResponse.json({
     ok: true,
-    test: true,
     slug: params.slug,
   });
 }
