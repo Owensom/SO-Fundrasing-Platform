@@ -1,5 +1,3 @@
-import PublicRafflePage from "@/components/PublicRafflePage";
-
 export const dynamic = "force-dynamic";
 
 type PageProps = {
@@ -9,5 +7,10 @@ type PageProps = {
 };
 
 export default function RaffleSlugPage({ params }: PageProps) {
-  return <PublicRafflePage slug={params.slug} />;
+  return (
+    <main style={{ padding: 24 }}>
+      <h1>Raffle route works</h1>
+      <p>Slug: {params.slug}</p>
+    </main>
+  );
 }
