@@ -9,7 +9,5 @@ type PageProps = {
 };
 
 export default function RaffleSlugPage({ params }: PageProps) {
-  const slug = typeof params?.slug === "string" ? params.slug : "";
-
-  return <PublicRafflePage slug={slug} />;
+  return <PublicRafflePage slug={params.slug} />;
 }
