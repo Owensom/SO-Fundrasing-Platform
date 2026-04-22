@@ -1,5 +1,7 @@
 import PublicRafflePage from "@/components/PublicRafflePage";
 
+export const dynamic = "force-dynamic";
+
 type PageProps = {
   params: {
     slug: string;
@@ -7,5 +9,7 @@ type PageProps = {
 };
 
 export default function RaffleSlugPage({ params }: PageProps) {
-  return <PublicRafflePage slug={params.slug} />;
+  const slug = typeof params?.slug === "string" ? params.slug : "";
+
+  return <PublicRafflePage slug={slug} />;
 }
