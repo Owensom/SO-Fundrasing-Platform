@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { getBestPrice } from "../lib/rafflePricing";
-import type { TicketSelection } from "../types/raffles";
+import { useEffect, useMemo, useState } from "react";
 
 type Props = {
   slug: string;
+};
+
+type TicketSelection = {
+  colour: string;
+  number: number;
 };
 
 type RaffleColour = {
@@ -71,11 +74,9 @@ function formatDateTime(value: string | null | undefined) {
 
 function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
   const status = String(rawStatus ?? "").trim().toLowerCase();
-
   if (status === "published") return "published";
   if (status === "drawn") return "drawn";
   if (status === "closed") return "closed";
-
   return "draft";
 }
 
@@ -83,15 +84,12 @@ function toSafeRaffle(input: any): SafeRaffle {
   const raw = input ?? {};
   const colours = Array.isArray(raw.colours) ? raw.colours : [];
   const offers = Array.isArray(raw.offers) ? raw.offers : [];
-  const reservedTickets = Array.isArray(raw.reservedTickets)
-    ? raw.reservedTickets
-    : [];
+  const reservedTickets = Array.isArray(raw.reservedTickets) ? raw.reservedTickets : [];
   const soldTickets = Array.isArray(raw.soldTickets) ? raw.soldTickets : [];
 
   const startNumber = Number(raw.startNumber);
   const endNumber = Number(raw.endNumber);
-  const rawWinnerTicketNumber =
-    raw.winnerTicketNumber ?? raw.winner_ticket_number;
+  const rawWinnerTicketNumber = raw.winnerTicketNumber ?? raw.winner_ticket_number;
   const winnerTicketNumber = Number(rawWinnerTicketNumber);
 
   return {
@@ -104,17 +102,13 @@ function toSafeRaffle(input: any): SafeRaffle {
     startNumber: Number.isFinite(startNumber) ? startNumber : 1,
     endNumber: Number.isFinite(endNumber) ? endNumber : 1,
     currency: String(raw.currency ?? "EUR"),
-    ticketPrice: Number.isFinite(Number(raw.ticketPrice))
-      ? Number(raw.ticketPrice)
-      : 0,
+    ticketPrice: Number.isFinite(Number(raw.ticketPrice)) ? Number(raw.ticketPrice) : 0,
     status: normaliseFrontendStatus(raw.status),
     colours: colours.map((c: any, index: number) => ({
       id: String(c?.id ?? `colour-${index}`),
       name: String(c?.name ?? c ?? `Colour ${index + 1}`),
       hex: c?.hex ? String(c.hex) : null,
-      sortOrder: Number.isFinite(Number(c?.sortOrder))
-        ? Number(c.sortOrder)
-        : index,
+      sortOrder: Number.isFinite(Number(c?.sortOrder)) ? Number(c.sortOrder) : index,
     })),
     offers: offers.map((o: any, index: number) => ({
       id: String(o?.id ?? `offer-${index}`),
@@ -134,9 +128,7 @@ function toSafeRaffle(input: any): SafeRaffle {
       colour: String(t?.colour ?? ""),
       number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
     })),
-    winnerTicketNumber: Number.isFinite(winnerTicketNumber)
-      ? winnerTicketNumber
-      : null,
+    winnerTicketNumber: Number.isFinite(winnerTicketNumber) ? winnerTicketNumber : null,
     winnerColour:
       raw.winnerColour ?? raw.winner_colour
         ? String(raw.winnerColour ?? raw.winner_colour)
@@ -148,16 +140,27 @@ function toSafeRaffle(input: any): SafeRaffle {
   };
 }
 
+function bestPrice(quantity: number, ticketPrice: number, offers: RaffleOffer[]) {
+  const activeOffers = offers.filter((o) => o.isActive && o.quantity > 0 && o.price >= 0);
+  let bestTotal = quantity * ticketPrice;
+
+  for (const offer of activeOffers) {
+    const bundles = Math.floor(quantity / offer.quantity);
+    const remainder = quantity % offer.quantity;
+    const total = bundles * offer.price + remainder * ticketPrice;
+    if (total < bestTotal) bestTotal = total;
+  }
+
+  return {
+    quantity,
+    total: bestTotal,
+  };
+}
+
 function renderColourLabel(colour: RaffleColour) {
   if (colour.hex) {
     return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
         <span
           style={{
             width: 14,
@@ -259,11 +262,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
   const visibleNumbers = useMemo(() => {
     if (!raffle) return [];
-    if (
-      !Number.isFinite(raffle.startNumber) ||
-      !Number.isFinite(raffle.endNumber)
-    )
-      return [];
+    if (!Number.isFinite(raffle.startNumber) || !Number.isFinite(raffle.endNumber)) return [];
     if (raffle.endNumber < raffle.startNumber) return [];
 
     const out: number[] = [];
@@ -280,12 +279,8 @@ export default function PublicRafflePage({ slug }: Props) {
   const canReserve = Boolean(raffle && isPublished);
 
   const pricing = useMemo(() => {
-    if (!raffle) return getBestPrice(0, 0, []);
-    return getBestPrice(
-      basket.length,
-      raffle.ticketPrice,
-      isPublished ? raffle.offers.filter((o) => o.isActive) : []
-    );
+    if (!raffle) return { quantity: 0, total: 0 };
+    return bestPrice(basket.length, raffle.ticketPrice, isPublished ? raffle.offers : []);
   }, [basket.length, raffle, isPublished]);
 
   function toggleTicket(number: number) {
@@ -301,8 +296,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
       if (exists) {
         return current.filter(
-          (ticket) =>
-            !(ticket.colour === selectedColour && ticket.number === number)
+          (ticket) => !(ticket.colour === selectedColour && ticket.number === number)
         );
       }
 
@@ -331,8 +325,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
       if (!buyerName.trim()) throw new Error("Please enter your name.");
       if (!buyerEmail.trim()) throw new Error("Please enter your email.");
-      if (basket.length === 0)
-        throw new Error("Please select at least one ticket.");
+      if (basket.length === 0) throw new Error("Please select at least one ticket.");
 
       const response = await fetch(
         `/api/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
@@ -387,18 +380,14 @@ export default function PublicRafflePage({ slug }: Props) {
         {isDrawn ? (
           <div style={styles.success}>
             Winning ticket:{" "}
-            {raffle.winnerTicketNumber != null
-              ? `#${raffle.winnerTicketNumber}`
-              : "—"}{" "}
-            | Colour: {raffle.winnerColour || "—"} | Drawn at:{" "}
-            {formatDateTime(raffle.drawnAt)}
+            {raffle.winnerTicketNumber != null ? `#${raffle.winnerTicketNumber}` : "—"}{" "}
+            | Colour: {raffle.winnerColour || "—"} | Drawn at: {formatDateTime(raffle.drawnAt)}
           </div>
         ) : null}
 
         {isClosed ? (
           <div style={styles.noticeDark}>
-            This raffle is now closed. Reservations and payments are no longer
-            available.
+            This raffle is now closed. Reservations and payments are no longer available.
           </div>
         ) : null}
 
@@ -416,8 +405,7 @@ export default function PublicRafflePage({ slug }: Props) {
               disabled={!canReserve}
               style={{
                 ...styles.colourButton,
-                background:
-                  selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
+                background: selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
                 color: selectedColour === colour.name ? "#ffffff" : "#111827",
                 opacity: canReserve ? 1 : 0.7,
                 cursor: canReserve ? "pointer" : "not-allowed",
@@ -452,13 +440,10 @@ export default function PublicRafflePage({ slug }: Props) {
                         : isReserved
                           ? "#f59e0b"
                           : "#ffffff",
-                    color:
-                      isSelected || isSold || isReserved ? "#ffffff" : "#111827",
+                    color: isSelected || isSold || isReserved ? "#ffffff" : "#111827",
                     opacity: canReserve ? 1 : 0.7,
                     cursor:
-                      isSold || isReserved || !canReserve
-                        ? "not-allowed"
-                        : "pointer",
+                      isSold || isReserved || !canReserve ? "not-allowed" : "pointer",
                   }}
                 >
                   {number}
@@ -476,18 +461,11 @@ export default function PublicRafflePage({ slug }: Props) {
         ) : (
           <div style={styles.basket}>
             {basket.map((ticket) => (
-              <div
-                key={makeTicketKey(ticket.colour, ticket.number)}
-                style={styles.basketRow}
-              >
+              <div key={makeTicketKey(ticket.colour, ticket.number)} style={styles.basketRow}>
                 <span>
                   {ticket.colour} #{ticket.number}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => removeFromBasket(ticket)}
-                  style={styles.removeButton}
-                >
+                <button type="button" onClick={() => removeFromBasket(ticket)} style={styles.removeButton}>
                   Remove
                 </button>
               </div>
@@ -523,19 +501,14 @@ export default function PublicRafflePage({ slug }: Props) {
             style={{
               ...styles.primaryButton,
               opacity: saving || basket.length === 0 || !canReserve ? 0.6 : 1,
-              cursor:
-                saving || basket.length === 0 || !canReserve
-                  ? "not-allowed"
-                  : "pointer",
+              cursor: saving || basket.length === 0 || !canReserve ? "not-allowed" : "pointer",
             }}
           >
             {saving ? "Reserving..." : "Reserve tickets"}
           </button>
         </div>
 
-        {reservationMessage ? (
-          <div style={styles.success}>{reservationMessage}</div>
-        ) : null}
+        {reservationMessage ? <div style={styles.success}>{reservationMessage}</div> : null}
         {error ? <div style={styles.error}>{error}</div> : null}
       </div>
     </div>
