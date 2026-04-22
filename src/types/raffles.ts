@@ -2,10 +2,12 @@ export type CurrencyCode = "GBP" | "USD" | "EUR";
 
 export type RaffleStatus = "draft" | "published" | "closed" | "drawn";
 
-export type TicketSelection = {
+export type TicketRef = {
   colour: string;
   number: number;
 };
+
+export type TicketSelection = TicketRef;
 
 export type RaffleColour = {
   id: string;
@@ -57,7 +59,9 @@ export type Raffle = {
   config_json: {
     startNumber?: number;
     endNumber?: number;
-    colours?: Array<string | { id?: string; name?: string; hex?: string | null; sortOrder?: number }>;
+    colours?: Array<
+      string | { id?: string; name?: string; hex?: string | null; sortOrder?: number }
+    >;
     offers?: Array<{
       id?: string;
       label?: string;
