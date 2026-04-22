@@ -84,7 +84,7 @@ export async function POST(
 
     const soldTickets = await getSoldTicketsForDraw(raffleId);
 
-    if (soldTickets.length === 0) {
+    if (!soldTickets.length) {
       return NextResponse.json(
         { ok: false, error: "No sold tickets available for draw." },
         { status: 400 }
@@ -97,7 +97,7 @@ export async function POST(
     const updated = await setRaffleWinner({
       raffleId,
       ticketNumber: winner.ticket_number,
-      colour: winner.colour,
+      colour: winner.colour ?? null,
       saleId: winner.sale_id,
       drawnBy: userEmail,
     });
