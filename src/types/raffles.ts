@@ -1,135 +1,35 @@
-export type RaffleColour = {
-  id: string;
-  name: string;
-  hex?: string | null;
-  sortOrder?: number;
-};
+"use client";
 
-export type RaffleOffer = {
-  id: string;
-  label: string;
-  quantity: number;
-  price: number;
-  isActive: boolean;
-  sortOrder?: number;
-};
+import { useMemo, useState } from "react";
 
-export type TicketSelection = {
-  colour: string;
-  number: number;
-};
-
-export type TicketRef = TicketSelection;
-
-export type ReservedOrSoldTicket = {
-  colour: string;
-  number: number;
-};
-
-export type Purchase = {
-  id: string;
-  raffleId: string;
-  buyerName: string;
-  buyerEmail: string;
-  tickets: TicketSelection[];
-  quantity: number;
-  subtotal: number;
-  discount: number;
-  total: number;
-  currency: string;
-  status?: string;
-  createdAt?: string;
-};
-
-export type Raffle = {
-  id: string;
+type Props = {
   slug: string;
-  title: string;
-  description?: string | null;
-  imageUrl?: string | null;
-  image_url?: string | null;
-  startNumber: number;
-  endNumber: number;
-  currency: string;
-  ticketPrice: number;
-  colours: RaffleColour[];
-  offers: RaffleOffer[];
-  isActive?: boolean;
-  is_active?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
-export type RaffleDetails = Raffle & {
-  reservedTickets: ReservedOrSoldTicket[];
-  soldTickets: ReservedOrSoldTicket[];
-};
+export default function PublicRafflePage({ slug }: Props) {
+  const [count, setCount] = useState(0);
 
-export type PublicRaffle = RaffleDetails;
+  const doubled = useMemo(() => count * 2, [count]);
 
-export type SaveRaffleInput = {
-  slug: string;
-  title: string;
-  description?: string | null;
-  imageUrl?: string | null;
-  startNumber: number;
-  endNumber: number;
-  currency: string;
-  ticketPrice: number;
-  isActive?: boolean;
-  colours: Array<{
-    id?: string;
-    name: string;
-    hex?: string | null;
-    sortOrder?: number;
-  }>;
-  offers: Array<{
-    id?: string;
-    label: string;
-    quantity: number;
-    price: number;
-    isActive?: boolean;
-    sortOrder?: number;
-  }>;
-};
-
-export type PublicRaffleResponse = {
-  ok: true;
-  raffle: PublicRaffle;
-};
-
-export type ReserveTicketsRequest = {
-  buyerName: string;
-  buyerEmail: string;
-  tickets: TicketSelection[];
-};
-
-export type ReserveTicketsResponse = {
-  ok: true;
-  reservationGroupId: string;
-  expiresAt: string;
-  checkoutDraft: {
-    raffleId: string;
-    raffleSlug: string;
-    raffleTitle: string;
-    buyerName: string;
-    buyerEmail: string;
-    tickets: TicketSelection[];
-    quantity: number;
-    currency: string;
-    subtotal: number;
-    discount: number;
-    total: number;
-    pricingBreakdown: {
-      singlesCount: number;
-      singlesTotal: number;
-      appliedOffers: Array<{
-        offerId: string;
-        label: string;
-        quantity: number;
-        price: number;
-        count: number;
-      }>;
-    };
-  };
-};
+  return (
+    <div style={{ padding: 24, color: "#111111" }}>
+      <h1>Client hooks + memo work</h1>
+      <p>Slug: {slug}</p>
+      <p>Count: {count}</p>
+      <p>Doubled: {doubled}</p>
+      <button
+        type="button"
+        onClick={() => setCount((c) => c + 1)}
+        style={{
+          padding: "8px 12px",
+          borderRadius: 8,
+          border: "1px solid #ccc",
+          background: "#fff",
+          cursor: "pointer",
+        }}
+      >
+        Increment
+      </button>
+    </div>
+  );
+}
