@@ -79,7 +79,7 @@ export type RaffleDetails = {
 export type SoldTicketForDraw = {
   sale_id: string;
   ticket_number: number;
-  colour: string;
+  colour: string | null;
 };
 
 /* ================= HELPERS ================= */
@@ -251,7 +251,7 @@ export async function getSoldTicketsForDraw(
       colour
     from raffle_ticket_sales
     where raffle_id = $1
-    order by created_at asc, ticket_number asc
+    order by ticket_number asc
     `,
     [raffleId]
   );
@@ -260,7 +260,7 @@ export async function getSoldTicketsForDraw(
 export async function setRaffleWinner(params: {
   raffleId: string;
   ticketNumber: number;
-  colour: string;
+  colour: string | null;
   saleId: string;
   drawnBy: string | null;
 }): Promise<RaffleDetails | null> {
