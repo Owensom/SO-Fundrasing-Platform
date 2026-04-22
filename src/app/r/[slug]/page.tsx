@@ -6,6 +6,6 @@ type PageProps = {
   };
 };
 
-export default function RafflePage({ params }: PageProps) {
+export default function RaffleSlugPage({ params }: PageProps) {
   return <PublicRafflePage slug={params.slug} />;
 }
