@@ -29,12 +29,8 @@ export async function POST(
     const body = (await request.json()) as Body;
     const raffleId = params.id;
 
-    if (!body.action || (body.action !== "close" && body.action !== "draw")) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid action" },
-        { status: 400 }
-      );
-    }
+    console.log("ACTION:", body.action);
+    console.log("RAFFLE ID:", raffleId);
 
     const raffle = await getRaffleById(raffleId);
 
@@ -45,48 +41,22 @@ export async function POST(
       );
     }
 
-    const userEmail =
-      typeof session.user?.email === "string" ? session.user.email : null;
+    console.log("RAFFLE STATUS:", raffle.status);
 
     if (body.action === "close") {
-      if (raffle.status !== "published") {
-        return NextResponse.json(
-          { ok: false, error: "Only published raffles can be closed." },
-          { status: 400 }
-        );
-      }
-
       const updated = await closeRaffle(raffleId);
-
-      if (!updated) {
-        return NextResponse.json(
-          { ok: false, error: "Failed to close raffle." },
-          { status: 400 }
-        );
-      }
-
       return NextResponse.json({ ok: true, raffle: updated });
     }
 
-    if (raffle.status !== "closed") {
-      return NextResponse.json(
-        { ok: false, error: "Only closed raffles can draw a winner." },
-        { status: 400 }
-      );
-    }
-
-    if (raffle.drawn_at) {
-      return NextResponse.json(
-        { ok: false, error: "Winner already drawn." },
-        { status: 400 }
-      );
-    }
+    // ===== DRAW =====
 
     const soldTickets = await getSoldTicketsForDraw(raffleId);
 
+    console.log("SOLD TICKETS:", soldTickets);
+
     if (!soldTickets.length) {
       return NextResponse.json(
-        { ok: false, error: "No sold tickets available for draw." },
+        { ok: false, error: "No sold tickets found" },
         { status: 400 }
       );
     }
@@ -94,26 +64,28 @@ export async function POST(
     const winnerIndex = crypto.randomInt(0, soldTickets.length);
     const winner = soldTickets[winnerIndex];
 
+    console.log("WINNER PICKED:", winner);
+
     const updated = await setRaffleWinner({
       raffleId,
       ticketNumber: winner.ticket_number,
       colour: winner.colour ?? null,
       saleId: winner.sale_id,
-      drawnBy: userEmail,
+      drawnBy: session.user?.email ?? null,
     });
 
-    if (!updated) {
-      return NextResponse.json(
-        { ok: false, error: "Failed to store drawn winner." },
-        { status: 400 }
-      );
-    }
+    console.log("UPDATED RESULT:", updated);
 
     return NextResponse.json({ ok: true, raffle: updated });
-  } catch (error) {
-    console.error("raffle action error", error);
+  } catch (error: any) {
+    console.error("🔥 DRAW ERROR:", error);
+
     return NextResponse.json(
-      { ok: false, error: "Internal server error" },
+      {
+        ok: false,
+        error: error?.message || "Unknown error",
+        stack: error?.stack || null,
+      },
       { status: 500 }
     );
   }
