@@ -28,6 +28,15 @@ function parseOffers(value: string) {
   }
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export async function GET(request: NextRequest) {
   const tenantSlug = getTenantSlugFromRequest(request);
 
@@ -69,7 +78,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
 
     const title = String(formData.get("title") ?? "").trim();
-    const slug = String(formData.get("slug") ?? "").trim();
+    const rawSlug = String(formData.get("slug") ?? "").trim();
+    const slug = slugify(rawSlug || title);
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
     const currency = String(formData.get("currency") ?? "EUR").trim();
