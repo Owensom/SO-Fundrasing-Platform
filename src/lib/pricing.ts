@@ -38,8 +38,7 @@ export function normalizeOffers(input: unknown): NormalizedOffer[] {
 
       const raw = item as RawOffer;
 
-      const label =
-        typeof raw.label === "string" ? raw.label.trim() : "";
+      const label = typeof raw.label === "string" ? raw.label.trim() : "";
 
       const quantity = Math.floor(
         toFiniteNumber(raw.quantity ?? raw.tickets ?? 0)
@@ -53,8 +52,7 @@ export function normalizeOffers(input: unknown): NormalizedOffer[] {
         price_cents = Math.round(toFiniteNumber(raw.price) * 100);
       }
 
-      const is_active =
-        raw.is_active === true || raw.isActive === true;
+      const is_active = raw.is_active === true || raw.isActive === true;
 
       const sort_order = Math.floor(
         toFiniteNumber(raw.sort_order ?? raw.sortOrder ?? index)
