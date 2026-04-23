@@ -74,12 +74,14 @@ type ReserveResponse = {
   expiresAt?: string;
   totalAmountCents?: number;
   error?: string;
+  debug?: unknown;
 };
 
 type CheckoutResponse = {
   ok: boolean;
   url?: string;
   error?: string;
+  debug?: unknown;
 };
 
 function isValidEmail(email: string) {
@@ -228,6 +230,7 @@ function calculateOfferTotal(
 export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
+  const [debugInfo, setDebugInfo] = useState<string>("");
   const colourOptions = useMemo(
     () => normaliseColours(raffle.config_json?.colours),
     [raffle.config_json?.colours]
@@ -319,6 +322,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     });
 
     setError("");
+    setDebugInfo("");
   }
 
   function removeSelectedTicket(ticket: SelectedTicket) {
@@ -339,6 +343,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     try {
       setLoading(true);
       setError("");
+      setDebugInfo("");
       setSuccess(null);
 
       const trimmedName = buyerName.trim();
@@ -376,10 +381,12 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       const data = (await response.json()) as ReserveResponse;
 
       if (!response.ok || !data.ok) {
+        setDebugInfo(JSON.stringify(data, null, 2));
         throw new Error(data.error || "Failed to reserve tickets");
       }
 
       setSuccess(data);
+      setDebugInfo(JSON.stringify(data, null, 2));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Reservation failed";
@@ -408,19 +415,34 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
       setCheckoutLoading(true);
       setError("");
+      setDebugInfo("");
+
+      const requestBody = {
+        raffleId: raffle.id,
+        reservationToken: success.reservationToken,
+      };
 
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          raffleId: raffle.id,
-          reservationToken: success.reservationToken,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = (await response.json()) as CheckoutResponse;
+
+      setDebugInfo(
+        JSON.stringify(
+          {
+            requestBody,
+            responseStatus: response.status,
+            responseData: data,
+          },
+          null,
+          2
+        )
+      );
 
       if (!response.ok || !data.ok || !data.url) {
         throw new Error(data.error || "Failed to create Stripe Checkout");
@@ -685,7 +707,26 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       ) : null}
 
       {error ? (
-        <p style={{ color: "red", marginTop: 12 }}>{error}</p>
+        <p style={{ color: "red", marginTop: 12, whiteSpace: "pre-wrap" }}>
+          {error}
+        </p>
+      ) : null}
+
+      {debugInfo ? (
+        <pre
+          style={{
+            marginTop: 12,
+            padding: 12,
+            background: "#f5f5f5",
+            border: "1px solid #ddd",
+            borderRadius: 8,
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+            fontSize: 12,
+          }}
+        >
+          {debugInfo}
+        </pre>
       ) : null}
 
       {success?.ok ? (
