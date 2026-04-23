@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { query, queryOne } from "@/lib/db";
+import { query } from "@/lib/db";
 import { getRaffleBySlug } from "../../../../../../api/_lib/raffles-repo";
 
 export const runtime = "nodejs";
@@ -10,6 +10,7 @@ type ReserveBody = {
   tenantSlug?: string;
   buyerName?: string;
   buyerEmail?: string;
+  quantity?: number;
   selectedTickets?: Array<{
     number?: number;
     ticket_number?: number;
@@ -17,13 +18,10 @@ type ReserveBody = {
   }>;
 };
 
-type CountRow = {
-  count: string | number;
+type ReservedOrSoldRow = {
+  ticket_number: number;
+  colour: string | null;
 };
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
 
 function normalizeSelectedTickets(
   value: unknown
@@ -35,7 +33,11 @@ function normalizeSelectedTickets(
       if (!item || typeof item !== "object") return null;
 
       const row = item as Record<string, unknown>;
-      const ticketNumber = Number(row.ticket_number ?? row.number ?? null);
+
+      const ticketNumber = Number(
+        row.ticket_number ?? row.number ?? null
+      );
+
       const colour =
         typeof row.colour === "string" && row.colour.trim()
           ? row.colour.trim()
@@ -51,6 +53,20 @@ function normalizeSelectedTickets(
     .filter(Boolean) as Array<{ ticket_number: number; colour: string | null }>;
 }
 
+function hasDuplicateTickets(
+  tickets: Array<{ ticket_number: number; colour: string | null }>
+) {
+  const seen = new Set<string>();
+
+  for (const ticket of tickets) {
+    const key = `${ticket.ticket_number}::${ticket.colour ?? ""}`;
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+
+  return false;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { slug: string } }
@@ -60,12 +76,16 @@ export async function POST(
 
     const tenantSlug =
       typeof body.tenantSlug === "string" ? body.tenantSlug.trim() : "";
+
     const buyerName =
       typeof body.buyerName === "string" ? body.buyerName.trim() : "";
+
     const buyerEmail =
       typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
 
-    if (!tenantSlug || !params.slug) {
+    const slug = params.slug;
+
+    if (!tenantSlug || !slug) {
       return NextResponse.json(
         { ok: false, error: "Missing tenant or raffle slug." },
         { status: 400 }
@@ -74,28 +94,12 @@ export async function POST(
 
     if (!buyerName || !buyerEmail) {
       return NextResponse.json(
-        { ok: false, error: "Name and email are required." },
+        { ok: false, error: "Missing buyer details." },
         { status: 400 }
       );
     }
 
-    if (!isValidEmail(buyerEmail)) {
-      return NextResponse.json(
-        { ok: false, error: "Enter a valid email address." },
-        { status: 400 }
-      );
-    }
-
-    const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
-
-    if (!selectedTickets.length) {
-      return NextResponse.json(
-        { ok: false, error: "No tickets selected." },
-        { status: 400 }
-      );
-    }
-
-    const raffle = await getRaffleBySlug(tenantSlug, params.slug);
+    const raffle = await getRaffleBySlug(tenantSlug, slug);
 
     if (!raffle || raffle.status !== "published") {
       return NextResponse.json(
@@ -103,6 +107,97 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
+
+    const quantity =
+      typeof body.quantity === "number"
+        ? Math.max(0, Math.floor(body.quantity))
+        : 0;
+
+    if (selectedTickets.length === 0 && quantity <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "No tickets selected." },
+        { status: 400 }
+      );
+    }
+
+    if (selectedTickets.length > 0 && hasDuplicateTickets(selectedTickets)) {
+      return NextResponse.json(
+        { ok: false, error: "Duplicate tickets selected." },
+        { status: 400 }
+      );
+    }
+
+    const requestedQuantity =
+      selectedTickets.length > 0 ? selectedTickets.length : quantity;
+
+    const remainingTickets = Math.max(
+      Number(raffle.total_tickets) - Number(raffle.sold_tickets),
+      0
+    );
+
+    if (requestedQuantity > remainingTickets) {
+      return NextResponse.json(
+        { ok: false, error: "Not enough tickets remaining." },
+        { status: 400 }
+      );
+    }
+
+    // ===== CHECK AVAILABILITY =====
+
+    if (selectedTickets.length > 0) {
+      const valuesSql = selectedTickets
+        .map((_, index) => {
+          const base = index * 2;
+          return `($${base + 2}, $${base + 3})`;
+        })
+        .join(", ");
+
+      const soldOrReserved = await query<ReservedOrSoldRow>(
+        `
+        with requested(ticket_number, colour) as (
+          values ${valuesSql}
+        )
+        select ticket_number, colour
+        from (
+          select ticket_number, colour
+          from raffle_ticket_reservations
+          where raffle_id = $1
+            and status = 'reserved'
+            and expires_at > now()
+
+          union all
+
+          select ticket_number, colour
+          from raffle_ticket_sales
+          where raffle_id = $1
+        ) taken
+        inner join requested req
+          on req.ticket_number = taken.ticket_number
+         and coalesce(req.colour, '') = coalesce(taken.colour, '')
+        `,
+        [
+          raffle.id,
+          ...selectedTickets.flatMap((t) => [
+            t.ticket_number,
+            t.colour,
+          ]),
+        ]
+      );
+
+      if (soldOrReserved.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "One or more selected tickets are no longer available.",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
+    // ===== CREATE RESERVATION =====
 
     const reservationGroupId = crypto.randomUUID();
     const reservationToken = crypto.randomUUID();
@@ -118,22 +213,22 @@ export async function POST(
           reservation_token,
           ticket_number,
           colour,
-          buyer_name,
-          buyer_email,
           status,
           expires_at,
+          buyer_name,
+          buyer_email,
           created_at
         )
         values (
-          gen_random_uuid()::text,
+          gen_random_uuid(),
           $1,
-          $2,
-          $3,
+          $2::uuid,
+          $3::uuid,
           $4,
           $5,
+          'reserved',
           $6,
           $7,
-          'reserved',
           $8,
           now()
         )
@@ -144,47 +239,24 @@ export async function POST(
           reservationToken,
           ticket.ticket_number,
           ticket.colour,
+          expiresAt,
           buyerName,
           buyerEmail,
-          expiresAt.toISOString(),
         ]
-      );
-    }
-
-    const verify = await queryOne<CountRow>(
-      `
-      select count(*)::int as count
-      from raffle_ticket_reservations
-      where raffle_id = $1
-        and reservation_token = $2
-      `,
-      [raffle.id, reservationToken]
-    );
-
-    const insertedCount = Number(verify?.count ?? 0);
-
-    if (insertedCount !== selectedTickets.length) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `RESERVE VERIFY FAILED | raffleId=${raffle.id} | token=${reservationToken} | expected=${selectedTickets.length} | actual=${insertedCount}`,
-        },
-        { status: 500 }
       );
     }
 
     return NextResponse.json({
       ok: true,
       reservationToken,
+      expiresAt,
       raffleId: raffle.id,
-      expiresAt: expiresAt.toISOString(),
-      debug: `RESERVE VERIFIED | raffleId=${raffle.id} | token=${reservationToken} | count=${insertedCount}`,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("raffle reserve error", error);
 
     return NextResponse.json(
-      { ok: false, error: error?.message || "Internal server error." },
+      { ok: false, error: "Internal server error." },
       { status: 500 }
     );
   }
