@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRaffleById } from "@/lib/raffles";
-import { queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -18,8 +18,13 @@ type ReservationRow = {
   id: string;
   raffle_id: string;
   reservation_token: string;
-  quantity: number;
   expires_at: string;
+  buyer_email: string | null;
+  buyer_name: string | null;
+};
+
+type ReservationCountRow = {
+  count: string | number;
 };
 
 export async function POST(request: NextRequest) {
@@ -27,10 +32,10 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CheckoutBody;
 
     const raffleId =
-      typeof body.raffleId === "string" ? body.raffleId : "";
+      typeof body.raffleId === "string" ? body.raffleId.trim() : "";
     const reservationToken =
       typeof body.reservationToken === "string"
-        ? body.reservationToken
+        ? body.reservationToken.trim()
         : "";
 
     if (!raffleId || !reservationToken) {
@@ -55,11 +60,15 @@ export async function POST(request: NextRequest) {
         id,
         raffle_id,
         reservation_token,
-        quantity,
-        expires_at
+        expires_at,
+        buyer_email,
+        buyer_name
       from raffle_ticket_reservations
       where reservation_token = $1
         and raffle_id = $2
+        and status = 'reserved'
+      order by created_at asc
+      limit 1
       `,
       [reservationToken, raffleId]
     );
@@ -78,7 +87,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const quantity = Number(reservation.quantity);
+    const reservationCount = await queryOne<ReservationCountRow>(
+      `
+      select count(*)::int as count
+      from raffle_ticket_reservations
+      where reservation_token = $1
+        and raffle_id = $2
+        and status = 'reserved'
+        and expires_at > now()
+      `,
+      [reservationToken, raffleId]
+    );
+
+    const quantity = Number(reservationCount?.count ?? 0);
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return NextResponse.json(
@@ -98,15 +119,19 @@ export async function POST(request: NextRequest) {
 
     const unitAmount = Math.round(ticketPrice * 100);
 
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      new URL(request.url).origin;
+
     const successUrl =
-      typeof body.successUrl === "string" && body.successUrl
-        ? body.successUrl
-        : `${process.env.NEXT_PUBLIC_APP_URL}/success`;
+      typeof body.successUrl === "string" && body.successUrl.trim()
+        ? body.successUrl.trim()
+        : `${baseUrl}/success`;
 
     const cancelUrl =
-      typeof body.cancelUrl === "string" && body.cancelUrl
-        ? body.cancelUrl
-        : `${process.env.NEXT_PUBLIC_APP_URL}/r/${raffle.slug}`;
+      typeof body.cancelUrl === "string" && body.cancelUrl.trim()
+        ? body.cancelUrl.trim()
+        : `${baseUrl}/r/${raffle.slug}`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -124,6 +149,7 @@ export async function POST(request: NextRequest) {
           quantity,
         },
       ],
+      customer_email: reservation.buyer_email || undefined,
       metadata: {
         raffle_id: raffle.id,
         reservation_token: reservation.reservation_token,
@@ -136,11 +162,14 @@ export async function POST(request: NextRequest) {
       ok: true,
       url: session.url,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("stripe checkout error", error);
 
     return NextResponse.json(
-      { ok: false, error: "Internal server error." },
+      {
+        ok: false,
+        error: error?.message || "Internal server error.",
+      },
       { status: 500 }
     );
   }
