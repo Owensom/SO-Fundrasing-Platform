@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CheckoutBody;
 
-    const raffleId =
+    const requestedRaffleId =
       typeof body.raffleId === "string" ? body.raffleId.trim() : "";
     const reservationToken =
       typeof body.reservationToken === "string"
@@ -103,26 +103,18 @@ export async function POST(request: NextRequest) {
         : "";
 
     console.log("STRIPE CHECKOUT INPUT", {
-      raffleId,
+      requestedRaffleId,
       reservationToken,
     });
 
-    if (!raffleId || !reservationToken) {
+    if (!reservationToken) {
       return NextResponse.json(
-        { ok: false, error: "Missing raffleId or reservationToken." },
+        { ok: false, error: "Missing reservationToken." },
         { status: 400 }
       );
     }
 
-    const raffle = (await getRaffleById(raffleId)) as RaffleLike | null;
-
-    if (!raffle || raffle.status !== "published") {
-      return NextResponse.json(
-        { ok: false, error: "This raffle is closed." },
-        { status: 400 }
-      );
-    }
-
+    // Trust the reservation token first. This matches your working by-reservation route.
     const reservation = await queryOne<ReservationRow>(
       `
       select
@@ -135,12 +127,11 @@ export async function POST(request: NextRequest) {
         status
       from raffle_ticket_reservations
       where reservation_token = $1
-        and raffle_id = $2
         and expires_at > now()
       order by created_at asc
       limit 1
       `,
-      [reservationToken, raffleId]
+      [reservationToken]
     );
 
     console.log("STRIPE CHECKOUT RESERVATION", reservation);
@@ -151,7 +142,7 @@ export async function POST(request: NextRequest) {
           ok: false,
           error: "Reservation not found.",
           debug: {
-            raffleId,
+            requestedRaffleId,
             reservationToken,
           },
         },
@@ -166,6 +157,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const raffle = (await getRaffleById(reservation.raffle_id)) as RaffleLike | null;
+
+    if (!raffle || raffle.status !== "published") {
+      return NextResponse.json(
+        { ok: false, error: "This raffle is closed." },
+        { status: 400 }
+      );
+    }
+
     const reservationCount = await queryOne<ReservationCountRow>(
       `
       select count(*)::int as count
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         and raffle_id = $2
         and expires_at > now()
       `,
-      [reservationToken, raffleId]
+      [reservation.reservation_token, reservation.raffle_id]
     );
 
     const quantity = Number(reservationCount?.count ?? 0);
@@ -262,6 +262,7 @@ export async function POST(request: NextRequest) {
         savings_cents: String(pricing.savings_cents),
         applied_offers_json: JSON.stringify(pricing.applied_offers),
         tenant_slug: raffle.tenant_slug ?? "",
+        requested_raffle_id: requestedRaffleId,
       },
       success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
