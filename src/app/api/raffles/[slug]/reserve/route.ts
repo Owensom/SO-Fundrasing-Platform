@@ -23,7 +23,7 @@ type ReservedOrSoldRow = {
   colour: string | null;
 };
 
-type InsertedCountRow = {
+type CountRow = {
   count: string | number;
 };
 
@@ -41,9 +41,7 @@ function normalizeSelectedTickets(
       if (!item || typeof item !== "object") return null;
 
       const row = item as Record<string, unknown>;
-
       const ticketNumber = Number(row.ticket_number ?? row.number ?? null);
-
       const colour =
         typeof row.colour === "string" && row.colour.trim()
           ? row.colour.trim()
@@ -119,7 +117,6 @@ export async function POST(
     }
 
     const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
-
     const quantity =
       typeof body.quantity === "number"
         ? Math.max(0, Math.floor(body.quantity))
@@ -260,7 +257,7 @@ export async function POST(
       );
     }
 
-    const insertedCount = await queryOne<InsertedCountRow>(
+    const verifiedCountRow = await queryOne<CountRow>(
       `
       select count(*)::int as count
       from raffle_ticket_reservations
@@ -270,29 +267,29 @@ export async function POST(
       [reservationToken, raffle.id]
     );
 
-    const count = Number(insertedCount?.count ?? 0);
+    const verifiedCount = Number(verifiedCountRow?.count ?? 0);
 
-    if (!Number.isFinite(count) || count !== selectedTickets.length) {
-      const latestReservations = await query(
-        `
-        select
-          reservation_token,
-          raffle_id,
-          buyer_email,
-          created_at
-        from raffle_ticket_reservations
-        order by created_at desc
-        limit 3
-        `
-      );
+    const latestRow = await queryOne<{
+      reservation_token: string;
+      raffle_id: string;
+      created_at: string;
+    }>(
+      `
+      select reservation_token, raffle_id, created_at
+      from raffle_ticket_reservations
+      order by created_at desc
+      limit 1
+      `
+    );
 
+    if (!Number.isFinite(verifiedCount) || verifiedCount !== selectedTickets.length) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            `Reservation insert verification failed | expected=${selectedTickets.length} | actual=${count} | raffleId=${raffle.id} | token=${reservationToken}` +
-            (latestReservations[0]
-              ? ` | latest raffleId=${String((latestReservations[0] as any).raffle_id)} | latest token=${String((latestReservations[0] as any).reservation_token)}`
+            `Reserve verification failed | raffleId=${raffle.id} | token=${reservationToken} | expected=${selectedTickets.length} | actual=${verifiedCount}` +
+            (latestRow
+              ? ` | latest raffleId=${latestRow.raffle_id} | latest token=${latestRow.reservation_token}`
               : ""),
         },
         { status: 500 }
@@ -304,6 +301,11 @@ export async function POST(
       reservationToken,
       expiresAt: expiresAt.toISOString(),
       raffleId: raffle.id,
+      debug:
+        `Reserve verified | raffleId=${raffle.id} | token=${reservationToken} | count=${verifiedCount}` +
+        (latestRow
+          ? ` | latest raffleId=${latestRow.raffle_id} | latest token=${latestRow.reservation_token}`
+          : ""),
     });
   } catch (error: any) {
     console.error("raffle reserve error", error);
