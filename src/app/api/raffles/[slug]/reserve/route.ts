@@ -238,6 +238,7 @@ export async function POST(
     }
 
     const reservationToken = crypto.randomUUID();
+    const reservationGroupId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const unitPriceCents = Math.round(Number(raffle.ticket_price) * 100);
 
@@ -247,6 +248,7 @@ export async function POST(
         insert into raffle_ticket_reservations (
           id,
           raffle_id,
+          reservation_group_id,
           reservation_token,
           ticket_number,
           colour,
@@ -266,14 +268,16 @@ export async function POST(
           $6,
           $7,
           $8,
+          $9,
           'reserved',
           now(),
-          $9::timestamptz
+          $10::timestamptz
         )
         `,
         [
           crypto.randomUUID(),
           raffle.id,
+          reservationGroupId,
           reservationToken,
           ticket.ticket_number,
           ticket.colour ?? "default",
@@ -288,6 +292,7 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       reservationToken,
+      reservationGroupId,
       expiresAt,
       quantity: requestedQuantity,
       selectedTickets,
