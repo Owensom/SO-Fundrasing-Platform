@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ Get reservations
+    // ✅ Find reservations
     const reservations = await query<ReservationRow>(
       `
       select
@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
         reservation_token,
         expires_at,
         buyer_email,
-        buyer_name
+        buyer_name,
+        created_at
       from raffle_ticket_reservations
       where reservation_token = $1
       order by created_at asc
@@ -103,14 +104,33 @@ export async function POST(request: NextRequest) {
       [reservationToken]
     );
 
+    // 🚨 DEBUG BLOCK (DO NOT REMOVE UNTIL FIXED)
     if (!reservations.length) {
+      const latest = await query(
+        `
+        select
+          reservation_token,
+          raffle_id,
+          created_at
+        from raffle_ticket_reservations
+        order by created_at desc
+        limit 5
+        `
+      );
+
       return NextResponse.json(
-        { ok: false, error: "Reservation not found." },
+        {
+          ok: false,
+          error: "Reservation not found.",
+          debug: {
+            sentToken: reservationToken,
+            latestReservations: latest,
+          },
+        },
         { status: 404 }
       );
     }
 
-    // ✅ pick valid reservation
     const reservation =
       reservations.find(
         (r) => new Date(r.expires_at).getTime() > Date.now()
@@ -127,7 +147,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ count tickets
+    // ✅ Count tickets
     const reservationCount = await queryOne<ReservationCountRow>(
       `
       select count(*)::int as count
@@ -156,7 +176,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ offers
+    // ✅ Offers pricing
     const normalizedOffers = normalizeOffers(getOffersFromRaffle(raffle));
 
     const pricing = getBestPriceForQuantity({
@@ -178,7 +198,7 @@ export async function POST(request: NextRequest) {
     const successUrl = `${baseUrl}/success`;
     const cancelUrl = `${baseUrl}/r/${raffle.slug}`;
 
-    // ✅ Stripe session
+    // ✅ Create Stripe session
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -205,7 +225,7 @@ export async function POST(request: NextRequest) {
       cancel_url: cancelUrl,
     });
 
-    // ✅ CRITICAL FIX
+    // ✅ FIX: fallback URL
     const checkoutUrl =
       session.url ||
       (session.id
