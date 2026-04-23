@@ -3,13 +3,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
   closeRaffle,
+  deleteRaffle,
   getRaffleById,
   getSoldTicketsForDraw,
   setRaffleWinner,
 } from "@/lib/raffles";
+import { queryOne } from "@/lib/db";
+import { sendWinnerEmail } from "@/lib/email";
 
 type Body = {
-  action?: "close" | "draw";
+  action?: "close" | "draw" | "delete";
+};
+
+type WinnerRow = {
+  buyer_email: string | null;
+  buyer_name: string | null;
 };
 
 export async function POST(
@@ -29,9 +37,6 @@ export async function POST(
     const body = (await request.json()) as Body;
     const raffleId = params.id;
 
-    console.log("ACTION:", body.action);
-    console.log("RAFFLE ID:", raffleId);
-
     const raffle = await getRaffleById(raffleId);
 
     if (!raffle) {
@@ -41,18 +46,25 @@ export async function POST(
       );
     }
 
-    console.log("RAFFLE STATUS:", raffle.status);
-
     if (body.action === "close") {
       const updated = await closeRaffle(raffleId);
       return NextResponse.json({ ok: true, raffle: updated });
     }
 
-    // ===== DRAW =====
+    if (body.action === "delete") {
+      const deleted = await deleteRaffle(raffleId);
+
+      if (!deleted) {
+        return NextResponse.json(
+          { ok: false, error: "Delete failed" },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ ok: true, deleted: true });
+    }
 
     const soldTickets = await getSoldTicketsForDraw(raffleId);
-
-    console.log("SOLD TICKETS:", soldTickets);
 
     if (!soldTickets.length) {
       return NextResponse.json(
@@ -64,8 +76,6 @@ export async function POST(
     const winnerIndex = crypto.randomInt(0, soldTickets.length);
     const winner = soldTickets[winnerIndex];
 
-    console.log("WINNER PICKED:", winner);
-
     const updated = await setRaffleWinner({
       raffleId,
       ticketNumber: winner.ticket_number,
@@ -74,11 +84,52 @@ export async function POST(
       drawnBy: session.user?.email ?? null,
     });
 
-    console.log("UPDATED RESULT:", updated);
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Failed to set winner" },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ ok: true, raffle: updated });
+    const winnerRow = await queryOne<WinnerRow>(
+      `
+      select buyer_email, buyer_name
+      from raffle_ticket_sales
+      where id = $1
+      limit 1
+      `,
+      [winner.sale_id]
+    );
+
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    try {
+      if (winnerRow?.buyer_email) {
+        await sendWinnerEmail({
+          to: winnerRow.buyer_email,
+          name: winnerRow.buyer_name,
+          raffleTitle: updated.title,
+          ticketNumber: winner.ticket_number,
+          colour: winner.colour,
+        });
+        emailSent = true;
+      } else {
+        emailError = "Winner email address not found";
+      }
+    } catch (error: any) {
+      console.error("winner email failed", error);
+      emailError = error?.message || "Winner email failed";
+    }
+
+    return NextResponse.json({
+      ok: true,
+      raffle: updated,
+      emailSent,
+      emailError,
+    });
   } catch (error: any) {
-    console.error("🔥 DRAW ERROR:", error);
+    console.error("DRAW ACTION ERROR:", error);
 
     return NextResponse.json(
       {
