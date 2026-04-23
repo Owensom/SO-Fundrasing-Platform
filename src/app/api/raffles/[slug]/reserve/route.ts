@@ -286,11 +286,17 @@ export async function POST(
       quantity: requestedQuantity,
       selectedTickets,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("raffle reserve error", error);
 
     return NextResponse.json(
-      { ok: false, error: "Internal server error." },
+      {
+        ok: false,
+        error: error?.message || "Internal server error.",
+        detail: error?.detail || null,
+        code: error?.code || null,
+        constraint: error?.constraint || null,
+      },
       { status: 500 }
     );
   }
