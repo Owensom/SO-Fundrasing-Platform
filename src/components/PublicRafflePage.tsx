@@ -333,7 +333,7 @@ export default function PublicRafflePage({ slug }: Props) {
           body: JSON.stringify({
             tenantSlug: raffle.tenantSlug,
             quantity: basket.length,
-            selectedTickets: basket,
+            tickets: basket,
             buyerName: buyerName.trim(),
             buyerEmail: buyerEmail.trim(),
           }),
@@ -370,6 +370,21 @@ export default function PublicRafflePage({ slug }: Props) {
   return (
     <div style={styles.page}>
       <div style={styles.container}>
+        {raffle.imageUrl ? (
+          <img
+            src={raffle.imageUrl}
+            alt={raffle.title}
+            style={{
+              width: "100%",
+              maxHeight: 360,
+              objectFit: "cover",
+              borderRadius: 16,
+              marginBottom: 20,
+              border: "1px solid #e2e8f0",
+            }}
+          />
+        ) : null}
+
         <h1>{raffle.title}</h1>
         {raffle.description ? <p>{raffle.description}</p> : null}
 
