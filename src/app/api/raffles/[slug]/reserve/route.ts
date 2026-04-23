@@ -141,7 +141,7 @@ export async function POST(
       const valuesSql = selectedTickets
         .map((_, index) => {
           const base = index * 2;
-          return `($${base + 2}, $${base + 3})`;
+          return `($${base + 2}::int, $${base + 3}::text)`;
         })
         .join(", ");
 
@@ -150,9 +150,11 @@ export async function POST(
         with requested(ticket_number, colour) as (
           values ${valuesSql}
         )
-        select ticket_number, colour
+        select taken.ticket_number, taken.colour
         from (
-          select ticket_number, colour
+          select
+            cast(ticket_number as int) as ticket_number,
+            cast(colour as text) as colour
           from raffle_ticket_reservations
           where raffle_id = $1
             and status = 'reserved'
@@ -160,7 +162,9 @@ export async function POST(
 
           union all
 
-          select ticket_number, colour
+          select
+            cast(ticket_number as int) as ticket_number,
+            cast(colour as text) as colour
           from raffle_ticket_sales
           where raffle_id = $1
         ) taken
@@ -170,7 +174,10 @@ export async function POST(
         `,
         [
           raffle.id,
-          ...selectedTickets.flatMap((t) => [t.ticket_number, t.colour]),
+          ...selectedTickets.flatMap((t) => [
+            t.ticket_number,
+            t.colour ?? "",
+          ]),
         ]
       );
 
