@@ -325,7 +325,7 @@ export default function PublicRafflePage({ slug }: Props) {
       if (!buyerEmail.trim()) throw new Error("Please enter your email.");
       if (basket.length === 0) throw new Error("Please select at least one ticket.");
 
-      const response = await fetch(
+      const reserveResponse = await fetch(
         `/api/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
         {
           method: "POST",
@@ -340,21 +340,61 @@ export default function PublicRafflePage({ slug }: Props) {
         }
       );
 
-      const text = await response.text();
+      const reserveText = await reserveResponse.text();
 
-      let parsed: any = null;
+      let reserveParsed: any = null;
       try {
-        parsed = JSON.parse(text);
+        reserveParsed = JSON.parse(reserveText);
       } catch {
-        throw new Error(`Reserve API did not return JSON: ${text.slice(0, 120)}`);
+        throw new Error(`Reserve API did not return JSON: ${reserveText.slice(0, 120)}`);
       }
 
-      if (!response.ok) {
-        throw new Error(parsed?.error || "Reserve failed");
+      if (!reserveResponse.ok) {
+        throw new Error(reserveParsed?.error || "Reserve failed");
       }
 
-      setReservationMessage(`Reserved until ${parsed?.expiresAt ?? ""}`);
-      setBasket([]);
+      const reservationToken = String(reserveParsed?.reservationToken ?? "").trim();
+
+      if (!reservationToken) {
+        throw new Error("Reservation succeeded but no reservation token was returned.");
+      }
+
+      setReservationMessage(`Reserved until ${reserveParsed?.expiresAt ?? ""}`);
+
+      const checkoutResponse = await fetch(`/api/stripe/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raffleId: raffle.id,
+          reservationToken,
+        }),
+      });
+
+      const checkoutText = await checkoutResponse.text();
+
+      let checkoutParsed: any = null;
+      try {
+        checkoutParsed = JSON.parse(checkoutText);
+      } catch {
+        throw new Error(`Checkout API did not return JSON: ${checkoutText.slice(0, 120)}`);
+      }
+
+      if (!checkoutResponse.ok) {
+        throw new Error(checkoutParsed?.error || "Checkout failed");
+      }
+
+      const checkoutUrl = String(
+        checkoutParsed?.url ??
+          checkoutParsed?.checkoutUrl ??
+          checkoutParsed?.sessionUrl ??
+          ""
+      ).trim();
+
+      if (!checkoutUrl) {
+        throw new Error("Checkout session created but no checkout URL was returned.");
+      }
+
+      window.location.href = checkoutUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reserve failed");
     } finally {
