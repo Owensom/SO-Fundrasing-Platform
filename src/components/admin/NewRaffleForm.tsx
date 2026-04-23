@@ -49,6 +49,11 @@ function makeOffer(id: string, label = "", price = "", quantity = ""): OfferRow 
   };
 }
 
+function toInt(value: string, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
 export default function NewRaffleForm({ tenantSlug }: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -57,6 +62,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  const [startNumber, setStartNumber] = useState("1");
+  const [endNumber, setEndNumber] = useState("10");
 
   const [selectedColours, setSelectedColours] = useState<string[]>(["Red", "Blue"]);
   const [customColour, setCustomColour] = useState("");
@@ -95,6 +103,16 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
     return JSON.stringify(clean);
   }, [offers]);
+
+  const numbersPerColour = useMemo(() => {
+    const start = toInt(startNumber, 1);
+    const end = toInt(endNumber, 1);
+    return end >= start ? end - start + 1 : 0;
+  }, [startNumber, endNumber]);
+
+  const totalTickets = useMemo(() => {
+    return numbersPerColour * selectedColours.length;
+  }, [numbersPerColour, selectedColours.length]);
 
   function toggleColour(colour: string) {
     setSelectedColours((current) =>
@@ -179,6 +197,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
       <input type="hidden" name="image_url" value={imageUrl} />
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
+      <input type="hidden" name="total_tickets" value={String(totalTickets)} />
 
       <label>
         <div style={{ marginBottom: 6 }}>Title</div>
@@ -315,18 +334,6 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         />
       </label>
 
-      <label>
-        <div style={{ marginBottom: 6 }}>Total tickets</div>
-        <input
-          name="total_tickets"
-          type="number"
-          min="0"
-          step="1"
-          defaultValue="20"
-          style={{ width: "100%", padding: 12 }}
-        />
-      </label>
-
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <label>
           <div style={{ marginBottom: 6 }}>Start number</div>
@@ -335,7 +342,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             type="number"
             min="0"
             step="1"
-            defaultValue="1"
+            value={startNumber}
+            onChange={(e) => setStartNumber(e.target.value)}
             style={{ width: "100%", padding: 12 }}
           />
         </label>
@@ -347,10 +355,26 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             type="number"
             min="0"
             step="1"
-            defaultValue="10"
+            value={endNumber}
+            onChange={(e) => setEndNumber(e.target.value)}
             style={{ width: "100%", padding: 12 }}
           />
         </label>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 8,
+          padding: 14,
+          borderRadius: 12,
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <div><strong>Numbers per colour:</strong> {numbersPerColour}</div>
+        <div><strong>Selected colours:</strong> {selectedColours.length}</div>
+        <div><strong>Total tickets:</strong> {totalTickets}</div>
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>
@@ -425,7 +449,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           </button>
         </div>
 
-        {offers.map((offer, index) => (
+        {offers.map((offer) => (
           <div
             key={offer.id}
             style={{
