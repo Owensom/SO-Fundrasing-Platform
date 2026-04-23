@@ -325,6 +325,13 @@ export default function PublicRafflePage({ slug }: Props) {
       if (!buyerEmail.trim()) throw new Error("Please enter your email.");
       if (basket.length === 0) throw new Error("Please select at least one ticket.");
 
+      const selectedTickets = basket.map((ticket) => ({
+        ticket_number: ticket.number,
+        colour: ticket.colour,
+      }));
+
+      console.log("SENDING TICKETS", selectedTickets);
+
       const reserveResponse = await fetch(
         `/api/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
         {
@@ -332,10 +339,10 @@ export default function PublicRafflePage({ slug }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             tenantSlug: raffle.tenantSlug,
-            quantity: basket.length,
-            tickets: basket,
             buyerName: buyerName.trim(),
             buyerEmail: buyerEmail.trim(),
+            quantity: basket.length,
+            selectedTickets,
           }),
         }
       );
@@ -359,7 +366,11 @@ export default function PublicRafflePage({ slug }: Props) {
         throw new Error("Reservation succeeded but no reservation token was returned.");
       }
 
-      setReservationMessage(`Reserved until ${reserveParsed?.expiresAt ?? ""}`);
+      setReservationMessage(
+        reserveParsed?.debug
+          ? `${String(reserveParsed?.expiresAt ?? "")} | ${String(reserveParsed.debug)}`
+          : `Reserved until ${String(reserveParsed?.expiresAt ?? "")}`
+      );
 
       const checkoutResponse = await fetch(`/api/stripe/checkout`, {
         method: "POST",
