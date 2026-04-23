@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 type ReservationRow = {
   id: string;
   raffle_id: string;
+  reservation_group_id: string | null;
   reservation_token: string;
   ticket_number: number;
   colour: string | null;
@@ -184,6 +185,7 @@ export async function POST(request: NextRequest) {
       select
         r.id,
         r.raffle_id,
+        r.reservation_group_id,
         r.reservation_token,
         r.ticket_number,
         r.colour,
@@ -281,7 +283,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Keep reservation records in sync with actual Stripe buyer details
     await query(
       `
       update raffle_ticket_reservations
@@ -334,26 +335,27 @@ export async function POST(request: NextRequest) {
           ) values (
             $1::uuid,
             $2,
-            null,
-            null,
             $3,
+            null,
             $4,
             $5,
             $6,
-            now(),
             $7,
+            now(),
             $8,
             $9,
             $10,
             $11,
             $12,
             $13,
+            $14,
             now()
           )
           `,
           [
             saleId,
             r.raffle_id,
+            r.reservation_group_id,
             colourValue,
             r.ticket_number,
             customerName,
@@ -422,11 +424,17 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("stripe webhook error", error);
 
     return NextResponse.json(
-      { ok: false, error: "Webhook failed" },
+      {
+        ok: false,
+        error: error?.message || "Webhook failed",
+        detail: error?.detail || null,
+        code: error?.code || null,
+        constraint: error?.constraint || null,
+      },
       { status: 500 },
     );
   }
