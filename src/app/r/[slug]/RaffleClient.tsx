@@ -71,6 +71,7 @@ type ReserveResponse = {
   ok: boolean;
   reservationToken?: string;
   raffleId?: string;
+  expiresAt?: string;
   totalAmountCents?: number;
   error?: string;
 };
@@ -167,12 +168,17 @@ function normaliseColours(colours?: RawColour[]): NormalisedColour[] {
 function calculateOfferTotal(
   selectedCount: number,
   ticketPrice: number,
-  offers: Array<{ label: string; quantity: number; price: number }>,
+  offers: Array<{ label: string; quantity: number; price: number }>
 ) {
   if (selectedCount <= 0) {
     return {
       total: 0,
-      appliedOffers: [] as Array<{ label: string; quantity: number; price: number; times: number }>,
+      appliedOffers: [] as Array<{
+        label: string;
+        quantity: number;
+        price: number;
+        times: number;
+      }>,
       fullPriceTotal: 0,
       savings: 0,
     };
@@ -224,10 +230,10 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [buyerEmail, setBuyerEmail] = useState("");
   const colourOptions = useMemo(
     () => normaliseColours(raffle.config_json?.colours),
-    [raffle.config_json?.colours],
+    [raffle.config_json?.colours]
   );
   const [selectedColour, setSelectedColour] = useState(
-    colourOptions[0]?.value || "default",
+    colourOptions[0]?.value || "default"
   );
   const [selectedTickets, setSelectedTickets] = useState<SelectedTicket[]>([]);
   const [loading, setLoading] = useState(false);
@@ -246,27 +252,27 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     Number(
       raffle.config_json?.endNumber ||
         raffle.total_tickets ||
-        startNumber + raffle.total_tickets - 1,
+        startNumber + raffle.total_tickets - 1
     ) || raffle.total_tickets;
 
   const ticketNumbers = Array.from(
     { length: Math.max(endNumber - startNumber + 1, 0) },
-    (_, i) => startNumber + i,
+    (_, i) => startNumber + i
   );
 
   const soldSet = useMemo(
     () => new Set(sold.map((t) => `${t.colour}-${t.ticket_number}`)),
-    [sold],
+    [sold]
   );
 
   const reservedSet = useMemo(
     () => new Set(reserved.map((t) => `${t.colour}-${t.ticket_number}`)),
-    [reserved],
+    [reserved]
   );
 
   const selectedSet = useMemo(
     () => new Set(selectedTickets.map((t) => `${t.colour}-${t.ticket_number}`)),
-    [selectedTickets],
+    [selectedTickets]
   );
 
   const selectedColourLabel =
@@ -290,7 +296,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       const exists = prev.some(
         (ticket) =>
           ticket.ticket_number === ticketNumber &&
-          ticket.colour === selectedColour,
+          ticket.colour === selectedColour
       );
 
       if (exists) {
@@ -299,7 +305,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
             !(
               ticket.ticket_number === ticketNumber &&
               ticket.colour === selectedColour
-            ),
+            )
         );
       }
 
@@ -324,8 +330,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           !(
             t.ticket_number === ticket.ticket_number &&
             t.colour === ticket.colour
-          ),
-      ),
+          )
+      )
     );
   }
 
@@ -359,8 +365,10 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          tenantSlug: raffle.tenant_slug,
           buyerName: trimmedName,
           buyerEmail: trimmedEmail,
+          quantity: selectedTickets.length,
           selectedTickets,
         }),
       });
@@ -378,10 +386,11 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
       if (
         message.toLowerCase().includes("already reserved") ||
-        message.toLowerCase().includes("already sold")
+        message.toLowerCase().includes("already sold") ||
+        message.toLowerCase().includes("no longer available")
       ) {
         setError(
-          "Some selected tickets are no longer available. Please refresh and try again.",
+          "Some selected tickets are no longer available. Please refresh and try again."
         );
       } else {
         setError(message);
@@ -393,8 +402,8 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
   async function goToStripeCheckout() {
     try {
-      if (!success?.reservationToken || !success?.raffleId) {
-        throw new Error("Missing reservation details");
+      if (!success?.reservationToken) {
+        throw new Error("Missing reservation token");
       }
 
       setCheckoutLoading(true);
@@ -406,7 +415,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          raffleId: success.raffleId,
+          raffleId: raffle.id,
           reservationToken: success.reservationToken,
         }),
       });
@@ -463,7 +472,9 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           <h3>Offers</h3>
           <ul>
             {offers.map((offer) => (
-              <li key={offer.id || `${offer.label}-${offer.quantity}-${offer.price}`}>
+              <li
+                key={offer.id || `${offer.label}-${offer.quantity}-${offer.price}`}
+              >
                 {offer.label}
               </li>
             ))}
@@ -683,7 +694,13 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           <p>
             <strong>Reservation token:</strong> {success.reservationToken}
           </p>
-          <p>Your tickets are locked for 15 minutes.</p>
+          {success.expiresAt ? (
+            <p>
+              <strong>Reserved until:</strong> {success.expiresAt}
+            </p>
+          ) : (
+            <p>Your tickets are locked for 15 minutes.</p>
+          )}
           <p>
             <strong>Buyer:</strong> {buyerName} ({buyerEmail})
           </p>
