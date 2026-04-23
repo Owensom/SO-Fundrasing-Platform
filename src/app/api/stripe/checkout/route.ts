@@ -22,6 +22,7 @@ type ReservationRow = {
   expires_at: string;
   buyer_email: string | null;
   buyer_name: string | null;
+  status?: string | null;
 };
 
 type ReservationCountRow = {
@@ -41,17 +42,13 @@ type RaffleLike = {
     [key: string]: unknown;
   } | null;
   offers?: unknown;
-  tenant_slug?: string;
+  tenant_slug?: string | null;
 };
 
 function toMoneyCentsFromRaffle(raffle: RaffleLike): number {
   const centsRaw = raffle.ticket_price_cents;
 
-  if (
-    typeof centsRaw === "number" &&
-    Number.isFinite(centsRaw) &&
-    centsRaw > 0
-  ) {
+  if (typeof centsRaw === "number" && Number.isFinite(centsRaw) && centsRaw > 0) {
     return Math.round(centsRaw);
   }
 
@@ -66,11 +63,7 @@ function toMoneyCentsFromRaffle(raffle: RaffleLike): number {
 
   const priceRaw = raffle.ticket_price;
 
-  if (
-    typeof priceRaw === "number" &&
-    Number.isFinite(priceRaw) &&
-    priceRaw > 0
-  ) {
+  if (typeof priceRaw === "number" && Number.isFinite(priceRaw) && priceRaw > 0) {
     return Math.round(priceRaw * 100);
   }
 
@@ -109,6 +102,11 @@ export async function POST(request: NextRequest) {
         ? body.reservationToken.trim()
         : "";
 
+    console.log("STRIPE CHECKOUT INPUT", {
+      raffleId,
+      reservationToken,
+    });
+
     if (!raffleId || !reservationToken) {
       return NextResponse.json(
         { ok: false, error: "Missing raffleId or reservationToken." },
@@ -133,20 +131,30 @@ export async function POST(request: NextRequest) {
         reservation_token,
         expires_at,
         buyer_email,
-        buyer_name
+        buyer_name,
+        status
       from raffle_ticket_reservations
       where reservation_token = $1
         and raffle_id = $2
-        and status = 'reserved'
+        and expires_at > now()
       order by created_at asc
       limit 1
       `,
       [reservationToken, raffleId]
     );
 
+    console.log("STRIPE CHECKOUT RESERVATION", reservation);
+
     if (!reservation) {
       return NextResponse.json(
-        { ok: false, error: "Reservation not found." },
+        {
+          ok: false,
+          error: "Reservation not found.",
+          debug: {
+            raffleId,
+            reservationToken,
+          },
+        },
         { status: 404 }
       );
     }
@@ -164,7 +172,6 @@ export async function POST(request: NextRequest) {
       from raffle_ticket_reservations
       where reservation_token = $1
         and raffle_id = $2
-        and status = 'reserved'
         and expires_at > now()
       `,
       [reservationToken, raffleId]
