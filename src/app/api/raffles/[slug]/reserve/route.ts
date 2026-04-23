@@ -82,8 +82,17 @@ export async function POST(
       typeof body.buyerName === "string" ? body.buyerName.trim() : "";
     const buyerEmail =
       typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
-
     const slug = params.slug;
+
+    console.log("RESERVE INPUT", {
+      tenantSlug,
+      slug,
+      buyerName,
+      buyerEmail,
+      selectedTicketsCount: Array.isArray(body.selectedTickets)
+        ? body.selectedTickets.length
+        : 0,
+    });
 
     if (!tenantSlug || !slug) {
       return NextResponse.json(
@@ -107,6 +116,12 @@ export async function POST(
     }
 
     const raffle = await getRaffleBySlug(tenantSlug, slug);
+
+    console.log("RESERVE RAFFLE FOUND", {
+      raffleId: raffle?.id,
+      raffleSlug: raffle?.slug,
+      raffleStatus: raffle?.status,
+    });
 
     if (!raffle || raffle.status !== "published") {
       return NextResponse.json(
@@ -256,6 +271,14 @@ export async function POST(
         ]
       );
     }
+
+    console.log("RESERVE TOKEN CREATED", {
+      raffleId: raffle.id,
+      reservationGroupId,
+      reservationToken,
+      expiresAt: expiresAt.toISOString(),
+      selectedTicketsCount: selectedTickets.length,
+    });
 
     return NextResponse.json({
       ok: true,
