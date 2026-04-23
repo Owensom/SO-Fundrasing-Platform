@@ -73,6 +73,7 @@ type ReserveResponse = {
   raffleId?: string;
   expiresAt?: string;
   error?: string;
+  debug?: string;
 };
 
 type CheckoutResponse = {
@@ -390,6 +391,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
         reservationToken: data.reservationToken,
         raffleId: data.raffleId,
         expiresAt: data.expiresAt,
+        debug: data.debug,
       };
 
       console.log("FRONTEND TOKEN STORED", cleanSuccess.reservationToken);
@@ -722,6 +724,9 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           <p>
             <strong>Buyer:</strong> {buyerName} ({buyerEmail})
           </p>
+          {success.debug ? (
+            <p style={{ marginTop: 8, color: "#555" }}>{success.debug}</p>
+          ) : null}
           <p>
             <strong>Offer-adjusted total shown:</strong> {pricing.total.toFixed(2)}{" "}
             {raffle.currency}
