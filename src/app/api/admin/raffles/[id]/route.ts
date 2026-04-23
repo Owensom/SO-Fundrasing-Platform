@@ -126,10 +126,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       formData.get("ticket_price"),
       existing.ticket_price,
     );
-    const total_tickets = parseNumber(
-      formData.get("total_tickets"),
-      existing.total_tickets,
-    );
     const startNumber = parseNumber(
       formData.get("startNumber"),
       Number(
@@ -148,6 +144,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const colours = parseColours(String(formData.get("colours") ?? ""));
     const offers = parseOffers(String(formData.get("offers") ?? "[]"));
 
+    const numbersPerColour = colours.length > 0 && endNumber >= startNumber
+      ? endNumber - startNumber + 1
+      : Number(
+          (existing.config_json as Record<string, unknown> | undefined)
+            ?.numbersPerColour ?? 0,
+        );
+
+    const colourCount = colours.length;
+    const total_tickets = numbersPerColour * colourCount;
+
     const updated = await updateRaffle(id, {
       tenant_slug: tenantSlug,
       title: title || existing.title,
@@ -161,14 +167,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       status: status as "draft" | "published" | "closed" | "drawn",
       startNumber,
       endNumber,
-      numbersPerColour:
-        colours.length > 0 && endNumber >= startNumber
-          ? endNumber - startNumber + 1
-          : Number(
-              (existing.config_json as Record<string, unknown> | undefined)
-                ?.numbersPerColour ?? 0,
-            ),
-      colourCount: colours.length,
+      numbersPerColour,
+      colourCount,
       colours,
       offers,
       sold:
@@ -231,6 +231,30 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const config = (existing.config_json ?? {}) as Record<string, unknown>;
 
+    const colours = Array.isArray(body?.colours)
+      ? body.colours
+      : Array.isArray(config.colours)
+        ? (config.colours as string[])
+        : [];
+
+    const startNumber =
+      body?.startNumber != null
+        ? Number(body.startNumber)
+        : Number(config.startNumber ?? 0);
+
+    const endNumber =
+      body?.endNumber != null
+        ? Number(body.endNumber)
+        : Number(config.endNumber ?? 0);
+
+    const numbersPerColour =
+      colours.length > 0 && endNumber >= startNumber
+        ? endNumber - startNumber + 1
+        : 0;
+
+    const colourCount = colours.length;
+    const total_tickets = numbersPerColour * colourCount;
+
     const updated = await updateRaffle(id, {
       tenant_slug: tenantSlug,
       title: String(body?.title ?? existing.title),
@@ -242,36 +266,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         body?.ticket_price != null
           ? Number(body.ticket_price)
           : Number(existing.ticket_price),
-      total_tickets:
-        body?.total_tickets != null
-          ? Number(body.total_tickets)
-          : Number(existing.total_tickets),
+      total_tickets,
       sold_tickets:
         body?.sold_tickets != null
           ? Number(body.sold_tickets)
           : Number(existing.sold_tickets),
       status: body?.status ?? existing.status,
-      startNumber:
-        body?.startNumber != null
-          ? Number(body.startNumber)
-          : Number(config.startNumber ?? 0),
-      endNumber:
-        body?.endNumber != null
-          ? Number(body.endNumber)
-          : Number(config.endNumber ?? 0),
-      numbersPerColour:
-        body?.numbersPerColour != null
-          ? Number(body.numbersPerColour)
-          : Number(config.numbersPerColour ?? 0),
-      colourCount:
-        body?.colourCount != null
-          ? Number(body.colourCount)
-          : Number(config.colourCount ?? 0),
-      colours: Array.isArray(body?.colours)
-        ? body.colours
-        : Array.isArray(config.colours)
-          ? (config.colours as string[])
-          : [],
+      startNumber,
+      endNumber,
+      numbersPerColour,
+      colourCount,
+      colours,
       offers: Array.isArray(body?.offers)
         ? body.offers
         : Array.isArray(config.offers)
