@@ -6,6 +6,11 @@ type Props = {
   slug: string;
 };
 
+type TicketSelection = {
+  colour: string;
+  number: number;
+};
+
 type RaffleColour = {
   id: string;
   name: string;
@@ -135,6 +140,20 @@ function toSafeRaffle(input: any): SafeRaffle {
   };
 }
 
+function bestPrice(quantity: number, ticketPrice: number, offers: RaffleOffer[]) {
+  const activeOffers = offers.filter((o) => o.isActive && o.quantity > 0 && o.price > 0);
+  let bestTotal = quantity * ticketPrice;
+
+  for (const offer of activeOffers) {
+    const bundles = Math.floor(quantity / offer.quantity);
+    const remainder = quantity % offer.quantity;
+    const total = bundles * offer.price + remainder * ticketPrice;
+    if (total < bestTotal) bestTotal = total;
+  }
+
+  return { quantity, total: bestTotal };
+}
+
 function renderColourLabel(colour: RaffleColour) {
   if (colour.hex) {
     return (
@@ -160,8 +179,13 @@ function renderColourLabel(colour: RaffleColour) {
 export default function PublicRafflePage({ slug }: Props) {
   const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [selectedColour, setSelectedColour] = useState("");
+  const [basket, setBasket] = useState<TicketSelection[]>([]);
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [reservationMessage, setReservationMessage] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -172,6 +196,7 @@ export default function PublicRafflePage({ slug }: Props) {
       try {
         setLoading(true);
         setError("");
+        setReservationMessage("");
 
         const response = await fetch(`/api/raffles/${encodeURIComponent(slug)}`);
         const text = await response.text();
@@ -228,6 +253,11 @@ export default function PublicRafflePage({ slug }: Props) {
     return { sold, reserved };
   }, [raffle]);
 
+  const basketKeys = useMemo(
+    () => new Set(basket.map((t) => makeTicketKey(t.colour, t.number))),
+    [basket]
+  );
+
   const visibleNumbers = useMemo(() => {
     if (!raffle) return [];
     if (!Number.isFinite(raffle.startNumber) || !Number.isFinite(raffle.endNumber)) return [];
@@ -244,6 +274,93 @@ export default function PublicRafflePage({ slug }: Props) {
   const isClosed = raffle?.status === "closed";
   const isDrawn = raffle?.status === "drawn";
   const isDraft = raffle?.status === "draft";
+  const canReserve = Boolean(raffle && isPublished);
+
+  const pricing = useMemo(() => {
+    if (!raffle) return { quantity: 0, total: 0 };
+    return bestPrice(basket.length, raffle.ticketPrice, isPublished ? raffle.offers : []);
+  }, [basket.length, raffle, isPublished]);
+
+  function toggleTicket(number: number) {
+    if (!raffle || !selectedColour || !canReserve) return;
+
+    const key = makeTicketKey(selectedColour, number);
+    if (availability.sold.has(key) || availability.reserved.has(key)) return;
+
+    setBasket((current) => {
+      const exists = current.some(
+        (ticket) => ticket.colour === selectedColour && ticket.number === number
+      );
+
+      if (exists) {
+        return current.filter(
+          (ticket) => !(ticket.colour === selectedColour && ticket.number === number)
+        );
+      }
+
+      return [...current, { colour: selectedColour, number }].sort((a, b) => {
+        if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
+        return a.number - b.number;
+      });
+    });
+  }
+
+  function removeFromBasket(ticket: TicketSelection) {
+    setBasket((current) =>
+      current.filter(
+        (item) => !(item.colour === ticket.colour && item.number === ticket.number)
+      )
+    );
+  }
+
+  async function reserveTickets() {
+    if (!raffle || !canReserve) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      setReservationMessage("");
+
+      if (!buyerName.trim()) throw new Error("Please enter your name.");
+      if (!buyerEmail.trim()) throw new Error("Please enter your email.");
+      if (basket.length === 0) throw new Error("Please select at least one ticket.");
+
+      const response = await fetch(
+        `/api/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantSlug: raffle.tenantSlug,
+            quantity: basket.length,
+            selectedTickets: basket,
+            buyerName: buyerName.trim(),
+            buyerEmail: buyerEmail.trim(),
+          }),
+        }
+      );
+
+      const text = await response.text();
+
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`Reserve API did not return JSON: ${text.slice(0, 120)}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(parsed?.error || "Reserve failed");
+      }
+
+      setReservationMessage(`Reserved until ${parsed?.expiresAt ?? ""}`);
+      setBasket([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reserve failed");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
@@ -276,72 +393,127 @@ export default function PublicRafflePage({ slug }: Props) {
           </div>
         ) : null}
 
-        {isDraft ? (
-          <div style={styles.notice}>This raffle is not published yet.</div>
-        ) : null}
+        {isDraft ? <div style={styles.notice}>This raffle is not published yet.</div> : null}
 
-        {isPublished ? (
-          <div style={styles.notice}>This raffle is open.</div>
-        ) : null}
-
-        <h2 style={styles.heading}>Colours</h2>
+        <h2 style={styles.heading}>Choose colour</h2>
         <div style={styles.colourRow}>
-          {raffle.colours.map((colour) => (
-            <button
-              key={colour.id}
-              type="button"
-              onClick={() => setSelectedColour(colour.name)}
-              style={{
-                ...styles.colourButton,
-                background: selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
-                color: selectedColour === colour.name ? "#ffffff" : "#111827",
-              }}
-            >
-              {renderColourLabel(colour)}
-            </button>
-          ))}
+          {raffle.colours.length === 0 ? (
+            <div style={styles.notice}>No colours configured.</div>
+          ) : (
+            raffle.colours.map((colour) => (
+              <button
+                key={colour.id}
+                type="button"
+                onClick={() => setSelectedColour(colour.name)}
+                disabled={!canReserve}
+                style={{
+                  ...styles.colourButton,
+                  background: selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
+                  color: selectedColour === colour.name ? "#ffffff" : "#111827",
+                  opacity: canReserve ? 1 : 0.7,
+                  cursor: canReserve ? "pointer" : "not-allowed",
+                }}
+              >
+                {renderColourLabel(colour)}
+              </button>
+            ))
+          )}
         </div>
 
-        <h2 style={styles.heading}>Offers</h2>
-        {raffle.offers.length === 0 ? (
-          <div style={styles.notice}>No offers configured.</div>
+        <h2 style={styles.heading}>Choose numbers</h2>
+        {selectedColour ? (
+          <div style={styles.numberGrid}>
+            {visibleNumbers.map((number) => {
+              const key = makeTicketKey(selectedColour, number);
+              const isSold = availability.sold.has(key);
+              const isReserved = availability.reserved.has(key);
+              const isSelected = basketKeys.has(key);
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleTicket(number)}
+                  disabled={isSold || isReserved || !canReserve}
+                  style={{
+                    ...styles.numberButton,
+                    background: isSelected
+                      ? "#2563eb"
+                      : isSold
+                        ? "#111827"
+                        : isReserved
+                          ? "#f59e0b"
+                          : "#ffffff",
+                    color: isSelected || isSold || isReserved ? "#ffffff" : "#111827",
+                    opacity: canReserve ? 1 : 0.7,
+                    cursor: isSold || isReserved || !canReserve ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {number}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={styles.notice}>Select a colour to view available numbers.</div>
+        )}
+
+        <h2 style={styles.heading}>Basket</h2>
+        {basket.length === 0 ? (
+          <div style={styles.notice}>No tickets selected yet.</div>
         ) : (
           <div style={styles.basket}>
-            {raffle.offers.map((offer) => (
-              <div key={offer.id} style={styles.basketRow}>
+            {basket.map((ticket) => (
+              <div key={makeTicketKey(ticket.colour, ticket.number)} style={styles.basketRow}>
                 <span>
-                  {offer.label} — {offer.quantity} tickets
+                  {ticket.colour} #{ticket.number}
                 </span>
-                <span>{formatCurrency(offer.price, raffle.currency)}</span>
+                <button type="button" onClick={() => removeFromBasket(ticket)} style={styles.removeButton}>
+                  Remove
+                </button>
               </div>
             ))}
           </div>
         )}
 
-        <h2 style={styles.heading}>Numbers for {selectedColour || "selected colour"}</h2>
-        <div style={styles.numberGrid}>
-          {visibleNumbers.map((number) => {
-            const key = makeTicketKey(selectedColour, number);
-            const isSold = availability.sold.has(key);
-            const isReserved = availability.reserved.has(key);
-
-            return (
-              <div
-                key={key}
-                style={{
-                  ...styles.numberButton,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: isSold ? "#111827" : isReserved ? "#f59e0b" : "#ffffff",
-                  color: isSold || isReserved ? "#ffffff" : "#111827",
-                }}
-              >
-                {number}
-              </div>
-            );
-          })}
+        <div style={styles.totalBox}>
+          <div>Tickets: {pricing.quantity}</div>
+          <div>Total: {formatCurrency(pricing.total, raffle.currency)}</div>
         </div>
+
+        <h2 style={styles.heading}>Your details</h2>
+        <div style={styles.form}>
+          <input
+            value={buyerName}
+            onChange={(e) => setBuyerName(e.target.value)}
+            placeholder="Your name"
+            style={styles.input}
+            disabled={!canReserve}
+          />
+          <input
+            value={buyerEmail}
+            onChange={(e) => setBuyerEmail(e.target.value)}
+            placeholder="Your email"
+            type="email"
+            style={styles.input}
+            disabled={!canReserve}
+          />
+          <button
+            type="button"
+            onClick={reserveTickets}
+            disabled={saving || basket.length === 0 || !canReserve}
+            style={{
+              ...styles.primaryButton,
+              opacity: saving || basket.length === 0 || !canReserve ? 0.6 : 1,
+              cursor: saving || basket.length === 0 || !canReserve ? "not-allowed" : "pointer",
+            }}
+          >
+            {saving ? "Reserving..." : "Reserve tickets"}
+          </button>
+        </div>
+
+        {reservationMessage ? <div style={styles.success}>{reservationMessage}</div> : null}
+        {error ? <div style={styles.error}>{error}</div> : null}
       </div>
     </div>
   );
@@ -378,7 +550,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     padding: "10px 16px",
     fontWeight: 700,
-    cursor: "pointer",
   },
   numberGrid: {
     display: "grid",
@@ -403,6 +574,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 10,
   },
+  removeButton: {
+    border: "none",
+    background: "transparent",
+    color: "#dc2626",
+    fontWeight: 700,
+  },
   totalBox: {
     marginTop: 20,
     padding: 14,
@@ -413,13 +590,33 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
     fontWeight: 700,
   },
+  form: {
+    display: "grid",
+    gap: 12,
+    marginTop: 24,
+  },
+  input: {
+    height: 44,
+    padding: "0 12px",
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    fontSize: 16,
+  },
+  primaryButton: {
+    height: 48,
+    border: "none",
+    borderRadius: 10,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 700,
+    fontSize: 16,
+  },
   notice: {
     padding: 12,
     borderRadius: 10,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     color: "#475569",
-    marginTop: 16,
   },
   noticeDark: {
     padding: 12,
@@ -436,5 +633,13 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ecfdf5",
     border: "1px solid #bbf7d0",
     color: "#166534",
+  },
+  error: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
   },
 };
