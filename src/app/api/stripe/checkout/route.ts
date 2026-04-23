@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRaffleById } from "@/lib/raffles";
-import { queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { getBestPriceForQuantity, normalizeOffers } from "@/lib/pricing";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -114,8 +114,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Trust the reservation token first. This matches your working by-reservation route.
-    const reservation = await queryOne<ReservationRow>(
+    const reservations = await query<ReservationRow>(
       `
       select
         id,
@@ -127,16 +126,14 @@ export async function POST(request: NextRequest) {
         status
       from raffle_ticket_reservations
       where reservation_token = $1
-        and expires_at > now()
       order by created_at asc
-      limit 1
       `,
       [reservationToken]
     );
 
-    console.log("STRIPE CHECKOUT RESERVATION", reservation);
+    console.log("ALL RESERVATIONS FOUND", reservations);
 
-    if (!reservation) {
+    if (!reservations.length) {
       return NextResponse.json(
         {
           ok: false,
@@ -150,7 +147,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (new Date(reservation.expires_at).getTime() < Date.now()) {
+    const reservation =
+      reservations.find(
+        (row) => new Date(row.expires_at).getTime() > Date.now()
+      ) ?? null;
+
+    if (!reservation) {
       return NextResponse.json(
         { ok: false, error: "Reservation expired." },
         { status: 400 }
