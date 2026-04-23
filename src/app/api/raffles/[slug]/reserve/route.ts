@@ -3,8 +3,13 @@ import crypto from "crypto";
 import { query } from "@/lib/db";
 import { getRaffleBySlug } from "../../../../../../api/_lib/raffles-repo";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type ReserveBody = {
   tenantSlug?: string;
+  buyerName?: string;
+  buyerEmail?: string;
   quantity?: number;
   selectedTickets?: Array<{
     number?: number;
@@ -18,6 +23,10 @@ type ReservedOrSoldRow = {
   colour: string | null;
 };
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function normalizeSelectedTickets(
   value: unknown
 ): Array<{ ticket_number: number; colour: string | null }> {
@@ -29,9 +38,7 @@ function normalizeSelectedTickets(
 
       const row = item as Record<string, unknown>;
 
-      const ticketNumber = Number(
-        row.ticket_number ?? row.number ?? null
-      );
+      const ticketNumber = Number(row.ticket_number ?? row.number ?? null);
 
       const colour =
         typeof row.colour === "string" && row.colour.trim()
@@ -71,12 +78,30 @@ export async function POST(
 
     const tenantSlug =
       typeof body.tenantSlug === "string" ? body.tenantSlug.trim() : "";
+    const buyerName =
+      typeof body.buyerName === "string" ? body.buyerName.trim() : "";
+    const buyerEmail =
+      typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
 
     const slug = params.slug;
 
     if (!tenantSlug || !slug) {
       return NextResponse.json(
         { ok: false, error: "Missing tenant or raffle slug." },
+        { status: 400 }
+      );
+    }
+
+    if (!buyerName || !buyerEmail) {
+      return NextResponse.json(
+        { ok: false, error: "Name and email are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEmail(buyerEmail)) {
+      return NextResponse.json(
+        { ok: false, error: "Enter a valid email address." },
         { status: 400 }
       );
     }
@@ -137,8 +162,6 @@ export async function POST(
       );
     }
 
-    // ===== CHECK AVAILABILITY =====
-
     if (selectedTickets.length > 0) {
       const valuesSql = selectedTickets
         .map((_, index) => {
@@ -172,10 +195,7 @@ export async function POST(
         `,
         [
           raffle.id,
-          ...selectedTickets.flatMap((t) => [
-            t.ticket_number,
-            t.colour,
-          ]),
+          ...selectedTickets.flatMap((t) => [t.ticket_number, t.colour]),
         ]
       );
 
@@ -190,13 +210,9 @@ export async function POST(
       }
     }
 
-    // ===== CREATE RESERVATION =====
-
     const reservationGroupId = crypto.randomUUID();
-
     const reservationToken = crypto.randomUUID();
-
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     for (const ticket of selectedTickets) {
       await query(
@@ -208,6 +224,8 @@ export async function POST(
           reservation_token,
           ticket_number,
           colour,
+          buyer_name,
+          buyer_email,
           status,
           expires_at,
           created_at
@@ -219,8 +237,10 @@ export async function POST(
           $3,
           $4,
           $5,
-          'reserved',
           $6,
+          $7,
+          'reserved',
+          $8,
           now()
         )
         `,
@@ -230,6 +250,8 @@ export async function POST(
           reservationToken,
           ticket.ticket_number,
           ticket.colour,
+          buyerName,
+          buyerEmail,
           expiresAt,
         ]
       );
@@ -238,7 +260,7 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       reservationToken,
-      expiresAt,
+      expiresAt: expiresAt.toISOString(),
       raffleId: raffle.id,
     });
   } catch (error) {
