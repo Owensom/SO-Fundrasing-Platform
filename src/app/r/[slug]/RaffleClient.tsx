@@ -153,8 +153,8 @@ function normaliseColours(colours?: RawColour[]): NormalisedColour[] {
         "Default";
 
       return {
-        value,
-        label,
+        value: String(value),
+        label: String(label),
         hex: colour.hex,
       };
     })
@@ -272,11 +272,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     [reserved]
   );
 
-  const selectedSet = useMemo(
-    () => new Set(selectedTickets.map((t) => `${t.colour}-${t.ticket_number}`)),
-    [selectedTickets]
-  );
-
   const selectedColourLabel =
     colourOptions.find((c) => c.value === selectedColour)?.label ||
     selectedColour;
@@ -287,6 +282,12 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     return calculateOfferTotal(selectedTickets.length, ticketPrice, offers);
   }, [selectedTickets.length, ticketPrice, offers]);
 
+  function isTicketSelected(ticketNumber: number, colour: string) {
+    return selectedTickets.some(
+      (t) => t.ticket_number === ticketNumber && t.colour === colour
+    );
+  }
+
   function toggleTicket(ticketNumber: number) {
     if (isLocked) return;
 
@@ -295,18 +296,13 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
     setSelectedTickets((prev) => {
       const exists = prev.some(
-        (ticket) =>
-          ticket.ticket_number === ticketNumber &&
-          ticket.colour === selectedColour
+        (t) => t.ticket_number === ticketNumber && t.colour === selectedColour
       );
 
       if (exists) {
         return prev.filter(
-          (ticket) =>
-            !(
-              ticket.ticket_number === ticketNumber &&
-              ticket.colour === selectedColour
-            )
+          (t) =>
+            !(t.ticket_number === ticketNumber && t.colour === selectedColour)
         );
       }
 
@@ -356,7 +352,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       }
 
       if (selectedTickets.length === 0) {
-        setError("Please select at least one ticket");
+        setError("No tickets selected.");
         return;
       }
 
@@ -364,11 +360,13 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
         tenantSlug: raffle.tenant_slug,
         buyerName: trimmedName,
         buyerEmail: trimmedEmail,
-        quantity: selectedTickets.length,
-        selectedTickets,
+        selectedTickets: selectedTickets.map((t) => ({
+          ticket_number: t.ticket_number,
+          colour: t.colour,
+        })),
       };
 
-      console.log("FRONTEND RESERVE REQUEST", requestBody);
+      console.log("SENDING TICKETS", requestBody.selectedTickets);
 
       const response = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
         method: "POST",
@@ -380,38 +378,21 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
       const data = (await response.json()) as ReserveResponse;
 
-      console.log("FRONTEND RESERVE RESPONSE", data);
-
       if (!response.ok || !data.ok) {
         throw new Error(data.error || "Failed to reserve tickets");
       }
 
-      const cleanSuccess: ReserveResponse = {
+      setSuccess({
         ok: true,
         reservationToken: data.reservationToken,
         raffleId: data.raffleId,
         expiresAt: data.expiresAt,
         debug: data.debug,
-      };
-
-      console.log("FRONTEND TOKEN STORED", cleanSuccess.reservationToken);
-
-      setSuccess(cleanSuccess);
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Reservation failed";
-
-      if (
-        message.toLowerCase().includes("already reserved") ||
-        message.toLowerCase().includes("already sold") ||
-        message.toLowerCase().includes("no longer available")
-      ) {
-        setError(
-          "Some selected tickets are no longer available. Please refresh and try again."
-        );
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -422,11 +403,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       if (!success?.reservationToken || !success?.raffleId) {
         throw new Error("Missing reservation details");
       }
-
-      console.log("FRONTEND TOKEN BEFORE CHECKOUT", {
-        reservationToken: success.reservationToken,
-        raffleId: success.raffleId,
-      });
 
       setCheckoutLoading(true);
       setError("");
@@ -443,8 +419,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
       });
 
       const data = (await response.json()) as CheckoutResponse;
-
-      console.log("FRONTEND CHECKOUT RESPONSE", data);
 
       if (!response.ok || !data.ok || !data.url) {
         throw new Error(data.error || "Failed to create Stripe Checkout");
@@ -576,7 +550,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           const isSold = soldSet.has(key);
           const isReserved = reservedSet.has(key);
           const isUnavailable = isSold || isReserved;
-          const isSelected = selectedSet.has(key);
+          const isSelected = isTicketSelected(number, selectedColour);
 
           return (
             <button
