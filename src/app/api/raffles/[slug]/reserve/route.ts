@@ -1,297 +1,121 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { query, queryOne } from "@/lib/db";
-import { getRaffleBySlug } from "../../../../../../api/_lib/raffles-repo";
+import { query } from "@/lib/db";
+import { getRaffleBySlug } from "@/lib/raffles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type ReserveBody = {
-  tenantSlug?: string;
-  buyerName?: string;
-  buyerEmail?: string;
-  quantity?: number;
-  selectedTickets?: Array<{
-    number?: number;
-    ticket_number?: number;
-    colour?: string | null;
-  }>;
-};
-
-type ReservedOrSoldRow = {
-  ticket_number: number;
-  colour: string | null;
-};
-
-type CountRow = {
-  count: string | number;
-};
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function normalizeSelectedTickets(
-  value: unknown
-): Array<{ ticket_number: number; colour: string | null }> {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-
-      const row = item as Record<string, unknown>;
-      const ticketNumber = Number(row.ticket_number ?? row.number ?? null);
-      const colour =
-        typeof row.colour === "string" && row.colour.trim()
-          ? row.colour.trim()
-          : null;
-
-      if (!Number.isInteger(ticketNumber)) return null;
-
-      return {
-        ticket_number: ticketNumber,
-        colour,
-      };
-    })
-    .filter(Boolean) as Array<{ ticket_number: number; colour: string | null }>;
-}
-
-function hasDuplicateTickets(
-  tickets: Array<{ ticket_number: number; colour: string | null }>
-) {
-  const seen = new Set<string>();
-
-  for (const ticket of tickets) {
-    const key = `${ticket.ticket_number}::${ticket.colour ?? ""}`;
-    if (seen.has(key)) return true;
-    seen.add(key);
-  }
-
-  return false;
-}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const body = (await request.json()) as ReserveBody;
+    const body = await request.json();
 
-    const tenantSlug =
-      typeof body.tenantSlug === "string" ? body.tenantSlug.trim() : "";
-    const buyerName =
-      typeof body.buyerName === "string" ? body.buyerName.trim() : "";
-    const buyerEmail =
-      typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
-    const slug = params.slug;
+    const tenantSlug = String(body.tenantSlug || "").trim();
+    const buyerName = String(body.buyerName || "").trim();
+    const buyerEmail = String(body.buyerEmail || "").trim();
+    const selectedTickets = Array.isArray(body.selectedTickets)
+      ? body.selectedTickets
+      : [];
 
-    if (!tenantSlug || !slug) {
+    console.log("RESERVE INPUT", {
+      tenantSlug,
+      slug: params.slug,
+      buyerName,
+      buyerEmail,
+      selectedTickets,
+    });
+
+    if (!tenantSlug || !params.slug) {
       return NextResponse.json(
-        { ok: false, error: "Missing tenant or raffle slug." },
+        { ok: false, error: "Missing tenant or slug" },
         { status: 400 }
       );
     }
 
-    if (!buyerName || !buyerEmail) {
+    if (!selectedTickets.length) {
       return NextResponse.json(
-        { ok: false, error: "Name and email are required." },
+        { ok: false, error: "No tickets selected" },
         { status: 400 }
       );
     }
 
-    if (!isValidEmail(buyerEmail)) {
+    const raffle = await getRaffleBySlug(tenantSlug, params.slug);
+
+    if (!raffle) {
       return NextResponse.json(
-        { ok: false, error: "Enter a valid email address." },
-        { status: 400 }
+        { ok: false, error: "Raffle not found" },
+        { status: 404 }
       );
     }
 
-    const raffle = await getRaffleBySlug(tenantSlug, slug);
+    const reservationToken = crypto.randomUUID();
+    const reservationGroupId = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    if (!raffle || raffle.status !== "published") {
-      return NextResponse.json(
-        { ok: false, error: "This raffle is not open for reservations." },
-        { status: 400 }
-      );
-    }
+    let inserted = 0;
 
-    const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
-    const quantity =
-      typeof body.quantity === "number"
-        ? Math.max(0, Math.floor(body.quantity))
-        : 0;
+    for (const t of selectedTickets) {
+      const ticketNumber = Number(t.ticket_number);
+      const colour = t.colour || null;
 
-    if (selectedTickets.length === 0 && quantity <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "No tickets selected." },
-        { status: 400 }
-      );
-    }
+      if (!Number.isInteger(ticketNumber)) continue;
 
-    if (selectedTickets.length > 0 && hasDuplicateTickets(selectedTickets)) {
-      return NextResponse.json(
-        { ok: false, error: "Duplicate tickets selected." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      selectedTickets.length > 0 &&
-      quantity > 0 &&
-      selectedTickets.length !== quantity
-    ) {
-      return NextResponse.json(
-        { ok: false, error: "Selected ticket count does not match quantity." },
-        { status: 400 }
-      );
-    }
-
-    const requestedQuantity =
-      selectedTickets.length > 0 ? selectedTickets.length : quantity;
-
-    const remainingTickets = Math.max(
-      Number(raffle.total_tickets) - Number(raffle.sold_tickets),
-      0
-    );
-
-    if (requestedQuantity > remainingTickets) {
-      return NextResponse.json(
-        { ok: false, error: "Not enough tickets remaining." },
-        { status: 400 }
-      );
-    }
-
-    if (selectedTickets.length > 0) {
-      const valuesSql = selectedTickets
-        .map((_, index) => {
-          const base = index * 2;
-          return `($${base + 2}, $${base + 3})`;
-        })
-        .join(", ");
-
-      const soldOrReserved = await query<ReservedOrSoldRow>(
-        `
-        with requested(ticket_number, colour) as (
-          values ${valuesSql}
-        )
-        select ticket_number, colour
-        from (
-          select ticket_number, colour
-          from raffle_ticket_reservations
-          where raffle_id = $1
-            and status = 'reserved'
-            and expires_at > now()
-
-          union all
-
-          select ticket_number, colour
-          from raffle_ticket_sales
-          where raffle_id = $1
-        ) taken
-        inner join requested req
-          on req.ticket_number = taken.ticket_number
-         and coalesce(req.colour, '') = coalesce(taken.colour, '')
-        `,
-        [
-          raffle.id,
-          ...selectedTickets.flatMap((t) => [t.ticket_number, t.colour]),
-        ]
-      );
-
-      if (soldOrReserved.length > 0) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "One or more selected tickets are no longer available.",
-          },
-          { status: 409 }
+      try {
+        await query(
+          `
+          insert into raffle_ticket_reservations (
+            id,
+            raffle_id,
+            reservation_group_id,
+            reservation_token,
+            ticket_number,
+            colour,
+            buyer_name,
+            buyer_email,
+            status,
+            expires_at,
+            created_at
+          )
+          values (
+            gen_random_uuid()::text,
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            'reserved',
+            $8,
+            now()
+          )
+          `,
+          [
+            raffle.id,
+            reservationGroupId,
+            reservationToken,
+            ticketNumber,
+            colour,
+            buyerName,
+            buyerEmail,
+            expiresAt,
+          ]
         );
+
+        inserted++;
+      } catch (err) {
+        console.error("INSERT FAILED", err);
       }
     }
 
-    const reservationGroupId = crypto.randomUUID();
-    const reservationToken = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    console.log("RESERVE RESULT", { inserted });
 
-    for (const ticket of selectedTickets) {
-      await query(
-        `
-        insert into raffle_ticket_reservations (
-          id,
-          raffle_id,
-          reservation_group_id,
-          reservation_token,
-          ticket_number,
-          colour,
-          buyer_name,
-          buyer_email,
-          status,
-          expires_at,
-          created_at
-        )
-        values (
-          gen_random_uuid()::text,
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          'reserved',
-          $8,
-          now()
-        )
-        `,
-        [
-          raffle.id,
-          reservationGroupId,
-          reservationToken,
-          ticket.ticket_number,
-          ticket.colour,
-          buyerName,
-          buyerEmail,
-          expiresAt,
-        ]
-      );
-    }
-
-    const verifiedCountRow = await queryOne<CountRow>(
-      `
-      select count(*)::int as count
-      from raffle_ticket_reservations
-      where reservation_token = $1
-        and raffle_id = $2
-      `,
-      [reservationToken, raffle.id]
-    );
-
-    const verifiedCount = Number(verifiedCountRow?.count ?? 0);
-
-    const latestRow = await queryOne<{
-      reservation_token: string;
-      raffle_id: string;
-      created_at: string;
-    }>(
-      `
-      select reservation_token, raffle_id, created_at
-      from raffle_ticket_reservations
-      order by created_at desc
-      limit 1
-      `
-    );
-
-    if (!Number.isFinite(verifiedCount) || verifiedCount !== selectedTickets.length) {
+    if (inserted === 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            `Reserve verification failed | raffleId=${raffle.id} | token=${reservationToken} | expected=${selectedTickets.length} | actual=${verifiedCount}` +
-            (latestRow
-              ? ` | latest raffleId=${latestRow.raffle_id} | latest token=${latestRow.reservation_token}`
-              : ""),
-        },
+        { ok: false, error: "Failed to reserve tickets" },
         { status: 500 }
       );
     }
@@ -299,19 +123,14 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       reservationToken,
-      expiresAt: expiresAt.toISOString(),
       raffleId: raffle.id,
-      debug:
-        `Reserve verified | raffleId=${raffle.id} | token=${reservationToken} | count=${verifiedCount}` +
-        (latestRow
-          ? ` | latest raffleId=${latestRow.raffle_id} | latest token=${latestRow.reservation_token}`
-          : ""),
+      expiresAt,
     });
-  } catch (error: any) {
-    console.error("raffle reserve error", error);
+  } catch (err) {
+    console.error("RESERVE ERROR", err);
 
     return NextResponse.json(
-      { ok: false, error: error?.message || "Internal server error." },
+      { ok: false, error: "Server error" },
       { status: 500 }
     );
   }
