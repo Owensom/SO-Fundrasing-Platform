@@ -76,10 +76,6 @@ export async function sendReceiptEmail(params: {
   });
 }
 
-//
-// 🎯 WINNER EMAIL
-//
-
 export async function sendWinnerEmail(params: {
   to: string;
   name?: string | null;
@@ -100,9 +96,7 @@ export async function sendWinnerEmail(params: {
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
       <h2 style="margin-top:0;color:#16a34a;">🎉 You won!</h2>
-
       <p>Hi ${name || "there"},</p>
-
       <p>Congratulations — you are the winner of:</p>
 
       <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:20px 0;">
@@ -111,11 +105,7 @@ export async function sendWinnerEmail(params: {
         <p><strong>Colour:</strong> ${colour || "Default"}</p>
       </div>
 
-      <p>
-        The organiser will contact you shortly with details on how to claim your prize.
-      </p>
-
-      <p style="margin-top:24px;">🎊 Congratulations again and good luck in future draws!</p>
+      <p>The organiser will contact you shortly with details on how to claim your prize.</p>
 
       <p style="margin-top:24px;font-size:12px;color:#666;">
         This is an automated email notification.
