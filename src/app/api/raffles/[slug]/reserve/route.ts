@@ -33,11 +33,7 @@ function normalizeSelectedTickets(
       if (!item || typeof item !== "object") return null;
 
       const row = item as Record<string, unknown>;
-
-      const ticketNumber = Number(
-        row.ticket_number ?? row.number ?? null
-      );
-
+      const ticketNumber = Number(row.ticket_number ?? row.number ?? null);
       const colour =
         typeof row.colour === "string" && row.colour.trim()
           ? row.colour.trim()
@@ -76,13 +72,10 @@ export async function POST(
 
     const tenantSlug =
       typeof body.tenantSlug === "string" ? body.tenantSlug.trim() : "";
-
     const buyerName =
       typeof body.buyerName === "string" ? body.buyerName.trim() : "";
-
     const buyerEmail =
       typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
-
     const slug = params.slug;
 
     if (!tenantSlug || !slug) {
@@ -144,8 +137,6 @@ export async function POST(
       );
     }
 
-    // ===== CHECK AVAILABILITY =====
-
     if (selectedTickets.length > 0) {
       const valuesSql = selectedTickets
         .map((_, index) => {
@@ -179,10 +170,7 @@ export async function POST(
         `,
         [
           raffle.id,
-          ...selectedTickets.flatMap((t) => [
-            t.ticket_number,
-            t.colour,
-          ]),
+          ...selectedTickets.flatMap((t) => [t.ticket_number, t.colour]),
         ]
       );
 
@@ -196,8 +184,6 @@ export async function POST(
         );
       }
     }
-
-    // ===== CREATE RESERVATION =====
 
     const reservationGroupId = crypto.randomUUID();
     const reservationToken = crypto.randomUUID();
@@ -217,19 +203,21 @@ export async function POST(
           expires_at,
           buyer_name,
           buyer_email,
+          unit_price_cents,
           created_at
         )
         values (
           gen_random_uuid(),
           $1,
-          $2::uuid,
-          $3::uuid,
+          $2,
+          $3,
           $4,
           $5,
           'reserved',
           $6,
           $7,
           $8,
+          $9,
           now()
         )
         `,
@@ -242,6 +230,7 @@ export async function POST(
           expiresAt,
           buyerName,
           buyerEmail,
+          Math.round(Number(raffle.ticket_price ?? 0) * 100),
         ]
       );
     }
@@ -249,14 +238,17 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       reservationToken,
-      expiresAt,
+      expiresAt: expiresAt.toISOString(),
       raffleId: raffle.id,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("raffle reserve error", error);
 
     return NextResponse.json(
-      { ok: false, error: "Internal server error." },
+      {
+        ok: false,
+        error: error?.message || "Internal server error.",
+      },
       { status: 500 }
     );
   }
