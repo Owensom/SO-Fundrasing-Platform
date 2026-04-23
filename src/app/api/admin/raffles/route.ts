@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { listRaffles } from "../../../../../api/_lib/raffles-repo";
+import { createRaffle, listRaffles } from "../../../../../api/_lib/raffles-repo";
+
+function parseNumber(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback = 0,
+) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function parseColours(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseOffers(value: string) {
+  if (!value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function GET(request: NextRequest) {
   const tenantSlug = getTenantSlugFromRequest(request);
@@ -21,6 +47,86 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/admin/raffles failed", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const formData = await request.formData();
+
+    const title = String(formData.get("title") ?? "").trim();
+    const slug = String(formData.get("slug") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const image_url = String(formData.get("image_url") ?? "").trim();
+    const currency = String(formData.get("currency") ?? "EUR").trim();
+    const status = String(formData.get("status") ?? "draft").trim();
+
+    const ticket_price = parseNumber(formData.get("ticket_price"), 0);
+    const total_tickets = parseNumber(formData.get("total_tickets"), 0);
+    const startNumber = parseNumber(formData.get("startNumber"), 1);
+    const endNumber = parseNumber(formData.get("endNumber"), 1);
+
+    const colours = parseColours(String(formData.get("colours") ?? ""));
+    const offers = parseOffers(String(formData.get("offers") ?? "[]"));
+
+    if (!title) {
+      return NextResponse.json(
+        { ok: false, error: "Title is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!slug) {
+      return NextResponse.json(
+        { ok: false, error: "Slug is required" },
+        { status: 400 },
+      );
+    }
+
+    const raffle = await createRaffle({
+      tenant_slug: tenantSlug,
+      title,
+      slug,
+      description,
+      image_url,
+      currency: currency as "GBP" | "USD" | "EUR",
+      ticket_price,
+      total_tickets,
+      sold_tickets: 0,
+      status: status as "draft" | "published" | "closed" | "drawn",
+      startNumber,
+      endNumber,
+      numbersPerColour:
+        colours.length > 0 && endNumber >= startNumber
+          ? endNumber - startNumber + 1
+          : 0,
+      colourCount: colours.length,
+      colours,
+      offers,
+      sold: [],
+      reserved: [],
+    });
+
+    return NextResponse.redirect(
+      new URL(`/admin/raffles/${raffle.id}`, request.url),
+      { status: 303 },
+    );
+  } catch (error) {
+    console.error("POST /api/admin/raffles failed", error);
 
     return NextResponse.json(
       { ok: false, error: "Internal error" },
