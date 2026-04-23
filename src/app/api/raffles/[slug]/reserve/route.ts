@@ -192,6 +192,12 @@ export async function POST(
       `
       with requested(ticket_number, colour) as (
         values ${valuesSql}
+      ),
+      typed as (
+        select
+          ticket_number::int as ticket_number,
+          colour::text as colour
+        from requested
       )
       select taken.ticket_number, taken.colour
       from (
@@ -207,7 +213,7 @@ export async function POST(
         from raffle_ticket_sales rts
         where rts.raffle_id = $1
       ) taken
-      inner join requested req
+      inner join typed req
         on req.ticket_number = taken.ticket_number
        and coalesce(req.colour, '') = coalesce(taken.colour, '')
       `,
