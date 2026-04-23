@@ -1,734 +1,318 @@
-"use client";
+import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+import { query, queryOne } from "@/lib/db";
+import { getRaffleBySlug } from "../../../../../../api/_lib/raffles-repo";
 
-import { useMemo, useState } from "react";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-type TicketState = {
-  ticket_number: number;
-  colour: string;
-};
-
-type RaffleOffer = {
-  id?: string;
-  label: string;
-  price: number;
+type ReserveBody = {
+  tenantSlug?: string;
+  buyerName?: string;
+  buyerEmail?: string;
   quantity?: number;
-  tickets?: number;
-  is_active?: boolean;
-  sort_order?: number;
+  selectedTickets?: Array<{
+    number?: number;
+    ticket_number?: number;
+    colour?: string | null;
+  }>;
 };
 
-type RawColour =
-  | string
-  | {
-      id?: string;
-      value?: string;
-      name?: string;
-      label?: string;
-      hex?: string;
-    };
-
-type NormalisedColour = {
-  value: string;
-  label: string;
-  hex?: string;
-};
-
-type RaffleConfig = {
-  startNumber?: number;
-  endNumber?: number;
-  colours?: RawColour[];
-  offers?: RaffleOffer[];
-};
-
-type Raffle = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string;
-  image_url: string;
-  currency: string;
-  ticket_price?: number;
-  total_tickets: number;
-  sold_tickets: number;
-  remaining_tickets?: number;
-  status: string;
-  config_json?: RaffleConfig;
-};
-
-type Props = {
-  raffle: Raffle;
-  sold: TicketState[];
-  reserved: TicketState[];
-};
-
-type SelectedTicket = {
+type ReservedOrSoldRow = {
   ticket_number: number;
-  colour: string;
+  colour: string | null;
 };
 
-type ReserveResponse = {
-  ok: boolean;
-  reservationToken?: string;
-  raffleId?: string;
-  expiresAt?: string;
-  error?: string;
-  debug?: string;
-};
-
-type CheckoutResponse = {
-  ok: boolean;
-  url?: string;
-  error?: string;
+type CountRow = {
+  count: string | number;
 };
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function normaliseOffers(offers?: RaffleOffer[]) {
-  if (!Array.isArray(offers)) return [];
+function normalizeSelectedTickets(
+  value: unknown
+): Array<{ ticket_number: number; colour: string | null }> {
+  if (!Array.isArray(value)) return [];
 
-  return offers
-    .map((offer, index) => {
-      const quantity = Number(offer.quantity ?? offer.tickets ?? 0);
-      const price = Number(offer.price ?? 0);
-      const label = typeof offer.label === "string" ? offer.label : "";
-      const isActive = offer.is_active !== false;
-      const sortOrder = Number(offer.sort_order ?? index);
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
 
-      if (!label || !Number.isFinite(quantity) || quantity <= 0) return null;
-      if (!Number.isFinite(price) || price < 0) return null;
-      if (!isActive) return null;
+      const row = item as Record<string, unknown>;
+      const ticketNumber = Number(row.ticket_number ?? row.number ?? null);
+      const colour =
+        typeof row.colour === "string" && row.colour.trim()
+          ? row.colour.trim()
+          : null;
 
-      return {
-        id: offer.id,
-        label,
-        quantity,
-        price,
-        sort_order: sortOrder,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => {
-      if (b!.quantity !== a!.quantity) return b!.quantity - a!.quantity;
-      return a!.sort_order - b!.sort_order;
-    }) as Array<{
-    id?: string;
-    label: string;
-    quantity: number;
-    price: number;
-    sort_order: number;
-  }>;
-}
-
-function normaliseColours(colours?: RawColour[]): NormalisedColour[] {
-  if (!Array.isArray(colours) || colours.length === 0) {
-    return [{ value: "default", label: "Default" }];
-  }
-
-  const mapped = colours
-    .map((colour) => {
-      if (typeof colour === "string") {
-        return {
-          value: colour,
-          label: colour,
-        };
-      }
-
-      if (!colour || typeof colour !== "object") return null;
-
-      const value =
-        colour.value ||
-        colour.id ||
-        colour.name ||
-        colour.label ||
-        "default";
-
-      const label =
-        colour.name ||
-        colour.label ||
-        colour.value ||
-        colour.id ||
-        "Default";
+      if (!Number.isInteger(ticketNumber)) return null;
 
       return {
-        value,
-        label,
-        hex: colour.hex,
+        ticket_number: ticketNumber,
+        colour,
       };
     })
-    .filter(Boolean) as NormalisedColour[];
-
-  return mapped.length > 0
-    ? mapped
-    : [{ value: "default", label: "Default" }];
+    .filter(Boolean) as Array<{ ticket_number: number; colour: string | null }>;
 }
 
-function calculateOfferTotal(
-  selectedCount: number,
-  ticketPrice: number,
-  offers: Array<{ label: string; quantity: number; price: number }>
+function hasDuplicateTickets(
+  tickets: Array<{ ticket_number: number; colour: string | null }>
 ) {
-  if (selectedCount <= 0) {
-    return {
-      total: 0,
-      appliedOffers: [] as Array<{
-        label: string;
-        quantity: number;
-        price: number;
-        times: number;
-      }>,
-      fullPriceTotal: 0,
-      savings: 0,
-    };
+  const seen = new Set<string>();
+
+  for (const ticket of tickets) {
+    const key = `${ticket.ticket_number}::${ticket.colour ?? ""}`;
+    if (seen.has(key)) return true;
+    seen.add(key);
   }
 
-  let remaining = selectedCount;
-  let total = 0;
-  const appliedOffers: Array<{
-    label: string;
-    quantity: number;
-    price: number;
-    times: number;
-  }> = [];
-
-  for (const offer of offers) {
-    let times = 0;
-
-    while (remaining >= offer.quantity) {
-      total += offer.price;
-      remaining -= offer.quantity;
-      times += 1;
-    }
-
-    if (times > 0) {
-      appliedOffers.push({
-        label: offer.label,
-        quantity: offer.quantity,
-        price: offer.price,
-        times,
-      });
-    }
-  }
-
-  total += remaining * ticketPrice;
-
-  const fullPriceTotal = selectedCount * ticketPrice;
-  const savings = Math.max(fullPriceTotal - total, 0);
-
-  return {
-    total,
-    appliedOffers,
-    fullPriceTotal,
-    savings,
-  };
+  return false;
 }
 
-export default function RaffleClient({ raffle, sold, reserved }: Props) {
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
-  const [selectedTickets, setSelectedTickets] = useState<SelectedTicket[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState<ReserveResponse | null>(null);
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { slug: string } }
+) {
+  try {
+    const body = (await request.json()) as ReserveBody;
 
-  const colourOptions = useMemo(
-    () => normaliseColours(raffle.config_json?.colours),
-    [raffle.config_json?.colours]
-  );
+    const tenantSlug =
+      typeof body.tenantSlug === "string" ? body.tenantSlug.trim() : "";
+    const buyerName =
+      typeof body.buyerName === "string" ? body.buyerName.trim() : "";
+    const buyerEmail =
+      typeof body.buyerEmail === "string" ? body.buyerEmail.trim() : "";
+    const slug = params.slug;
 
-  const [selectedColour, setSelectedColour] = useState(
-    colourOptions[0]?.value || "default"
-  );
+    if (!tenantSlug || !slug) {
+      return NextResponse.json(
+        { ok: false, error: "Missing tenant or raffle slug." },
+        { status: 400 }
+      );
+    }
 
-  const isLocked = !!success?.ok;
+    if (!buyerName || !buyerEmail) {
+      return NextResponse.json(
+        { ok: false, error: "Name and email are required." },
+        { status: 400 }
+      );
+    }
 
-  const offers = useMemo(() => {
-    return normaliseOffers(raffle.config_json?.offers);
-  }, [raffle.config_json?.offers]);
+    if (!isValidEmail(buyerEmail)) {
+      return NextResponse.json(
+        { ok: false, error: "Enter a valid email address." },
+        { status: 400 }
+      );
+    }
 
-  const startNumber = Number(raffle.config_json?.startNumber || 1);
-  const endNumber =
-    Number(
-      raffle.config_json?.endNumber ||
-        raffle.total_tickets ||
-        startNumber + raffle.total_tickets - 1
-    ) || raffle.total_tickets;
+    const raffle = await getRaffleBySlug(tenantSlug, slug);
 
-  const ticketNumbers = Array.from(
-    { length: Math.max(endNumber - startNumber + 1, 0) },
-    (_, i) => startNumber + i
-  );
+    if (!raffle || raffle.status !== "published") {
+      return NextResponse.json(
+        { ok: false, error: "This raffle is not open for reservations." },
+        { status: 400 }
+      );
+    }
 
-  const soldSet = useMemo(
-    () => new Set(sold.map((t) => `${t.colour}-${t.ticket_number}`)),
-    [sold]
-  );
+    const selectedTickets = normalizeSelectedTickets(body.selectedTickets);
+    const quantity =
+      typeof body.quantity === "number"
+        ? Math.max(0, Math.floor(body.quantity))
+        : 0;
 
-  const reservedSet = useMemo(
-    () => new Set(reserved.map((t) => `${t.colour}-${t.ticket_number}`)),
-    [reserved]
-  );
+    if (selectedTickets.length === 0 && quantity <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "No tickets selected." },
+        { status: 400 }
+      );
+    }
 
-  const selectedColourLabel =
-    colourOptions.find((c) => c.value === selectedColour)?.label ||
-    selectedColour;
+    if (selectedTickets.length > 0 && hasDuplicateTickets(selectedTickets)) {
+      return NextResponse.json(
+        { ok: false, error: "Duplicate tickets selected." },
+        { status: 400 }
+      );
+    }
 
-  const ticketPrice = Number(raffle.ticket_price || 0);
+    if (
+      selectedTickets.length > 0 &&
+      quantity > 0 &&
+      selectedTickets.length !== quantity
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Selected ticket count does not match quantity." },
+        { status: 400 }
+      );
+    }
 
-  const pricing = useMemo(() => {
-    return calculateOfferTotal(selectedTickets.length, ticketPrice, offers);
-  }, [selectedTickets.length, ticketPrice, offers]);
+    const requestedQuantity =
+      selectedTickets.length > 0 ? selectedTickets.length : quantity;
 
-  function toggleTicket(ticketNumber: number) {
-    if (isLocked) return;
+    const remainingTickets = Math.max(
+      Number(raffle.total_tickets) - Number(raffle.sold_tickets),
+      0
+    );
 
-    const soldKey = `${selectedColour}-${ticketNumber}`;
-    if (soldSet.has(soldKey) || reservedSet.has(soldKey)) return;
+    if (requestedQuantity > remainingTickets) {
+      return NextResponse.json(
+        { ok: false, error: "Not enough tickets remaining." },
+        { status: 400 }
+      );
+    }
 
-    setSelectedTickets((prev) => {
-      const exists = prev.some(
-        (t) => t.ticket_number === ticketNumber && t.colour === selectedColour
+    if (selectedTickets.length > 0) {
+      const valuesSql = selectedTickets
+        .map((_, index) => {
+          const base = index * 2;
+          return `($${base + 2}, $${base + 3})`;
+        })
+        .join(", ");
+
+      const soldOrReserved = await query<ReservedOrSoldRow>(
+        `
+        with requested(ticket_number, colour) as (
+          values ${valuesSql}
+        )
+        select ticket_number, colour
+        from (
+          select ticket_number, colour
+          from raffle_ticket_reservations
+          where raffle_id = $1
+            and status = 'reserved'
+            and expires_at > now()
+
+          union all
+
+          select ticket_number, colour
+          from raffle_ticket_sales
+          where raffle_id = $1
+        ) taken
+        inner join requested req
+          on req.ticket_number = taken.ticket_number
+         and coalesce(req.colour, '') = coalesce(taken.colour, '')
+        `,
+        [
+          raffle.id,
+          ...selectedTickets.flatMap((t) => [t.ticket_number, t.colour]),
+        ]
       );
 
-      if (exists) {
-        return prev.filter(
-          (t) =>
-            !(t.ticket_number === ticketNumber && t.colour === selectedColour)
+      if (soldOrReserved.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "One or more selected tickets are no longer available.",
+          },
+          { status: 409 }
         );
       }
+    }
 
-      return [
-        ...prev,
+    const reservationGroupId = crypto.randomUUID();
+    const reservationToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    for (const ticket of selectedTickets) {
+      await query(
+        `
+        insert into raffle_ticket_reservations (
+          id,
+          raffle_id,
+          reservation_group_id,
+          reservation_token,
+          ticket_number,
+          colour,
+          buyer_name,
+          buyer_email,
+          status,
+          expires_at,
+          created_at
+        )
+        values (
+          gen_random_uuid()::text,
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          'reserved',
+          $8,
+          now()
+        )
+        `,
+        [
+          raffle.id,
+          reservationGroupId,
+          reservationToken,
+          ticket.ticket_number,
+          ticket.colour,
+          buyerName,
+          buyerEmail,
+          expiresAt,
+        ]
+      );
+    }
+
+    const verifiedCountRow = await queryOne<CountRow>(
+      `
+      select count(*)::int as count
+      from raffle_ticket_reservations
+      where reservation_token = $1
+        and raffle_id = $2
+      `,
+      [reservationToken, raffle.id]
+    );
+
+    const verifiedCount = Number(verifiedCountRow?.count ?? 0);
+
+    const latestRow = await queryOne<{
+      reservation_token: string;
+      raffle_id: string;
+      created_at: string;
+    }>(
+      `
+      select reservation_token, raffle_id, created_at
+      from raffle_ticket_reservations
+      order by created_at desc
+      limit 1
+      `
+    );
+
+    if (!Number.isFinite(verifiedCount) || verifiedCount !== selectedTickets.length) {
+      return NextResponse.json(
         {
-          ticket_number: ticketNumber,
-          colour: selectedColour,
+          ok: false,
+          error:
+            `Reserve verification failed | raffleId=${raffle.id} | token=${reservationToken} | expected=${selectedTickets.length} | actual=${verifiedCount}` +
+            (latestRow
+              ? ` | latest raffleId=${latestRow.raffle_id} | latest token=${latestRow.reservation_token}`
+              : ""),
         },
-      ];
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      reservationToken,
+      expiresAt: expiresAt.toISOString(),
+      raffleId: raffle.id,
+      debug:
+        `Reserve verified | raffleId=${raffle.id} | token=${reservationToken} | count=${verifiedCount}` +
+        (latestRow
+          ? ` | latest raffleId=${latestRow.raffle_id} | latest token=${latestRow.reservation_token}`
+          : ""),
     });
+  } catch (error: any) {
+    console.error("raffle reserve error", error);
 
-    setError("");
-  }
-
-  function removeSelectedTicket(ticket: SelectedTicket) {
-    if (isLocked) return;
-
-    setSelectedTickets((prev) =>
-      prev.filter(
-        (t) =>
-          !(
-            t.ticket_number === ticket.ticket_number &&
-            t.colour === ticket.colour
-          )
-      )
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Internal server error." },
+      { status: 500 }
     );
   }
-
-  async function reserveTickets() {
-    try {
-      setLoading(true);
-      setError("");
-      setSuccess(null);
-
-      const trimmedName = buyerName.trim();
-      const trimmedEmail = buyerEmail.trim();
-
-      if (!trimmedName || !trimmedEmail) {
-        setError("Name and email are required");
-        return;
-      }
-
-      if (!isValidEmail(trimmedEmail)) {
-        setError("Enter a valid email address");
-        return;
-      }
-
-      if (selectedTickets.length === 0) {
-        setError("No tickets selected");
-        return;
-      }
-
-      console.log("SENDING TICKETS", selectedTickets);
-
-      const requestBody = {
-        tenantSlug: raffle.tenant_slug,
-        buyerName: trimmedName,
-        buyerEmail: trimmedEmail,
-        quantity: selectedTickets.length,
-        selectedTickets,
-      };
-
-      const response = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = (await response.json()) as ReserveResponse;
-
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Failed to reserve tickets");
-      }
-
-      setSuccess({
-        ok: true,
-        reservationToken: data.reservationToken,
-        raffleId: data.raffleId,
-        expiresAt: data.expiresAt,
-        debug: data.debug,
-      });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Reservation failed";
-
-      if (
-        message.toLowerCase().includes("already reserved") ||
-        message.toLowerCase().includes("already sold") ||
-        message.toLowerCase().includes("no longer available")
-      ) {
-        setError(
-          "Some selected tickets are no longer available. Please refresh and try again."
-        );
-      } else {
-        setError(message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function goToStripeCheckout() {
-    try {
-      if (!success?.reservationToken || !success?.raffleId) {
-        throw new Error("Missing reservation details");
-      }
-
-      setCheckoutLoading(true);
-      setError("");
-
-      const response = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          raffleId: success.raffleId,
-          reservationToken: success.reservationToken,
-        }),
-      });
-
-      const data = (await response.json()) as CheckoutResponse;
-
-      if (!response.ok || !data.ok || !data.url) {
-        throw new Error(data.error || "Failed to create Stripe Checkout");
-      }
-
-      window.location.href = data.url;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
-    } finally {
-      setCheckoutLoading(false);
-    }
-  }
-
-  return (
-    <div>
-      {raffle.image_url ? (
-        <img
-          src={raffle.image_url}
-          alt={raffle.title}
-          style={{ width: "100%", height: "auto", marginBottom: 20 }}
-        />
-      ) : null}
-
-      <p>{raffle.description}</p>
-
-      <hr style={{ margin: "24px 0" }} />
-
-      <p>
-        <strong>Single ticket price:</strong> {ticketPrice.toFixed(2)}{" "}
-        {raffle.currency}
-      </p>
-
-      <p>
-        <strong>Total tickets:</strong> {raffle.total_tickets}
-      </p>
-
-      <p>
-        <strong>Sold:</strong> {raffle.sold_tickets}
-      </p>
-
-      <p>
-        <strong>Remaining:</strong> {raffle.remaining_tickets ?? 0}
-      </p>
-
-      <hr style={{ margin: "24px 0" }} />
-
-      {offers.length > 0 ? (
-        <div style={{ marginBottom: 24 }}>
-          <h3>Offers</h3>
-          <ul>
-            {offers.map((offer) => (
-              <li key={offer.id || `${offer.label}-${offer.quantity}-${offer.price}`}>
-                {offer.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <h2>Select tickets</h2>
-
-      <div style={{ display: "grid", gap: 12, maxWidth: 420, marginBottom: 20 }}>
-        <label>
-          <div style={{ marginBottom: 6 }}>Name</div>
-          <input
-            value={buyerName}
-            onChange={(e) => setBuyerName(e.target.value)}
-            disabled={isLocked}
-            style={{
-              width: "100%",
-              padding: 10,
-              opacity: isLocked ? 0.7 : 1,
-            }}
-          />
-        </label>
-
-        <label>
-          <div style={{ marginBottom: 6 }}>Email</div>
-          <input
-            type="email"
-            value={buyerEmail}
-            onChange={(e) => setBuyerEmail(e.target.value)}
-            disabled={isLocked}
-            style={{
-              width: "100%",
-              padding: 10,
-              opacity: isLocked ? 0.7 : 1,
-            }}
-          />
-        </label>
-      </div>
-
-      {colourOptions.length > 1 ? (
-        <div style={{ marginBottom: 20 }}>
-          <h3>Choose a colour</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {colourOptions.map((colour) => (
-              <button
-                key={colour.value}
-                type="button"
-                onClick={() => setSelectedColour(colour.value)}
-                disabled={isLocked}
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: 8,
-                  border: "1px solid #ccc",
-                  background: selectedColour === colour.value ? "#111" : "#fff",
-                  color: selectedColour === colour.value ? "#fff" : "#111",
-                  cursor: isLocked ? "not-allowed" : "pointer",
-                  opacity: isLocked ? 0.7 : 1,
-                }}
-              >
-                {colour.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(10, 1fr)",
-          gap: 8,
-        }}
-      >
-        {ticketNumbers.map((number) => {
-          const key = `${selectedColour}-${number}`;
-          const isSold = soldSet.has(key);
-          const isReserved = reservedSet.has(key);
-          const isUnavailable = isSold || isReserved;
-          const isSelected = selectedTickets.some(
-            (t) => t.ticket_number === number && t.colour === selectedColour
-          );
-
-          return (
-            <button
-              key={key}
-              type="button"
-              disabled={isUnavailable || isLocked}
-              onClick={() => toggleTicket(number)}
-              style={{
-                padding: 10,
-                border: "1px solid #ccc",
-                borderRadius: 6,
-                background: isSold
-                  ? "#000"
-                  : isReserved
-                    ? "#999"
-                    : isSelected
-                      ? "#16a34a"
-                      : "#fff",
-                color: isUnavailable || isSelected ? "#fff" : "#000",
-                cursor: isUnavailable || isLocked ? "not-allowed" : "pointer",
-                opacity: isUnavailable || isLocked ? 0.6 : 1,
-              }}
-            >
-              {number}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <p>
-          <strong>Current colour:</strong> {selectedColourLabel}
-        </p>
-
-        <p>
-          <strong>Selected:</strong>{" "}
-          {selectedTickets.length
-            ? selectedTickets
-                .map((t) => {
-                  const label =
-                    colourOptions.find((c) => c.value === t.colour)?.label ||
-                    t.colour;
-                  return `${t.ticket_number} (${label})`;
-                })
-                .join(", ")
-            : "None"}
-        </p>
-
-        <p>
-          <strong>Standard total:</strong>{" "}
-          {(pricing.fullPriceTotal || 0).toFixed(2)} {raffle.currency}
-        </p>
-
-        <p>
-          <strong>Total:</strong> {pricing.total.toFixed(2)} {raffle.currency}
-        </p>
-
-        {pricing.appliedOffers.length > 0 ? (
-          <div style={{ marginTop: 8 }}>
-            <p style={{ color: "#15803d", marginBottom: 8 }}>
-              Best available offer applied automatically
-            </p>
-            <ul>
-              {pricing.appliedOffers.map((offer) => (
-                <li key={`${offer.label}-${offer.times}`}>
-                  {offer.label}
-                  {offer.times > 1 ? ` × ${offer.times}` : ""}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {pricing.savings > 0 ? (
-          <p style={{ color: "#15803d" }}>
-            <strong>You save:</strong> {pricing.savings.toFixed(2)}{" "}
-            {raffle.currency}
-          </p>
-        ) : null}
-      </div>
-
-      {selectedTickets.length ? (
-        <div style={{ marginTop: 12 }}>
-          <h3>Basket</h3>
-          <ul>
-            {selectedTickets.map((ticket) => {
-              const label =
-                colourOptions.find((c) => c.value === ticket.colour)?.label ||
-                ticket.colour;
-
-              return (
-                <li key={`${ticket.colour}-${ticket.ticket_number}`}>
-                  #{ticket.ticket_number} ({label}){" "}
-                  <button
-                    type="button"
-                    onClick={() => removeSelectedTicket(ticket)}
-                    disabled={isLocked}
-                    style={{ marginLeft: 8 }}
-                  >
-                    Remove
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
-
-      {!success?.ok ? (
-        <div style={{ marginTop: 20 }}>
-          <button
-            type="button"
-            onClick={reserveTickets}
-            disabled={loading || selectedTickets.length === 0}
-            style={{
-              padding: "12px 16px",
-              background: "#111",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              borderRadius: 8,
-              opacity: loading || selectedTickets.length === 0 ? 0.6 : 1,
-            }}
-          >
-            {loading ? "Reserving..." : "Reserve tickets"}
-          </button>
-        </div>
-      ) : null}
-
-      {error ? <p style={{ color: "red", marginTop: 12 }}>{error}</p> : null}
-
-      {success?.ok ? (
-        <div style={{ marginTop: 20, padding: 16, border: "1px solid #ddd" }}>
-          <h3>Tickets reserved</h3>
-          <p>
-            <strong>Reservation token:</strong> {success.reservationToken}
-          </p>
-          {success.expiresAt ? (
-            <p>
-              <strong>Reserved until:</strong> {success.expiresAt}
-            </p>
-          ) : (
-            <p>Your tickets are locked for 15 minutes.</p>
-          )}
-          <p>
-            <strong>Buyer:</strong> {buyerName} ({buyerEmail})
-          </p>
-          {success.debug ? (
-            <p style={{ marginTop: 8, color: "#555" }}>{success.debug}</p>
-          ) : null}
-          <p>
-            <strong>Offer-adjusted total shown:</strong> {pricing.total.toFixed(2)}{" "}
-            {raffle.currency}
-          </p>
-          <button
-            type="button"
-            onClick={goToStripeCheckout}
-            disabled={checkoutLoading}
-            style={{
-              marginTop: 12,
-              padding: "12px 16px",
-              background: "#635bff",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              borderRadius: 8,
-              opacity: checkoutLoading ? 0.6 : 1,
-            }}
-          >
-            {checkoutLoading ? "Redirecting..." : "Pay with Stripe"}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
 }
