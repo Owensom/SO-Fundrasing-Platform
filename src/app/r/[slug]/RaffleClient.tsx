@@ -72,16 +72,13 @@ type ReserveResponse = {
   reservationToken?: string;
   raffleId?: string;
   expiresAt?: string;
-  totalAmountCents?: number;
   error?: string;
-  debug?: unknown;
 };
 
 type CheckoutResponse = {
   ok: boolean;
   url?: string;
   error?: string;
-  debug?: unknown;
 };
 
 function isValidEmail(email: string) {
@@ -230,19 +227,20 @@ function calculateOfferTotal(
 export default function RaffleClient({ raffle, sold, reserved }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
-  const [debugInfo, setDebugInfo] = useState<string>("");
-  const colourOptions = useMemo(
-    () => normaliseColours(raffle.config_json?.colours),
-    [raffle.config_json?.colours]
-  );
-  const [selectedColour, setSelectedColour] = useState(
-    colourOptions[0]?.value || "default"
-  );
   const [selectedTickets, setSelectedTickets] = useState<SelectedTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<ReserveResponse | null>(null);
+
+  const colourOptions = useMemo(
+    () => normaliseColours(raffle.config_json?.colours),
+    [raffle.config_json?.colours]
+  );
+
+  const [selectedColour, setSelectedColour] = useState(
+    colourOptions[0]?.value || "default"
+  );
 
   const isLocked = !!success?.ok;
 
@@ -292,7 +290,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     if (isLocked) return;
 
     const key = `${selectedColour}-${ticketNumber}`;
-
     if (soldSet.has(key) || reservedSet.has(key)) return;
 
     setSelectedTickets((prev) => {
@@ -322,7 +319,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     });
 
     setError("");
-    setDebugInfo("");
   }
 
   function removeSelectedTicket(ticket: SelectedTicket) {
@@ -343,7 +339,6 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
     try {
       setLoading(true);
       setError("");
-      setDebugInfo("");
       setSuccess(null);
 
       const trimmedName = buyerName.trim();
@@ -364,29 +359,42 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
         return;
       }
 
+      const requestBody = {
+        tenantSlug: raffle.tenant_slug,
+        buyerName: trimmedName,
+        buyerEmail: trimmedEmail,
+        quantity: selectedTickets.length,
+        selectedTickets,
+      };
+
+      console.log("FRONTEND RESERVE REQUEST", requestBody);
+
       const response = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          tenantSlug: raffle.tenant_slug,
-          buyerName: trimmedName,
-          buyerEmail: trimmedEmail,
-          quantity: selectedTickets.length,
-          selectedTickets,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = (await response.json()) as ReserveResponse;
 
+      console.log("FRONTEND RESERVE RESPONSE", data);
+
       if (!response.ok || !data.ok) {
-        setDebugInfo(JSON.stringify(data, null, 2));
         throw new Error(data.error || "Failed to reserve tickets");
       }
 
-      setSuccess(data);
-      setDebugInfo(JSON.stringify(data, null, 2));
+      const cleanSuccess: ReserveResponse = {
+        ok: true,
+        reservationToken: data.reservationToken,
+        raffleId: data.raffleId,
+        expiresAt: data.expiresAt,
+      };
+
+      console.log("FRONTEND TOKEN STORED", cleanSuccess.reservationToken);
+
+      setSuccess(cleanSuccess);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Reservation failed";
@@ -409,40 +417,32 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
 
   async function goToStripeCheckout() {
     try {
-      if (!success?.reservationToken) {
-        throw new Error("Missing reservation token");
+      if (!success?.reservationToken || !success?.raffleId) {
+        throw new Error("Missing reservation details");
       }
+
+      console.log("FRONTEND TOKEN BEFORE CHECKOUT", {
+        reservationToken: success.reservationToken,
+        raffleId: success.raffleId,
+      });
 
       setCheckoutLoading(true);
       setError("");
-      setDebugInfo("");
-
-      const requestBody = {
-        raffleId: raffle.id,
-        reservationToken: success.reservationToken,
-      };
 
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          raffleId: success.raffleId,
+          reservationToken: success.reservationToken,
+        }),
       });
 
       const data = (await response.json()) as CheckoutResponse;
 
-      setDebugInfo(
-        JSON.stringify(
-          {
-            requestBody,
-            responseStatus: response.status,
-            responseData: data,
-          },
-          null,
-          2
-        )
-      );
+      console.log("FRONTEND CHECKOUT RESPONSE", data);
 
       if (!response.ok || !data.ok || !data.url) {
         throw new Error(data.error || "Failed to create Stripe Checkout");
@@ -494,9 +494,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
           <h3>Offers</h3>
           <ul>
             {offers.map((offer) => (
-              <li
-                key={offer.id || `${offer.label}-${offer.quantity}-${offer.price}`}
-              >
+              <li key={offer.id || `${offer.label}-${offer.quantity}-${offer.price}`}>
                 {offer.label}
               </li>
             ))}
@@ -706,28 +704,7 @@ export default function RaffleClient({ raffle, sold, reserved }: Props) {
         </div>
       ) : null}
 
-      {error ? (
-        <p style={{ color: "red", marginTop: 12, whiteSpace: "pre-wrap" }}>
-          {error}
-        </p>
-      ) : null}
-
-      {debugInfo ? (
-        <pre
-          style={{
-            marginTop: 12,
-            padding: 12,
-            background: "#f5f5f5",
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            overflowX: "auto",
-            whiteSpace: "pre-wrap",
-            fontSize: 12,
-          }}
-        >
-          {debugInfo}
-        </pre>
-      ) : null}
+      {error ? <p style={{ color: "red", marginTop: 12 }}>{error}</p> : null}
 
       {success?.ok ? (
         <div style={{ marginTop: 20, padding: 16, border: "1px solid #ddd" }}>
