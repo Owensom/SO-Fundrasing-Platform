@@ -42,7 +42,7 @@ export async function sendReceiptEmail(params: {
   const ticketItems = tickets
     .map(
       (ticket) =>
-        `<li style="margin-bottom:6px;">#${ticket.ticket_number} (${ticket.colour})</li>`,
+        `<li style="margin-bottom:6px;">#${ticket.ticket_number} (${ticket.colour})</li>`
     )
     .join("");
 
@@ -53,9 +53,9 @@ export async function sendReceiptEmail(params: {
       <p>Thank you for your purchase. Your raffle receipt is below.</p>
 
       <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:20px 0;">
-        <p style="margin:0 0 10px 0;"><strong>Raffle:</strong> ${raffleTitle}</p>
-        <p style="margin:0 0 10px 0;"><strong>Amount paid:</strong> ${formattedAmount}</p>
-        <p style="margin:0 0 10px 0;"><strong>Reservation:</strong> ${reservationToken}</p>
+        <p><strong>Raffle:</strong> ${raffleTitle}</p>
+        <p><strong>Amount paid:</strong> ${formattedAmount}</p>
+        <p><strong>Reservation:</strong> ${reservationToken}</p>
       </div>
 
       <h3>Your tickets</h3>
@@ -72,6 +72,61 @@ export async function sendReceiptEmail(params: {
     from: "Raffle Platform <onboarding@resend.dev>",
     to,
     subject: `Your tickets for ${raffleTitle}`,
+    html,
+  });
+}
+
+//
+// 🎯 WINNER EMAIL
+//
+
+export async function sendWinnerEmail(params: {
+  to: string;
+  name?: string | null;
+  raffleTitle: string;
+  ticketNumber: number;
+  colour?: string | null;
+}) {
+  const { to, name, raffleTitle, ticketNumber, colour } = params;
+
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is required");
+  }
+
+  if (!to) {
+    throw new Error("Recipient email is required");
+  }
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
+      <h2 style="margin-top:0;color:#16a34a;">🎉 You won!</h2>
+
+      <p>Hi ${name || "there"},</p>
+
+      <p>Congratulations — you are the winner of:</p>
+
+      <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:20px 0;">
+        <p><strong>${raffleTitle}</strong></p>
+        <p><strong>Winning ticket:</strong> #${ticketNumber}</p>
+        <p><strong>Colour:</strong> ${colour || "Default"}</p>
+      </div>
+
+      <p>
+        The organiser will contact you shortly with details on how to claim your prize.
+      </p>
+
+      <p style="margin-top:24px;">🎊 Congratulations again and good luck in future draws!</p>
+
+      <p style="margin-top:24px;font-size:12px;color:#666;">
+        This is an automated email notification.
+      </p>
+    </div>
+  `;
+
+  await resend.emails.send({
+    from: "Raffle Platform <onboarding@resend.dev>",
+    to,
+    subject: `🎉 You won: ${raffleTitle}`,
     html,
   });
 }
