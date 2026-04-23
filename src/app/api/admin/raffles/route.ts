@@ -86,7 +86,6 @@ export async function POST(request: NextRequest) {
     const status = String(formData.get("status") ?? "draft").trim();
 
     const ticket_price = parseNumber(formData.get("ticket_price"), 0);
-    const total_tickets = parseNumber(formData.get("total_tickets"), 0);
     const startNumber = parseNumber(formData.get("startNumber"), 1);
     const endNumber = parseNumber(formData.get("endNumber"), 1);
 
@@ -107,6 +106,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const numbersPerColour = colours.length > 0 && endNumber >= startNumber
+      ? endNumber - startNumber + 1
+      : 0;
+
+    const total_tickets = numbersPerColour * colours.length;
+
     const raffle = await createRaffle({
       tenant_slug: tenantSlug,
       title,
@@ -120,10 +125,7 @@ export async function POST(request: NextRequest) {
       status: status as "draft" | "published" | "closed" | "drawn",
       startNumber,
       endNumber,
-      numbersPerColour:
-        colours.length > 0 && endNumber >= startNumber
-          ? endNumber - startNumber + 1
-          : 0,
+      numbersPerColour,
       colourCount: colours.length,
       colours,
       offers,
