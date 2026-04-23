@@ -4,6 +4,9 @@ import { getRaffleById } from "@/lib/raffles";
 import { query, queryOne } from "@/lib/db";
 import { getBestPriceForQuantity, normalizeOffers } from "@/lib/pricing";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
@@ -19,10 +22,14 @@ type ReservationRow = {
   id: string;
   raffle_id: string;
   reservation_token: string;
+  reservation_group_id?: string | null;
+  ticket_number?: number | null;
+  colour: string | null;
   expires_at: string;
   buyer_email: string | null;
   buyer_name: string | null;
   status?: string | null;
+  created_at?: string;
 };
 
 type ReservationCountRow = {
@@ -120,10 +127,14 @@ export async function POST(request: NextRequest) {
         id,
         raffle_id,
         reservation_token,
+        reservation_group_id,
+        ticket_number,
+        colour,
         expires_at,
         buyer_email,
         buyer_name,
-        status
+        status,
+        created_at
       from raffle_ticket_reservations
       where reservation_token = $1
       order by created_at asc
@@ -131,9 +142,31 @@ export async function POST(request: NextRequest) {
       [reservationToken]
     );
 
-    console.log("ALL RESERVATIONS FOUND", reservations);
+    console.log("CHECKOUT TOKEN MATCHES", reservations);
+
+    const nowIso = new Date().toISOString();
 
     if (!reservations.length) {
+      const latestReservations = await query<ReservationRow>(
+        `
+        select
+          id,
+          raffle_id,
+          reservation_token,
+          reservation_group_id,
+          ticket_number,
+          colour,
+          expires_at,
+          buyer_email,
+          buyer_name,
+          status,
+          created_at
+        from raffle_ticket_reservations
+        order by created_at desc
+        limit 10
+        `
+      );
+
       return NextResponse.json(
         {
           ok: false,
@@ -141,6 +174,20 @@ export async function POST(request: NextRequest) {
           debug: {
             requestedRaffleId,
             reservationToken,
+            nowIso,
+            foundCount: 0,
+            latestReservations: latestReservations.map((row) => ({
+              raffle_id: row.raffle_id,
+              reservation_token: row.reservation_token,
+              reservation_group_id: row.reservation_group_id,
+              ticket_number: row.ticket_number,
+              colour: row.colour,
+              buyer_email: row.buyer_email,
+              buyer_name: row.buyer_name,
+              status: row.status,
+              expires_at: row.expires_at,
+              created_at: row.created_at,
+            })),
           },
         },
         { status: 404 }
@@ -150,20 +197,53 @@ export async function POST(request: NextRequest) {
     const reservation =
       reservations.find(
         (row) => new Date(row.expires_at).getTime() > Date.now()
-      ) ?? null;
+      ) ?? reservations[0];
 
-    if (!reservation) {
+    const raffleIdToUse = reservation.raffle_id || requestedRaffleId;
+
+    if (!raffleIdToUse) {
       return NextResponse.json(
-        { ok: false, error: "Reservation expired." },
+        {
+          ok: false,
+          error: "Missing raffle id for reservation.",
+          debug: {
+            requestedRaffleId,
+            reservationToken,
+            reservation,
+          },
+        },
         { status: 400 }
       );
     }
 
-    const raffle = (await getRaffleById(reservation.raffle_id)) as RaffleLike | null;
+    const raffle = (await getRaffleById(raffleIdToUse)) as RaffleLike | null;
 
-    if (!raffle || raffle.status !== "published") {
+    if (!raffle) {
       return NextResponse.json(
-        { ok: false, error: "This raffle is closed." },
+        {
+          ok: false,
+          error: "Raffle not found for reservation.",
+          debug: {
+            requestedRaffleId,
+            raffleIdToUse,
+            reservationToken,
+            reservation,
+          },
+        },
+        { status: 404 }
+      );
+    }
+
+    if (raffle.status !== "published") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "This raffle is closed.",
+          debug: {
+            raffleIdToUse,
+            raffleStatus: raffle.status,
+          },
+        },
         { status: 400 }
       );
     }
@@ -174,16 +254,24 @@ export async function POST(request: NextRequest) {
       from raffle_ticket_reservations
       where reservation_token = $1
         and raffle_id = $2
-        and expires_at > now()
       `,
-      [reservation.reservation_token, reservation.raffle_id]
+      [reservation.reservation_token, raffleIdToUse]
     );
 
     const quantity = Number(reservationCount?.count ?? 0);
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Invalid reservation quantity." },
+        {
+          ok: false,
+          error: "Invalid reservation quantity.",
+          debug: {
+            raffleIdToUse,
+            reservationToken,
+            reservationCount,
+            reservation,
+          },
+        },
         { status: 400 }
       );
     }
@@ -192,7 +280,15 @@ export async function POST(request: NextRequest) {
 
     if (!Number.isFinite(singleTicketPriceCents) || singleTicketPriceCents <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Invalid ticket price." },
+        {
+          ok: false,
+          error: "Invalid ticket price.",
+          debug: {
+            raffleIdToUse,
+            ticket_price: raffle.ticket_price,
+            ticket_price_cents: raffle.ticket_price_cents,
+          },
+        },
         { status: 400 }
       );
     }
@@ -207,7 +303,15 @@ export async function POST(request: NextRequest) {
 
     if (!Number.isFinite(pricing.subtotal_cents) || pricing.subtotal_cents <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Invalid checkout total." },
+        {
+          ok: false,
+          error: "Invalid checkout total.",
+          debug: {
+            pricing,
+            raffleIdToUse,
+            reservationToken,
+          },
+        },
         { status: 400 }
       );
     }
@@ -279,6 +383,12 @@ export async function POST(request: NextRequest) {
         base_total_cents: pricing.base_total_cents,
         savings_cents: pricing.savings_cents,
         applied_offers: pricing.applied_offers,
+      },
+      debug: {
+        requestedRaffleId,
+        raffleIdToUse,
+        reservationToken,
+        reservationRowsFound: reservations.length,
       },
     });
   } catch (error: any) {
