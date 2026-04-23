@@ -34,6 +34,15 @@ function parseOffers(value: string) {
   }
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   const tenantSlug = getTenantSlugFromRequest(request);
   const id = context.params.id;
@@ -107,7 +116,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const formData = await request.formData();
 
     const title = String(formData.get("title") ?? "").trim();
-    const slug = String(formData.get("slug") ?? "").trim();
+    const rawSlug = String(formData.get("slug") ?? "").trim();
+    const slug = slugify(rawSlug || existing.slug);
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
     const currency = String(formData.get("currency") ?? existing.currency);
@@ -148,7 +158,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       ticket_price,
       total_tickets,
       sold_tickets: existing.sold_tickets,
-      status: status as "draft" | "published" | "closed",
+      status: status as "draft" | "published" | "closed" | "drawn",
       startNumber,
       endNumber,
       numbersPerColour:
@@ -163,12 +173,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       offers,
       sold:
         ((existing.config_json as Record<string, unknown> | undefined)
-          ?.sold as Array<{ colour: string; number: number }> | undefined) ??
-        [],
+          ?.sold as Array<{ colour: string; number: number }> | undefined) ?? [],
       reserved:
         ((existing.config_json as Record<string, unknown> | undefined)
-          ?.reserved as Array<{ colour: string; number: number }> | undefined) ??
-        [],
+          ?.reserved as Array<{ colour: string; number: number }> | undefined) ?? [],
     });
 
     if (!updated) {
@@ -226,7 +234,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const updated = await updateRaffle(id, {
       tenant_slug: tenantSlug,
       title: String(body?.title ?? existing.title),
-      slug: String(body?.slug ?? existing.slug),
+      slug: slugify(String(body?.slug ?? existing.slug)),
       description: String(body?.description ?? existing.description ?? ""),
       image_url: String(body?.image_url ?? existing.image_url ?? ""),
       currency: body?.currency ?? existing.currency,
