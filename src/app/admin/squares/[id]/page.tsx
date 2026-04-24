@@ -29,6 +29,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
+      {/* NAV */}
       <p>
         <a href="/admin">← Dashboard</a> |{" "}
         <a href="/admin/squares">Squares games</a> |{" "}
@@ -44,6 +45,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </a>
       </p>
 
+      {/* FORM */}
       <form
         action={`/api/admin/squares/${game.id}`}
         method="post"
@@ -79,6 +81,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           />
         </label>
 
+        {/* IMAGE UPLOAD */}
         <ImageUploadField currentImageUrl={game.image_url ?? ""} />
 
         <label>
@@ -162,6 +165,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </button>
       </form>
 
+      {/* WINNERS */}
       <section
         style={{
           marginTop: 32,
@@ -177,7 +181,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             {winners.map((winner) => (
               <li key={winner.id}>
                 <strong>{winner.prize_title}</strong>: Square #
-                {winner.square_number} — {firstNameOnly(winner.customer_name)}
+                {winner.square_number} —{" "}
+                {firstNameOnly(winner.customer_name)}
               </li>
             ))}
           </ul>
