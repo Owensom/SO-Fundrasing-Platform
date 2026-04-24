@@ -7,6 +7,7 @@ import {
   listSquaresWinners,
   normalisePrizes,
 } from "../../../../../../../api/_lib/squares-repo";
+import { sendSquaresWinnerEmail } from "@/lib/email";
 
 type RouteContext = {
   params: {
@@ -129,6 +130,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
 
       winners.push(winner);
+
+      // 🔥 Send winner email
+      if (winningEntry.customer_email) {
+        try {
+          await sendSquaresWinnerEmail({
+            to: winningEntry.customer_email,
+            name: winningEntry.customer_name,
+            gameTitle: game.title,
+            squareNumber: winningEntry.square_number,
+            prizeTitle: prize.title,
+          });
+        } catch (err) {
+          console.error("Failed to send winner email:", err);
+        }
+      }
     }
 
     return NextResponse.json({
