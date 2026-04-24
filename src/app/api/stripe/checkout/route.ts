@@ -57,18 +57,38 @@ function toMoneyCentsFromRaffle(raffle: RaffleLike): number {
 }
 
 function getOffersFromRaffle(raffle: RaffleLike): unknown {
-  if (Array.isArray(raffle.config_json?.offers)) return raffle.config_json?.offers;
-  if (Array.isArray(raffle.offers)) return raffle.offers;
+  if (Array.isArray(raffle.config_json?.offers)) {
+    return raffle.config_json?.offers;
+  }
+
+  if (Array.isArray(raffle.offers)) {
+    return raffle.offers;
+  }
+
   return [];
+}
+
+function calculatePlatformFee(totalCents: number) {
+  const platformFeePercent = Number(process.env.PLATFORM_FEE_PERCENT ?? 10);
+
+  if (!Number.isFinite(platformFeePercent) || platformFeePercent < 0) {
+    return Math.round(totalCents * 0.1);
+  }
+
+  return Math.round(totalCents * (platformFeePercent / 100));
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CheckoutBody;
 
-    const raffleId = typeof body.raffleId === "string" ? body.raffleId.trim() : "";
+    const raffleId =
+      typeof body.raffleId === "string" ? body.raffleId.trim() : "";
+
     const reservationToken =
-      typeof body.reservationToken === "string" ? body.reservationToken.trim() : "";
+      typeof body.reservationToken === "string"
+        ? body.reservationToken.trim()
+        : "";
 
     if (!raffleId || !reservationToken) {
       return NextResponse.json(
@@ -157,6 +177,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const platformFeeCents = calculatePlatformFee(pricing.subtotal_cents);
+    const netAmountCents = Math.max(pricing.subtotal_cents - platformFeeCents, 0);
+
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
     const successUrl =
@@ -185,7 +208,9 @@ export async function POST(request: NextRequest) {
             currency: raffle.currency.toLowerCase(),
             product_data: {
               name: raffle.title,
-              description: `${quantity} ticket${quantity > 1 ? "s" : ""}${appliedOffersDescription}`,
+              description: `${quantity} ticket${
+                quantity > 1 ? "s" : ""
+              }${appliedOffersDescription}`,
             },
             unit_amount: pricing.subtotal_cents,
           },
@@ -196,10 +221,14 @@ export async function POST(request: NextRequest) {
       metadata: {
         raffle_id: raffleId,
         reservation_token: reservationToken,
+        tenant_slug: raffle.tenant_slug ?? "",
         ticket_quantity: String(quantity),
+        single_ticket_price_cents: String(singleTicketPriceCents),
         subtotal_cents: String(pricing.subtotal_cents),
         base_total_cents: String(pricing.base_total_cents),
         savings_cents: String(pricing.savings_cents),
+        platform_fee_cents: String(platformFeeCents),
+        net_amount_cents: String(netAmountCents),
         applied_offers_json: JSON.stringify(pricing.applied_offers ?? []),
       },
       success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
@@ -207,7 +236,8 @@ export async function POST(request: NextRequest) {
     });
 
     const checkoutUrl =
-      session.url || (session.id ? `https://checkout.stripe.com/c/pay/${session.id}` : null);
+      session.url ||
+      (session.id ? `https://checkout.stripe.com/c/pay/${session.id}` : null);
 
     if (!checkoutUrl) {
       return NextResponse.json(
@@ -219,7 +249,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       url: checkoutUrl,
-      pricing,
+      pricing: {
+        ...pricing,
+        platform_fee_cents: platformFeeCents,
+        net_amount_cents: netAmountCents,
+      },
     });
   } catch (error: any) {
     console.error("stripe checkout error", error);
