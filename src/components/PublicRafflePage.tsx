@@ -1,4 +1,4 @@
-"use client";
+""use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -10,7 +10,7 @@ type Winner = {
   drawnAt: string | null;
 };
 
-type SafeRaffle = {
+type Raffle = {
   id: string;
   slug: string;
   title: string;
@@ -21,10 +21,7 @@ type SafeRaffle = {
   totalTickets: number;
   soldTicketsCount: number;
   status: string;
-  startNumber: number;
-  endNumber: number;
   colours: any[];
-  offers: any[];
   soldTickets: { number: number; colour: string }[];
   reservedTickets: { number: number; colour: string }[];
   winnerTicketNumber: number | null;
@@ -47,7 +44,32 @@ function ordinal(n: number) {
   return `${n}th`;
 }
 
-export default function PublicRafflePage({ raffle }: { raffle: SafeRaffle }) {
+export default function PublicRafflePage({ slug }: { slug: string }) {
+  const [raffle, setRaffle] = useState<Raffle | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`/api/raffles/${slug}`);
+        const data = await res.json();
+
+        if (data?.ok) {
+          setRaffle(data.raffle);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [slug]);
+
+  if (loading) return <div style={{ padding: 40 }}>Loading...</div>;
+  if (!raffle) return <div style={{ padding: 40 }}>Not found</div>;
+
   const isDrawn = raffle.status === "drawn";
 
   return (
@@ -66,7 +88,7 @@ export default function PublicRafflePage({ raffle }: { raffle: SafeRaffle }) {
         <p style={{ marginTop: 12 }}>{raffle.description}</p>
       ) : null}
 
-      {/* WINNERS BLOCK */}
+      {/* WINNERS */}
       {isDrawn ? (
         <div
           style={{
@@ -115,7 +137,9 @@ export default function PublicRafflePage({ raffle }: { raffle: SafeRaffle }) {
 
       {/* BASIC INFO */}
       <div style={{ marginTop: 20 }}>
-        <div>Price: {raffle.currency} {raffle.ticketPrice.toFixed(2)}</div>
+        <div>
+          Price: {raffle.currency} {raffle.ticketPrice.toFixed(2)}
+        </div>
         <div>Total: {raffle.totalTickets}</div>
         <div>Sold: {raffle.soldTicketsCount}</div>
       </div>
