@@ -1,3 +1,5 @@
+import ImageUploadField from "@/components/ImageUploadField";
+
 export default function NewSquaresGamePage() {
   const defaultPrizes = JSON.stringify(
     [
@@ -13,6 +15,11 @@ export default function NewSquaresGamePage() {
 
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
+      <p>
+        <a href="/admin">← Dashboard</a> |{" "}
+        <a href="/admin/squares">Squares games</a>
+      </p>
+
       <h1>Create squares game</h1>
 
       <form
@@ -47,14 +54,7 @@ export default function NewSquaresGamePage() {
           />
         </label>
 
-        <label>
-          Image URL
-          <input
-            name="image_url"
-            placeholder="https://..."
-            style={{ display: "block", width: "100%", padding: 10 }}
-          />
-        </label>
+        <ImageUploadField currentImageUrl="" />
 
         <label>
           Number of squares
