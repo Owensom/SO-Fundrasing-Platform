@@ -15,16 +15,20 @@ export default function RaffleAdminActions({
   drawnAt,
 }: Props) {
   const router = useRouter();
-  const [loadingAction, setLoadingAction] = useState<"close" | "draw" | null>(
-    null
-  );
+
+  const [loadingAction, setLoadingAction] = useState<
+    "close" | "draw" | "delete" | null
+  >(null);
+
   const [error, setError] = useState("");
 
-  async function runAction(action: "close" | "draw") {
+  async function runAction(action: "close" | "draw" | "delete") {
     const confirmMessage =
       action === "close"
         ? "Are you sure you want to close this raffle? No more ticket purchases will be allowed."
-        : "Are you sure you want to draw a winner? This should only be done once.";
+        : action === "draw"
+          ? "Are you sure you want to draw a winner? This should only be done once."
+          : "Are you sure you want to delete this raffle? This cannot be undone.";
 
     const confirmed = window.confirm(confirmMessage);
     if (!confirmed) return;
@@ -48,6 +52,12 @@ export default function RaffleAdminActions({
         return;
       }
 
+      if (action === "delete") {
+        router.push("/admin");
+        router.refresh();
+        return;
+      }
+
       router.refresh();
     } catch (err) {
       console.error("raffle admin action error", err);
@@ -59,6 +69,9 @@ export default function RaffleAdminActions({
 
   const canClose = status === "published";
   const canDraw = status === "closed" && !drawnAt;
+
+  // Backend currently allows delete for draft, closed, and drawn only.
+  const canDelete = status === "draft" || status === "closed" || status === "drawn";
 
   return (
     <div
@@ -127,6 +140,41 @@ export default function RaffleAdminActions({
           >
             {loadingAction === "draw" ? "Drawing..." : "Draw Winner"}
           </button>
+        ) : null}
+
+        {canDelete ? (
+          <button
+            type="button"
+            onClick={() => runAction("delete")}
+            disabled={loadingAction !== null}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #dc2626",
+              background: "#dc2626",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: loadingAction ? "not-allowed" : "pointer",
+              opacity: loadingAction ? 0.7 : 1,
+            }}
+          >
+            {loadingAction === "delete" ? "Deleting..." : "Delete Raffle"}
+          </button>
+        ) : null}
+
+        {status === "published" ? (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              color: "#1d4ed8",
+              fontWeight: 600,
+            }}
+          >
+            Close this raffle before deleting it.
+          </div>
         ) : null}
 
         {status === "drawn" ? (
