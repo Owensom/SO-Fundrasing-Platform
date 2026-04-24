@@ -28,12 +28,10 @@ type SquaresGame = {
 export default function SquaresGameClient({ game }: { game: SquaresGame }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+  const [coverFees, setCoverFees] = useState(true);
 
   const sold = useMemo(() => new Set(game.config_json?.sold ?? []), [game]);
-  const reserved = useMemo(
-    () => new Set(game.config_json?.reserved ?? []),
-    [game],
-  );
+  const reserved = useMemo(() => new Set(game.config_json?.reserved ?? []), [game]);
 
   const squares = useMemo(
     () => Array.from({ length: game.total_squares }, (_, i) => i + 1),
@@ -63,7 +61,7 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
     setSelected(shuffled.slice(0, count));
   }
 
-  async function reserveSelected() {
+  async function checkoutSelected() {
     if (selected.length === 0) {
       alert("Please select at least one square.");
       return;
@@ -72,7 +70,7 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
     try {
       setLoading(true);
 
-      const response = await fetch(`/api/squares/${game.slug}/reserve`, {
+      const reserveResponse = await fetch(`/api/squares/${game.slug}/reserve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -82,17 +80,34 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
         }),
       });
 
-      const data = await response.json();
+      const reserveData = await reserveResponse.json();
 
-      if (!response.ok || !data.ok) {
-        alert(data.error || "Could not reserve squares.");
+      if (!reserveResponse.ok || !reserveData.ok) {
+        alert(reserveData.error || "Could not reserve squares.");
         return;
       }
 
-      alert("Squares reserved successfully!");
+      const checkoutResponse = await fetch(`/api/squares/${game.slug}/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          reservationToken: reserveData.reservationToken,
+          coverFees,
+          successUrl: `${window.location.origin}/success`,
+          cancelUrl: `${window.location.origin}/s/${game.slug}`,
+        }),
+      });
 
-      // Optional: clear selection after reserve
-      setSelected([]);
+      const checkoutData = await checkoutResponse.json();
+
+      if (!checkoutResponse.ok || !checkoutData.ok || !checkoutData.url) {
+        alert(checkoutData.error || "Could not start checkout.");
+        return;
+      }
+
+      window.location.href = checkoutData.url;
     } catch (err) {
       console.error(err);
       alert("Something went wrong.");
@@ -180,19 +195,28 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
           <strong>Total:</strong> {(total / 100).toFixed(2)} {currency}
         </div>
 
+        <label style={{ display: "block", marginTop: 12 }}>
+          <input
+            type="checkbox"
+            checked={coverFees}
+            onChange={(event) => setCoverFees(event.target.checked)}
+          />{" "}
+          Cover platform fees
+        </label>
+
         <button
           type="button"
-          onClick={reserveSelected}
+          onClick={checkoutSelected}
           disabled={selected.length === 0 || loading}
           style={{
             marginTop: 16,
             padding: 12,
             borderRadius: 8,
             border: "1px solid #111",
-            cursor: "pointer",
+            cursor: selected.length === 0 || loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? "Reserving..." : "Reserve selected squares"}
+          {loading ? "Starting checkout..." : "Checkout"}
         </button>
       </section>
 
