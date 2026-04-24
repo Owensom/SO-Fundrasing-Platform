@@ -48,7 +48,7 @@ export async function sendReceiptEmail(params: {
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
-      <h2 style="margin-top:0;">Payment successful</h2>
+      <h2>Payment successful</h2>
       <p>Hi ${name || "there"},</p>
       <p>Thank you for your purchase. Your raffle receipt is below.</p>
 
@@ -59,12 +59,9 @@ export async function sendReceiptEmail(params: {
       </div>
 
       <h3>Your tickets</h3>
-      <ul style="padding-left:20px;">
-        ${ticketItems}
-      </ul>
+      <ul>${ticketItems}</ul>
 
       <p style="margin-top:24px;">Please keep this email as your receipt.</p>
-      <p style="margin-top:24px;font-size:12px;color:#666;">This is an automated email confirmation.</p>
     </div>
   `;
 
@@ -95,10 +92,6 @@ export async function sendSquaresReceiptEmail(params: {
     reservationToken,
   } = params;
 
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is required");
-  }
-
   if (!to) {
     throw new Error("Recipient email is required");
   }
@@ -109,12 +102,12 @@ export async function sendSquaresReceiptEmail(params: {
   }).format(amountCents / 100);
 
   const squareItems = squares
-    .map((square) => `<li style="margin-bottom:6px;">Square #${square}</li>`)
+    .map((square) => `<li>Square #${square}</li>`)
     .join("");
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
-      <h2 style="margin-top:0;">Payment successful</h2>
+      <h2>Payment successful</h2>
       <p>Hi ${name || "there"},</p>
       <p>Thank you for your purchase. Your squares receipt is below.</p>
 
@@ -125,12 +118,7 @@ export async function sendSquaresReceiptEmail(params: {
       </div>
 
       <h3>Your squares</h3>
-      <ul style="padding-left:20px;">
-        ${squareItems}
-      </ul>
-
-      <p style="margin-top:24px;">Please keep this email as your receipt.</p>
-      <p style="margin-top:24px;font-size:12px;color:#666;">This is an automated email confirmation.</p>
+      <ul>${squareItems}</ul>
     </div>
   `;
 
@@ -151,31 +139,18 @@ export async function sendWinnerEmail(params: {
 }) {
   const { to, name, raffleTitle, ticketNumber, colour } = params;
 
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is required");
-  }
-
-  if (!to) {
-    throw new Error("Recipient email is required");
-  }
-
   const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
-      <h2 style="margin-top:0;color:#16a34a;">🎉 You won!</h2>
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+      <h2 style="color:#16a34a;">🎉 You won!</h2>
       <p>Hi ${name || "there"},</p>
-      <p>Congratulations — you are the winner of:</p>
+
+      <p>You are the winner of:</p>
 
       <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:20px 0;">
         <p><strong>${raffleTitle}</strong></p>
         <p><strong>Winning ticket:</strong> #${ticketNumber}</p>
         <p><strong>Colour:</strong> ${colour || "Default"}</p>
       </div>
-
-      <p>The organiser will contact you shortly with details on how to claim your prize.</p>
-
-      <p style="margin-top:24px;font-size:12px;color:#666;">
-        This is an automated email notification.
-      </p>
     </div>
   `;
 
@@ -183,6 +158,40 @@ export async function sendWinnerEmail(params: {
     from: "Raffle Platform <onboarding@resend.dev>",
     to,
     subject: `🎉 You won: ${raffleTitle}`,
+    html,
+  });
+}
+
+export async function sendSquaresWinnerEmail(params: {
+  to: string;
+  name?: string | null;
+  gameTitle: string;
+  squareNumber: number;
+  prizeTitle: string;
+}) {
+  const { to, name, gameTitle, squareNumber, prizeTitle } = params;
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+      <h2 style="color:#16a34a;">🎉 You won!</h2>
+      <p>Hi ${name || "there"},</p>
+
+      <p>Congratulations — you have won:</p>
+
+      <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:20px 0;">
+        <p><strong>${gameTitle}</strong></p>
+        <p><strong>Prize:</strong> ${prizeTitle}</p>
+        <p><strong>Winning square:</strong> #${squareNumber}</p>
+      </div>
+
+      <p>The organiser will contact you shortly.</p>
+    </div>
+  `;
+
+  await resend.emails.send({
+    from: "Raffle Platform <onboarding@resend.dev>",
+    to,
+    subject: `🎉 You won: ${gameTitle}`,
     html,
   });
 }
