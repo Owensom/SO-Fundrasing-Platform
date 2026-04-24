@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { query } from "@/lib/db";
+import { sendReceiptEmail, sendSquaresReceiptEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,16 +55,10 @@ export async function POST(request: NextRequest) {
 
     const session = event.data.object as Stripe.Checkout.Session;
 
-    const raffleId = String(session.metadata?.raffle_id || "");
+    const type = session.metadata?.type || "raffle";
+
     const reservationToken = String(session.metadata?.reservation_token || "");
     const tenantSlug = String(session.metadata?.tenant_slug || "");
-
-    if (!raffleId || !reservationToken) {
-      return NextResponse.json(
-        { ok: false, error: "Missing raffle_id or reservation_token metadata" },
-        { status: 400 }
-      );
-    }
 
     const paymentIntentId =
       typeof session.payment_intent === "string"
@@ -77,52 +72,111 @@ export async function POST(request: NextRequest) {
         Math.max(grossAmountCents - platformFeeCents, 0)
     );
 
-    await query(
-      `
-      update raffle_ticket_reservations
-      set
-        status = 'sold',
-        checkout_session_id = $1,
-        payment_id = $2,
-        gross_amount_cents = $3,
-        platform_fee_cents = $4,
-        net_amount_cents = $5
-      where raffle_id = $6
-        and reservation_token = $7
-      `,
-      [
-        session.id,
-        paymentIntentId,
-        grossAmountCents,
-        platformFeeCents,
-        netAmountCents,
-        raffleId,
-        reservationToken,
-      ]
-    );
+    const email =
+      session.customer_details?.email || session.customer_email || null;
 
-    await query(
-      `
-      update raffles
-      set
-        sold_tickets = (
-          select count(*)::int
-          from raffle_ticket_reservations
-          where raffle_id = $1
-            and status = 'sold'
-        ),
-        updated_at = now()
-      where id = $1
-      `,
-      [raffleId]
-    );
+    const name = session.customer_details?.name || null;
+
+    if (type === "raffle") {
+      const raffleId = String(session.metadata?.raffle_id || "");
+
+      if (!raffleId || !reservationToken) {
+        return NextResponse.json(
+          { ok: false, error: "Missing raffle metadata" },
+          { status: 400 }
+        );
+      }
+
+      await query(
+        `
+        update raffle_ticket_reservations
+        set
+          status = 'sold',
+          checkout_session_id = $1,
+          payment_id = $2,
+          gross_amount_cents = $3,
+          platform_fee_cents = $4,
+          net_amount_cents = $5
+        where raffle_id = $6
+          and reservation_token = $7
+        `,
+        [
+          session.id,
+          paymentIntentId,
+          grossAmountCents,
+          platformFeeCents,
+          netAmountCents,
+          raffleId,
+          reservationToken,
+        ]
+      );
+
+      const tickets = await query(
+        `
+        select ticket_number, colour
+        from raffle_ticket_reservations
+        where raffle_id = $1
+          and reservation_token = $2
+        `,
+        [raffleId, reservationToken]
+      );
+
+      if (email) {
+        await sendReceiptEmail({
+          to: email,
+          name,
+          raffleTitle: session.metadata?.raffle_title || "Raffle",
+          tickets,
+          amountCents: grossAmountCents,
+          currency: session.currency || "GBP",
+          reservationToken,
+        });
+      }
+    }
+
+    if (type === "squares") {
+      const gameId = String(session.metadata?.game_id || "");
+
+      if (!gameId || !reservationToken) {
+        return NextResponse.json(
+          { ok: false, error: "Missing squares metadata" },
+          { status: 400 }
+        );
+      }
+
+      await query(
+        `
+        update squares_reservations
+        set
+          payment_status = 'paid',
+          stripe_checkout_session_id = $1
+        where reservation_token = $2
+        `,
+        [session.id, reservationToken]
+      );
+
+      const squares = JSON.parse(
+        session.metadata?.squares_json || "[]"
+      ) as number[];
+
+      if (email) {
+        await sendSquaresReceiptEmail({
+          to: email,
+          name,
+          gameTitle: session.metadata?.game_title || "Squares Game",
+          squares,
+          amountCents: grossAmountCents,
+          currency: session.currency || "GBP",
+          reservationToken,
+        });
+      }
+    }
 
     await query(
       `
       insert into platform_payments (
         stripe_checkout_session_id,
         stripe_payment_intent_id,
-        raffle_id,
         tenant_slug,
         reservation_token,
         currency,
@@ -132,11 +186,10 @@ export async function POST(request: NextRequest) {
         payment_status,
         customer_email
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
-        raffle_id = excluded.raffle_id,
         tenant_slug = excluded.tenant_slug,
         reservation_token = excluded.reservation_token,
         currency = excluded.currency,
@@ -149,7 +202,6 @@ export async function POST(request: NextRequest) {
       [
         session.id,
         paymentIntentId,
-        raffleId,
         tenantSlug,
         reservationToken,
         session.currency || null,
@@ -157,14 +209,13 @@ export async function POST(request: NextRequest) {
         platformFeeCents,
         netAmountCents,
         session.payment_status || null,
-        session.customer_details?.email || session.customer_email || null,
+        email,
       ]
     );
 
     return NextResponse.json({
       ok: true,
       event: event.type,
-      checkoutSessionId: session.id,
     });
   } catch (error: any) {
     console.error("Stripe webhook error", error);
