@@ -4,7 +4,7 @@ import {
   getSquaresGameById,
   listSquaresWinners,
 } from "../../../../../api/_lib/squares-repo";
-import ImageUploadField from "@/components/ImageUploadField";
+import ImageUploadField from "../../../../components/ImageUploadField";
 
 type PageProps = {
   params: {
@@ -29,7 +29,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
-      {/* NAV */}
       <p>
         <a href="/admin">← Dashboard</a> |{" "}
         <a href="/admin/squares">Squares games</a> |{" "}
@@ -45,7 +44,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </a>
       </p>
 
-      {/* FORM */}
       <form
         action={`/api/admin/squares/${game.id}`}
         method="post"
@@ -81,7 +79,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           />
         </label>
 
-        {/* IMAGE UPLOAD */}
         <ImageUploadField currentImageUrl={game.image_url ?? ""} />
 
         <label>
@@ -165,7 +162,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </button>
       </form>
 
-      {/* WINNERS */}
       <section
         style={{
           marginTop: 32,
