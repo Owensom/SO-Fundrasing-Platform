@@ -6,11 +6,25 @@ type Props = {
   slug: string;
 };
 
-type RafflePrize = {
-  position: number;
-  title: string;
-  description: string;
-  isPublic: boolean;
+type TicketSelection = {
+  colour: string;
+  number: number;
+};
+
+type RaffleColour = {
+  id: string;
+  name: string;
+  hex?: string | null;
+  sortOrder?: number;
+};
+
+type RaffleOffer = {
+  id: string;
+  label: string;
+  quantity: number;
+  price: number;
+  isActive: boolean;
+  sortOrder?: number;
 };
 
 type RaffleWinner = {
@@ -21,213 +35,433 @@ type RaffleWinner = {
   drawnAt: string | null;
 };
 
+type RafflePrize = {
+  position: number;
+  title: string;
+  description: string;
+  isPublic: boolean;
+};
+
+type SafeRaffleStatus = "draft" | "published" | "closed" | "drawn";
+
 type SafeRaffle = {
   id: string;
   slug: string;
   title: string;
   description: string;
   imageUrl: string;
-  currency: string;
-  ticketPrice: number;
-  status: string;
+  tenantSlug: string;
   startNumber: number;
   endNumber: number;
+  currency: string;
+  ticketPrice: number;
+  status: SafeRaffleStatus;
+  colours: RaffleColour[];
+  offers: RaffleOffer[];
   prizes: RafflePrize[];
+  reservedTickets: Array<{ colour: string; number: number }>;
+  soldTickets: Array<{ colour: string; number: number }>;
+  winnerTicketNumber: number | null;
+  winnerColour: string | null;
+  drawnAt: string | null;
   winners: RaffleWinner[];
 };
 
-function ordinal(n: number) {
-  if (n % 10 === 1 && n % 100 !== 11) return `${n}st`;
-  if (n % 10 === 2 && n % 100 !== 12) return `${n}nd`;
-  if (n % 10 === 3 && n % 100 !== 13) return `${n}rd`;
-  return `${n}th`;
+function makeTicketKey(colour: string, number: number) {
+  return `${colour}::${number}`;
 }
 
 function formatCurrency(value: number, currency: string) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency,
-  }).format(value || 0);
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number.isFinite(value) ? value : 0);
+  } catch {
+    return `${currency || "GBP"} ${(Number.isFinite(value) ? value : 0).toFixed(2)}`;
+  }
 }
 
-function toSafeRaffle(raw: any): SafeRaffle {
-  const prizes = Array.isArray(raw?.prizes) ? raw.prizes : [];
-  const winners = Array.isArray(raw?.winners) ? raw.winners : [];
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function ordinal(position: number) {
+  const suffix =
+    position % 10 === 1 && position % 100 !== 11
+      ? "st"
+      : position % 10 === 2 && position % 100 !== 12
+        ? "nd"
+        : position % 10 === 3 && position % 100 !== 13
+          ? "rd"
+          : "th";
+
+  return `${position}${suffix}`;
+}
+
+function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
+  const status = String(rawStatus ?? "").trim().toLowerCase();
+  if (status === "published") return "published";
+  if (status === "drawn") return "drawn";
+  if (status === "closed") return "closed";
+  return "draft";
+}
+
+function toSafeRaffle(input: any): SafeRaffle {
+  const raw = input ?? {};
+  const colours = Array.isArray(raw.colours) ? raw.colours : [];
+  const offers = Array.isArray(raw.offers) ? raw.offers : [];
+  const prizes = Array.isArray(raw.prizes) ? raw.prizes : [];
+  const reservedTickets = Array.isArray(raw.reservedTickets)
+    ? raw.reservedTickets
+    : [];
+  const soldTickets = Array.isArray(raw.soldTickets) ? raw.soldTickets : [];
+  const winners = Array.isArray(raw.winners) ? raw.winners : [];
+
+  const startNumber = Number(raw.startNumber);
+  const endNumber = Number(raw.endNumber);
+  const rawWinnerTicketNumber =
+    raw.winnerTicketNumber ?? raw.winner_ticket_number;
+  const winnerTicketNumber = Number(rawWinnerTicketNumber);
 
   return {
-    id: String(raw?.id ?? ""),
-    slug: String(raw?.slug ?? ""),
-    title: String(raw?.title ?? ""),
-    description: String(raw?.description ?? ""),
-    imageUrl: String(raw?.imageUrl ?? ""),
-    currency: String(raw?.currency ?? "GBP"),
-    ticketPrice: Number(raw?.ticketPrice ?? 0),
-    status: String(raw?.status ?? "draft"),
-    startNumber: Number(raw?.startNumber ?? 1),
-    endNumber: Number(raw?.endNumber ?? 1),
-
+    id: String(raw.id ?? ""),
+    slug: String(raw.slug ?? ""),
+    title: String(raw.title ?? "Raffle"),
+    description: String(raw.description ?? ""),
+    imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
+    tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
+    startNumber: Number.isFinite(startNumber) ? startNumber : 1,
+    endNumber: Number.isFinite(endNumber) ? endNumber : 1,
+    currency: String(raw.currency ?? "GBP"),
+    ticketPrice: Number.isFinite(Number(raw.ticketPrice))
+      ? Number(raw.ticketPrice)
+      : 0,
+    status: normaliseFrontendStatus(raw.status),
+    colours: colours.map((c: any, index: number) => ({
+      id: String(c?.id ?? `colour-${index}`),
+      name: String(c?.name ?? c ?? `Colour ${index + 1}`),
+      hex: c?.hex ? String(c.hex) : null,
+      sortOrder: Number.isFinite(Number(c?.sortOrder))
+        ? Number(c.sortOrder)
+        : index,
+    })),
+    offers: offers.map((o: any, index: number) => ({
+      id: String(o?.id ?? `offer-${index}`),
+      label: String(o?.label ?? `Offer ${index + 1}`),
+      quantity: Number.isFinite(Number(o?.quantity))
+        ? Number(o.quantity)
+        : 0,
+      price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
+      isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
+      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
+        ? Number(o?.sortOrder ?? o?.sort_order)
+        : index,
+    })),
     prizes: prizes
-      .map((p: any, i: number) => ({
-        position: Number(p?.position ?? i + 1),
-        title: String(p?.title ?? ""),
-        description: String(p?.description ?? ""),
-        isPublic: p?.isPublic !== false,
+      .map((prize: any, index: number) => ({
+        position: Number.isFinite(Number(prize?.position))
+          ? Number(prize.position)
+          : index + 1,
+        title: String(prize?.title ?? ""),
+        description: String(prize?.description ?? ""),
+        isPublic: prize?.isPublic !== false && prize?.is_public !== false,
       }))
-      .filter((p: RafflePrize) => p.title.trim().length > 0),
-
-    winners: winners.map((w: any) => ({
-      prizePosition: Number(w.prizePosition ?? w.prize_position ?? 1),
-      ticketNumber: Number(w.ticketNumber ?? w.ticket_number ?? 0),
-      colour: w.colour ?? null,
-      buyerName: w.buyerName ?? w.buyer_name ?? null,
-      drawnAt: w.drawnAt ?? w.drawn_at ?? null,
+      .filter(
+        (prize: RafflePrize) =>
+          prize.isPublic && prize.title.trim().length > 0
+      )
+      .sort((a: RafflePrize, b: RafflePrize) => a.position - b.position),
+    reservedTickets: reservedTickets.map((t: any) => ({
+      colour: String(t?.colour ?? ""),
+      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+    })),
+    soldTickets: soldTickets.map((t: any) => ({
+      colour: String(t?.colour ?? ""),
+      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+    })),
+    winnerTicketNumber: Number.isFinite(winnerTicketNumber)
+      ? winnerTicketNumber
+      : null,
+    winnerColour:
+      raw.winnerColour ?? raw.winner_colour
+        ? String(raw.winnerColour ?? raw.winner_colour)
+        : null,
+    drawnAt:
+      raw.drawnAt ?? raw.drawn_at
+        ? String(raw.drawnAt ?? raw.drawn_at)
+        : null,
+    winners: winners.map((winner: any) => ({
+      prizePosition: Number(winner.prizePosition ?? winner.prize_position ?? 1),
+      ticketNumber: Number(winner.ticketNumber ?? winner.ticket_number ?? 0),
+      colour:
+        winner.colour != null && String(winner.colour).trim()
+          ? String(winner.colour)
+          : null,
+      buyerName:
+        winner.buyerName ?? winner.buyer_name
+          ? String(winner.buyerName ?? winner.buyer_name)
+          : null,
+      drawnAt:
+        winner.drawnAt ?? winner.drawn_at
+          ? String(winner.drawnAt ?? winner.drawn_at)
+          : null,
     })),
   };
+}
+
+function calculateBestPrice(
+  quantity: number,
+  ticketPrice: number,
+  offers: RaffleOffer[]
+) {
+  const activeOffers = offers
+    .filter((o) => o.isActive && o.quantity > 0 && o.price > 0)
+    .sort((a, b) => {
+      if (b.quantity !== a.quantity) return b.quantity - a.quantity;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    });
+
+  let remaining = quantity;
+  let total = 0;
+  const appliedOffers: Array<{
+    label: string;
+    quantity: number;
+    price: number;
+    times: number;
+  }> = [];
+
+  for (const offer of activeOffers) {
+    const times = Math.floor(remaining / offer.quantity);
+
+    if (times > 0) {
+      total += times * offer.price;
+      remaining -= times * offer.quantity;
+      appliedOffers.push({
+        label: offer.label,
+        quantity: offer.quantity,
+        price: offer.price,
+        times,
+      });
+    }
+  }
+
+  total += remaining * ticketPrice;
+
+  const standardTotal = quantity * ticketPrice;
+  const savings = Math.max(standardTotal - total, 0);
+
+  return {
+    quantity,
+    total,
+    standardTotal,
+    savings,
+    appliedOffers,
+  };
+}
+
+function renderColourLabel(colour: RaffleColour) {
+  if (colour.hex) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: 999,
+            background: colour.hex,
+            border: "1px solid #cbd5e1",
+            display: "inline-block",
+          }}
+        />
+        {colour.name}
+      </span>
+    );
+  }
+
+  return colour.name;
+}
+
+function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
+  if (!colourName) return null;
+
+  const match = colours.find(
+    (colour) => colour.name === colourName || colour.id === colourName
+  );
+  const background = match?.hex || colourName;
+
+  return (
+    <span
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: 999,
+        background,
+        border: "1px solid #cbd5e1",
+        display: "inline-block",
+      }}
+    />
+  );
 }
 
 export default function PublicRafflePage({ slug }: Props) {
   const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedColour, setSelectedColour] = useState("");
+  const [basket, setBasket] = useState<TicketSelection[]>([]);
+  const [autoQuantity, setAutoQuantity] = useState(1);
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [coverFees, setCoverFees] = useState(false);
+  const [reservationMessage, setReservationMessage] = useState("");
 
   useEffect(() => {
+    if (!slug) return;
+
+    let cancelled = false;
+
     async function load() {
-      const res = await fetch(`/api/raffles/${slug}`);
-      const data = await res.json();
-      setRaffle(toSafeRaffle(data?.raffle));
-      setLoading(false);
+      try {
+        setLoading(true);
+        setError("");
+        setReservationMessage("");
+
+        const response = await fetch(`/api/raffles/${encodeURIComponent(slug)}`);
+        const text = await response.text();
+
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`API did not return JSON: ${text.slice(0, 120)}`);
+        }
+
+        if (!response.ok) {
+          throw new Error(parsed?.error || "Failed to load raffle");
+        }
+
+        const safe = toSafeRaffle(parsed?.raffle);
+
+        if (!cancelled) {
+          setRaffle(safe);
+          setSelectedColour(safe.colours[0]?.name ?? "");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load raffle");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
+
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
-  if (loading) return <div style={styles.wrap}>Loading…</div>;
-  if (!raffle) return <div style={styles.wrap}>Not found</div>;
+  const availability = useMemo(() => {
+    const sold = new Set<string>();
+    const reserved = new Set<string>();
 
-  return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <h1>{raffle.title}</h1>
-        <p>{raffle.description}</p>
+    if (!raffle) return { sold, reserved };
 
-        <div style={styles.totalBox}>
-          <div>Ticket price: {formatCurrency(raffle.ticketPrice, raffle.currency)}</div>
-          <div>Range: {raffle.startNumber} to {raffle.endNumber}</div>
-          <div>Status: {raffle.status}</div>
-        </div>
+    for (const t of raffle.soldTickets) {
+      sold.add(makeTicketKey(t.colour, t.number));
+    }
 
-        {/* PRIZES */}
-        {raffle.prizes.length > 0 && (
-          <section style={styles.prizesBox}>
-            <div style={styles.prizesTitle}>Prizes</div>
+    for (const t of raffle.reservedTickets) {
+      reserved.add(makeTicketKey(t.colour, t.number));
+    }
 
-            {raffle.prizes.map((prize) => (
-              <div key={prize.position} style={styles.prizeCard}>
-                <div style={styles.prizePosition}>
-                  {ordinal(prize.position)}
-                </div>
+    return { sold, reserved };
+  }, [raffle]);
 
-                <div>
-                  <div style={styles.prizeTitle}>{prize.title}</div>
-                  {prize.description && (
-                    <div style={styles.prizeDescription}>
-                      {prize.description}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </section>
-        )}
-
-        {/* WINNERS */}
-        {raffle.winners.length > 0 && (
-          <section style={styles.winnersBox}>
-            <div style={styles.winnersTitle}>Winners</div>
-
-            {raffle.winners.map((winner) => (
-              <div key={winner.ticketNumber} style={styles.winnerCard}>
-                <div>{ordinal(winner.prizePosition)}</div>
-                <div>#{winner.ticketNumber}</div>
-                <div>{winner.colour || "—"}</div>
-              </div>
-            ))}
-          </section>
-        )}
-      </div>
-    </div>
+  const basketKeys = useMemo(
+    () => new Set(basket.map((t) => makeTicketKey(t.colour, t.number))),
+    [basket]
   );
-}
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    padding: 24,
-    background: "#f8fafc",
-    minHeight: "100vh",
-  },
-  container: {
-    maxWidth: 900,
-    margin: "0 auto",
-    background: "#fff",
-    padding: 24,
-    borderRadius: 16,
-  },
-  wrap: { padding: 24 },
+  const visibleNumbers = useMemo(() => {
+    if (!raffle) return [];
+    if (!Number.isFinite(raffle.startNumber) || !Number.isFinite(raffle.endNumber))
+      return [];
+    if (raffle.endNumber < raffle.startNumber) return [];
 
-  totalBox: {
-    marginTop: 20,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-  },
+    const out: number[] = [];
+    for (let n = raffle.startNumber; n <= raffle.endNumber; n += 1) {
+      out.push(n);
+    }
+    return out;
+  }, [raffle]);
 
-  prizesBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 12,
-    background: "#fff7ed",
-  },
-  prizesTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    marginBottom: 10,
-  },
-  prizeCard: {
-    display: "grid",
-    gridTemplateColumns: "80px 1fr",
-    gap: 10,
-    padding: 10,
-    border: "1px solid #fed7aa",
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-  prizePosition: {
-    fontWeight: 800,
-  },
-  prizeTitle: {
-    fontWeight: 700,
-  },
-  prizeDescription: {
-    fontSize: 14,
-    color: "#64748b",
-  },
+  const isPublished = raffle?.status === "published";
+  const isClosed = raffle?.status === "closed";
+  const isDrawn = raffle?.status === "drawn";
+  const isDraft = raffle?.status === "draft";
+  const canReserve = Boolean(raffle && isPublished);
 
-  winnersBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 12,
-    background: "#ecfdf5",
-  },
-  winnersTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    marginBottom: 10,
-  },
-  winnerCard: {
-    display: "grid",
-    gridTemplateColumns: "80px 1fr 1fr",
-    gap: 10,
-    padding: 10,
-    border: "1px solid #bbf7d0",
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-};
+  const pricing = useMemo(() => {
+    if (!raffle) {
+      return {
+        quantity: 0,
+        total: 0,
+        standardTotal: 0,
+        savings: 0,
+        appliedOffers: [] as Array<{
+          label: string;
+          quantity: number;
+          price: number;
+          times: number;
+        }>,
+      };
+    }
+
+    return calculateBestPrice(
+      basket.length,
+      raffle.ticketPrice,
+      isPublished ? raffle.offers : []
+    );
+  }, [basket.length, raffle, isPublished]);
+
+  const estimatedFee =
+    pricing.total > 0 ? Math.round(pricing.total * 0.1 * 100) / 100 : 0;
+  const displayTotal = coverFees ? pricing.total + estimatedFee : pricing.total;
+
+  const availableCount = useMemo(() => {
+    if (!raffle) return 0;
+
+    let count = 0;
+
+    for (const colour of raffle.colours) {
+      for (const number of visibleNumbers) {
+        const key = makeTicketKey(colour.name, number);
+
+        if (!availability.sold.has(key) && !availability.reserved.has(key)) {
+          count += 1;
+        }
+      }
+    }
+
+    return count;
+  }, [raffle, visibleNumbers, availability]);
+
+  function toggleTicket(number: number) {
+    if (!raffle || !selectedColour || !canReserve) return;
+
+    const key = makeTicketKey(selectedColour, number);
+    if (availability.sold.has(key) || availability.reserved.has(key)) return;
+
+    setBasket((current) => {
+      const exists = current.some(
+        (ticket) =>
+          ticket.col
