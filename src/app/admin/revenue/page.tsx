@@ -5,12 +5,23 @@ import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-type RevenueSummaryRow = {
-  tenant_slug: string | null;
+type CurrencySummaryRow = {
+  currency: string | null;
   payment_count: string | number;
   gross_amount_cents: string | number;
   platform_fee_cents: string | number;
   net_amount_cents: string | number;
+  donor_fee_cents: string | number;
+};
+
+type TenantSummaryRow = {
+  tenant_slug: string | null;
+  currency: string | null;
+  payment_count: string | number;
+  gross_amount_cents: string | number;
+  platform_fee_cents: string | number;
+  net_amount_cents: string | number;
+  donor_fee_cents: string | number;
 };
 
 type PaymentRow = {
@@ -22,6 +33,8 @@ type PaymentRow = {
   gross_amount_cents: number;
   platform_fee_cents: number;
   net_amount_cents: number;
+  donor_fee_cents: number;
+  donor_covered_fees: boolean;
   payment_status: string | null;
   customer_email: string | null;
   created_at: string;
@@ -54,18 +67,36 @@ export default async function AdminRevenuePage() {
     redirect("/admin/login");
   }
 
-  const summaries = await query<RevenueSummaryRow>(
+  const currencySummaries = await query<CurrencySummaryRow>(
     `
     select
-      tenant_slug,
+      coalesce(currency, 'gbp') as currency,
       count(*)::int as payment_count,
       coalesce(sum(gross_amount_cents), 0)::int as gross_amount_cents,
       coalesce(sum(platform_fee_cents), 0)::int as platform_fee_cents,
-      coalesce(sum(net_amount_cents), 0)::int as net_amount_cents
+      coalesce(sum(net_amount_cents), 0)::int as net_amount_cents,
+      coalesce(sum(donor_fee_cents), 0)::int as donor_fee_cents
     from platform_payments
     where payment_status = 'paid'
-    group by tenant_slug
-    order by gross_amount_cents desc
+    group by coalesce(currency, 'gbp')
+    order by currency asc
+    `
+  );
+
+  const tenantSummaries = await query<TenantSummaryRow>(
+    `
+    select
+      tenant_slug,
+      coalesce(currency, 'gbp') as currency,
+      count(*)::int as payment_count,
+      coalesce(sum(gross_amount_cents), 0)::int as gross_amount_cents,
+      coalesce(sum(platform_fee_cents), 0)::int as platform_fee_cents,
+      coalesce(sum(net_amount_cents), 0)::int as net_amount_cents,
+      coalesce(sum(donor_fee_cents), 0)::int as donor_fee_cents
+    from platform_payments
+    where payment_status = 'paid'
+    group by tenant_slug, coalesce(currency, 'gbp')
+    order by tenant_slug asc, currency asc
     `
   );
 
@@ -80,6 +111,8 @@ export default async function AdminRevenuePage() {
       p.gross_amount_cents,
       p.platform_fee_cents,
       p.net_amount_cents,
+      coalesce(p.donor_fee_cents, 0)::int as donor_fee_cents,
+      coalesce(p.donor_covered_fees, false)::boolean as donor_covered_fees,
       p.payment_status,
       p.customer_email,
       p.created_at,
@@ -91,24 +124,10 @@ export default async function AdminRevenuePage() {
     `
   );
 
-  const totalGross = summaries.reduce(
-    (sum, row) => sum + Number(row.gross_amount_cents ?? 0),
-    0
-  );
-  const totalFees = summaries.reduce(
-    (sum, row) => sum + Number(row.platform_fee_cents ?? 0),
-    0
-  );
-  const totalNet = summaries.reduce(
-    (sum, row) => sum + Number(row.net_amount_cents ?? 0),
-    0
-  );
-  const totalPayments = summaries.reduce(
+  const totalPayments = currencySummaries.reduce(
     (sum, row) => sum + Number(row.payment_count ?? 0),
     0
   );
-
-  const currency = payments[0]?.currency || "gbp";
 
   return (
     <main style={styles.page}>
@@ -119,7 +138,7 @@ export default async function AdminRevenuePage() {
           </Link>
           <h1 style={styles.title}>Revenue Dashboard</h1>
           <p style={styles.subtle}>
-            Platform fee accounting from Stripe webhooks.
+            Platform fee accounting from Stripe webhooks, grouped by currency.
           </p>
         </div>
       </div>
@@ -130,53 +149,93 @@ export default async function AdminRevenuePage() {
           <div style={styles.cardValue}>{totalPayments}</div>
         </div>
 
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Gross sales</div>
-          <div style={styles.cardValue}>{money(totalGross, currency)}</div>
-        </div>
+        {currencySummaries.length ? (
+          currencySummaries.map((row) => {
+            const currency = row.currency || "gbp";
 
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Platform fees</div>
-          <div style={styles.cardValue}>{money(totalFees, currency)}</div>
-        </div>
-
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Net to organisers</div>
-          <div style={styles.cardValue}>{money(totalNet, currency)}</div>
-        </div>
+            return (
+              <div key={currency} style={styles.card}>
+                <div style={styles.cardLabel}>
+                  {currency.toUpperCase()} totals
+                </div>
+                <div style={styles.currencyGrid}>
+                  <div>
+                    <div style={styles.miniLabel}>Gross</div>
+                    <div style={styles.miniValue}>
+                      {money(row.gross_amount_cents, currency)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={styles.miniLabel}>Platform fees</div>
+                    <div style={styles.miniValue}>
+                      {money(row.platform_fee_cents, currency)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={styles.miniLabel}>Donor-covered fees</div>
+                    <div style={styles.miniValue}>
+                      {money(row.donor_fee_cents, currency)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={styles.miniLabel}>Net owed</div>
+                    <div style={styles.miniValue}>
+                      {money(row.net_amount_cents, currency)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>No payments yet</div>
+            <div style={styles.cardValue}>—</div>
+          </div>
+        )}
       </section>
 
       <section style={styles.panel}>
-        <h2 style={styles.sectionTitle}>By tenant</h2>
+        <h2 style={styles.sectionTitle}>By tenant and currency</h2>
 
-        {summaries.length ? (
+        {tenantSummaries.length ? (
           <div style={styles.tableWrap}>
             <table style={styles.table}>
               <thead>
                 <tr>
                   <th style={styles.th}>Tenant</th>
+                  <th style={styles.th}>Currency</th>
                   <th style={styles.th}>Payments</th>
                   <th style={styles.th}>Gross</th>
                   <th style={styles.th}>Platform fee</th>
+                  <th style={styles.th}>Donor fees</th>
                   <th style={styles.th}>Net owed</th>
                 </tr>
               </thead>
               <tbody>
-                {summaries.map((row) => (
-                  <tr key={row.tenant_slug || "unknown"}>
-                    <td style={styles.td}>{row.tenant_slug || "—"}</td>
-                    <td style={styles.td}>{Number(row.payment_count)}</td>
-                    <td style={styles.td}>
-                      {money(row.gross_amount_cents, currency)}
-                    </td>
-                    <td style={styles.td}>
-                      {money(row.platform_fee_cents, currency)}
-                    </td>
-                    <td style={styles.td}>
-                      {money(row.net_amount_cents, currency)}
-                    </td>
-                  </tr>
-                ))}
+                {tenantSummaries.map((row) => {
+                  const currency = row.currency || "gbp";
+
+                  return (
+                    <tr key={`${row.tenant_slug || "unknown"}-${currency}`}>
+                      <td style={styles.td}>{row.tenant_slug || "—"}</td>
+                      <td style={styles.td}>{currency.toUpperCase()}</td>
+                      <td style={styles.td}>{Number(row.payment_count)}</td>
+                      <td style={styles.td}>
+                        {money(row.gross_amount_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {money(row.platform_fee_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {money(row.donor_fee_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {money(row.net_amount_cents, currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -199,31 +258,43 @@ export default async function AdminRevenuePage() {
                   <th style={styles.th}>Customer</th>
                   <th style={styles.th}>Gross</th>
                   <th style={styles.th}>Fee</th>
+                  <th style={styles.th}>Donor fee</th>
                   <th style={styles.th}>Net</th>
+                  <th style={styles.th}>Covered?</th>
                   <th style={styles.th}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map((payment) => (
-                  <tr key={payment.id}>
-                    <td style={styles.td}>{formatDate(payment.created_at)}</td>
-                    <td style={styles.td}>
-                      {payment.raffle_title || payment.raffle_id}
-                    </td>
-                    <td style={styles.td}>{payment.tenant_slug || "—"}</td>
-                    <td style={styles.td}>{payment.customer_email || "—"}</td>
-                    <td style={styles.td}>
-                      {money(payment.gross_amount_cents, payment.currency || "gbp")}
-                    </td>
-                    <td style={styles.td}>
-                      {money(payment.platform_fee_cents, payment.currency || "gbp")}
-                    </td>
-                    <td style={styles.td}>
-                      {money(payment.net_amount_cents, payment.currency || "gbp")}
-                    </td>
-                    <td style={styles.td}>{payment.payment_status || "—"}</td>
-                  </tr>
-                ))}
+                {payments.map((payment) => {
+                  const currency = payment.currency || "gbp";
+
+                  return (
+                    <tr key={payment.id}>
+                      <td style={styles.td}>{formatDate(payment.created_at)}</td>
+                      <td style={styles.td}>
+                        {payment.raffle_title || payment.raffle_id}
+                      </td>
+                      <td style={styles.td}>{payment.tenant_slug || "—"}</td>
+                      <td style={styles.td}>{payment.customer_email || "—"}</td>
+                      <td style={styles.td}>
+                        {money(payment.gross_amount_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {money(payment.platform_fee_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {money(payment.donor_fee_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {money(payment.net_amount_cents, currency)}
+                      </td>
+                      <td style={styles.td}>
+                        {payment.donor_covered_fees ? "Yes" : "No"}
+                      </td>
+                      <td style={styles.td}>{payment.payment_status || "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -266,7 +337,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cards: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
     gap: 14,
   },
   card: {
@@ -286,6 +357,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 28,
     fontWeight: 900,
     color: "#111827",
+  },
+  currencyGrid: {
+    display: "grid",
+    gap: 10,
+  },
+  miniLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  miniValue: {
+    color: "#111827",
+    fontSize: 20,
+    fontWeight: 900,
   },
   panel: {
     padding: 18,
