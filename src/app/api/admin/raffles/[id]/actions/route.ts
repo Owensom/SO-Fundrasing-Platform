@@ -5,17 +5,19 @@ import {
   closeRaffle,
   deleteRaffle,
   getRaffleById,
-  getSoldTicketsForDraw,
   setRaffleWinner,
 } from "@/lib/raffles";
-import { queryOne } from "@/lib/db";
+import { query } from "@/lib/db";
 import { sendWinnerEmail } from "@/lib/email";
 
 type Body = {
   action?: "close" | "draw" | "delete";
 };
 
-type WinnerRow = {
+type SoldTicketRow = {
+  sale_id: string;
+  ticket_number: number;
+  colour: string | null;
   buyer_email: string | null;
   buyer_name: string | null;
 };
@@ -64,7 +66,28 @@ export async function POST(
       return NextResponse.json({ ok: true, deleted: true });
     }
 
-    const soldTickets = await getSoldTicketsForDraw(raffleId);
+    if (body.action !== "draw") {
+      return NextResponse.json(
+        { ok: false, error: "Unknown action" },
+        { status: 400 }
+      );
+    }
+
+    const soldTickets = await query<SoldTicketRow>(
+      `
+      select
+        id::text as sale_id,
+        ticket_number::int as ticket_number,
+        colour::text as colour,
+        buyer_email,
+        buyer_name
+      from raffle_ticket_reservations
+      where raffle_id = $1
+        and status = 'sold'
+      order by created_at asc
+      `,
+      [raffleId]
+    );
 
     if (!soldTickets.length) {
       return NextResponse.json(
@@ -91,28 +114,19 @@ export async function POST(
       );
     }
 
-    const winnerRow = await queryOne<WinnerRow>(
-      `
-      select buyer_email, buyer_name
-      from raffle_ticket_sales
-      where id = $1
-      limit 1
-      `,
-      [winner.sale_id]
-    );
-
     let emailSent = false;
     let emailError: string | null = null;
 
     try {
-      if (winnerRow?.buyer_email) {
+      if (winner.buyer_email) {
         await sendWinnerEmail({
-          to: winnerRow.buyer_email,
-          name: winnerRow.buyer_name,
+          to: winner.buyer_email,
+          name: winner.buyer_name,
           raffleTitle: updated.title,
           ticketNumber: winner.ticket_number,
           colour: winner.colour,
         });
+
         emailSent = true;
       } else {
         emailError = "Winner email address not found";
@@ -125,6 +139,12 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       raffle: updated,
+      winner: {
+        ticketNumber: winner.ticket_number,
+        colour: winner.colour,
+        buyerEmail: winner.buyer_email,
+        buyerName: winner.buyer_name,
+      },
       emailSent,
       emailError,
     });
@@ -135,7 +155,6 @@ export async function POST(
       {
         ok: false,
         error: error?.message || "Unknown error",
-        stack: error?.stack || null,
       },
       { status: 500 }
     );
