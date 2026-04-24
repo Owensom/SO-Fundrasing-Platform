@@ -31,7 +31,10 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
   const [coverFees, setCoverFees] = useState(true);
 
   const sold = useMemo(() => new Set(game.config_json?.sold ?? []), [game]);
-  const reserved = useMemo(() => new Set(game.config_json?.reserved ?? []), [game]);
+  const reserved = useMemo(
+    () => new Set(game.config_json?.reserved ?? []),
+    [game],
+  );
 
   const squares = useMemo(
     () => Array.from({ length: game.total_squares }, (_, i) => i + 1),
@@ -95,7 +98,7 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
         body: JSON.stringify({
           reservationToken: reserveData.reservationToken,
           coverFees,
-          successUrl: `${window.location.origin}/success`,
+          successUrl: `${window.location.origin}/s/${game.slug}?paid=1`,
           cancelUrl: `${window.location.origin}/s/${game.slug}`,
         }),
       });
