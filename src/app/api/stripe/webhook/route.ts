@@ -40,10 +40,10 @@ export async function POST(request: NextRequest) {
         webhookSecret
       );
     } catch (error: any) {
-      console.error("stripe webhook signature error", error);
+      console.error("Stripe webhook signature error", error);
 
       return NextResponse.json(
-        { ok: false, error: `Webhook signature failed: ${error?.message}` },
+        { ok: false, error: error?.message || "Invalid signature" },
         { status: 400 }
       );
     }
@@ -58,27 +58,24 @@ export async function POST(request: NextRequest) {
     const reservationToken = String(session.metadata?.reservation_token || "");
     const tenantSlug = String(session.metadata?.tenant_slug || "");
 
-    const grossAmountCents = Number(session.amount_total || 0);
-    const platformFeeCents = Number(session.metadata?.platform_fee_cents || 0);
-    const netAmountCents = Number(
-      session.metadata?.net_amount_cents ||
-        Math.max(grossAmountCents - platformFeeCents, 0)
-    );
+    if (!raffleId || !reservationToken) {
+      return NextResponse.json(
+        { ok: false, error: "Missing raffle_id or reservation_token metadata" },
+        { status: 400 }
+      );
+    }
 
     const paymentIntentId =
       typeof session.payment_intent === "string"
         ? session.payment_intent
         : session.payment_intent?.id || null;
 
-    if (!raffleId || !reservationToken) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing raffle_id or reservation_token in Stripe metadata",
-        },
-        { status: 400 }
-      );
-    }
+    const grossAmountCents = Number(session.amount_total || 0);
+    const platformFeeCents = Number(session.metadata?.platform_fee_cents || 0);
+    const netAmountCents = Number(
+      session.metadata?.net_amount_cents ||
+        Math.max(grossAmountCents - platformFeeCents, 0)
+    );
 
     await query(
       `
@@ -106,6 +103,22 @@ export async function POST(request: NextRequest) {
 
     await query(
       `
+      update raffles
+      set
+        sold_tickets = (
+          select count(*)::int
+          from raffle_ticket_reservations
+          where raffle_id = $1
+            and status = 'sold'
+        ),
+        updated_at = now()
+      where id = $1
+      `,
+      [raffleId]
+    );
+
+    await query(
+      `
       insert into platform_payments (
         stripe_checkout_session_id,
         stripe_payment_intent_id,
@@ -123,10 +136,14 @@ export async function POST(request: NextRequest) {
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
-        payment_status = excluded.payment_status,
+        raffle_id = excluded.raffle_id,
+        tenant_slug = excluded.tenant_slug,
+        reservation_token = excluded.reservation_token,
+        currency = excluded.currency,
         gross_amount_cents = excluded.gross_amount_cents,
         platform_fee_cents = excluded.platform_fee_cents,
         net_amount_cents = excluded.net_amount_cents,
+        payment_status = excluded.payment_status,
         customer_email = excluded.customer_email
       `,
       [
@@ -148,14 +165,9 @@ export async function POST(request: NextRequest) {
       ok: true,
       event: event.type,
       checkoutSessionId: session.id,
-      raffleId,
-      reservationToken,
-      grossAmountCents,
-      platformFeeCents,
-      netAmountCents,
     });
   } catch (error: any) {
-    console.error("stripe webhook error", error);
+    console.error("Stripe webhook error", error);
 
     return NextResponse.json(
       { ok: false, error: error?.message || "Webhook failed" },
