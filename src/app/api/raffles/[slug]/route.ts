@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type DbRaffleRow = {
   id: string;
@@ -31,6 +32,14 @@ type TicketRow = {
   colour: string | null;
 };
 
+type WinnerRow = {
+  prize_position: number;
+  ticket_number: number;
+  colour: string | null;
+  buyer_name: string | null;
+  drawn_at: string | null;
+};
+
 function normalizeColourItem(value: unknown, index: number) {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -54,27 +63,17 @@ function normalizeColourItem(value: unknown, index: number) {
             ? row.id.trim()
             : `Colour ${index + 1}`;
 
-    const hex =
-      typeof row.hex === "string" && row.hex.trim()
-        ? row.hex.trim()
-        : null;
-
-    const id =
-      typeof row.id === "string" && row.id.trim()
-        ? row.id.trim()
-        : `colour-${index}`;
-
-    const sortOrder = Number.isFinite(Number(row.sortOrder))
-      ? Number(row.sortOrder)
-      : Number.isFinite(Number(row.sort_order))
-        ? Number(row.sort_order)
-        : index;
-
     return {
-      id,
+      id:
+        typeof row.id === "string" && row.id.trim()
+          ? row.id.trim()
+          : `colour-${index}`,
       name,
-      hex,
-      sortOrder,
+      hex:
+        typeof row.hex === "string" && row.hex.trim()
+          ? row.hex.trim()
+          : null,
+      sortOrder: Number(row.sortOrder ?? row.sort_order ?? index) || index,
     };
   }
 
@@ -164,6 +163,21 @@ export async function GET(
       [raffleId]
     );
 
+    const winners = await query<WinnerRow>(
+      `
+      select
+        prize_position::int,
+        ticket_number::int,
+        colour,
+        buyer_name,
+        drawn_at
+      from raffle_winners
+      where raffle_id = $1
+      order by prize_position asc
+      `,
+      [raffleId]
+    );
+
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
     const offersRaw = Array.isArray(config.offers) ? config.offers : [];
 
@@ -201,6 +215,13 @@ export async function GET(
             : null,
         winnerColour: raffle.winner_colour ?? null,
         drawnAt: raffle.drawn_at ?? null,
+        winners: winners.map((winner) => ({
+          prizePosition: Number(winner.prize_position),
+          ticketNumber: Number(winner.ticket_number),
+          colour: winner.colour,
+          buyerName: winner.buyer_name,
+          drawnAt: winner.drawn_at,
+        })),
       },
     });
   } catch (error: any) {
