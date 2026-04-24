@@ -21,6 +21,7 @@ type DbRaffleRow = {
     endNumber?: number;
     colours?: unknown[];
     offers?: unknown[];
+    prizes?: unknown[];
   } | null;
   winner_ticket_number?: number | null;
   winner_colour?: string | null;
@@ -115,6 +116,35 @@ function normalizeOfferItem(value: unknown, index: number) {
   };
 }
 
+function normalizePrizeItem(value: unknown, index: number) {
+  if (!value || typeof value !== "object") return null;
+
+  const row = value as Record<string, unknown>;
+
+  const title =
+    typeof row.title === "string" && row.title.trim()
+      ? row.title.trim()
+      : "";
+
+  if (!title) return null;
+
+  const isPublic = row.isPublic !== false && row.is_public !== false;
+
+  if (!isPublic) return null;
+
+  return {
+    position: Number.isFinite(Number(row.position))
+      ? Math.max(1, Math.floor(Number(row.position)))
+      : index + 1,
+    title,
+    description:
+      typeof row.description === "string" && row.description.trim()
+        ? row.description.trim()
+        : "",
+    isPublic: true,
+  };
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { slug: string } }
@@ -180,6 +210,12 @@ export async function GET(
 
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
     const offersRaw = Array.isArray(config.offers) ? config.offers : [];
+    const prizesRaw = Array.isArray(config.prizes) ? config.prizes : [];
+
+    const prizes = prizesRaw
+      .map(normalizePrizeItem)
+      .filter(Boolean)
+      .sort((a: any, b: any) => a.position - b.position);
 
     return NextResponse.json({
       ok: true,
@@ -201,6 +237,7 @@ export async function GET(
         endNumber: Number(config.endNumber ?? 1),
         colours: coloursRaw.map(normalizeColourItem),
         offers: offersRaw.map(normalizeOfferItem),
+        prizes,
         soldTickets: sold.map((t) => ({
           number: Number(t.ticket_number),
           colour: t.colour || "default",
