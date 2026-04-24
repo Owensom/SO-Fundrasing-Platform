@@ -34,6 +34,7 @@ export default async function AdminHomePage() {
       </div>
 
       <section style={styles.grid}>
+        {/* RAFFLES */}
         <Link href="/admin/raffles" style={styles.card}>
           <div style={styles.cardTitle}>🎟 Manage Raffles</div>
           <div style={styles.cardDesc}>
@@ -48,6 +49,22 @@ export default async function AdminHomePage() {
           </div>
         </Link>
 
+        {/* SQUARES */}
+        <Link href="/admin/squares" style={styles.card}>
+          <div style={styles.cardTitle}>🔲 Manage Squares</div>
+          <div style={styles.cardDesc}>
+            View and manage your squares games
+          </div>
+        </Link>
+
+        <Link href="/admin/squares/new" style={styles.card}>
+          <div style={styles.cardTitle}>➕ Create Squares Game</div>
+          <div style={styles.cardDesc}>
+            Launch a new squares game
+          </div>
+        </Link>
+
+        {/* REVENUE */}
         <Link href="/admin/revenue" style={styles.card}>
           <div style={styles.cardTitle}>💰 Revenue & Fees</div>
           <div style={styles.cardDesc}>
@@ -107,7 +124,6 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
     color: "#111827",
     boxShadow: "0 4px 14px rgba(0,0,0,0.05)",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease",
   },
   cardTitle: {
     fontSize: 18,
