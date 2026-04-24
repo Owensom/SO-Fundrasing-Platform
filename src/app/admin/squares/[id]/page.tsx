@@ -4,6 +4,7 @@ import {
   getSquaresGameById,
   listSquaresWinners,
 } from "../../../../../api/_lib/squares-repo";
+import ImageUploadField from "./ImageUploadField";
 
 type PageProps = {
   params: {
@@ -29,7 +30,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
       <p>
-        <a href="/admin/squares/new">Create another squares game</a>
+        <a href="/admin">← Dashboard</a> |{" "}
+        <a href="/admin/squares">Squares games</a> |{" "}
+        <a href="/admin/squares/new">Create another</a>
       </p>
 
       <h1>Edit squares game</h1>
@@ -76,14 +79,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           />
         </label>
 
-        <label>
-          Image URL
-          <input
-            name="image_url"
-            defaultValue={game.image_url ?? ""}
-            style={{ display: "block", width: "100%", padding: 10 }}
-          />
-        </label>
+        <ImageUploadField currentImageUrl={game.image_url ?? ""} />
 
         <label>
           Number of squares
@@ -177,24 +173,16 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <h2>Draw winners</h2>
 
         {winners.length > 0 ? (
-          <div>
-            <p>Winners have already been drawn.</p>
-
-            <ul>
-              {winners.map((winner) => (
-                <li key={winner.id}>
-                  <strong>{winner.prize_title}</strong>: Square #
-                  {winner.square_number} — {firstNameOnly(winner.customer_name)}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ul>
+            {winners.map((winner) => (
+              <li key={winner.id}>
+                <strong>{winner.prize_title}</strong>: Square #
+                {winner.square_number} — {firstNameOnly(winner.customer_name)}
+              </li>
+            ))}
+          </ul>
         ) : (
-          <form
-            action={`/api/admin/squares/${game.id}/draw`}
-            method="post"
-            style={{ marginTop: 16 }}
-          >
+          <form action={`/api/admin/squares/${game.id}/draw`} method="post">
             <button
               type="submit"
               style={{
