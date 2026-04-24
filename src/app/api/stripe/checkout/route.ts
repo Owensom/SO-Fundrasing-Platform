@@ -16,6 +16,7 @@ type CheckoutBody = {
   reservationToken?: string;
   successUrl?: string;
   cancelUrl?: string;
+  coverFees?: boolean;
 };
 
 type ReservationRow = {
@@ -68,14 +69,14 @@ function getOffersFromRaffle(raffle: RaffleLike): unknown {
   return [];
 }
 
-function calculatePlatformFee(totalCents: number) {
+function calculatePlatformFee(ticketSubtotalCents: number) {
   const platformFeePercent = Number(process.env.PLATFORM_FEE_PERCENT ?? 10);
 
   if (!Number.isFinite(platformFeePercent) || platformFeePercent < 0) {
-    return Math.round(totalCents * 0.1);
+    return Math.round(ticketSubtotalCents * 0.1);
   }
 
-  return Math.round(totalCents * (platformFeePercent / 100));
+  return Math.round(ticketSubtotalCents * (platformFeePercent / 100));
 }
 
 export async function POST(request: NextRequest) {
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest) {
       typeof body.reservationToken === "string"
         ? body.reservationToken.trim()
         : "";
+
+    const donorCoveredFees = body.coverFees === true;
 
     if (!raffleId || !reservationToken) {
       return NextResponse.json(
@@ -177,8 +180,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const platformFeeCents = calculatePlatformFee(pricing.subtotal_cents);
-    const netAmountCents = Math.max(pricing.subtotal_cents - platformFeeCents, 0);
+    const ticketSubtotalCents = pricing.subtotal_cents;
+    const platformFeeCents = calculatePlatformFee(ticketSubtotalCents);
+    const donorFeeCents = donorCoveredFees ? platformFeeCents : 0;
+
+    const grossAmountCents = ticketSubtotalCents + donorFeeCents;
+
+    const netAmountCents = donorCoveredFees
+      ? ticketSubtotalCents
+      : Math.max(ticketSubtotalCents - platformFeeCents, 0);
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
@@ -199,6 +209,12 @@ export async function POST(request: NextRequest) {
             .join(", ")}`
         : "";
 
+    const feeDescription = donorCoveredFees
+      ? ` | Donor covered platform fee: ${(donorFeeCents / 100).toFixed(2)} ${
+          raffle.currency
+        }`
+      : "";
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -210,9 +226,9 @@ export async function POST(request: NextRequest) {
               name: raffle.title,
               description: `${quantity} ticket${
                 quantity > 1 ? "s" : ""
-              }${appliedOffersDescription}`,
+              }${appliedOffersDescription}${feeDescription}`,
             },
-            unit_amount: pricing.subtotal_cents,
+            unit_amount: grossAmountCents,
           },
           quantity: 1,
         },
@@ -224,11 +240,19 @@ export async function POST(request: NextRequest) {
         tenant_slug: raffle.tenant_slug ?? "",
         ticket_quantity: String(quantity),
         single_ticket_price_cents: String(singleTicketPriceCents),
-        subtotal_cents: String(pricing.subtotal_cents),
+
+        ticket_subtotal_cents: String(ticketSubtotalCents),
+        subtotal_cents: String(ticketSubtotalCents),
+        gross_amount_cents: String(grossAmountCents),
+
         base_total_cents: String(pricing.base_total_cents),
         savings_cents: String(pricing.savings_cents),
+
         platform_fee_cents: String(platformFeeCents),
+        donor_covered_fees: donorCoveredFees ? "true" : "false",
+        donor_fee_cents: String(donorFeeCents),
         net_amount_cents: String(netAmountCents),
+
         applied_offers_json: JSON.stringify(pricing.applied_offers ?? []),
       },
       success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
@@ -251,7 +275,11 @@ export async function POST(request: NextRequest) {
       url: checkoutUrl,
       pricing: {
         ...pricing,
+        ticket_subtotal_cents: ticketSubtotalCents,
+        gross_amount_cents: grossAmountCents,
         platform_fee_cents: platformFeeCents,
+        donor_covered_fees: donorCoveredFees,
+        donor_fee_cents: donorFeeCents,
         net_amount_cents: netAmountCents,
       },
     });
