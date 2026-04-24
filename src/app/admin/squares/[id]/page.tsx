@@ -4,7 +4,7 @@ import {
   getSquaresGameById,
   listSquaresWinners,
 } from "../../../../../api/_lib/squares-repo";
-import ImageUploadField from "./ImageUploadField";
+import ImageUploadField from "@/components/ImageUploadField";
 
 type PageProps = {
   params: {
