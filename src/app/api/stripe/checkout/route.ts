@@ -25,8 +25,6 @@ type ReservationRow = {
   expires_at: string;
   buyer_email: string | null;
   buyer_name: string | null;
-  status?: string | null;
-  created_at?: string;
 };
 
 type ReservationCountRow = {
@@ -49,48 +47,18 @@ type RaffleLike = {
 };
 
 function toMoneyCentsFromRaffle(raffle: RaffleLike): number {
-  const centsRaw = raffle.ticket_price_cents;
+  const cents = Number(raffle.ticket_price_cents);
+  if (Number.isFinite(cents) && cents > 0) return Math.round(cents);
 
-  if (typeof centsRaw === "number" && Number.isFinite(centsRaw) && centsRaw > 0) {
-    return Math.round(centsRaw);
-  }
-
-  if (
-    typeof centsRaw === "string" &&
-    centsRaw.trim() !== "" &&
-    Number.isFinite(Number(centsRaw))
-  ) {
-    const parsed = Number(centsRaw);
-    if (parsed > 0) return Math.round(parsed);
-  }
-
-  const priceRaw = raffle.ticket_price;
-
-  if (typeof priceRaw === "number" && Number.isFinite(priceRaw) && priceRaw > 0) {
-    return Math.round(priceRaw * 100);
-  }
-
-  if (
-    typeof priceRaw === "string" &&
-    priceRaw.trim() !== "" &&
-    Number.isFinite(Number(priceRaw))
-  ) {
-    const parsed = Number(priceRaw);
-    if (parsed > 0) return Math.round(parsed * 100);
-  }
+  const price = Number(raffle.ticket_price);
+  if (Number.isFinite(price) && price > 0) return Math.round(price * 100);
 
   return 0;
 }
 
 function getOffersFromRaffle(raffle: RaffleLike): unknown {
-  if (Array.isArray(raffle.config_json?.offers)) {
-    return raffle.config_json?.offers;
-  }
-
-  if (Array.isArray(raffle.offers)) {
-    return raffle.offers;
-  }
-
+  if (Array.isArray(raffle.config_json?.offers)) return raffle.config_json?.offers;
+  if (Array.isArray(raffle.offers)) return raffle.offers;
   return [];
 }
 
@@ -98,117 +66,49 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CheckoutBody;
 
-    const requestedRaffleId =
-      typeof body.raffleId === "string" ? body.raffleId.trim() : "";
+    const raffleId = typeof body.raffleId === "string" ? body.raffleId.trim() : "";
     const reservationToken =
-      typeof body.reservationToken === "string"
-        ? body.reservationToken.trim()
-        : "";
+      typeof body.reservationToken === "string" ? body.reservationToken.trim() : "";
 
-    if (!requestedRaffleId || !reservationToken) {
+    if (!raffleId || !reservationToken) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Missing raffleId or reservationToken | raffleId=${requestedRaffleId || "(blank)"} | token=${reservationToken || "(blank)"}`,
-        },
+        { ok: false, error: "Missing raffleId or reservationToken." },
         { status: 400 }
       );
     }
 
-    const exactReservations = await query<ReservationRow>(
+    const reservations = await query<ReservationRow>(
       `
       select
-        id,
+        id::text,
         raffle_id,
         reservation_token,
         expires_at,
         buyer_email,
-        buyer_name,
-        status,
-        created_at
+        buyer_name
       from raffle_ticket_reservations
       where reservation_token = $1
         and raffle_id = $2
+        and expires_at > now()
       order by created_at asc
       `,
-      [reservationToken, requestedRaffleId]
+      [reservationToken, raffleId]
     );
 
-    if (!exactReservations.length) {
-      const tokenOnlyReservations = await query<ReservationRow>(
-        `
-        select
-          id,
-          raffle_id,
-          reservation_token,
-          expires_at,
-          buyer_email,
-          buyer_name,
-          status,
-          created_at
-        from raffle_ticket_reservations
-        where reservation_token = $1
-        order by created_at asc
-        `,
-        [reservationToken]
-      );
-
-      const latestReservations = await query<ReservationRow>(
-        `
-        select
-          id,
-          raffle_id,
-          reservation_token,
-          expires_at,
-          buyer_email,
-          buyer_name,
-          status,
-          created_at
-        from raffle_ticket_reservations
-        order by created_at desc
-        limit 3
-        `
-      );
-
+    if (!reservations.length) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            `Reservation not found | sent raffleId=${requestedRaffleId} | sent token=${reservationToken} | tokenOnlyMatches=${tokenOnlyReservations.length}` +
-            (tokenOnlyReservations[0]
-              ? ` | token belongs to raffleId=${tokenOnlyReservations[0].raffle_id}`
-              : "") +
-            (latestReservations[0]
-              ? ` | latest raffleId=${latestReservations[0].raffle_id} | latest token=${latestReservations[0].reservation_token}`
-              : ""),
-        },
+        { ok: false, error: "Reservation not found or expired." },
         { status: 404 }
       );
     }
 
-    const reservation =
-      exactReservations.find(
-        (row) => new Date(row.expires_at).getTime() > Date.now()
-      ) ?? null;
+    const reservation = reservations[0];
 
-    if (!reservation) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `Reservation expired | raffleId=${requestedRaffleId} | token=${reservationToken}`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const raffle = (await getRaffleById(requestedRaffleId)) as RaffleLike | null;
+    const raffle = (await getRaffleById(raffleId)) as RaffleLike | null;
 
     if (!raffle || raffle.status !== "published") {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Raffle not available | raffleId=${requestedRaffleId} | status=${raffle?.status || "(missing)"}`,
-        },
+        { ok: false, error: "Raffle is not available." },
         { status: 400 }
       );
     }
@@ -221,17 +121,14 @@ export async function POST(request: NextRequest) {
         and raffle_id = $2
         and expires_at > now()
       `,
-      [reservationToken, requestedRaffleId]
+      [reservationToken, raffleId]
     );
 
     const quantity = Number(reservationCount?.count ?? 0);
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Invalid reservation quantity | raffleId=${requestedRaffleId} | token=${reservationToken} | count=${String(reservationCount?.count ?? 0)}`,
-        },
+        { ok: false, error: "Invalid reservation quantity." },
         { status: 400 }
       );
     }
@@ -240,34 +137,27 @@ export async function POST(request: NextRequest) {
 
     if (!Number.isFinite(singleTicketPriceCents) || singleTicketPriceCents <= 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Invalid ticket price | raffleId=${requestedRaffleId}`,
-        },
+        { ok: false, error: "Invalid ticket price." },
         { status: 400 }
       );
     }
 
-    const normalizedOffers = normalizeOffers(getOffersFromRaffle(raffle));
+    const offers = normalizeOffers(getOffersFromRaffle(raffle));
 
     const pricing = getBestPriceForQuantity({
       quantity,
       single_ticket_price_cents: singleTicketPriceCents,
-      offers: normalizedOffers,
+      offers,
     });
 
     if (!Number.isFinite(pricing.subtotal_cents) || pricing.subtotal_cents <= 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Invalid checkout total | raffleId=${requestedRaffleId} | quantity=${quantity}`,
-        },
+        { ok: false, error: "Invalid checkout total." },
         { status: 400 }
       );
     }
 
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
     const successUrl =
       typeof body.successUrl === "string" && body.successUrl.trim()
@@ -279,6 +169,13 @@ export async function POST(request: NextRequest) {
         ? body.cancelUrl.trim()
         : `${baseUrl}/r/${raffle.slug}`;
 
+    const appliedOffersDescription =
+      pricing.applied_offers?.length > 0
+        ? ` | Offers: ${pricing.applied_offers
+            .map((offer: any) => `${offer.count} × ${offer.label}`)
+            .join(", ")}`
+        : "";
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -288,7 +185,7 @@ export async function POST(request: NextRequest) {
             currency: raffle.currency.toLowerCase(),
             product_data: {
               name: raffle.title,
-              description: `${quantity} ticket${quantity > 1 ? "s" : ""}`,
+              description: `${quantity} ticket${quantity > 1 ? "s" : ""}${appliedOffersDescription}`,
             },
             unit_amount: pricing.subtotal_cents,
           },
@@ -297,26 +194,24 @@ export async function POST(request: NextRequest) {
       ],
       customer_email: reservation.buyer_email || undefined,
       metadata: {
-        raffle_id: requestedRaffleId,
+        raffle_id: raffleId,
         reservation_token: reservationToken,
         ticket_quantity: String(quantity),
+        subtotal_cents: String(pricing.subtotal_cents),
+        base_total_cents: String(pricing.base_total_cents),
+        savings_cents: String(pricing.savings_cents),
+        applied_offers_json: JSON.stringify(pricing.applied_offers ?? []),
       },
       success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
     });
 
     const checkoutUrl =
-      session.url ||
-      (session.id
-        ? `https://checkout.stripe.com/c/pay/${session.id}`
-        : null);
+      session.url || (session.id ? `https://checkout.stripe.com/c/pay/${session.id}` : null);
 
     if (!checkoutUrl) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Stripe session created but no checkout URL | raffleId=${requestedRaffleId} | token=${reservationToken}`,
-        },
+        { ok: false, error: "Stripe session created but no checkout URL." },
         { status: 500 }
       );
     }
@@ -324,15 +219,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       url: checkoutUrl,
+      pricing,
     });
   } catch (error: any) {
     console.error("stripe checkout error", error);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: error?.message || "Internal server error.",
-      },
+      { ok: false, error: error?.message || "Internal server error." },
       { status: 500 }
     );
   }
