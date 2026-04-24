@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { getRaffleById } from "@/lib/raffles";
 import { query } from "@/lib/db";
 import RaffleAdminActions from "./RaffleAdminActions";
+import PrizeSettings from "./PrizeSettings";
 
 type PageProps = {
   params: {
@@ -122,7 +123,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
   );
 
   const fallbackWinners: WinnerRow[] =
-    winners.length === 0 && raffle.status === "drawn" && raffle.winner_ticket_number != null
+    winners.length === 0 &&
+    raffle.status === "drawn" &&
+    raffle.winner_ticket_number != null
       ? [
           {
             id: "fallback",
@@ -140,6 +143,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
   const displayWinners = winners.length ? winners : fallbackWinners;
   const badgeStyle = statusStyles(raffle.status);
+
+  const initialPrizes =
+    Array.isArray((raffle.config_json as any)?.prizes)
+      ? ((raffle.config_json as any).prizes as any[])
+      : [];
 
   return (
     <main
@@ -244,6 +252,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
         drawnAt={raffle.drawn_at}
       />
 
+      <PrizeSettings raffleId={raffle.id} initialPrizes={initialPrizes} />
+
       {raffle.status === "drawn" ? (
         <section
           style={{
@@ -275,7 +285,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#6b7280",
+                        marginBottom: 6,
+                      }}
+                    >
                       Prize
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 800 }}>
@@ -284,7 +300,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#6b7280",
+                        marginBottom: 6,
+                      }}
+                    >
                       Winning ticket
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 800 }}>
@@ -296,7 +318,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#6b7280",
+                        marginBottom: 6,
+                      }}
+                    >
                       Winner
                     </div>
                     <div style={{ fontWeight: 700 }}>
