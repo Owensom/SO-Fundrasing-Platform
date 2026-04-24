@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getRaffleById } from "@/lib/raffles";
+import { query } from "@/lib/db";
 import RaffleAdminActions from "./RaffleAdminActions";
 
 type PageProps = {
@@ -9,6 +10,31 @@ type PageProps = {
     id: string;
   };
 };
+
+type WinnerRow = {
+  id: string;
+  raffle_id: string;
+  prize_position: number;
+  ticket_number: number;
+  colour: string | null;
+  sale_id: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  drawn_at: string;
+};
+
+function ordinal(position: number) {
+  const suffix =
+    position % 10 === 1 && position % 100 !== 11
+      ? "st"
+      : position % 10 === 2 && position % 100 !== 12
+        ? "nd"
+        : position % 10 === 3 && position % 100 !== 13
+          ? "rd"
+          : "th";
+
+  return `${position}${suffix}`;
+}
 
 function formatStatus(status: "draft" | "published" | "closed" | "drawn") {
   switch (status) {
@@ -76,6 +102,43 @@ export default async function AdminRafflePage({ params }: PageProps) {
     notFound();
   }
 
+  const winners = await query<WinnerRow>(
+    `
+    select
+      id::text,
+      raffle_id,
+      prize_position::int,
+      ticket_number::int,
+      colour,
+      sale_id,
+      buyer_name,
+      buyer_email,
+      drawn_at
+    from raffle_winners
+    where raffle_id = $1
+    order by prize_position asc
+    `,
+    [raffle.id]
+  );
+
+  const fallbackWinners: WinnerRow[] =
+    winners.length === 0 && raffle.status === "drawn" && raffle.winner_ticket_number != null
+      ? [
+          {
+            id: "fallback",
+            raffle_id: raffle.id,
+            prize_position: 1,
+            ticket_number: raffle.winner_ticket_number,
+            colour: raffle.winner_colour,
+            sale_id: raffle.winner_sale_id,
+            buyer_name: null,
+            buyer_email: null,
+            drawn_at: raffle.drawn_at || "",
+          },
+        ]
+      : [];
+
+  const displayWinners = winners.length ? winners : fallbackWinners;
   const badgeStyle = statusStyles(raffle.status);
 
   return (
@@ -150,7 +213,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
         </div>
 
         <div
-          style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
         >
           <Link
             href={`/r/${raffle.slug}`}
@@ -188,82 +256,65 @@ export default async function AdminRafflePage({ params }: PageProps) {
           }}
         >
           <div style={{ fontSize: 22, fontWeight: 800, color: "#065f46" }}>
-            Winner Drawn
+            Winners Drawn
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 12,
-                background: "#ffffff",
-                border: "1px solid #d1fae5",
-              }}
-            >
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
-                Winning ticket
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 800 }}>
-                {raffle.winner_ticket_number != null
-                  ? `#${raffle.winner_ticket_number}`
-                  : "—"}
-              </div>
-            </div>
+          {displayWinners.length ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              {displayWinners.map((winner) => (
+                <div
+                  key={winner.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "120px 1fr 1fr",
+                    gap: 12,
+                    padding: 14,
+                    borderRadius: 12,
+                    background: "#ffffff",
+                    border: "1px solid #d1fae5",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+                      Prize
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>
+                      {ordinal(winner.prize_position)}
+                    </div>
+                  </div>
 
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 12,
-                background: "#ffffff",
-                border: "1px solid #d1fae5",
-              }}
-            >
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
-                Winning colour
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>
-                {raffle.winner_colour || "—"}
-              </div>
-            </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+                      Winning ticket
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>
+                      #{winner.ticket_number}
+                    </div>
+                    <div style={{ marginTop: 4, fontWeight: 700 }}>
+                      Colour: {winner.colour || "—"}
+                    </div>
+                  </div>
 
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 12,
-                background: "#ffffff",
-                border: "1px solid #d1fae5",
-              }}
-            >
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
-                Drawn at
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>
-                {formatDateTime(raffle.drawn_at)}
-              </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+                      Winner
+                    </div>
+                    <div style={{ fontWeight: 700 }}>
+                      {winner.buyer_name || "—"}
+                    </div>
+                    <div style={{ color: "#6b7280", fontSize: 14 }}>
+                      {winner.buyer_email || "—"}
+                    </div>
+                    <div style={{ color: "#6b7280", fontSize: 14, marginTop: 4 }}>
+                      {formatDateTime(winner.drawn_at)}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 12,
-                background: "#ffffff",
-                border: "1px solid #d1fae5",
-              }}
-            >
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
-                Drawn by
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>
-                {raffle.drawn_by || "—"}
-              </div>
-            </div>
-          </div>
+          ) : (
+            <div>No winners found.</div>
+          )}
         </section>
       ) : null}
 
@@ -376,24 +427,32 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 12, color: "#6b7280" }}>Label</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          Label
+                        </div>
                         <div style={{ fontWeight: 700 }}>{offer.label}</div>
                       </div>
 
                       <div>
-                        <div style={{ fontSize: 12, color: "#6b7280" }}>Price</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          Price
+                        </div>
                         <div style={{ fontWeight: 700 }}>
                           {raffle.currency} {offer.price.toFixed(2)}
                         </div>
                       </div>
 
                       <div>
-                        <div style={{ fontSize: 12, color: "#6b7280" }}>Quantity</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          Quantity
+                        </div>
                         <div style={{ fontWeight: 700 }}>{offer.quantity}</div>
                       </div>
 
                       <div>
-                        <div style={{ fontSize: 12, color: "#6b7280" }}>Active</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          Active
+                        </div>
                         <div style={{ fontWeight: 700 }}>
                           {offer.is_active ? "Yes" : "No"}
                         </div>
@@ -458,36 +517,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
               /r/{raffle.slug}
             </code>
           </div>
-
-          {raffle.status === "closed" ? (
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                background: "#fff7ed",
-                border: "1px solid #fed7aa",
-                color: "#9a3412",
-                fontWeight: 600,
-              }}
-            >
-              This raffle is closed. Customers should no longer be able to reserve or pay.
-            </div>
-          ) : null}
-
-          {raffle.status === "drawn" ? (
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                color: "#065f46",
-                fontWeight: 600,
-              }}
-            >
-              Winner has been drawn and can now be shown on the public raffle page.
-            </div>
-          ) : null}
         </aside>
       </section>
     </main>
