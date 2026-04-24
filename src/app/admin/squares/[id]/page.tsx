@@ -1,12 +1,19 @@
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getSquaresGameById } from "../../../../../api/_lib/squares-repo";
+import {
+  getSquaresGameById,
+  listSquaresWinners,
+} from "../../../../../api/_lib/squares-repo";
 
 type PageProps = {
   params: {
     id: string;
   };
 };
+
+function firstNameOnly(name?: string | null) {
+  return name?.trim().split(/\s+/)[0] || "Winner";
+}
 
 export default async function AdminSquaresEditPage({ params }: PageProps) {
   const tenantSlug = getTenantSlugFromHeaders();
@@ -16,6 +23,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     notFound();
   }
 
+  const winners = await listSquaresWinners(game.id);
   const prizesJson = JSON.stringify(game.config_json?.prizes ?? [], null, 2);
 
   return (
@@ -157,6 +165,52 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           Save squares game
         </button>
       </form>
+
+      <section
+        style={{
+          marginTop: 32,
+          padding: 16,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+        }}
+      >
+        <h2>Draw winners</h2>
+
+        {winners.length > 0 ? (
+          <div>
+            <p>Winners have already been drawn.</p>
+
+            <ul>
+              {winners.map((winner) => (
+                <li key={winner.id}>
+                  <strong>{winner.prize_title}</strong>: Square #
+                  {winner.square_number} — {firstNameOnly(winner.customer_name)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <form
+            action={`/api/admin/squares/${game.id}/draw`}
+            method="post"
+            style={{ marginTop: 16 }}
+          >
+            <button
+              type="submit"
+              style={{
+                padding: 12,
+                borderRadius: 8,
+                border: "1px solid #111",
+                background: "#16a34a",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              Draw winners
+            </button>
+          </form>
+        )}
+      </section>
     </main>
   );
 }
