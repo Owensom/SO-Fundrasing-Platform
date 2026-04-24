@@ -87,7 +87,6 @@ async function getRaffle(id: string): Promise<RaffleDetails | null> {
 
 function coloursToInput(colours: ColourValue[] | undefined): string {
   if (!Array.isArray(colours) || colours.length === 0) return "";
-
   return colours
     .map((colour) => {
       if (typeof colour === "string") return colour;
@@ -104,7 +103,6 @@ function offersToJson(offers: Offer[] | undefined): string {
   if (!Array.isArray(offers) || offers.length === 0) {
     return "[]";
   }
-
   return JSON.stringify(
     offers.map((offer) => ({
       id: offer.id,
@@ -150,6 +148,9 @@ export default async function EditRafflePage({
   }
 
   const config = raffle.config_json ?? {};
+
+  // Disable critical fields if raffle is published or drawn
+  const isLocked = raffle.status === "published" || raffle.status === "drawn";
 
   return (
     <main style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
@@ -208,6 +209,7 @@ export default async function EditRafflePage({
           <select
             name="currency"
             defaultValue={raffle.currency}
+            disabled={isLocked}
             style={{ width: "100%", padding: 12 }}
           >
             <option value="EUR">EUR</option>
@@ -225,6 +227,7 @@ export default async function EditRafflePage({
             step="0.01"
             defaultValue={raffle.ticket_price}
             style={{ width: "100%", padding: 12 }}
+            disabled={isLocked}
           />
         </label>
 
@@ -237,6 +240,7 @@ export default async function EditRafflePage({
             step="1"
             defaultValue={raffle.total_tickets}
             style={{ width: "100%", padding: 12 }}
+            disabled={isLocked}
           />
         </label>
 
@@ -249,6 +253,7 @@ export default async function EditRafflePage({
             step="1"
             defaultValue={Number(config.startNumber ?? 0)}
             style={{ width: "100%", padding: 12 }}
+            disabled={isLocked}
           />
         </label>
 
@@ -261,6 +266,7 @@ export default async function EditRafflePage({
             step="1"
             defaultValue={Number(config.endNumber ?? 0)}
             style={{ width: "100%", padding: 12 }}
+            disabled={isLocked}
           />
         </label>
 
@@ -270,6 +276,7 @@ export default async function EditRafflePage({
             name="colours"
             defaultValue={coloursToInput(config.colours)}
             style={{ width: "100%", padding: 12 }}
+            disabled={isLocked}
           />
         </label>
 
