@@ -13,6 +13,14 @@ type RafflePrize = {
   isPublic: boolean;
 };
 
+type RaffleWinner = {
+  prizePosition: number;
+  ticketNumber: number;
+  colour: string | null;
+  buyerName: string | null;
+  drawnAt: string | null;
+};
+
 type SafeRaffle = {
   id: string;
   slug: string;
@@ -25,6 +33,7 @@ type SafeRaffle = {
   startNumber: number;
   endNumber: number;
   prizes: RafflePrize[];
+  winners: RaffleWinner[];
 };
 
 function ordinal(n: number) {
@@ -43,6 +52,7 @@ function formatCurrency(value: number, currency: string) {
 
 function toSafeRaffle(raw: any): SafeRaffle {
   const prizes = Array.isArray(raw?.prizes) ? raw.prizes : [];
+  const winners = Array.isArray(raw?.winners) ? raw.winners : [];
 
   return {
     id: String(raw?.id ?? ""),
@@ -55,6 +65,7 @@ function toSafeRaffle(raw: any): SafeRaffle {
     status: String(raw?.status ?? "draft"),
     startNumber: Number(raw?.startNumber ?? 1),
     endNumber: Number(raw?.endNumber ?? 1),
+
     prizes: prizes
       .map((p: any, i: number) => ({
         position: Number(p?.position ?? i + 1),
@@ -63,6 +74,14 @@ function toSafeRaffle(raw: any): SafeRaffle {
         isPublic: p?.isPublic !== false,
       }))
       .filter((p: RafflePrize) => p.title.trim().length > 0),
+
+    winners: winners.map((w: any) => ({
+      prizePosition: Number(w.prizePosition ?? w.prize_position ?? 1),
+      ticketNumber: Number(w.ticketNumber ?? w.ticket_number ?? 0),
+      colour: w.colour ?? null,
+      buyerName: w.buyerName ?? w.buyer_name ?? null,
+      drawnAt: w.drawnAt ?? w.drawn_at ?? null,
+    })),
   };
 }
 
@@ -77,7 +96,6 @@ export default function PublicRafflePage({ slug }: Props) {
       setRaffle(toSafeRaffle(data?.raffle));
       setLoading(false);
     }
-
     load();
   }, [slug]);
 
@@ -92,7 +110,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
         <div style={styles.totalBox}>
           <div>Ticket price: {formatCurrency(raffle.ticketPrice, raffle.currency)}</div>
-          <div>Range: {raffle.startNumber} - {raffle.endNumber}</div>
+          <div>Range: {raffle.startNumber} to {raffle.endNumber}</div>
+          <div>Status: {raffle.status}</div>
         </div>
 
         {/* PRIZES */}
@@ -100,24 +119,37 @@ export default function PublicRafflePage({ slug }: Props) {
           <section style={styles.prizesBox}>
             <div style={styles.prizesTitle}>Prizes</div>
 
-            <div style={{ display: "grid", gap: 10 }}>
-              {raffle.prizes.map((prize) => (
-                <div key={prize.position} style={styles.prizeCard}>
-                  <div style={styles.prizePosition}>
-                    {ordinal(prize.position)}
-                  </div>
-
-                  <div>
-                    <div style={styles.prizeTitle}>{prize.title}</div>
-                    {prize.description && (
-                      <div style={styles.prizeDescription}>
-                        {prize.description}
-                      </div>
-                    )}
-                  </div>
+            {raffle.prizes.map((prize) => (
+              <div key={prize.position} style={styles.prizeCard}>
+                <div style={styles.prizePosition}>
+                  {ordinal(prize.position)}
                 </div>
-              ))}
-            </div>
+
+                <div>
+                  <div style={styles.prizeTitle}>{prize.title}</div>
+                  {prize.description && (
+                    <div style={styles.prizeDescription}>
+                      {prize.description}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* WINNERS */}
+        {raffle.winners.length > 0 && (
+          <section style={styles.winnersBox}>
+            <div style={styles.winnersTitle}>Winners</div>
+
+            {raffle.winners.map((winner) => (
+              <div key={winner.ticketNumber} style={styles.winnerCard}>
+                <div>{ordinal(winner.prizePosition)}</div>
+                <div>#{winner.ticketNumber}</div>
+                <div>{winner.colour || "—"}</div>
+              </div>
+            ))}
           </section>
         )}
       </div>
@@ -132,55 +164,70 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
   },
   container: {
-    maxWidth: 800,
+    maxWidth: 900,
     margin: "0 auto",
     background: "#fff",
     padding: 24,
     borderRadius: 16,
   },
-  wrap: {
-    padding: 24,
-  },
+  wrap: { padding: 24 },
+
   totalBox: {
     marginTop: 20,
     padding: 12,
     border: "1px solid #e2e8f0",
     borderRadius: 10,
   },
+
   prizesBox: {
-    marginTop: 24,
-    padding: 18,
-    borderRadius: 16,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
     background: "#fff7ed",
-    border: "1px solid #fed7aa",
   },
   prizesTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 800,
-    marginBottom: 12,
-    color: "#9a3412",
+    marginBottom: 10,
   },
   prizeCard: {
     display: "grid",
     gridTemplateColumns: "80px 1fr",
-    gap: 12,
-    padding: 12,
+    gap: 10,
+    padding: 10,
     border: "1px solid #fed7aa",
-    borderRadius: 12,
-    background: "#fff",
+    borderRadius: 10,
+    marginBottom: 8,
   },
   prizePosition: {
-    fontSize: 20,
     fontWeight: 800,
-    color: "#c2410c",
   },
   prizeTitle: {
-    fontSize: 16,
-    fontWeight: 800,
+    fontWeight: 700,
   },
   prizeDescription: {
     fontSize: 14,
     color: "#64748b",
-    marginTop: 4,
+  },
+
+  winnersBox: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
+    background: "#ecfdf5",
+  },
+  winnersTitle: {
+    fontSize: 20,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
+  winnerCard: {
+    display: "grid",
+    gridTemplateColumns: "80px 1fr 1fr",
+    gap: 10,
+    padding: 10,
+    border: "1px solid #bbf7d0",
+    borderRadius: 10,
+    marginBottom: 8,
   },
 };
