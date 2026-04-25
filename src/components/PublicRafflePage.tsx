@@ -371,3 +371,272 @@ export default function PublicRafflePage({ slug }: Props) {
       cancelled = true;
     };
   }, [slug]);
+  const availability = useMemo(() => {
+    const sold = new Set<string>();
+    const reserved = new Set<string>();
+
+    if (!raffle) return { sold, reserved };
+
+    for (const t of raffle.soldTickets) {
+      sold.add(makeTicketKey(t.colour, t.number));
+    }
+
+    for (const t of raffle.reservedTickets) {
+      reserved.add(makeTicketKey(t.colour, t.number));
+    }
+
+    return { sold, reserved };
+  }, [raffle]);
+
+  const basketKeys = useMemo(
+    () => new Set(basket.map((t) => makeTicketKey(t.colour, t.number))),
+    [basket]
+  );
+
+  const visibleNumbers = useMemo(() => {
+    if (!raffle) return [];
+    if (!Number.isFinite(raffle.startNumber) || !Number.isFinite(raffle.endNumber)) return [];
+    if (raffle.endNumber < raffle.startNumber) return [];
+
+    const out: number[] = [];
+    for (let n = raffle.startNumber; n <= raffle.endNumber; n += 1) {
+      out.push(n);
+    }
+    return out;
+  }, [raffle]);
+
+  const isPublished = raffle?.status === "published";
+  const isClosed = raffle?.status === "closed";
+  const isDrawn = raffle?.status === "drawn";
+  const isDraft = raffle?.status === "draft";
+  const canReserve = Boolean(raffle && isPublished);
+
+  const pricing = useMemo(() => {
+    if (!raffle) {
+      return {
+        quantity: 0,
+        total: 0,
+        standardTotal: 0,
+        savings: 0,
+        appliedOffers: [] as Array<{ label: string; quantity: number; price: number; times: number }>,
+      };
+    }
+
+    return calculateBestPrice(basket.length, raffle.ticketPrice, isPublished ? raffle.offers : []);
+  }, [basket.length, raffle, isPublished]);
+
+  const estimatedFee = pricing.total > 0 ? Math.round(pricing.total * 0.1 * 100) / 100 : 0;
+  const displayTotal = coverFees ? pricing.total + estimatedFee : pricing.total;
+
+  const availableCount = useMemo(() => {
+    if (!raffle) return 0;
+
+    let count = 0;
+
+    for (const colour of raffle.colours) {
+      for (const number of visibleNumbers) {
+        const key = makeTicketKey(colour.name, number);
+
+        if (!availability.sold.has(key) && !availability.reserved.has(key)) {
+          count += 1;
+        }
+      }
+    }
+
+    return count;
+  }, [raffle, visibleNumbers, availability]);
+
+  function toggleTicket(number: number) {
+    if (!raffle || !selectedColour || !canReserve) return;
+
+    const key = makeTicketKey(selectedColour, number);
+    if (availability.sold.has(key) || availability.reserved.has(key)) return;
+
+    setBasket((current) => {
+      const exists = current.some(
+        (ticket) => ticket.colour === selectedColour && ticket.number === number
+      );
+
+      if (exists) {
+        return current.filter(
+          (ticket) => !(ticket.colour === selectedColour && ticket.number === number)
+        );
+      }
+
+      return [...current, { colour: selectedColour, number }].sort((a, b) => {
+        if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
+        return a.number - b.number;
+      });
+    });
+  }
+
+  function removeFromBasket(ticket: TicketSelection) {
+    setBasket((current) =>
+      current.filter(
+        (item) => !(item.colour === ticket.colour && item.number === ticket.number)
+      )
+    );
+  }
+
+  function clearBasket() {
+    setBasket([]);
+    setError("");
+    setReservationMessage("");
+  }
+
+  function autoSelectTicketQuantity(quantity: number) {
+    if (!raffle || !canReserve) return;
+
+    const requested = Math.max(1, Math.floor(Number(quantity) || 0));
+
+    const selected: TicketSelection[] = [];
+    const selectedKeys = new Set<string>();
+
+    const sortedColours = raffle.colours
+      .slice()
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+    for (const colour of sortedColours) {
+      for (const number of visibleNumbers) {
+        if (selected.length >= requested) break;
+
+        const key = makeTicketKey(colour.name, number);
+
+        if (
+          selectedKeys.has(key) ||
+          availability.sold.has(key) ||
+          availability.reserved.has(key)
+        ) {
+          continue;
+        }
+
+        selectedKeys.add(key);
+        selected.push({ colour: colour.name, number });
+      }
+
+      if (selected.length >= requested) break;
+    }
+
+    if (selected.length < requested) {
+      setBasket(selected);
+      setError(
+        `Only ${selected.length} ticket${selected.length === 1 ? "" : "s"} could be selected. Not enough tickets are available.`
+      );
+      return;
+    }
+
+    setBasket(
+      selected.sort((a, b) => {
+        if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
+        return a.number - b.number;
+      })
+    );
+
+    setAutoQuantity(requested);
+    setError("");
+    setReservationMessage("");
+  }
+
+  function autoSelectTickets() {
+    if (!autoQuantity || autoQuantity <= 0) {
+      setError("Enter how many tickets you would like.");
+      return;
+    }
+
+    autoSelectTicketQuantity(autoQuantity);
+  }
+
+  async function reserveTickets() {
+    if (!raffle || !canReserve) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      setReservationMessage("");
+
+      if (!buyerName.trim()) throw new Error("Please enter your name.");
+      if (!buyerEmail.trim()) throw new Error("Please enter your email.");
+      if (basket.length === 0) throw new Error("Please select at least one ticket.");
+
+      const selectedTickets = basket.map((ticket) => ({
+        ticket_number: ticket.number,
+        colour: ticket.colour,
+      }));
+
+      const reserveResponse = await fetch(
+        `/api/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantSlug: raffle.tenantSlug,
+            buyerName: buyerName.trim(),
+            buyerEmail: buyerEmail.trim(),
+            quantity: basket.length,
+            selectedTickets,
+          }),
+        }
+      );
+
+      const reserveText = await reserveResponse.text();
+
+      let reserveParsed: any = null;
+      try {
+        reserveParsed = JSON.parse(reserveText);
+      } catch {
+        throw new Error(`Reserve API did not return JSON: ${reserveText.slice(0, 120)}`);
+      }
+
+      if (!reserveResponse.ok) {
+        throw new Error(reserveParsed?.error || "Reserve failed");
+      }
+
+      const reservationToken = String(reserveParsed?.reservationToken ?? "").trim();
+
+      if (!reservationToken) {
+        throw new Error("Reservation succeeded but no reservation token was returned.");
+      }
+
+      setReservationMessage(`Reserved until ${String(reserveParsed?.expiresAt ?? "")}`);
+
+      const checkoutResponse = await fetch(`/api/stripe/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raffleId: raffle.id,
+          reservationToken,
+          coverFees,
+        }),
+      });
+
+      const checkoutText = await checkoutResponse.text();
+
+      let checkoutParsed: any = null;
+      try {
+        checkoutParsed = JSON.parse(checkoutText);
+      } catch {
+        throw new Error(`Checkout API did not return JSON: ${checkoutText.slice(0, 120)}`);
+      }
+
+      if (!checkoutResponse.ok) {
+        throw new Error(checkoutParsed?.error || "Checkout failed");
+      }
+
+      const checkoutUrl = String(
+        checkoutParsed?.url ??
+          checkoutParsed?.checkoutUrl ??
+          checkoutParsed?.sessionUrl ??
+          ""
+      ).trim();
+
+      if (!checkoutUrl) {
+        throw new Error("Checkout session created but no checkout URL was returned.");
+      }
+
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reserve failed");
+    } finally {
+      setSaving(false);
+    }
+  }
