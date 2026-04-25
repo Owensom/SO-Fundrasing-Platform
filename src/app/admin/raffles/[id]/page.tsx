@@ -43,7 +43,7 @@ function colourToText(colour: any) {
 }
 
 function normaliseOfferForUI(offer: any, index: number) {
-  const quantity = Number(offer?.quantity ?? offer?.tickets ?? 1);
+  const quantity = Number(offer?.quantity ?? offer?.tickets ?? 0);
   const price =
     offer?.price != null
       ? Number(offer.price)
@@ -53,13 +53,14 @@ function normaliseOfferForUI(offer: any, index: number) {
 
   return {
     id: offer?.id || `offer-${index + 1}`,
-    label: offer?.label || "",
-    quantity,
-    price,
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : "",
+    price: Number.isFinite(price) && price > 0 ? price : "",
     is_active:
-      offer?.is_active === true ||
-      offer?.isActive === true ||
-      offer?.active === true,
+      offer?.is_active === false ||
+      offer?.isActive === false ||
+      offer?.active === false
+        ? false
+        : true,
   };
 }
 
@@ -83,7 +84,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
     ...offers,
     ...Array.from({ length: Math.max(2, 5 - offers.length) }, (_, index) => ({
       id: `new-offer-${index + 1}`,
-      label: "",
       quantity: "",
       price: "",
       is_active: true,
@@ -240,79 +240,92 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <section>
             <h3>Offers</h3>
             <p style={{ color: "#6b7280", fontSize: 13, marginTop: -6 }}>
-              Add simple bundle offers. Example: tickets = 3, value = 12 creates “3 for £12”.
+              Optional bundle pricing. Example: enter <strong>3</strong> and{" "}
+              <strong>12.00</strong> to create a public offer of 3 tickets for 12.00.
             </p>
 
             <input type="hidden" name="offer_count" value={offerRows.length} />
 
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th align="left" style={{ padding: "8px 6px" }}>
-                    Tickets
-                  </th>
-                  <th align="left" style={{ padding: "8px 6px" }}>
-                    Value
-                  </th>
-                  <th align="left" style={{ padding: "8px 6px" }}>
-                    Active
-                  </th>
-                </tr>
-              </thead>
+            <div style={{ display: "grid", gap: 10 }}>
+              {offerRows.map((offer, index) => (
+                <div
+                  key={`${offer.id}-${index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr auto",
+                    gap: 10,
+                    alignItems: "end",
+                    padding: 12,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    background: "#f9fafb",
+                  }}
+                >
+                  <label style={{ display: "grid", gap: 4 }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>
+                      Number of tickets
+                    </span>
+                    <input
+                      name={`offer_quantity_${index}`}
+                      type="number"
+                      min={1}
+                      defaultValue={offer.quantity}
+                      placeholder="3"
+                      style={{
+                        height: 40,
+                        borderRadius: 8,
+                        border: "1px solid #d1d5db",
+                        padding: "0 10px",
+                        fontSize: 15,
+                      }}
+                    />
+                  </label>
 
-              <tbody>
-                {offerRows.map((offer, index) => (
-                  <tr key={`${offer.id}-${index}`}>
-                    <td style={{ padding: 6 }}>
-                      <input
-                        name={`offer_quantity_${index}`}
-                        type="number"
-                        min={1}
-                        defaultValue={offer.quantity}
-                        placeholder="3"
-                        style={{ width: "100%", padding: 8 }}
-                      />
-                    </td>
+                  <label style={{ display: "grid", gap: 4 }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>
+                      Total offer price
+                    </span>
+                    <input
+                      name={`offer_price_${index}`}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      defaultValue={offer.price}
+                      placeholder="12.00"
+                      style={{
+                        height: 40,
+                        borderRadius: 8,
+                        border: "1px solid #d1d5db",
+                        padding: "0 10px",
+                        fontSize: 15,
+                      }}
+                    />
+                  </label>
 
-                    <td style={{ padding: 6 }}>
-                      <input
-                        name={`offer_price_${index}`}
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        defaultValue={
-                          Number(offer.price) > 0 ? Number(offer.price) : ""
-                        }
-                        placeholder="12.00"
-                        style={{ width: "100%", padding: 8 }}
-                      />
-                    </td>
-
-                    <td style={{ padding: 6 }}>
-                      <input
-                        name={`offer_active_${index}`}
-                        type="checkbox"
-                        value="true"
-                        defaultChecked={offer.is_active}
-                      />
-
-                      <input
-                        type="hidden"
-                        name={`offer_label_${index}`}
-                        value={
-                          Number(offer.quantity) > 0 && Number(offer.price) > 0
-                            ? `${offer.quantity} for ${offer.price}`
-                            : ""
-                        }
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      height: 40,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      name={`offer_active_${index}`}
+                      type="checkbox"
+                      value="true"
+                      defaultChecked={offer.is_active}
+                    />
+                    Use
+                  </label>
+                </div>
+              ))}
+            </div>
 
             <p style={{ color: "#6b7280", fontSize: 13 }}>
-              Leave blank rows empty. Save the raffle to apply changes.
+              Leave unused rows blank. Save the raffle to apply changes.
             </p>
           </section>
 
