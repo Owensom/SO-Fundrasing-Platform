@@ -16,16 +16,19 @@ type RawOffer = {
   price_cents?: number;
   is_active?: boolean;
   isActive?: boolean;
+  active?: boolean;
   sort_order?: number;
   sortOrder?: number;
 };
 
 function toFiniteNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
+
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
+
   return 0;
 }
 
@@ -41,7 +44,7 @@ export function normalizeOffers(input: unknown): NormalizedOffer[] {
       const label = typeof raw.label === "string" ? raw.label.trim() : "";
 
       const quantity = Math.floor(
-        toFiniteNumber(raw.quantity ?? raw.tickets ?? 0)
+        toFiniteNumber(raw.quantity ?? raw.tickets ?? 0),
       );
 
       let price_cents = 0;
@@ -52,10 +55,13 @@ export function normalizeOffers(input: unknown): NormalizedOffer[] {
         price_cents = Math.round(toFiniteNumber(raw.price) * 100);
       }
 
-      const is_active = raw.is_active === true || raw.isActive === true;
+      const is_active =
+        raw.is_active === false || raw.isActive === false || raw.active === false
+          ? false
+          : true;
 
       const sort_order = Math.floor(
-        toFiniteNumber(raw.sort_order ?? raw.sortOrder ?? index)
+        toFiniteNumber(raw.sort_order ?? raw.sortOrder ?? index),
       );
 
       if (!label) return null;
@@ -100,10 +106,10 @@ export function getBestPriceForQuantity(params: {
   const quantity = Math.max(0, Math.floor(params.quantity));
   const single_ticket_price_cents = Math.max(
     0,
-    Math.floor(params.single_ticket_price_cents)
+    Math.floor(params.single_ticket_price_cents),
   );
-  const offers = params.offers.filter((offer) => offer.is_active);
 
+  const offers = params.offers.filter((offer) => offer.is_active);
   const base_total_cents = quantity * single_ticket_price_cents;
 
   if (quantity <= 0 || single_ticket_price_cents <= 0) {
@@ -119,27 +125,27 @@ export function getBestPriceForQuantity(params: {
 
   const dp = new Array<number>(quantity + 1).fill(Infinity);
   const pick = new Array<
-    | null
-    | { type: "single" }
-    | { type: "offer"; offer: NormalizedOffer }
+    null | { type: "single" } | { type: "offer"; offer: NormalizedOffer }
   >(quantity + 1).fill(null);
 
   dp[0] = 0;
 
   for (let i = 1; i <= quantity; i += 1) {
     const singleCandidate = dp[i - 1] + single_ticket_price_cents;
+
     if (singleCandidate < dp[i]) {
       dp[i] = singleCandidate;
       pick[i] = { type: "single" };
     }
 
     for (const offer of offers) {
-      if (i >= offer.quantity) {
-        const offerCandidate = dp[i - offer.quantity] + offer.price_cents;
-        if (offerCandidate < dp[i]) {
-          dp[i] = offerCandidate;
-          pick[i] = { type: "offer", offer };
-        }
+      if (i < offer.quantity) continue;
+
+      const offerCandidate = dp[i - offer.quantity] + offer.price_cents;
+
+      if (offerCandidate < dp[i]) {
+        dp[i] = offerCandidate;
+        pick[i] = { type: "offer", offer };
       }
     }
   }
@@ -183,8 +189,8 @@ export function getBestPriceForQuantity(params: {
     cursor -= chosen.offer.quantity;
   }
 
+  const subtotal_cents = Number.isFinite(dp[quantity]) ? dp[quantity] : 0;
   const applied_offers = Array.from(appliedOfferMap.values());
-  const subtotal_cents = dp[quantity];
   const savings_cents = Math.max(0, base_total_cents - subtotal_cents);
 
   return {
