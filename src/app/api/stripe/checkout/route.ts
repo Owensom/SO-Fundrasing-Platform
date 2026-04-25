@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRaffleById } from "@/lib/raffles";
-import { query, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
 import { getBestPriceForQuantity, normalizeOffers } from "@/lib/pricing";
 
 export const runtime = "nodejs";
@@ -15,8 +15,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const raffleId = body.raffleId;
-    const reservationToken = body.reservationToken;
+    const raffleId = String(body.raffleId ?? "").trim();
+    const reservationToken = String(body.reservationToken ?? "").trim();
+    const coverFees = body.coverFees === true;
 
     if (!raffleId || !reservationToken) {
       return NextResponse.json(
@@ -34,28 +35,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 🔒 LOCK PURCHASES
     if (raffle.status !== "published") {
       return NextResponse.json(
         { ok: false, error: "Raffle is closed" },
-        { status: 400 }
-      );
-    }
-
-    const reservations = await query(
-      `
-      select *
-      from raffle_ticket_reservations
-      where raffle_id = $1
-        and reservation_token = $2
-        and expires_at > now()
-      `,
-      [raffleId, reservationToken]
-    );
-
-    if (!reservations.length) {
-      return NextResponse.json(
-        { ok: false, error: "Reservation expired" },
         { status: 400 }
       );
     }
@@ -71,29 +53,35 @@ export async function POST(request: NextRequest) {
       [raffleId, reservationToken]
     );
 
-    const quantity = reservationCount?.count || 0;
+    const quantity = Number(reservationCount?.count ?? 0);
 
-    if (quantity <= 0) {
+    if (!Number.isFinite(quantity) || quantity <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Invalid quantity" },
+        { ok: false, error: "Reservation expired" },
         { status: 400 }
       );
     }
 
-    const singlePrice = Math.round(Number(raffle.ticket_price) * 100);
+    const singlePriceCents = Math.round(Number(raffle.ticket_price) * 100);
 
-    const offers = normalizeOffers(
-      (raffle.config_json as any)?.offers || []
-    );
+    if (!Number.isFinite(singlePriceCents) || singlePriceCents <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Raffle ticket price is not configured" },
+        { status: 400 }
+      );
+    }
+
+    const offers = normalizeOffers((raffle.config_json as any)?.offers || []);
 
     const pricing = getBestPriceForQuantity({
       quantity,
-      single_ticket_price_cents: singlePrice,
+      single_ticket_price_cents: singlePriceCents,
       offers,
     });
 
     const subtotal = pricing.subtotal_cents;
-    const platformFee = Math.round(subtotal * 0.1);
+    const platformFee = coverFees ? Math.round(subtotal * 0.1) : 0;
+    const totalCharge = subtotal + platformFee;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -102,11 +90,11 @@ export async function POST(request: NextRequest) {
         {
           quantity: 1,
           price_data: {
-            currency: raffle.currency.toLowerCase(),
+            currency: String(raffle.currency || "GBP").toLowerCase(),
             product_data: {
-              name: raffle.title,
+              name: `${raffle.title} (${quantity} ticket${quantity === 1 ? "" : "s"})`,
             },
-            unit_amount: subtotal,
+            unit_amount: totalCharge,
           },
         },
       ],
@@ -115,6 +103,8 @@ export async function POST(request: NextRequest) {
       metadata: {
         raffle_id: raffleId,
         reservation_token: reservationToken,
+        quantity: String(quantity),
+        subtotal_cents: String(subtotal),
         platform_fee_cents: String(platformFee),
       },
     });
@@ -127,7 +117,7 @@ export async function POST(request: NextRequest) {
     console.error("checkout error", err);
 
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: err?.message || "Checkout failed" },
       { status: 500 }
     );
   }
