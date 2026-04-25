@@ -123,13 +123,67 @@ export async function POST(request: NextRequest) {
 
       await query(
         `
+        insert into raffle_ticket_sales (
+          raffle_id,
+          ticket_number,
+          colour,
+          buyer_name,
+          buyer_email,
+          currency,
+          amount_cents,
+          reservation_id,
+          payment_id,
+          stripe_checkout_session_id,
+          stripe_payment_intent_id,
+          purchase_reference,
+          reservation_group_id,
+          sold_at
+        )
+        select
+          r.raffle_id,
+          r.ticket_number,
+          coalesce(nullif(r.colour, ''), 'default'),
+          r.buyer_name,
+          r.buyer_email,
+          $3,
+          $4,
+          r.reservation_token,
+          $5,
+          $6,
+          $5,
+          r.reservation_token,
+          r.reservation_group_id,
+          now()
+        from raffle_ticket_reservations r
+        where r.raffle_id = $1
+          and r.reservation_token = $2
+          and r.status = 'sold'
+          and not exists (
+            select 1
+            from raffle_ticket_sales s
+            where s.raffle_id = r.raffle_id
+              and s.ticket_number = r.ticket_number
+              and s.colour = coalesce(nullif(r.colour, ''), 'default')
+          )
+        `,
+        [
+          raffleId,
+          reservationToken,
+          session.currency || "GBP",
+          grossAmountCents,
+          paymentIntentId,
+          session.id,
+        ],
+      );
+
+      await query(
+        `
         update raffles
         set
           sold_tickets = (
             select count(*)::int
-            from raffle_ticket_reservations
+            from raffle_ticket_sales
             where raffle_id = $1
-              and status = 'sold'
           ),
           updated_at = now()
         where id = $1
@@ -143,9 +197,9 @@ export async function POST(request: NextRequest) {
       }>(
         `
         select ticket_number, colour
-        from raffle_ticket_reservations
+        from raffle_ticket_sales
         where raffle_id = $1
-          and reservation_token = $2
+          and reservation_id = $2
         order by ticket_number asc
         `,
         [raffleId, reservationToken],
