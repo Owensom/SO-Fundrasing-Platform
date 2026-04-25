@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { getRaffleById, updateRaffle } from "../../../../../../api/_lib/raffles-repo";
+import {
+  getRaffleById,
+  updateRaffle,
+} from "../../../../../../api/_lib/raffles-repo";
 
 type RouteContext = {
   params: {
     id: string;
   };
+};
+
+type OfferInput = {
+  id?: string;
+  label?: string;
+  price?: number;
+  price_cents?: number;
+  quantity?: number;
+  tickets?: number;
+  is_active?: boolean;
+  isActive?: boolean;
+  active?: boolean;
+  sort_order?: number;
+  sortOrder?: number;
 };
 
 function parseNumber(
@@ -23,12 +40,53 @@ function parseColours(value: string): string[] {
     .filter(Boolean);
 }
 
+function normaliseOffers(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      const raw = item as OfferInput;
+
+      const label = String(raw.label ?? "").trim();
+      const quantity = Number(raw.quantity ?? raw.tickets ?? 0);
+
+      const price =
+        raw.price != null
+          ? Number(raw.price)
+          : raw.price_cents != null
+            ? Number(raw.price_cents) / 100
+            : 0;
+
+      const isActive =
+        raw.is_active === true ||
+        raw.isActive === true ||
+        raw.active === true;
+
+      const sortOrder = Number(raw.sort_order ?? raw.sortOrder ?? index);
+
+      if (!label || !Number.isFinite(quantity) || quantity <= 0) return null;
+      if (!Number.isFinite(price) || price <= 0) return null;
+
+      return {
+        id: raw.id || `offer-${quantity}-${index}`,
+        label,
+        price,
+        quantity,
+        tickets: quantity,
+        is_active: isActive,
+        isActive,
+        sort_order: Number.isFinite(sortOrder) ? sortOrder : index,
+        sortOrder: Number.isFinite(sortOrder) ? sortOrder : index,
+      };
+    })
+    .filter(Boolean);
+}
+
 function parseOffers(value: string) {
   if (!value.trim()) return [];
 
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
+    return normaliseOffers(JSON.parse(value));
   } catch {
     return [];
   }
@@ -114,42 +172,56 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const formData = await request.formData();
+    const existingConfig =
+      (existing.config_json as Record<string, unknown> | undefined) ?? {};
 
-    const title = String(formData.get("title") ?? "").trim();
-    const rawSlug = String(formData.get("slug") ?? "").trim();
+    const title = String(formData.get("title") ?? existing.title).trim();
+    const rawSlug = String(formData.get("slug") ?? existing.slug).trim();
     const slug = slugify(rawSlug || existing.slug);
-    const description = String(formData.get("description") ?? "").trim();
-    const image_url = String(formData.get("image_url") ?? "").trim();
+    const description = String(
+      formData.get("description") ?? existing.description ?? "",
+    ).trim();
+
+    const image_url = String(
+      formData.get("image_url") ?? existing.image_url ?? "",
+    ).trim();
+
     const currency = String(formData.get("currency") ?? existing.currency);
     const status = String(formData.get("status") ?? existing.status);
+
     const ticket_price = parseNumber(
       formData.get("ticket_price"),
       existing.ticket_price,
     );
+
     const startNumber = parseNumber(
       formData.get("startNumber"),
-      Number(
-        (existing.config_json as Record<string, unknown> | undefined)
-          ?.startNumber ?? 0,
-      ),
+      Number(existingConfig.startNumber ?? 0),
     );
+
     const endNumber = parseNumber(
       formData.get("endNumber"),
-      Number(
-        (existing.config_json as Record<string, unknown> | undefined)
-          ?.endNumber ?? 0,
-      ),
+      Number(existingConfig.endNumber ?? 0),
     );
 
-    const colours = parseColours(String(formData.get("colours") ?? ""));
-    const offers = parseOffers(String(formData.get("offers") ?? "[]"));
+    const submittedColours = String(formData.get("colours") ?? "");
+    const colours =
+      submittedColours.trim().length > 0
+        ? parseColours(submittedColours)
+        : Array.isArray(existingConfig.colours)
+          ? (existingConfig.colours as string[])
+          : [];
 
-    const numbersPerColour = colours.length > 0 && endNumber >= startNumber
-      ? endNumber - startNumber + 1
-      : Number(
-          (existing.config_json as Record<string, unknown> | undefined)
-            ?.numbersPerColour ?? 0,
-        );
+    const submittedOffers = String(formData.get("offers") ?? "");
+    const offers =
+      submittedOffers.trim().length > 0
+        ? parseOffers(submittedOffers)
+        : normaliseOffers(existingConfig.offers ?? []);
+
+    const numbersPerColour =
+      colours.length > 0 && endNumber >= startNumber
+        ? endNumber - startNumber + 1
+        : Number(existingConfig.numbersPerColour ?? 0);
 
     const colourCount = colours.length;
     const total_tickets = numbersPerColour * colourCount;
@@ -172,11 +244,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       colours,
       offers,
       sold:
-        ((existing.config_json as Record<string, unknown> | undefined)
-          ?.sold as Array<{ colour: string; number: number }> | undefined) ?? [],
+        (existingConfig.sold as
+          | Array<{ colour: string; number: number }>
+          | undefined) ?? [],
       reserved:
-        ((existing.config_json as Record<string, unknown> | undefined)
-          ?.reserved as Array<{ colour: string; number: number }> | undefined) ?? [],
+        (existingConfig.reserved as
+          | Array<{ colour: string; number: number }>
+          | undefined) ?? [],
     });
 
     if (!updated) {
@@ -212,7 +286,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
-
     const existing = await getRaffleById(id);
 
     if (!existing) {
@@ -278,18 +351,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       colourCount,
       colours,
       offers: Array.isArray(body?.offers)
-        ? body.offers
-        : Array.isArray(config.offers)
-          ? (config.offers as Array<{
-              id?: string;
-              label: string;
-              price: number;
-              quantity?: number;
-              tickets?: number;
-              is_active?: boolean;
-              sort_order?: number;
-            }>)
-          : [],
+        ? normaliseOffers(body.offers)
+        : normaliseOffers(config.offers ?? []),
       sold: Array.isArray(config.sold)
         ? (config.sold as Array<{ colour: string; number: number }>)
         : [],
