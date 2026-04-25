@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import crypto from "crypto";
 import { getRaffleBySlug } from "@/lib/raffles";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { query } from "@/lib/db";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-});
 
 export async function POST(
   request: NextRequest,
@@ -17,7 +11,16 @@ export async function POST(
   try {
     const body = await request.json();
 
-    const raffle = await getRaffleBySlug(params.slug);
+    const tenantSlug = await getTenantSlugFromHeaders();
+
+    if (!tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant not found" },
+        { status: 400 }
+      );
+    }
+
+    const raffle = await getRaffleBySlug(params.slug, tenantSlug);
 
     if (!raffle) {
       return NextResponse.json(
@@ -34,85 +37,42 @@ export async function POST(
       );
     }
 
-    const reservationToken = body.reservationToken;
+    const ticketNumbers: number[] = body.ticketNumbers || [];
 
-    if (!reservationToken) {
+    if (!ticketNumbers.length) {
       return NextResponse.json(
-        { ok: false, error: "Missing reservation token" },
+        { ok: false, error: "No tickets selected" },
         { status: 400 }
       );
     }
 
-    const reservations = await query<{
-      ticket_number: number;
-    }>(
-      `
-      select ticket_number
-      from raffle_ticket_reservations
-      where raffle_id = $1
-        and reservation_token = $2
-        and status = 'reserved'
-      `,
-      [raffle.id, reservationToken]
-    );
+    const reservationToken = crypto.randomUUID();
 
-    if (!reservations.length) {
-      return NextResponse.json(
-        { ok: false, error: "No reserved tickets found" },
-        { status: 400 }
+    for (const ticketNumber of ticketNumbers) {
+      await query(
+        `
+        insert into raffle_ticket_reservations (
+          raffle_id,
+          ticket_number,
+          status,
+          reservation_token,
+          created_at
+        )
+        values ($1, $2, 'reserved', $3, now())
+        `,
+        [raffle.id, ticketNumber, reservationToken]
       );
     }
-
-    const ticketCount = reservations.length;
-
-    const unitAmount = Math.round(raffle.ticket_price * 100);
-    const grossAmount = unitAmount * ticketCount;
-
-    const platformFee = Math.round(grossAmount * 0.1); // 10% example
-    const netAmount = grossAmount - platformFee;
-
-    const successUrl =
-      body.successUrl ||
-      `${request.nextUrl.origin}/r/${raffle.slug}?success=1`;
-
-    const cancelUrl =
-      body.cancelUrl || `${request.nextUrl.origin}/r/${raffle.slug}`;
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          quantity: ticketCount,
-          price_data: {
-            currency: raffle.currency.toLowerCase(),
-            product_data: {
-              name: raffle.title,
-            },
-            unit_amount: unitAmount,
-          },
-        },
-      ],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      metadata: {
-        raffle_id: raffle.id,
-        reservation_token: reservationToken,
-        tenant_slug: raffle.tenant_slug,
-        platform_fee_cents: String(platformFee),
-        net_amount_cents: String(netAmount),
-      },
-    });
 
     return NextResponse.json({
       ok: true,
-      url: session.url,
+      reservationToken,
     });
   } catch (error: any) {
-    console.error("Checkout error:", error);
+    console.error(error);
 
     return NextResponse.json(
-      { ok: false, error: error?.message || "Checkout failed" },
+      { ok: false, error: "Reservation failed" },
       { status: 500 }
     );
   }
