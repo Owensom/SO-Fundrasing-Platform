@@ -171,8 +171,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               type="number"
               step="0.01"
               min={0}
-              defaultValue={raffle.ticket_price}
-              required
+              defaultValue={Number(raffle.ticket_price) > 0 ? raffle.ticket_price : ""}
               style={{ display: "block", width: "100%", padding: 10 }}
             />
           </label>
@@ -281,7 +280,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                         type="number"
                         min={0}
                         step="0.01"
-                        defaultValue={offer.price}
+                        defaultValue={offer.price > 0 ? offer.price : ""}
                         style={{ width: 100, padding: 8 }}
                       />
                     </td>
