@@ -7,7 +7,8 @@ type Prize = {
   position: number;
   title: string;
   description?: string;
-  isPublic: boolean;
+  isPublic?: boolean;
+  is_public?: boolean;
 };
 
 type Props = {
@@ -19,11 +20,11 @@ function normalisePrizes(prizes: Prize[]) {
   return prizes
     .map((prize, index) => ({
       position: Number.isFinite(Number(prize.position))
-        ? Number(prize.position)
+        ? Math.max(1, Math.floor(Number(prize.position)))
         : index + 1,
       title: String(prize.title || "").trim(),
       description: String(prize.description || "").trim(),
-      isPublic: prize.isPublic !== false,
+      isPublic: prize.isPublic !== false && prize.is_public !== false,
     }))
     .filter((prize) => prize.title.length > 0)
     .sort((a, b) => a.position - b.position);
@@ -33,8 +34,8 @@ export default function PrizeSettings({ raffleId, initialPrizes }: Props) {
   const router = useRouter();
 
   const [prizes, setPrizes] = useState<Prize[]>(
-    initialPrizes.length
-      ? initialPrizes
+    normalisePrizes(initialPrizes).length
+      ? normalisePrizes(initialPrizes)
       : [
           {
             position: 1,
@@ -127,6 +128,7 @@ export default function PrizeSettings({ raffleId, initialPrizes }: Props) {
   return (
     <section
       style={{
+        marginTop: 24,
         display: "grid",
         gap: 14,
         padding: 20,
@@ -245,7 +247,7 @@ export default function PrizeSettings({ raffleId, initialPrizes }: Props) {
             >
               <input
                 type="checkbox"
-                checked={prize.isPublic}
+                checked={prize.isPublic !== false && prize.is_public !== false}
                 onChange={(event) =>
                   updatePrize(index, { isPublic: event.target.checked })
                 }
