@@ -73,6 +73,10 @@ export async function POST(
     }
 
     const reservationToken = crypto.randomUUID();
+
+    // ✅ FIX: group id required by DB
+    const reservationGroupId = reservationToken;
+
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     for (const ticket of selectedTickets) {
@@ -91,10 +95,11 @@ export async function POST(
           buyer_email,
           status,
           reservation_token,
+          reservation_group_id,
           expires_at,
           created_at
         )
-        values ($1, $2, $3, $4, $5, 'reserved', $6, $7, now())
+        values ($1, $2, $3, $4, $5, 'reserved', $6, $7, $8, now())
         `,
         [
           raffle.id,
@@ -103,6 +108,7 @@ export async function POST(
           buyerName,
           buyerEmail,
           reservationToken,
+          reservationGroupId, // ✅ added
           expiresAt,
         ]
       );
