@@ -40,7 +40,15 @@ function parseColours(value: string): string[] {
     .filter(Boolean);
 }
 
-function normaliseOffers(value: unknown) {
+function normaliseOffers(value: unknown): Array<{
+  id?: string;
+  label: string;
+  price: number;
+  quantity?: number;
+  tickets?: number;
+  is_active?: boolean;
+  sort_order?: number;
+}> {
   if (!Array.isArray(value)) return [];
 
   return value
@@ -74,12 +82,22 @@ function normaliseOffers(value: unknown) {
         quantity,
         tickets: quantity,
         is_active: isActive,
-        isActive,
         sort_order: Number.isFinite(sortOrder) ? sortOrder : index,
-        sortOrder: Number.isFinite(sortOrder) ? sortOrder : index,
       };
     })
-    .filter(Boolean);
+    .filter(
+      (
+        offer,
+      ): offer is {
+        id?: string;
+        label: string;
+        price: number;
+        quantity?: number;
+        tickets?: number;
+        is_active?: boolean;
+        sort_order?: number;
+      } => offer !== null,
+    );
 }
 
 function parseOffers(value: string) {
