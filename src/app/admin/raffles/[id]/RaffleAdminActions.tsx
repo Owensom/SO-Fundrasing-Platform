@@ -20,7 +20,6 @@ export default function RaffleAdminActions({
     "close" | "draw" | "delete" | null
   >(null);
 
-  const [winnerCount, setWinnerCount] = useState(1);
   const [error, setError] = useState("");
 
   async function runAction(action: "close" | "draw" | "delete") {
@@ -28,9 +27,7 @@ export default function RaffleAdminActions({
       action === "close"
         ? "Are you sure you want to close this raffle? No more ticket purchases will be allowed."
         : action === "draw"
-          ? `Are you sure you want to draw ${winnerCount} winner${
-              winnerCount === 1 ? "" : "s"
-            }? This should only be done once.`
+          ? "Are you sure you want to draw a winner? This should only be done once."
           : "Are you sure you want to delete this raffle? This cannot be undone.";
 
     const confirmed = window.confirm(confirmMessage);
@@ -45,10 +42,7 @@ export default function RaffleAdminActions({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          action,
-          winnerCount: action === "draw" ? winnerCount : undefined,
-        }),
+        body: JSON.stringify({ action }),
       });
 
       const data = await response.json();
@@ -75,6 +69,8 @@ export default function RaffleAdminActions({
 
   const canClose = status === "published";
   const canDraw = status === "closed" && !drawnAt;
+
+  // Backend currently allows delete for draft, closed, and drawn only.
   const canDelete = status === "draft" || status === "closed" || status === "drawn";
 
   return (
@@ -102,54 +98,6 @@ export default function RaffleAdminActions({
           }}
         >
           {error}
-        </div>
-      ) : null}
-
-      {canDraw ? (
-        <div
-          style={{
-            display: "grid",
-            gap: 8,
-            padding: 12,
-            borderRadius: 10,
-            border: "1px solid #bbf7d0",
-            background: "#ecfdf5",
-            maxWidth: 360,
-          }}
-        >
-          <label
-            style={{
-              display: "grid",
-              gap: 6,
-              fontWeight: 700,
-              color: "#065f46",
-            }}
-          >
-            Number of winners
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={winnerCount}
-              onChange={(event) =>
-                setWinnerCount(
-                  Math.max(1, Math.floor(Number(event.target.value) || 1))
-                )
-              }
-              style={{
-                height: 40,
-                borderRadius: 8,
-                border: "1px solid #86efac",
-                padding: "0 10px",
-                fontSize: 16,
-                fontWeight: 700,
-              }}
-            />
-          </label>
-          <div style={{ color: "#166534", fontSize: 13 }}>
-            Winners will be drawn as 1st, 2nd, 3rd, etc. Each winning ticket is
-            unique.
-          </div>
         </div>
       ) : null}
 
@@ -190,7 +138,7 @@ export default function RaffleAdminActions({
               opacity: loadingAction ? 0.7 : 1,
             }}
           >
-            {loadingAction === "draw" ? "Drawing..." : "Draw Winners"}
+            {loadingAction === "draw" ? "Drawing..." : "Draw Winner"}
           </button>
         ) : null}
 
@@ -225,7 +173,7 @@ export default function RaffleAdminActions({
               fontWeight: 600,
             }}
           >
-            Close this raffle before drawing or deleting it.
+            Close this raffle before deleting it.
           </div>
         ) : null}
 
@@ -240,7 +188,7 @@ export default function RaffleAdminActions({
               fontWeight: 600,
             }}
           >
-            Winners already drawn
+            Winner already drawn
           </div>
         ) : null}
 
