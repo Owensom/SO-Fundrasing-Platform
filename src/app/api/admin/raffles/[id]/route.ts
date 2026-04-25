@@ -4,6 +4,7 @@ import {
   getRaffleById,
   updateRaffle,
 } from "../../../../../../api/_lib/raffles-repo";
+import { queryOne } from "@/lib/db";
 
 type RouteContext = {
   params: {
@@ -41,21 +42,25 @@ function parseCommaList(value: string): string[] {
     .filter(Boolean);
 }
 
+function formatOfferLabel(quantity: number, price: number) {
+  return `${quantity} for ${price.toFixed(2)}`;
+}
+
 function parseOffersFromForm(formData: FormData): Offer[] {
   const count = toNumber(formData.get("offer_count"), 0);
   const offers: Offer[] = [];
 
   for (let index = 0; index < count; index += 1) {
-    const label = String(formData.get(`offer_label_${index}`) ?? "").trim();
-    const quantity = toNumber(formData.get(`offer_quantity_${index}`), 0);
-    const price = toNumber(formData.get(`offer_price_${index}`), 0);
+    const quantity = toOptionalNumber(formData.get(`offer_quantity_${index}`));
+    const price = toOptionalNumber(formData.get(`offer_price_${index}`));
     const isActive = formData.get(`offer_active_${index}`) === "true";
 
-    if (!label || quantity <= 0 || price <= 0) continue;
+    if (quantity == null || price == null) continue;
+    if (quantity <= 0 || price <= 0) continue;
 
     offers.push({
       id: `offer-${index + 1}`,
-      label,
+      label: formatOfferLabel(quantity, price),
       price,
       quantity,
       tickets: quantity,
@@ -74,6 +79,26 @@ function slugify(value: string) {
     .replace(/['"]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+async function restorePrizesAfterRaffleUpdate(
+  raffleId: string,
+  prizes: unknown
+) {
+  await queryOne<{ id: string }>(
+    `
+    update raffles
+    set config_json = jsonb_set(
+      coalesce(config_json, '{}'::jsonb),
+      '{prizes}',
+      $2::jsonb,
+      true
+    )
+    where id = $1
+    returning id
+    `,
+    [raffleId, JSON.stringify(Array.isArray(prizes) ? prizes : [])]
+  );
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
@@ -135,6 +160,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const existingConfig =
     (existing.config_json as Record<string, unknown> | undefined) ?? {};
+
+  const existingPrizes = Array.isArray(existingConfig.prizes)
+    ? existingConfig.prizes
+    : [];
 
   const formData = await request.formData();
 
@@ -220,6 +249,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { status: 500 },
     );
   }
+
+  await restorePrizesAfterRaffleUpdate(id, existingPrizes);
 
   return NextResponse.redirect(new URL(`/admin/raffles/${id}`, request.url), {
     status: 303,
