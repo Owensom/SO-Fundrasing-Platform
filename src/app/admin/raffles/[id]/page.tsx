@@ -19,17 +19,35 @@ type WinnerRow = {
   prize_position: number;
   ticket_number: number;
   colour: string | null;
-  sale_id: string | null;
   buyer_name: string | null;
   buyer_email: string | null;
-  drawn_at: string;
 };
 
-function colourToText(colour: any) {
-  if (typeof colour === "string") return colour;
-  if (colour?.name) return colour.name;
-  if (colour?.hex) return colour.hex;
-  return "";
+/* =========================
+   NORMALISE OFFERS FOR UI
+========================= */
+function normalizeOffer(o: any, index: number) {
+  const quantity = Number(o.quantity ?? o.tickets ?? 0);
+
+  const price =
+    o.price != null
+      ? Number(o.price)
+      : o.price_cents != null
+        ? Number(o.price_cents) / 100
+        : 0;
+
+  const isActive =
+    o.is_active === true ||
+    o.isActive === true ||
+    o.active === true;
+
+  return {
+    id: o.id || `offer-${index}`,
+    label: o.label || `${quantity} tickets`,
+    quantity,
+    price,
+    isActive,
+  };
 }
 
 export default async function AdminRafflePage({ params }: PageProps) {
@@ -40,6 +58,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
   if (!raffle) notFound();
 
   const config = (raffle.config_json as any) ?? {};
+
   const colours = Array.isArray(config.colours) ? config.colours : [];
   const offers = Array.isArray(config.offers) ? config.offers : [];
 
@@ -69,6 +88,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
       <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
 
+      {/* =========================
+          EDIT FORM
+      ========================= */}
       <section
         style={{
           marginTop: 24,
@@ -85,142 +107,93 @@ export default async function AdminRafflePage({ params }: PageProps) {
           method="post"
           style={{ display: "grid", gap: 16 }}
         >
-          <label>
-            Title
-            <input
-              name="title"
-              defaultValue={raffle.title}
-              required
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
-
-          <label>
-            Slug
-            <input
-              name="slug"
-              defaultValue={raffle.slug}
-              required
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
-
-          <label>
-            Description
-            <textarea
-              name="description"
-              rows={4}
-              defaultValue={raffle.description ?? ""}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
+          <input name="title" defaultValue={raffle.title} required />
+          <input name="slug" defaultValue={raffle.slug} required />
+          <textarea
+            name="description"
+            defaultValue={raffle.description ?? ""}
+          />
 
           <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
 
-          <label>
-            Ticket price
-            <input
-              name="ticket_price"
-              type="number"
-              min={0}
-              step="0.01"
-              defaultValue={raffle.ticket_price}
-              required
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
+          <input
+            name="ticket_price"
+            type="number"
+            defaultValue={raffle.ticket_price}
+          />
 
-          <label>
-            Start number
-            <input
-              name="startNumber"
-              type="number"
-              defaultValue={Number(config.startNumber ?? 1)}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
+          <input
+            name="startNumber"
+            type="number"
+            defaultValue={config.startNumber ?? 1}
+          />
 
-          <label>
-            End number
-            <input
-              name="endNumber"
-              type="number"
-              defaultValue={Number(config.endNumber ?? raffle.total_tickets)}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
+          <input
+            name="endNumber"
+            type="number"
+            defaultValue={config.endNumber ?? raffle.total_tickets}
+          />
 
-          <label>
-            Colours
-            <input
-              name="colours"
-              defaultValue={colours.map(colourToText).filter(Boolean).join(", ")}
-              placeholder="Red, Blue, Green"
-              style={{ display: "block", width: "100%", padding: 10 }}
-            />
-          </label>
+          <input
+            name="colours"
+            defaultValue={colours.join(", ")}
+            placeholder="Red, Blue, Green"
+          />
 
-          <label>
-            Offers JSON
-            <textarea
-              name="offers"
-              rows={8}
-              defaultValue={JSON.stringify(offers, null, 2)}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: 10,
-                fontFamily: "monospace",
-              }}
-            />
-          </label>
+          {/* 🔥 OFFERS JSON */}
+          <textarea
+            name="offers"
+            rows={8}
+            defaultValue={JSON.stringify(offers, null, 2)}
+          />
 
-          <label>
-            Currency
-            <select
-              name="currency"
-              defaultValue={raffle.currency ?? "GBP"}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            >
-              <option value="GBP">GBP</option>
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-
-          <label>
-            Status
-            <select
-              name="status"
-              defaultValue={raffle.status}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="closed">Closed</option>
-              <option value="drawn">Drawn</option>
-            </select>
-          </label>
-
-          <button
-            type="submit"
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              border: "1px solid #111",
-              cursor: "pointer",
-            }}
-          >
-            Save raffle
-          </button>
+          <button type="submit">Save raffle</button>
         </form>
       </section>
+
+      {/* =========================
+          OFFERS DISPLAY (FIXED)
+      ========================= */}
+      {offers.length > 0 && (
+        <section style={{ marginTop: 30 }}>
+          <h2>Offers</h2>
+
+          {offers.map((raw: any, i: number) => {
+            const offer = normalizeOffer(raw, i);
+
+            return (
+              <div
+                key={offer.id}
+                style={{
+                  padding: 12,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 10,
+                  marginBottom: 10,
+                }}
+              >
+                <strong>{offer.label}</strong>
+
+                <div>
+                  {offer.quantity} tickets for {offer.price}
+                </div>
+
+                <div style={{ color: offer.isActive ? "green" : "red" }}>
+                  {offer.isActive ? "Active" : "Inactive"}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <PrizeSettings
         raffleId={raffle.id}
         initialPrizes={config.prizes ?? []}
       />
 
+      {/* =========================
+          WINNERS
+      ========================= */}
       {raffle.status === "drawn" && (
         <section style={{ marginTop: 30 }}>
           <h2>Winners</h2>
