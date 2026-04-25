@@ -142,7 +142,7 @@ function toSafeRaffle(input: any): SafeRaffle {
       hex: c?.hex ? String(c.hex) : null,
       sortOrder: Number.isFinite(Number(c?.sortOrder)) ? Number(c.sortOrder) : index,
     })),
-        offers: offers.map((o: any, index: number) => ({
+    offers: offers.map((o: any, index: number) => ({
       id: String(o?.id ?? `offer-${index}`),
       label: String(o?.label ?? `Offer ${index + 1}`),
       quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
@@ -310,6 +310,19 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
   );
 }
 
+function shuffleTickets(tickets: TicketSelection[]) {
+  const shuffled = tickets.slice();
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const current = shuffled[index];
+    shuffled[index] = shuffled[swapIndex];
+    shuffled[swapIndex] = current;
+  }
+
+  return shuffled;
+}
+
 export default function PublicRafflePage({ slug }: Props) {
   const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -371,6 +384,7 @@ export default function PublicRafflePage({ slug }: Props) {
       cancelled = true;
     };
   }, [slug]);
+
   const availability = useMemo(() => {
     const sold = new Set<string>();
     const reserved = new Set<string>();
@@ -483,14 +497,15 @@ export default function PublicRafflePage({ slug }: Props) {
     setError("");
     setReservationMessage("");
   }
-
-  function autoSelectTicketQuantity(quantity: number) {
+    function autoSelectTicketQuantity(quantity: number) {
     if (!raffle || !canReserve) return;
 
     const requested = Math.max(1, Math.floor(Number(quantity) || 0));
+    const existingBasketKeys = new Set(
+      basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number))
+    );
 
-    const selected: TicketSelection[] = [];
-    const selectedKeys = new Set<string>();
+    const availableTickets: TicketSelection[] = [];
 
     const sortedColours = raffle.colours
       .slice()
@@ -498,27 +513,34 @@ export default function PublicRafflePage({ slug }: Props) {
 
     for (const colour of sortedColours) {
       for (const number of visibleNumbers) {
-        if (selected.length >= requested) break;
-
         const key = makeTicketKey(colour.name, number);
 
         if (
-          selectedKeys.has(key) ||
+          existingBasketKeys.has(key) ||
           availability.sold.has(key) ||
           availability.reserved.has(key)
         ) {
           continue;
         }
 
-        selectedKeys.add(key);
-        selected.push({ colour: colour.name, number });
+        availableTickets.push({
+          colour: colour.name,
+          number,
+        });
       }
-
-      if (selected.length >= requested) break;
     }
 
-    if (selected.length < requested) {
-      setBasket(selected);
+    const randomTickets = shuffleTickets(availableTickets).slice(0, requested);
+    const selected = [...basket, ...randomTickets];
+
+    if (randomTickets.length < requested) {
+      setBasket(
+        selected.sort((a, b) => {
+          if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
+          return a.number - b.number;
+        })
+      );
+
       setError(
         `Only ${selected.length} ticket${selected.length === 1 ? "" : "s"} could be selected. Not enough tickets are available.`
       );
@@ -640,6 +662,7 @@ export default function PublicRafflePage({ slug }: Props) {
       setSaving(false);
     }
   }
+
   if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
@@ -768,7 +791,7 @@ export default function PublicRafflePage({ slug }: Props) {
             <div>
               <h2 style={{ margin: 0 }}>Quick buy</h2>
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Choose how many tickets you would like and we’ll auto-select available numbers across colours.
+                Choose how many tickets you would like and we’ll randomly auto-select available numbers across colours.
               </p>
             </div>
 
