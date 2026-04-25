@@ -198,46 +198,75 @@ function toSafeRaffle(input: any): SafeRaffle {
 }
 
 function calculateBestPrice(quantity: number, ticketPrice: number, offers: RaffleOffer[]) {
+  const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
+
   const activeOffers = offers
     .filter((o) => o.isActive && o.quantity > 0 && o.price > 0)
     .sort((a, b) => {
-      if (b.quantity !== a.quantity) return b.quantity - a.quantity;
-      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+        return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      }
+
+      return a.quantity - b.quantity;
     });
 
-  let remaining = quantity;
-  let total = 0;
-  const appliedOffers: Array<{ label: string; quantity: number; price: number; times: number }> = [];
+  const dp: Array<{
+    total: number;
+    appliedOffers: Array<{ label: string; quantity: number; price: number; times: number }>;
+  }> = Array.from({ length: safeQuantity + 1 }, () => ({
+    total: Number.POSITIVE_INFINITY,
+    appliedOffers: [],
+  }));
 
-  for (const offer of activeOffers) {
-    const times = Math.floor(remaining / offer.quantity);
+  dp[0] = { total: 0, appliedOffers: [] };
 
-    if (times > 0) {
-      total += times * offer.price;
-      remaining -= times * offer.quantity;
-      appliedOffers.push({
-        label: offer.label,
-        quantity: offer.quantity,
-        price: offer.price,
-        times,
-      });
+  for (let i = 1; i <= safeQuantity; i += 1) {
+    dp[i] = {
+      total: dp[i - 1].total + ticketPrice,
+      appliedOffers: [...dp[i - 1].appliedOffers],
+    };
+
+    for (const offer of activeOffers) {
+      if (i < offer.quantity) continue;
+
+      const previous = dp[i - offer.quantity];
+      const candidateTotal = previous.total + offer.price;
+
+      if (candidateTotal < dp[i].total) {
+        const existing = previous.appliedOffers.find((item) => item.label === offer.label);
+
+        dp[i] = {
+          total: candidateTotal,
+          appliedOffers: existing
+            ? previous.appliedOffers.map((item) =>
+                item.label === offer.label ? { ...item, times: item.times + 1 } : item
+              )
+            : [
+                ...previous.appliedOffers,
+                {
+                  label: offer.label,
+                  quantity: offer.quantity,
+                  price: offer.price,
+                  times: 1,
+                },
+              ],
+        };
+      }
     }
   }
 
-  total += remaining * ticketPrice;
-
-  const standardTotal = quantity * ticketPrice;
+  const total = Number.isFinite(dp[safeQuantity]?.total) ? dp[safeQuantity].total : 0;
+  const standardTotal = safeQuantity * ticketPrice;
   const savings = Math.max(standardTotal - total, 0);
 
   return {
-    quantity,
+    quantity: safeQuantity,
     total,
     standardTotal,
     savings,
-    appliedOffers,
+    appliedOffers: dp[safeQuantity]?.appliedOffers ?? [],
   };
 }
-
 function renderColourLabel(colour: RaffleColour) {
   if (colour.hex) {
     return (
@@ -455,66 +484,37 @@ export default function PublicRafflePage({ slug }: Props) {
     setReservationMessage("");
   }
 
-  function autoSelectTickets() {
+  function autoSelectTicketQuantity(quantity: number) {
     if (!raffle || !canReserve) return;
 
-    const requested = Math.max(1, Math.floor(Number(autoQuantity) || 0));
+    const requested = Math.max(1, Math.floor(Number(quantity) || 0));
 
-    if (requested <= 0) {
-      setError("Enter how many tickets you would like.");
-      return;
-    }
-
-    const currentKeys = new Set(basket.map((t) => makeTicketKey(t.colour, t.number)));
-    const selected: TicketSelection[] = [...basket];
+    const selected: TicketSelection[] = [];
+    const selectedKeys = new Set<string>();
 
     const sortedColours = raffle.colours
       .slice()
       .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-    let colourIndex = 0;
-    let safety = 0;
+    for (const colour of sortedColours) {
+      for (const number of visibleNumbers) {
+        if (selected.length >= requested) break;
 
-    while (
-      selected.length < requested &&
-      safety < requested * visibleNumbers.length * Math.max(sortedColours.length, 1)
-    ) {
-      const colour = sortedColours[colourIndex % Math.max(sortedColours.length, 1)];
-      colourIndex += 1;
-      safety += 1;
-
-      if (!colour) break;
-
-      const nextNumber = visibleNumbers.find((number) => {
         const key = makeTicketKey(colour.name, number);
 
-        return (
-          !currentKeys.has(key) &&
-          !availability.sold.has(key) &&
-          !availability.reserved.has(key)
-        );
-      });
+        if (
+          selectedKeys.has(key) ||
+          availability.sold.has(key) ||
+          availability.reserved.has(key)
+        ) {
+          continue;
+        }
 
-      if (nextNumber == null) {
-        const everyColourFull = sortedColours.every((c) =>
-          visibleNumbers.every((number) => {
-            const key = makeTicketKey(c.name, number);
-            return (
-              currentKeys.has(key) ||
-              availability.sold.has(key) ||
-              availability.reserved.has(key)
-            );
-          })
-        );
-
-        if (everyColourFull) break;
-
-        continue;
+        selectedKeys.add(key);
+        selected.push({ colour: colour.name, number });
       }
 
-      const key = makeTicketKey(colour.name, nextNumber);
-      currentKeys.add(key);
-      selected.push({ colour: colour.name, number: nextNumber });
+      if (selected.length >= requested) break;
     }
 
     if (selected.length < requested) {
@@ -531,8 +531,14 @@ export default function PublicRafflePage({ slug }: Props) {
         return a.number - b.number;
       })
     );
+
+    setAutoQuantity(requested);
     setError("");
     setReservationMessage("");
+  }
+
+  function autoSelectTickets() {
+    autoSelectTicketQuantity(autoQuantity);
   }
 
   async function reserveTickets() {
@@ -629,8 +635,7 @@ export default function PublicRafflePage({ slug }: Props) {
       setSaving(false);
     }
   }
-
-  if (!slug) return <div style={styles.wrap}>Loading…</div>;
+    if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
   if (!raffle) return <div style={styles.wrap}>Raffle not found.</div>;
@@ -797,9 +802,14 @@ export default function PublicRafflePage({ slug }: Props) {
                 .slice()
                 .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
                 .map((offer) => (
-                  <div key={offer.id} style={styles.offerPill}>
+                  <button
+                    key={offer.id}
+                    type="button"
+                    onClick={() => autoSelectTicketQuantity(offer.quantity)}
+                    style={styles.offerPill}
+                  >
                     {offer.label} — {formatCurrency(offer.price, raffle.currency)}
-                  </div>
+                  </button>
                 ))}
             </div>
           </section>
@@ -1133,6 +1143,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#166534",
     fontWeight: 700,
     fontSize: 14,
+    cursor: "pointer",
   },
   colourRow: {
     display: "flex",
