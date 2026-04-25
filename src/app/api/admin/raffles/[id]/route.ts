@@ -1,216 +1,237 @@
-import Link from "next/link";
-import { redirect, notFound } from "next/navigation";
-import { auth } from "@/auth";
-import { getRaffleById } from "@/lib/raffles";
-import { query } from "@/lib/db";
-import RaffleAdminActions from "./RaffleAdminActions";
-import PrizeSettings from "./PrizeSettings";
-import ImageUploadField from "@/components/ImageUploadField";
+import { NextRequest, NextResponse } from "next/server";
+import { getTenantSlugFromRequest } from "@/lib/tenant";
+import {
+  getRaffleById,
+  updateRaffle,
+} from "../../../../../../api/_lib/raffles-repo";
 
-type PageProps = {
+type RouteContext = {
   params: {
     id: string;
   };
 };
 
-type WinnerRow = {
-  id: string;
-  raffle_id: string;
-  prize_position: number;
-  ticket_number: number;
-  colour: string | null;
-  buyer_name: string | null;
-  buyer_email: string | null;
+type Offer = {
+  id?: string;
+  label: string;
+  price: number;
+  quantity?: number;
+  tickets?: number;
+  is_active?: boolean;
+  sort_order?: number;
 };
 
-/* =========================
-   NORMALISE OFFERS FOR UI
-========================= */
-function normalizeOffer(o: any, index: number) {
-  const quantity = Number(o.quantity ?? o.tickets ?? 0);
-
-  const price =
-    o.price != null
-      ? Number(o.price)
-      : o.price_cents != null
-        ? Number(o.price_cents) / 100
-        : 0;
-
-  const isActive =
-    o.is_active === true ||
-    o.isActive === true ||
-    o.active === true;
-
-  return {
-    id: o.id || `offer-${index}`,
-    label: o.label || `${quantity} tickets`,
-    quantity,
-    price,
-    isActive,
-  };
+function toNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-export default async function AdminRafflePage({ params }: PageProps) {
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+function parseColours(value: string): string[] {
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
 
-  const raffle = await getRaffleById(params.id);
-  if (!raffle) notFound();
+function normalizeOffers(input: unknown): Offer[] {
+  if (!Array.isArray(input)) return [];
 
-  const config = (raffle.config_json as any) ?? {};
+  const result: Offer[] = [];
 
-  const colours = Array.isArray(config.colours) ? config.colours : [];
-  const offers = Array.isArray(config.offers) ? config.offers : [];
+  input.forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
 
-  const winners = await query<WinnerRow>(
-    `
-    select *
-    from raffle_winners
-    where raffle_id = $1
-    order by prize_position asc
-    `,
-    [raffle.id],
+    const raw: any = item;
+
+    const label = String(raw.label ?? "").trim();
+    const quantity = toNumber(raw.quantity ?? raw.tickets ?? 0);
+
+    const price =
+      raw.price != null
+        ? toNumber(raw.price)
+        : raw.price_cents != null
+          ? toNumber(raw.price_cents) / 100
+          : 0;
+
+    const isActive =
+      raw.is_active === true ||
+      raw.isActive === true ||
+      raw.active === true;
+
+    const sortOrder = toNumber(raw.sort_order ?? raw.sortOrder ?? index);
+
+    if (!label || quantity <= 0 || price <= 0) return;
+
+    result.push({
+      id: raw.id || `offer-${index}`,
+      label,
+      price,
+      quantity,
+      tickets: quantity,
+      is_active: isActive,
+      sort_order: sortOrder,
+    });
+  });
+
+  return result;
+}
+
+function parseOffers(value: string): Offer[] {
+  if (!value.trim()) return [];
+
+  try {
+    return normalizeOffers(JSON.parse(value));
+  } catch {
+    return [];
+  }
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+  const id = context.params.id;
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  const raffle = await getRaffleById(id);
+
+  if (!raffle) {
+    return NextResponse.json(
+      { ok: false, error: "Raffle not found" },
+      { status: 404 },
+    );
+  }
+
+  if (raffle.tenant_slug !== tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Forbidden" },
+      { status: 403 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, item: raffle });
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+  const id = context.params.id;
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  const existing = await getRaffleById(id);
+
+  if (!existing) {
+    return NextResponse.json(
+      { ok: false, error: "Raffle not found" },
+      { status: 404 },
+    );
+  }
+
+  if (existing.tenant_slug !== tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Forbidden" },
+      { status: 403 },
+    );
+  }
+
+  const existingConfig =
+    (existing.config_json as Record<string, unknown> | undefined) ?? {};
+
+  const formData = await request.formData();
+
+  const title = String(formData.get("title") ?? existing.title);
+  const slug = slugify(String(formData.get("slug") ?? existing.slug));
+  const description = String(
+    formData.get("description") ?? existing.description ?? "",
+  );
+  const image_url = String(formData.get("image_url") ?? existing.image_url ?? "");
+  const currency = String(formData.get("currency") ?? existing.currency ?? "GBP");
+  const status = String(formData.get("status") ?? existing.status);
+
+  const ticket_price = toNumber(
+    formData.get("ticket_price"),
+    existing.ticket_price,
   );
 
-  return (
-    <main style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}>
-      <p>
-        <Link href="/admin/raffles">← Back to raffles</Link>
-      </p>
-
-      <h1>{raffle.title}</h1>
-
-      <p>
-        <Link href={`/r/${raffle.slug}`} target="_blank">
-          View public page
-        </Link>
-      </p>
-
-      <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
-
-      {/* =========================
-          EDIT FORM
-      ========================= */}
-      <section
-        style={{
-          marginTop: 24,
-          padding: 20,
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          background: "#fff",
-        }}
-      >
-        <h2>Edit raffle</h2>
-
-        <form
-          action={`/api/admin/raffles/${raffle.id}`}
-          method="post"
-          style={{ display: "grid", gap: 16 }}
-        >
-          <input name="title" defaultValue={raffle.title} required />
-          <input name="slug" defaultValue={raffle.slug} required />
-          <textarea
-            name="description"
-            defaultValue={raffle.description ?? ""}
-          />
-
-          <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
-
-          <input
-            name="ticket_price"
-            type="number"
-            defaultValue={raffle.ticket_price}
-          />
-
-          <input
-            name="startNumber"
-            type="number"
-            defaultValue={config.startNumber ?? 1}
-          />
-
-          <input
-            name="endNumber"
-            type="number"
-            defaultValue={config.endNumber ?? raffle.total_tickets}
-          />
-
-          <input
-            name="colours"
-            defaultValue={colours.join(", ")}
-            placeholder="Red, Blue, Green"
-          />
-
-          {/* 🔥 OFFERS JSON */}
-          <textarea
-            name="offers"
-            rows={8}
-            defaultValue={JSON.stringify(offers, null, 2)}
-          />
-
-          <button type="submit">Save raffle</button>
-        </form>
-      </section>
-
-      {/* =========================
-          OFFERS DISPLAY (FIXED)
-      ========================= */}
-      {offers.length > 0 && (
-        <section style={{ marginTop: 30 }}>
-          <h2>Offers</h2>
-
-          {offers.map((raw: any, i: number) => {
-            const offer = normalizeOffer(raw, i);
-
-            return (
-              <div
-                key={offer.id}
-                style={{
-                  padding: 12,
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 10,
-                  marginBottom: 10,
-                }}
-              >
-                <strong>{offer.label}</strong>
-
-                <div>
-                  {offer.quantity} tickets for {offer.price}
-                </div>
-
-                <div style={{ color: offer.isActive ? "green" : "red" }}>
-                  {offer.isActive ? "Active" : "Inactive"}
-                </div>
-              </div>
-            );
-          })}
-        </section>
-      )}
-
-      <PrizeSettings
-        raffleId={raffle.id}
-        initialPrizes={config.prizes ?? []}
-      />
-
-      {/* =========================
-          WINNERS
-      ========================= */}
-      {raffle.status === "drawn" && (
-        <section style={{ marginTop: 30 }}>
-          <h2>Winners</h2>
-
-          {winners.length ? (
-            winners.map((winner) => (
-              <div key={winner.id}>
-                {winner.prize_position} — #{winner.ticket_number} —{" "}
-                {winner.colour || "No colour"} — {winner.buyer_name || "—"} (
-                {winner.buyer_email || "—"})
-              </div>
-            ))
-          ) : (
-            <div>No winners yet.</div>
-          )}
-        </section>
-      )}
-    </main>
+  const startNumber = toNumber(
+    formData.get("startNumber"),
+    toNumber(existingConfig.startNumber, 1),
   );
+
+  const endNumber = toNumber(
+    formData.get("endNumber"),
+    toNumber(existingConfig.endNumber, existing.total_tickets),
+  );
+
+  const submittedColours = String(formData.get("colours") ?? "");
+  const colours =
+    submittedColours.trim().length > 0
+      ? parseColours(submittedColours)
+      : Array.isArray(existingConfig.colours)
+        ? (existingConfig.colours as string[])
+        : [];
+
+  const submittedOffers = String(formData.get("offers") ?? "");
+  const offers =
+    submittedOffers.trim().length > 0
+      ? parseOffers(submittedOffers)
+      : normalizeOffers(existingConfig.offers ?? []);
+
+  const numbersPerColour =
+    colours.length > 0 && endNumber >= startNumber
+      ? endNumber - startNumber + 1
+      : toNumber(existingConfig.numbersPerColour, 0);
+
+  const colourCount = colours.length;
+  const total_tickets = numbersPerColour * colourCount;
+
+  const updated = await updateRaffle(id, {
+    tenant_slug: tenantSlug,
+    title,
+    slug,
+    description,
+    image_url,
+    currency: currency as "GBP" | "USD" | "EUR",
+    ticket_price,
+    total_tickets,
+    sold_tickets: existing.sold_tickets,
+    status: status as "draft" | "published" | "closed" | "drawn",
+    startNumber,
+    endNumber,
+    numbersPerColour,
+    colourCount,
+    colours,
+    offers,
+    sold: (existingConfig.sold as any) ?? [],
+    reserved: (existingConfig.reserved as any) ?? [],
+  });
+
+  if (!updated) {
+    return NextResponse.json(
+      { ok: false, error: "Update failed" },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.redirect(new URL(`/admin/raffles/${id}`, request.url), {
+    status: 303,
+  });
 }
