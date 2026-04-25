@@ -23,7 +23,7 @@ export async function POST(
       );
     }
 
-    const raffle = await getRaffleBySlug(params.slug, tenantSlug);
+    const raffle = await getRaffleBySlug(tenantSlug, params.slug);
 
     if (!raffle) {
       return NextResponse.json(
@@ -45,8 +45,8 @@ export async function POST(
     const selectedTickets = Array.isArray(body.selectedTickets)
       ? body.selectedTickets
       : Array.isArray(body.ticketNumbers)
-        ? body.ticketNumbers.map((number: unknown) => ({
-            ticket_number: number,
+        ? body.ticketNumbers.map((ticketNumber: unknown) => ({
+            ticket_number: ticketNumber,
             colour: "",
           }))
         : [];
@@ -73,7 +73,7 @@ export async function POST(
     }
 
     const reservationToken = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     for (const ticket of selectedTickets) {
       const ticketNumber = Number(ticket.ticket_number ?? ticket.number);
@@ -111,7 +111,7 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       reservationToken,
-      expiresAt,
+      expiresAt: expiresAt.toISOString(),
     });
   } catch (error: any) {
     console.error("reserve error", error);
