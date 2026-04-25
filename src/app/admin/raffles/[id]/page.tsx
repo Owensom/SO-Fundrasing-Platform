@@ -8,55 +8,19 @@ import PrizeSettings from "./PrizeSettings";
 import ImageUploadField from "@/components/ImageUploadField";
 
 type PageProps = {
-  params: {
-    id: string;
-  };
+  params: { id: string };
 };
-
-type WinnerRow = {
-  id: string;
-  raffle_id: string;
-  prize_position: number;
-  ticket_number: number;
-  colour: string | null;
-  sale_id: string | null;
-  buyer_name: string | null;
-  buyer_email: string | null;
-  drawn_at: string;
-};
-
-function ordinal(position: number) {
-  const suffix =
-    position % 10 === 1 && position % 100 !== 11
-      ? "st"
-      : position % 10 === 2 && position % 100 !== 12
-        ? "nd"
-        : position % 10 === 3 && position % 100 !== 13
-          ? "rd"
-          : "th";
-
-  return `${position}${suffix}`;
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
 
 export default async function AdminRafflePage({ params }: PageProps) {
   const session = await auth();
-
   if (!session) redirect("/admin/login");
 
   const raffle = await getRaffleById(params.id);
   if (!raffle) notFound();
 
-  const winners = await query<WinnerRow>(
-    `select * from raffle_winners where raffle_id = $1 order by prize_position asc`,
-    [raffle.id]
-  );
+  const config = (raffle.config_json as any) || {};
+  const colours = config.colours || [];
+  const offers = config.offers || [];
 
   return (
     <main style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}>
@@ -70,95 +34,117 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
       <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
 
-      <PrizeSettings
-        raffleId={raffle.id}
-        initialPrizes={(raffle.config_json as any)?.prizes ?? []}
-      />
-
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 20,
-          marginTop: 20,
-        }}
+      {/* 🎯 MAIN EDIT FORM */}
+      <form
+        action={`/api/admin/raffles/${raffle.id}`}
+        method="post"
+        style={{ display: "grid", gap: 16, marginTop: 20 }}
       >
-        {/* LEFT */}
-        <div style={{ border: "1px solid #eee", padding: 16 }}>
-          <h2>Details</h2>
+        <h2>Edit raffle</h2>
 
-          <p>{raffle.description}</p>
+        <input name="title" defaultValue={raffle.title} placeholder="Title" />
+        <textarea
+          name="description"
+          defaultValue={raffle.description ?? ""}
+          placeholder="Description"
+        />
 
-          <p>
-            <strong>Price:</strong> {raffle.ticket_price}
-          </p>
+        <input
+          name="ticket_price"
+          defaultValue={raffle.ticket_price}
+          type="number"
+          step="0.01"
+        />
 
-          <p>
-            <strong>Total:</strong> {raffle.total_tickets}
-          </p>
+        <input
+          name="total_tickets"
+          defaultValue={raffle.total_tickets}
+          type="number"
+        />
 
-          <p>
-            <strong>Sold:</strong> {raffle.sold_tickets}
-          </p>
-        </div>
+        <input name="slug" defaultValue={raffle.slug} />
 
-        {/* RIGHT */}
-        <aside style={{ border: "1px solid #eee", padding: 16 }}>
-          <h2>Image</h2>
+        <input type="hidden" name="status" value={raffle.status} />
 
-          {/* 🔥 Upload */}
-          <form
-            action={`/api/admin/raffles/${raffle.id}`}
-            method="post"
-            style={{ display: "grid", gap: 10 }}
-          >
-            <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
+        <button type="submit">Save raffle</button>
+      </form>
 
-            {/* preserve existing fields */}
-            <input type="hidden" name="title" value={raffle.title} />
-            <input type="hidden" name="slug" value={raffle.slug} />
-            <input
-              type="hidden"
-              name="description"
-              value={raffle.description ?? ""}
-            />
-            <input
-              type="hidden"
-              name="ticket_price"
-              value={raffle.ticket_price}
-            />
-            <input
-              type="hidden"
-              name="total_tickets"
-              value={raffle.total_tickets}
-            />
-            <input type="hidden" name="status" value={raffle.status} />
+      {/* 🎨 COLOURS */}
+      <section style={{ marginTop: 30 }}>
+        <h2>Colours</h2>
 
-            <button type="submit">Save image</button>
-          </form>
+        {colours.map((c: any, i: number) => (
+          <div key={i}>
+            {c.name} ({c.hex})
+          </div>
+        ))}
 
-          {/* preview */}
-          {raffle.image_url && (
-            <img
-              src={raffle.image_url}
-              style={{ width: "100%", marginTop: 12 }}
-            />
-          )}
-        </aside>
+        <p style={{ color: "#666" }}>
+          (Colours exist — UI editing can be added next)
+        </p>
       </section>
 
-      {raffle.status === "drawn" && (
-        <section style={{ marginTop: 30 }}>
-          <h2>Winners</h2>
+      {/* 💰 OFFERS */}
+      <section style={{ marginTop: 30 }}>
+        <h2>Offers</h2>
 
-          {winners.map((w) => (
-            <div key={w.id}>
-              {ordinal(w.prize_position)} — #{w.ticket_number} —{" "}
-              {w.buyer_name || "—"} ({w.buyer_email || "—"})
-            </div>
-          ))}
-        </section>
-      )}
+        {offers.map((o: any, i: number) => (
+          <div key={i}>
+            {o.label} — £{o.price} ({o.quantity} tickets)
+          </div>
+        ))}
+
+        <p style={{ color: "#666" }}>
+          (Offers exist — UI editing can be added next)
+        </p>
+      </section>
+
+      {/* 🏆 PRIZES */}
+      <PrizeSettings
+        raffleId={raffle.id}
+        initialPrizes={config.prizes ?? []}
+      />
+
+      {/* 🖼 IMAGE */}
+      <section style={{ marginTop: 30 }}>
+        <h2>Image</h2>
+
+        <form
+          action={`/api/admin/raffles/${raffle.id}`}
+          method="post"
+          style={{ display: "grid", gap: 10 }}
+        >
+          <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
+
+          <input type="hidden" name="title" value={raffle.title} />
+          <input type="hidden" name="slug" value={raffle.slug} />
+          <input
+            type="hidden"
+            name="description"
+            value={raffle.description ?? ""}
+          />
+          <input
+            type="hidden"
+            name="ticket_price"
+            value={raffle.ticket_price}
+          />
+          <input
+            type="hidden"
+            name="total_tickets"
+            value={raffle.total_tickets}
+          />
+          <input type="hidden" name="status" value={raffle.status} />
+
+          <button type="submit">Save image</button>
+        </form>
+
+        {raffle.image_url && (
+          <img
+            src={raffle.image_url}
+            style={{ width: "100%", marginTop: 12 }}
+          />
+        )}
+      </section>
     </main>
   );
 }
