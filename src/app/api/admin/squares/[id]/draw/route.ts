@@ -8,6 +8,7 @@ import {
   normalisePrizes,
 } from "../../../../../../../api/_lib/squares-repo";
 import { sendSquaresWinnerEmail } from "@/lib/email";
+import { query } from "@/lib/db";
 
 type RouteContext = {
   params: {
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!tenantSlug) {
     return NextResponse.json(
       { ok: false, error: "Tenant not found" },
-      { status: 404 },
+      { status: 404 }
     );
   }
 
@@ -36,14 +37,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!game) {
       return NextResponse.json(
         { ok: false, error: "Squares game not found" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
     if (game.tenant_slug !== tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Forbidden" },
-        { status: 403 },
+        { status: 403 }
       );
     }
 
@@ -53,9 +54,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Winners have already been drawn for this squares game.",
+          error: "Winners have already been drawn.",
         },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (prizes.length === 0) {
       return NextResponse.json(
         { ok: false, error: "No prizes configured." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -92,13 +93,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       (entry) =>
         Number.isInteger(entry.square_number) &&
         entry.square_number >= 1 &&
-        entry.square_number <= game.total_squares,
+        entry.square_number <= game.total_squares
     );
 
     if (validEntries.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "No paid squares available to draw from." },
-        { status: 400 },
+        { ok: false, error: "No valid paid squares." },
+        { status: 400 }
       );
     }
 
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       winners.push(winner);
 
-      // 🔥 Send winner email
+      // send email
       if (winningEntry.customer_email) {
         try {
           await sendSquaresWinnerEmail({
@@ -142,10 +143,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
             prizeTitle: prize.title,
           });
         } catch (err) {
-          console.error("Failed to send winner email:", err);
+          console.error("Email failed:", err);
         }
       }
     }
+
+    // 🔒 LOCK GAME AFTER DRAW
+    await query(
+      `
+      update squares_games
+      set status = 'drawn',
+          updated_at = now()
+      where id = $1
+        and tenant_slug = $2
+      `,
+      [gameId, tenantSlug]
+    );
 
     return NextResponse.json({
       ok: true,
@@ -156,7 +169,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(
       { ok: false, error: "Internal error" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
