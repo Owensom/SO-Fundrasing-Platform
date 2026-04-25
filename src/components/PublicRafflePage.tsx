@@ -94,10 +94,10 @@ function ordinal(position: number) {
     position % 10 === 1 && position % 100 !== 11
       ? "st"
       : position % 10 === 2 && position % 100 !== 12
-      ? "nd"
-      : position % 10 === 3 && position % 100 !== 13
-      ? "rd"
-      : "th";
+        ? "nd"
+        : position % 10 === 3 && position % 100 !== 13
+          ? "rd"
+          : "th";
 
   return `${position}${suffix}`;
 }
@@ -109,6 +109,207 @@ function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
   if (status === "closed") return "closed";
   return "draft";
 }
+
+function toSafeRaffle(input: any): SafeRaffle {
+  const raw = input ?? {};
+  const colours = Array.isArray(raw.colours) ? raw.colours : [];
+  const offers = Array.isArray(raw.offers) ? raw.offers : [];
+  const prizes = Array.isArray(raw.prizes) ? raw.prizes : [];
+  const reservedTickets = Array.isArray(raw.reservedTickets) ? raw.reservedTickets : [];
+  const soldTickets = Array.isArray(raw.soldTickets) ? raw.soldTickets : [];
+  const winners = Array.isArray(raw.winners) ? raw.winners : [];
+
+  const startNumber = Number(raw.startNumber);
+  const endNumber = Number(raw.endNumber);
+  const rawWinnerTicketNumber = raw.winnerTicketNumber ?? raw.winner_ticket_number;
+  const winnerTicketNumber = Number(rawWinnerTicketNumber);
+
+  return {
+    id: String(raw.id ?? ""),
+    slug: String(raw.slug ?? ""),
+    title: String(raw.title ?? "Raffle"),
+    description: String(raw.description ?? ""),
+    imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
+    tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
+    startNumber: Number.isFinite(startNumber) ? startNumber : 1,
+    endNumber: Number.isFinite(endNumber) ? endNumber : 1,
+    currency: String(raw.currency ?? "GBP"),
+    ticketPrice: Number.isFinite(Number(raw.ticketPrice)) ? Number(raw.ticketPrice) : 0,
+    status: normaliseFrontendStatus(raw.status),
+    colours: colours.map((c: any, index: number) => ({
+      id: String(c?.id ?? `colour-${index}`),
+      name: String(c?.name ?? c ?? `Colour ${index + 1}`),
+      hex: c?.hex ? String(c.hex) : null,
+      sortOrder: Number.isFinite(Number(c?.sortOrder)) ? Number(c.sortOrder) : index,
+    })),
+        offers: offers.map((o: any, index: number) => ({
+      id: String(o?.id ?? `offer-${index}`),
+      label: String(o?.label ?? `Offer ${index + 1}`),
+      quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
+      price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
+      isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
+      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
+        ? Number(o?.sortOrder ?? o?.sort_order)
+        : index,
+    })),
+    prizes: prizes
+      .map((p: any, index: number) => ({
+        position: Number.isFinite(Number(p?.position)) ? Number(p.position) : index + 1,
+        title: String(p?.title ?? ""),
+        description: String(p?.description ?? ""),
+        isPublic: p?.isPublic !== false,
+      }))
+      .filter((p: RafflePrize) => p.title.trim().length > 0 && p.isPublic)
+      .sort((a: RafflePrize, b: RafflePrize) => a.position - b.position),
+    reservedTickets: reservedTickets.map((t: any) => ({
+      colour: String(t?.colour ?? ""),
+      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+    })),
+    soldTickets: soldTickets.map((t: any) => ({
+      colour: String(t?.colour ?? ""),
+      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+    })),
+    winnerTicketNumber: Number.isFinite(winnerTicketNumber) ? winnerTicketNumber : null,
+    winnerColour:
+      raw.winnerColour ?? raw.winner_colour
+        ? String(raw.winnerColour ?? raw.winner_colour)
+        : null,
+    drawnAt:
+      raw.drawnAt ?? raw.drawn_at
+        ? String(raw.drawnAt ?? raw.drawn_at)
+        : null,
+    winners: winners.map((winner: any) => ({
+      prizePosition: Number(winner.prizePosition ?? winner.prize_position ?? 1),
+      ticketNumber: Number(winner.ticketNumber ?? winner.ticket_number ?? 0),
+      colour:
+        winner.colour != null && String(winner.colour).trim()
+          ? String(winner.colour)
+          : null,
+      buyerName:
+        winner.buyerName ?? winner.buyer_name
+          ? String(winner.buyerName ?? winner.buyer_name)
+          : null,
+      drawnAt:
+        winner.drawnAt ?? winner.drawn_at
+          ? String(winner.drawnAt ?? winner.drawn_at)
+          : null,
+    })),
+  };
+}
+
+function calculateBestPrice(quantity: number, ticketPrice: number, offers: RaffleOffer[]) {
+  const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
+
+  const activeOffers = offers
+    .filter((o) => o.isActive && o.quantity > 0 && o.price > 0)
+    .sort((a, b) => {
+      if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+        return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      }
+
+      return a.quantity - b.quantity;
+    });
+
+  const dp: Array<{
+    total: number;
+    appliedOffers: Array<{ label: string; quantity: number; price: number; times: number }>;
+  }> = Array.from({ length: safeQuantity + 1 }, () => ({
+    total: Number.POSITIVE_INFINITY,
+    appliedOffers: [],
+  }));
+
+  dp[0] = { total: 0, appliedOffers: [] };
+
+  for (let i = 1; i <= safeQuantity; i += 1) {
+    dp[i] = {
+      total: dp[i - 1].total + ticketPrice,
+      appliedOffers: [...dp[i - 1].appliedOffers],
+    };
+
+    for (const offer of activeOffers) {
+      if (i < offer.quantity) continue;
+
+      const previous = dp[i - offer.quantity];
+      const candidateTotal = previous.total + offer.price;
+
+      if (candidateTotal < dp[i].total) {
+        const existing = previous.appliedOffers.find((item) => item.label === offer.label);
+
+        dp[i] = {
+          total: candidateTotal,
+          appliedOffers: existing
+            ? previous.appliedOffers.map((item) =>
+                item.label === offer.label ? { ...item, times: item.times + 1 } : item
+              )
+            : [
+                ...previous.appliedOffers,
+                {
+                  label: offer.label,
+                  quantity: offer.quantity,
+                  price: offer.price,
+                  times: 1,
+                },
+              ],
+        };
+      }
+    }
+  }
+
+  const total = Number.isFinite(dp[safeQuantity]?.total) ? dp[safeQuantity].total : 0;
+  const standardTotal = safeQuantity * ticketPrice;
+  const savings = Math.max(standardTotal - total, 0);
+
+  return {
+    quantity: safeQuantity,
+    total,
+    standardTotal,
+    savings,
+    appliedOffers: dp[safeQuantity]?.appliedOffers ?? [],
+  };
+}
+
+function renderColourLabel(colour: RaffleColour) {
+  if (colour.hex) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: 999,
+            background: colour.hex,
+            border: "1px solid #cbd5e1",
+            display: "inline-block",
+          }}
+        />
+        {colour.name}
+      </span>
+    );
+  }
+
+  return colour.name;
+}
+
+function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
+  if (!colourName) return null;
+
+  const match = colours.find((colour) => colour.name === colourName || colour.id === colourName);
+  const background = match?.hex || colourName;
+
+  return (
+    <span
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: 999,
+        background,
+        border: "1px solid #cbd5e1",
+        display: "inline-block",
+      }}
+    />
+  );
+}
+
 export default function PublicRafflePage({ slug }: Props) {
   const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,10 +317,7 @@ export default function PublicRafflePage({ slug }: Props) {
   const [error, setError] = useState("");
   const [selectedColour, setSelectedColour] = useState("");
   const [basket, setBasket] = useState<TicketSelection[]>([]);
-
-  // ✅ FIX: allow blank
-  const [autoQuantity, setAutoQuantity] = useState<number>(1);
-
+  const [autoQuantity, setAutoQuantity] = useState(1);
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [coverFees, setCoverFees] = useState(false);
@@ -128,102 +326,48 @@ export default function PublicRafflePage({ slug }: Props) {
   useEffect(() => {
     if (!slug) return;
 
+    let cancelled = false;
+
     async function load() {
-      const res = await fetch(`/api/raffles/${slug}`);
-      const json = await res.json();
-      setRaffle(json.raffle);
-      setLoading(false);
+      try {
+        setLoading(true);
+        setError("");
+        setReservationMessage("");
+
+        const response = await fetch(`/api/raffles/${encodeURIComponent(slug)}`);
+        const text = await response.text();
+
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`API did not return JSON: ${text.slice(0, 120)}`);
+        }
+
+        if (!response.ok) {
+          throw new Error(parsed?.error || "Failed to load raffle");
+        }
+
+        const safe = toSafeRaffle(parsed?.raffle);
+
+        if (!cancelled) {
+          setRaffle(safe);
+          setSelectedColour(safe.colours[0]?.name ?? "");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load raffle");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
 
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
-
-  function autoSelectTicketQuantity(quantity: number) {
-    if (!raffle) return;
-
-    const selected: TicketSelection[] = [];
-
-    for (let i = raffle.startNumber; i <= raffle.endNumber; i++) {
-      if (selected.length >= quantity) break;
-
-      selected.push({
-        colour: raffle.colours[0]?.name || "",
-        number: i,
-      });
-    }
-
-    setBasket(selected);
-  }
-
-  // ✅ FIX: validation only on click
-  function autoSelectTickets() {
-    if (!autoQuantity || autoQuantity <= 0) {
-      setError("Enter how many tickets you would like.");
-      return;
-    }
-
-    autoSelectTicketQuantity(autoQuantity);
-  }
-
-  if (!raffle) return <div>Loading…</div>;
-
-  return (
-    <div style={{ padding: 24 }}>
-      <h1>{raffle.title}</h1>
-
-      {/* QUICK BUY */}
-      <div>
-        <h2>Quick buy</h2>
-
-        <input
-          type="number"
-          min={1}
-          value={autoQuantity === 0 ? "" : autoQuantity}
-          onChange={(e) => {
-            const raw = e.target.value;
-
-            if (raw === "") {
-              setAutoQuantity(0);
-              return;
-            }
-
-            const parsed = Number(raw);
-            if (!Number.isFinite(parsed)) return;
-
-            setAutoQuantity(parsed);
-          }}
-        />
-
-        <button onClick={autoSelectTickets}>Auto select</button>
-      </div>
-
-      {/* PRIZES */}
-      {raffle.prizes?.length > 0 && (
-        <div>
-          <h2>Prizes</h2>
-          {raffle.prizes.map((p) => (
-            <div key={p.position}>
-              {ordinal(p.position)} — {p.title}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* BASKET */}
-      <div>
-        <h2>Basket</h2>
-        {basket.map((t) => (
-          <div key={makeTicketKey(t.colour, t.number)}>
-            {t.colour} #{t.number}
-          </div>
-        ))}
-      </div>
-
-      {error && <div style={{ color: "red" }}>{error}</div>}
-
-      <div>
-        Total: {formatCurrency(basket.length * raffle.ticketPrice, raffle.currency)}
-      </div>
-    </div>
-  );
-}
