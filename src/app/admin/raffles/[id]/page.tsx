@@ -84,8 +84,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
     ...Array.from({ length: Math.max(2, 5 - offers.length) }, (_, index) => ({
       id: `new-offer-${index + 1}`,
       label: "",
-      quantity: 1,
-      price: 0,
+      quantity: "",
+      price: "",
       is_active: true,
     })),
   ];
@@ -239,58 +239,71 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
           <section>
             <h3>Offers</h3>
+            <p style={{ color: "#6b7280", fontSize: 13, marginTop: -6 }}>
+              Add simple bundle offers. Example: tickets = 3, value = 12 creates “3 for £12”.
+            </p>
 
             <input type="hidden" name="offer_count" value={offerRows.length} />
 
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th align="left">Label</th>
-                  <th align="left">Tickets</th>
-                  <th align="left">Price</th>
-                  <th align="left">Active</th>
+                  <th align="left" style={{ padding: "8px 6px" }}>
+                    Tickets
+                  </th>
+                  <th align="left" style={{ padding: "8px 6px" }}>
+                    Value
+                  </th>
+                  <th align="left" style={{ padding: "8px 6px" }}>
+                    Active
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
                 {offerRows.map((offer, index) => (
                   <tr key={`${offer.id}-${index}`}>
-                    <td>
-                      <input
-                        name={`offer_label_${index}`}
-                        defaultValue={offer.label}
-                        placeholder="3 for £12"
-                        style={{ width: "100%", padding: 8 }}
-                      />
-                    </td>
-
-                    <td>
+                    <td style={{ padding: 6 }}>
                       <input
                         name={`offer_quantity_${index}`}
                         type="number"
                         min={1}
                         defaultValue={offer.quantity}
-                        style={{ width: 90, padding: 8 }}
+                        placeholder="3"
+                        style={{ width: "100%", padding: 8 }}
                       />
                     </td>
 
-                    <td>
+                    <td style={{ padding: 6 }}>
                       <input
                         name={`offer_price_${index}`}
                         type="number"
                         min={0}
                         step="0.01"
-                        defaultValue={offer.price > 0 ? offer.price : ""}
-                        style={{ width: 100, padding: 8 }}
+                        defaultValue={
+                          Number(offer.price) > 0 ? Number(offer.price) : ""
+                        }
+                        placeholder="12.00"
+                        style={{ width: "100%", padding: 8 }}
                       />
                     </td>
 
-                    <td>
+                    <td style={{ padding: 6 }}>
                       <input
                         name={`offer_active_${index}`}
                         type="checkbox"
                         value="true"
                         defaultChecked={offer.is_active}
+                      />
+
+                      <input
+                        type="hidden"
+                        name={`offer_label_${index}`}
+                        value={
+                          Number(offer.quantity) > 0 && Number(offer.price) > 0
+                            ? `${offer.quantity} for ${offer.price}`
+                            : ""
+                        }
                       />
                     </td>
                   </tr>
