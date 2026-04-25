@@ -10,6 +10,7 @@ type Prize = {
   title?: string;
   description?: string;
   isPublic?: boolean;
+  is_public?: boolean;
 };
 
 type Body = {
@@ -39,7 +40,7 @@ function normalisePrizes(value: unknown) {
           : index + 1,
         title,
         description: String(row.description || "").trim(),
-        isPublic: row.isPublic !== false,
+        isPublic: row.isPublic !== false && row.is_public !== false,
       };
     })
     .filter(Boolean)
@@ -80,14 +81,17 @@ export async function POST(
       );
     }
 
-    const nextConfig = {
-      ...(raffle.config_json && typeof raffle.config_json === "object"
+    const existingConfig =
+      raffle.config_json && typeof raffle.config_json === "object"
         ? raffle.config_json
-        : {}),
+        : {};
+
+    const nextConfig = {
+      ...existingConfig,
       prizes,
     };
 
-    await queryOne<RaffleRow>(
+    const updated = await queryOne<RaffleRow>(
       `
       update raffles
       set
@@ -98,6 +102,13 @@ export async function POST(
       `,
       [params.id, JSON.stringify(nextConfig)]
     );
+
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Failed to save prizes" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
