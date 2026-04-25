@@ -26,6 +26,14 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toOptionalNumber(value: unknown): number | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
 function parseCommaList(value: string): string[] {
   return value
     .split(",")
@@ -137,12 +145,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
   );
   const image_url = String(formData.get("image_url") ?? existing.image_url ?? "");
   const currency = String(formData.get("currency") ?? existing.currency ?? "GBP");
-  const status = String(formData.get("status") ?? existing.status);
+  const status = String(formData.get("status") ?? existing.status) as
+    | "draft"
+    | "published"
+    | "closed"
+    | "drawn";
 
-  const ticket_price = toNumber(
-    formData.get("ticket_price"),
-    existing.ticket_price,
-  );
+  const rawTicketPrice = toOptionalNumber(formData.get("ticket_price"));
+  const ticket_price = rawTicketPrice ?? 0;
+
+  if (status !== "draft" && ticket_price <= 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Ticket price is required before publishing, closing, or drawing a raffle.",
+      },
+      { status: 400 },
+    );
+  }
 
   const startNumber = toNumber(
     formData.get("startNumber"),
@@ -183,7 +203,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     ticket_price,
     total_tickets,
     sold_tickets: existing.sold_tickets,
-    status: status as "draft" | "published" | "closed" | "drawn",
+    status,
     startNumber,
     endNumber,
     numbersPerColour,
