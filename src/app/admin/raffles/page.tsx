@@ -1,200 +1,150 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { headers, cookies } from "next/headers";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getRaffleById } from "@/lib/raffles";
+import { query } from "@/lib/db";
+import RaffleAdminActions from "./RaffleAdminActions";
+import PrizeSettings from "./PrizeSettings";
+import ImageUploadField from "@/components/ImageUploadField";
 
-type RaffleItem = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string;
-  image_url: string;
-  currency: string;
-  ticket_price: number;
-  total_tickets: number;
-  sold_tickets: number;
-  remaining_tickets: number;
-  status: string;
-  created_at: string;
-  updated_at: string;
+type PageProps = {
+  params: { id: string };
 };
 
-type ApiResponse = {
-  ok: boolean;
-  items?: RaffleItem[];
-  error?: string;
-};
-
-async function getAdminRaffles(): Promise<RaffleItem[]> {
-  const headerStore = headers();
-  const cookieStore = cookies();
-
-  const host = headerStore.get("host") || "";
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join("; ");
-
-  const res = await fetch(`${protocol}://${host}/api/admin/raffles`, {
-    cache: "no-store",
-    headers: {
-      cookie: cookieHeader,
-    },
-  });
-
-  const data = (await res.json()) as ApiResponse;
-
-  if (!res.ok || !data.ok || !data.items) {
-    return [];
-  }
-
-  return data.items;
-}
-
-export default async function AdminRafflesPage() {
+export default async function AdminRafflePage({ params }: PageProps) {
   const session = await auth();
+  if (!session) redirect("/admin/login");
 
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
+  const raffle = await getRaffleById(params.id);
+  if (!raffle) notFound();
 
-  const tenantSlug = await getTenantSlugFromHeaders();
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
-    : [];
-
-  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    redirect("/admin/login?error=tenant_access_denied");
-  }
-
-  const raffles = await getAdminRaffles();
+  const config = (raffle.config_json as any) || {};
+  const colours = config.colours || [];
+  const offers = config.offers || [];
 
   return (
-    <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 16px" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 24,
-          gap: 16,
-        }}
+    <main style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}>
+      <Link href="/admin">← Back</Link>
+
+      <h1>{raffle.title}</h1>
+
+      <Link href={`/r/${raffle.slug}`} target="_blank">
+        View public page
+      </Link>
+
+      <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
+
+      {/* 🎯 MAIN EDIT FORM */}
+      <form
+        action={`/api/admin/raffles/${raffle.id}`}
+        method="post"
+        style={{ display: "grid", gap: 16, marginTop: 20 }}
       >
-        <div>
-          <h1 style={{ margin: 0 }}>Manage raffles</h1>
-          <p style={{ margin: "8px 0 0" }}>
-            Tenant: <strong>{tenantSlug}</strong>
-          </p>
-        </div>
+        <h2>Edit raffle</h2>
 
-        <Link
-          href="/admin/raffles/new"
-          style={{
-            display: "inline-block",
-            padding: "12px 18px",
-            borderRadius: 9999,
-            background: "#1683f8",
-            color: "#fff",
-            textDecoration: "none",
-            fontWeight: 600,
-          }}
+        <input name="title" defaultValue={raffle.title} placeholder="Title" />
+        <textarea
+          name="description"
+          defaultValue={raffle.description ?? ""}
+          placeholder="Description"
+        />
+
+        <input
+          name="ticket_price"
+          defaultValue={raffle.ticket_price}
+          type="number"
+          step="0.01"
+        />
+
+        <input
+          name="total_tickets"
+          defaultValue={raffle.total_tickets}
+          type="number"
+        />
+
+        <input name="slug" defaultValue={raffle.slug} />
+
+        <input type="hidden" name="status" value={raffle.status} />
+
+        <button type="submit">Save raffle</button>
+      </form>
+
+      {/* 🎨 COLOURS */}
+      <section style={{ marginTop: 30 }}>
+        <h2>Colours</h2>
+
+        {colours.map((c: any, i: number) => (
+          <div key={i}>
+            {c.name} ({c.hex})
+          </div>
+        ))}
+
+        <p style={{ color: "#666" }}>
+          (Colours exist — UI editing can be added next)
+        </p>
+      </section>
+
+      {/* 💰 OFFERS */}
+      <section style={{ marginTop: 30 }}>
+        <h2>Offers</h2>
+
+        {offers.map((o: any, i: number) => (
+          <div key={i}>
+            {o.label} — £{o.price} ({o.quantity} tickets)
+          </div>
+        ))}
+
+        <p style={{ color: "#666" }}>
+          (Offers exist — UI editing can be added next)
+        </p>
+      </section>
+
+      {/* 🏆 PRIZES */}
+      <PrizeSettings
+        raffleId={raffle.id}
+        initialPrizes={config.prizes ?? []}
+      />
+
+      {/* 🖼 IMAGE */}
+      <section style={{ marginTop: 30 }}>
+        <h2>Image</h2>
+
+        <form
+          action={`/api/admin/raffles/${raffle.id}`}
+          method="post"
+          style={{ display: "grid", gap: 10 }}
         >
-          Create raffle
-        </Link>
-      </div>
+          <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
 
-      {raffles.length === 0 ? (
-        <div
-          style={{
-            padding: 24,
-            border: "1px solid #e5e7eb",
-            borderRadius: 16,
-            background: "#fff",
-          }}
-        >
-          No raffles yet.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 16 }}>
-          {raffles.map((raffle) => (
-            <div
-              key={raffle.id}
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 16,
-                padding: 20,
-                background: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <h2 style={{ margin: 0 }}>{raffle.title}</h2>
-                  <p style={{ margin: "8px 0 0", color: "#4b5563" }}>
-                    /r/{raffle.slug}
-                  </p>
-                </div>
+          <input type="hidden" name="title" value={raffle.title} />
+          <input type="hidden" name="slug" value={raffle.slug} />
+          <input
+            type="hidden"
+            name="description"
+            value={raffle.description ?? ""}
+          />
+          <input
+            type="hidden"
+            name="ticket_price"
+            value={raffle.ticket_price}
+          />
+          <input
+            type="hidden"
+            name="total_tickets"
+            value={raffle.total_tickets}
+          />
+          <input type="hidden" name="status" value={raffle.status} />
 
-                <div
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 9999,
-                    border: "1px solid #d1d5db",
-                    fontSize: 14,
-                  }}
-                >
-                  {raffle.status}
-                </div>
-              </div>
+          <button type="submit">Save image</button>
+        </form>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gap: 12,
-                  marginTop: 16,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>Price</div>
-                  <div>
-                    {raffle.ticket_price} {raffle.currency}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>Total</div>
-                  <div>{raffle.total_tickets}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>Sold</div>
-                  <div>{raffle.sold_tickets}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>Remaining</div>
-                  <div>{raffle.remaining_tickets}</div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 16, marginTop: 20 }}>
-                <Link href={`/r/${raffle.slug}`}>View public page</Link>
-                <Link href={`/admin/raffles/${raffle.id}`}>Open details</Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        {raffle.image_url && (
+          <img
+            src={raffle.image_url}
+            style={{ width: "100%", marginTop: 12 }}
+          />
+        )}
+      </section>
     </main>
   );
 }
