@@ -1,163 +1,134 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRaffleById, updateRaffle } from "@/lib/raffles";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { getRaffleById, updateRaffle } from "../../../../../../api/_lib/raffles-repo";
 
-type OfferInput = {
+// --- types ---
+export type NormalizedOffer = {
+  id?: string;
+  label: string;
+  quantity: number;
+  price_cents: number;
+  is_active: boolean;
+  sort_order: number;
+};
+
+type RawOffer = {
   id?: string;
   label?: string;
-  price?: number;
-  price_cents?: number;
   quantity?: number;
   tickets?: number;
+  price?: number;
+  price_cents?: number;
   is_active?: boolean;
   isActive?: boolean;
   sort_order?: number;
   sortOrder?: number;
-  active?: boolean;
 };
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/['"]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+// --- helper functions ---
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
 }
 
+function normalizeOffers(input: unknown): NormalizedOffer[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item, index): NormalizedOffer | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const raw = item as RawOffer;
+
+      const label = typeof raw.label === "string" ? raw.label.trim() : "";
+      const quantity = Math.floor(toFiniteNumber(raw.quantity ?? raw.tickets ?? 0));
+
+      let price_cents = 0;
+      if (raw.price_cents !== undefined) price_cents = Math.round(toFiniteNumber(raw.price_cents));
+      else if (raw.price !== undefined) price_cents = Math.round(toFiniteNumber(raw.price) * 100);
+
+      const is_active = raw.is_active === true || raw.isActive === true;
+      const sort_order = Math.floor(toFiniteNumber(raw.sort_order ?? raw.sortOrder ?? index));
+
+      if (!label || quantity <= 0 || price_cents <= 0) return null;
+
+      return { id: raw.id, label, quantity, price_cents, is_active, sort_order };
+    })
+    .filter((o): o is NormalizedOffer => Boolean(o))
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
+
+// --- helpers ---
 function parseColours(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return value.split(",").map((v) => v.trim()).filter(Boolean);
 }
 
-function parseNumber(value: unknown, fallback = 0): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/['"]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-function normalizeOffers(value: unknown) {
-  if (!Array.isArray(value)) return [];
+// --- main POST route ---
+export async function POST(req: NextRequest, context: { params: { id: string } }) {
+  const tenantSlug = getTenantSlugFromRequest(req);
+  const id = context.params.id;
 
-  const offers: {
-    id?: string;
-    label: string;
-    price: number;
-    quantity: number;
-    tickets: number;
-    is_active: boolean;
-    sort_order: number;
-  }[] = [];
+  if (!tenantSlug) return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
 
-  value.forEach((item, index) => {
-    if (!item || typeof item !== "object") return;
-    const raw = item as OfferInput;
+  try {
+    const existing = await getRaffleById(id);
+    if (!existing) return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
+    if (existing.tenant_slug !== tenantSlug) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
-    const label = String(raw.label ?? "").trim();
-    const quantity = parseNumber(raw.quantity ?? raw.tickets ?? 0);
-    let price = 0;
+    const formData = await req.formData();
+    const title = String(formData.get("title") ?? "").trim();
+    const rawSlug = String(formData.get("slug") ?? "").trim();
+    const slug = slugify(rawSlug || existing.slug);
+    const description = String(formData.get("description") ?? "").trim();
+    const image_url = String(formData.get("image_url") ?? "").trim();
+    const currency = String(formData.get("currency") ?? existing.currency);
+    const status = String(formData.get("status") ?? existing.status);
+    const ticket_price = Number(formData.get("ticket_price") ?? existing.ticket_price);
+    const startNumber = Number(formData.get("startNumber") ?? 0);
+    const endNumber = Number(formData.get("endNumber") ?? 0);
 
-    if (raw.price != null) price = parseNumber(raw.price);
-    else if (raw.price_cents != null) price = parseNumber(raw.price_cents) / 100;
+    const colours = parseColours(String(formData.get("colours") ?? ""));
+    const rawOffers = String(formData.get("offers") ?? "[]");
+    const offers = normalizeOffers(JSON.parse(rawOffers));
 
-    const isActive = raw.is_active === true || raw.isActive === true || raw.active === true;
-    const sortOrder = parseNumber(raw.sort_order ?? raw.sortOrder ?? index);
+    const numbersPerColour = colours.length > 0 && endNumber >= startNumber ? endNumber - startNumber + 1 : 0;
+    const colourCount = colours.length;
+    const total_tickets = numbersPerColour * colourCount;
 
-    if (!label || quantity <= 0 || price <= 0) return;
-
-    offers.push({
-      id: raw.id || `offer-${index}`,
-      label,
-      price,
-      quantity,
-      tickets: quantity,
-      is_active: isActive,
-      sort_order: sortOrder,
+    const updated = await updateRaffle(id, {
+      tenant_slug: tenantSlug,
+      title: title || existing.title,
+      slug: slug || existing.slug,
+      description,
+      image_url,
+      currency: currency as "GBP" | "USD" | "EUR",
+      ticket_price,
+      total_tickets,
+      sold_tickets: existing.sold_tickets,
+      status: status as "draft" | "published" | "closed" | "drawn",
+      startNumber,
+      endNumber,
+      numbersPerColour,
+      colourCount,
+      colours,
+      offers,
+      sold: ((existing.config_json as any)?.sold ?? []) as Array<{ colour: string; number: number }>,
+      reserved: ((existing.config_json as any)?.reserved ?? []) as Array<{ colour: string; number: number }>,
     });
-  });
 
-  return offers;
-}
+    if (!updated) return NextResponse.json({ ok: false, error: "Update failed" }, { status: 500 });
 
-type RouteContext = { params: { id: string } };
-
-export async function GET(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const id = context.params.id;
-
-  if (!tenantSlug) {
-    return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
+    return NextResponse.redirect(new URL(`/admin/raffles/${id}`, req.url), { status: 303 });
+  } catch (error) {
+    console.error("POST raffle update failed:", error);
+    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
   }
-
-  const raffle = await getRaffleById(id);
-  if (!raffle) {
-    return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
-  }
-
-  if (raffle.tenant_slug !== tenantSlug) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  return NextResponse.json({ ok: true, item: raffle });
-}
-
-export async function POST(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const id = context.params.id;
-
-  if (!tenantSlug) {
-    return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
-  }
-
-  const existing = await getRaffleById(id);
-  if (!existing) return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
-  if (existing.tenant_slug !== tenantSlug)
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-
-  const formData = await request.formData();
-
-  const title = String(formData.get("title") ?? "").trim();
-  const slug = slugify(String(formData.get("slug") ?? existing.slug));
-  const description = String(formData.get("description") ?? "");
-  const image_url = String(formData.get("image_url") ?? "");
-  const ticket_price = parseNumber(formData.get("ticket_price"), existing.ticket_price);
-  const status = String(formData.get("status") ?? existing.status);
-
-  const colours = parseColours(String(formData.get("colours") ?? ""));
-  const offersRaw = String(formData.get("offers") ?? "[]");
-  const offers = normalizeOffers(JSON.parse(offersRaw));
-
-  const startNumber = parseNumber(formData.get("startNumber"), 1);
-  const endNumber = parseNumber(formData.get("endNumber"), 1);
-
-  const numbersPerColour = colours.length > 0 && endNumber >= startNumber ? endNumber - startNumber + 1 : 0;
-  const colourCount = colours.length;
-  const total_tickets = numbersPerColour * colourCount;
-
-  const updated = await updateRaffle(id, {
-    tenant_slug: tenantSlug,
-    title,
-    slug,
-    description,
-    image_url,
-    ticket_price,
-    total_tickets,
-    sold_tickets: existing.sold_tickets,
-    status: status as "draft" | "published" | "closed" | "drawn",
-    startNumber,
-    endNumber,
-    numbersPerColour,
-    colourCount,
-    colours,
-    offers,
-    sold: (existing.config_json?.sold as Array<{ colour: string; number: number }>) ?? [],
-    reserved: (existing.config_json?.reserved as Array<{ colour: string; number: number }>) ?? [],
-  });
-
-  if (!updated) {
-    return NextResponse.json({ ok: false, error: "Update failed" }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true, item: updated });
 }
