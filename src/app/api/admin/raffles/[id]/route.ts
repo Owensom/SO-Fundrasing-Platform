@@ -192,7 +192,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     slug,
     description,
     image_url,
-    currency,
+    currency: currency as "GBP" | "USD" | "EUR",
     ticket_price,
     total_tickets,
     sold_tickets: existing.sold_tickets,
