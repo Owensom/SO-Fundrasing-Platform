@@ -31,10 +31,7 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
   const [coverFees, setCoverFees] = useState(true);
 
   const sold = useMemo(() => new Set(game.config_json?.sold ?? []), [game]);
-  const reserved = useMemo(
-    () => new Set(game.config_json?.reserved ?? []),
-    [game],
-  );
+  const reserved = useMemo(() => new Set(game.config_json?.reserved ?? []), [game]);
 
   const squares = useMemo(
     () => Array.from({ length: game.total_squares }, (_, i) => i + 1),
@@ -75,12 +72,8 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
 
       const reserveResponse = await fetch(`/api/squares/${game.slug}/reserve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          squares: selected,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ squares: selected }),
       });
 
       const reserveData = await reserveResponse.json();
@@ -92,9 +85,7 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
 
       const checkoutResponse = await fetch(`/api/squares/${game.slug}/checkout`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reservationToken: reserveData.reservationToken,
           coverFees,
@@ -120,22 +111,23 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
   }
 
   return (
-    <main style={{ maxWidth: 1000, margin: "40px auto", padding: 24 }}>
+    <section>
       <h1>{game.title}</h1>
 
-      {game.image_url && (
+      {game.image_url ? (
         <img
           src={game.image_url}
-          alt=""
+          alt={game.title}
           style={{
             width: "100%",
             maxHeight: 420,
             objectFit: "cover",
-            borderRadius: 12,
-            marginBottom: 20,
+            borderRadius: 16,
+            margin: "16px 0 24px",
+            border: "1px solid #e5e7eb",
           }}
         />
-      )}
+      ) : null}
 
       {game.description && <p>{game.description}</p>}
 
@@ -172,21 +164,10 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
         </p>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button type="button" onClick={() => autoPick(1)}>
-            Auto pick 1
-          </button>
-
-          <button type="button" onClick={() => autoPick(5)}>
-            Auto pick 5
-          </button>
-
-          <button type="button" onClick={() => autoPick(10)}>
-            Auto pick 10
-          </button>
-
-          <button type="button" onClick={() => setSelected([])}>
-            Clear
-          </button>
+          <button type="button" onClick={() => autoPick(1)}>Auto pick 1</button>
+          <button type="button" onClick={() => autoPick(5)}>Auto pick 5</button>
+          <button type="button" onClick={() => autoPick(10)}>Auto pick 10</button>
+          <button type="button" onClick={() => setSelected([])}>Clear</button>
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -270,6 +251,6 @@ export default function SquaresGameClient({ game }: { game: SquaresGame }) {
           );
         })}
       </div>
-    </main>
+    </section>
   );
 }
