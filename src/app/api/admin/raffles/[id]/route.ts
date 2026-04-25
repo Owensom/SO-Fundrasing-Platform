@@ -26,64 +26,37 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function parseColours(value: string): string[] {
+function parseCommaList(value: string): string[] {
   return value
     .split(",")
-    .map((v) => v.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
-function normalizeOffers(input: unknown): Offer[] {
-  if (!Array.isArray(input)) return [];
+function parseOffersFromForm(formData: FormData): Offer[] {
+  const count = toNumber(formData.get("offer_count"), 0);
+  const offers: Offer[] = [];
 
-  const result: Offer[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const label = String(formData.get(`offer_label_${index}`) ?? "").trim();
+    const quantity = toNumber(formData.get(`offer_quantity_${index}`), 0);
+    const price = toNumber(formData.get(`offer_price_${index}`), 0);
+    const isActive = formData.get(`offer_active_${index}`) === "true";
 
-  input.forEach((item, index) => {
-    if (!item || typeof item !== "object") return;
+    if (!label || quantity <= 0 || price <= 0) continue;
 
-    const raw: any = item;
-
-    const label = String(raw.label ?? "").trim();
-    const quantity = toNumber(raw.quantity ?? raw.tickets ?? 0);
-
-    const price =
-      raw.price != null
-        ? toNumber(raw.price)
-        : raw.price_cents != null
-          ? toNumber(raw.price_cents) / 100
-          : 0;
-
-    const isActive =
-      raw.is_active === true ||
-      raw.isActive === true ||
-      raw.active === true;
-
-    const sortOrder = toNumber(raw.sort_order ?? raw.sortOrder ?? index);
-
-    if (!label || quantity <= 0 || price <= 0) return;
-
-    result.push({
-      id: raw.id || `offer-${index}`,
+    offers.push({
+      id: `offer-${index + 1}`,
       label,
       price,
       quantity,
       tickets: quantity,
       is_active: isActive,
-      sort_order: sortOrder,
+      sort_order: index,
     });
-  });
-
-  return result;
-}
-
-function parseOffers(value: string): Offer[] {
-  if (!value.trim()) return [];
-
-  try {
-    return normalizeOffers(JSON.parse(value));
-  } catch {
-    return [];
   }
+
+  return offers;
 }
 
 function slugify(value: string) {
@@ -181,19 +154,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     toNumber(existingConfig.endNumber, existing.total_tickets),
   );
 
-  const submittedColours = String(formData.get("colours") ?? "");
-  const colours =
-    submittedColours.trim().length > 0
-      ? parseColours(submittedColours)
-      : Array.isArray(existingConfig.colours)
-        ? (existingConfig.colours as string[])
-        : [];
+  const presetColours = formData
+    .getAll("colour_preset")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
 
-  const submittedOffers = String(formData.get("offers") ?? "");
-  const offers =
-    submittedOffers.trim().length > 0
-      ? parseOffers(submittedOffers)
-      : normalizeOffers(existingConfig.offers ?? []);
+  const customColours = parseCommaList(String(formData.get("custom_colours") ?? ""));
+
+  const colours = Array.from(new Set([...presetColours, ...customColours]));
+
+  const offers = parseOffersFromForm(formData);
 
   const numbersPerColour =
     colours.length > 0 && endNumber >= startNumber
