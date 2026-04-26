@@ -10,6 +10,7 @@ export type Raffle = {
   title: string;
   slug: string;
   description?: string;
+  image_url?: string; // ✅ restored for admin page
   ticket_price_cents: number;
   total_tickets: number;
   sold_tickets: number;
@@ -69,9 +70,7 @@ export async function updateRaffle(
 // Update raffle offers
 // ------------------------------
 export async function updateRaffleOffers(id: string, tenantSlug: string, offers: any[]): Promise<any[]> {
-  // Delete existing
   await query("DELETE FROM raffle_offers WHERE raffle_id = $1 AND tenant_slug = $2", [id, tenantSlug]);
-  // Insert new
   const inserted: any[] = [];
   for (const offer of offers) {
     const res = await query(
@@ -116,4 +115,14 @@ export async function updateRafflePrizes(id: string, tenantSlug: string, prizes:
     inserted.push(res[0]);
   }
   return inserted;
+}
+
+// ------------------------------
+// Map tickets helper (for by-reservation route)
+// ------------------------------
+export function mapTickets(tickets: any[]): any[] {
+  return tickets.map((t) => ({
+    ticket_number: t.ticket_number,
+    colour: t.colour || t.hex || "#000000",
+  }));
 }
