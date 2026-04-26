@@ -12,7 +12,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const user = await auth();
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
-    const tenantSlug = getTenantSlugFromHeaders(req.headers);
+    // ✅ Multi-tenant: no arguments required
+    const tenantSlug = getTenantSlugFromHeaders();
 
     // Verify raffle exists for tenant
     const raffle = await getRaffleById(params.id);
