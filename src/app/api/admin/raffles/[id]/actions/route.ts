@@ -1,26 +1,32 @@
 // src/app/api/admin/raffles/[id]/actions/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { deleteRaffle } from "@/lib/raffles";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { deleteRaffle, getRaffleById } from "@/lib/raffles";
 
 export const runtime = "nodejs";
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-
-  const tenantSlug = await getTenantSlugFromHeaders();
-  if (!tenantSlug) return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 400 });
-
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // Authenticate admin
+    const user = await auth();
+    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
+    const tenantSlug = getTenantSlugFromHeaders(req.headers);
+
+    // Verify raffle exists for tenant
+    const raffle = await getRaffleById(params.id);
+    if (!raffle || raffle.tenant_slug !== tenantSlug) {
+      return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
+    }
+
+    // Delete raffle
     await deleteRaffle(params.id, tenantSlug);
+
+    // Return success
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("Delete raffle error:", err);
-    return NextResponse.json({ ok: false, error: err.message || "Failed to delete raffle" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
