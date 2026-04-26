@@ -3,7 +3,7 @@ import { getRaffleBySlug } from "@/lib/raffles";
 import { query } from "@/lib/db";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2022-11-15" });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2023-10-16" });
 
 export const runtime = "edge";
 
