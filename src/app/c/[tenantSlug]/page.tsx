@@ -1,151 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-
-type Campaign = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  type: "raffle" | "squares" | "event";
-  startNumber?: number;
-  endNumber?: number;
-  size?: number;
-  date?: string;
-};
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
 type Props = {
-  params: {
-    tenantSlug: string;
-  };
+  slug: string;
+  tenantSlug: string;
 };
 
-export default function TenantCampaignsPage({ params }: Props) {
-  const { tenantSlug } = params;
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+export default function PublicRafflePage({ slug, tenantSlug }: Props) {
+  const router = useRouter();
+  const [raffle, setRaffle] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!slug) return;
+
+    let cancelled = false;
+
     async function load() {
       try {
         setLoading(true);
         setError("");
 
-        const res = await fetch(`/api/public/campaigns/${encodeURIComponent(tenantSlug)}`);
+        const res = await fetch(`/api/raffles/${encodeURIComponent(slug)}`);
         const data = await res.json();
 
         if (!res.ok || !data.ok) {
-          throw new Error(data?.error || "Failed to load campaigns");
+          throw new Error(data?.error || "Failed to load raffle");
         }
 
-        setCampaigns(data.campaigns ?? []);
+        if (!cancelled) setRaffle(data.raffle);
       } catch (err: any) {
-        setError(err?.message || "Failed to load campaigns");
+        if (!cancelled) setError(err?.message || "Failed to load raffle");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
-  }, [tenantSlug]);
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
-  if (loading) return <div style={styles.wrap}>Loading campaigns…</div>;
-  if (error) return <div style={styles.wrap}>Error: {error}</div>;
-  if (!campaigns.length) return <div style={styles.wrap}>No active campaigns found.</div>;
+  if (loading) return <div style={{ padding: 24 }}>Loading raffle…</div>;
+  if (error) return <div style={{ padding: 24 }}>Error: {error}</div>;
+  if (!raffle) return <div style={{ padding: 24 }}>Raffle not found.</div>;
 
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>Active Campaigns</h1>
-      <div style={styles.grid}>
-        {campaigns.map((c) => {
-          const link =
-            c.type === "raffle"
-              ? `/r/${c.slug}`
-              : c.type === "squares"
-              ? `/s/${c.slug}`
-              : `/e/${c.slug}`; // future events page
+    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+      {/* Back button to campaign page */}
+      <button
+        onClick={() => router.push(`/c/${tenantSlug}`)}
+        style={{
+          marginBottom: 24,
+          padding: "8px 16px",
+          borderRadius: 8,
+          border: "1px solid #cbd5e1",
+          background: "#f8fafc",
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        ← Back to campaigns
+      </button>
 
-          return (
-            <Link key={c.id} href={link} style={styles.card}>
-              {c.imageUrl ? (
-                <img src={c.imageUrl} alt={c.title} style={styles.image} />
-              ) : null}
-              <div style={styles.cardContent}>
-                <h2 style={styles.cardTitle}>{c.title}</h2>
-                <p style={styles.cardDesc}>{c.description}</p>
-                <span style={styles.cardType}>{c.type.toUpperCase()}</span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      {raffle.imageUrl ? (
+        <img
+          src={raffle.imageUrl}
+          alt={raffle.title}
+          style={{ width: "100%", height: 300, objectFit: "cover", borderRadius: 16, marginBottom: 20 }}
+        />
+      ) : null}
+
+      <h1>{raffle.title}</h1>
+      {raffle.description ? <p>{raffle.description}</p> : null}
+
+      {/* Render prizes if available */}
+      {raffle.prizes?.length > 0 && (
+        <section style={{ marginTop: 20, padding: 16, border: "1px solid #fed7aa", borderRadius: 12, background: "#fff7ed" }}>
+          <h2>Prizes</h2>
+          <ul>
+            {raffle.prizes.map((p: any, index: number) => (
+              <li key={index}>
+                {p.position}. {p.title} {p.description ? `– ${p.description}` : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Reserved tickets, basket, or other purchase flow can go here */}
+      {/* …existing raffle ticket selection and checkout logic… */}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    maxWidth: 1100,
-    margin: "40px auto",
-    padding: "0 16px",
-    fontFamily: "Arial, sans-serif",
-  },
-  wrap: {
-    padding: 24,
-    textAlign: "center",
-  },
-  heading: {
-    fontSize: 32,
-    fontWeight: 900,
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 20,
-  },
-  card: {
-    display: "flex",
-    flexDirection: "column",
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
-    overflow: "hidden",
-    textDecoration: "none",
-    color: "#111827",
-    cursor: "pointer",
-    background: "#ffffff",
-    transition: "transform 0.2s, box-shadow 0.2s",
-  },
-  cardContent: {
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    margin: 0,
-  },
-  cardDesc: {
-    fontSize: 14,
-    color: "#64748b",
-    flex: 1,
-  },
-  cardType: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#2563eb",
-    textTransform: "uppercase",
-  },
-  image: {
-    width: "100%",
-    height: 180,
-    objectFit: "cover",
-    borderBottom: "1px solid #e2e8f0",
-  },
-};
