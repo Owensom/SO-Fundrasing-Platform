@@ -1,7 +1,9 @@
 // src/lib/db.ts
-// Restored full helpers: query, queryOne, getDbClient
-// TLS-safe dynamic pg import
+// =======================================
+// TLS-safe dynamic import for pg
+// Preserves all original helpers and TypeScript generics
 // Uses process.env.DATABASE_URL directly
+// =======================================
 
 let _client: any;
 
@@ -13,19 +15,19 @@ async function getClient() {
   return _client;
 }
 
-// Query helper returning all rows
-export async function query(text: string, params?: any[]) {
+// Generic query helper returning all rows
+export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
   const client = await getClient();
   const res = await client.query(text, params);
   return res.rows;
 }
 
-// Query helper returning first row or null
-export async function queryOne(text: string, params?: any[]) {
+// Generic query helper returning first row or null
+export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
   const client = await getClient();
   const res = await client.query(text, params);
   return res.rows[0] || null;
 }
 
-// Export client getter in case some modules need it
+// Export client getter for any server-side direct use
 export { getClient as getDbClient };
