@@ -1,7 +1,7 @@
 // src/lib/raffles.ts
 // =======================================
-// Full restore of your original file
-// Preserves all exports used in pages, admin routes, APIs
+// Full restore with deleteRaffle fix
+// Preserves all exports and works with Neon db.ts
 // =======================================
 
 import { query, queryOne, getDbClient } from "@/lib/db";
@@ -18,6 +18,7 @@ export type Raffle = {
   sold_tickets: number;
   status: string;
   currency: string;
+  tenant_slug: string;
   config_json: {
     colours: { id?: string; hex: string; name: string; sortOrder?: number }[];
     offers: { id?: string; label: string; price: number; quantity?: number; sortOrder?: number; isActive?: boolean }[];
@@ -41,10 +42,13 @@ export async function getRaffleBySlug(slug: string): Promise<Raffle | null> {
 }
 
 // ------------------------------
-// Delete raffle
+// Delete raffle (fixed signature for multi-tenant)
 // ------------------------------
-export async function deleteRaffle(id: string): Promise<void> {
-  await query("DELETE FROM raffles WHERE id = $1", [id]);
+export async function deleteRaffle(id: string, tenantSlug: string): Promise<void> {
+  await query(
+    "DELETE FROM raffles WHERE id = $1 AND tenant_slug = $2",
+    [id, tenantSlug]
+  );
 }
 
 // ------------------------------
@@ -65,6 +69,6 @@ export function mapTickets(
 }
 
 // ------------------------------
-// Any additional helpers you had
-// (Add them here exactly as in your previous working version)
+// Any additional helpers
 // ------------------------------
+// Add other helpers exactly as they existed in your previous working version
