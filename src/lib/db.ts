@@ -17,13 +17,13 @@ const client = new postgres.Client({
 // Query helpers
 // ------------------------------
 export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
-  const res = await client.unsafe(text, params);
-  return res.map((row: any) => row);
+  const res = await client.query(text, params); // ✅ use query instead of unsafe
+  return res.rows;
 }
 
 export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
-  const res = await client.unsafe(text, params);
-  return res[0] || null;
+  const res = await client.query(text, params); // ✅ use query
+  return res.rows[0] || null;
 }
 
 // ------------------------------
@@ -36,7 +36,7 @@ export function getDbClient() {
 // ------------------------------
 // sql export for setup/admin routes
 // ------------------------------
-export const sql = client;
+export const sql = query; // ✅ replace sql tagged templates with query helper
 
 // ===============================
 // Notes:
