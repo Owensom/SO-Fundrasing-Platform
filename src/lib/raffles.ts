@@ -28,14 +28,17 @@ export type RafflePrize = {
   name?: string;
   title?: string;
   description?: string;
+  isPublic?: boolean;
+  is_public?: boolean;
+  position?: number;
   sortOrder?: number;
   sort_order?: number;
 };
 
 export type RaffleConfig = {
-  colours?: RaffleColour[];
-  offers?: RaffleOffer[];
-  prizes?: RafflePrize[];
+  colours: RaffleColour[];
+  offers: RaffleOffer[];
+  prizes: RafflePrize[];
   sold?: any[];
   reserved?: any[];
   [key: string]: any;
@@ -60,36 +63,48 @@ export type Raffle = {
 };
 
 function normaliseRaffle(row: any): Raffle {
-  const config: RaffleConfig =
+  const rawConfig =
     row?.config_json && typeof row.config_json === "object" ? row.config_json : {};
 
-  const currency = (row.currency || "GBP") as RaffleCurrency;
+  const colours = Array.isArray(rawConfig.colours) ? rawConfig.colours : [];
+  const offers = Array.isArray(rawConfig.offers) ? rawConfig.offers : [];
+  const prizes = Array.isArray(rawConfig.prizes) ? rawConfig.prizes : [];
+
+  const config: RaffleConfig = {
+    ...rawConfig,
+    colours,
+    offers,
+    prizes,
+  };
 
   return {
     ...row,
     description: row.description ?? "",
     image_url: row.image_url ?? "",
-    currency,
+    currency: (row.currency || "GBP") as RaffleCurrency,
     status: (row.status || "draft") as RaffleStatus,
-    config_json: {
-      ...config,
-      colours: Array.isArray(config.colours) ? config.colours : [],
-      offers: Array.isArray(config.offers) ? config.offers : [],
-      prizes: Array.isArray(config.prizes) ? config.prizes : [],
-    },
-    colours: Array.isArray(config.colours) ? config.colours : [],
-    offers: Array.isArray(config.offers) ? config.offers : [],
-    prizes: Array.isArray(config.prizes) ? config.prizes : [],
+    config_json: config,
+    colours,
+    offers,
+    prizes,
   };
 }
 
 async function getCurrentConfig(id: string, tenantSlug: string): Promise<RaffleConfig> {
-  const row = await queryOne<{ config_json: RaffleConfig }>(
+  const row = await queryOne<{ config_json: any }>(
     "SELECT config_json FROM raffles WHERE id = $1 AND tenant_slug = $2",
     [id, tenantSlug]
   );
 
-  return row?.config_json && typeof row.config_json === "object" ? row.config_json : {};
+  const rawConfig =
+    row?.config_json && typeof row.config_json === "object" ? row.config_json : {};
+
+  return {
+    ...rawConfig,
+    colours: Array.isArray(rawConfig.colours) ? rawConfig.colours : [],
+    offers: Array.isArray(rawConfig.offers) ? rawConfig.offers : [],
+    prizes: Array.isArray(rawConfig.prizes) ? rawConfig.prizes : [],
+  };
 }
 
 async function updateConfigJson(
@@ -117,7 +132,9 @@ export async function getRaffleBySlug(
         "SELECT * FROM raffles WHERE tenant_slug = $1 AND slug = $2",
         [tenantSlugOrSlug, maybeSlug]
       )
-    : await queryOne<any>("SELECT * FROM raffles WHERE slug = $1", [tenantSlugOrSlug]);
+    : await queryOne<any>("SELECT * FROM raffles WHERE slug = $1", [
+        tenantSlugOrSlug,
+      ]);
 
   return row ? normaliseRaffle(row) : null;
 }
@@ -249,9 +266,12 @@ export async function updateRafflePrizes(
 
   const normalisedPrizes = prizes.map((prize, index) => ({
     id: prize.id || `prize-${index + 1}`,
-    name: prize.name ?? prize.title ?? `Prize ${index + 1}`,
     title: prize.title ?? prize.name ?? `Prize ${index + 1}`,
+    name: prize.name ?? prize.title ?? `Prize ${index + 1}`,
     description: prize.description ?? "",
+    isPublic: prize.isPublic ?? prize.is_public ?? true,
+    is_public: prize.is_public ?? prize.isPublic ?? true,
+    position: prize.position ?? index + 1,
     sortOrder: prize.sortOrder ?? prize.sort_order ?? index,
     sort_order: prize.sort_order ?? prize.sortOrder ?? index,
   }));
