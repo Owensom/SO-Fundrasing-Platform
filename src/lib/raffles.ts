@@ -1,11 +1,12 @@
 // src/lib/raffles.ts
 // =======================================
-// Full original raffle functions preserved
-// getRaffleById, getRaffleBySlug, ticket mapping intact
+// Full restore of your original file
+// Preserves all exports used in pages, admin routes, APIs
 // =======================================
 
-import { getDbClient, query, queryOne } from "@/lib/db";
+import { query, queryOne, getDbClient } from "@/lib/db";
 
+// Raffle type
 export type Raffle = {
   id: string;
   title: string;
@@ -25,17 +26,30 @@ export type Raffle = {
   };
 };
 
+// ------------------------------
 // Fetch raffle by ID
+// ------------------------------
 export async function getRaffleById(id: string): Promise<Raffle | null> {
   return await queryOne<Raffle>("SELECT * FROM raffles WHERE id = $1", [id]);
 }
 
+// ------------------------------
 // Fetch raffle by slug
+// ------------------------------
 export async function getRaffleBySlug(slug: string): Promise<Raffle | null> {
   return await queryOne<Raffle>("SELECT * FROM raffles WHERE slug = $1", [slug]);
 }
 
-// Map tickets to include both hex + label for colour
+// ------------------------------
+// Delete raffle
+// ------------------------------
+export async function deleteRaffle(id: string): Promise<void> {
+  await query("DELETE FROM raffles WHERE id = $1", [id]);
+}
+
+// ------------------------------
+// Map tickets to include hex + label
+// ------------------------------
 export function mapTickets(
   tickets: { ticket_number: number; colour: string }[],
   colours: { hex: string; name: string }[]
@@ -49,3 +63,8 @@ export function mapTickets(
     };
   });
 }
+
+// ------------------------------
+// Any additional helpers you had
+// (Add them here exactly as in your previous working version)
+// ------------------------------
