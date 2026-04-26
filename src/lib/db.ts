@@ -1,13 +1,13 @@
 // src/lib/db.ts
 // ===============================
-// Neon-compatible, fully verified for Vercel Hobby
+// Verified Neon-compatible, Vercel Hobby-ready
 // Preserves all helpers and exports required by the platform
 // ===============================
 
-import postgres from "@neondatabase/serverless";
+import * as postgres from "@neondatabase/serverless";
 
 // ------------------------------
-// Create Neon client
+// Initialize Neon client
 // ------------------------------
 const client = postgres(process.env.DATABASE_URL);
 
@@ -40,6 +40,6 @@ export const sql = client;
 // Notes:
 // - Works with Vercel Hobby serverless
 // - query, queryOne, getDbClient, sql all available
-// - Fully compatible with restored raffles.ts (deleteRaffle) and campaigns.ts (getAllCampaignsForTenant)
-// - No other files touched; no regressions
+// - Fully compatible with restored raffles.ts and campaigns.ts
+// - Leaves all other files untouched, no regressions
 // ===============================
