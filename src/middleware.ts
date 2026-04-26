@@ -39,11 +39,11 @@ export default auth((req) => {
     const url = req.nextUrl.clone();
     url.pathname = "/";
     url.searchParams.set("error", "tenant_not_found");
-    return NextResponse.redirect(url);
+
+    // ✅ FIX: absolute redirect
+    return NextResponse.redirect(new URL(url.toString(), req.url));
   }
 
-  // Only require that a user is logged in here.
-  // Tenant membership is enforced inside the actual admin pages/APIs.
   if (!req.auth?.user) {
     if (isAdminApiPath) {
       return NextResponse.json(
@@ -55,7 +55,9 @@ export default auth((req) => {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     loginUrl.searchParams.set("error", "tenant_access_denied");
-    return NextResponse.redirect(loginUrl);
+
+    // ✅ FIX: absolute redirect
+    return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
   }
 
   return NextResponse.next();
