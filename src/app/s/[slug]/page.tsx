@@ -1,68 +1,65 @@
-import { notFound } from "next/navigation";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import {
-  getSquaresGameByTenantAndSlug,
-  listSquaresWinners,
-} from "../../../../api/_lib/squares-repo";
-import SquaresGameClient from "./SquaresGameClient";
+"use client";
 
-type PageProps = {
-  params: {
-    slug: string;
-  };
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+type SquaresGame = {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  size: number;
 };
 
-function firstNameOnly(name?: string | null) {
-  return name?.trim().split(/\s+/)[0] || "Winner";
-}
+type Props = {
+  params: { slug: string; tenantSlug: string };
+};
 
-export default async function SquaresPublicPage({ params }: PageProps) {
-  const tenantSlug = getTenantSlugFromHeaders();
+export default function PublicSquaresPage({ params }: Props) {
+  const { slug, tenantSlug } = params;
+  const [game, setGame] = useState<SquaresGame | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  if (!tenantSlug) {
-    notFound();
-  }
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch(`/api/public/squares/${slug}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed to load squares game");
+        setGame(data.game ?? null);
+      } catch (err: any) {
+        setError(err.message || "Failed to load squares game");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [slug]);
 
-  const game = await getSquaresGameByTenantAndSlug(
-    tenantSlug,
-    params.slug,
-  );
-
-  if (!game || game.status !== "published") {
-    notFound();
-  }
-
-  const winners = await listSquaresWinners(game.id);
+  if (loading) return <div style={{ padding: 16 }}>Loading…</div>;
+  if (error) return <div style={{ padding: 16, color: "red" }}>{error}</div>;
+  if (!game) return <div style={{ padding: 16 }}>Squares game not found.</div>;
 
   return (
-    <main style={{ maxWidth: 1000, margin: "40px auto", padding: 24 }}>
-      {/* Winners section */}
-      {winners.length > 0 && (
-        <section
-          style={{
-            marginBottom: 24,
-            padding: 16,
-            border: "2px solid #16a34a",
-            borderRadius: 12,
-            background: "#f0fdf4",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>🎉 Winners</h2>
+    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+      <Link href={`/c/${tenantSlug}`} style={{ display: "inline-block", marginBottom: 16, color: "#2563eb" }}>
+        ← Back to all campaigns
+      </Link>
 
-          <ul style={{ paddingLeft: 20 }}>
-            {winners.map((winner) => (
-              <li key={winner.id}>
-                <strong>{winner.prize_title}</strong>: Square #
-                {winner.square_number} —{" "}
-                {firstNameOnly(winner.customer_name)}
-              </li>
-            ))}
-          </ul>
-        </section>
+      <h1>{game.title}</h1>
+      {game.imageUrl && (
+        <img
+          src={game.imageUrl}
+          alt={game.title}
+          style={{ width: "100%", maxHeight: 360, objectFit: "cover", borderRadius: 16, marginBottom: 20 }}
+        />
       )}
-
-      {/* Game UI */}
-      <SquaresGameClient game={game} />
-    </main>
+      {game.description && <p>{game.description}</p>}
+      <div>Grid size: {game.size} × {game.size}</div>
+    </div>
   );
 }
