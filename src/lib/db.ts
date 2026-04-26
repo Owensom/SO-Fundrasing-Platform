@@ -1,16 +1,14 @@
 // src/lib/db.ts
-import { env } from "@/env.mjs";
-
 let _client: any;
 
 export async function getDbClient() {
   if (_client) return _client;
 
-  // Dynamic import avoids bundling Node-only 'pg' in client code
+  // Dynamic import for server-only Node pg
   const { Client } = await import("pg");
 
   _client = new Client({
-    connectionString: env.DATABASE_URL,
+    connectionString: process.env.DATABASE_URL, // use Vercel env variable directly
   });
 
   await _client.connect();
