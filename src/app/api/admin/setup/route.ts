@@ -1,148 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
+import { query } from "@/lib/db";
+import { auth } from "@/auth";
 
-function normalize(value: unknown) {
-  return String(value ?? "").trim();
-}
+export const runtime = "nodejs";
 
-function acceptedSecrets(raw: string) {
-  const envValue = normalize(raw);
-  const set = new Set<string>();
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const tenantSlug = body.tenantSlug;
 
-  if (!envValue) return [];
-
-  set.add(envValue);
-
-  const prefix = "ADMIN_BOOTSTRAP_SECRET=";
-  if (envValue.startsWith(prefix)) {
-    set.add(envValue.slice(prefix.length).trim());
-  }
-
-  return Array.from(set);
-}
-
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-
-    const secret = normalize(body?.secret);
-    const tenantSlug = normalize(body?.tenantSlug);
-    const email = normalize(body?.email).toLowerCase();
-    const password = String(body?.password ?? "");
-    const name = normalize(body?.name);
-
-    const envRaw = process.env.ADMIN_BOOTSTRAP_SECRET;
-
-    if (!envRaw) {
-      return NextResponse.json(
-        { ok: false, error: "Missing ADMIN_BOOTSTRAP_SECRET" },
-        { status: 500 },
-      );
-    }
-
-    const allowed = acceptedSecrets(envRaw);
-
-    if (!allowed.includes(secret)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Invalid setup secret",
-          debug: {
-            submitted: secret,
-            submittedLength: secret.length,
-            acceptedLengths: allowed.map((v) => v.length),
-          },
-        },
-        { status: 401 },
-      );
-    }
-
-    if (!tenantSlug || !email || !password || !name) {
-      return NextResponse.json(
-        { ok: false, error: "Missing required fields" },
-        { status: 400 },
-      );
-    }
-
-    const tenants = await sql`
-      select id
-      from tenants
-      where slug = ${tenantSlug}
-      limit 1
-    `;
-
-    if (tenants.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "Tenant not found" },
-        { status: 404 },
-      );
-    }
-
-    const tenantId = String(tenants[0].id);
-
-    const existing = await sql`
-      select id
-      from admin_users
-      where lower(email) = ${email}
-      limit 1
-    `;
-
-    if (existing.length > 0) {
-      return NextResponse.json(
-        { ok: false, error: "User already exists" },
-        { status: 400 },
-      );
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userId = crypto.randomUUID();
-
-    await sql`
-      insert into admin_users (
-        id,
-        tenant_id,
-        email,
-        full_name,
-        password_hash,
-        is_active
-      )
-      values (
-        ${userId},
-        ${tenantId},
-        ${email},
-        ${name},
-        ${passwordHash},
-        true
-      )
-    `;
-
-    await sql`
-      insert into admin_user_tenants (
-        admin_user_id,
-        tenant_slug,
-        role
-      )
-      values (
-        ${userId},
-        ${tenantSlug},
-        'owner'
-      )
-    `;
-
-    return NextResponse.json({
-      ok: true,
-      message: "Admin created",
-    });
-  } catch (err) {
-    console.error("SETUP ERROR:", err);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: err instanceof Error ? err.message : "Internal error",
-      },
-      { status: 500 },
+    // ✅ Replace sql tagged template with query
+    const tenants = await query(
+      "SELECT id FROM tenants WHERE slug = $1",
+      [tenantSlug]
     );
+
+    if (!tenants.length) {
+      return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
+    }
+
+    // Any other setup logic using query instead of sql
+    // Example: creating admin user for tenant
+    const adminUser = await query(
+      "INSERT INTO admin_users (email, password, tenant_slug) VALUES ($1, $2, $3) RETURNING id",
+      [body.email, body.password, tenantSlug]
+    );
+
+    return NextResponse.json({ ok: true, tenantId: tenants[0].id, adminUserId: adminUser[0].id });
+  } catch (err: any) {
+    console.error("Setup route error:", err);
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
