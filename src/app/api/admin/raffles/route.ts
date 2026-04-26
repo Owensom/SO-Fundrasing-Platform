@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { createRaffle, listRaffles } from "../../../../../api/_lib/raffles-repo";
 
+export const runtime = "nodejs";
+
 function parseNumber(
   value: FormDataEntryValue | string | null | undefined,
   fallback = 0,
@@ -65,17 +67,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
-  }
-
   try {
     const formData = await request.formData();
+
+    const tenantSlug =
+      getTenantSlugFromRequest(request) ||
+      String(formData.get("tenantSlug") ?? "").trim();
+
+    if (!tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant not found" },
+        { status: 404 },
+      );
+    }
 
     const title = String(formData.get("title") ?? "").trim();
     const rawSlug = String(formData.get("slug") ?? "").trim();
@@ -106,9 +110,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const numbersPerColour = colours.length > 0 && endNumber >= startNumber
-      ? endNumber - startNumber + 1
-      : 0;
+    const numbersPerColour =
+      colours.length > 0 && endNumber >= startNumber
+        ? endNumber - startNumber + 1
+        : 0;
 
     const total_tickets = numbersPerColour * colours.length;
 
