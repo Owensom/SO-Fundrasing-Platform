@@ -1,8 +1,7 @@
 // src/app/admin/raffles/[id]/page.tsx
-// =======================================
-// Changes: Only fixed imports
-// UI and table of colours remain unchanged
-// =======================================
+// Admin UI preserved exactly
+// Only imports fixed
+
 import { getRaffleById } from "@/lib/raffles";
 
 interface RafflePageProps {
