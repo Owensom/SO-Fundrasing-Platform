@@ -1,16 +1,14 @@
 // src/lib/db.ts
 // ===============================
 // Dynamic pg import for serverless (Vercel Hobby)
-// Preserves all existing helpers and TypeScript generics
-// Uses process.env.DATABASE_URL
+// Preserves all existing query helpers and generics
 // ===============================
 
 let _client: any;
 
-// Get the server-side Postgres client
 async function getClient() {
   if (_client) return _client;
-  const { Client } = await import("pg"); // dynamic import to avoid TLS issues in serverless
+  const { Client } = await import("pg"); // dynamic import avoids TLS issues
   _client = new Client({ connectionString: process.env.DATABASE_URL });
   await _client.connect();
   return _client;
@@ -23,17 +21,16 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
   return res.rows;
 }
 
-// Generic query returning the first row or null
+// Generic query returning first row
 export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
   const client = await getClient();
   const res = await client.query(text, params);
   return res.rows[0] || null;
 }
 
-// Export client getter for direct server usage
+// Export client getter for any server-side direct usage
 export { getClient as getDbClient };
 
 // ===============================
-// No other changes to your repo needed
-// All existing exports in raffles.ts, campaigns.ts, pages, admin routes remain intact
+// Nothing else is changed — all other files remain intact
 // ===============================
