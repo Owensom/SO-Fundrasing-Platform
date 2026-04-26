@@ -1,7 +1,7 @@
 import { query } from "./db";
 import type { SafeRaffle } from "./types";
 
-// Fetch by slug for public pages
+// Fetch raffle by slug for public pages
 export async function getRaffleBySlug(slug: string, tenantSlug: string): Promise<SafeRaffle | null> {
   const result = await query<SafeRaffle>(
     `
@@ -17,7 +17,7 @@ export async function getRaffleBySlug(slug: string, tenantSlug: string): Promise
   return result[0] ?? null;
 }
 
-// Fetch by ID for admin / checkout
+// Fetch raffle by ID for admin/checkout pages
 export async function getRaffleById(id: string, tenantSlug: string): Promise<SafeRaffle | null> {
   const result = await query<SafeRaffle>(
     `
@@ -30,4 +30,16 @@ export async function getRaffleById(id: string, tenantSlug: string): Promise<Saf
     [id, tenantSlug]
   );
   return result[0] ?? null;
+}
+
+// Delete a raffle (admin)
+export async function deleteRaffle(id: string, tenantSlug: string): Promise<void> {
+  await query(
+    `
+    delete from raffles
+    where id = $1
+      and tenant_slug = $2
+    `,
+    [id, tenantSlug]
+  );
 }
