@@ -1,52 +1,39 @@
 // src/lib/raffles.ts
 import { query } from "./db";
-import type { SafeRaffle } from "./types";
 
-// Fetch raffle by slug for public pages
-export async function getRaffleBySlug(
-  slug: string,
-  tenantSlug: string
-): Promise<SafeRaffle | null> {
-  const result = await query<SafeRaffle>(
-    `
-    select *
-    from raffles
-    where slug = $1
-      and tenant_slug = $2
-      and status = 'published'
-    limit 1
-    `,
+export type Raffle = {
+  id: string;
+  tenant_slug: string;
+  slug: string;
+  title: string;
+  description: string;
+  image_url?: string | null;
+  ticket_price: number;
+  total_tickets: number;
+  sold_tickets: number;
+  status: "draft" | "published" | "closed" | "drawn";
+  currency: string;
+  config_json: {
+    startNumber?: number;
+    endNumber?: number;
+    colours?: { id: string; name: string; hex?: string }[];
+    offers?: { id: string; label: string; price: number; quantity: number; isActive?: boolean }[];
+    prizes?: { position: number; title: string; description?: string; isPublic?: boolean }[];
+  };
+};
+
+export async function getRaffleById(tenantSlug: string, id: string): Promise<Raffle | null> {
+  const raffle = await query<Raffle>(
+    `SELECT * FROM raffles WHERE id = $1 AND tenant_slug = $2 LIMIT 1`,
+    [id, tenantSlug]
+  );
+  return raffle[0] ?? null;
+}
+
+export async function getRaffleBySlug(tenantSlug: string, slug: string): Promise<Raffle | null> {
+  const raffle = await query<Raffle>(
+    `SELECT * FROM raffles WHERE slug = $1 AND tenant_slug = $2 LIMIT 1`,
     [slug, tenantSlug]
   );
-  return result[0] ?? null;
-}
-
-// Fetch raffle by ID for admin/checkout pages
-export async function getRaffleById(
-  id: string,
-  tenantSlug: string
-): Promise<SafeRaffle | null> {
-  const result = await query<SafeRaffle>(
-    `
-    select *
-    from raffles
-    where id = $1
-      and tenant_slug = $2
-    limit 1
-    `,
-    [id, tenantSlug]
-  );
-  return result[0] ?? null;
-}
-
-// Delete a raffle (admin)
-export async function deleteRaffle(id: string, tenantSlug: string): Promise<void> {
-  await query(
-    `
-    delete from raffles
-    where id = $1
-      and tenant_slug = $2
-    `,
-    [id, tenantSlug]
-  );
+  return raffle[0] ?? null;
 }
