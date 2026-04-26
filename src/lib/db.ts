@@ -1,43 +1,45 @@
 // src/lib/db.ts
 // ===============================
-// Neon client with named exports for full backend compatibility
-// Preserves all existing connection logic and multi-tenant safety
+// Neon database helpers
+// Web/Vercel compatible
 // ===============================
 
-import * as postgres from "@neondatabase/serverless";
+import { Pool } from "@neondatabase/serverless";
 
-// ------------------------------
-// Initialize Neon client
-// ------------------------------
-const client = new postgres.Client({
-  connectionString: process.env.DATABASE_URL,
-});
+let pool: Pool | null = null;
 
-// ------------------------------
-// Query helpers
-// ------------------------------
-export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
-  const res = await client.query(text, params); // Use client.query instead of unsafe
-  return res.rows;
+function getPool() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is not set");
+  }
+
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+  }
+
+  return pool;
 }
 
-export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
-  const res = await client.query(text, params);
-  return res.rows[0] || null;
+export async function query<T = any>(
+  text: string,
+  params?: any[],
+): Promise<T[]> {
+  const result = await getPool().query(text, params);
+  return result.rows as T[];
 }
 
-// ------------------------------
-// Client getter
-// ------------------------------
+export async function queryOne<T = any>(
+  text: string,
+  params?: any[],
+): Promise<T | null> {
+  const result = await getPool().query(text, params);
+  return (result.rows[0] as T) || null;
+}
+
 export function getDbClient() {
-  return client;
+  return getPool();
 }
 
-// ------------------------------
-// SQL helper for legacy / setup routes
-// ------------------------------
 export const sql = query;
-
-// ------------------------------
-// Named exports ensure all dependent files (raffles.ts, campaigns.ts, admin routes) compile
-// ===============================
