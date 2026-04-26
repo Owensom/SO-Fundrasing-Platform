@@ -1,174 +1,215 @@
-import { notFound } from "next/navigation";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getRaffleBySlug } from "@/lib/raffles";
+"use client";
 
-type PageProps = {
-  params: Promise<{
-    slug: string;
-  }>;
+import { useEffect, useState } from "react";
+
+type TicketState = {
+  ticket_number: number;
+  colour: string;
 };
 
-function formatMoney(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: currency || "GBP",
-  }).format(amount);
-}
+type Raffle = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  image_url: string;
+  currency: string;
+  ticket_price?: number;
+  total_tickets: number;
+  sold_tickets: number;
+  status: string;
+};
 
-function colourToText(colour: any) {
-  if (typeof colour === "string") return colour;
-  if (colour?.name) return colour.name;
-  if (colour?.hex) return colour.hex;
-  return "";
-}
+type ApiResponse = {
+  ok: boolean;
+  raffle?: Raffle;
+  sold?: TicketState[];
+  reserved?: TicketState[];
+};
 
-export default async function PublicRafflePage({ params }: PageProps) {
-  const { slug } = await params;
-  const tenantSlug = getTenantSlugFromHeaders();
+export default function PublicRafflePage({
+  params,
+}: {
+  params: { slug: string };
+}) {
+  const [raffle, setRaffle] = useState<Raffle | null>(null);
+  const [sold, setSold] = useState<TicketState[]>([]);
+  const [reserved, setReserved] = useState<TicketState[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  if (!tenantSlug) notFound();
+  const colour = "default";
 
-  const raffle = await getRaffleBySlug(tenantSlug, slug);
-  if (!raffle) notFound();
+  useEffect(() => {
+    fetch(`/api/raffles/${params.slug}`)
+      .then((res) => res.json())
+      .then((data: ApiResponse) => {
+        if (data.ok && data.raffle) {
+          setRaffle(data.raffle);
+          setSold(data.sold || []);
+          setReserved(data.reserved || []);
+        }
+      });
+  }, [params.slug]);
 
-  const config = (raffle.config_json as any) ?? {};
+  if (!raffle) {
+    return <div style={{ padding: 20 }}>Loading...</div>;
+  }
 
-  const colours = Array.isArray(config.colours)
-    ? config.colours.map(colourToText).filter(Boolean)
-    : [];
+  if (raffle.status !== "published") {
+    return <div style={{ padding: 20 }}>Not available</div>;
+  }
 
-  const offers = Array.isArray(config.offers) ? config.offers : [];
-
-  const ticketPrice = Number(raffle.ticket_price_cents || 0) / 100;
-  const remainingTickets = Math.max(
-    Number(raffle.total_tickets || 0) - Number(raffle.sold_tickets || 0),
-    0,
+  const soldSet = new Set(sold.map((t) => `${t.colour}-${t.ticket_number}`));
+  const reservedSet = new Set(
+    reserved.map((t) => `${t.colour}-${t.ticket_number}`),
   );
+
+  const numbers = Array.from(
+    { length: raffle.total_tickets },
+    (_, i) => i + 1,
+  );
+
+  function toggleTicket(number: number) {
+    setSelected((prev) =>
+      prev.includes(number)
+        ? prev.filter((n) => n !== number)
+        : [...prev, number],
+    );
+  }
+
+  async function handleCheckout() {
+    if (!raffle || !selected.length) return;
+
+    setLoading(true);
+
+    try {
+      const reserveRes = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tickets: selected.map((n) => ({
+            ticket_number: n,
+            colour,
+          })),
+          buyer_name: "Guest",
+          buyer_email: "guest@example.com",
+        }),
+      });
+
+      const reserveData = await reserveRes.json();
+
+      if (!reserveData.ok) {
+        alert("Reservation failed");
+        setLoading(false);
+        return;
+      }
+
+      const checkoutRes = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservation_token: reserveData.reservation_token,
+        }),
+      });
+
+      const checkoutData = await checkoutRes.json();
+
+      if (!checkoutData.url) {
+        alert("Checkout failed");
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = checkoutData.url;
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
+    }
+
+    setLoading(false);
+  }
 
   return (
     <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <section
+      <h1>{raffle.title}</h1>
+
+      {raffle.image_url && (
+        <img
+          src={raffle.image_url}
+          alt={raffle.title}
+          style={{ width: "100%", marginBottom: 20 }}
+        />
+      )}
+
+      <p>{raffle.description}</p>
+
+      <p>
+        <strong>Price:</strong> {raffle.ticket_price} {raffle.currency}
+      </p>
+
+      <h2>Select tickets</h2>
+
+      <div
         style={{
-          padding: 24,
-          border: "1px solid #e5e7eb",
-          borderRadius: 18,
-          background: "#fff",
+          display: "grid",
+          gridTemplateColumns: "repeat(10, 1fr)",
+          gap: 8,
         }}
       >
-        {raffle.image_url ? (
-          <img
-            src={raffle.image_url}
-            alt={raffle.title}
-            style={{
-              width: "100%",
-              maxHeight: 420,
-              objectFit: "cover",
-              borderRadius: 16,
-              marginBottom: 24,
-            }}
-          />
-        ) : null}
+        {numbers.map((number) => {
+          const key = `${colour}-${number}`;
+          const isSold = soldSet.has(key);
+          const isReserved = reservedSet.has(key);
+          const isUnavailable = isSold || isReserved;
+          const isSelected = selected.includes(number);
 
-        <h1 style={{ marginTop: 0 }}>{raffle.title}</h1>
+          return (
+            <button
+              key={number}
+              type="button"
+              disabled={isUnavailable}
+              onClick={() => toggleTicket(number)}
+              style={{
+                padding: 10,
+                border: "1px solid #ccc",
+                borderRadius: 6,
+                background: isSold
+                  ? "#000"
+                  : isReserved
+                    ? "#999"
+                    : isSelected
+                      ? "#4caf50"
+                      : "#fff",
+                color: isUnavailable || isSelected ? "#fff" : "#000",
+                cursor: isUnavailable ? "not-allowed" : "pointer",
+              }}
+            >
+              {number}
+            </button>
+          );
+        })}
+      </div>
 
-        {raffle.description ? (
-          <p style={{ fontSize: 17, lineHeight: 1.6 }}>{raffle.description}</p>
-        ) : null}
+      <div style={{ marginTop: 20 }}>
+        <p>Selected: {selected.length > 0 ? selected.join(", ") : "None"}</p>
 
-        <div
+        <button
+          type="button"
+          onClick={handleCheckout}
+          disabled={!selected.length || loading}
           style={{
-            display: "grid",
-            gap: 10,
-            marginTop: 20,
-            padding: 16,
-            borderRadius: 14,
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
+            padding: "12px 20px",
+            background: "#0070f3",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
           }}
         >
-          <div>
-            <strong>Status:</strong> {raffle.status}
-          </div>
-          <div>
-            <strong>Single ticket price:</strong>{" "}
-            {formatMoney(ticketPrice, raffle.currency)}
-          </div>
-          <div>
-            <strong>Total tickets:</strong> {raffle.total_tickets}
-          </div>
-          <div>
-            <strong>Remaining tickets:</strong> {remainingTickets}
-          </div>
-        </div>
-
-        {raffle.status !== "published" ? (
-          <div
-            style={{
-              marginTop: 20,
-              padding: 14,
-              borderRadius: 12,
-              background: "#fff7ed",
-              border: "1px solid #fed7aa",
-              color: "#9a3412",
-              fontWeight: 600,
-            }}
-          >
-            This raffle is not currently open for ticket purchases.
-          </div>
-        ) : null}
-
-        {colours.length ? (
-          <section style={{ marginTop: 28 }}>
-            <h2>Ticket colours</h2>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {colours.map((colour: string) => (
-                <span
-                  key={colour}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    background: "#e2e8f0",
-                    fontWeight: 600,
-                  }}
-                >
-                  {colour}
-                </span>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {offers.length ? (
-          <section style={{ marginTop: 28 }}>
-            <h2>Offers</h2>
-            <div style={{ display: "grid", gap: 10 }}>
-              {offers.map((offer: any, index: number) => {
-                const quantity = Number(offer.quantity ?? offer.tickets ?? 0);
-                const price = Number(offer.price ?? 0);
-
-                if (!quantity || !price) return null;
-
-                return (
-                  <div
-                    key={offer.id || index}
-                    style={{
-                      padding: 14,
-                      borderRadius: 12,
-                      border: "1px solid #e5e7eb",
-                      background: "#f9fafb",
-                    }}
-                  >
-                    <strong>
-                      {quantity} tickets for{" "}
-                      {formatMoney(price, raffle.currency)}
-                    </strong>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-      </section>
+          {loading ? "Processing..." : "Checkout"}
+        </button>
+      </div>
     </main>
   );
 }
