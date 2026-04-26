@@ -10,7 +10,7 @@ export type Raffle = {
   title: string;
   slug: string;
   description?: string;
-  image_url?: string; // ✅ restored for admin page
+  image_url?: string;
   ticket_price_cents: number;
   total_tickets: number;
   sold_tickets: number;
@@ -18,6 +18,19 @@ export type Raffle = {
   offers: any[];
   colours: any[];
   prizes?: any[];
+  config_json: {
+    colours: { name: string; hex: string; sortOrder?: number }[];
+    offers: {
+      id?: string;
+      label: string;
+      price: number;
+      quantity?: number;
+      isActive?: boolean;
+      sortOrder?: number;
+    }[];
+    reserved?: any[];
+    [key: string]: any;
+  };
 };
 
 // ------------------------------
@@ -53,7 +66,7 @@ export async function deleteRaffle(id: string, tenantSlug: string) {
 export async function updateRaffle(
   id: string,
   tenantSlug: string,
-  fields: Partial<Omit<Raffle, "id" | "tenant_slug" | "offers" | "colours" | "prizes">>
+  fields: Partial<Omit<Raffle, "id" | "tenant_slug" | "offers" | "colours" | "prizes" | "config_json">>
 ): Promise<Raffle> {
   const keys = Object.keys(fields);
   const values = Object.values(fields);
