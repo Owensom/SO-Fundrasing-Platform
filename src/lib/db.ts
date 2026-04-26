@@ -1,46 +1,32 @@
-// src/lib/db.ts
-// ===============================
-// Fully working Neon db.ts for Vercel Hobby
-// Preserves all helpers and exports for platform
-// ===============================
+// src/app/api/admin/raffles/[id]/actions/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { deleteRaffle, getRaffleById } from "@/lib/raffles";
 
-import * as postgres from "@neondatabase/serverless";
+export const runtime = "nodejs";
 
-// ------------------------------
-// Initialize Neon client
-// ------------------------------
-const client = new postgres.Client({
-  connectionString: process.env.DATABASE_URL,
-});
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    // Authenticate admin
+    const user = await auth();
+    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
-// ------------------------------
-// Query helpers
-// ------------------------------
-export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
-  const res = await client.query(text, params); // ✅ use query instead of unsafe
-  return res.rows;
+    const tenantSlug = getTenantSlugFromHeaders(req.headers);
+
+    // Fetch raffle for confirmation/logging
+    const raffle = await getRaffleById(params.id);
+    if (!raffle || raffle.tenant_slug !== tenantSlug) {
+      return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
+    }
+
+    // Delete raffle (multi-tenant)
+    await deleteRaffle(params.id, tenantSlug);
+
+    // Return JSON with success and updated raffle list (frontend expects { ok: true })
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error("Delete raffle error:", err);
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+  }
 }
-
-export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
-  const res = await client.query(text, params); // ✅ use query
-  return res.rows[0] || null;
-}
-
-// ------------------------------
-// Client getter
-// ------------------------------
-export function getDbClient() {
-  return client;
-}
-
-// ------------------------------
-// sql export for setup/admin routes
-// ------------------------------
-export const sql = query; // ✅ replace sql tagged templates with query helper
-
-// ===============================
-// Notes:
-// - Matches your installed @neondatabase/serverless package
-// - Fully compatible with multi-tenant raffles.ts and campaigns.ts
-// - Vercel Hobby serverless deployable
-// ===============================
