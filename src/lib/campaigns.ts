@@ -1,6 +1,6 @@
 // src/lib/campaigns.ts
 // =======================================
-// Full restore with 'type' field added
+// Full restore with literal 'type' field
 // Preserves all helpers and exports for multi-tenant platform
 // =======================================
 
@@ -13,7 +13,7 @@ export type Campaign = {
   slug: string;
   description: string;
   tenant_slug: string;
-  type: string; // ✅ Added to match page expectation
+  type: "raffle" | "squares" | "event"; // ✅ Literal union type fixed
   image_url?: string;
   start_date?: string;
   end_date?: string;
