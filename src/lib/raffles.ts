@@ -1,7 +1,10 @@
 // src/lib/raffles.ts
-// Full original raffle functions, ticket colour mapping preserved
+// =======================================
+// Full original raffle functions preserved
+// getRaffleById, getRaffleBySlug, ticket mapping intact
+// =======================================
 
-import { getDbClient } from "@/lib/db";
+import { getDbClient, query, queryOne } from "@/lib/db";
 
 export type Raffle = {
   id: string;
@@ -24,12 +27,15 @@ export type Raffle = {
 
 // Fetch raffle by ID
 export async function getRaffleById(id: string): Promise<Raffle | null> {
-  const client = await getDbClient();
-  const res = await client.query("SELECT * FROM raffles WHERE id = $1", [id]);
-  return res.rows[0] || null;
+  return await queryOne<Raffle>("SELECT * FROM raffles WHERE id = $1", [id]);
 }
 
-// Map tickets to include both hex and label
+// Fetch raffle by slug
+export async function getRaffleBySlug(slug: string): Promise<Raffle | null> {
+  return await queryOne<Raffle>("SELECT * FROM raffles WHERE slug = $1", [slug]);
+}
+
+// Map tickets to include both hex + label for colour
 export function mapTickets(
   tickets: { ticket_number: number; colour: string }[],
   colours: { hex: string; name: string }[]
