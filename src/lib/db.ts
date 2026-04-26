@@ -1,18 +1,13 @@
 // src/lib/db.ts
 // ===============================
-// Neon-compatible database client
+// Neon-compatible, Vercel Hobby-ready
 // Preserves all helpers and exports
-// Works on Vercel Hobby serverless
 // ===============================
 
-import { createClient } from "@neondatabase/serverless";
+import { Neon } from "@neondatabase/serverless";
 
-// ------------------------------
-// Neon client
-// ------------------------------
-const client = createClient({
-  connectionString: process.env.DATABASE_URL,
-});
+// Create Neon client
+const client = new Neon(process.env.DATABASE_URL);
 
 // ------------------------------
 // Query helpers
@@ -35,13 +30,13 @@ export function getDbClient() {
 }
 
 // ------------------------------
-// sql export (if your routes use it)
+// sql export for setup routes
 // ------------------------------
-export const sql = client.sql || client.query; // adapt if your code uses sql tagged templates
+export const sql = client.sql || client.query; // adjust if your setup route uses tagged templates
 
 // ===============================
 // Notes:
-// - Keep all previous exports intact
-// - Works directly with Neon, no dynamic pg import required
-// - All existing routes, admin actions, tenant pages, and API calls remain unchanged
+// - Works with Vercel Hobby serverless
+// - All previous exports (query, queryOne, getDbClient, sql) preserved
+// - Does NOT touch raffles.ts, campaigns.ts, admin pages, squares, offers
 // ===============================
