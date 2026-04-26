@@ -1,35 +1,31 @@
 // src/app/admin/raffles/[id]/page.tsx
-"use client";
+import { getRaffleById } from "@/lib/raffles";
 
-import { useEffect, useState } from "react";
-import { redirect, notFound } from "next/navigation";
-import { auth } from "@/auth";
-import { getRaffleById, Raffle } from "@/lib/raffles";
-
-type PageProps = {
+interface RafflePageProps {
   params: { id: string };
-};
+}
 
-export default async function AdminRafflePage({ params }: PageProps) {
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+export default async function RafflePage({ params }: RafflePageProps) {
+  const raffle = await getRaffleById(params.id);
 
-  const tenantSlug = session.user.tenant_slug;
-  const raffle: Raffle | null = await getRaffleById(tenantSlug, params.id);
-  if (!raffle) notFound();
+  if (!raffle) return <div>Raffle not found</div>;
 
   return (
-    <main style={{ padding: 24 }}>
-      <h1>{raffle.title}</h1>
-      <p>Status: {raffle.status}</p>
-      <p>Tickets sold: {raffle.sold_tickets ?? 0}</p>
-      <p>Ticket price: £{raffle.ticket_price}</p>
-      <p>Total tickets: {raffle.total_tickets}</p>
-      <p>Start number: {raffle.config_json.startNumber ?? 1}</p>
-      <p>End number: {raffle.config_json.endNumber ?? raffle.total_tickets}</p>
-      <p>Colours: {raffle.config_json.colours?.map(c => c.name).join(", ") ?? "None"}</p>
-      <p>Offers: {raffle.config_json.offers?.map(o => o.label).join(", ") ?? "None"}</p>
-      <p>Prizes: {raffle.config_json.prizes?.map(p => p.title).join(", ") ?? "None"}</p>
-    </main>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold">{raffle.title}</h1>
+      <p>{raffle.description}</p>
+      <img src={raffle.image_url} alt={raffle.title} className="my-4 max-w-xs" />
+      <div>
+        <h2 className="text-lg font-semibold mt-4">Colours</h2>
+        <ul>
+          {raffle.config_json.colours.map((col) => (
+            <li key={col.hex} className="flex items-center gap-2">
+              <div className="w-4 h-4" style={{ backgroundColor: col.hex }}></div>
+              {col.name} ({col.hex})
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
