@@ -1,144 +1,283 @@
-// src/lib/raffles.ts
 import { query, queryOne } from "@/lib/db";
 
-// ------------------------------
-// Types
-// ------------------------------
+export type RaffleCurrency = "GBP" | "EUR" | "USD";
+export type RaffleStatus = "draft" | "published" | "closed" | "drawn";
+
+export type RaffleColour = {
+  id?: string;
+  name: string;
+  hex: string;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
+export type RaffleOffer = {
+  id?: string;
+  label: string;
+  price: number;
+  quantity?: number;
+  tickets?: number;
+  isActive?: boolean;
+  is_active?: boolean;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
+export type RafflePrize = {
+  id?: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
+export type RaffleConfig = {
+  colours?: RaffleColour[];
+  offers?: RaffleOffer[];
+  prizes?: RafflePrize[];
+  sold?: any[];
+  reserved?: any[];
+  [key: string]: any;
+};
+
 export type Raffle = {
   id: string;
   tenant_slug: string;
   title: string;
   slug: string;
-  description?: string;
-  image_url?: string;
+  description?: string | null;
+  image_url?: string | null;
   ticket_price_cents: number;
   total_tickets: number;
   sold_tickets: number;
-  status: "draft" | "published" | "closed" | "drawn";
-  offers: any[];
-  colours: any[];
-  prizes?: any[];
-  config_json: {
-    colours: { name: string; hex: string; sortOrder?: number }[];
-    offers: {
-      id?: string;
-      label: string;
-      price: number;
-      quantity?: number;
-      isActive?: boolean;
-      sortOrder?: number;
-    }[];
-    reserved?: any[];
-    [key: string]: any;
-  };
+  status: RaffleStatus;
+  currency: RaffleCurrency;
+  config_json: RaffleConfig;
+  offers: RaffleOffer[];
+  colours: RaffleColour[];
+  prizes: RafflePrize[];
 };
 
-// ------------------------------
-// Get raffle by ID
-// ------------------------------
-export async function getRaffleById(id: string): Promise<Raffle | null> {
-  return await queryOne<Raffle>("SELECT * FROM raffles WHERE id = $1", [id]);
+function normaliseRaffle(row: any): Raffle {
+  const config: RaffleConfig =
+    row?.config_json && typeof row.config_json === "object" ? row.config_json : {};
+
+  const currency = (row.currency || "GBP") as RaffleCurrency;
+
+  return {
+    ...row,
+    description: row.description ?? "",
+    image_url: row.image_url ?? "",
+    currency,
+    status: (row.status || "draft") as RaffleStatus,
+    config_json: {
+      ...config,
+      colours: Array.isArray(config.colours) ? config.colours : [],
+      offers: Array.isArray(config.offers) ? config.offers : [],
+      prizes: Array.isArray(config.prizes) ? config.prizes : [],
+    },
+    colours: Array.isArray(config.colours) ? config.colours : [],
+    offers: Array.isArray(config.offers) ? config.offers : [],
+    prizes: Array.isArray(config.prizes) ? config.prizes : [],
+  };
 }
 
-// ------------------------------
-// Get raffle by slug (multi-tenant)
-// ------------------------------
-export async function getRaffleBySlug(tenantSlug: string, slug: string): Promise<Raffle | null> {
-  return await queryOne<Raffle>(
-    "SELECT * FROM raffles WHERE tenant_slug = $1 AND slug = $2",
-    [tenantSlug, slug]
-  );
-}
-
-// ------------------------------
-// Delete raffle
-// ------------------------------
-export async function deleteRaffle(id: string, tenantSlug: string) {
-  await query(
-    "DELETE FROM raffles WHERE id = $1 AND tenant_slug = $2",
+async function getCurrentConfig(id: string, tenantSlug: string): Promise<RaffleConfig> {
+  const row = await queryOne<{ config_json: RaffleConfig }>(
+    "SELECT config_json FROM raffles WHERE id = $1 AND tenant_slug = $2",
     [id, tenantSlug]
   );
+
+  return row?.config_json && typeof row.config_json === "object" ? row.config_json : {};
 }
 
-// ------------------------------
-// Update raffle
-// ------------------------------
+async function updateConfigJson(
+  id: string,
+  tenantSlug: string,
+  nextConfig: RaffleConfig
+): Promise<void> {
+  await query(
+    "UPDATE raffles SET config_json = $1, updated_at = NOW() WHERE id = $2 AND tenant_slug = $3",
+    [nextConfig, id, tenantSlug]
+  );
+}
+
+export async function getRaffleById(id: string): Promise<Raffle | null> {
+  const row = await queryOne<any>("SELECT * FROM raffles WHERE id = $1", [id]);
+  return row ? normaliseRaffle(row) : null;
+}
+
+export async function getRaffleBySlug(
+  tenantSlugOrSlug: string,
+  maybeSlug?: string
+): Promise<Raffle | null> {
+  const row = maybeSlug
+    ? await queryOne<any>(
+        "SELECT * FROM raffles WHERE tenant_slug = $1 AND slug = $2",
+        [tenantSlugOrSlug, maybeSlug]
+      )
+    : await queryOne<any>("SELECT * FROM raffles WHERE slug = $1", [tenantSlugOrSlug]);
+
+  return row ? normaliseRaffle(row) : null;
+}
+
+export async function deleteRaffle(id: string, tenantSlug: string): Promise<void> {
+  await query("DELETE FROM raffles WHERE id = $1 AND tenant_slug = $2", [
+    id,
+    tenantSlug,
+  ]);
+}
+
 export async function updateRaffle(
   id: string,
   tenantSlug: string,
-  fields: Partial<Omit<Raffle, "id" | "tenant_slug" | "offers" | "colours" | "prizes" | "config_json">>
+  fields: Partial<{
+    title: string;
+    slug: string;
+    description: string;
+    image_url: string;
+    ticket_price_cents: number;
+    total_tickets: number;
+    sold_tickets: number;
+    status: RaffleStatus;
+    currency: RaffleCurrency;
+    config_json: RaffleConfig;
+  }>
 ): Promise<Raffle> {
-  const keys = Object.keys(fields);
-  const values = Object.values(fields);
-  const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-  const res = await queryOne<Raffle>(
-    `UPDATE raffles SET ${setClause} WHERE id = $${keys.length + 1} AND tenant_slug = $${keys.length + 2} RETURNING *`,
+  const allowed = [
+    "title",
+    "slug",
+    "description",
+    "image_url",
+    "ticket_price_cents",
+    "total_tickets",
+    "sold_tickets",
+    "status",
+    "currency",
+    "config_json",
+  ] as const;
+
+  const entries = Object.entries(fields).filter(
+    ([key, value]) => allowed.includes(key as any) && value !== undefined
+  );
+
+  if (entries.length === 0) {
+    const existing = await getRaffleById(id);
+    if (!existing || existing.tenant_slug !== tenantSlug) {
+      throw new Error("Raffle not found");
+    }
+    return existing;
+  }
+
+  const setClause = entries
+    .map(([key], index) => `${key} = $${index + 1}`)
+    .join(", ");
+
+  const values = entries.map(([, value]) => value);
+
+  const row = await queryOne<any>(
+    `UPDATE raffles
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${entries.length + 1}
+       AND tenant_slug = $${entries.length + 2}
+     RETURNING *`,
     [...values, id, tenantSlug]
   );
-  if (!res) throw new Error("Raffle not found or not updated");
-  return res;
+
+  if (!row) throw new Error("Raffle not found or not updated");
+
+  return normaliseRaffle(row);
 }
 
-// ------------------------------
-// Update raffle offers
-// ------------------------------
-export async function updateRaffleOffers(id: string, tenantSlug: string, offers: any[]): Promise<any[]> {
-  await query("DELETE FROM raffle_offers WHERE raffle_id = $1 AND tenant_slug = $2", [id, tenantSlug]);
-  const inserted: any[] = [];
-  for (const offer of offers) {
-    const res = await query(
-      `INSERT INTO raffle_offers (raffle_id, tenant_slug, label, price, quantity, is_active, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [id, tenantSlug, offer.label, offer.price, offer.quantity, offer.isActive, offer.sortOrder || 0]
-    );
-    inserted.push(res[0]);
-  }
-  return inserted;
+export async function updateRaffleOffers(
+  id: string,
+  tenantSlug: string,
+  offers: RaffleOffer[]
+): Promise<RaffleOffer[]> {
+  const config = await getCurrentConfig(id, tenantSlug);
+
+  const normalisedOffers = offers.map((offer, index) => ({
+    id: offer.id || `offer-${index + 1}`,
+    label: offer.label,
+    price: Number(offer.price || 0),
+    quantity: Number(offer.quantity ?? offer.tickets ?? 1),
+    tickets: Number(offer.tickets ?? offer.quantity ?? 1),
+    isActive: offer.isActive ?? offer.is_active ?? true,
+    is_active: offer.is_active ?? offer.isActive ?? true,
+    sortOrder: offer.sortOrder ?? offer.sort_order ?? index,
+    sort_order: offer.sort_order ?? offer.sortOrder ?? index,
+  }));
+
+  await updateConfigJson(id, tenantSlug, {
+    ...config,
+    offers: normalisedOffers,
+  });
+
+  return normalisedOffers;
 }
 
-// ------------------------------
-// Update raffle colours
-// ------------------------------
-export async function updateRaffleColours(id: string, tenantSlug: string, colours: any[]): Promise<any[]> {
-  await query("DELETE FROM raffle_colours WHERE raffle_id = $1 AND tenant_slug = $2", [id, tenantSlug]);
-  const inserted: any[] = [];
-  for (const colour of colours) {
-    const res = await query(
-      `INSERT INTO raffle_colours (raffle_id, tenant_slug, name, hex, sort_order)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [id, tenantSlug, colour.name, colour.hex, colour.sortOrder || 0]
-    );
-    inserted.push(res[0]);
-  }
-  return inserted;
+export async function updateRaffleColours(
+  id: string,
+  tenantSlug: string,
+  colours: RaffleColour[]
+): Promise<RaffleColour[]> {
+  const config = await getCurrentConfig(id, tenantSlug);
+
+  const normalisedColours = colours.map((colour, index) => ({
+    id: colour.id || `colour-${index + 1}`,
+    name: colour.name,
+    hex: colour.hex,
+    sortOrder: colour.sortOrder ?? colour.sort_order ?? index,
+    sort_order: colour.sort_order ?? colour.sortOrder ?? index,
+  }));
+
+  await updateConfigJson(id, tenantSlug, {
+    ...config,
+    colours: normalisedColours,
+  });
+
+  return normalisedColours;
 }
 
-// ------------------------------
-// Update raffle prizes
-// ------------------------------
-export async function updateRafflePrizes(id: string, tenantSlug: string, prizes: any[]): Promise<any[]> {
-  await query("DELETE FROM raffle_prizes WHERE raffle_id = $1 AND tenant_slug = $2", [id, tenantSlug]);
-  const inserted: any[] = [];
-  for (const prize of prizes) {
-    const res = await query(
-      `INSERT INTO raffle_prizes (raffle_id, tenant_slug, name, description, sort_order)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [id, tenantSlug, prize.name, prize.description, prize.sortOrder || 0]
-    );
-    inserted.push(res[0]);
-  }
-  return inserted;
+export async function updateRafflePrizes(
+  id: string,
+  tenantSlug: string,
+  prizes: RafflePrize[]
+): Promise<RafflePrize[]> {
+  const config = await getCurrentConfig(id, tenantSlug);
+
+  const normalisedPrizes = prizes.map((prize, index) => ({
+    id: prize.id || `prize-${index + 1}`,
+    name: prize.name ?? prize.title ?? `Prize ${index + 1}`,
+    title: prize.title ?? prize.name ?? `Prize ${index + 1}`,
+    description: prize.description ?? "",
+    sortOrder: prize.sortOrder ?? prize.sort_order ?? index,
+    sort_order: prize.sort_order ?? prize.sortOrder ?? index,
+  }));
+
+  await updateConfigJson(id, tenantSlug, {
+    ...config,
+    prizes: normalisedPrizes,
+  });
+
+  return normalisedPrizes;
 }
 
-// ------------------------------
-// Map tickets helper (Option 1)
-// ------------------------------
-export function mapTickets(tickets: any[], colours?: any[]): any[] {
-  return tickets.map((t) => {
-    const colourMatch = colours?.find((c) => c.id === t.colour_id);
+export function mapTickets(tickets: any[], colours?: RaffleColour[]): any[] {
+  return tickets.map((ticket) => {
+    const colourMatch = colours?.find((colour) => {
+      return (
+        colour.id === ticket.colour_id ||
+        colour.hex === ticket.colour ||
+        colour.name === ticket.colour
+      );
+    });
+
     return {
-      ticket_number: t.ticket_number,
-      colour: t.colour || colourMatch?.hex || "#000000",
+      ticket_number: ticket.ticket_number,
+      colour: ticket.colour || colourMatch?.hex || "#000000",
+      label: colourMatch?.name || ticket.label || ticket.colour || "Unknown",
     };
   });
 }
