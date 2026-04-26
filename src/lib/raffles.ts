@@ -1,6 +1,6 @@
 // src/lib/raffles.ts
 // =======================================
-// Full restore with deleteRaffle fix
+// Full restore with multi-tenant fixes
 // Preserves all exports and works with Neon db.ts
 // =======================================
 
@@ -31,18 +31,24 @@ export type Raffle = {
 // Fetch raffle by ID
 // ------------------------------
 export async function getRaffleById(id: string): Promise<Raffle | null> {
-  return await queryOne<Raffle>("SELECT * FROM raffles WHERE id = $1", [id]);
+  return await queryOne<Raffle>(
+    "SELECT * FROM raffles WHERE id = $1",
+    [id]
+  );
 }
 
 // ------------------------------
-// Fetch raffle by slug
+// Fetch raffle by slug (multi-tenant)
 // ------------------------------
-export async function getRaffleBySlug(slug: string): Promise<Raffle | null> {
-  return await queryOne<Raffle>("SELECT * FROM raffles WHERE slug = $1", [slug]);
+export async function getRaffleBySlug(tenantSlug: string, slug: string): Promise<Raffle | null> {
+  return await queryOne<Raffle>(
+    "SELECT * FROM raffles WHERE tenant_slug = $1 AND slug = $2",
+    [tenantSlug, slug]
+  );
 }
 
 // ------------------------------
-// Delete raffle (fixed signature for multi-tenant)
+// Delete raffle (multi-tenant)
 // ------------------------------
 export async function deleteRaffle(id: string, tenantSlug: string): Promise<void> {
   await query(
@@ -70,5 +76,5 @@ export function mapTickets(
 
 // ------------------------------
 // Any additional helpers
+// Add any other helpers from your previous working version here
 // ------------------------------
-// Add other helpers exactly as they existed in your previous working version
