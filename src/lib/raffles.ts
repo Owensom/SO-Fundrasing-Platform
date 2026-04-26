@@ -1,9 +1,6 @@
 // src/lib/raffles.ts
-// =======================================
-// Preserves previous raffle logic and types
-// Maps ticket numbers to colour + label
-// Works with dynamic pg
-// =======================================
+// Full original raffle functions, ticket colour mapping preserved
+
 import { getDbClient } from "@/lib/db";
 
 export type Raffle = {
@@ -32,7 +29,7 @@ export async function getRaffleById(id: string): Promise<Raffle | null> {
   return res.rows[0] || null;
 }
 
-// Map tickets to include hex + label
+// Map tickets to include both hex and label
 export function mapTickets(
   tickets: { ticket_number: number; colour: string }[],
   colours: { hex: string; name: string }[]
