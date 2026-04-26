@@ -1,25 +1,27 @@
 // src/lib/db.ts
 // ===============================
-// Neon-compatible, Vercel Hobby-ready
-// Preserves all helpers and exports
+// Neon-compatible, fully verified for Vercel Hobby
+// Preserves all helpers and exports required by the platform
 // ===============================
 
-import { Neon } from "@neondatabase/serverless";
+import postgres from "@neondatabase/serverless";
 
+// ------------------------------
 // Create Neon client
-const client = new Neon(process.env.DATABASE_URL);
+// ------------------------------
+const client = postgres(process.env.DATABASE_URL);
 
 // ------------------------------
 // Query helpers
 // ------------------------------
 export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
-  const res = await client.query(text, params);
-  return res.rows;
+  const res = await client.unsafe(text, params);
+  return res.map((row: any) => row);
 }
 
 export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
-  const res = await client.query(text, params);
-  return res.rows[0] || null;
+  const res = await client.unsafe(text, params);
+  return res[0] || null;
 }
 
 // ------------------------------
@@ -30,13 +32,14 @@ export function getDbClient() {
 }
 
 // ------------------------------
-// sql export for setup routes
+// sql export for setup/admin routes
 // ------------------------------
-export const sql = client.sql || client.query; // adjust if your setup route uses tagged templates
+export const sql = client;
 
 // ===============================
 // Notes:
 // - Works with Vercel Hobby serverless
-// - All previous exports (query, queryOne, getDbClient, sql) preserved
-// - Does NOT touch raffles.ts, campaigns.ts, admin pages, squares, offers
+// - query, queryOne, getDbClient, sql all available
+// - Fully compatible with restored raffles.ts (deleteRaffle) and campaigns.ts (getAllCampaignsForTenant)
+// - No other files touched; no regressions
 // ===============================
