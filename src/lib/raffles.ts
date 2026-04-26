@@ -1,7 +1,7 @@
-// src/lib/raffles.ts
 import { query } from "./db";
 import type { SafeRaffle } from "./types";
 
+// Fetch by slug for public pages
 export async function getRaffleBySlug(slug: string, tenantSlug: string): Promise<SafeRaffle | null> {
   const result = await query<SafeRaffle>(
     `
@@ -14,6 +14,20 @@ export async function getRaffleBySlug(slug: string, tenantSlug: string): Promise
     `,
     [slug, tenantSlug]
   );
+  return result[0] ?? null;
+}
 
+// Fetch by ID for admin / checkout
+export async function getRaffleById(id: string, tenantSlug: string): Promise<SafeRaffle | null> {
+  const result = await query<SafeRaffle>(
+    `
+    select *
+    from raffles
+    where id = $1
+      and tenant_slug = $2
+    limit 1
+    `,
+    [id, tenantSlug]
+  );
   return result[0] ?? null;
 }
