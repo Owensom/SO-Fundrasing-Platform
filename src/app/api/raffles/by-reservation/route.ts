@@ -1,9 +1,7 @@
 // src/app/api/raffles/by-reservation/route.ts
-// =======================================
-// Changes: Fixed import paths to use "@/lib/db"
-// No env.mjs needed
-// Map tickets include label + hex
-// =======================================
+// Fixed imports to match restored db.ts
+// Ticket colour mapping preserved
+
 import { NextRequest, NextResponse } from "next/server";
 import { getDbClient } from "@/lib/db";
 import { mapTickets } from "@/lib/raffles";
