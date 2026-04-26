@@ -1,43 +1,39 @@
-// src/lib/raffles.ts
-import { getDbClient } from "./db";
+// src/app/api/raffles/by-reservation/route.ts
+// =======================================
+// Changes: Fixed import paths to use "@/lib/db"
+// No env.mjs needed
+// Map tickets include label + hex
+// =======================================
+import { NextRequest, NextResponse } from "next/server";
+import { getDbClient } from "@/lib/db";
+import { mapTickets } from "@/lib/raffles";
 
-export type Raffle = {
-  id: string;
-  title: string;
-  slug: string;
-  description: string;
-  image_url: string;
-  ticket_price_cents: number;
-  total_tickets: number;
-  sold_tickets: number;
-  status: string;
-  currency: string;
-  config_json: {
-    colours: { id?: string; hex: string; name: string; sortOrder?: number }[];
-    offers: { id?: string; label: string; price: number; quantity?: number; sortOrder?: number; isActive?: boolean }[];
-    sold?: number[];
-    reserved?: any[];
-  };
-};
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const token = url.searchParams.get("reservation_token");
+  if (!token) return NextResponse.json({ ok: false, error: "No token provided" });
 
-// Fetch raffle by ID
-export async function getRaffleById(id: string): Promise<Raffle | null> {
   const client = await getDbClient();
-  const res = await client.query("SELECT * FROM raffles WHERE id = $1", [id]);
-  return res.rows[0] || null;
-}
 
-// Normalize tickets with colour info
-export function mapTickets(
-  tickets: { ticket_number: number; colour: string }[],
-  colours: { hex: string; name: string }[]
-) {
-  return tickets.map((t) => {
-    const c = colours.find((col) => col.hex === t.colour) || { name: "Unknown", hex: t.colour };
-    return {
-      ticket_number: t.ticket_number,
-      colour: c.hex,
-      label: c.name,
-    };
-  });
+  const res = await client.query(
+    `SELECT rtr.ticket_number, rtr.colour, r.config_json
+     FROM raffle_ticket_reservations rtr
+     JOIN raffles r ON r.id = rtr.raffle_id
+     WHERE rtr.reservation_token = $1`,
+    [token]
+  );
+
+  if (!res.rows.length) return NextResponse.json({ ok: false, error: "Not found" });
+
+  const config = res.rows[0].config_json;
+  const colours = config.colours || [];
+
+  const tickets = res.rows.map((row: any) => ({
+    ticket_number: row.ticket_number,
+    colour: row.colour,
+  }));
+
+  const mappedTickets = mapTickets(tickets, colours);
+
+  return NextResponse.json({ ok: true, tickets: mappedTickets });
 }
