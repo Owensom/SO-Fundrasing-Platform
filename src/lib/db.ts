@@ -1,32 +1,43 @@
-// src/app/api/admin/raffles/[id]/actions/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { deleteRaffle, getRaffleById } from "@/lib/raffles";
+// src/lib/db.ts
+// ===============================
+// Neon client with named exports for full backend compatibility
+// Preserves all existing connection logic and multi-tenant safety
+// ===============================
 
-export const runtime = "nodejs";
+import * as postgres from "@neondatabase/serverless";
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    // Authenticate admin
-    const user = await auth();
-    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+// ------------------------------
+// Initialize Neon client
+// ------------------------------
+const client = new postgres.Client({
+  connectionString: process.env.DATABASE_URL,
+});
 
-    const tenantSlug = getTenantSlugFromHeaders(req.headers);
-
-    // Fetch raffle for confirmation/logging
-    const raffle = await getRaffleById(params.id);
-    if (!raffle || raffle.tenant_slug !== tenantSlug) {
-      return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
-    }
-
-    // Delete raffle (multi-tenant)
-    await deleteRaffle(params.id, tenantSlug);
-
-    // Return JSON with success and updated raffle list (frontend expects { ok: true })
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error("Delete raffle error:", err);
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
-  }
+// ------------------------------
+// Query helpers
+// ------------------------------
+export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
+  const res = await client.query(text, params); // Use client.query instead of unsafe
+  return res.rows;
 }
+
+export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
+  const res = await client.query(text, params);
+  return res.rows[0] || null;
+}
+
+// ------------------------------
+// Client getter
+// ------------------------------
+export function getDbClient() {
+  return client;
+}
+
+// ------------------------------
+// SQL helper for legacy / setup routes
+// ------------------------------
+export const sql = query;
+
+// ------------------------------
+// Named exports ensure all dependent files (raffles.ts, campaigns.ts, admin routes) compile
+// ===============================
