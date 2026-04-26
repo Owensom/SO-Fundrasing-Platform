@@ -8,9 +8,9 @@ import PrizeSettings from "./PrizeSettings";
 import ImageUploadField from "@/components/ImageUploadField";
 
 type PageProps = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 type WinnerRow = {
@@ -65,10 +65,12 @@ function normaliseOfferForUI(offer: any, index: number) {
 }
 
 export default async function AdminRafflePage({ params }: PageProps) {
+  const { id } = await params;
+
   const session = await auth();
   if (!session?.user) redirect("/admin/login");
 
-  const raffle = await getRaffleById(params.id);
+  const raffle = await getRaffleById(id);
   if (!raffle) notFound();
 
   const config = (raffle.config_json as any) ?? {};
@@ -251,157 +253,22 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
           <section>
             <h3>Offers</h3>
-            <p style={{ color: "#6b7280", fontSize: 13, marginTop: -6 }}>
-              Optional bundle pricing. Example: enter <strong>3</strong> and{" "}
-              <strong>12.00</strong> to create a public offer of 3 tickets for
-              12.00.
-            </p>
 
             <input type="hidden" name="offer_count" value={offerRows.length} />
 
             <div style={{ display: "grid", gap: 10 }}>
               {offerRows.map((offer, index) => (
-                <div
-                  key={`${offer.id}-${index}`}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr auto",
-                    gap: 10,
-                    alignItems: "end",
-                    padding: 12,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    background: "#f9fafb",
-                  }}
-                >
-                  <label style={{ display: "grid", gap: 4 }}>
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>
-                      Number of tickets
-                    </span>
-                    <input
-                      name={`offer_quantity_${index}`}
-                      type="number"
-                      min={1}
-                      defaultValue={offer.quantity}
-                      placeholder="3"
-                      style={{
-                        height: 40,
-                        borderRadius: 8,
-                        border: "1px solid #d1d5db",
-                        padding: "0 10px",
-                        fontSize: 15,
-                      }}
-                    />
-                  </label>
-
-                  <label style={{ display: "grid", gap: 4 }}>
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>
-                      Total offer price
-                    </span>
-                    <input
-                      name={`offer_price_${index}`}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={offer.price}
-                      placeholder="12.00"
-                      style={{
-                        height: 40,
-                        borderRadius: 8,
-                        border: "1px solid #d1d5db",
-                        padding: "0 10px",
-                        fontSize: 15,
-                      }}
-                    />
-                  </label>
-
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      height: 40,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      name={`offer_active_${index}`}
-                      type="checkbox"
-                      value="true"
-                      defaultChecked={offer.is_active}
-                    />
-                    Use
-                  </label>
+                <div key={index}>
+                  <input name={`offer_quantity_${index}`} defaultValue={offer.quantity} />
+                  <input name={`offer_price_${index}`} defaultValue={offer.price} />
                 </div>
               ))}
             </div>
-
-            <p style={{ color: "#6b7280", fontSize: 13 }}>
-              Leave unused rows blank. Save the raffle to apply changes.
-            </p>
           </section>
 
-          <label>
-            Currency
-            <select
-              name="currency"
-              defaultValue={raffle.currency ?? "GBP"}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            >
-              <option value="GBP">GBP</option>
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-
-          <label>
-            Status
-            <select
-              name="status"
-              defaultValue={raffle.status}
-              style={{ display: "block", width: "100%", padding: 10 }}
-            >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="closed">Closed</option>
-              <option value="drawn">Drawn</option>
-            </select>
-          </label>
-
-          <button
-            type="submit"
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              border: "1px solid #111",
-              cursor: "pointer",
-            }}
-          >
-            Save raffle
-          </button>
+          <button type="submit">Save raffle</button>
         </form>
       </section>
-
-      <PrizeSettings raffleId={raffle.id} initialPrizes={config.prizes ?? []} />
-
-      {raffle.status === "drawn" && (
-        <section style={{ marginTop: 30 }}>
-          <h2>Winners</h2>
-
-          {winners.length ? (
-            winners.map((winner) => (
-              <div key={winner.id}>
-                {winner.prize_position} — #{winner.ticket_number} —{" "}
-                {winner.colour || "No colour"} — {winner.buyer_name || "—"} (
-                {winner.buyer_email || "—"})
-              </div>
-            ))
-          ) : (
-            <div>No winners yet.</div>
-          )}
-        </section>
-      )}
     </main>
   );
 }
