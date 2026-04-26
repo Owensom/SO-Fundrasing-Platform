@@ -5,12 +5,15 @@ import Link from "next/link";
 
 type Campaign = {
   id: string;
-  type: "raffle" | "squares" | "event";
-  title: string;
-  description?: string;
-  imageUrl?: string;
   slug: string;
-  status: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  type: "raffle" | "squares" | "event";
+  startNumber?: number;
+  endNumber?: number;
+  size?: number;
+  date?: string;
 };
 
 type Props = {
@@ -19,92 +22,130 @@ type Props = {
   };
 };
 
-export default function TenantCampaignPage({ params }: Props) {
+export default function TenantCampaignsPage({ params }: Props) {
   const { tenantSlug } = params;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!tenantSlug) return;
-
-    let cancelled = false;
-
-    async function loadCampaigns() {
-      setLoading(true);
-      setError("");
-
+    async function load() {
       try {
+        setLoading(true);
+        setError("");
+
         const res = await fetch(`/api/public/campaigns/${encodeURIComponent(tenantSlug)}`);
         const data = await res.json();
 
-        if (!res.ok) {
+        if (!res.ok || !data.ok) {
           throw new Error(data?.error || "Failed to load campaigns");
         }
 
-        if (!cancelled) {
-          setCampaigns(data.campaigns ?? []);
-        }
+        setCampaigns(data.campaigns ?? []);
       } catch (err: any) {
-        if (!cancelled) {
-          setError(err.message || "Failed to load campaigns");
-        }
+        setError(err?.message || "Failed to load campaigns");
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     }
 
-    loadCampaigns();
-
-    return () => {
-      cancelled = true;
-    };
+    load();
   }, [tenantSlug]);
 
+  if (loading) return <div style={styles.wrap}>Loading campaigns…</div>;
+  if (error) return <div style={styles.wrap}>Error: {error}</div>;
+  if (!campaigns.length) return <div style={styles.wrap}>No active campaigns found.</div>;
+
   return (
-    <div style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}>
-      <h1>Active Campaigns</h1>
+    <div style={styles.page}>
+      <h1 style={styles.heading}>Active Campaigns</h1>
+      <div style={styles.grid}>
+        {campaigns.map((c) => {
+          const link =
+            c.type === "raffle"
+              ? `/r/${c.slug}`
+              : c.type === "squares"
+              ? `/s/${c.slug}`
+              : `/e/${c.slug}`; // future events page
 
-      {loading && <p>Loading campaigns…</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      {!loading && campaigns.length === 0 && <p>No active campaigns found.</p>}
-
-      <div style={{ display: "grid", gap: 20, marginTop: 20 }}>
-        {campaigns.map((campaign) => (
-          <Link
-            key={campaign.id}
-            href={
-              campaign.type === "raffle"
-                ? `/r/${campaign.slug}`
-                : campaign.type === "squares"
-                  ? `/s/${campaign.slug}`
-                  : `/e/${campaign.slug}`
-            }
-            style={{
-              display: "block",
-              padding: 16,
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-              background: "#ffffff",
-              textDecoration: "none",
-              color: "#111827",
-              transition: "box-shadow 0.2s",
-            }}
-          >
-            {campaign.imageUrl && (
-              <img
-                src={campaign.imageUrl}
-                alt={campaign.title}
-                style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 8, marginBottom: 12 }}
-              />
-            )}
-            <h2 style={{ margin: "0 0 8px" }}>{campaign.title}</h2>
-            {campaign.description && <p style={{ margin: 0, color: "#475569" }}>{campaign.description}</p>}
-            <span style={{ fontSize: 12, color: "#64748b" }}>{campaign.type.toUpperCase()}</span>
-          </Link>
-        ))}
+          return (
+            <Link key={c.id} href={link} style={styles.card}>
+              {c.imageUrl ? (
+                <img src={c.imageUrl} alt={c.title} style={styles.image} />
+              ) : null}
+              <div style={styles.cardContent}>
+                <h2 style={styles.cardTitle}>{c.title}</h2>
+                <p style={styles.cardDesc}>{c.description}</p>
+                <span style={styles.cardType}>{c.type.toUpperCase()}</span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    maxWidth: 1100,
+    margin: "40px auto",
+    padding: "0 16px",
+    fontFamily: "Arial, sans-serif",
+  },
+  wrap: {
+    padding: 24,
+    textAlign: "center",
+  },
+  heading: {
+    fontSize: 32,
+    fontWeight: 900,
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 20,
+  },
+  card: {
+    display: "flex",
+    flexDirection: "column",
+    border: "1px solid #e2e8f0",
+    borderRadius: 12,
+    overflow: "hidden",
+    textDecoration: "none",
+    color: "#111827",
+    cursor: "pointer",
+    background: "#ffffff",
+    transition: "transform 0.2s, box-shadow 0.2s",
+  },
+  cardContent: {
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: 800,
+    margin: 0,
+  },
+  cardDesc: {
+    fontSize: 14,
+    color: "#64748b",
+    flex: 1,
+  },
+  cardType: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#2563eb",
+    textTransform: "uppercase",
+  },
+  image: {
+    width: "100%",
+    height: 180,
+    objectFit: "cover",
+    borderBottom: "1px solid #e2e8f0",
+  },
+};
