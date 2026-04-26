@@ -131,11 +131,14 @@ export async function updateRafflePrizes(id: string, tenantSlug: string, prizes:
 }
 
 // ------------------------------
-// Map tickets helper (for by-reservation route)
+// Map tickets helper (Option 1)
 // ------------------------------
-export function mapTickets(tickets: any[]): any[] {
-  return tickets.map((t) => ({
-    ticket_number: t.ticket_number,
-    colour: t.colour || t.hex || "#000000",
-  }));
+export function mapTickets(tickets: any[], colours?: any[]): any[] {
+  return tickets.map((t) => {
+    const colourMatch = colours?.find((c) => c.id === t.colour_id);
+    return {
+      ticket_number: t.ticket_number,
+      colour: t.colour || colourMatch?.hex || "#000000",
+    };
+  });
 }
