@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { deleteRaffle, getRaffleById } from "@/lib/raffles";
 import { query } from "@/lib/db";
+import { sendWinnerEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +58,9 @@ export async function POST(
     const body = await req.json();
     const action = String(body?.action || "");
 
+    // ----------------------
+    // CLOSE
+    // ----------------------
     if (action === "close") {
       const updated = await query(
         `
@@ -82,6 +86,9 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
+    // ----------------------
+    // DRAW
+    // ----------------------
     if (action === "draw") {
       if (raffle.status !== "closed") {
         return NextResponse.json(
@@ -116,19 +123,25 @@ export async function POST(
       const prizes = Array.isArray(config.prizes)
         ? config.prizes.filter((prize: any) => {
             const title = String(prize?.title ?? prize?.name ?? "").trim();
-            const isPublic = prize?.isPublic !== false && prize?.is_public !== false;
+            const isPublic =
+              prize?.isPublic !== false && prize?.is_public !== false;
             return title && isPublic;
           })
         : [];
 
       const winnerCount = Math.max(prizes.length || 1, 1);
+
       const winners = shuffle(soldTickets).slice(
         0,
         Math.min(winnerCount, soldTickets.length),
       );
 
-      await query("delete from raffle_winners where raffle_id = $1", [raffle.id]);
+      // Clear existing winners
+      await query("delete from raffle_winners where raffle_id = $1", [
+        raffle.id,
+      ]);
 
+      // Insert winners
       for (let index = 0; index < winners.length; index += 1) {
         const winner = winners[index];
 
@@ -160,6 +173,7 @@ export async function POST(
 
       const firstWinner = winners[0];
 
+      // Update raffle
       await query(
         `
         update raffles
@@ -184,9 +198,31 @@ export async function POST(
         ],
       );
 
+      // ----------------------
+      // SEND WINNER EMAILS
+      // ----------------------
+      for (const winner of winners) {
+        if (!winner.buyer_email) continue;
+
+        try {
+          await sendWinnerEmail({
+            to: winner.buyer_email,
+            name: winner.buyer_name,
+            raffleTitle: raffle.title,
+            ticketNumber: winner.ticket_number,
+            colour: winner.colour,
+          });
+        } catch (emailError) {
+          console.error("winner email failed", emailError);
+        }
+      }
+
       return NextResponse.json({ ok: true });
     }
 
+    // ----------------------
+    // DELETE
+    // ----------------------
     if (action === "delete") {
       if (raffle.status === "published") {
         return NextResponse.json(
