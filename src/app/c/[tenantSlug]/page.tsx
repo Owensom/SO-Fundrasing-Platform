@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -18,8 +20,7 @@ type Props = {
   };
 };
 
-export default function TenantCampaignPage({ params }: Props) {
-  const { tenantSlug } = params;
+export default function TenantCampaignsPage({ params }: Props) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -29,10 +30,11 @@ export default function TenantCampaignPage({ params }: Props) {
       try {
         setLoading(true);
         setError("");
-        const res = await fetch(`/api/public/campaigns?tenantSlug=${tenantSlug}`);
+
+        const res = await fetch(`/api/public/campaigns/${params.tenantSlug}`);
         const data = await res.json();
 
-        if (!res.ok || !data.ok) {
+        if (!res.ok) {
           throw new Error(data?.error || "Failed to load campaigns");
         }
 
@@ -45,45 +47,41 @@ export default function TenantCampaignPage({ params }: Props) {
     }
 
     loadCampaigns();
-  }, [tenantSlug]);
+  }, [params.tenantSlug]);
 
   if (loading) return <div style={styles.wrap}>Loading campaigns…</div>;
   if (error) return <div style={styles.wrap}>Error: {error}</div>;
-  if (!campaigns.length) return <div style={styles.wrap}>No campaigns found.</div>;
+  if (!campaigns.length) return <div style={styles.wrap}>No active campaigns found.</div>;
 
   return (
     <main style={styles.page}>
-      <h1 style={{ textAlign: "center" }}>Active Campaigns</h1>
-
+      <h1 style={styles.heading}>Active Campaigns</h1>
       <div style={styles.grid}>
-        {campaigns.map((c) => {
-          const url =
-            c.type === "raffle"
-              ? `/r/${c.slug}`
-              : c.type === "squares"
-                ? `/s/${c.slug}`
-                : `/e/${c.slug}`;
-
-          return (
-            <Link key={c.id} href={url} style={styles.card}>
-              {c.imageUrl ? (
-                <img src={c.imageUrl} alt={c.title} style={styles.image} />
-              ) : null}
-              <div style={styles.cardContent}>
-                <h2>{c.title}</h2>
-                {c.type === "raffle" && c.ticketPrice != null ? (
-                  <div>Ticket: £{c.ticketPrice.toFixed(2)}</div>
-                ) : null}
-                {c.type === "raffle" && c.prizes ? (
-                  <div>Prizes: {c.prizes.length}</div>
-                ) : null}
-                {c.type === "squares" && c.gridSize ? (
-                  <div>Grid: {c.gridSize}×{c.gridSize}</div>
-                ) : null}
-              </div>
-            </Link>
-          );
-        })}
+        {campaigns.map((campaign) => (
+          <Link
+            key={campaign.id}
+            href={`/${campaign.type}/${campaign.slug}`}
+            style={styles.card}
+          >
+            {campaign.imageUrl && (
+              <img
+                src={campaign.imageUrl}
+                alt={campaign.title}
+                style={styles.image}
+              />
+            )}
+            <div style={styles.cardBody}>
+              <div style={styles.title}>{campaign.title}</div>
+              <div style={styles.type}>{campaign.type.toUpperCase()}</div>
+              {campaign.type === "raffle" && campaign.ticketPrice != null && (
+                <div style={styles.price}>Ticket: £{(campaign.ticketPrice ?? 0).toFixed(2)}</div>
+              )}
+              {campaign.type === "squares" && campaign.gridSize != null && (
+                <div style={styles.price}>Grid: {campaign.gridSize} squares</div>
+              )}
+            </div>
+          </Link>
+        ))}
       </div>
     </main>
   );
@@ -92,39 +90,57 @@ export default function TenantCampaignPage({ params }: Props) {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     padding: 24,
-    minHeight: "100vh",
-    background: "#f8fafc",
+    maxWidth: 1100,
+    margin: "0 auto",
+    fontFamily: "Arial, sans-serif",
   },
   wrap: {
     padding: 24,
     textAlign: "center",
   },
+  heading: {
+    fontSize: 28,
+    fontWeight: 700,
+    marginBottom: 24,
+  },
   grid: {
     display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
     gap: 20,
-    gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-    marginTop: 24,
   },
   card: {
-    background: "#ffffff",
+    display: "block",
     borderRadius: 16,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-    overflow: "hidden",
+    border: "1px solid #e2e8f0",
     textDecoration: "none",
     color: "#111827",
-    display: "flex",
-    flexDirection: "column",
-    cursor: "pointer",
+    overflow: "hidden",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     transition: "transform 0.2s",
   },
   image: {
     width: "100%",
-    height: 160,
+    height: 140,
     objectFit: "cover",
+    display: "block",
   },
-  cardContent: {
-    padding: 16,
+  cardBody: {
+    padding: 12,
     display: "grid",
     gap: 6,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 700,
+  },
+  type: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748b",
+  },
+  price: {
+    fontSize: 14,
+    fontWeight: 600,
+    marginTop: 4,
   },
 };
