@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
       reserved: [],
     });
 
+    // ✅ FIXED: absolute redirect required by Next.js
     return NextResponse.redirect(
       new URL(`/admin/raffles/${raffle.id}`, request.url),
       { status: 303 },
