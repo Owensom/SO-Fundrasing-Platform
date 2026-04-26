@@ -1,4 +1,3 @@
-// src/app/api/admin/raffles/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
@@ -12,72 +11,103 @@ import {
 
 export const runtime = "nodejs";
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Authenticate admin
     const user = await auth();
-    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (!user) {
+      return NextResponse.redirect("/admin/login");
+    }
 
-    // Multi-tenant
     const tenantSlug = getTenantSlugFromHeaders();
 
-    // Fetch current raffle
     const raffle = await getRaffleById(params.id);
     if (!raffle || raffle.tenant_slug !== tenantSlug) {
-      return NextResponse.json({ ok: false, error: "Raffle not found" }, { status: 404 });
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     }
 
-    const body = await req.json();
+    const formData = await req.formData();
 
-    // ------------------------------
-    // Update main raffle fields
-    // ------------------------------
-    const updatedRaffle = await updateRaffle(params.id, tenantSlug, {
-      title: body.title,
-      description: body.description,
-      ticket_price_cents: body.ticket_price_cents,
-      total_tickets: body.total_tickets,
-      status: body.status
-    });
+    // --------------------------
+    // BASIC FIELDS
+    // --------------------------
+    const title = String(formData.get("title") || "");
+    const slug = String(formData.get("slug") || "");
+    const description = String(formData.get("description") || "");
+    const image_url = String(formData.get("image_url") || "");
 
-    // ------------------------------
-    // Update offers if provided
-    // ------------------------------
-    let updatedOffers = raffle.offers;
-    if (body.offers) {
-      updatedOffers = await updateRaffleOffers(params.id, tenantSlug, body.offers);
-    }
+    const ticket_price = Number(formData.get("ticket_price") || 0);
+    const ticket_price_cents = Math.round(ticket_price * 100);
 
-    // ------------------------------
-    // Update colours if provided
-    // ------------------------------
-    let updatedColours = raffle.colours;
-    if (body.colours) {
-      updatedColours = await updateRaffleColours(params.id, tenantSlug, body.colours);
-    }
+    const total_tickets =
+      Number(formData.get("endNumber")) -
+      Number(formData.get("startNumber")) +
+      1;
 
-    // ------------------------------
-    // Update prizes if provided
-    // ------------------------------
-    let updatedPrizes = raffle.prizes || [];
-    if (body.prizes) {
-      updatedPrizes = await updateRafflePrizes(params.id, tenantSlug, body.prizes);
-    }
+    const status = String(formData.get("status") || "draft");
+    const currency = String(formData.get("currency") || "GBP");
 
-    // ------------------------------
-    // Return full updated raffle object for frontend
-    // ------------------------------
-    return NextResponse.json({
-      ok: true,
-      raffle: {
-        ...updatedRaffle,
-        offers: updatedOffers,
-        colours: updatedColours,
-        prizes: updatedPrizes
+    // --------------------------
+    // COLOURS
+    // --------------------------
+    const preset = formData.getAll("colour_preset").map(String);
+    const custom = String(formData.get("custom_colours") || "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    const colours = [...preset, ...custom].map((c, i) => ({
+      id: `colour-${i + 1}`,
+      name: c,
+      hex: c.startsWith("#") ? c : c.toLowerCase(),
+      sortOrder: i
+    }));
+
+    // --------------------------
+    // OFFERS
+    // --------------------------
+    const offerCount = Number(formData.get("offer_count") || 0);
+    const offers: any[] = [];
+
+    for (let i = 0; i < offerCount; i++) {
+      const quantity = Number(formData.get(`offer_quantity_${i}`));
+      const price = Number(formData.get(`offer_price_${i}`));
+      const active = formData.get(`offer_active_${i}`) === "true";
+
+      if (quantity > 0 && price > 0) {
+        offers.push({
+          id: `offer-${i + 1}`,
+          label: `${quantity} for ${price}`,
+          price,
+          quantity,
+          tickets: quantity,
+          isActive: active,
+          sortOrder: i
+        });
       }
+    }
+
+    // --------------------------
+    // UPDATE
+    // --------------------------
+    await updateRaffle(params.id, tenantSlug, {
+      title,
+      slug,
+      description,
+      image_url,
+      ticket_price_cents,
+      total_tickets,
+      status: status as any,
+      currency: currency as any
     });
+
+    await updateRaffleOffers(params.id, tenantSlug, offers);
+    await updateRaffleColours(params.id, tenantSlug, colours);
+
+    // prizes handled separately via PrizeSettings component
+
+    return NextResponse.redirect(`/admin/raffles/${params.id}`);
   } catch (err: any) {
-    console.error("Update raffle error:", err);
+    console.error("POST raffle error:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
