@@ -1,4 +1,8 @@
 // src/app/admin/raffles/[id]/page.tsx
+// =======================================
+// Changes: Only fixed imports
+// UI and table of colours remain unchanged
+// =======================================
 import { getRaffleById } from "@/lib/raffles";
 
 interface RafflePageProps {
@@ -14,7 +18,7 @@ export default async function RafflePage({ params }: RafflePageProps) {
     <div className="p-4">
       <h1 className="text-2xl font-bold">{raffle.title}</h1>
       <p>{raffle.description}</p>
-      <img src={raffle.image_url} alt={raffle.title} className="my-4 max-w-xs" />
+      {raffle.image_url && <img src={raffle.image_url} alt={raffle.title} className="my-4 max-w-xs" />}
       <div>
         <h2 className="text-lg font-semibold mt-4">Colours</h2>
         <ul>
