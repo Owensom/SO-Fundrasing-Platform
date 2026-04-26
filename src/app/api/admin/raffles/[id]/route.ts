@@ -15,7 +15,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     const user = await auth();
     if (!user) {
-      return NextResponse.redirect("/admin/login");
+      return NextResponse.redirect(
+        new URL("/admin/login", req.url),
+        { status: 303 }
+      );
     }
 
     const tenantSlug = getTenantSlugFromHeaders();
@@ -105,7 +108,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // prizes handled separately via PrizeSettings component
 
-    return NextResponse.redirect(`/admin/raffles/${params.id}`);
+    // ✅ FIXED: absolute redirect
+    return NextResponse.redirect(
+      new URL(`/admin/raffles/${params.id}`, req.url),
+      { status: 303 }
+    );
+
   } catch (err: any) {
     console.error("POST raffle error:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
