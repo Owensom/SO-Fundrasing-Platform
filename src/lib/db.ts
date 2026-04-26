@@ -1,15 +1,13 @@
 // src/lib/db.ts
-// =======================================
-// TLS-safe dynamic import for pg
-// Restores original helpers: query, queryOne, getDbClient
+// Restored full helpers: query, queryOne, getDbClient
+// TLS-safe dynamic pg import
 // Uses process.env.DATABASE_URL directly
-// =======================================
 
 let _client: any;
 
 async function getClient() {
   if (_client) return _client;
-  const { Client } = await import("pg");
+  const { Client } = await import("pg"); // dynamic import for serverless
   _client = new Client({ connectionString: process.env.DATABASE_URL });
   await _client.connect();
   return _client;
