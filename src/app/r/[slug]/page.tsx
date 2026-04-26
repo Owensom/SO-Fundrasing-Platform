@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 
 type TicketState = {
-  ticket_number: number;
+  number: number;
   colour: string;
+};
+
+type RaffleColour = {
+  id: string;
+  name: string;
+  hex: string | null;
 };
 
 type Raffle = {
@@ -12,19 +18,29 @@ type Raffle = {
   slug: string;
   title: string;
   description: string;
+  imageUrl: string;
   image_url: string;
   currency: string;
-  ticket_price?: number;
-  total_tickets: number;
-  sold_tickets: number;
+  ticketPrice: number;
+  totalTickets: number;
+  soldTicketsCount: number;
   status: string;
+  startNumber: number;
+  endNumber: number;
+  colours: RaffleColour[];
+  soldTickets: TicketState[];
+  reservedTickets: TicketState[];
 };
 
 type ApiResponse = {
   ok: boolean;
   raffle?: Raffle;
-  sold?: TicketState[];
-  reserved?: TicketState[];
+  error?: string;
+};
+
+type SelectedTicket = {
+  number: number;
+  colour: string;
 };
 
 export default function PublicRafflePage({
@@ -33,24 +49,39 @@ export default function PublicRafflePage({
   params: { slug: string };
 }) {
   const [raffle, setRaffle] = useState<Raffle | null>(null);
-  const [sold, setSold] = useState<TicketState[]>([]);
-  const [reserved, setReserved] = useState<TicketState[]>([]);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<SelectedTicket[]>([]);
   const [loading, setLoading] = useState(false);
-
-  const colour = "default";
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/raffles/${params.slug}`)
-      .then((res) => res.json())
-      .then((data: ApiResponse) => {
-        if (data.ok && data.raffle) {
-          setRaffle(data.raffle);
-          setSold(data.sold || []);
-          setReserved(data.reserved || []);
+    async function loadRaffle() {
+      try {
+        setLoadError("");
+
+        const res = await fetch(`/api/raffles/${params.slug}`, {
+          cache: "no-store",
+        });
+
+        const data: ApiResponse = await res.json();
+
+        if (!res.ok || !data.ok || !data.raffle) {
+          throw new Error(data.error || "Failed to load raffle");
         }
-      });
+
+        setRaffle(data.raffle);
+      } catch (error) {
+        setLoadError(
+          error instanceof Error ? error.message : "Failed to load raffle",
+        );
+      }
+    }
+
+    loadRaffle();
   }, [params.slug]);
+
+  if (loadError) {
+    return <div style={{ padding: 20, color: "red" }}>{loadError}</div>;
+  }
 
   if (!raffle) {
     return <div style={{ padding: 20 }}>Loading...</div>;
@@ -60,21 +91,47 @@ export default function PublicRafflePage({
     return <div style={{ padding: 20 }}>Not available</div>;
   }
 
-  const soldSet = new Set(sold.map((t) => `${t.colour}-${t.ticket_number}`));
+  const colours =
+    raffle.colours && raffle.colours.length
+      ? raffle.colours
+      : [{ id: "default", name: "Default", hex: null }];
+
+  const soldSet = new Set(
+    raffle.soldTickets.map((ticket) => `${ticket.colour}-${ticket.number}`),
+  );
+
   const reservedSet = new Set(
-    reserved.map((t) => `${t.colour}-${t.ticket_number}`),
+    raffle.reservedTickets.map(
+      (ticket) => `${ticket.colour}-${ticket.number}`,
+    ),
   );
 
   const numbers = Array.from(
-    { length: raffle.total_tickets },
-    (_, i) => i + 1,
+    {
+      length: Math.max(
+        Number(raffle.endNumber || 1) - Number(raffle.startNumber || 1) + 1,
+        0,
+      ),
+    },
+    (_, index) => Number(raffle.startNumber || 1) + index,
   );
 
-  function toggleTicket(number: number) {
-    setSelected((prev) =>
-      prev.includes(number)
-        ? prev.filter((n) => n !== number)
-        : [...prev, number],
+  function isSelected(number: number, colour: string) {
+    return selected.some(
+      (ticket) => ticket.number === number && ticket.colour === colour,
+    );
+  }
+
+  function toggleTicket(number: number, colour: string) {
+    setSelected((current) =>
+      current.some(
+        (ticket) => ticket.number === number && ticket.colour === colour,
+      )
+        ? current.filter(
+            (ticket) =>
+              !(ticket.number === number && ticket.colour === colour),
+          )
+        : [...current, { number, colour }],
     );
   }
 
@@ -88,9 +145,9 @@ export default function PublicRafflePage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tickets: selected.map((n) => ({
-            ticket_number: n,
-            colour,
+          tickets: selected.map((ticket) => ({
+            ticket_number: ticket.number,
+            colour: ticket.colour,
           })),
           buyer_name: "Guest",
           buyer_email: "guest@example.com",
@@ -100,7 +157,7 @@ export default function PublicRafflePage({
       const reserveData = await reserveRes.json();
 
       if (!reserveData.ok) {
-        alert("Reservation failed");
+        alert(reserveData.error || "Reservation failed");
         setLoading(false);
         return;
       }
@@ -116,83 +173,104 @@ export default function PublicRafflePage({
       const checkoutData = await checkoutRes.json();
 
       if (!checkoutData.url) {
-        alert("Checkout failed");
+        alert(checkoutData.error || "Checkout failed");
         setLoading(false);
         return;
       }
 
       window.location.href = checkoutData.url;
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       alert("Something went wrong");
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
-    <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+    <main style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}>
       <h1>{raffle.title}</h1>
 
-      {raffle.image_url && (
+      {(raffle.imageUrl || raffle.image_url) && (
         <img
-          src={raffle.image_url}
+          src={raffle.imageUrl || raffle.image_url}
           alt={raffle.title}
-          style={{ width: "100%", marginBottom: 20 }}
+          style={{
+            width: "100%",
+            maxHeight: 420,
+            objectFit: "cover",
+            borderRadius: 16,
+            marginBottom: 20,
+          }}
         />
       )}
 
       <p>{raffle.description}</p>
 
       <p>
-        <strong>Price:</strong> {raffle.ticket_price} {raffle.currency}
+        <strong>Price:</strong> {raffle.ticketPrice} {raffle.currency}
       </p>
 
       <h2>Select tickets</h2>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(10, 1fr)",
-          gap: 8,
-        }}
-      >
-        {numbers.map((number) => {
-          const key = `${colour}-${number}`;
-          const isSold = soldSet.has(key);
-          const isReserved = reservedSet.has(key);
-          const isUnavailable = isSold || isReserved;
-          const isSelected = selected.includes(number);
+      <div style={{ display: "grid", gap: 28 }}>
+        {colours.map((colour) => (
+          <section key={colour.id}>
+            <h3>{colour.name}</h3>
 
-          return (
-            <button
-              key={number}
-              type="button"
-              disabled={isUnavailable}
-              onClick={() => toggleTicket(number)}
+            <div
               style={{
-                padding: 10,
-                border: "1px solid #ccc",
-                borderRadius: 6,
-                background: isSold
-                  ? "#000"
-                  : isReserved
-                    ? "#999"
-                    : isSelected
-                      ? "#4caf50"
-                      : "#fff",
-                color: isUnavailable || isSelected ? "#fff" : "#000",
-                cursor: isUnavailable ? "not-allowed" : "pointer",
+                display: "grid",
+                gridTemplateColumns: "repeat(10, 1fr)",
+                gap: 8,
               }}
             >
-              {number}
-            </button>
-          );
-        })}
+              {numbers.map((number) => {
+                const colourKey = colour.name || colour.id || "default";
+                const key = `${colourKey}-${number}`;
+                const isSold = soldSet.has(key);
+                const isReserved = reservedSet.has(key);
+                const isUnavailable = isSold || isReserved;
+                const selectedNow = isSelected(number, colourKey);
+
+                return (
+                  <button
+                    key={`${colourKey}-${number}`}
+                    type="button"
+                    disabled={isUnavailable}
+                    onClick={() => toggleTicket(number, colourKey)}
+                    style={{
+                      padding: 10,
+                      border: "1px solid #ccc",
+                      borderRadius: 6,
+                      background: isSold
+                        ? "#000"
+                        : isReserved
+                          ? "#999"
+                          : selectedNow
+                            ? "#4caf50"
+                            : "#fff",
+                      color: isUnavailable || selectedNow ? "#fff" : "#000",
+                      cursor: isUnavailable ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {number}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <p>Selected: {selected.length > 0 ? selected.join(", ") : "None"}</p>
+        <p>
+          Selected:{" "}
+          {selected.length > 0
+            ? selected
+                .map((ticket) => `${ticket.colour} ${ticket.number}`)
+                .join(", ")
+            : "None"}
+        </p>
 
         <button
           type="button"
@@ -204,7 +282,7 @@ export default function PublicRafflePage({
             color: "#fff",
             border: "none",
             borderRadius: 6,
-            cursor: "pointer",
+            cursor: !selected.length || loading ? "not-allowed" : "pointer",
           }}
         >
           {loading ? "Processing..." : "Checkout"}
