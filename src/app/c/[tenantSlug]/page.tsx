@@ -1,105 +1,124 @@
 // src/app/c/[tenantSlug]/page.tsx
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
 
-type Params = {
-  params: { tenantSlug: string };
-};
+type CampaignType = "raffle" | "squares" | "event";
 
 type Campaign = {
   id: string;
-  type: "raffle" | "squares" | "event";
+  type: CampaignType;
   title: string;
   slug: string;
-  status: "published" | "closed" | "draft" | "drawn";
   description?: string;
   imageUrl?: string;
+  status: "draft" | "published" | "closed" | "drawn";
 };
 
-export default async function TenantCampaignsPage({ params }: Params) {
+type Props = {
+  params: { tenantSlug: string };
+};
+
+export default function CampaignsPage({ params }: Props) {
   const { tenantSlug } = params;
+  const router = useRouter();
 
-  // Fetch campaigns for this tenant
-  const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // Filter to only published campaigns
-  const activeCampaigns = campaigns.filter(
-    (c) => c.status === "published"
-  );
+  useEffect(() => {
+    async function loadCampaigns() {
+      setLoading(true);
+      setError("");
 
-  if (activeCampaigns.length === 0) {
-    return (
-      <main style={styles.page}>
-        <div style={styles.container}>
-          <h1>Tenant campaigns</h1>
-          <p>No active campaigns available at this time.</p>
-        </div>
-      </main>
-    );
-  }
+      try {
+        const items = await getAllCampaignsForTenant(tenantSlug);
+        // Only show published campaigns
+        setCampaigns(items.filter((c) => c.status === "published"));
+      } catch (err) {
+        console.error("Failed to load campaigns:", err);
+        setError("Failed to load campaigns.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCampaigns();
+  }, [tenantSlug]);
+
+  if (loading) return <div style={{ padding: 24 }}>Loading campaigns…</div>;
+  if (error) return <div style={{ padding: 24, color: "red" }}>{error}</div>;
+  if (!campaigns.length) return <div style={{ padding: 24 }}>No active campaigns found.</div>;
 
   return (
-    <main style={styles.page}>
-      <div style={styles.container}>
-        <h1>Active campaigns</h1>
-        <div style={styles.grid}>
-          {activeCampaigns.map((c) => {
-            const linkHref =
-              c.type === "raffle"
-                ? `/r/${c.slug}`
-                : c.type === "squares"
-                ? `/s/${c.slug}`
-                : `/e/${c.slug}`;
+    <main style={{ maxWidth: 1100, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 28, fontWeight: 800 }}>Active Campaigns</h1>
 
-            return (
-              <Link key={c.id} href={linkHref} style={styles.card}>
-                {c.imageUrl ? (
-                  <img
-                    src={c.imageUrl}
-                    alt={c.title}
-                    style={styles.cardImage}
-                  />
-                ) : null}
-                <div style={styles.cardBody}>
-                  <h2 style={styles.cardTitle}>{c.title}</h2>
-                  {c.description ? (
-                    <p style={styles.cardDescription}>{c.description}</p>
-                  ) : null}
-                  <span style={styles.cardType}>
-                    {c.type.charAt(0).toUpperCase() + c.type.slice(1)}
-                  </span>
+      <div style={{ display: "grid", gap: 16, marginTop: 20 }}>
+        {campaigns.map((campaign) => (
+          <Link
+            key={campaign.id}
+            href={
+              campaign.type === "raffle"
+                ? `/r/${campaign.slug}`
+                : campaign.type === "squares"
+                  ? `/s/${campaign.slug}`
+                  : `/e/${campaign.slug}`
+            }
+            style={{
+              display: "grid",
+              gridTemplateColumns: "120px 1fr",
+              gap: 12,
+              padding: 14,
+              border: "1px solid #d1d5db",
+              borderRadius: 12,
+              textDecoration: "none",
+              color: "#111827",
+              alignItems: "center",
+            }}
+          >
+            {campaign.imageUrl ? (
+              <img
+                src={campaign.imageUrl}
+                alt={campaign.title}
+                style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 8 }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 120,
+                  height: 80,
+                  background: "#f3f4f6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 8,
+                  color: "#6b7280",
+                  fontWeight: 700,
+                }}
+              >
+                No Image
+              </div>
+            )}
+
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{campaign.title}</div>
+              {campaign.description ? (
+                <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>
+                  {campaign.description}
                 </div>
-              </Link>
-            );
-          })}
-        </div>
+              ) : null}
+              <div style={{ marginTop: 6, fontSize: 12, color: "#475569" }}>
+                Type: {campaign.type}, Status: {campaign.status}
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
     </main>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", padding: 24, background: "#f8fafc" },
-  container: { maxWidth: 1100, margin: "0 auto" },
-  grid: {
-    display: "grid",
-    gap: 16,
-    gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-    marginTop: 16,
-  },
-  card: {
-    display: "block",
-    borderRadius: 12,
-    overflow: "hidden",
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    textDecoration: "none",
-    color: "#111827",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-  },
-  cardImage: { width: "100%", height: 160, objectFit: "cover" },
-  cardBody: { padding: 12 },
-  cardTitle: { fontSize: 18, fontWeight: 700, marginBottom: 6 },
-  cardDescription: { fontSize: 14, color: "#64748b", marginBottom: 6 },
-  cardType: { fontSize: 12, fontWeight: 700, color: "#2563eb" },
-};
