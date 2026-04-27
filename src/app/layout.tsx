@@ -38,7 +38,7 @@ export default function RootLayout({
             style={{
               maxWidth: "1200px",
               margin: "0 auto",
-              padding: "10px 20px",
+              padding: "16px 24px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -60,7 +60,7 @@ export default function RootLayout({
                 height={120}
                 priority
                 style={{
-                  height: "48px",
+                  height: "64px",
                   width: "auto",
                   objectFit: "contain",
                 }}
@@ -71,7 +71,7 @@ export default function RootLayout({
 
         <main
           style={{
-            minHeight: "calc(100vh - 150px)",
+            minHeight: "calc(100vh - 170px)",
           }}
         >
           {children}
