@@ -6,10 +6,26 @@ import {
   updateRaffle,
   updateRaffleOffers,
   updateRaffleColours,
-  updateRafflePrizes
 } from "@/lib/raffles";
+import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
+
+function normaliseImagePosition(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
+  }
+
+  return "center";
+}
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -37,6 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const slug = String(formData.get("slug") || "");
     const description = String(formData.get("description") || "");
     const image_url = String(formData.get("image_url") || "");
+    const image_position = normaliseImagePosition(formData.get("image_position"));
 
     const ticket_price = Number(formData.get("ticket_price") || 0);
     const ticket_price_cents = Math.round(ticket_price * 100);
@@ -62,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       id: `colour-${i + 1}`,
       name: c,
       hex: c.startsWith("#") ? c : c.toLowerCase(),
-      sortOrder: i
+      sortOrder: i,
     }));
 
     // --------------------------
@@ -84,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           quantity,
           tickets: quantity,
           isActive: active,
-          sortOrder: i
+          sortOrder: i,
         });
       }
     }
@@ -100,20 +117,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ticket_price_cents,
       total_tickets,
       status: status as any,
-      currency: currency as any
+      currency: currency as any,
     });
 
     await updateRaffleOffers(params.id, tenantSlug, offers);
     await updateRaffleColours(params.id, tenantSlug, colours);
 
+    // --------------------------
+    // IMAGE FOCUS
+    // --------------------------
+    await query(
+      `
+      update raffles
+      set
+        config_json = coalesce(config_json, '{}'::jsonb)
+          || jsonb_build_object('image_position', $3::text),
+        updated_at = now()
+      where id = $1
+        and tenant_slug = $2
+      `,
+      [params.id, tenantSlug, image_position],
+    );
+
     // prizes handled separately via PrizeSettings component
 
-    // ✅ FIXED: absolute redirect
     return NextResponse.redirect(
       new URL(`/admin/raffles/${params.id}`, req.url),
       { status: 303 }
     );
-
   } catch (err: any) {
     console.error("POST raffle error:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
