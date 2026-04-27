@@ -199,12 +199,17 @@ export async function POST(
       );
 
       // ----------------------
-      // SEND WINNER EMAILS
+      // SEND WINNER EMAILS (IMPROVED LOGGING)
       // ----------------------
       for (const winner of winners) {
-        if (!winner.buyer_email) continue;
+        if (!winner.buyer_email) {
+          console.warn("No email for winner:", winner.ticket_number);
+          continue;
+        }
 
         try {
+          console.log("Sending winner email to:", winner.buyer_email);
+
           await sendWinnerEmail({
             to: winner.buyer_email,
             name: winner.buyer_name,
@@ -212,8 +217,13 @@ export async function POST(
             ticketNumber: winner.ticket_number,
             colour: winner.colour,
           });
-        } catch (emailError) {
-          console.error("winner email failed", emailError);
+
+          console.log("Winner email sent:", winner.buyer_email);
+        } catch (emailError: any) {
+          console.error("Winner email FAILED:", {
+            email: winner.buyer_email,
+            error: emailError?.message,
+          });
         }
       }
 
