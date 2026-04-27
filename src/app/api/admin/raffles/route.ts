@@ -19,7 +19,7 @@ function parseColours(value: string): string[] {
     .filter(Boolean);
 }
 
-function parseOffers(value: string) {
+function parseJsonArray(value: string) {
   if (!value.trim()) return [];
 
   try {
@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
     const endNumber = parseNumber(formData.get("endNumber"), 1);
 
     const colours = parseColours(String(formData.get("colours") ?? ""));
-    const offers = parseOffers(String(formData.get("offers") ?? "[]"));
+    const offers = parseJsonArray(String(formData.get("offers") ?? "[]"));
+    const prizes = parseJsonArray(String(formData.get("prizes") ?? "[]"));
 
     if (!title) {
       return NextResponse.json(
@@ -134,11 +135,11 @@ export async function POST(request: NextRequest) {
       colourCount: colours.length,
       colours,
       offers,
+      prizes,
       sold: [],
       reserved: [],
     });
 
-    // ✅ FIXED: absolute redirect required by Next.js
     return NextResponse.redirect(
       new URL(`/admin/raffles/${raffle.id}`, request.url),
       { status: 303 },
