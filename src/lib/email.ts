@@ -2,9 +2,9 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 🔧 Replace later with real hosted logo
+// ✅ YOUR LOGO (now working)
 const DEFAULT_LOGO =
-  "https://via.placeholder.com/200x60?text=Your+Logo";
+  "https://res.cloudinary.com/dyez8xsbw/image/upload/v1777292787/so-logo-full_dt3i5l.png";
 
 // -----------------------------
 // Helpers
@@ -18,6 +18,14 @@ function formatCurrency(amount: number, currency: string) {
   } catch {
     return `${amount / 100} ${currency}`;
   }
+}
+
+function renderLogo() {
+  return `
+    <div style="text-align:center;margin-bottom:20px;">
+      <img src="${DEFAULT_LOGO}" alt="Logo" style="max-height:60px;" />
+    </div>
+  `;
 }
 
 // -----------------------------
@@ -54,9 +62,7 @@ export async function sendReceiptEmail({
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
       
-      <div style="text-align:center;margin-bottom:20px;">
-        <img src="${DEFAULT_LOGO}" alt="Logo" style="max-height:60px;" />
-      </div>
+      ${renderLogo()}
 
       <h2>Payment successful</h2>
       <p>Hi ${name || "there"},</p>
@@ -76,7 +82,7 @@ export async function sendReceiptEmail({
 
   try {
     await resend.emails.send({
-      from: "Raffle Platform <onboarding@resend.dev>",
+      from: "SO Platform <onboarding@resend.dev>",
       to,
       subject: `Your tickets for ${raffleTitle}`,
       html,
@@ -105,9 +111,7 @@ export async function sendWinnerEmail({
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
       
-      <div style="text-align:center;margin-bottom:20px;">
-        <img src="${DEFAULT_LOGO}" alt="Logo" style="max-height:60px;" />
-      </div>
+      ${renderLogo()}
 
       <h2 style="color:#16a34a;">🎉 You won!</h2>
       <p>Hi ${name || "there"},</p>
@@ -126,7 +130,7 @@ export async function sendWinnerEmail({
 
   try {
     await resend.emails.send({
-      from: "Raffle Platform <onboarding@resend.dev>",
+      from: "SO Platform <onboarding@resend.dev>",
       to,
       subject: `You won ${raffleTitle}!`,
       html,
@@ -137,7 +141,7 @@ export async function sendWinnerEmail({
 }
 
 // -----------------------------
-// SQUARES RECEIPT EMAIL (RESTORED)
+// SQUARES RECEIPT EMAIL
 // -----------------------------
 export async function sendSquaresReceiptEmail({
   to,
@@ -158,16 +162,12 @@ export async function sendSquaresReceiptEmail({
 }) {
   const formattedAmount = formatCurrency(amountCents, currency);
 
-  const squareItems = squares
-    .map((s) => `<li>Square #${s}</li>`)
-    .join("");
+  const squareItems = squares.map((s) => `<li>Square #${s}</li>`).join("");
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
       
-      <div style="text-align:center;margin-bottom:20px;">
-        <img src="${DEFAULT_LOGO}" alt="Logo" style="max-height:60px;" />
-      </div>
+      ${renderLogo()}
 
       <h2>Payment successful</h2>
       <p>Hi ${name || "there"},</p>
@@ -185,7 +185,7 @@ export async function sendSquaresReceiptEmail({
 
   try {
     await resend.emails.send({
-      from: "Raffle Platform <onboarding@resend.dev>",
+      from: "SO Platform <onboarding@resend.dev>",
       to,
       subject: `Your squares for ${gameTitle}`,
       html,
@@ -196,7 +196,7 @@ export async function sendSquaresReceiptEmail({
 }
 
 // -----------------------------
-// SQUARES WINNER EMAIL (RESTORED)
+// SQUARES WINNER EMAIL
 // -----------------------------
 export async function sendSquaresWinnerEmail({
   to,
@@ -214,9 +214,7 @@ export async function sendSquaresWinnerEmail({
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
       
-      <div style="text-align:center;margin-bottom:20px;">
-        <img src="${DEFAULT_LOGO}" alt="Logo" style="max-height:60px;" />
-      </div>
+      ${renderLogo()}
 
       <h2 style="color:#16a34a;">🎉 You won!</h2>
       <p>Hi ${name || "there"},</p>
@@ -235,7 +233,7 @@ export async function sendSquaresWinnerEmail({
 
   try {
     await resend.emails.send({
-      from: "Raffle Platform <onboarding@resend.dev>",
+      from: "SO Platform <onboarding@resend.dev>",
       to,
       subject: `You won ${gameTitle}!`,
       html,
