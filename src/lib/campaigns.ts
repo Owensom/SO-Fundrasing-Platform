@@ -1,46 +1,63 @@
-// src/lib/campaigns.ts
-// =======================================
-// Full restore with literal 'type' and 'status' fields
-// Preserves all helpers and exports for multi-tenant platform
-// =======================================
-
 import { query, queryOne } from "@/lib/db";
 
-// Campaign type
 export type Campaign = {
   id: string;
   title: string;
   slug: string;
   description: string;
   tenant_slug: string;
-  type: "raffle" | "squares" | "event"; // ✅ Literal union type
+  type: "raffle" | "squares" | "event";
   image_url?: string;
+  imageUrl?: string;
   start_date?: string;
   end_date?: string;
-  status: "draft" | "published" | "closed" | "drawn"; // ✅ Literal union type
+  status: "draft" | "published" | "closed" | "drawn";
 };
 
-// ------------------------------
-// Fetch a single campaign by slug
-// ------------------------------
 export async function getCampaignBySlug(slug: string): Promise<Campaign | null> {
-  return await queryOne<Campaign>(
-    "SELECT * FROM campaigns WHERE slug = $1",
-    [slug]
+  return queryOne<Campaign>(
+    `
+    select
+      id,
+      title,
+      slug,
+      description,
+      tenant_id as tenant_slug,
+      type,
+      hero_image_url as image_url,
+      hero_image_url as "imageUrl",
+      starts_at as start_date,
+      ends_at as end_date,
+      status
+    from campaigns
+    where slug = $1
+    limit 1
+    `,
+    [slug],
   );
 }
 
-// ------------------------------
-// Fetch all campaigns for a tenant
-// ------------------------------
-export async function getAllCampaignsForTenant(tenantSlug: string): Promise<Campaign[]> {
-  return await query<Campaign>(
-    "SELECT * FROM campaigns WHERE tenant_slug = $1 ORDER BY start_date DESC",
-    [tenantSlug]
+export async function getAllCampaignsForTenant(
+  tenantSlug: string,
+): Promise<Campaign[]> {
+  return query<Campaign>(
+    `
+    select
+      id,
+      title,
+      slug,
+      description,
+      tenant_id as tenant_slug,
+      type,
+      hero_image_url as image_url,
+      hero_image_url as "imageUrl",
+      starts_at as start_date,
+      ends_at as end_date,
+      status
+    from campaigns
+    where tenant_id = $1
+    order by starts_at desc nulls last, created_at desc
+    `,
+    [tenantSlug],
   );
 }
-
-// ------------------------------
-// Any additional helpers
-// Add other helpers exactly as they existed in your previous working version
-// ------------------------------
