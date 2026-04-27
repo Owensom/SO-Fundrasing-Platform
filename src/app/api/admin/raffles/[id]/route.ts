@@ -6,8 +6,8 @@ import {
   updateRaffle,
   updateRaffleOffers,
   updateRaffleColours,
+  updateRaffleImagePosition, // ✅ NEW
 } from "@/lib/raffles";
-import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -27,7 +27,10 @@ function normaliseImagePosition(value: unknown) {
   return "center";
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const user = await auth();
     if (!user) {
@@ -41,7 +44,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const raffle = await getRaffleById(params.id);
     if (!raffle || raffle.tenant_slug !== tenantSlug) {
-      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "Not found" },
+        { status: 404 }
+      );
     }
 
     const formData = await req.formData();
@@ -53,7 +59,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const slug = String(formData.get("slug") || "");
     const description = String(formData.get("description") || "");
     const image_url = String(formData.get("image_url") || "");
-    const image_position = normaliseImagePosition(formData.get("image_position"));
+    const image_position = normaliseImagePosition(
+      formData.get("image_position")
+    );
 
     const ticket_price = Number(formData.get("ticket_price") || 0);
     const ticket_price_cents = Math.round(ticket_price * 100);
@@ -70,6 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // COLOURS
     // --------------------------
     const preset = formData.getAll("colour_preset").map(String);
+
     const custom = String(formData.get("custom_colours") || "")
       .split(",")
       .map((c) => c.trim())
@@ -107,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // --------------------------
-    // UPDATE
+    // UPDATE BASE RAFFLE
     // --------------------------
     await updateRaffle(params.id, tenantSlug, {
       title,
@@ -120,33 +129,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       currency: currency as any,
     });
 
+    // --------------------------
+    // UPDATE CONFIG PARTS
+    // --------------------------
     await updateRaffleOffers(params.id, tenantSlug, offers);
     await updateRaffleColours(params.id, tenantSlug, colours);
 
     // --------------------------
-    // IMAGE FOCUS
+    // ✅ IMAGE POSITION (FIXED)
     // --------------------------
-    await query(
-      `
-      update raffles
-      set
-        config_json = coalesce(config_json, '{}'::jsonb)
-          || jsonb_build_object('image_position', $3::text),
-        updated_at = now()
-      where id = $1
-        and tenant_slug = $2
-      `,
-      [params.id, tenantSlug, image_position],
+    await updateRaffleImagePosition(
+      params.id,
+      tenantSlug,
+      image_position
     );
 
-    // prizes handled separately via PrizeSettings component
-
+    // --------------------------
+    // REDIRECT
+    // --------------------------
     return NextResponse.redirect(
       new URL(`/admin/raffles/${params.id}`, req.url),
       { status: 303 }
     );
   } catch (err: any) {
     console.error("POST raffle error:", err);
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+
+    return NextResponse.json(
+      { ok: false, error: err.message },
+      { status: 500 }
+    );
   }
 }
