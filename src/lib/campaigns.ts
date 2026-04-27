@@ -9,8 +9,6 @@ export type Campaign = {
   type: "raffle" | "squares" | "event";
   image_url?: string;
   imageUrl?: string;
-  start_date?: string;
-  end_date?: string;
   status: "draft" | "published" | "closed" | "drawn";
 };
 
@@ -22,14 +20,12 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
       title,
       slug,
       description,
-      tenant_id as tenant_slug,
-      type,
-      hero_image_url as image_url,
-      hero_image_url as "imageUrl",
-      starts_at as start_date,
-      ends_at as end_date,
+      tenant_slug,
+      'raffle' as type,
+      image_url,
+      image_url as "imageUrl",
       status
-    from campaigns
+    from raffles
     where slug = $1
     limit 1
     `,
@@ -47,16 +43,14 @@ export async function getAllCampaignsForTenant(
       title,
       slug,
       description,
-      tenant_id as tenant_slug,
-      type,
-      hero_image_url as image_url,
-      hero_image_url as "imageUrl",
-      starts_at as start_date,
-      ends_at as end_date,
+      tenant_slug,
+      'raffle' as type,
+      image_url,
+      image_url as "imageUrl",
       status
-    from campaigns
-    where tenant_id = $1
-    order by starts_at desc nulls last, created_at desc
+    from raffles
+    where tenant_slug = $1
+    order by created_at desc
     `,
     [tenantSlug],
   );
