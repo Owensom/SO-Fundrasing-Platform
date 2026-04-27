@@ -3,11 +3,14 @@ import { query, queryOne } from "./db";
 
 type CurrencyCode = "GBP" | "USD" | "EUR";
 
+type ImagePosition = "center" | "top" | "bottom" | "left" | "right";
+
 type RaffleConfig = {
   startNumber?: number;
   endNumber?: number;
   numbersPerColour?: number;
   colourCount?: number;
+  image_position?: ImagePosition;
   colours?: string[];
   offers?: Array<{
     id?: string;
@@ -97,6 +100,7 @@ export type CreateRaffleInput = {
   slug: string;
   description?: string;
   image_url?: string;
+  image_position?: string;
   currency?: CurrencyCode;
   ticket_price?: number | null;
   total_tickets?: number | null;
@@ -134,6 +138,22 @@ export type SoldTicketForDraw = {
 function normalizeCurrency(value: unknown): CurrencyCode {
   if (value === "USD" || value === "EUR") return value;
   return "GBP";
+}
+
+function normalizeImagePosition(value: unknown): ImagePosition {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
+  }
+
+  return "center";
 }
 
 function toFiniteNumber(value: unknown, fallback = 0) {
@@ -252,6 +272,7 @@ function buildConfig(input: CreateRaffleInput): RaffleConfig {
     endNumber: toFiniteNumber(input.endNumber, 0),
     numbersPerColour: toFiniteNumber(input.numbersPerColour, 0),
     colourCount: toFiniteNumber(input.colourCount, 0),
+    image_position: normalizeImagePosition(input.image_position),
     colours: toStringArray(input.colours),
     offers: normalizeOffers(input.offers),
     prizes: normalizePrizes(input.prizes),
