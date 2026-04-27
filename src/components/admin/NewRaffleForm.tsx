@@ -15,6 +15,14 @@ type OfferRow = {
   sort_order: number;
 };
 
+type PrizeRow = {
+  id: string;
+  position: string;
+  title: string;
+  description: string;
+  is_public: boolean;
+};
+
 const PRESET_COLOURS = [
   "Red",
   "Blue",
@@ -49,6 +57,21 @@ function makeOffer(id: string, label = "", price = "", quantity = ""): OfferRow 
   };
 }
 
+function makePrize(
+  id: string,
+  position = "1",
+  title = "",
+  description = "",
+): PrizeRow {
+  return {
+    id,
+    position,
+    title,
+    description,
+    is_public: true,
+  };
+}
+
 function toInt(value: string, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
@@ -66,12 +89,19 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   const [startNumber, setStartNumber] = useState("1");
   const [endNumber, setEndNumber] = useState("10");
 
-  const [selectedColours, setSelectedColours] = useState<string[]>(["Red", "Blue"]);
+  const [selectedColours, setSelectedColours] = useState<string[]>([
+    "Red",
+    "Blue",
+  ]);
   const [customColour, setCustomColour] = useState("");
 
   const [offers, setOffers] = useState<OfferRow[]>([
     makeOffer("offer-1", "3 for 12", "12", "3"),
     makeOffer("offer-2", "5 for 18", "18", "5"),
+  ]);
+
+  const [prizes, setPrizes] = useState<PrizeRow[]>([
+    makePrize("prize-1", "1", "", ""),
   ]);
 
   useEffect(() => {
@@ -103,6 +133,31 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
     return JSON.stringify(clean);
   }, [offers]);
+
+  const prizesValue = useMemo(() => {
+    const clean = prizes
+      .map((prize, index) => {
+        const position = Number(prize.position);
+
+        return {
+          id: prize.id,
+          position:
+            Number.isFinite(position) && position > 0
+              ? Math.floor(position)
+              : index + 1,
+          title: prize.title.trim(),
+          name: prize.title.trim(),
+          description: prize.description.trim(),
+          isPublic: Boolean(prize.is_public),
+          is_public: Boolean(prize.is_public),
+          sortOrder: index,
+          sort_order: index,
+        };
+      })
+      .filter((prize) => prize.title);
+
+    return JSON.stringify(clean);
+  }, [prizes]);
 
   const numbersPerColour = useMemo(() => {
     const start = toInt(startNumber, 1);
@@ -147,6 +202,23 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
   function removeOffer(id: string) {
     setOffers((current) => current.filter((offer) => offer.id !== id));
+  }
+
+  function updatePrize(id: string, patch: Partial<PrizeRow>) {
+    setPrizes((current) =>
+      current.map((prize) => (prize.id === id ? { ...prize, ...patch } : prize)),
+    );
+  }
+
+  function addPrize() {
+    setPrizes((current) => [
+      ...current,
+      makePrize(`prize-${crypto.randomUUID()}`, String(current.length + 1)),
+    ]);
+  }
+
+  function removePrize(id: string) {
+    setPrizes((current) => current.filter((prize) => prize.id !== id));
   }
 
   async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -197,6 +269,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
       <input type="hidden" name="image_url" value={imageUrl} />
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
+      <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="total_tickets" value={String(totalTickets)} />
 
       <label>
@@ -517,6 +590,123 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           Offers are saved automatically from the rows above.
         </div>
       </div>
+
+      <section
+        style={{
+          display: "grid",
+          gap: 12,
+          padding: 16,
+          borderRadius: 12,
+          border: "1px solid #e2e8f0",
+          background: "#fff",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>Prize Settings</div>
+          <div style={{ color: "#64748b", fontSize: 13 }}>
+            Choose what prizes are visible on the public raffle page.
+          </div>
+        </div>
+
+        {prizes.map((prize) => (
+          <div
+            key={prize.id}
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: 12,
+              border: "1px solid #e2e8f0",
+              borderRadius: 10,
+              background: "#f8fafc",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "90px 1fr auto",
+                gap: 10,
+                alignItems: "end",
+              }}
+            >
+              <label style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "#64748b" }}>Position</span>
+                <input
+                  value={prize.position}
+                  onChange={(e) => updatePrize(prize.id, { position: e.target.value })}
+                  type="number"
+                  min="1"
+                  step="1"
+                  style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1" }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "#64748b" }}>Prize title</span>
+                <input
+                  value={prize.title}
+                  onChange={(e) => updatePrize(prize.id, { title: e.target.value })}
+                  placeholder="Prize title"
+                  style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1" }}
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => removePrize(prize.id)}
+                disabled={prizes.length <= 1}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #fecaca",
+                  background: "#fff",
+                  color: "#b91c1c",
+                  cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                  opacity: prizes.length <= 1 ? 0.6 : 1,
+                }}
+              >
+                Remove
+              </button>
+            </div>
+
+            <label style={{ display: "grid", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "#64748b" }}>
+                Description optional
+              </span>
+              <textarea
+                value={prize.description}
+                onChange={(e) => updatePrize(prize.id, { description: e.target.value })}
+                rows={2}
+                style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1" }}
+              />
+            </label>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
+              <input
+                type="checkbox"
+                checked={prize.is_public}
+                onChange={(e) => updatePrize(prize.id, { is_public: e.target.checked })}
+              />
+              Show this prize on public page
+            </label>
+          </div>
+        ))}
+
+        <button
+          type="button"
+          onClick={addPrize}
+          style={{
+            width: "fit-content",
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            background: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          Add prize
+        </button>
+      </section>
 
       <label>
         <div style={{ marginBottom: 6 }}>Status</div>
