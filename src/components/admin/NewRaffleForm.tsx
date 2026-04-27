@@ -37,6 +37,14 @@ const PRESET_COLOURS = [
   "Silver",
 ];
 
+const IMAGE_POSITIONS = [
+  { value: "center", label: "Center" },
+  { value: "top", label: "Top" },
+  { value: "bottom", label: "Bottom" },
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+];
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -83,6 +91,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   const [slugEdited, setSlugEdited] = useState(false);
 
   const [imageUrl, setImageUrl] = useState("");
+  const [imagePosition, setImagePosition] = useState("center");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
@@ -110,7 +119,10 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     }
   }, [title, slugEdited]);
 
-  const coloursValue = useMemo(() => selectedColours.join(","), [selectedColours]);
+  const coloursValue = useMemo(
+    () => selectedColours.join(","),
+    [selectedColours],
+  );
 
   const offersValue = useMemo(() => {
     const clean = offers
@@ -267,6 +279,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     >
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
       <input type="hidden" name="image_url" value={imageUrl} />
+      <input type="hidden" name="image_position" value={imagePosition} />
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
       <input type="hidden" name="prizes" value={prizesValue} />
@@ -357,6 +370,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                 width: 180,
                 height: 180,
                 objectFit: "cover",
+                objectPosition: imagePosition,
                 borderRadius: 12,
                 border: "1px solid #e2e8f0",
               }}
@@ -370,6 +384,21 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             placeholder="Or paste image URL"
           />
         )}
+
+        <label>
+          <div style={{ marginBottom: 6 }}>Image focus</div>
+          <select
+            value={imagePosition}
+            onChange={(e) => setImagePosition(e.target.value)}
+            style={{ width: "100%", padding: 12 }}
+          >
+            {IMAGE_POSITIONS.map((position) => (
+              <option key={position.value} value={position.value}>
+                {position.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {uploadError ? (
           <div
