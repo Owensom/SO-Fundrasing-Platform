@@ -1,4 +1,4 @@
-/import PublicRafflePage from "@/components/PublicRafflePage";
+import PublicRafflePage from "@/components/PublicRafflePage";
 
 export const dynamic = "force-dynamic";
 
