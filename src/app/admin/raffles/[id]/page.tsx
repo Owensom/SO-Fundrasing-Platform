@@ -35,6 +35,14 @@ const PRESET_COLOURS = [
   "White",
 ];
 
+const IMAGE_POSITIONS = [
+  { value: "center", label: "Center" },
+  { value: "top", label: "Top" },
+  { value: "bottom", label: "Bottom" },
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+];
+
 function colourToText(colour: any) {
   if (typeof colour === "string") return colour;
   if (colour?.name) return colour.name;
@@ -64,6 +72,22 @@ function normaliseOfferForUI(offer: any, index: number) {
   };
 }
 
+function normaliseImagePosition(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
+  }
+
+  return "center";
+}
+
 export default async function AdminRafflePage({ params }: PageProps) {
   const { id } = await params;
 
@@ -74,6 +98,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
   if (!raffle) notFound();
 
   const config = (raffle.config_json as any) ?? {};
+  const imagePosition = normaliseImagePosition(config.image_position);
 
   const colours = Array.isArray(config.colours)
     ? config.colours.map(colourToText).filter(Boolean)
@@ -171,6 +196,21 @@ export default async function AdminRafflePage({ params }: PageProps) {
           </label>
 
           <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
+
+          <label>
+            Image focus
+            <select
+              name="image_position"
+              defaultValue={imagePosition}
+              style={{ display: "block", width: "100%", padding: 10 }}
+            >
+              {IMAGE_POSITIONS.map((position) => (
+                <option key={position.value} value={position.value}>
+                  {position.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label>
             Ticket price
