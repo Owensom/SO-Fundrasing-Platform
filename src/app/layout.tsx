@@ -27,6 +27,7 @@ export default function RootLayout({
             'Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
+        {/* HEADER */}
         <header
           style={{
             width: "100%",
@@ -38,29 +39,21 @@ export default function RootLayout({
             style={{
               maxWidth: "1200px",
               margin: "0 auto",
-              padding: "16px 24px",
+              padding: "20px 24px",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "center",
             }}
           >
-            <Link
-              href="/"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                textDecoration: "none",
-              }}
-              aria-label="SO Fundraising Platform home"
-            >
+            <Link href="/" aria-label="SO Fundraising Platform home">
               <Image
                 src="/brand/so-logo-full.png"
                 alt="SO Fundraising Platform"
-                width={360}
-                height={120}
+                width={420}
+                height={140}
                 priority
                 style={{
-                  height: "64px",
+                  height: "72px",
                   width: "auto",
                   objectFit: "contain",
                 }}
@@ -69,14 +62,16 @@ export default function RootLayout({
           </div>
         </header>
 
+        {/* MAIN CONTENT */}
         <main
           style={{
-            minHeight: "calc(100vh - 170px)",
+            minHeight: "calc(100vh - 180px)",
           }}
         >
           {children}
         </main>
 
+        {/* FOOTER */}
         <footer
           style={{
             borderTop: "1px solid #e5e7eb",
@@ -88,7 +83,7 @@ export default function RootLayout({
             style={{
               maxWidth: "1200px",
               margin: "0 auto",
-              padding: "22px 20px",
+              padding: "24px 20px",
               textAlign: "center",
               fontSize: "12px",
               color: "#607085",
