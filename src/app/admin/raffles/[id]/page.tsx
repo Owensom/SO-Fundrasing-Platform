@@ -15,6 +15,9 @@ export default async function AdminRafflePage({ params }: Props) {
   }
 
   const config = (raffle.config_json as any) || {};
+  const colours = config.colours || [];
+  const offers = config.offers || [];
+  const prizes = config.prizes || [];
 
   return (
     <form
@@ -28,17 +31,15 @@ export default async function AdminRafflePage({ params }: Props) {
         gap: 24,
       }}
     >
-      {/* --------------------------
-         HEADER (PUBLIC STYLE)
-      -------------------------- */}
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 16,
-          padding: 20,
-          background: "#ffffff",
-        }}
-      >
+      {/* ==========================
+         HEADER (KEEP THIS)
+      ========================== */}
+      <div style={{
+        border: "1px solid #e2e8f0",
+        borderRadius: 16,
+        padding: 20,
+        background: "#ffffff",
+      }}>
         {raffle.image_url ? (
           <img
             src={raffle.image_url}
@@ -52,127 +53,106 @@ export default async function AdminRafflePage({ params }: Props) {
             }}
           />
         ) : (
-          <div
-            style={{
-              height: 160,
-              background: "#f1f5f9",
-              borderRadius: 12,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#64748b",
-              marginBottom: 16,
-            }}
-          >
+          <div style={{
+            height: 160,
+            background: "#f1f5f9",
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#64748b",
+            marginBottom: 16,
+          }}>
             No image
           </div>
         )}
 
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontWeight: 600 }}>Title</label>
+          <input name="title" defaultValue={raffle.title || ""} />
+          <textarea name="description" defaultValue={raffle.description || ""} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
             <input
-              name="title"
-              defaultValue={raffle.title || ""}
-              style={{
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #e2e8f0",
-                fontSize: 18,
-                fontWeight: 600,
-              }}
+              name="ticket_price"
+              type="number"
+              step="0.01"
+              defaultValue={(raffle.ticket_price_cents || 0) / 100}
             />
+            <input name="startNumber" type="number" defaultValue={config.startNumber || 1} />
+            <input name="endNumber" type="number" defaultValue={config.endNumber || 100} />
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontWeight: 600 }}>Description</label>
-            <textarea
-              name="description"
-              defaultValue={raffle.description || ""}
-              style={{
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #e2e8f0",
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 16,
-            }}
-          >
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={{ fontWeight: 600 }}>Ticket price</label>
-              <input
-                name="ticket_price"
-                type="number"
-                step="0.01"
-                defaultValue={(raffle.ticket_price_cents || 0) / 100}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={{ fontWeight: 600 }}>Start number</label>
-              <input
-                name="startNumber"
-                type="number"
-                defaultValue={config.startNumber || 1}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={{ fontWeight: 600 }}>End number</label>
-              <input
-                name="endNumber"
-                type="number"
-                defaultValue={config.endNumber || 100}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontWeight: 600 }}>Image URL</label>
-            <input
-              name="image_url"
-              defaultValue={raffle.image_url || ""}
-              style={{
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #e2e8f0",
-              }}
-            />
-          </div>
+          <input name="image_url" defaultValue={raffle.image_url || ""} />
         </div>
       </div>
 
-      {/* --------------------------
+      {/* ==========================
+         COLOURS (RESTORED)
+      ========================== */}
+      <div>
+        <h3>Colours</h3>
+        <input
+          name="custom_colours"
+          defaultValue={colours.map((c: any) => c.hex || c).join(",")}
+          style={{ width: "100%" }}
+        />
+      </div>
+
+      {/* ==========================
+         OFFERS (RESTORED)
+      ========================== */}
+      <div>
+        <h3>Offers</h3>
+
+        <input type="hidden" name="offer_count" value={offers.length} />
+
+        {offers.map((offer: any, i: number) => (
+          <div key={i} style={{ display: "flex", gap: 10 }}>
+            <input
+              name={`offer_quantity_${i}`}
+              defaultValue={offer.quantity}
+              placeholder="Qty"
+            />
+            <input
+              name={`offer_price_${i}`}
+              defaultValue={offer.price}
+              placeholder="Price"
+            />
+            <input
+              type="hidden"
+              name={`offer_active_${i}`}
+              value={offer.isActive ? "true" : "false"}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* ==========================
+         PRIZES (RESTORED)
+      ========================== */}
+      <div>
+        <h3>Prizes</h3>
+
+        {prizes.map((prize: any, i: number) => (
+          <div key={i}>
+            <input
+              name={`prize_title_${i}`}
+              defaultValue={prize.title || ""}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* ==========================
          HIDDEN FIELDS
-      -------------------------- */}
+      ========================== */}
       <input type="hidden" name="slug" defaultValue={raffle.slug || ""} />
       <input type="hidden" name="currency" defaultValue={raffle.currency || "GBP"} />
       <input type="hidden" name="status" defaultValue={raffle.status || "draft"} />
 
-      {/* --------------------------
-         SAVE BUTTON
-      -------------------------- */}
+      {/* ==========================
+         SAVE
+      ========================== */}
       <button
         type="submit"
         style={{
@@ -182,8 +162,6 @@ export default async function AdminRafflePage({ params }: Props) {
           border: "none",
           borderRadius: 12,
           fontWeight: 700,
-          fontSize: 16,
-          cursor: "pointer",
         }}
       >
         Save Changes
