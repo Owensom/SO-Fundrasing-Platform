@@ -50,7 +50,7 @@ type SafeRaffle = {
   title: string;
   description: string;
   imageUrl: string;
-  imagePosition?: string;
+  imagePosition: string;
   tenantSlug: string;
   startNumber: number;
   endNumber: number;
@@ -95,10 +95,10 @@ function ordinal(position: number) {
     position % 10 === 1 && position % 100 !== 11
       ? "st"
       : position % 10 === 2 && position % 100 !== 12
-      ? "nd"
-      : position % 10 === 3 && position % 100 !== 13
-      ? "rd"
-      : "th";
+        ? "nd"
+        : position % 10 === 3 && position % 100 !== 13
+          ? "rd"
+          : "th";
 
   return `${position}${suffix}`;
 }
@@ -111,141 +111,25 @@ function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
   return "draft";
 }
 
-function toSafeRaffle(input: any): SafeRaffle {
-  const raw = input ?? {};
-  const config = raw.config_json ?? {};
-  const colours = Array.isArray(raw.colours) ? raw.colours : [];
-  const offers = Array.isArray(raw.offers) ? raw.offers : [];
-  const prizes = Array.isArray(raw.prizes) ? raw.prizes : [];
-  const reservedTickets = Array.isArray(raw.reservedTickets) ? raw.reservedTickets : [];
-  const soldTickets = Array.isArray(raw.soldTickets) ? raw.soldTickets : [];
-  const winners = Array.isArray(raw.winners) ? raw.winners : [];
+function normaliseImagePosition(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
 
-  const startNumber = Number(raw.startNumber);
-  const endNumber = Number(raw.endNumber);
-  const rawWinnerTicketNumber = raw.winnerTicketNumber ?? raw.winner_ticket_number;
-  const winnerTicketNumber = Number(rawWinnerTicketNumber);
-
-  return {
-    id: String(raw.id ?? ""),
-    slug: String(raw.slug ?? ""),
-    title: String(raw.title ?? "Raffle"),
-    description: String(raw.description ?? ""),
-    imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
-    imagePosition: String(
-      raw.imagePosition ??
-        raw.image_position ??
-        config.image_position ??
-        "center",
-    ),
-    tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
-    startNumber: Number.isFinite(startNumber) ? startNumber : 1,
-    endNumber: Number.isFinite(endNumber) ? endNumber : 1,
-    currency: String(raw.currency ?? "GBP"),
-    ticketPrice: Number.isFinite(Number(raw.ticketPrice)) ? Number(raw.ticketPrice) : 0,
-    status: normaliseFrontendStatus(raw.status),
-    colours: colours.map((c: any, index: number) => ({
-      id: String(c?.id ?? `colour-${index}`),
-      name: String(c?.name ?? c ?? `Colour ${index + 1}`),
-      hex: c?.hex ? String(c.hex) : null,
-      sortOrder: Number.isFinite(Number(c?.sortOrder)) ? Number(c.sortOrder) : index,
-    })),
-    offers: offers.map((o: any, index: number) => ({
-      id: String(o?.id ?? `offer-${index}`),
-      label: String(o?.label ?? `Offer ${index + 1}`),
-      quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
-      price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
-      isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
-      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
-        ? Number(o?.sortOrder ?? o?.sort_order)
-        : index,
-    })),
-    prizes: prizes
-      .map((p: any, index: number) => ({
-        position: Number.isFinite(Number(p?.position)) ? Number(p.position) : index + 1,
-        title: String(p?.title ?? ""),
-        description: String(p?.description ?? ""),
-        isPublic: p?.isPublic !== false,
-      }))
-      .filter((p: RafflePrize) => p.title.trim().length > 0 && p.isPublic)
-      .sort((a: RafflePrize, b: RafflePrize) => a.position - b.position),
-    reservedTickets: reservedTickets.map((t: any) => ({
-      colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
-    })),
-    soldTickets: soldTickets.map((t: any) => ({
-      colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
-    })),
-    winnerTicketNumber: Number.isFinite(winnerTicketNumber) ? winnerTicketNumber : null,
-    winnerColour:
-      raw.winnerColour ?? raw.winner_colour
-        ? String(raw.winnerColour ?? raw.winner_colour)
-        : null,
-    drawnAt:
-      raw.drawnAt ?? raw.drawn_at
-        ? String(raw.drawnAt ?? raw.drawn_at)
-        : null,
-    winners: winners.map((winner: any) => ({
-      prizePosition: Number(winner.prizePosition ?? winner.prize_position ?? 1),
-      ticketNumber: Number(winner.ticketNumber ?? winner.ticket_number ?? 0),
-      colour:
-        winner.colour != null && String(winner.colour).trim()
-          ? String(winner.colour)
-          : null,
-      buyerName:
-        winner.buyerName ?? winner.buyer_name
-          ? String(winner.buyerName ?? winner.buyer_name)
-          : null,
-      drawnAt:
-        winner.drawnAt ?? winner.drawn_at
-          ? String(winner.drawnAt ?? winner.drawn_at)
-          : null,
-    })),
-  };
-}
-function formatCurrency(value: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: currency || "GBP",
-    }).format(Number.isFinite(value) ? value : 0);
-  } catch {
-    return `${currency || "GBP"} ${(Number.isFinite(value) ? value : 0).toFixed(2)}`;
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
   }
+
+  return "center";
 }
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-function ordinal(position: number) {
-  const suffix =
-    position % 10 === 1 && position % 100 !== 11
-      ? "st"
-      : position % 10 === 2 && position % 100 !== 12
-      ? "nd"
-      : position % 10 === 3 && position % 100 !== 13
-      ? "rd"
-      : "th";
-
-  return `${position}${suffix}`;
-}
-
-function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
-  const status = String(rawStatus ?? "").trim().toLowerCase();
-  if (status === "published") return "published";
-  if (status === "drawn") return "drawn";
-  if (status === "closed") return "closed";
-  return "draft";
-}
-
 function toSafeRaffle(input: any): SafeRaffle {
   const raw = input ?? {};
   const config = raw.config_json ?? {};
+
   const colours = Array.isArray(raw.colours) ? raw.colours : [];
   const offers = Array.isArray(raw.offers) ? raw.offers : [];
   const prizes = Array.isArray(raw.prizes) ? raw.prizes : [];
@@ -255,7 +139,10 @@ function toSafeRaffle(input: any): SafeRaffle {
 
   const startNumber = Number(raw.startNumber);
   const endNumber = Number(raw.endNumber);
-  const rawWinnerTicketNumber = raw.winnerTicketNumber ?? raw.winner_ticket_number;
+
+  const rawWinnerTicketNumber =
+    raw.winnerTicketNumber ?? raw.winner_ticket_number;
+
   const winnerTicketNumber = Number(rawWinnerTicketNumber);
 
   return {
@@ -264,74 +151,124 @@ function toSafeRaffle(input: any): SafeRaffle {
     title: String(raw.title ?? "Raffle"),
     description: String(raw.description ?? ""),
     imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
-    imagePosition: String(
+
+    // ✅ KEY FIX (pull from ALL possible sources)
+    imagePosition: normaliseImagePosition(
       raw.imagePosition ??
-        raw.image_position ??
-        config.image_position ??
-        "center",
+      raw.image_position ??
+      config.image_position
     ),
+
     tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
     startNumber: Number.isFinite(startNumber) ? startNumber : 1,
     endNumber: Number.isFinite(endNumber) ? endNumber : 1,
     currency: String(raw.currency ?? "GBP"),
-    ticketPrice: Number.isFinite(Number(raw.ticketPrice)) ? Number(raw.ticketPrice) : 0,
+    ticketPrice: Number.isFinite(Number(raw.ticketPrice))
+      ? Number(raw.ticketPrice)
+      : 0,
     status: normaliseFrontendStatus(raw.status),
+
     colours: colours.map((c: any, index: number) => ({
       id: String(c?.id ?? `colour-${index}`),
       name: String(c?.name ?? c ?? `Colour ${index + 1}`),
       hex: c?.hex ? String(c.hex) : null,
-      sortOrder: Number.isFinite(Number(c?.sortOrder)) ? Number(c.sortOrder) : index,
+      sortOrder: Number.isFinite(Number(c?.sortOrder))
+        ? Number(c.sortOrder)
+        : index,
     })),
+
     offers: offers.map((o: any, index: number) => ({
       id: String(o?.id ?? `offer-${index}`),
       label: String(o?.label ?? `Offer ${index + 1}`),
-      quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
-      price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
+      quantity: Number.isFinite(Number(o?.quantity))
+        ? Number(o.quantity)
+        : 0,
+      price: Number.isFinite(Number(o?.price))
+        ? Number(o.price)
+        : 0,
       isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
-      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
+      sortOrder: Number.isFinite(
+        Number(o?.sortOrder ?? o?.sort_order)
+      )
         ? Number(o?.sortOrder ?? o?.sort_order)
         : index,
     })),
+
     prizes: prizes
       .map((p: any, index: number) => ({
-        position: Number.isFinite(Number(p?.position)) ? Number(p.position) : index + 1,
+        position: Number.isFinite(Number(p?.position))
+          ? Number(p.position)
+          : index + 1,
         title: String(p?.title ?? ""),
         description: String(p?.description ?? ""),
         isPublic: p?.isPublic !== false,
       }))
-      .filter((p: RafflePrize) => p.title.trim().length > 0 && p.isPublic)
-      .sort((a: RafflePrize, b: RafflePrize) => a.position - b.position),
+      .filter(
+        (p: RafflePrize) =>
+          p.title.trim().length > 0 && p.isPublic
+      )
+      .sort(
+        (a: RafflePrize, b: RafflePrize) =>
+          a.position - b.position
+      ),
+
     reservedTickets: reservedTickets.map((t: any) => ({
       colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+      number: Number.isFinite(Number(t?.number))
+        ? Number(t.number)
+        : 0,
     })),
+
     soldTickets: soldTickets.map((t: any) => ({
       colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+      number: Number.isFinite(Number(t?.number))
+        ? Number(t.number)
+        : 0,
     })),
-    winnerTicketNumber: Number.isFinite(winnerTicketNumber) ? winnerTicketNumber : null,
+
+    winnerTicketNumber: Number.isFinite(winnerTicketNumber)
+      ? winnerTicketNumber
+      : null,
+
     winnerColour:
       raw.winnerColour ?? raw.winner_colour
         ? String(raw.winnerColour ?? raw.winner_colour)
         : null,
+
     drawnAt:
       raw.drawnAt ?? raw.drawn_at
         ? String(raw.drawnAt ?? raw.drawn_at)
         : null,
+
     winners: winners.map((winner: any) => ({
-      prizePosition: Number(winner.prizePosition ?? winner.prize_position ?? 1),
-      ticketNumber: Number(winner.ticketNumber ?? winner.ticket_number ?? 0),
+      prizePosition: Number(
+        winner.prizePosition ??
+        winner.prize_position ??
+        1
+      ),
+      ticketNumber: Number(
+        winner.ticketNumber ??
+        winner.ticket_number ??
+        0
+      ),
       colour:
-        winner.colour != null && String(winner.colour).trim()
+        winner.colour != null &&
+        String(winner.colour).trim()
           ? String(winner.colour)
           : null,
       buyerName:
         winner.buyerName ?? winner.buyer_name
-          ? String(winner.buyerName ?? winner.buyer_name)
+          ? String(
+              winner.buyerName ??
+              winner.buyer_name
+            )
           : null,
       drawnAt:
         winner.drawnAt ?? winner.drawn_at
-          ? String(winner.drawnAt ?? winner.drawn_at)
+          ? String(
+              winner.drawnAt ??
+              winner.drawn_at
+            )
           : null,
     })),
   };
@@ -378,7 +315,7 @@ function calculateBestPrice(quantity: number, ticketPrice: number, offers: Raffl
           total: candidateTotal,
           appliedOffers: existing
             ? previous.appliedOffers.map((item) =>
-                item.label === offer.label ? { ...item, times: item.times + 1 } : item
+                item.label === offer.label ? { ...item, times: item.times + 1 } : item,
               )
             : [
                 ...previous.appliedOffers,
@@ -523,8 +460,7 @@ export default function PublicRafflePage({ slug }: Props) {
       cancelled = true;
     };
   }, [slug]);
-
-  const availability = useMemo(() => {
+    const availability = useMemo(() => {
     const sold = new Set<string>();
     const reserved = new Set<string>();
 
@@ -707,7 +643,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
     autoSelectTicketQuantity(autoQuantity);
   }
-    async function reserveTickets() {
+
+  async function reserveTickets() {
     if (!raffle || !canReserve) return;
 
     try {
@@ -845,8 +782,7 @@ export default function PublicRafflePage({ slug }: Props) {
           <div>Status: {raffle.status}</div>
           <div>Available now: {availableCount}</div>
         </div>
-
-        {raffle.prizes.length > 0 ? (
+                {raffle.prizes.length > 0 ? (
           <section style={styles.prizesBox}>
             <div style={styles.prizesTitle}>Prizes</div>
 
@@ -1004,7 +940,8 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
           </section>
         ) : null}
-                <h2 style={styles.heading}>Choose colour</h2>
+
+        <h2 style={styles.heading}>Choose colour</h2>
         <div style={styles.colourRow}>
           {raffle.colours.length === 0 ? (
             <div style={styles.notice}>No colours configured.</div>
@@ -1084,8 +1021,7 @@ export default function PublicRafflePage({ slug }: Props) {
             ))}
           </div>
         )}
-
-        <div style={styles.totalBox}>
+                <div style={styles.totalBox}>
           <div>Tickets: {pricing.quantity}</div>
           <div>Standard total: {formatCurrency(pricing.standardTotal, raffle.currency)}</div>
           <div>Ticket total: {formatCurrency(pricing.total, raffle.currency)}</div>
