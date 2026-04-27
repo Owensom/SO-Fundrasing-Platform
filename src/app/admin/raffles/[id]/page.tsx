@@ -20,24 +20,29 @@ export default async function AdminRafflePage({ params }: Props) {
     <form
       action={`/api/admin/raffles/${raffle.id}`}
       method="POST"
-      style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}
+      style={{
+        maxWidth: 1000,
+        margin: "40px auto",
+        padding: 16,
+        display: "grid",
+        gap: 24,
+      }}
     >
       {/* --------------------------
-         PUBLIC-STYLE HEADER PREVIEW
+         HEADER (PUBLIC STYLE)
       -------------------------- */}
       <div
         style={{
           border: "1px solid #e2e8f0",
           borderRadius: 16,
           padding: 20,
-          marginBottom: 24,
           background: "#ffffff",
         }}
       >
         {raffle.image_url ? (
           <img
             src={raffle.image_url}
-            alt={raffle.title}
+            alt={raffle.title || ""}
             style={{
               width: "100%",
               maxHeight: 260,
@@ -63,111 +68,121 @@ export default async function AdminRafflePage({ params }: Props) {
           </div>
         )}
 
-        <input
-          name="title"
-          defaultValue={raffle.title}
-          placeholder="Raffle title"
-          style={{
-            width: "100%",
-            fontSize: 24,
-            fontWeight: 700,
-            border: "none",
-            marginBottom: 8,
-          }}
-        />
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gap: 6 }}>
+            <label style={{ fontWeight: 600 }}>Title</label>
+            <input
+              name="title"
+              defaultValue={raffle.title || ""}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #e2e8f0",
+                fontSize: 18,
+                fontWeight: 600,
+              }}
+            />
+          </div>
 
-        <textarea
-          name="description"
-          defaultValue={raffle.description}
-          placeholder="Description"
-          style={{
-            width: "100%",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            padding: 10,
-            marginBottom: 12,
-          }}
-        />
+          <div style={{ display: "grid", gap: 6 }}>
+            <label style={{ fontWeight: 600 }}>Description</label>
+            <textarea
+              name="description"
+              defaultValue={raffle.description || ""}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #e2e8f0",
+              }}
+            />
+          </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 12,
-          }}
-        >
-          <input
-            name="ticket_price"
-            defaultValue={(raffle.ticket_price_cents || 0) / 100}
-            placeholder="Price"
-            type="number"
-            step="0.01"
+          <div
             style={{
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e2e8f0",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 16,
             }}
-          />
+          >
+            <div style={{ display: "grid", gap: 6 }}>
+              <label style={{ fontWeight: 600 }}>Ticket price</label>
+              <input
+                name="ticket_price"
+                type="number"
+                step="0.01"
+                defaultValue={(raffle.ticket_price_cents || 0) / 100}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #e2e8f0",
+                }}
+              />
+            </div>
 
-          <input
-            name="startNumber"
-            defaultValue={config.startNumber || 1}
-            placeholder="Start"
-            type="number"
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e2e8f0",
-            }}
-          />
+            <div style={{ display: "grid", gap: 6 }}>
+              <label style={{ fontWeight: 600 }}>Start number</label>
+              <input
+                name="startNumber"
+                type="number"
+                defaultValue={config.startNumber || 1}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #e2e8f0",
+                }}
+              />
+            </div>
 
-          <input
-            name="endNumber"
-            defaultValue={config.endNumber || 100}
-            placeholder="End"
-            type="number"
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e2e8f0",
-            }}
-          />
+            <div style={{ display: "grid", gap: 6 }}>
+              <label style={{ fontWeight: 600 }}>End number</label>
+              <input
+                name="endNumber"
+                type="number"
+                defaultValue={config.endNumber || 100}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #e2e8f0",
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <label style={{ fontWeight: 600 }}>Image URL</label>
+            <input
+              name="image_url"
+              defaultValue={raffle.image_url || ""}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #e2e8f0",
+              }}
+            />
+          </div>
         </div>
-
-        <input
-          name="image_url"
-          defaultValue={raffle.image_url}
-          placeholder="Image URL"
-          style={{
-            width: "100%",
-            padding: 8,
-            borderRadius: 8,
-            border: "1px solid #e2e8f0",
-          }}
-        />
       </div>
 
       {/* --------------------------
-         KEEP EXISTING ADMIN LOGIC
+         HIDDEN FIELDS
       -------------------------- */}
+      <input type="hidden" name="slug" defaultValue={raffle.slug || ""} />
+      <input type="hidden" name="currency" defaultValue={raffle.currency || "GBP"} />
+      <input type="hidden" name="status" defaultValue={raffle.status || "draft"} />
 
-      {/* Hidden fields (important) */}
-      <input type="hidden" name="slug" defaultValue={raffle.slug} />
-      <input type="hidden" name="currency" defaultValue={raffle.currency} />
-      <input type="hidden" name="status" defaultValue={raffle.status} />
-
-      {/* Submit */}
+      {/* --------------------------
+         SAVE BUTTON
+      -------------------------- */}
       <button
         type="submit"
         style={{
-          marginTop: 20,
-          padding: "12px 20px",
+          padding: "14px 20px",
           background: "#16a34a",
           color: "#fff",
           border: "none",
-          borderRadius: 10,
+          borderRadius: 12,
           fontWeight: 700,
+          fontSize: 16,
           cursor: "pointer",
         }}
       >
