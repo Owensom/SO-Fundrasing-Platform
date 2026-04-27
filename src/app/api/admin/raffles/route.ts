@@ -39,6 +39,22 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function normaliseImagePosition(value: string) {
+  const clean = value.trim().toLowerCase();
+
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
+  }
+
+  return "center";
+}
+
 export async function GET(request: NextRequest) {
   const tenantSlug = getTenantSlugFromRequest(request);
 
@@ -86,6 +102,9 @@ export async function POST(request: NextRequest) {
     const slug = slugify(rawSlug || title);
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
+    const image_position = normaliseImagePosition(
+      String(formData.get("image_position") ?? "center"),
+    );
     const currency = String(formData.get("currency") ?? "EUR").trim();
     const status = String(formData.get("status") ?? "draft").trim();
 
@@ -124,6 +143,7 @@ export async function POST(request: NextRequest) {
       slug,
       description,
       image_url,
+      image_position,
       currency: currency as "GBP" | "USD" | "EUR",
       ticket_price,
       total_tickets,
