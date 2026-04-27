@@ -19,6 +19,7 @@ type DbRaffleRow = {
   config_json: {
     startNumber?: number;
     endNumber?: number;
+    image_position?: string;
     colours?: unknown[];
     offers?: unknown[];
     prizes?: unknown[];
@@ -40,6 +41,22 @@ type WinnerRow = {
   buyer_name: string | null;
   drawn_at: string | null;
 };
+
+function normalizeImagePosition(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
+  }
+
+  return "center";
+}
 
 function normalizeColourItem(value: unknown, index: number) {
   if (typeof value === "string") {
@@ -147,7 +164,7 @@ function normalizePrizeItem(value: unknown, index: number) {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: { slug: string } },
 ) {
   try {
     const raffleRows = await query<DbRaffleRow>(
@@ -157,19 +174,20 @@ export async function GET(
       where slug = $1
       limit 1
       `,
-      [params.slug]
+      [params.slug],
     );
 
     if (!raffleRows.length) {
       return NextResponse.json(
         { ok: false, error: "Not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     const raffle = raffleRows[0];
     const raffleId = raffle.id;
     const config = raffle.config_json ?? {};
+    const imagePosition = normalizeImagePosition(config.image_position);
 
     const sold = await query<TicketRow>(
       `
@@ -178,7 +196,7 @@ export async function GET(
       where raffle_id = $1
       order by ticket_number asc
       `,
-      [raffleId]
+      [raffleId],
     );
 
     const reserved = await query<TicketRow>(
@@ -190,7 +208,7 @@ export async function GET(
         and expires_at > now()
       order by ticket_number asc
       `,
-      [raffleId]
+      [raffleId],
     );
 
     const winners = await query<WinnerRow>(
@@ -205,7 +223,7 @@ export async function GET(
       where raffle_id = $1
       order by prize_position asc
       `,
-      [raffleId]
+      [raffleId],
     );
 
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
@@ -228,6 +246,9 @@ export async function GET(
         description: raffle.description ?? "",
         imageUrl: raffle.image_url ?? "",
         image_url: raffle.image_url ?? "",
+        imagePosition,
+        image_position: imagePosition,
+        config_json: config,
         currency: raffle.currency ?? "GBP",
         ticketPrice: Number(raffle.ticket_price_cents ?? 0) / 100,
         totalTickets: Number(raffle.total_tickets ?? 0),
@@ -269,7 +290,7 @@ export async function GET(
         ok: false,
         error: error?.message || "Internal server error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
