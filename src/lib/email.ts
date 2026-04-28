@@ -202,7 +202,7 @@ async function sendEmail(params: {
 
   const fromEmail =
     process.env.RESEND_FROM_EMAIL?.trim() ||
-    "noreply@send.sofundraising.it.com";
+    "noreply@sofundraising.it.com";
 
   if (!process.env.RESEND_API_KEY) {
     throw new Error("Missing RESEND_API_KEY");
