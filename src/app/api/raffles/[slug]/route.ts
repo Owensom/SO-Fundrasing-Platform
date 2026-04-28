@@ -11,6 +11,7 @@ type DbRaffleRow = {
   title: string;
   description: string | null;
   image_url: string | null;
+  draw_at: string | null;
   currency: string | null;
   ticket_price_cents: number | null;
   total_tickets: number | null;
@@ -88,9 +89,7 @@ function normalizeColourItem(value: unknown, index: number) {
           : `colour-${index}`,
       name,
       hex:
-        typeof row.hex === "string" && row.hex.trim()
-          ? row.hex.trim()
-          : null,
+        typeof row.hex === "string" && row.hex.trim() ? row.hex.trim() : null,
       sortOrder: Number(row.sortOrder ?? row.sort_order ?? index) || index,
     };
   }
@@ -139,9 +138,7 @@ function normalizePrizeItem(value: unknown, index: number) {
   const row = value as Record<string, unknown>;
 
   const title =
-    typeof row.title === "string" && row.title.trim()
-      ? row.title.trim()
-      : "";
+    typeof row.title === "string" && row.title.trim() ? row.title.trim() : "";
 
   if (!title) return null;
 
@@ -246,6 +243,8 @@ export async function GET(
         description: raffle.description ?? "",
         imageUrl: raffle.image_url ?? "",
         image_url: raffle.image_url ?? "",
+        drawAt: raffle.draw_at ?? null,
+        draw_at: raffle.draw_at ?? null,
         imagePosition,
         image_position: imagePosition,
         config_json: config,
