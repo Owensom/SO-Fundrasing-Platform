@@ -7,6 +7,9 @@ type PageProps = {
   params: Promise<{
     tenantSlug: string;
   }>;
+  searchParams?: {
+    adminReturn?: string;
+  };
 };
 
 type Campaign = {
@@ -32,8 +35,19 @@ function getTypeLabel(type: Campaign["type"]) {
   return "Event";
 }
 
-export default async function TenantCampaignsPage({ params }: PageProps) {
+function getSafeAdminReturn(value?: string) {
+  if (!value) return "";
+  if (value.startsWith("/admin/")) return value;
+  return "";
+}
+
+export default async function TenantCampaignsPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { tenantSlug } = await params;
+
+  const adminReturn = getSafeAdminReturn(searchParams?.adminReturn);
 
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
 
@@ -44,6 +58,15 @@ export default async function TenantCampaignsPage({ params }: PageProps) {
   return (
     <main style={styles.page}>
       <section style={styles.header}>
+        {/* ✅ NEW: admin back button */}
+        {adminReturn ? (
+          <div style={{ marginBottom: 16 }}>
+            <Link href={adminReturn} style={styles.adminBack}>
+              ← Back to admin raffles
+            </Link>
+          </div>
+        ) : null}
+
         <div style={styles.badge}>Fundraising campaigns</div>
 
         <h1 style={styles.title}>Active Campaigns</h1>
@@ -116,6 +139,16 @@ const styles: Record<string, React.CSSProperties> = {
   header: {
     maxWidth: 1100,
     margin: "0 auto 24px",
+  },
+  adminBack: {
+    display: "inline-flex",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
   },
   badge: {
     display: "inline-flex",
