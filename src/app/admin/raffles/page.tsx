@@ -140,7 +140,10 @@ export default async function AdminRafflesPage() {
 
   const totalRaffles = raffles.length;
   const publishedCount = raffles.filter((r) => r.status === "published").length;
-  const totalSold = raffles.reduce((sum, r) => sum + Number(r.sold_tickets || 0), 0);
+  const totalSold = raffles.reduce(
+    (sum, r) => sum + Number(r.sold_tickets || 0),
+    0,
+  );
   const totalRemaining = raffles.reduce(
     (sum, r) => sum + Number(r.remaining_tickets || 0),
     0,
@@ -199,23 +202,15 @@ export default async function AdminRafflesPage() {
           </p>
         </div>
 
-        <Link
-          href="/admin/raffles/new"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "13px 18px",
-            borderRadius: 9999,
-            background: "#1683f8",
-            color: "#fff",
-            textDecoration: "none",
-            fontWeight: 800,
-            boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-          }}
-        >
-          + Create raffle
-        </Link>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Link href="/raffles" target="_blank" style={styles.topSecondaryLink}>
+            Public raffles page
+          </Link>
+
+          <Link href="/admin/raffles/new" style={styles.createLink}>
+            + Create raffle
+          </Link>
+        </div>
       </section>
 
       <section
@@ -393,19 +388,29 @@ export default async function AdminRafflesPage() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(130px, 1fr))",
                         gap: 10,
                         marginTop: 16,
                       }}
                     >
                       <InfoBlock
                         label="Price"
-                        value={formatCurrency(raffle.ticket_price, raffle.currency)}
+                        value={formatCurrency(
+                          raffle.ticket_price,
+                          raffle.currency,
+                        )}
                       />
-                      <InfoBlock label="Draw date" value={formatDrawDate(raffle.draw_at)} />
+                      <InfoBlock
+                        label="Draw date"
+                        value={formatDrawDate(raffle.draw_at)}
+                      />
                       <InfoBlock label="Total" value={raffle.total_tickets} />
                       <InfoBlock label="Sold" value={raffle.sold_tickets} />
-                      <InfoBlock label="Remaining" value={raffle.remaining_tickets} />
+                      <InfoBlock
+                        label="Remaining"
+                        value={raffle.remaining_tickets}
+                      />
                     </div>
 
                     <div style={{ marginTop: 16 }}>
@@ -459,11 +464,11 @@ export default async function AdminRafflesPage() {
                       </Link>
 
                       <Link
-                        href={`/r/${raffle.slug}`}
+                        href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
                         target="_blank"
                         style={styles.secondaryLink}
                       >
-                        View public page
+                        View campaign page
                       </Link>
                     </div>
                   </div>
@@ -534,6 +539,30 @@ function InfoBlock({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  createLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#1683f8",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: 800,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  topSecondaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
   primaryLink: {
     display: "inline-flex",
     alignItems: "center",
