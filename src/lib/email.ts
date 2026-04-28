@@ -44,6 +44,18 @@ function formatCurrency(amount: number, currency: string) {
   }
 }
 
+function formatDrawDate(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "full",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function colourDot(colour?: string | null) {
   if (!colour) return "";
 
@@ -61,6 +73,19 @@ function colourDot(colour?: string | null) {
       background:${isHex ? safeColour : "#94a3b8"};
       border:1px solid #cbd5e1;
     "></span>
+  `;
+}
+
+function renderInfoRow(label: string, value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return "";
+  }
+
+  return `
+    <p style="margin:0 0 10px;font-size:15px;color:#334155;">
+      <strong style="color:#0f172a;">${escapeHtml(label)}:</strong>
+      ${escapeHtml(value)}
+    </p>
   `;
 }
 
@@ -191,6 +216,7 @@ export async function sendReceiptEmail({
   currency,
   reservationToken,
   tickets,
+  drawAt,
   branding,
 }: {
   to: string;
@@ -200,9 +226,11 @@ export async function sendReceiptEmail({
   currency: string;
   reservationToken: string;
   tickets: Array<{ ticket_number: number; colour?: string | null }>;
+  drawAt?: string | null;
   branding?: EmailBranding;
 }) {
   const formattedAmount = formatCurrency(amountCents, currency);
+  const formattedDrawDate = formatDrawDate(drawAt);
 
   const ticketItems = tickets
     .map((ticket) => {
@@ -231,7 +259,9 @@ export async function sendReceiptEmail({
     branding,
     eyebrow: "Ticket confirmation",
     heading: "Payment successful",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your raffle tickets are confirmed below.`,
+    intro: `Hi ${
+      name || "there"
+    }, thank you for your purchase. Your raffle tickets are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -240,15 +270,9 @@ export async function sendReceiptEmail({
         margin:20px 0;
         background:#f8fafc;
       ">
-        <p style="margin:0 0 10px;font-size:15px;color:#334155;">
-          <strong style="color:#0f172a;">Raffle:</strong>
-          ${escapeHtml(raffleTitle)}
-        </p>
-
-        <p style="margin:0 0 10px;font-size:15px;color:#334155;">
-          <strong style="color:#0f172a;">Amount paid:</strong>
-          ${escapeHtml(formattedAmount)}
-        </p>
+        ${renderInfoRow("Raffle", raffleTitle)}
+        ${renderInfoRow("Draw date", formattedDrawDate)}
+        ${renderInfoRow("Amount paid", formattedAmount)}
 
         <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
           <strong style="color:#0f172a;">Reference:</strong>
@@ -261,7 +285,10 @@ export async function sendReceiptEmail({
       </h2>
 
       <div style="margin:0 0 22px;">
-        ${ticketItems || `<p style="color:#64748b;">No ticket numbers found.</p>`}
+        ${
+          ticketItems ||
+          `<p style="color:#64748b;">No ticket numbers found.</p>`
+        }
       </div>
 
       <div style="
@@ -311,7 +338,9 @@ export async function sendWinnerEmail({
     branding,
     eyebrow: "Winner notification",
     heading: "🎉 You won!",
-    intro: `Hi ${name || "there"}, congratulations — your ticket has been selected as a winner.`,
+    intro: `Hi ${
+      name || "there"
+    }, congratulations — your ticket has been selected as a winner.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
@@ -424,7 +453,9 @@ export async function sendSquaresReceiptEmail({
     branding,
     eyebrow: "Squares confirmation",
     heading: "Payment successful",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
+    intro: `Hi ${
+      name || "there"
+    }, thank you for your purchase. Your squares are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -433,15 +464,8 @@ export async function sendSquaresReceiptEmail({
         margin:20px 0;
         background:#f8fafc;
       ">
-        <p style="margin:0 0 10px;font-size:15px;color:#334155;">
-          <strong style="color:#0f172a;">Game:</strong>
-          ${escapeHtml(gameTitle)}
-        </p>
-
-        <p style="margin:0 0 10px;font-size:15px;color:#334155;">
-          <strong style="color:#0f172a;">Amount paid:</strong>
-          ${escapeHtml(formattedAmount)}
-        </p>
+        ${renderInfoRow("Game", gameTitle)}
+        ${renderInfoRow("Amount paid", formattedAmount)}
 
         <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
           <strong style="color:#0f172a;">Reference:</strong>
@@ -490,7 +514,9 @@ export async function sendSquaresWinnerEmail({
     branding,
     eyebrow: "Winner notification",
     heading: "🎉 You won!",
-    intro: `Hi ${name || "there"}, congratulations — your square has been selected as a winner.`,
+    intro: `Hi ${
+      name || "there"
+    }, congratulations — your square has been selected as a winner.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
