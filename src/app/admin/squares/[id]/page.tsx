@@ -13,16 +13,18 @@ type PageProps = {
   };
 };
 
+type Prize = {
+  title?: string;
+  name?: string;
+  description?: string;
+};
+
 function firstNameOnly(name?: string | null) {
   return name?.trim().split(/\s+/)[0] || "Winner";
 }
 
 function moneyFromCents(cents: number) {
   return (Number(cents || 0) / 100).toFixed(2);
-}
-
-function safePrizesJson(value: unknown) {
-  return JSON.stringify(Array.isArray(value) ? value : [], null, 2);
 }
 
 export default async function AdminSquaresEditPage({ params }: PageProps) {
@@ -34,10 +36,22 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   }
 
   const winners = await listSquaresWinners(game.id);
-  const prizes = Array.isArray(game.config_json?.prizes)
-    ? game.config_json.prizes
+
+  const savedPrizes = Array.isArray(game.config_json?.prizes)
+    ? (game.config_json.prizes as Prize[])
     : [];
-  const prizesJson = safePrizesJson(prizes);
+
+  const prizeRows =
+    savedPrizes.length > 0
+      ? savedPrizes
+      : [
+          {
+            title: "First prize",
+            description: "",
+          },
+        ];
+
+  const blankPrizeRows = Array.from({ length: 4 });
 
   return (
     <main style={pageStyle}>
@@ -56,8 +70,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <h1 style={titleStyle}>Edit squares game</h1>
 
           <p style={subtitleStyle}>
-            Manage the public squares game, pricing, image, prizes and winner
-            draw.
+            Manage the squares game, image, pricing, prizes and winner draw.
           </p>
         </div>
 
@@ -151,8 +164,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>Squares setup</h2>
           <p style={sectionTextStyle}>
-            Configure the board size and square price. Maximum supported board
-            size is 500 squares.
+            Configure board size and pricing. Maximum board size is 500 squares.
           </p>
 
           <div style={gridStyle}>
@@ -214,39 +226,65 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>Prizes</h2>
           <p style={sectionTextStyle}>
-            This keeps your existing save route safe by using the same prizes
-            JSON field. The next upgrade can convert this into a proper editable
-            table like raffles once we check the save API.
+            Add one prize per row. Blank rows are ignored when saved.
           </p>
 
-          {prizes.length > 0 && (
-            <div style={prizeListStyle}>
-              {prizes.map((prize: any, index: number) => (
-                <div key={index} style={prizeCardStyle}>
-                  <div style={{ fontWeight: 900 }}>
-                    {prize.title || prize.name || `Prize ${index + 1}`}
-                  </div>
-                  {prize.description ? (
-                    <div style={mutedStyle}>{prize.description}</div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={tableHeadRowStyle}>
+                  <th style={thStyle}>Prize</th>
+                  <th style={thStyle}>Description</th>
+                </tr>
+              </thead>
 
-          <label style={labelStyle}>
-            Prizes JSON
-            <textarea
-              name="prizes"
-              rows={8}
-              defaultValue={prizesJson}
-              style={{
-                ...textareaStyle,
-                fontFamily:
-                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-              }}
-            />
-          </label>
+              <tbody>
+                {prizeRows.map((prize, index) => (
+                  <tr key={`saved-${index}`} style={trStyle}>
+                    <td style={tdStyle}>
+                      <input
+                        name="prize_title"
+                        defaultValue={prize.title || prize.name || ""}
+                        placeholder={`Prize ${index + 1}`}
+                        style={inputStyle}
+                      />
+                    </td>
+
+                    <td style={tdStyle}>
+                      <input
+                        name="prize_description"
+                        defaultValue={prize.description || ""}
+                        placeholder="Optional prize description"
+                        style={inputStyle}
+                      />
+                    </td>
+                  </tr>
+                ))}
+
+                {blankPrizeRows.map((_, index) => (
+                  <tr key={`blank-${index}`} style={trStyle}>
+                    <td style={tdStyle}>
+                      <input
+                        name="prize_title"
+                        placeholder={`Additional prize ${
+                          prizeRows.length + index + 1
+                        }`}
+                        style={inputStyle}
+                      />
+                    </td>
+
+                    <td style={tdStyle}>
+                      <input
+                        name="prize_description"
+                        placeholder="Optional prize description"
+                        style={inputStyle}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -331,21 +369,16 @@ const actionRowStyle: CSSProperties = {
 
 const darkButtonStyle: CSSProperties = {
   display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
   borderRadius: 12,
   padding: "12px 16px",
   background: "#111827",
   color: "white",
   fontWeight: 900,
   textDecoration: "none",
-  border: "1px solid #111827",
 };
 
 const secondaryButtonStyle: CSSProperties = {
   display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
   borderRadius: 12,
   padding: "12px 16px",
   background: "#ffffff",
@@ -403,7 +436,6 @@ const cardStyle: CSSProperties = {
 
 const sectionHeaderStyle: CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
   justifyContent: "space-between",
   gap: 16,
   marginBottom: 18,
@@ -471,17 +503,37 @@ const drawButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-const prizeListStyle: CSSProperties = {
-  display: "grid",
-  gap: 10,
-  marginBottom: 16,
-};
-
-const prizeCardStyle: CSSProperties = {
+const tableWrapStyle: CSSProperties = {
+  overflowX: "auto",
   border: "1px solid #e5e7eb",
   borderRadius: 14,
-  padding: 14,
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const tableHeadRowStyle: CSSProperties = {
   background: "#f8fafc",
+};
+
+const thStyle: CSSProperties = {
+  textAlign: "left",
+  padding: 12,
+  color: "#475569",
+  fontSize: 13,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const trStyle: CSSProperties = {
+  borderTop: "1px solid #e5e7eb",
+};
+
+const tdStyle: CSSProperties = {
+  padding: 12,
+  verticalAlign: "top",
 };
 
 const winnerListStyle: CSSProperties = {
