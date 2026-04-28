@@ -23,9 +23,7 @@ function getRandomAvailableSquares(
   const available: number[] = [];
 
   for (let i = 1; i <= totalSquares; i++) {
-    if (!unavailable.has(i)) {
-      available.push(i);
-    }
+    if (!unavailable.has(i)) available.push(i);
   }
 
   for (let i = available.length - 1; i > 0; i--) {
@@ -52,6 +50,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const requestedSquares = Array.isArray(body?.squares) ? body.squares : [];
     const randomCount = Math.max(0, Math.floor(Number(body?.randomCount || 0)));
+    const previewOnly = Boolean(body?.previewOnly);
 
     const customerName = String(body?.customerName ?? "").trim();
     const customerEmail = String(body?.customerEmail ?? "").trim();
@@ -82,9 +81,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const unavailable = new Set<number>();
 
     for (const sale of sales) {
-      for (const square of sale.squares ?? []) {
-        unavailable.add(Number(square));
-      }
+      for (const square of sale.squares ?? []) unavailable.add(Number(square));
     }
 
     for (const reservation of reservations) {
@@ -119,6 +116,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { ok: false, error: `Square ${blocked[0]} is no longer available` },
         { status: 409 },
       );
+    }
+
+    if (previewOnly) {
+      return NextResponse.json({
+        ok: true,
+        previewOnly: true,
+        squares: selectedSquares,
+      });
     }
 
     const reservation = await createSquaresReservation({
