@@ -45,6 +45,7 @@ export type RaffleRow = {
   title: string;
   description: string;
   image_url: string | null;
+  draw_at: string | null;
   currency: CurrencyCode | null;
   ticket_price_cents: number;
   total_tickets: number;
@@ -67,6 +68,7 @@ export type RaffleSummary = {
   title: string;
   description: string;
   image_url: string;
+  draw_at: string | null;
   currency: CurrencyCode;
   ticket_price: number;
   total_tickets: number;
@@ -100,6 +102,7 @@ export type CreateRaffleInput = {
   slug: string;
   description?: string;
   image_url?: string;
+  draw_at?: string | null;
   image_position?: string;
   currency?: CurrencyCode;
   ticket_price?: number | null;
@@ -154,6 +157,11 @@ function normalizeImagePosition(value: unknown): ImagePosition {
   }
 
   return "center";
+}
+
+function normalizeDrawAt(value: unknown): string | null {
+  const clean = String(value ?? "").trim();
+  return clean ? clean : null;
 }
 
 function toFiniteNumber(value: unknown, fallback = 0) {
@@ -289,6 +297,7 @@ function toRaffleSummary(row: RaffleRow): RaffleSummary {
     title: row.title,
     description: row.description ?? "",
     image_url: row.image_url ?? "",
+    draw_at: row.draw_at ?? null,
     currency: normalizeCurrency(row.currency),
     ticket_price: Number(row.ticket_price_cents) / 100,
     total_tickets: Number(row.total_tickets),
@@ -337,6 +346,7 @@ const RAFFLE_SELECT = `
   title,
   description,
   image_url,
+  draw_at,
   currency,
   ticket_price_cents,
   total_tickets,
@@ -422,6 +432,7 @@ export async function createRaffle(
       title,
       description,
       image_url,
+      draw_at,
       currency,
       ticket_price_cents,
       total_tickets,
@@ -429,7 +440,7 @@ export async function createRaffle(
       status,
       config_json
     )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
     returning ${RAFFLE_SELECT}
     `,
     [
@@ -439,6 +450,7 @@ export async function createRaffle(
       input.title,
       input.description ?? "",
       input.image_url ?? "",
+      normalizeDrawAt(input.draw_at),
       normalizeCurrency(input.currency),
       input.ticket_price != null ? Math.round(input.ticket_price * 100) : 0,
       input.total_tickets ?? 0,
@@ -470,12 +482,13 @@ export async function updateRaffle(
       title = $4,
       description = $5,
       image_url = $6,
-      currency = $7,
-      ticket_price_cents = $8,
-      total_tickets = $9,
-      sold_tickets = $10,
-      status = $11,
-      config_json = $12::jsonb,
+      draw_at = $7,
+      currency = $8,
+      ticket_price_cents = $9,
+      total_tickets = $10,
+      sold_tickets = $11,
+      status = $12,
+      config_json = $13::jsonb,
       updated_at = now()
     where id = $1
        or (tenant_slug = $2 and slug = $3)
@@ -488,6 +501,7 @@ export async function updateRaffle(
       input.title,
       input.description ?? "",
       input.image_url ?? "",
+      normalizeDrawAt(input.draw_at),
       normalizeCurrency(input.currency),
       input.ticket_price != null ? Math.round(input.ticket_price * 100) : 0,
       input.total_tickets ?? 0,
