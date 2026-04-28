@@ -201,7 +201,8 @@ async function sendEmail(params: {
   const brand = getBranding(params.branding);
 
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL?.trim() || "noreply@sofundraising.it.com";
+    process.env.RESEND_FROM_EMAIL?.trim() ||
+    "noreply@send.sofundraising.it.com";
 
   if (!process.env.RESEND_API_KEY) {
     throw new Error("Missing RESEND_API_KEY");
