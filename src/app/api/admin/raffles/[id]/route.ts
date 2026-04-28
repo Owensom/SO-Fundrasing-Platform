@@ -6,7 +6,7 @@ import {
   updateRaffle,
   updateRaffleOffers,
   updateRaffleColours,
-  updateRaffleImagePosition, // ✅ NEW
+  updateRaffleImagePosition,
 } from "@/lib/raffles";
 
 export const runtime = "nodejs";
@@ -29,15 +29,14 @@ function normaliseImagePosition(value: unknown) {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const user = await auth();
     if (!user) {
-      return NextResponse.redirect(
-        new URL("/admin/login", req.url),
-        { status: 303 }
-      );
+      return NextResponse.redirect(new URL("/admin/login", req.url), {
+        status: 303,
+      });
     }
 
     const tenantSlug = getTenantSlugFromHeaders();
@@ -46,37 +45,33 @@ export async function POST(
     if (!raffle || raffle.tenant_slug !== tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     const formData = await req.formData();
 
-    // --------------------------
-    // BASIC FIELDS
-    // --------------------------
     const title = String(formData.get("title") || "");
     const slug = String(formData.get("slug") || "");
     const description = String(formData.get("description") || "");
     const image_url = String(formData.get("image_url") || "");
     const image_position = normaliseImagePosition(
-      formData.get("image_position")
+      formData.get("image_position"),
     );
+
+    const rawDrawAt = String(formData.get("draw_at") || "").trim();
+    const draw_at = rawDrawAt ? rawDrawAt : null;
 
     const ticket_price = Number(formData.get("ticket_price") || 0);
     const ticket_price_cents = Math.round(ticket_price * 100);
 
-    const total_tickets =
-      Number(formData.get("endNumber")) -
-      Number(formData.get("startNumber")) +
-      1;
+    const startNumber = Number(formData.get("startNumber") || 1);
+    const endNumber = Number(formData.get("endNumber") || 1);
+    const total_tickets = Math.max(0, endNumber - startNumber + 1);
 
     const status = String(formData.get("status") || "draft");
     const currency = String(formData.get("currency") || "GBP");
 
-    // --------------------------
-    // COLOURS
-    // --------------------------
     const preset = formData.getAll("colour_preset").map(String);
 
     const custom = String(formData.get("custom_colours") || "")
@@ -91,9 +86,6 @@ export async function POST(
       sortOrder: i,
     }));
 
-    // --------------------------
-    // OFFERS
-    // --------------------------
     const offerCount = Number(formData.get("offer_count") || 0);
     const offers: any[] = [];
 
@@ -115,48 +107,32 @@ export async function POST(
       }
     }
 
-    // --------------------------
-    // UPDATE BASE RAFFLE
-    // --------------------------
     await updateRaffle(params.id, tenantSlug, {
       title,
       slug,
       description,
       image_url,
+      draw_at,
       ticket_price_cents,
       total_tickets,
       status: status as any,
       currency: currency as any,
     });
 
-    // --------------------------
-    // UPDATE CONFIG PARTS
-    // --------------------------
     await updateRaffleOffers(params.id, tenantSlug, offers);
     await updateRaffleColours(params.id, tenantSlug, colours);
+    await updateRaffleImagePosition(params.id, tenantSlug, image_position);
 
-    // --------------------------
-    // ✅ IMAGE POSITION (FIXED)
-    // --------------------------
-    await updateRaffleImagePosition(
-      params.id,
-      tenantSlug,
-      image_position
-    );
-
-    // --------------------------
-    // REDIRECT
-    // --------------------------
     return NextResponse.redirect(
       new URL(`/admin/raffles/${params.id}`, req.url),
-      { status: 303 }
+      { status: 303 },
     );
   } catch (err: any) {
     console.error("POST raffle error:", err);
 
     return NextResponse.json(
       { ok: false, error: err.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
