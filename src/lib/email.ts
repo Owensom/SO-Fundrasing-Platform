@@ -24,17 +24,6 @@ function getBranding(branding?: EmailBranding) {
   };
 }
 
-function getFromAddress(branding?: EmailBranding) {
-  const brand = getBranding(branding);
-  const fromEmail = process.env.RESEND_FROM_EMAIL?.trim();
-
-  if (!fromEmail) {
-    throw new Error("Missing RESEND_FROM_EMAIL environment variable");
-  }
-
-  return `${brand.name} <${fromEmail}>`;
-}
-
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -53,18 +42,6 @@ function formatCurrency(amount: number, currency: string) {
   } catch {
     return `${(amount / 100).toFixed(2)} ${escapeHtml(currency)}`;
   }
-}
-
-function formatDrawDate(value?: string | null) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "full",
-    timeStyle: "short",
-  }).format(date);
 }
 
 function colourDot(colour?: string | null) {
@@ -87,19 +64,6 @@ function colourDot(colour?: string | null) {
   `;
 }
 
-function renderInfoRow(label: string, value: unknown) {
-  if (value === null || value === undefined || String(value).trim() === "") {
-    return "";
-  }
-
-  return `
-    <p style="margin:0 0 10px;font-size:15px;color:#334155;">
-      <strong style="color:#0f172a;">${escapeHtml(label)}:</strong>
-      ${escapeHtml(value)}
-    </p>
-  `;
-}
-
 function renderEmailShell(params: {
   branding?: EmailBranding;
   heading: string;
@@ -114,9 +78,7 @@ function renderEmailShell(params: {
     <!doctype html>
     <html>
       <body style="margin:0;padding:0;background:#f1f5f9;">
-        <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
-          ${escapeHtml(params.heading)}
-        </div>
+        <div style="display:none;">${escapeHtml(params.heading)}</div>
 
         <div style="
           font-family:Arial,Helvetica,sans-serif;
@@ -130,70 +92,22 @@ function renderEmailShell(params: {
             border:1px solid #e2e8f0;
             border-radius:22px;
             overflow:hidden;
-            box-shadow:0 10px 30px rgba(15,23,42,0.08);
           ">
-            <div style="height:6px;background:${escapeHtml(
-              brand.primaryColor,
-            )};"></div>
+            <div style="height:6px;background:${brand.primaryColor};"></div>
 
-            <div style="padding:30px 26px 28px;">
-              <div style="text-align:center;margin-bottom:28px;">
-                <img
-                  src="${escapeHtml(brand.logoUrl)}"
-                  alt="${escapeHtml(brand.name)}"
-                  style="max-width:280px;width:100%;height:auto;display:block;margin:0 auto;"
-                />
+            <div style="padding:30px;">
+              <div style="text-align:center;margin-bottom:20px;">
+                <img src="${brand.logoUrl}" style="max-width:240px;" />
               </div>
 
-              ${
-                params.eyebrow
-                  ? `<p style="
-                      margin:0 0 8px;
-                      color:${escapeHtml(brand.primaryColor)};
-                      font-size:13px;
-                      font-weight:800;
-                      letter-spacing:0.08em;
-                      text-transform:uppercase;
-                    ">${escapeHtml(params.eyebrow)}</p>`
-                  : ""
-              }
+              <h1>${escapeHtml(params.heading)}</h1>
 
-              <h1 style="
-                font-size:28px;
-                line-height:1.2;
-                margin:0 0 12px;
-                color:#0f172a;
-              ">
-                ${escapeHtml(params.heading)}
-              </h1>
-
-              ${
-                params.intro
-                  ? `<p style="
-                      font-size:16px;
-                      line-height:1.65;
-                      margin:0 0 22px;
-                      color:#334155;
-                    ">${escapeHtml(params.intro)}</p>`
-                  : ""
-              }
+              ${params.intro ? `<p>${escapeHtml(params.intro)}</p>` : ""}
 
               ${params.body}
 
-              <div style="
-                margin-top:30px;
-                padding-top:18px;
-                border-top:1px solid #e2e8f0;
-                color:#64748b;
-                font-size:13px;
-                line-height:1.6;
-              ">
-                ${
-                  params.footer ||
-                  `Powered by ${escapeHtml(
-                    brand.name,
-                  )}. Supporting causes through fundraising.`
-                }
+              <div style="margin-top:20px;font-size:12px;color:#64748b;">
+                Powered by ${escapeHtml(brand.name)}
               </div>
             </div>
           </div>
@@ -209,13 +123,19 @@ async function sendEmail(params: {
   html: string;
   branding?: EmailBranding;
 }) {
+  const brand = getBranding(params.branding);
+
   await resend.emails.send({
-    from: getFromAddress(params.branding),
+    from: `${brand.name} <noreply@sofundraising.it.com>`,
     to: params.to,
     subject: params.subject,
     html: params.html,
   });
 }
+
+/* =========================
+   RECEIPT EMAIL
+========================= */
 
 export async function sendReceiptEmail({
   to,
@@ -225,103 +145,46 @@ export async function sendReceiptEmail({
   currency,
   reservationToken,
   tickets,
-  drawAt,
   branding,
-}: {
-  to: string;
-  name?: string | null;
-  raffleTitle: string;
-  amountCents: number;
-  currency: string;
-  reservationToken: string;
-  tickets: Array<{ ticket_number: number; colour?: string | null }>;
-  drawAt?: string | null;
-  branding?: EmailBranding;
-}) {
+}: any) {
   const formattedAmount = formatCurrency(amountCents, currency);
-  const formattedDrawDate = formatDrawDate(drawAt);
 
   const ticketItems = tickets
-    .map((ticket) => {
-      const colour = ticket.colour || "Default";
-
-      return `
-        <div style="
-          border:1px solid #e2e8f0;
-          border-radius:14px;
-          padding:13px 14px;
-          margin-bottom:10px;
-          background:#ffffff;
-        ">
-          <div style="font-size:16px;font-weight:800;color:#0f172a;">
-            🎟️ Ticket #${escapeHtml(ticket.ticket_number)}
-          </div>
-          <div style="margin-top:5px;font-size:14px;color:#475569;">
-            ${colourDot(ticket.colour)}${escapeHtml(colour)}
-          </div>
-        </div>
-      `;
-    })
+    .map(
+      (ticket: any) => `
+      <div>
+        🎟️ Ticket #${ticket.ticket_number}
+        <br/>
+        ${colourDot(ticket.colour)} ${ticket.colour || "Default"}
+      </div>
+    `,
+    )
     .join("");
 
   const html = renderEmailShell({
     branding,
-    eyebrow: "Ticket confirmation",
     heading: "Payment successful",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your raffle tickets are confirmed below.`,
+    intro: `Hi ${name || "there"}, your tickets are confirmed.`,
     body: `
-      <div style="
-        border:1px solid #e2e8f0;
-        border-radius:18px;
-        padding:18px;
-        margin:20px 0;
-        background:#f8fafc;
-      ">
-        ${renderInfoRow("Raffle", raffleTitle)}
-        ${renderInfoRow("Draw date", formattedDrawDate)}
-        ${renderInfoRow("Amount paid", formattedAmount)}
-
-        <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
-          <strong style="color:#0f172a;">Reference:</strong>
-          ${escapeHtml(reservationToken)}
-        </p>
-      </div>
-
-      <h2 style="font-size:20px;margin:24px 0 12px;color:#0f172a;">
-        Your tickets
-      </h2>
-
-      <div style="margin:0 0 22px;">
-        ${
-          ticketItems ||
-          `<p style="color:#64748b;">No ticket numbers found.</p>`
-        }
-      </div>
-
-      <div style="
-        border-radius:18px;
-        padding:18px;
-        background:#ecfdf5;
-        border:1px solid #bbf7d0;
-      ">
-        <p style="margin:0;font-size:16px;line-height:1.6;color:#166534;font-weight:800;">
-          Good luck — your entry is confirmed.
-        </p>
-      </div>
+      <p><strong>${raffleTitle}</strong></p>
+      <p>Amount: ${formattedAmount}</p>
+      <p>Ref: ${reservationToken}</p>
+      <hr/>
+      ${ticketItems}
     `,
   });
 
-  try {
-    await sendEmail({
-      to,
-      subject: `Your tickets for ${raffleTitle}`,
-      html,
-      branding,
-    });
-  } catch (err) {
-    console.error("receipt email failed", err);
-  }
+  await sendEmail({
+    to,
+    subject: `Your tickets for ${raffleTitle}`,
+    html,
+    branding,
+  });
 }
+
+/* =========================
+   WINNER EMAIL
+========================= */
 
 export async function sendWinnerEmail({
   to,
@@ -330,244 +193,22 @@ export async function sendWinnerEmail({
   ticketNumber,
   colour,
   branding,
-}: {
-  to: string;
-  name?: string | null;
-  raffleTitle: string;
-  ticketNumber: number;
-  colour?: string | null;
-  branding?: EmailBranding;
-}) {
-  const brand = getBranding(branding);
-  const safeColour = colour || "Default";
-
+}: any) {
   const html = renderEmailShell({
     branding,
-    eyebrow: "Winner notification",
     heading: "🎉 You won!",
-    intro: `Hi ${name || "there"}, congratulations — your ticket has been selected as a winner.`,
+    intro: `Hi ${name || "there"}, congratulations!`,
     body: `
-      <div style="
-        border:1px solid #bbf7d0;
-        border-radius:20px;
-        padding:22px;
-        margin:20px 0;
-        background:#ecfdf5;
-      ">
-        <p style="
-          margin:0 0 14px;
-          font-size:20px;
-          font-weight:900;
-          color:#14532d;
-        ">
-          ${escapeHtml(raffleTitle)}
-        </p>
-
-        <div style="
-          border-radius:16px;
-          background:#ffffff;
-          border:1px solid #bbf7d0;
-          padding:16px;
-          margin-top:12px;
-        ">
-          <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
-            <strong>Winning ticket:</strong>
-            #${escapeHtml(ticketNumber)}
-          </p>
-
-          <p style="margin:0;font-size:17px;color:#0f172a;">
-            <strong>Colour:</strong>
-            ${colourDot(colour)}${escapeHtml(safeColour)}
-          </p>
-        </div>
-      </div>
-
-      <div style="text-align:center;margin:26px 0;">
-        <span style="
-          display:inline-block;
-          background:${escapeHtml(brand.primaryColor)};
-          color:#ffffff;
-          text-decoration:none;
-          padding:14px 24px;
-          border-radius:999px;
-          font-weight:900;
-          font-size:15px;
-        ">
-          Congratulations
-        </span>
-      </div>
-
-      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
-        The organiser will be in touch soon with the next steps.
-      </p>
+      <p>${raffleTitle}</p>
+      <p>Ticket: #${ticketNumber}</p>
+      <p>Colour: ${colourDot(colour)} ${colour || "Default"}</p>
     `,
   });
 
-  try {
-    await sendEmail({
-      to,
-      subject: `You won ${raffleTitle}!`,
-      html,
-      branding,
-    });
-  } catch (err) {
-    console.error("winner email failed", err);
-  }
-}
-
-export async function sendSquaresReceiptEmail({
-  to,
-  name,
-  gameTitle,
-  amountCents,
-  currency,
-  reservationToken,
-  squares,
-  branding,
-}: {
-  to: string;
-  name?: string | null;
-  gameTitle: string;
-  amountCents: number;
-  currency: string;
-  reservationToken: string;
-  squares: number[];
-  branding?: EmailBranding;
-}) {
-  const formattedAmount = formatCurrency(amountCents, currency);
-
-  const squareItems = squares
-    .map(
-      (square) => `
-        <div style="
-          border:1px solid #e2e8f0;
-          border-radius:14px;
-          padding:13px 14px;
-          margin-bottom:10px;
-          background:#ffffff;
-        ">
-          <div style="font-size:16px;font-weight:800;color:#0f172a;">
-            ◼️ Square #${escapeHtml(square)}
-          </div>
-        </div>
-      `,
-    )
-    .join("");
-
-  const html = renderEmailShell({
+  await sendEmail({
+    to,
+    subject: `You won ${raffleTitle}!`,
+    html,
     branding,
-    eyebrow: "Squares confirmation",
-    heading: "Payment successful",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
-    body: `
-      <div style="
-        border:1px solid #e2e8f0;
-        border-radius:18px;
-        padding:18px;
-        margin:20px 0;
-        background:#f8fafc;
-      ">
-        ${renderInfoRow("Game", gameTitle)}
-        ${renderInfoRow("Amount paid", formattedAmount)}
-
-        <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
-          <strong style="color:#0f172a;">Reference:</strong>
-          ${escapeHtml(reservationToken)}
-        </p>
-      </div>
-
-      <h2 style="font-size:20px;margin:24px 0 12px;color:#0f172a;">
-        Your squares
-      </h2>
-
-      <div style="margin:0 0 22px;">
-        ${squareItems || `<p style="color:#64748b;">No squares found.</p>`}
-      </div>
-    `,
   });
-
-  try {
-    await sendEmail({
-      to,
-      subject: `Your squares for ${gameTitle}`,
-      html,
-      branding,
-    });
-  } catch (err) {
-    console.error("squares receipt email failed", err);
-  }
-}
-
-export async function sendSquaresWinnerEmail({
-  to,
-  name,
-  gameTitle,
-  squareNumber,
-  prizeTitle,
-  branding,
-}: {
-  to: string;
-  name?: string | null;
-  gameTitle: string;
-  squareNumber: number;
-  prizeTitle: string;
-  branding?: EmailBranding;
-}) {
-  const html = renderEmailShell({
-    branding,
-    eyebrow: "Winner notification",
-    heading: "🎉 You won!",
-    intro: `Hi ${name || "there"}, congratulations — your square has been selected as a winner.`,
-    body: `
-      <div style="
-        border:1px solid #bbf7d0;
-        border-radius:20px;
-        padding:22px;
-        margin:20px 0;
-        background:#ecfdf5;
-      ">
-        <p style="
-          margin:0 0 14px;
-          font-size:20px;
-          font-weight:900;
-          color:#14532d;
-        ">
-          ${escapeHtml(gameTitle)}
-        </p>
-
-        <div style="
-          border-radius:16px;
-          background:#ffffff;
-          border:1px solid #bbf7d0;
-          padding:16px;
-          margin-top:12px;
-        ">
-          <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
-            <strong>Prize:</strong>
-            ${escapeHtml(prizeTitle)}
-          </p>
-
-          <p style="margin:0;font-size:17px;color:#0f172a;">
-            <strong>Winning square:</strong>
-            #${escapeHtml(squareNumber)}
-          </p>
-        </div>
-      </div>
-
-      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
-        The organiser will be in touch soon with the next steps.
-      </p>
-    `,
-  });
-
-  try {
-    await sendEmail({
-      to,
-      subject: `You won ${gameTitle}!`,
-      html,
-      branding,
-    });
-  } catch (err) {
-    console.error("squares winner email failed", err);
-  }
 }
