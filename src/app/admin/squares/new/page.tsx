@@ -19,7 +19,8 @@ export default function NewSquaresGamePage() {
           <h1 style={titleStyle}>Create squares game</h1>
 
           <p style={subtitleStyle}>
-            Set up a new squares game with image, pricing, board size and prizes.
+            Set up a new squares game with image, pricing, draw date, board size
+            and prizes.
           </p>
         </div>
       </div>
@@ -67,6 +68,11 @@ export default function NewSquaresGamePage() {
                 placeholder="Describe the game, prize and draw details."
                 style={textareaStyle}
               />
+            </label>
+
+            <label style={labelStyle}>
+              Draw date
+              <input name="draw_at" type="datetime-local" style={inputStyle} />
             </label>
           </div>
 
