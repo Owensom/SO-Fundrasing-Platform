@@ -182,6 +182,18 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     return numbersPerColour * selectedColours.length;
   }, [numbersPerColour, selectedColours.length]);
 
+  const validOffersCount = useMemo(() => {
+    try {
+      return JSON.parse(offersValue).length;
+    } catch {
+      return 0;
+    }
+  }, [offersValue]);
+
+  const publicPrizesCount = useMemo(() => {
+    return prizes.filter((prize) => prize.title.trim() && prize.is_public).length;
+  }, [prizes]);
+
   function toggleColour(colour: string) {
     setSelectedColours((current) =>
       current.includes(colour)
@@ -277,11 +289,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   }
 
   return (
-    <form
-      action="/api/admin/raffles"
-      method="post"
-      style={{ display: "grid", gap: 16, marginTop: 24, maxWidth: 760 }}
-    >
+    <form action="/api/admin/raffles" method="post" style={styles.form}>
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
       <input type="hidden" name="image_url" value={imageUrl} />
       <input type="hidden" name="image_position" value={imagePosition} />
@@ -290,237 +298,227 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="total_tickets" value={String(totalTickets)} />
 
-      <label>
-        <div style={{ marginBottom: 6 }}>Title</div>
-        <input
-          name="title"
-          required
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={{ width: "100%", padding: 12 }}
-          placeholder="Spring Cash Raffle"
-        />
-      </label>
-
-      <label>
-        <div style={{ marginBottom: 6 }}>Slug</div>
-        <input
-          name="slug"
-          required
-          value={slug}
-          onChange={(e) => {
-            setSlugEdited(true);
-            setSlug(slugify(e.target.value));
-          }}
-          style={{ width: "100%", padding: 12 }}
-          placeholder="spring-cash-raffle"
-        />
-      </label>
-
-      <label>
-        <div style={{ marginBottom: 6 }}>Description</div>
-        <textarea
-          name="description"
-          rows={4}
-          style={{ width: "100%", padding: 12 }}
-          placeholder="Describe the raffle..."
-        />
-      </label>
-
-      <label>
-        <div style={{ marginBottom: 6 }}>Draw date</div>
-        <input
-          name="draw_at"
-          type="datetime-local"
-          value={drawAt}
-          onChange={(e) => setDrawAt(e.target.value)}
-          style={{ width: "100%", padding: 12 }}
-        />
-        <div style={{ marginTop: 6, color: "#64748b", fontSize: 13 }}>
-          Optional. This will be shown to buyers and in admin.
+      <section style={styles.hero}>
+        <div>
+          <div style={styles.eyebrow}>Create raffle</div>
+          <h2 style={styles.heroTitle}>Build a new raffle</h2>
+          <p style={styles.heroText}>
+            Set the public details, ticket range, colours, offers and prizes.
+            You can save as draft and publish when ready.
+          </p>
         </div>
-      </label>
 
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ fontWeight: 600 }}>Image</div>
+        <div style={styles.tenantPill}>Tenant: {tenantSlug}</div>
+      </section>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <label
-            style={{
-              display: "inline-block",
-              padding: "10px 14px",
-              borderRadius: 9999,
-              background: "#1683f8",
-              color: "#fff",
-              fontWeight: 600,
-              cursor: uploading ? "not-allowed" : "pointer",
-              opacity: uploading ? 0.7 : 1,
-            }}
-          >
-            {uploading ? "Uploading..." : "Upload image"}
+      <section style={styles.summaryGrid}>
+        <SummaryCard label="Total tickets" value={totalTickets} />
+        <SummaryCard label="Numbers / colour" value={numbersPerColour} />
+        <SummaryCard label="Colours" value={selectedColours.length} />
+        <SummaryCard label="Offers" value={validOffersCount} />
+        <SummaryCard label="Public prizes" value={publicPrizesCount} />
+      </section>
+
+      <FormSection
+        title="Public details"
+        description="These details appear on the raffle page buyers see."
+      >
+        <div style={styles.twoColumn}>
+          <Field label="Title">
             <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              disabled={uploading}
-              style={{ display: "none" }}
+              name="title"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={styles.input}
+              placeholder="Spring Cash Raffle"
             />
-          </label>
+          </Field>
 
-          {imageUrl ? (
-            <span style={{ color: "#166534", fontWeight: 600 }}>
-              Image uploaded
-            </span>
-          ) : (
-            <span style={{ color: "#64748b" }}>No image uploaded yet</span>
-          )}
+          <Field label="Slug">
+            <input
+              name="slug"
+              required
+              value={slug}
+              onChange={(e) => {
+                setSlugEdited(true);
+                setSlug(slugify(e.target.value));
+              }}
+              style={styles.input}
+              placeholder="spring-cash-raffle"
+            />
+          </Field>
         </div>
 
-        {imageUrl ? (
-          <div style={{ display: "grid", gap: 8 }}>
+        <Field label="Description">
+          <textarea
+            name="description"
+            rows={4}
+            style={styles.textarea}
+            placeholder="Describe the raffle..."
+          />
+        </Field>
+
+        <div style={styles.twoColumn}>
+          <Field label="Draw date">
+            <input
+              name="draw_at"
+              type="datetime-local"
+              value={drawAt}
+              onChange={(e) => setDrawAt(e.target.value)}
+              style={styles.input}
+            />
+            <div style={styles.helpText}>
+              Optional. This will be shown to buyers and in admin.
+            </div>
+          </Field>
+
+          <Field label="Status">
+            <select name="status" defaultValue="draft" style={styles.input}>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="closed">Closed</option>
+            </select>
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="Image"
+        description="Upload a raffle image or paste an image URL."
+      >
+        <div style={styles.imageLayout}>
+          <div style={styles.imageControls}>
+            <div style={styles.uploadRow}>
+              <label
+                style={{
+                  ...styles.uploadButton,
+                  cursor: uploading ? "not-allowed" : "pointer",
+                  opacity: uploading ? 0.7 : 1,
+                }}
+              >
+                {uploading ? "Uploading..." : "Upload image"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={uploading}
+                  style={{ display: "none" }}
+                />
+              </label>
+
+              {imageUrl ? (
+                <span style={styles.successText}>Image uploaded</span>
+              ) : (
+                <span style={styles.mutedText}>No image uploaded yet</span>
+              )}
+            </div>
+
             <input
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
-              style={{ width: "100%", padding: 12 }}
-              placeholder="https://..."
+              style={styles.input}
+              placeholder="Or paste image URL"
             />
-            <img
-              src={imageUrl}
-              alt="Raffle preview"
-              style={{
-                width: 180,
-                height: 180,
-                objectFit: "cover",
-                objectPosition: imagePosition,
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-              }}
-            />
+
+            <Field label="Image focus">
+              <select
+                value={imagePosition}
+                onChange={(e) => setImagePosition(e.target.value)}
+                style={styles.input}
+              >
+                {IMAGE_POSITIONS.map((position) => (
+                  <option key={position.value} value={position.value}>
+                    {position.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {uploadError ? <div style={styles.errorBox}>{uploadError}</div> : null}
           </div>
-        ) : (
-          <input
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            style={{ width: "100%", padding: 12 }}
-            placeholder="Or paste image URL"
-          />
-        )}
 
-        <label>
-          <div style={{ marginBottom: 6 }}>Image focus</div>
-          <select
-            value={imagePosition}
-            onChange={(e) => setImagePosition(e.target.value)}
-            style={{ width: "100%", padding: 12 }}
-          >
-            {IMAGE_POSITIONS.map((position) => (
-              <option key={position.value} value={position.value}>
-                {position.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {uploadError ? (
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 10,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              color: "#991b1b",
-            }}
-          >
-            {uploadError}
+          <div style={styles.previewBox}>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Raffle preview"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: imagePosition,
+                  display: "block",
+                }}
+              />
+            ) : (
+              <div style={styles.emptyPreview}>🎟️</div>
+            )}
           </div>
-        ) : null}
-      </div>
+        </div>
+      </FormSection>
 
-      <label>
-        <div style={{ marginBottom: 6 }}>Currency</div>
-        <select
-          name="currency"
-          defaultValue="EUR"
-          style={{ width: "100%", padding: 12 }}
-        >
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
-          <option value="USD">USD</option>
-        </select>
-      </label>
-
-      <label>
-        <div style={{ marginBottom: 6 }}>Single ticket price</div>
-        <input
-          name="ticket_price"
-          type="number"
-          min="0"
-          step="0.01"
-          defaultValue="5"
-          style={{ width: "100%", padding: 12 }}
-        />
-      </label>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <label>
-          <div style={{ marginBottom: 6 }}>Start number</div>
-          <input
-            name="startNumber"
-            type="number"
-            min="0"
-            step="1"
-            value={startNumber}
-            onChange={(e) => setStartNumber(e.target.value)}
-            style={{ width: "100%", padding: 12 }}
-          />
-        </label>
-
-        <label>
-          <div style={{ marginBottom: 6 }}>End number</div>
-          <input
-            name="endNumber"
-            type="number"
-            min="0"
-            step="1"
-            value={endNumber}
-            onChange={(e) => setEndNumber(e.target.value)}
-            style={{ width: "100%", padding: 12 }}
-          />
-        </label>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 8,
-          padding: 14,
-          borderRadius: 12,
-          background: "#f8fafc",
-          border: "1px solid #e2e8f0",
-        }}
+      <FormSection
+        title="Tickets and pricing"
+        description="Choose ticket price, number range and currency."
       >
-        <div>
-          <strong>Numbers per colour:</strong> {numbersPerColour}
-        </div>
-        <div>
-          <strong>Selected colours:</strong> {selectedColours.length}
-        </div>
-        <div>
-          <strong>Total tickets:</strong> {totalTickets}
-        </div>
-      </div>
+        <div style={styles.threeColumn}>
+          <Field label="Currency">
+            <select name="currency" defaultValue="EUR" style={styles.input}>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="USD">USD</option>
+            </select>
+          </Field>
 
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ fontWeight: 600 }}>Colours</div>
+          <Field label="Single ticket price">
+            <input
+              name="ticket_price"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue="5"
+              style={styles.input}
+            />
+          </Field>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <Field label="Total tickets">
+            <input value={String(totalTickets)} readOnly style={styles.inputMuted} />
+          </Field>
+        </div>
+
+        <div style={styles.twoColumn}>
+          <Field label="Start number">
+            <input
+              name="startNumber"
+              type="number"
+              min="0"
+              step="1"
+              value={startNumber}
+              onChange={(e) => setStartNumber(e.target.value)}
+              style={styles.input}
+            />
+          </Field>
+
+          <Field label="End number">
+            <input
+              name="endNumber"
+              type="number"
+              min="0"
+              step="1"
+              value={endNumber}
+              onChange={(e) => setEndNumber(e.target.value)}
+              style={styles.input}
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="Ticket colours"
+        description="Buyers can choose from these colours. You can add custom colour names too."
+      >
+        <div style={styles.colourGrid}>
           {PRESET_COLOURS.map((colour) => {
             const active = selectedColours.includes(colour);
             return (
@@ -529,322 +527,588 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                 type="button"
                 onClick={() => toggleColour(colour)}
                 style={{
-                  border: "none",
-                  borderRadius: 9999,
-                  padding: "10px 14px",
+                  ...styles.colourButton,
                   background: active ? "#1683f8" : "#e2e8f0",
                   color: active ? "#fff" : "#111827",
-                  cursor: "pointer",
-                  fontWeight: 600,
                 }}
               >
+                {active ? "✓ " : ""}
                 {colour}
               </button>
             );
           })}
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={styles.inlineControls}>
           <input
             value={customColour}
             onChange={(e) => setCustomColour(e.target.value)}
-            style={{ flex: 1, padding: 12 }}
+            style={{ ...styles.input, flex: 1 }}
             placeholder="Add custom colour"
           />
-          <button
-            type="button"
-            onClick={addCustomColour}
-            style={{
-              padding: "12px 16px",
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-              background: "#fff",
-              cursor: "pointer",
-            }}
-          >
-            Add
+          <button type="button" onClick={addCustomColour} style={styles.lightButton}>
+            Add colour
           </button>
         </div>
 
-        <div style={{ color: "#475569" }}>
-          Selected:{" "}
+        <div style={styles.selectedBox}>
+          <strong>Selected:</strong>{" "}
           {selectedColours.length ? selectedColours.join(", ") : "None"}
         </div>
-      </div>
+      </FormSection>
 
-      <div style={{ display: "grid", gap: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div style={{ fontWeight: 600 }}>Offers</div>
-          <button
-            type="button"
-            onClick={addOffer}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-              background: "#fff",
-              cursor: "pointer",
-            }}
-          >
-            Add offer
+      <FormSection
+        title="Offers"
+        description="Optional bundle pricing. Example: 3 tickets for 12."
+        action={
+          <button type="button" onClick={addOffer} style={styles.lightButton}>
+            + Add offer
           </button>
-        </div>
-
-        {offers.map((offer) => (
-          <div
-            key={offer.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr auto auto",
-              gap: 10,
-              alignItems: "center",
-              padding: 12,
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-            }}
-          >
-            <input
-              value={offer.label}
-              onChange={(e) => updateOffer(offer.id, { label: e.target.value })}
-              placeholder="3 for 12"
-              style={{ padding: 12 }}
-            />
-            <input
-              value={offer.price}
-              onChange={(e) => updateOffer(offer.id, { price: e.target.value })}
-              placeholder="12"
-              type="number"
-              min="0"
-              step="0.01"
-              style={{ padding: 12 }}
-            />
-            <input
-              value={offer.quantity}
-              onChange={(e) =>
-                updateOffer(offer.id, { quantity: e.target.value })
-              }
-              placeholder="3"
-              type="number"
-              min="1"
-              step="1"
-              style={{ padding: 12 }}
-            />
-            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={offer.is_active}
-                onChange={(e) =>
-                  updateOffer(offer.id, { is_active: e.target.checked })
-                }
-              />
-              Active
-            </label>
-            <button
-              type="button"
-              onClick={() => removeOffer(offer.id)}
-              disabled={offers.length <= 1}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #fecaca",
-                background: "#fff",
-                color: "#b91c1c",
-                cursor: offers.length <= 1 ? "not-allowed" : "pointer",
-                opacity: offers.length <= 1 ? 0.6 : 1,
-              }}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-
-        <div style={{ color: "#475569" }}>
-          Offers are saved automatically from the rows above.
-        </div>
-      </div>
-
-      <section
-        style={{
-          display: "grid",
-          gap: 12,
-          padding: 16,
-          borderRadius: 12,
-          border: "1px solid #e2e8f0",
-          background: "#fff",
-        }}
+        }
       >
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>Prize Settings</div>
-          <div style={{ color: "#64748b", fontSize: 13 }}>
-            Choose what prizes are visible on the public raffle page.
-          </div>
+        <div style={styles.cardList}>
+          {offers.map((offer, index) => (
+            <div key={offer.id} style={styles.offerCard}>
+              <div style={styles.rowHeader}>
+                <strong>Offer {index + 1}</strong>
+                <label style={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={offer.is_active}
+                    onChange={(e) =>
+                      updateOffer(offer.id, { is_active: e.target.checked })
+                    }
+                  />
+                  Active
+                </label>
+              </div>
+
+              <div style={styles.threeColumn}>
+                <Field label="Label">
+                  <input
+                    value={offer.label}
+                    onChange={(e) =>
+                      updateOffer(offer.id, { label: e.target.value })
+                    }
+                    placeholder="3 for 12"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Price">
+                  <input
+                    value={offer.price}
+                    onChange={(e) =>
+                      updateOffer(offer.id, { price: e.target.value })
+                    }
+                    placeholder="12"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Tickets">
+                  <input
+                    value={offer.quantity}
+                    onChange={(e) =>
+                      updateOffer(offer.id, { quantity: e.target.value })
+                    }
+                    placeholder="3"
+                    type="number"
+                    min="1"
+                    step="1"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => removeOffer(offer.id)}
+                disabled={offers.length <= 1}
+                style={{
+                  ...styles.dangerButton,
+                  cursor: offers.length <= 1 ? "not-allowed" : "pointer",
+                  opacity: offers.length <= 1 ? 0.55 : 1,
+                }}
+              >
+                Remove offer
+              </button>
+            </div>
+          ))}
         </div>
+      </FormSection>
 
-        {prizes.map((prize) => (
-          <div
-            key={prize.id}
-            style={{
-              display: "grid",
-              gap: 10,
-              padding: 12,
-              border: "1px solid #e2e8f0",
-              borderRadius: 10,
-              background: "#f8fafc",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "90px 1fr auto",
-                gap: 10,
-                alignItems: "end",
-              }}
-            >
-              <label style={{ display: "grid", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>
-                  Position
-                </span>
-                <input
-                  value={prize.position}
-                  onChange={(e) =>
-                    updatePrize(prize.id, { position: e.target.value })
-                  }
-                  type="number"
-                  min="1"
-                  step="1"
-                  style={{
-                    padding: 10,
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                  }}
-                />
-              </label>
+      <FormSection
+        title="Prize settings"
+        description="Choose which prizes are visible on the public raffle page."
+        action={
+          <button type="button" onClick={addPrize} style={styles.lightButton}>
+            + Add prize
+          </button>
+        }
+      >
+        <div style={styles.cardList}>
+          {prizes.map((prize, index) => (
+            <div key={prize.id} style={styles.prizeCard}>
+              <div style={styles.rowHeader}>
+                <strong>Prize {index + 1}</strong>
+                <label style={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={prize.is_public}
+                    onChange={(e) =>
+                      updatePrize(prize.id, { is_public: e.target.checked })
+                    }
+                  />
+                  Show publicly
+                </label>
+              </div>
 
-              <label style={{ display: "grid", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>
-                  Prize title
-                </span>
-                <input
-                  value={prize.title}
+              <div style={styles.prizeGrid}>
+                <Field label="Position">
+                  <input
+                    value={prize.position}
+                    onChange={(e) =>
+                      updatePrize(prize.id, { position: e.target.value })
+                    }
+                    type="number"
+                    min="1"
+                    step="1"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Prize title">
+                  <input
+                    value={prize.title}
+                    onChange={(e) =>
+                      updatePrize(prize.id, { title: e.target.value })
+                    }
+                    placeholder="Prize title"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Description optional">
+                <textarea
+                  value={prize.description}
                   onChange={(e) =>
-                    updatePrize(prize.id, { title: e.target.value })
+                    updatePrize(prize.id, { description: e.target.value })
                   }
-                  placeholder="Prize title"
-                  style={{
-                    padding: 10,
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                  }}
+                  rows={2}
+                  style={styles.textarea}
                 />
-              </label>
+              </Field>
 
               <button
                 type="button"
                 onClick={() => removePrize(prize.id)}
                 disabled={prizes.length <= 1}
                 style={{
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #fecaca",
-                  background: "#fff",
-                  color: "#b91c1c",
+                  ...styles.dangerButton,
                   cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
-                  opacity: prizes.length <= 1 ? 0.6 : 1,
+                  opacity: prizes.length <= 1 ? 0.55 : 1,
                 }}
               >
-                Remove
+                Remove prize
               </button>
             </div>
+          ))}
+        </div>
+      </FormSection>
 
-            <label style={{ display: "grid", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>
-                Description optional
-              </span>
-              <textarea
-                value={prize.description}
-                onChange={(e) =>
-                  updatePrize(prize.id, { description: e.target.value })
-                }
-                rows={2}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #cbd5e1",
-                }}
-              />
-            </label>
-
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontWeight: 700,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={prize.is_public}
-                onChange={(e) =>
-                  updatePrize(prize.id, { is_public: e.target.checked })
-                }
-              />
-              Show this prize on public page
-            </label>
+      <section style={styles.submitBar}>
+        <div>
+          <strong style={{ color: "#0f172a" }}>Ready to create?</strong>
+          <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>
+            Save as draft first if you want to review before publishing.
           </div>
-        ))}
+        </div>
 
-        <button
-          type="button"
-          onClick={addPrize}
-          style={{
-            width: "fit-content",
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #cbd5e1",
-            background: "#fff",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Add prize
+        <button type="submit" style={styles.submitButton}>
+          Create raffle
         </button>
       </section>
-
-      <label>
-        <div style={{ marginBottom: 6 }}>Status</div>
-        <select
-          name="status"
-          defaultValue="draft"
-          style={{ width: "100%", padding: 12 }}
-        >
-          <option value="draft">draft</option>
-          <option value="published">published</option>
-          <option value="closed">closed</option>
-        </select>
-      </label>
-
-      <button
-        type="submit"
-        style={{
-          width: "100%",
-          padding: 14,
-          border: "none",
-          borderRadius: 9999,
-          background: "#1683f8",
-          color: "#fff",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
-      >
-        Create raffle
-      </button>
     </form>
   );
 }
+
+function FormSection({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionHeader}>
+        <div>
+          <h3 style={styles.sectionTitle}>{title}</h3>
+          {description ? <p style={styles.sectionDescription}>{description}</p> : null}
+        </div>
+        {action}
+      </div>
+
+      <div style={styles.sectionBody}>{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={styles.summaryCard}>
+      <div style={styles.summaryLabel}>{label}</div>
+      <div style={styles.summaryValue}>{value}</div>
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  form: {
+    display: "grid",
+    gap: 18,
+    marginTop: 24,
+    maxWidth: 1040,
+  },
+  hero: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 22,
+    borderRadius: 24,
+    background: "#0f172a",
+    color: "#ffffff",
+  },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: 30,
+    letterSpacing: "-0.04em",
+    lineHeight: 1.08,
+  },
+  heroText: {
+    margin: "10px 0 0",
+    color: "#cbd5e1",
+    maxWidth: 640,
+    lineHeight: 1.55,
+  },
+  tenantPill: {
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    color: "#e2e8f0",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: 12,
+  },
+  summaryCard: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 26,
+    fontWeight: 900,
+    marginTop: 4,
+  },
+  section: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 21,
+    letterSpacing: "-0.02em",
+  },
+  sectionDescription: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  sectionBody: {
+    display: "grid",
+    gap: 14,
+  },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+  inputMuted: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 900,
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+  },
+  twoColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+  },
+  threeColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 12,
+  },
+  imageLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gap: 16,
+    alignItems: "start",
+  },
+  imageControls: {
+    display: "grid",
+    gap: 12,
+  },
+  uploadRow: {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  uploadButton: {
+    display: "inline-flex",
+    padding: "11px 15px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+  },
+  successText: {
+    color: "#166534",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+  mutedText: {
+    color: "#64748b",
+    fontSize: 14,
+  },
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    overflow: "hidden",
+  },
+  emptyPreview: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    fontSize: 44,
+  },
+  errorBox: {
+    padding: 12,
+    borderRadius: 12,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+    fontWeight: 700,
+  },
+  colourGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  colourButton: {
+    border: "none",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 800,
+  },
+  inlineControls: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  lightButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    cursor: "pointer",
+    fontWeight: 900,
+  },
+  selectedBox: {
+    color: "#475569",
+    padding: 12,
+    borderRadius: 12,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    fontSize: 14,
+  },
+  cardList: {
+    display: "grid",
+    gap: 12,
+  },
+  offerCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    background: "#f8fafc",
+  },
+  prizeCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    background: "#f8fafc",
+  },
+  rowHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    color: "#0f172a",
+  },
+  checkboxLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    fontWeight: 800,
+    color: "#334155",
+    fontSize: 14,
+  },
+  prizeGrid: {
+    display: "grid",
+    gridTemplateColumns: "110px minmax(0, 1fr)",
+    gap: 12,
+  },
+  dangerButton: {
+    width: "fit-content",
+    padding: "9px 12px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#ffffff",
+    color: "#b91c1c",
+    fontWeight: 900,
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  submitButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+};
