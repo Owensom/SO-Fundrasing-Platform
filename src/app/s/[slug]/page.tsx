@@ -18,6 +18,7 @@ type Winner = {
 
 type SquaresGame = {
   id: string;
+  tenantSlug: string;
   slug: string;
   title: string;
   description?: string;
@@ -100,9 +101,12 @@ export default function PublicSquaresPage({ params }: Props) {
       setError("");
       setReservationMessage("");
 
-      const response = await fetch(`/api/public/squares/${encodeURIComponent(slug)}`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/public/squares/${encodeURIComponent(slug)}`,
+        {
+          cache: "no-store",
+        },
+      );
 
       const text = await response.text();
 
@@ -120,7 +124,9 @@ export default function PublicSquaresPage({ params }: Props) {
 
       setGame(parsed.game ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load squares game");
+      setError(
+        err instanceof Error ? err.message : "Failed to load squares game",
+      );
     } finally {
       setLoading(false);
     }
@@ -351,18 +357,14 @@ export default function PublicSquaresPage({ params }: Props) {
     <div style={styles.page}>
       <div style={styles.container}>
         <nav style={styles.navBar}>
-          <Link href="/" style={styles.navLink}>
+          <Link href={`/c/${game.tenantSlug}`} style={styles.navLink}>
             ← Back to campaigns
           </Link>
         </nav>
 
         {game.imageUrl ? (
           <div style={styles.imageWrap}>
-            <img
-              src={game.imageUrl}
-              alt={game.title}
-              style={styles.image}
-            />
+            <img src={game.imageUrl} alt={game.title} style={styles.image} />
           </div>
         ) : null}
 
@@ -389,7 +391,10 @@ export default function PublicSquaresPage({ params }: Props) {
 
             <div style={{ display: "grid", gap: 10 }}>
               {game.prizes.map((prize, index) => (
-                <div key={`${index}-${prize.title ?? prize.name}`} style={styles.prizeCard}>
+                <div
+                  key={`${index}-${prize.title ?? prize.name}`}
+                  style={styles.prizeCard}
+                >
                   <div style={styles.prizePosition}>{ordinal(index + 1)}</div>
 
                   <div style={styles.prizeContent}>
@@ -498,7 +503,11 @@ export default function PublicSquaresPage({ params }: Props) {
                 Auto select
               </button>
 
-              <button type="button" onClick={clearBasket} style={styles.clearButton}>
+              <button
+                type="button"
+                onClick={clearBasket}
+                style={styles.clearButton}
+              >
                 Clear basket
               </button>
             </div>
@@ -528,7 +537,8 @@ export default function PublicSquaresPage({ params }: Props) {
                       : "#ffffff",
                   color: isSelected || isUnavailable ? "#ffffff" : "#111827",
                   opacity: canReserve ? 1 : 0.7,
-                  cursor: isUnavailable || !canReserve ? "not-allowed" : "pointer",
+                  cursor:
+                    isUnavailable || !canReserve ? "not-allowed" : "pointer",
                 }}
               >
                 {square}
@@ -590,7 +600,9 @@ export default function PublicSquaresPage({ params }: Props) {
             </span>
           </label>
 
-          <div>Total today: {formatCurrencyFromCents(totalCents, game.currency)}</div>
+          <div>
+            Total today: {formatCurrencyFromCents(totalCents, game.currency)}
+          </div>
         </div>
 
         <h2 style={styles.heading}>Your details</h2>
