@@ -203,7 +203,11 @@ export default async function AdminRafflesPage() {
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-       <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.secondaryLink}>
+      <Link
+  href={`/c/${tenantSlug}?adminReturn=/admin/raffles`}
+  target="_blank"
+  style={styles.secondaryLink}
+>
   Public campaigns page
 </Link>
 
