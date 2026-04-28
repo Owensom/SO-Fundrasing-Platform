@@ -200,11 +200,38 @@ async function sendEmail(params: {
 }) {
   const brand = getBranding(params.branding);
 
-  await resend.emails.send({
-    from: `${brand.name} <noreply@sofundraising.it.com>`,
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL?.trim() || "noreply@sofundraising.it.com";
+
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("Missing RESEND_API_KEY");
+  }
+
+  const result = await resend.emails.send({
+    from: `${brand.name} <${fromEmail}>`,
     to: params.to,
     subject: params.subject,
     html: params.html,
+  });
+
+  if (result.error) {
+    console.error("Resend email error", {
+      to: params.to,
+      subject: params.subject,
+      error: result.error,
+    });
+
+    throw new Error(
+      typeof result.error.message === "string"
+        ? result.error.message
+        : "Resend failed to send email",
+    );
+  }
+
+  console.log("Email sent", {
+    to: params.to,
+    subject: params.subject,
+    id: result.data?.id,
   });
 }
 
