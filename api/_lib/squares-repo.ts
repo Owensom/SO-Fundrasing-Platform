@@ -24,6 +24,7 @@ export type SquaresGameRow = {
   title: string;
   description: string | null;
   image_url: string | null;
+  draw_at: string | null;
   status: SquaresStatus;
   currency: CurrencyCode | null;
   price_per_square_cents: number;
@@ -39,6 +40,7 @@ export type CreateSquaresGameInput = {
   title: string;
   description?: string;
   image_url?: string;
+  draw_at?: string | null;
   status?: SquaresStatus;
   currency?: CurrencyCode;
   price_per_square_cents: number;
@@ -138,7 +140,7 @@ export function normalisePrizes(value: unknown): SquarePrize[] {
       const raw = item as Record<string, unknown>;
 
       return {
-        title: String(raw.title ?? "").trim(),
+        title: String(raw.title ?? raw.name ?? "").trim(),
         description: String(raw.description ?? "").trim(),
         imageUrl: String(raw.imageUrl ?? raw.image_url ?? "").trim(),
       };
@@ -188,6 +190,7 @@ export async function getSquaresGameByTenantAndSlug(
 
 export async function createSquaresGame(input: CreateSquaresGameInput) {
   const id = uuid();
+
   const totalSquares = Math.min(
     500,
     Math.max(1, Number(input.total_squares || 100)),
@@ -208,13 +211,14 @@ export async function createSquaresGame(input: CreateSquaresGameInput) {
         title,
         description,
         image_url,
+        draw_at,
         status,
         currency,
         price_per_square_cents,
         total_squares,
         config_json
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
       returning *
     `,
     [
@@ -224,6 +228,7 @@ export async function createSquaresGame(input: CreateSquaresGameInput) {
       input.title,
       input.description ?? "",
       input.image_url ?? "",
+      input.draw_at ?? null,
       input.status ?? "draft",
       input.currency ?? "GBP",
       Number(input.price_per_square_cents || 0),
@@ -242,6 +247,7 @@ export async function updateSquaresGame(
   if (!existing) return null;
 
   const currentConfig = existing.config_json ?? {};
+
   const totalSquares =
     input.total_squares != null
       ? Math.min(500, Math.max(1, Number(input.total_squares)))
@@ -271,11 +277,12 @@ export async function updateSquaresGame(
         title = $4,
         description = $5,
         image_url = $6,
-        status = $7,
-        currency = $8,
-        price_per_square_cents = $9,
-        total_squares = $10,
-        config_json = $11::jsonb,
+        draw_at = $7,
+        status = $8,
+        currency = $9,
+        price_per_square_cents = $10,
+        total_squares = $11,
+        config_json = $12::jsonb,
         updated_at = now()
       where id = $1
       returning *
@@ -287,6 +294,7 @@ export async function updateSquaresGame(
       input.title ?? existing.title,
       input.description ?? existing.description ?? "",
       input.image_url ?? existing.image_url ?? "",
+      input.draw_at !== undefined ? input.draw_at : existing.draw_at ?? null,
       input.status ?? existing.status,
       input.currency ?? existing.currency ?? "GBP",
       input.price_per_square_cents != null
