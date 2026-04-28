@@ -1,234 +1,273 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import ImageUploadField from "@/components/ImageUploadField";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { listSquaresGames } from "../../../../api/_lib/squares-repo";
 
-export default function NewSquaresGamePage() {
+function formatMoney(cents: number | null | undefined, currency: string | null | undefined) {
+  return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
+}
+
+function formatDrawDate(value: string | null | undefined) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function getStatusStyle(status: string | null | undefined): CSSProperties {
+  const clean = String(status || "draft").toLowerCase();
+
+  if (clean === "published") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      border: "1px solid #bbf7d0",
+    };
+  }
+
+  if (clean === "closed") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid #fed7aa",
+    };
+  }
+
+  if (clean === "drawn") {
+    return {
+      background: "#dbeafe",
+      color: "#1d4ed8",
+      border: "1px solid #bfdbfe",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+  };
+}
+
+function progressPercent(sold: number, total: number) {
+  if (!total || total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
+}
+
+export default async function AdminSquaresListPage() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((v) => String(v))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  const games = await listSquaresGames(tenantSlug);
+
+  const published = games.filter((game) => game.status === "published").length;
+
+  const totalSquares = games.reduce(
+    (sum, game) => sum + Number(game.total_squares || 0),
+    0,
+  );
+
+  const soldSquares = games.reduce((sum, game) => {
+    const sold = Array.isArray(game.config_json?.sold)
+      ? game.config_json.sold.length
+      : 0;
+
+    return sum + sold;
+  }, 0);
+
+  const remainingSquares = Math.max(totalSquares - soldSquares, 0);
+
   return (
     <main style={styles.page}>
-      <section style={styles.topBar}>
-        <Link href="/admin/squares" style={styles.backLink}>
-          ← Back to squares
-        </Link>
+      <section style={styles.header}>
+        <div>
+          <div style={styles.badge}>Admin dashboard</div>
 
-        <Link href="/admin" style={styles.publicLink}>
-          Dashboard
-        </Link>
-      </section>
+          <h1 style={styles.title}>Manage squares</h1>
 
-      <section style={styles.hero}>
-        <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Squares creator</div>
-
-          <div style={styles.heroTitleRow}>
-            <h1 style={styles.heroTitle}>Create squares game</h1>
-          </div>
-
-          <p style={styles.heroSlug}>/admin/squares/new</p>
-
-          <p style={styles.heroDescription}>
-            Set up a new squares game with image, pricing, draw date, board size
-            and prizes.
+          <p style={styles.subtitle}>
+            Tenant: <strong>{tenantSlug}</strong>
           </p>
         </div>
 
-        <div style={styles.heroImageWrap}>
-          <div style={styles.heroImageEmpty}>🔲</div>
+        <div style={styles.nav}>
+          <Link href="/admin" style={styles.navButton}>
+            ← Dashboard
+          </Link>
+
+          <Link href="/admin/raffles" style={styles.navButton}>
+            Raffles
+          </Link>
+
+          <Link href="/admin/squares" style={styles.navButtonActive}>
+            Squares
+          </Link>
+
+          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
+            Public campaigns page
+          </Link>
+
+          <Link href="/admin/squares/new" style={styles.createButton}>
+            + Create squares
+          </Link>
         </div>
       </section>
 
-      <form action="/api/admin/squares" method="post" style={styles.form}>
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>Game details</h2>
-              <p style={styles.sectionDescription}>
-                These settings control the public squares page.
-              </p>
-            </div>
+      <section style={styles.statsGrid}>
+        <StatCard label="Total square games" value={games.length} />
+        <StatCard label="Published" value={published} />
+        <StatCard label="Squares sold" value={soldSquares} />
+        <StatCard label="Remaining" value={remainingSquares} />
+      </section>
 
-            <button type="submit" style={styles.submitButton}>
-              Create game
-            </button>
-          </div>
+      {games.length === 0 ? (
+        <section style={styles.emptyCard}>
+          <h2 style={{ margin: 0 }}>No squares games yet</h2>
+          <p style={styles.muted}>Create your first squares game.</p>
 
-          <div style={styles.twoColumn}>
-            <Field label="Title">
-              <input
-                name="title"
-                required
-                placeholder="Summer squares"
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Slug">
-              <input
-                name="slug"
-                placeholder="summer-squares"
-                style={styles.input}
-              />
-            </Field>
-          </div>
-
-          <Field label="Description">
-            <textarea
-              name="description"
-              rows={4}
-              placeholder="Describe the game, prize and draw details."
-              style={styles.textarea}
-            />
-          </Field>
-
-          <div style={styles.mediaBox}>
-            <div>
-              <h3 style={styles.subTitle}>Squares image</h3>
-              <p style={styles.sectionDescription}>
-                Upload or paste an image URL for the public squares page.
-              </p>
-
-              <ImageUploadField currentImageUrl="" />
-            </div>
-
-            <div style={styles.previewBox}>
-              <div style={styles.emptyPreview}>🔲</div>
-            </div>
-          </div>
-
-          <div style={styles.twoColumn}>
-            <Field label="Draw date">
-              <input name="draw_at" type="datetime-local" style={styles.input} />
-            </Field>
-
-            <Field label="Status">
-              <select name="status" defaultValue="draft" style={styles.input}>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed</option>
-              </select>
-            </Field>
-          </div>
+          <Link href="/admin/squares/new" style={styles.createButton}>
+            + Create squares
+          </Link>
         </section>
+      ) : (
+        <section style={styles.list}>
+          {games.map((game) => {
+            const sold = Array.isArray(game.config_json?.sold)
+              ? game.config_json.sold.length
+              : 0;
 
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>Squares setup</h2>
-              <p style={styles.sectionDescription}>
-                Configure board size and pricing. Maximum board size is 500
-                squares.
-              </p>
-            </div>
-          </div>
+            const total = Number(game.total_squares || 0);
+            const remaining = Math.max(total - sold, 0);
+            const progress = progressPercent(sold, total);
 
-          <div style={styles.threeColumn}>
-            <Field label="Number of squares">
-              <input
-                name="total_squares"
-                type="number"
-                min={1}
-                max={500}
-                defaultValue={100}
-                required
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Price per square">
-              <input
-                name="price_per_square"
-                type="number"
-                min={0}
-                step="0.01"
-                defaultValue="2.00"
-                required
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Currency">
-              <select name="currency" defaultValue="GBP" style={styles.input}>
-                <option value="GBP">GBP</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </Field>
-          </div>
-        </section>
-
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>Prizes</h2>
-              <p style={styles.sectionDescription}>
-                Add one prize per row. Blank rows are ignored when saved.
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr style={styles.tableHeadRow}>
-                  <th style={styles.th}>Prize</th>
-                  <th style={styles.th}>Description</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <tr key={index} style={styles.tr}>
-                    <td style={styles.td}>
-                      <input
-                        name="prize_title"
-                        defaultValue={index === 0 ? "1st Prize" : ""}
-                        placeholder={`Prize ${index + 1}`}
-                        style={styles.input}
+            return (
+              <article key={game.id} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div style={styles.imageWrap}>
+                    {game.image_url ? (
+                      <img
+                        src={game.image_url}
+                        alt={game.title}
+                        style={styles.image}
                       />
-                    </td>
+                    ) : (
+                      <div style={styles.imageEmpty}>🔲</div>
+                    )}
+                  </div>
 
-                    <td style={styles.td}>
-                      <input
-                        name="prize_description"
-                        placeholder="Optional prize description"
-                        style={styles.input}
+                  <div style={styles.cardMain}>
+                    <div style={styles.cardHeader}>
+                      <div>
+                        <h2 style={styles.cardTitle}>
+                          {game.title || "Untitled squares game"}
+                        </h2>
+
+                        <p style={styles.slug}>/s/{game.slug}</p>
+                      </div>
+
+                      <span
+                        style={{
+                          ...styles.status,
+                          ...getStatusStyle(game.status),
+                        }}
+                      >
+                        {game.status}
+                      </span>
+                    </div>
+
+                    <div style={styles.detailGrid}>
+                      <Detail
+                        label="Price"
+                        value={formatMoney(
+                          game.price_per_square_cents,
+                          game.currency,
+                        )}
                       />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
 
-        <section style={styles.submitBar}>
-          <div>
-            <strong style={{ color: "#0f172a" }}>Create squares game</strong>
-            <div style={styles.mutedSmall}>
-              This creates a new public squares campaign for this tenant.
-            </div>
-          </div>
+                      <Detail label="Draw date" value={formatDrawDate(game.draw_at)} />
 
-          <button type="submit" style={styles.submitButton}>
-            Create squares game
-          </button>
+                      <Detail label="Total" value={total} />
+
+                      <Detail label="Sold" value={sold} />
+
+                      <Detail label="Remaining" value={remaining} />
+                    </div>
+
+                    <div style={styles.progressRow}>
+                      <div style={styles.progressLabel}>Sales progress</div>
+                      <div style={styles.progressPercent}>{progress}%</div>
+                    </div>
+
+                    <div style={styles.progressTrack}>
+                      <div
+                        style={{
+                          ...styles.progressFill,
+                          width: `${progress}%`,
+                        }}
+                      />
+                    </div>
+
+                    <div style={styles.actions}>
+                      <Link
+                        href={`/admin/squares/${game.id}`}
+                        style={styles.openButton}
+                      >
+                        Open details
+                      </Link>
+
+                      <a
+                        href={`/s/${game.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.viewButton}
+                      >
+                        View campaign page
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </section>
-      </form>
+      )}
     </main>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <label style={styles.field}>
-      <span style={styles.label}>{label}</span>
-      {children}
-    </label>
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={styles.detail}>
+      <div style={styles.detailLabel}>{label}</div>
+      <div style={styles.detailValue}>{value}</div>
+    </div>
   );
 }
 
@@ -240,256 +279,233 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     minHeight: "100vh",
   },
-  topBar: {
+  header: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 16,
+    gap: 16,
+    alignItems: "flex-start",
     flexWrap: "wrap",
+    marginBottom: 24,
   },
-  backLink: {
-    color: "#334155",
-    textDecoration: "none",
-    fontWeight: 800,
-  },
-  publicLink: {
+  badge: {
     display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#e0f2fe",
+    color: "#0369a1",
+    fontSize: 13,
+    fontWeight: 900,
+    marginBottom: 10,
+  },
+  title: {
+    margin: 0,
+    fontSize: 38,
+    lineHeight: 1.1,
+    color: "#0f172a",
+  },
+  subtitle: {
+    margin: "10px 0 0",
+    color: "#64748b",
+  },
+  nav: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  navButton: {
+    padding: "12px 18px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
+    fontWeight: 900,
   },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 260px",
-    gap: 18,
-    alignItems: "stretch",
-    padding: 22,
-    borderRadius: 24,
+  navButtonActive: {
+    padding: "12px 18px",
+    borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
-    marginBottom: 16,
-  },
-  heroContent: {
-    minWidth: 0,
-  },
-  eyebrow: {
-    display: "inline-flex",
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    fontSize: 12,
+    border: "1px solid #0f172a",
+    textDecoration: "none",
     fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
   },
-  heroTitleRow: {
-    display: "flex",
-    gap: 12,
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
+  createButton: {
+    display: "inline-flex",
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 900,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
-  heroTitle: {
-    margin: 0,
-    fontSize: 34,
-    lineHeight: 1.08,
-    letterSpacing: "-0.04em",
-    wordBreak: "break-word",
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gap: 14,
+    marginBottom: 22,
   },
-  heroSlug: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    fontSize: 14,
-    fontWeight: 700,
-    wordBreak: "break-word",
+  statCard: {
+    padding: 18,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  heroDescription: {
-    margin: "12px 0 0",
-    color: "#e2e8f0",
-    lineHeight: 1.55,
-    maxWidth: 720,
+  statLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 900,
   },
-  heroImageWrap: {
-    borderRadius: 18,
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.12)",
-    overflow: "hidden",
-    minHeight: 180,
+  statValue: {
+    marginTop: 6,
+    fontSize: 28,
+    fontWeight: 950,
+    color: "#0f172a",
   },
-  heroImageEmpty: {
-    height: "100%",
-    minHeight: 180,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 46,
-    color: "#94a3b8",
-  },
-  form: {
+  list: {
     display: "grid",
     gap: 16,
   },
-  section: {
+  card: {
     padding: 18,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.02em",
-  },
-  sectionDescription: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  twoColumn: {
+  cardTop: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "110px 1fr",
+    gap: 18,
   },
-  threeColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 12,
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    resize: "vertical",
-    boxSizing: "border-box",
-  },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
-    gap: 16,
-    padding: 14,
+  imageWrap: {
+    width: 110,
+    height: 110,
     borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  subTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
-  previewBox: {
-    height: 220,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
     overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
   },
-  emptyPreview: {
+  image: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  imageEmpty: {
+    width: "100%",
     height: "100%",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    fontSize: 32,
     color: "#94a3b8",
-    fontSize: 42,
   },
-  tableWrap: {
-    overflowX: "auto",
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
+  cardMain: {
+    minWidth: 0,
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  tableHeadRow: {
-    background: "#f8fafc",
-  },
-  th: {
-    textAlign: "left",
-    padding: "14px 16px",
-    fontSize: 12,
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    fontWeight: 900,
-  },
-  tr: {
-    borderTop: "1px solid #e2e8f0",
-  },
-  td: {
-    padding: "12px",
-    verticalAlign: "top",
-  },
-  submitBar: {
+  cardHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.15,
+    color: "#0f172a",
+  },
+  slug: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontWeight: 700,
+  },
+  status: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 900,
+    textTransform: "capitalize",
+  },
+  detailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  detailLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+  },
+  progressRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 14,
+    color: "#64748b",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  progressLabel: {},
+  progressPercent: {},
+  progressTrack: {
+    height: 10,
+    background: "#e2e8f0",
+    borderRadius: 999,
+    overflow: "hidden",
+    marginTop: 8,
+  },
+  progressFill: {
+    height: "100%",
+    background: "#16a34a",
+    borderRadius: 999,
+  },
+  actions: {
+    display: "flex",
+    gap: 10,
     flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 18,
+    marginTop: 16,
+  },
+  openButton: {
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  viewButton: {
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  submitButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-  mutedSmall: {
+  muted: {
     color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
   },
 };
