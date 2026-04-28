@@ -89,6 +89,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
+  const [drawAt, setDrawAt] = useState("");
 
   const [imageUrl, setImageUrl] = useState("");
   const [imagePosition, setImagePosition] = useState("center");
@@ -201,7 +202,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
   function updateOffer(id: string, patch: Partial<OfferRow>) {
     setOffers((current) =>
-      current.map((offer) => (offer.id === id ? { ...offer, ...patch } : offer)),
+      current.map((offer) =>
+        offer.id === id ? { ...offer, ...patch } : offer,
+      ),
     );
   }
 
@@ -218,7 +221,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
   function updatePrize(id: string, patch: Partial<PrizeRow>) {
     setPrizes((current) =>
-      current.map((prize) => (prize.id === id ? { ...prize, ...patch } : prize)),
+      current.map((prize) =>
+        prize.id === id ? { ...prize, ...patch } : prize,
+      ),
     );
   }
 
@@ -322,10 +327,31 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         />
       </label>
 
+      <label>
+        <div style={{ marginBottom: 6 }}>Draw date</div>
+        <input
+          name="draw_at"
+          type="datetime-local"
+          value={drawAt}
+          onChange={(e) => setDrawAt(e.target.value)}
+          style={{ width: "100%", padding: 12 }}
+        />
+        <div style={{ marginTop: 6, color: "#64748b", fontSize: 13 }}>
+          Optional. This will be shown to buyers and in admin.
+        </div>
+      </label>
+
       <div style={{ display: "grid", gap: 10 }}>
         <div style={{ fontWeight: 600 }}>Image</div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <label
             style={{
               display: "inline-block",
@@ -349,7 +375,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           </label>
 
           {imageUrl ? (
-            <span style={{ color: "#166534", fontWeight: 600 }}>Image uploaded</span>
+            <span style={{ color: "#166534", fontWeight: 600 }}>
+              Image uploaded
+            </span>
           ) : (
             <span style={{ color: "#64748b" }}>No image uploaded yet</span>
           )}
@@ -417,7 +445,11 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
       <label>
         <div style={{ marginBottom: 6 }}>Currency</div>
-        <select name="currency" defaultValue="EUR" style={{ width: "100%", padding: 12 }}>
+        <select
+          name="currency"
+          defaultValue="EUR"
+          style={{ width: "100%", padding: 12 }}
+        >
           <option value="EUR">EUR</option>
           <option value="GBP">GBP</option>
           <option value="USD">USD</option>
@@ -474,9 +506,15 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           border: "1px solid #e2e8f0",
         }}
       >
-        <div><strong>Numbers per colour:</strong> {numbersPerColour}</div>
-        <div><strong>Selected colours:</strong> {selectedColours.length}</div>
-        <div><strong>Total tickets:</strong> {totalTickets}</div>
+        <div>
+          <strong>Numbers per colour:</strong> {numbersPerColour}
+        </div>
+        <div>
+          <strong>Selected colours:</strong> {selectedColours.length}
+        </div>
+        <div>
+          <strong>Total tickets:</strong> {totalTickets}
+        </div>
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>
@@ -529,12 +567,19 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         </div>
 
         <div style={{ color: "#475569" }}>
-          Selected: {selectedColours.length ? selectedColours.join(", ") : "None"}
+          Selected:{" "}
+          {selectedColours.length ? selectedColours.join(", ") : "None"}
         </div>
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <div style={{ fontWeight: 600 }}>Offers</div>
           <button
             type="button"
@@ -581,7 +626,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             />
             <input
               value={offer.quantity}
-              onChange={(e) => updateOffer(offer.id, { quantity: e.target.value })}
+              onChange={(e) =>
+                updateOffer(offer.id, { quantity: e.target.value })
+              }
               placeholder="3"
               type="number"
               min="1"
@@ -592,7 +639,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               <input
                 type="checkbox"
                 checked={offer.is_active}
-                onChange={(e) => updateOffer(offer.id, { is_active: e.target.checked })}
+                onChange={(e) =>
+                  updateOffer(offer.id, { is_active: e.target.checked })
+                }
               />
               Active
             </label>
@@ -658,24 +707,40 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               }}
             >
               <label style={{ display: "grid", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>Position</span>
+                <span style={{ fontSize: 12, color: "#64748b" }}>
+                  Position
+                </span>
                 <input
                   value={prize.position}
-                  onChange={(e) => updatePrize(prize.id, { position: e.target.value })}
+                  onChange={(e) =>
+                    updatePrize(prize.id, { position: e.target.value })
+                  }
                   type="number"
                   min="1"
                   step="1"
-                  style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1" }}
+                  style={{
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                  }}
                 />
               </label>
 
               <label style={{ display: "grid", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>Prize title</span>
+                <span style={{ fontSize: 12, color: "#64748b" }}>
+                  Prize title
+                </span>
                 <input
                   value={prize.title}
-                  onChange={(e) => updatePrize(prize.id, { title: e.target.value })}
+                  onChange={(e) =>
+                    updatePrize(prize.id, { title: e.target.value })
+                  }
                   placeholder="Prize title"
-                  style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1" }}
+                  style={{
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                  }}
                 />
               </label>
 
@@ -703,17 +768,32 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               </span>
               <textarea
                 value={prize.description}
-                onChange={(e) => updatePrize(prize.id, { description: e.target.value })}
+                onChange={(e) =>
+                  updatePrize(prize.id, { description: e.target.value })
+                }
                 rows={2}
-                style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1" }}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                }}
               />
             </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 700,
+              }}
+            >
               <input
                 type="checkbox"
                 checked={prize.is_public}
-                onChange={(e) => updatePrize(prize.id, { is_public: e.target.checked })}
+                onChange={(e) =>
+                  updatePrize(prize.id, { is_public: e.target.checked })
+                }
               />
               Show this prize on public page
             </label>
@@ -739,7 +819,11 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
       <label>
         <div style={{ marginBottom: 6 }}>Status</div>
-        <select name="status" defaultValue="draft" style={{ width: "100%", padding: 12 }}>
+        <select
+          name="status"
+          defaultValue="draft"
+          style={{ width: "100%", padding: 12 }}
+        >
           <option value="draft">draft</option>
           <option value="published">published</option>
           <option value="closed">closed</option>
