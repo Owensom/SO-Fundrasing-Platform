@@ -11,6 +11,7 @@ type RaffleItem = {
   title: string;
   description: string;
   image_url: string;
+  draw_at: string | null;
   currency: string;
   ticket_price: number;
   total_tickets: number;
@@ -52,6 +53,19 @@ async function getAdminRaffles(): Promise<RaffleItem[]> {
   }
 
   return data.items;
+}
+
+function formatDrawDate(value: string | null) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Not set";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 export default async function AdminRafflesPage() {
@@ -150,6 +164,7 @@ export default async function AdminRafflesPage() {
                     borderRadius: 9999,
                     border: "1px solid #d1d5db",
                     fontSize: 14,
+                    textTransform: "capitalize",
                   }}
                 >
                   {raffle.status}
@@ -159,7 +174,7 @@ export default async function AdminRafflesPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
                   gap: 12,
                   marginTop: 16,
                 }}
@@ -169,6 +184,13 @@ export default async function AdminRafflesPage() {
                   <div>
                     {raffle.ticket_price} {raffle.currency}
                   </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    Draw date
+                  </div>
+                  <div>{formatDrawDate(raffle.draw_at)}</div>
                 </div>
 
                 <div>
@@ -182,7 +204,9 @@ export default async function AdminRafflesPage() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>Remaining</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    Remaining
+                  </div>
                   <div>{raffle.remaining_tickets}</div>
                 </div>
               </div>
