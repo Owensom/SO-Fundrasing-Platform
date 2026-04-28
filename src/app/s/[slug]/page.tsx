@@ -59,7 +59,6 @@ function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
 
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -103,9 +102,7 @@ export default function PublicSquaresPage({ params }: Props) {
 
       const response = await fetch(
         `/api/public/squares/${encodeURIComponent(slug)}`,
-        {
-          cache: "no-store",
-        },
+        { cache: "no-store" },
       );
 
       const text = await response.text();
@@ -348,634 +345,828 @@ export default function PublicSquaresPage({ params }: Props) {
     }
   }
 
-  if (!slug) return <div style={styles.wrap}>Loading…</div>;
-  if (loading) return <div style={styles.wrap}>Loading squares game…</div>;
-  if (error && !game) return <div style={styles.wrap}>{error}</div>;
-  if (!game) return <div style={styles.wrap}>Squares game not found.</div>;
+  if (!slug) return <div className="sq-wrap">Loading…</div>;
+  if (loading) return <div className="sq-wrap">Loading squares game…</div>;
+  if (error && !game) return <div className="sq-wrap">{error}</div>;
+  if (!game) return <div className="sq-wrap">Squares game not found.</div>;
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <nav style={styles.navBar}>
-          <Link href={`/c/${game.tenantSlug}`} style={styles.navLink}>
-            ← Back to campaigns
-          </Link>
-        </nav>
+    <>
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
 
-        {game.imageUrl ? (
-          <div style={styles.imageWrap}>
-            <img src={game.imageUrl} alt={game.title} style={styles.image} />
-          </div>
-        ) : null}
+        .sq-page {
+          min-height: 100vh;
+          background: #f8fafc;
+          padding: 16px;
+        }
 
-        <h1 style={styles.title}>{game.title}</h1>
+        .sq-container {
+          max-width: 1100px;
+          margin: 0 auto;
+          background: #ffffff;
+          border-radius: 16px;
+          padding: 18px;
+          box-shadow: 0 2px 14px rgba(15, 23, 42, 0.08);
+        }
 
-        {game.description ? (
-          <p style={styles.description}>{game.description}</p>
-        ) : null}
+        .sq-wrap {
+          padding: 24px;
+        }
 
-        <div style={styles.totalBox}>
-          <div>
-            Square price:{" "}
-            {formatCurrencyFromCents(game.pricePerSquareCents, game.currency)}
-          </div>
-          <div>Draw date: {formatDateTime(game.drawAt)}</div>
-          <div>Total squares: {game.totalSquares}</div>
-          <div>Status: {game.status}</div>
-          <div>Available now: {availableCount}</div>
-        </div>
+        .sq-nav-bar {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-bottom: 16px;
+        }
 
-        {game.prizes.length > 0 ? (
-          <section style={styles.prizesBox}>
-            <div style={styles.prizesTitle}>Prizes</div>
+        .sq-nav-link {
+          display: inline-flex;
+          padding: 10px 14px;
+          border-radius: 999px;
+          background: #ffffff;
+          color: #0f172a;
+          border: 1px solid #cbd5e1;
+          text-decoration: none;
+          font-weight: 800;
+          font-size: 14px;
+        }
 
-            <div style={{ display: "grid", gap: 10 }}>
-              {game.prizes.map((prize, index) => (
-                <div
-                  key={`${index}-${prize.title ?? prize.name}`}
-                  style={styles.prizeCard}
-                >
-                  <div style={styles.prizePosition}>{ordinal(index + 1)}</div>
+        .sq-image-wrap {
+          width: 100%;
+          height: 360px;
+          overflow: hidden;
+          border-radius: 16px;
+          margin-bottom: 20px;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+        }
 
-                  <div style={styles.prizeContent}>
-                    <div style={styles.prizeTitle}>
-                      {prize.title || prize.name || `Prize ${index + 1}`}
-                    </div>
+        .sq-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center;
+          display: block;
+        }
 
-                    {prize.description ? (
-                      <div style={styles.prizeDescription}>
-                        {prize.description}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+        .sq-title {
+          margin: 0 0 8px;
+          font-size: clamp(28px, 7vw, 42px);
+          line-height: 1.1;
+          color: #0f172a;
+        }
+
+        .sq-description {
+          margin: 0 0 16px;
+          color: #475569;
+          line-height: 1.6;
+          word-break: break-word;
+        }
+
+        .sq-heading {
+          margin-top: 24px;
+          margin-bottom: 12px;
+          font-size: clamp(20px, 5vw, 28px);
+          line-height: 1.2;
+        }
+
+        .sq-info-box {
+          margin-top: 20px;
+          padding: 14px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          display: grid;
+          gap: 8px;
+          font-weight: 700;
+          line-height: 1.4;
+          word-break: break-word;
+        }
+
+        .sq-prizes-box {
+          margin-top: 20px;
+          padding: 16px;
+          border-radius: 16px;
+          background: #fff7ed;
+          border: 1px solid #fed7aa;
+        }
+
+        .sq-prizes-title {
+          font-size: 22px;
+          font-weight: 900;
+          color: #9a3412;
+          margin-bottom: 12px;
+        }
+
+        .sq-prize-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .sq-prize-card {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          padding: 14px;
+          border-radius: 12px;
+          background: #ffffff;
+          border: 1px solid #fed7aa;
+          align-items: flex-start;
+        }
+
+        .sq-prize-position {
+          font-size: 22px;
+          font-weight: 900;
+          color: #c2410c;
+          min-width: 70px;
+          flex-shrink: 0;
+        }
+
+        .sq-prize-content {
+          flex: 1 1 200px;
+          min-width: 0;
+        }
+
+        .sq-prize-title {
+          font-size: 18px;
+          font-weight: 900;
+          color: #111827;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+        }
+
+        .sq-prize-description {
+          margin-top: 4px;
+          font-size: 14px;
+          color: #64748b;
+          line-height: 1.45;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+        }
+
+        .sq-winners-box {
+          margin-top: 20px;
+          padding: 16px;
+          border-radius: 16px;
+          background: #ecfdf5;
+          border: 1px solid #a7f3d0;
+        }
+
+        .sq-winners-title {
+          font-size: 22px;
+          font-weight: 900;
+          color: #065f46;
+          margin-bottom: 12px;
+        }
+
+        .sq-winners-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .sq-winner-card {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+          padding: 14px;
+          border-radius: 12px;
+          background: #ffffff;
+          border: 1px solid #bbf7d0;
+          align-items: flex-start;
+        }
+
+        .sq-winner-block {
+          flex: 1 1 140px;
+          min-width: 0;
+        }
+
+        .sq-winner-label {
+          font-size: 12px;
+          color: #64748b;
+          margin-bottom: 4px;
+          font-weight: 700;
+        }
+
+        .sq-winner-prize {
+          font-size: 20px;
+          font-weight: 900;
+          color: #065f46;
+          word-break: break-word;
+        }
+
+        .sq-winner-ticket {
+          font-size: 24px;
+          font-weight: 900;
+          color: #111827;
+          word-break: break-word;
+        }
+
+        .sq-winner-name {
+          font-size: 18px;
+          font-weight: 800;
+          color: #111827;
+          word-break: break-word;
+        }
+
+        .sq-quick-select {
+          margin-top: 20px;
+          padding: 16px;
+          border-radius: 14px;
+          background: #f0f9ff;
+          border: 1px solid #bae6fd;
+          display: grid;
+          gap: 14px;
+        }
+
+        .sq-quick-title {
+          margin: 0;
+        }
+
+        .sq-quick-text {
+          margin: 6px 0 0;
+          color: #64748b;
+        }
+
+        .sq-quick-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          align-items: end;
+        }
+
+        .sq-quick-label {
+          display: grid;
+          gap: 6px;
+        }
+
+        .sq-small-label {
+          font-size: 13px;
+          font-weight: 700;
+          color: #475569;
+        }
+
+        .sq-quantity-input {
+          width: 130px;
+          height: 44px;
+          padding: 0 12px;
+          border-radius: 10px;
+          border: 1px solid #93c5fd;
+          font-size: 16px;
+          font-weight: 700;
+        }
+
+        .sq-auto-button {
+          height: 44px;
+          padding: 0 16px;
+          border: none;
+          border-radius: 10px;
+          background: #2563eb;
+          color: #ffffff;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .sq-clear-button {
+          height: 44px;
+          padding: 0 16px;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          background: #ffffff;
+          color: #334155;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .sq-number-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+          gap: 8px;
+        }
+
+        .sq-number-button {
+          min-height: 48px;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          font-weight: 700;
+          font-size: 15px;
+          touch-action: manipulation;
+        }
+
+        .sq-basket {
+          display: grid;
+          gap: 8px;
+        }
+
+        .sq-basket-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          padding: 12px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          flex-wrap: wrap;
+        }
+
+        .sq-remove-button {
+          border: none;
+          background: transparent;
+          color: #dc2626;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .sq-cover-fees-box {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          padding: 12px;
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          cursor: pointer;
+        }
+
+        .sq-form {
+          display: grid;
+          gap: 12px;
+          margin-top: 24px;
+        }
+
+        .sq-input {
+          height: 44px;
+          padding: 0 12px;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          font-size: 16px;
+          min-width: 0;
+          width: 100%;
+        }
+
+        .sq-primary-button {
+          height: 48px;
+          border: none;
+          border-radius: 10px;
+          background: #16a34a;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 16px;
+        }
+
+        .sq-notice {
+          padding: 12px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          color: #475569;
+        }
+
+        .sq-notice-dark {
+          padding: 12px;
+          border-radius: 10px;
+          background: #0f172a;
+          border: 1px solid #1e293b;
+          color: #e2e8f0;
+          margin-top: 16px;
+        }
+
+        .sq-success {
+          margin-top: 16px;
+          padding: 12px;
+          border-radius: 10px;
+          background: #ecfdf5;
+          border: 1px solid #bbf7d0;
+          color: #166534;
+        }
+
+        .sq-error {
+          margin-top: 16px;
+          padding: 12px;
+          border-radius: 10px;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          color: #991b1b;
+        }
+
+        @media (max-width: 640px) {
+          .sq-page {
+            padding: 0;
+            background: #ffffff;
+          }
+
+          .sq-container {
+            width: 100%;
+            border-radius: 0;
+            padding: 14px;
+            box-shadow: none;
+          }
+
+          .sq-nav-bar {
+            margin-bottom: 12px;
+          }
+
+          .sq-nav-link {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .sq-image-wrap {
+            height: 220px;
+            border-radius: 14px;
+            margin-bottom: 16px;
+          }
+
+          .sq-title {
+            font-size: 30px;
+          }
+
+          .sq-description {
+            font-size: 15px;
+          }
+
+          .sq-info-box {
+            font-size: 14px;
+          }
+
+          .sq-prizes-box,
+          .sq-winners-box,
+          .sq-quick-select {
+            padding: 14px;
+            border-radius: 14px;
+          }
+
+          .sq-prize-card,
+          .sq-winner-card {
+            display: grid;
+            gap: 8px;
+          }
+
+          .sq-prize-position {
+            min-width: 0;
+          }
+
+          .sq-quick-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .sq-quantity-input,
+          .sq-auto-button,
+          .sq-clear-button {
+            width: 100%;
+          }
+
+          .sq-number-grid {
+            grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+            gap: 7px;
+          }
+
+          .sq-number-button {
+            min-height: 44px;
+            border-radius: 9px;
+            font-size: 14px;
+            padding: 0;
+          }
+
+          .sq-basket-row {
+            align-items: flex-start;
+          }
+
+          .sq-remove-button {
+            padding: 6px 0;
+          }
+
+          .sq-cover-fees-box {
+            font-size: 14px;
+          }
+
+          .sq-primary-button {
+            min-height: 52px;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .sq-number-grid {
+            grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+            gap: 6px;
+          }
+
+          .sq-number-button {
+            min-height: 40px;
+            font-size: 13px;
+          }
+        }
+      `}</style>
+
+      <div className="sq-page">
+        <div className="sq-container">
+          <nav className="sq-nav-bar">
+            <Link href={`/c/${game.tenantSlug}`} className="sq-nav-link">
+              ← Back to campaigns
+            </Link>
+          </nav>
+
+          {game.imageUrl ? (
+            <div className="sq-image-wrap">
+              <img src={game.imageUrl} alt={game.title} className="sq-image" />
             </div>
-          </section>
-        ) : null}
+          ) : null}
 
-        {isDrawn ? (
-          <section style={styles.winnersBox}>
-            <div style={styles.winnersTitle}>Winning squares</div>
+          <h1 className="sq-title">{game.title}</h1>
 
-            {game.winners.length > 0 ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                {game.winners.map((winner) => (
-                  <div key={winner.id} style={styles.winnerCard}>
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Prize</div>
-                      <div style={styles.winnerPrize}>{winner.prize_title}</div>
-                    </div>
+          {game.description ? (
+            <p className="sq-description">{game.description}</p>
+          ) : null}
 
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Square</div>
-                      <div style={styles.winnerTicket}>
-                        #{winner.square_number}
+          <div className="sq-info-box">
+            <div>
+              Square price:{" "}
+              {formatCurrencyFromCents(game.pricePerSquareCents, game.currency)}
+            </div>
+            <div>Draw date: {formatDateTime(game.drawAt)}</div>
+            <div>Total squares: {game.totalSquares}</div>
+            <div>Status: {game.status}</div>
+            <div>Available now: {availableCount}</div>
+          </div>
+
+          {game.prizes.length > 0 ? (
+            <section className="sq-prizes-box">
+              <div className="sq-prizes-title">Prizes</div>
+
+              <div className="sq-prize-list">
+                {game.prizes.map((prize, index) => (
+                  <div
+                    key={`${index}-${prize.title ?? prize.name}`}
+                    className="sq-prize-card"
+                  >
+                    <div className="sq-prize-position">{ordinal(index + 1)}</div>
+
+                    <div className="sq-prize-content">
+                      <div className="sq-prize-title">
+                        {prize.title || prize.name || `Prize ${index + 1}`}
                       </div>
-                    </div>
 
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Winner</div>
-                      <div style={styles.winnerName}>
-                        {winner.customer_name || "Winner"}
-                      </div>
+                      {prize.description ? (
+                        <div className="sq-prize-description">
+                          {prize.description}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <div style={styles.notice}>No winners have been published yet.</div>
-            )}
-          </section>
-        ) : null}
+            </section>
+          ) : null}
 
-        {isClosed ? (
-          <div style={styles.noticeDark}>
-            This squares game is now closed. Reservations and payments are no
-            longer available.
-          </div>
-        ) : null}
+          {isDrawn ? (
+            <section className="sq-winners-box">
+              <div className="sq-winners-title">Winning squares</div>
 
-        {isDraft ? (
-          <div style={styles.notice}>This squares game is not published yet.</div>
-        ) : null}
+              {game.winners.length > 0 ? (
+                <div className="sq-winners-list">
+                  {game.winners.map((winner) => (
+                    <div key={winner.id} className="sq-winner-card">
+                      <div className="sq-winner-block">
+                        <div className="sq-winner-label">Prize</div>
+                        <div className="sq-winner-prize">
+                          {winner.prize_title}
+                        </div>
+                      </div>
 
-        {canReserve ? (
-          <section style={styles.quickSelect}>
-            <div>
-              <h2 style={{ margin: 0 }}>Quick buy</h2>
-              <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Choose how many squares you would like and we’ll randomly
-                auto-select available numbers.
-              </p>
+                      <div className="sq-winner-block">
+                        <div className="sq-winner-label">Square</div>
+                        <div className="sq-winner-ticket">
+                          #{winner.square_number}
+                        </div>
+                      </div>
+
+                      <div className="sq-winner-block">
+                        <div className="sq-winner-label">Winner</div>
+                        <div className="sq-winner-name">
+                          {winner.customer_name || "Winner"}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="sq-notice">
+                  No winners have been published yet.
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {isClosed ? (
+            <div className="sq-notice-dark">
+              This squares game is now closed. Reservations and payments are no
+              longer available.
             </div>
+          ) : null}
 
-            <div style={styles.quickControls}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={styles.smallLabel}>Number of squares</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={availableCount || 1}
-                  value={autoQuantity === 0 ? "" : autoQuantity}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-
-                    if (raw === "") {
-                      setAutoQuantity(0);
-                      return;
-                    }
-
-                    const parsed = Number(raw);
-                    if (!Number.isFinite(parsed)) return;
-
-                    setAutoQuantity(parsed);
-                  }}
-                  style={styles.quantityInput}
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => autoSelectSquares(autoQuantity)}
-                style={styles.autoButton}
-              >
-                Auto select
-              </button>
-
-              <button
-                type="button"
-                onClick={clearBasket}
-                style={styles.clearButton}
-              >
-                Clear basket
-              </button>
+          {isDraft ? (
+            <div className="sq-notice">
+              This squares game is not published yet.
             </div>
-          </section>
-        ) : null}
+          ) : null}
 
-        <h2 style={styles.heading}>Choose squares</h2>
+          {canReserve ? (
+            <section className="sq-quick-select">
+              <div>
+                <h2 className="sq-quick-title">Quick buy</h2>
+                <p className="sq-quick-text">
+                  Choose how many squares you would like and we’ll randomly
+                  auto-select available numbers.
+                </p>
+              </div>
 
-        <div style={styles.numberGrid}>
-          {Array.from({ length: game.totalSquares }, (_, index) => {
-            const square = index + 1;
-            const isUnavailable = unavailableSquares.has(square);
-            const isSelected = selectedSquares.includes(square);
+              <div className="sq-quick-controls">
+                <label className="sq-quick-label">
+                  <span className="sq-small-label">Number of squares</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={availableCount || 1}
+                    value={autoQuantity === 0 ? "" : autoQuantity}
+                    onChange={(event) => {
+                      const raw = event.target.value;
 
-            return (
-              <button
-                key={square}
-                type="button"
-                onClick={() => toggleSquare(square)}
-                disabled={isUnavailable || !canReserve}
-                style={{
-                  ...styles.numberButton,
-                  background: isSelected
-                    ? "#2563eb"
-                    : isUnavailable
-                      ? "#111827"
-                      : "#ffffff",
-                  color: isSelected || isUnavailable ? "#ffffff" : "#111827",
-                  opacity: canReserve ? 1 : 0.7,
-                  cursor:
-                    isUnavailable || !canReserve ? "not-allowed" : "pointer",
-                }}
-              >
-                {square}
-              </button>
-            );
-          })}
-        </div>
+                      if (raw === "") {
+                        setAutoQuantity(0);
+                        return;
+                      }
 
-        <h2 style={styles.heading}>Basket</h2>
+                      const parsed = Number(raw);
+                      if (!Number.isFinite(parsed)) return;
 
-        {selectedSquares.length === 0 ? (
-          <div style={styles.notice}>No squares selected yet.</div>
-        ) : (
-          <div style={styles.basket}>
-            {selectedSquares.map((square) => (
-              <div key={square} style={styles.basketRow}>
-                <span>Square #{square}</span>
+                      setAutoQuantity(parsed);
+                    }}
+                    className="sq-quantity-input"
+                  />
+                </label>
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setSelectedSquares((current) =>
-                      current.filter((item) => item !== square),
-                    )
-                  }
-                  style={styles.removeButton}
+                  onClick={() => autoSelectSquares(autoQuantity)}
+                  className="sq-auto-button"
                 >
-                  Remove
+                  Auto select
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearBasket}
+                  className="sq-clear-button"
+                >
+                  Clear basket
                 </button>
               </div>
-            ))}
+            </section>
+          ) : null}
+
+          <h2 className="sq-heading">Choose squares</h2>
+
+          <div className="sq-number-grid">
+            {Array.from({ length: game.totalSquares }, (_, index) => {
+              const square = index + 1;
+              const isUnavailable = unavailableSquares.has(square);
+              const isSelected = selectedSquares.includes(square);
+
+              return (
+                <button
+                  key={square}
+                  type="button"
+                  onClick={() => toggleSquare(square)}
+                  disabled={isUnavailable || !canReserve}
+                  className="sq-number-button"
+                  style={{
+                    background: isSelected
+                      ? "#2563eb"
+                      : isUnavailable
+                        ? "#111827"
+                        : "#ffffff",
+                    color: isSelected || isUnavailable ? "#ffffff" : "#111827",
+                    opacity: canReserve ? 1 : 0.7,
+                    cursor:
+                      isUnavailable || !canReserve ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {square}
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        <div style={styles.totalBox}>
-          <div>Squares: {selectedSquares.length}</div>
+          <h2 className="sq-heading">Basket</h2>
 
-          <div>
-            Square total:{" "}
-            {formatCurrencyFromCents(subtotalCents, game.currency)}
+          {selectedSquares.length === 0 ? (
+            <div className="sq-notice">No squares selected yet.</div>
+          ) : (
+            <div className="sq-basket">
+              {selectedSquares.map((square) => (
+                <div key={square} className="sq-basket-row">
+                  <span>Square #{square}</span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedSquares((current) =>
+                        current.filter((item) => item !== square),
+                      )
+                    }
+                    className="sq-remove-button"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="sq-info-box">
+            <div>Squares: {selectedSquares.length}</div>
+
+            <div>
+              Square total:{" "}
+              {formatCurrencyFromCents(subtotalCents, game.currency)}
+            </div>
+
+            <label className="sq-cover-fees-box">
+              <input
+                type="checkbox"
+                checked={coverFees}
+                onChange={(event) => setCoverFees(event.target.checked)}
+                disabled={!canReserve || selectedSquares.length === 0}
+              />
+
+              <span>
+                <strong>I’d like to cover platform fees</strong>
+                <br />
+                <span style={{ color: "#64748b", fontSize: 13 }}>
+                  Adds approximately{" "}
+                  {formatCurrencyFromCents(feeCents, game.currency)} so the
+                  organiser receives the full square value.
+                </span>
+              </span>
+            </label>
+
+            <div>
+              Total today: {formatCurrencyFromCents(totalCents, game.currency)}
+            </div>
           </div>
 
-          <label style={styles.coverFeesBox}>
+          <h2 className="sq-heading">Your details</h2>
+
+          <div className="sq-form">
             <input
-              type="checkbox"
-              checked={coverFees}
-              onChange={(event) => setCoverFees(event.target.checked)}
-              disabled={!canReserve || selectedSquares.length === 0}
+              value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)}
+              placeholder="Your name"
+              className="sq-input"
+              disabled={!canReserve}
             />
 
-            <span>
-              <strong>I’d like to cover platform fees</strong>
-              <br />
-              <span style={{ color: "#64748b", fontSize: 13 }}>
-                Adds approximately{" "}
-                {formatCurrencyFromCents(feeCents, game.currency)} so the
-                organiser receives the full square value.
-              </span>
-            </span>
-          </label>
+            <input
+              value={customerEmail}
+              onChange={(event) => setCustomerEmail(event.target.value)}
+              placeholder="Your email"
+              type="email"
+              className="sq-input"
+              disabled={!canReserve}
+            />
 
-          <div>
-            Total today: {formatCurrencyFromCents(totalCents, game.currency)}
+            <button
+              type="button"
+              onClick={reserveSquares}
+              disabled={saving || selectedSquares.length === 0 || !canReserve}
+              className="sq-primary-button"
+              style={{
+                opacity:
+                  saving || selectedSquares.length === 0 || !canReserve
+                    ? 0.6
+                    : 1,
+                cursor:
+                  saving || selectedSquares.length === 0 || !canReserve
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {saving ? "Redirecting to checkout..." : "Reserve and pay"}
+            </button>
           </div>
+
+          {reservationMessage ? (
+            <div className="sq-success">{reservationMessage}</div>
+          ) : null}
+
+          {error ? <div className="sq-error">{error}</div> : null}
         </div>
-
-        <h2 style={styles.heading}>Your details</h2>
-
-        <div style={styles.form}>
-          <input
-            value={customerName}
-            onChange={(event) => setCustomerName(event.target.value)}
-            placeholder="Your name"
-            style={styles.input}
-            disabled={!canReserve}
-          />
-
-          <input
-            value={customerEmail}
-            onChange={(event) => setCustomerEmail(event.target.value)}
-            placeholder="Your email"
-            type="email"
-            style={styles.input}
-            disabled={!canReserve}
-          />
-
-          <button
-            type="button"
-            onClick={reserveSquares}
-            disabled={saving || selectedSquares.length === 0 || !canReserve}
-            style={{
-              ...styles.primaryButton,
-              opacity:
-                saving || selectedSquares.length === 0 || !canReserve ? 0.6 : 1,
-              cursor:
-                saving || selectedSquares.length === 0 || !canReserve
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {saving ? "Redirecting to checkout..." : "Reserve and pay"}
-          </button>
-        </div>
-
-        {reservationMessage ? (
-          <div style={styles.success}>{reservationMessage}</div>
-        ) : null}
-
-        {error ? <div style={styles.error}>{error}</div> : null}
       </div>
-    </div>
+    </>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: 16,
-  },
-  container: {
-    maxWidth: 1100,
-    margin: "0 auto",
-    background: "#ffffff",
-    borderRadius: 16,
-    padding: 18,
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
-  },
-  wrap: {
-    padding: 24,
-  },
-  navBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 16,
-  },
-  navLink: {
-    display: "inline-flex",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-  imageWrap: {
-    width: "100%",
-    height: 360,
-    overflow: "hidden",
-    borderRadius: 16,
-    marginBottom: 20,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    objectPosition: "center",
-    display: "block",
-  },
-  title: {
-    margin: "0 0 8px",
-    fontSize: "clamp(28px, 7vw, 42px)",
-    lineHeight: 1.1,
-    color: "#0f172a",
-  },
-  description: {
-    margin: "0 0 16px",
-    color: "#475569",
-    lineHeight: 1.6,
-    wordBreak: "break-word",
-  },
-  heading: {
-    marginTop: 24,
-    marginBottom: 12,
-    fontSize: "clamp(20px, 5vw, 28px)",
-    lineHeight: 1.2,
-  },
-  prizesBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-  },
-  prizesTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#9a3412",
-    marginBottom: 12,
-  },
-  prizeCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #fed7aa",
-    alignItems: "flex-start",
-  },
-  prizePosition: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#c2410c",
-    minWidth: 70,
-    flexShrink: 0,
-  },
-  prizeContent: {
-    flex: "1 1 200px",
-    minWidth: 0,
-  },
-  prizeTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  prizeDescription: {
-    marginTop: 4,
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 1.45,
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  winnersBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-  },
-  winnersTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#065f46",
-    marginBottom: 12,
-  },
-  winnerCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 14,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #bbf7d0",
-    alignItems: "flex-start",
-  },
-  winnerBlock: {
-    flex: "1 1 140px",
-    minWidth: 0,
-  },
-  winnerLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-    fontWeight: 700,
-  },
-  winnerPrize: {
-    fontSize: 20,
-    fontWeight: 900,
-    color: "#065f46",
-    wordBreak: "break-word",
-  },
-  winnerTicket: {
-    fontSize: 24,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  winnerName: {
-    fontSize: 18,
-    fontWeight: 800,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  quickSelect: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 14,
-    background: "#f0f9ff",
-    border: "1px solid #bae6fd",
-    display: "grid",
-    gap: 14,
-  },
-  quickControls: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    alignItems: "end",
-  },
-  smallLabel: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#475569",
-  },
-  quantityInput: {
-    width: 130,
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #93c5fd",
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  autoButton: {
-    height: 44,
-    padding: "0 16px",
-    border: "none",
-    borderRadius: 10,
-    background: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  clearButton: {
-    height: 44,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#334155",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  numberGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))",
-    gap: 8,
-  },
-  numberButton: {
-    height: 48,
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontWeight: 700,
-  },
-  basket: {
-    display: "grid",
-    gap: 8,
-  },
-  basketRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-    flexWrap: "wrap",
-  },
-  removeButton: {
-    border: "none",
-    background: "transparent",
-    color: "#dc2626",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  totalBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 8,
-    fontWeight: 700,
-    lineHeight: 1.4,
-    wordBreak: "break-word",
-  },
-  coverFeesBox: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    cursor: "pointer",
-  },
-  form: {
-    display: "grid",
-    gap: 12,
-    marginTop: 24,
-  },
-  input: {
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontSize: 16,
-    minWidth: 0,
-  },
-  primaryButton: {
-    height: 48,
-    border: "none",
-    borderRadius: 10,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 700,
-    fontSize: 16,
-  },
-  notice: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    color: "#475569",
-  },
-  noticeDark: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    color: "#e2e8f0",
-    marginTop: 16,
-  },
-  success: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-  },
-  error: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-  },
-};
