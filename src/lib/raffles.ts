@@ -56,6 +56,7 @@ export type Raffle = {
   slug: string;
   description?: string | null;
   image_url?: string | null;
+  draw_at?: string | null;
   ticket_price_cents: number;
   total_tickets: number;
   sold_tickets: number;
@@ -105,6 +106,7 @@ function normaliseRaffle(row: any): Raffle {
     ...row,
     description: row.description ?? "",
     image_url: row.image_url ?? "",
+    draw_at: row.draw_at ?? null,
     currency: (row.currency || "GBP") as RaffleCurrency,
     status: (row.status || "draft") as RaffleStatus,
     config_json: config,
@@ -160,10 +162,7 @@ async function updateConfigJson(
 ========================= */
 
 export async function getRaffleById(id: string): Promise<Raffle | null> {
-  const row = await queryOne<any>(
-    "SELECT * FROM raffles WHERE id = $1",
-    [id],
-  );
+  const row = await queryOne<any>("SELECT * FROM raffles WHERE id = $1", [id]);
 
   return row ? normaliseRaffle(row) : null;
 }
@@ -177,10 +176,9 @@ export async function getRaffleBySlug(
         "SELECT * FROM raffles WHERE tenant_slug = $1 AND slug = $2",
         [tenantOrSlug, maybeSlug],
       )
-    : await queryOne<any>(
-        "SELECT * FROM raffles WHERE slug = $1",
-        [tenantOrSlug],
-      );
+    : await queryOne<any>("SELECT * FROM raffles WHERE slug = $1", [
+        tenantOrSlug,
+      ]);
 
   return row ? normaliseRaffle(row) : null;
 }
@@ -189,10 +187,10 @@ export async function deleteRaffle(
   id: string,
   tenantSlug: string,
 ): Promise<void> {
-  await query(
-    "DELETE FROM raffles WHERE id = $1 AND tenant_slug = $2",
-    [id, tenantSlug],
-  );
+  await query("DELETE FROM raffles WHERE id = $1 AND tenant_slug = $2", [
+    id,
+    tenantSlug,
+  ]);
 }
 
 export async function updateRaffle(
@@ -203,6 +201,7 @@ export async function updateRaffle(
     slug: string;
     description: string;
     image_url: string;
+    draw_at: string | null;
     ticket_price_cents: number;
     total_tickets: number;
     sold_tickets: number;
@@ -244,6 +243,7 @@ export async function updateRaffle(
     "slug",
     "description",
     "image_url",
+    "draw_at",
     "ticket_price_cents",
     "total_tickets",
     "sold_tickets",
@@ -253,8 +253,7 @@ export async function updateRaffle(
   ] as const;
 
   const entries = Object.entries(safeFields).filter(
-    ([key, value]) =>
-      allowed.includes(key as any) && value !== undefined,
+    ([key, value]) => allowed.includes(key as any) && value !== undefined,
   );
 
   if (entries.length === 0) {
