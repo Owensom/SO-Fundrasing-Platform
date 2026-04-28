@@ -51,7 +51,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   return (
     <main style={styles.page}>
-      {/* ✅ DASHBOARD NAV */}
+      {/* DASHBOARD NAV */}
       <nav style={styles.dashboardNav}>
         <Link href="/admin" style={styles.navLink}>Dashboard</Link>
         <Link href="/admin/raffles" style={styles.navLink}>Raffles</Link>
@@ -82,12 +82,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* IMAGE PREVIEW */}
+      {/* IMAGE */}
       <section style={styles.imageSection}>
         {game.image_url ? (
-          <img src={game.image_url} style={styles.image} />
+          <img src={game.image_url} alt={game.title} style={styles.image} />
         ) : (
-          <div style={styles.imageEmpty}>No image</div>
+          <div style={styles.imageEmpty}>No image uploaded</div>
         )}
       </section>
 
@@ -97,7 +97,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <div>Squares: {game.total_squares}</div>
         <div>
           Price: {moneyFromCents(game.price_per_square_cents)}{" "}
-          {game.currency}
+          {game.currency ?? "GBP"}
         </div>
       </section>
 
@@ -110,6 +110,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             <input
               name="title"
               defaultValue={game.title}
+              required
               placeholder="Title"
               style={styles.input}
             />
@@ -117,6 +118,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             <input
               name="slug"
               defaultValue={game.slug}
+              required
               placeholder="Slug"
               style={styles.input}
             />
@@ -129,7 +131,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             />
           </div>
 
-          <ImageUploadField currentImageUrl={game.image_url ?? ""} />
+          <div style={{ marginTop: 16 }}>
+            <ImageUploadField currentImageUrl={game.image_url ?? ""} />
+          </div>
         </section>
 
         <section style={styles.card}>
@@ -139,7 +143,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             <input
               name="total_squares"
               type="number"
+              min={1}
+              max={500}
               defaultValue={game.total_squares}
+              required
               style={styles.input}
             />
 
@@ -148,28 +155,29 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               type="number"
               step="0.01"
               defaultValue={moneyFromCents(game.price_per_square_cents)}
+              required
               style={styles.input}
             />
 
             <select
               name="currency"
-              defaultValue={game.currency}
+              defaultValue={game.currency ?? "GBP"}   // ✅ FIXED
               style={styles.input}
             >
-              <option>GBP</option>
-              <option>EUR</option>
-              <option>USD</option>
+              <option value="GBP">GBP</option>
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
             </select>
 
             <select
               name="status"
-              defaultValue={game.status}
+              defaultValue={game.status ?? "draft"}
               style={styles.input}
             >
-              <option>draft</option>
-              <option>published</option>
-              <option>closed</option>
-              <option>drawn</option>
+              <option value="draft">draft</option>
+              <option value="published">published</option>
+              <option value="closed">closed</option>
+              <option value="drawn">drawn</option>
             </select>
           </div>
         </section>
@@ -182,13 +190,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             <div key={i} style={styles.prizeRow}>
               <input
                 name="prize_title"
-                defaultValue={p.title}
+                defaultValue={p.title ?? p.name ?? ""}
                 placeholder="Prize"
                 style={styles.input}
               />
               <input
                 name="prize_description"
-                defaultValue={p.description}
+                defaultValue={p.description ?? ""}
                 placeholder="Description"
                 style={styles.input}
               />
@@ -203,7 +211,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           ))}
         </section>
 
-        <button style={styles.saveBtn}>Save changes</button>
+        <button type="submit" style={styles.saveBtn}>
+          Save changes
+        </button>
       </form>
 
       {/* WINNERS */}
@@ -219,7 +229,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           ))
         ) : (
           <form action={`/api/admin/squares/${game.id}/draw`} method="post">
-            <button style={styles.drawBtn}>Draw winners</button>
+            <button type="submit" style={styles.drawBtn}>
+              Draw winners
+            </button>
           </form>
         )}
       </section>
@@ -236,6 +248,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 10,
     marginBottom: 20,
+    flexWrap: "wrap",
   },
 
   navLink: {
@@ -259,6 +272,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     marginBottom: 20,
+    flexWrap: "wrap",
   },
 
   title: { fontSize: 32, margin: 0 },
@@ -285,17 +299,18 @@ const styles: Record<string, CSSProperties> = {
 
   image: {
     width: "100%",
-    height: 250,
+    height: 260,
     objectFit: "cover",
     borderRadius: 14,
   },
 
   imageEmpty: {
-    height: 250,
+    height: 260,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     background: "#f1f5f9",
+    borderRadius: 14,
   },
 
   summary: {
@@ -303,6 +318,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 20,
     marginBottom: 20,
     fontWeight: 700,
+    flexWrap: "wrap",
   },
 
   card: {
@@ -310,6 +326,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 20,
     borderRadius: 16,
     marginBottom: 20,
+    background: "#fff",
   },
 
   grid: {
@@ -342,6 +359,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 18px",
     borderRadius: 10,
     border: "none",
+    cursor: "pointer",
   },
 
   drawBtn: {
@@ -350,6 +368,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 18px",
     borderRadius: 10,
     border: "none",
+    cursor: "pointer",
   },
 
   winner: {
