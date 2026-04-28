@@ -1,101 +1,33 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { listSquaresGames } from "../../../../api/_lib/squares-repo";
+import ImageUploadField from "@/components/ImageUploadField";
 
-function formatMoney(cents: number | null | undefined, currency: string) {
-  return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
-}
-
-function getStatusStyle(status: string | null | undefined): CSSProperties {
-  const value = String(status || "draft").toLowerCase();
-
-  if (value === "published") {
-    return { background: "#ecfdf5", borderColor: "#bbf7d0", color: "#166534" };
-  }
-
-  if (value === "closed") {
-    return { background: "#fff7ed", borderColor: "#fed7aa", color: "#9a3412" };
-  }
-
-  if (value === "drawn") {
-    return { background: "#eff6ff", borderColor: "#bfdbfe", color: "#1d4ed8" };
-  }
-
-  return { background: "#f8fafc", borderColor: "#e2e8f0", color: "#475569" };
-}
-
-function statusBadge(status: string | null | undefined) {
-  const value = String(status || "draft").toLowerCase();
-
-  return (
-    <span style={{ ...styles.statusPill, ...getStatusStyle(value) }}>
-      {value}
-    </span>
-  );
-}
-
-export default async function AdminSquaresListPage() {
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
-
-  const tenantSlug = await getTenantSlugFromHeaders();
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((v) => String(v))
-    : [];
-
-  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    redirect("/admin/login?error=tenant_access_denied");
-  }
-
-  const games = await listSquaresGames(tenantSlug);
-
-  const publishedCount = games.filter(
-    (game) => String(game.status || "").toLowerCase() === "published",
-  ).length;
-
-  const totalSquares = games.reduce(
-    (total, game) => total + Number(game.total_squares || 0),
-    0,
-  );
-
+export default function NewSquaresGamePage() {
   return (
     <main style={styles.page}>
       <section style={styles.topBar}>
-        <Link href="/admin" style={styles.backLink}>
-          ← Back to dashboard
+        <Link href="/admin/squares" style={styles.backLink}>
+          ← Back to squares
         </Link>
 
-        <div style={styles.topActions}>
-          <Link href="/admin/raffles" style={styles.publicLink}>
-            Raffles
-          </Link>
-
-          <Link href="/admin/squares/new" style={styles.primaryLink}>
-            Create squares game
-          </Link>
-        </div>
+        <Link href="/admin" style={styles.publicLink}>
+          Dashboard
+        </Link>
       </section>
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Squares dashboard</div>
+          <div style={styles.eyebrow}>Squares creator</div>
 
           <div style={styles.heroTitleRow}>
-            <h1 style={styles.heroTitle}>Squares games</h1>
-
-            <div style={styles.statusPillDark}>{tenantSlug}</div>
+            <h1 style={styles.heroTitle}>Create squares game</h1>
           </div>
 
-          <p style={styles.heroSlug}>/admin/squares</p>
+          <p style={styles.heroSlug}>/admin/squares/new</p>
 
           <p style={styles.heroDescription}>
-            Create, edit and manage all squares games for this tenant.
+            Set up a new squares game with image, pricing, draw date, board size
+            and prizes.
           </p>
         </div>
 
@@ -104,94 +36,162 @@ export default async function AdminSquaresListPage() {
         </div>
       </section>
 
-      <section style={styles.summaryGrid}>
-        <SummaryCard label="Total games" value={games.length} />
-        <SummaryCard label="Published" value={publishedCount} />
-        <SummaryCard label="Total squares" value={totalSquares} />
-      </section>
-
-      {games.length === 0 ? (
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>No squares games yet</h2>
-          <p style={styles.sectionDescription}>
-            Create your first squares game to start selling numbered squares.
-          </p>
-
-          <div style={{ marginTop: 16 }}>
-            <Link href="/admin/squares/new" style={styles.submitButton}>
-              Create squares game
-            </Link>
-          </div>
-        </section>
-      ) : (
+      <form action="/api/admin/squares" method="post" style={styles.form}>
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>All squares games</h2>
+              <h2 style={styles.sectionTitle}>Game details</h2>
               <p style={styles.sectionDescription}>
-                View live pages, edit settings and manage draw results.
+                These settings control the public squares page.
               </p>
             </div>
 
-            <Link href="/admin/squares/new" style={styles.submitButton}>
-              New game
-            </Link>
+            <button type="submit" style={styles.submitButton}>
+              Create game
+            </button>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Title">
+              <input
+                name="title"
+                required
+                placeholder="Summer squares"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Slug">
+              <input
+                name="slug"
+                placeholder="summer-squares"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+
+          <Field label="Description">
+            <textarea
+              name="description"
+              rows={4}
+              placeholder="Describe the game, prize and draw details."
+              style={styles.textarea}
+            />
+          </Field>
+
+          <div style={styles.mediaBox}>
+            <div>
+              <h3 style={styles.subTitle}>Squares image</h3>
+              <p style={styles.sectionDescription}>
+                Upload or paste an image URL for the public squares page.
+              </p>
+
+              <ImageUploadField currentImageUrl="" />
+            </div>
+
+            <div style={styles.previewBox}>
+              <div style={styles.emptyPreview}>🔲</div>
+            </div>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Draw date">
+              <input name="draw_at" type="datetime-local" style={styles.input} />
+            </Field>
+
+            <Field label="Status">
+              <select name="status" defaultValue="draft" style={styles.input}>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed</option>
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Squares setup</h2>
+              <p style={styles.sectionDescription}>
+                Configure board size and pricing. Maximum board size is 500
+                squares.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.threeColumn}>
+            <Field label="Number of squares">
+              <input
+                name="total_squares"
+                type="number"
+                min={1}
+                max={500}
+                defaultValue={100}
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Price per square">
+              <input
+                name="price_per_square"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue="2.00"
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Currency">
+              <select name="currency" defaultValue="GBP" style={styles.input}>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Prizes</h2>
+              <p style={styles.sectionDescription}>
+                Add one prize per row. Blank rows are ignored when saved.
+              </p>
+            </div>
           </div>
 
           <div style={styles.tableWrap}>
             <table style={styles.table}>
               <thead>
                 <tr style={styles.tableHeadRow}>
-                  <th style={styles.th}>Title</th>
-                  <th style={styles.th}>Status</th>
-                  <th style={styles.th}>Squares</th>
-                  <th style={styles.th}>Price</th>
-                  <th style={styles.th}>Public page</th>
-                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
+                  <th style={styles.th}>Prize</th>
+                  <th style={styles.th}>Description</th>
                 </tr>
               </thead>
 
               <tbody>
-                {games.map((game) => (
-                  <tr key={game.id} style={styles.tr}>
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={index} style={styles.tr}>
                     <td style={styles.td}>
-                      <div style={styles.tableTitle}>
-                        {game.title || "Untitled squares game"}
-                      </div>
-                      <div style={styles.tableSub}>/s/{game.slug}</div>
-                    </td>
-
-                    <td style={styles.td}>{statusBadge(game.status)}</td>
-
-                    <td style={styles.td}>
-                      <strong>{Number(game.total_squares || 0)}</strong>
+                      <input
+                        name="prize_title"
+                        defaultValue={index === 0 ? "1st Prize" : ""}
+                        placeholder={`Prize ${index + 1}`}
+                        style={styles.input}
+                      />
                     </td>
 
                     <td style={styles.td}>
-                      {formatMoney(
-                        game.price_per_square_cents,
-                        game.currency ?? "GBP",
-                      )}
-                    </td>
-
-                    <td style={styles.td}>
-                      <a
-                        href={`/s/${game.slug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={styles.inlineLink}
-                      >
-                        View live page ↗
-                      </a>
-                    </td>
-
-                    <td style={{ ...styles.td, textAlign: "right" }}>
-                      <Link
-                        href={`/admin/squares/${game.id}`}
-                        style={styles.editButton}
-                      >
-                        Edit
-                      </Link>
+                      <input
+                        name="prize_description"
+                        placeholder="Optional prize description"
+                        style={styles.input}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -199,23 +199,36 @@ export default async function AdminSquaresListPage() {
             </table>
           </div>
         </section>
-      )}
+
+        <section style={styles.submitBar}>
+          <div>
+            <strong style={{ color: "#0f172a" }}>Create squares game</strong>
+            <div style={styles.mutedSmall}>
+              This creates a new public squares campaign for this tenant.
+            </div>
+          </div>
+
+          <button type="submit" style={styles.submitButton}>
+            Create squares game
+          </button>
+        </section>
+      </form>
     </main>
   );
 }
 
-function SummaryCard({
+function Field({
   label,
-  value,
+  children,
 }: {
   label: string;
-  value: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <div style={styles.summaryCard}>
-      <div style={styles.summaryLabel}>{label}</div>
-      <div style={styles.summaryValue}>{value}</div>
-    </div>
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -235,11 +248,6 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     flexWrap: "wrap",
   },
-  topActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
   backLink: {
     color: "#334155",
     textDecoration: "none",
@@ -254,18 +262,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-  primaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
     fontSize: 14,
@@ -309,15 +305,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
     wordBreak: "break-word",
   },
-  statusPillDark: {
-    padding: "7px 11px",
-    borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "rgba(255,255,255,0.12)",
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: 900,
-  },
   heroSlug: {
     margin: "8px 0 0",
     color: "#cbd5e1",
@@ -347,30 +334,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 46,
     color: "#94a3b8",
   },
-  summaryGrid: {
+  form: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    padding: 15,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 900,
-    marginTop: 5,
-    wordBreak: "break-word",
+    gap: 16,
   },
   section: {
     padding: 18,
@@ -378,7 +344,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
   },
   sectionHeader: {
     display: "flex",
@@ -400,15 +365,77 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
   },
-  submitButton: {
-    display: "inline-flex",
-    padding: "13px 20px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
+  twoColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+  },
+  threeColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 12,
+  },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
     fontWeight: 900,
-    textDecoration: "none",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gap: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
+  },
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+  },
+  emptyPreview: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    fontSize: 42,
   },
   tableWrap: {
     overflowX: "auto",
@@ -435,39 +462,34 @@ const styles: Record<string, CSSProperties> = {
     borderTop: "1px solid #e2e8f0",
   },
   td: {
-    padding: "16px",
-    verticalAlign: "middle",
+    padding: "12px",
+    verticalAlign: "top",
   },
-  tableTitle: {
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  submitButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
     fontWeight: 900,
-    color: "#0f172a",
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
-  tableSub: {
+  mutedSmall: {
     color: "#64748b",
     fontSize: 13,
     marginTop: 3,
-  },
-  inlineLink: {
-    color: "#1683f8",
-    fontWeight: 900,
-    textDecoration: "none",
-  },
-  editButton: {
-    display: "inline-flex",
-    borderRadius: 999,
-    padding: "9px 13px",
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    fontWeight: 900,
-    textDecoration: "none",
-  },
-  statusPill: {
-    display: "inline-flex",
-    padding: "7px 11px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    textTransform: "capitalize",
-    fontWeight: 900,
   },
 };
