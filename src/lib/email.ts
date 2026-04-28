@@ -24,6 +24,17 @@ function getBranding(branding?: EmailBranding) {
   };
 }
 
+function getFromAddress(branding?: EmailBranding) {
+  const brand = getBranding(branding);
+  const fromEmail = process.env.RESEND_FROM_EMAIL?.trim();
+
+  if (!fromEmail) {
+    throw new Error("Missing RESEND_FROM_EMAIL environment variable");
+  }
+
+  return `${brand.name} <${fromEmail}>`;
+}
+
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -198,10 +209,8 @@ async function sendEmail(params: {
   html: string;
   branding?: EmailBranding;
 }) {
-  const brand = getBranding(params.branding);
-
   await resend.emails.send({
-    from: `${brand.name} <onboarding@resend.dev>`,
+    from: getFromAddress(params.branding),
     to: params.to,
     subject: params.subject,
     html: params.html,
@@ -259,9 +268,7 @@ export async function sendReceiptEmail({
     branding,
     eyebrow: "Ticket confirmation",
     heading: "Payment successful",
-    intro: `Hi ${
-      name || "there"
-    }, thank you for your purchase. Your raffle tickets are confirmed below.`,
+    intro: `Hi ${name || "there"}, thank you for your purchase. Your raffle tickets are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -338,9 +345,7 @@ export async function sendWinnerEmail({
     branding,
     eyebrow: "Winner notification",
     heading: "🎉 You won!",
-    intro: `Hi ${
-      name || "there"
-    }, congratulations — your ticket has been selected as a winner.`,
+    intro: `Hi ${name || "there"}, congratulations — your ticket has been selected as a winner.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
@@ -453,9 +458,7 @@ export async function sendSquaresReceiptEmail({
     branding,
     eyebrow: "Squares confirmation",
     heading: "Payment successful",
-    intro: `Hi ${
-      name || "there"
-    }, thank you for your purchase. Your squares are confirmed below.`,
+    intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -514,9 +517,7 @@ export async function sendSquaresWinnerEmail({
     branding,
     eyebrow: "Winner notification",
     heading: "🎉 You won!",
-    intro: `Hi ${
-      name || "there"
-    }, congratulations — your square has been selected as a winner.`,
+    intro: `Hi ${name || "there"}, congratulations — your square has been selected as a winner.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
