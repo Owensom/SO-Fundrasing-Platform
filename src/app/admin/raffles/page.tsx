@@ -203,9 +203,9 @@ export default async function AdminRafflesPage() {
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href="/raffles" target="_blank" style={styles.topSecondaryLink}>
-            Public raffles page
-          </Link>
+       <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.secondaryLink}>
+  Public campaigns page
+</Link>
 
           <Link href="/admin/raffles/new" style={styles.createLink}>
             + Create raffle
