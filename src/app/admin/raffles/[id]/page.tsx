@@ -216,10 +216,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <Link href="/admin/raffles" style={styles.backLink}>
           ← Back to raffles
         </Link>
-
-        <Link href={`/r/${raffle.slug}`} target="_blank" style={styles.publicLink}>
-          View public page
-        </Link>
+<Link
+  href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
+  target="_blank"
+  style={styles.publicLink}
+>
+  View campaign page
+</Link>
       </section>
 
       <section style={styles.hero}>
