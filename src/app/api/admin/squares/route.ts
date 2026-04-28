@@ -7,12 +7,15 @@ import {
   slugify,
 } from "../../../../../api/_lib/squares-repo";
 
-function parseNumber(value: FormDataEntryValue | string | null | undefined, fallback = 0) {
+function parseNumber(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback = 0,
+) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function parsePrizes(value: string) {
+function parsePrizesJson(value: string) {
   if (!value.trim()) return [];
 
   try {
@@ -20,6 +23,56 @@ function parsePrizes(value: string) {
   } catch {
     return [];
   }
+}
+
+function parsePrizeTable(formData: FormData) {
+  const titles = formData.getAll("prize_title").map((v) => String(v).trim());
+  const descriptions = formData
+    .getAll("prize_description")
+    .map((v) => String(v).trim());
+
+  const prizes = titles
+    .map((title, index) => {
+      if (!title) return null;
+
+      return {
+        title,
+        name: title,
+        description: descriptions[index] ?? "",
+        position: index + 1,
+        sort_order: index + 1,
+        is_public: true,
+      };
+    })
+    .filter(Boolean);
+
+  return normalisePrizes(prizes);
+}
+
+function parsePrizes(formData: FormData) {
+  const tablePrizes = parsePrizeTable(formData);
+
+  if (tablePrizes.length > 0) {
+    return tablePrizes;
+  }
+
+  return parsePrizesJson(String(formData.get("prizes") ?? "[]"));
+}
+
+function parseDrawAt(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const date = new Date(raw);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
 }
 
 export async function GET(request: NextRequest) {
@@ -82,6 +135,8 @@ export async function POST(request: NextRequest) {
 
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
+    const draw_at = parseDrawAt(formData.get("draw_at"));
+
     const currency = String(formData.get("currency") ?? "GBP") as
       | "GBP"
       | "USD"
@@ -99,9 +154,9 @@ export async function POST(request: NextRequest) {
     );
 
     const priceMajor = parseNumber(formData.get("price_per_square"), 0);
-    const price_per_square_cents = Math.round(priceMajor * 100);
+    const price_per_square_cents = Math.max(0, Math.round(priceMajor * 100));
 
-    const prizes = parsePrizes(String(formData.get("prizes") ?? "[]"));
+    const prizes = parsePrizes(formData);
 
     const created = await createSquaresGame({
       tenant_slug: tenantSlug,
@@ -109,6 +164,7 @@ export async function POST(request: NextRequest) {
       slug,
       description,
       image_url,
+      draw_at,
       currency,
       status,
       total_squares,
