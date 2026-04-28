@@ -207,10 +207,10 @@ export default async function AdminRafflesPage() {
     ← Dashboard
   </Link>
 
-  <Link href="/admin/raffles" style={styles.topSecondaryLink}>
-    Raffles
-  </Link>
-
+<div style={styles.activeNav}>
+  Raffles
+</div>
+         
   <Link href="/admin/squares" style={styles.topSecondaryLink}>
     Squares
   </Link>
@@ -605,4 +605,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
   },
+activeNav: {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "13px 18px",
+  borderRadius: 9999,
+  background: "#0f172a",
+  color: "#ffffff",
+  fontWeight: 900,
+},
 };
