@@ -9,41 +9,29 @@ function formatMoney(cents: number | null | undefined, currency: string) {
   return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
 }
 
+function getStatusStyle(status: string | null | undefined): CSSProperties {
+  const value = String(status || "draft").toLowerCase();
+
+  if (value === "published") {
+    return { background: "#ecfdf5", borderColor: "#bbf7d0", color: "#166534" };
+  }
+
+  if (value === "closed") {
+    return { background: "#fff7ed", borderColor: "#fed7aa", color: "#9a3412" };
+  }
+
+  if (value === "drawn") {
+    return { background: "#eff6ff", borderColor: "#bfdbfe", color: "#1d4ed8" };
+  }
+
+  return { background: "#f8fafc", borderColor: "#e2e8f0", color: "#475569" };
+}
+
 function statusBadge(status: string | null | undefined) {
   const value = String(status || "draft").toLowerCase();
 
-  const background =
-    value === "published"
-      ? "#dcfce7"
-      : value === "closed"
-        ? "#fee2e2"
-        : value === "drawn"
-          ? "#e0e7ff"
-          : "#fef3c7";
-
-  const color =
-    value === "published"
-      ? "#166534"
-      : value === "closed"
-        ? "#991b1b"
-        : value === "drawn"
-          ? "#3730a3"
-          : "#92400e";
-
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        borderRadius: 999,
-        padding: "4px 10px",
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: "capitalize",
-        background,
-        color,
-      }}
-    >
+    <span style={{ ...styles.statusPill, ...getStatusStyle(value) }}>
       {value}
     </span>
   );
@@ -67,255 +55,419 @@ export default async function AdminSquaresListPage() {
 
   const games = await listSquaresGames(tenantSlug);
 
+  const publishedCount = games.filter(
+    (game) => String(game.status || "").toLowerCase() === "published",
+  ).length;
+
+  const totalSquares = games.reduce(
+    (total, game) => total + Number(game.total_squares || 0),
+    0,
+  );
+
   return (
-    <main style={pageStyle}>
-      <div style={headerStyle}>
-        <div>
-          <p style={{ margin: "0 0 10px" }}>
-            <Link href="/admin" style={linkStyle}>
-              ← Back to dashboard
-            </Link>
-          </p>
-
-          <h1 style={titleStyle}>Squares Games</h1>
-
-          <p style={subtitleStyle}>
-            Create and manage football-style squares games for this tenant.
-          </p>
-        </div>
-
-        <Link href="/admin/squares/new" style={primaryButtonStyle}>
-          + Create squares game
+    <main style={styles.page}>
+      <section style={styles.topBar}>
+        <Link href="/admin" style={styles.backLink}>
+          ← Back to dashboard
         </Link>
-      </div>
 
-      <section style={statsGridStyle}>
-        <div style={statCardStyle}>
-          <div style={statLabelStyle}>Total games</div>
-          <div style={statValueStyle}>{games.length}</div>
-        </div>
+        <div style={styles.topActions}>
+          <Link href="/admin/raffles" style={styles.publicLink}>
+            Raffles
+          </Link>
 
-        <div style={statCardStyle}>
-          <div style={statLabelStyle}>Published</div>
-          <div style={statValueStyle}>
-            {
-              games.filter(
-                (game) => String(game.status || "").toLowerCase() === "published",
-              ).length
-            }
-          </div>
-        </div>
-
-        <div style={statCardStyle}>
-          <div style={statLabelStyle}>Total squares available</div>
-          <div style={statValueStyle}>
-            {games.reduce(
-              (total, game) => total + Number(game.total_squares || 0),
-              0,
-            )}
-          </div>
+          <Link href="/admin/squares/new" style={styles.primaryLink}>
+            Create squares game
+          </Link>
         </div>
       </section>
 
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.eyebrow}>Squares dashboard</div>
+
+          <div style={styles.heroTitleRow}>
+            <h1 style={styles.heroTitle}>Squares games</h1>
+
+            <div style={styles.statusPillDark}>{tenantSlug}</div>
+          </div>
+
+          <p style={styles.heroSlug}>/admin/squares</p>
+
+          <p style={styles.heroDescription}>
+            Create, edit and manage all squares games for this tenant.
+          </p>
+        </div>
+
+        <div style={styles.heroImageWrap}>
+          <div style={styles.heroImageEmpty}>🔲</div>
+        </div>
+      </section>
+
+      <section style={styles.summaryGrid}>
+        <SummaryCard label="Total games" value={games.length} />
+        <SummaryCard label="Published" value={publishedCount} />
+        <SummaryCard label="Total squares" value={totalSquares} />
+      </section>
+
       {games.length === 0 ? (
-        <section style={emptyStateStyle}>
-          <h2 style={{ marginTop: 0 }}>No squares games yet</h2>
-          <p style={{ color: "#64748b" }}>
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>No squares games yet</h2>
+          <p style={styles.sectionDescription}>
             Create your first squares game to start selling numbered squares.
           </p>
 
-          <Link href="/admin/squares/new" style={primaryButtonStyle}>
-            Create squares game
-          </Link>
+          <div style={{ marginTop: 16 }}>
+            <Link href="/admin/squares/new" style={styles.submitButton}>
+              Create squares game
+            </Link>
+          </div>
         </section>
       ) : (
-        <section style={tableShellStyle}>
-          <table style={tableStyle}>
-            <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <th style={thStyle}>Title</th>
-                <th style={thStyle}>Status</th>
-                <th style={thStyle}>Squares</th>
-                <th style={thStyle}>Price</th>
-                <th style={thStyle}>Public page</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>All squares games</h2>
+              <p style={styles.sectionDescription}>
+                View live pages, edit settings and manage draw results.
+              </p>
+            </div>
 
-            <tbody>
-              {games.map((game) => (
-                <tr key={game.id} style={trStyle}>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: 900 }}>
-                      {game.title || "Untitled squares game"}
-                    </div>
-                    <div style={{ color: "#64748b", fontSize: 13 }}>
-                      /s/{game.slug}
-                    </div>
-                  </td>
+            <Link href="/admin/squares/new" style={styles.submitButton}>
+              New game
+            </Link>
+          </div>
 
-                  <td style={tdStyle}>{statusBadge(game.status)}</td>
-
-                  <td style={tdStyle}>
-                    <strong>{Number(game.total_squares || 0)}</strong>
-                  </td>
-
-                  <td style={tdStyle}>
-                    {formatMoney(
-                      game.price_per_square_cents,
-                      game.currency ?? "GBP",
-                    )}
-                  </td>
-
-                  <td style={tdStyle}>
-                    <a
-                      href={`/s/${game.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={linkStyle}
-                    >
-                      View live page ↗
-                    </a>
-                  </td>
-
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    <Link
-                      href={`/admin/squares/${game.id}`}
-                      style={editButtonStyle}
-                    >
-                      Edit
-                    </Link>
-                  </td>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHeadRow}>
+                  <th style={styles.th}>Title</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Squares</th>
+                  <th style={styles.th}>Price</th>
+                  <th style={styles.th}>Public page</th>
+                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {games.map((game) => (
+                  <tr key={game.id} style={styles.tr}>
+                    <td style={styles.td}>
+                      <div style={styles.tableTitle}>
+                        {game.title || "Untitled squares game"}
+                      </div>
+                      <div style={styles.tableSub}>/s/{game.slug}</div>
+                    </td>
+
+                    <td style={styles.td}>{statusBadge(game.status)}</td>
+
+                    <td style={styles.td}>
+                      <strong>{Number(game.total_squares || 0)}</strong>
+                    </td>
+
+                    <td style={styles.td}>
+                      {formatMoney(
+                        game.price_per_square_cents,
+                        game.currency ?? "GBP",
+                      )}
+                    </td>
+
+                    <td style={styles.td}>
+                      <a
+                        href={`/s/${game.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.inlineLink}
+                      >
+                        View live page ↗
+                      </a>
+                    </td>
+
+                    <td style={{ ...styles.td, textAlign: "right" }}>
+                      <Link
+                        href={`/admin/squares/${game.id}`}
+                        style={styles.editButton}
+                      >
+                        Edit
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </main>
   );
 }
 
-const pageStyle: CSSProperties = {
-  maxWidth: 1120,
-  margin: "40px auto",
-  padding: 24,
-  fontFamily:
-    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-};
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div style={styles.summaryCard}>
+      <div style={styles.summaryLabel}>{label}</div>
+      <div style={styles.summaryValue}>{value}</div>
+    </div>
+  );
+}
 
-const headerStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
-  alignItems: "flex-start",
-  marginBottom: 24,
-};
-
-const titleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 36,
-  lineHeight: 1.1,
-  color: "#0f172a",
-};
-
-const subtitleStyle: CSSProperties = {
-  marginTop: 10,
-  color: "#64748b",
-  maxWidth: 680,
-};
-
-const linkStyle: CSSProperties = {
-  color: "#2563eb",
-  fontWeight: 800,
-  textDecoration: "none",
-};
-
-const primaryButtonStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: 12,
-  padding: "12px 16px",
-  background: "#111827",
-  color: "white",
-  fontWeight: 900,
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.14)",
-};
-
-const statsGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const statCardStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 16,
-  padding: 18,
-  background: "#ffffff",
-};
-
-const statLabelStyle: CSSProperties = {
-  color: "#64748b",
-  fontSize: 14,
-  fontWeight: 800,
-};
-
-const statValueStyle: CSSProperties = {
-  fontSize: 30,
-  fontWeight: 950,
-  color: "#0f172a",
-};
-
-const emptyStateStyle: CSSProperties = {
-  border: "1px dashed #cbd5e1",
-  borderRadius: 18,
-  padding: 32,
-  background: "#f8fafc",
-  textAlign: "center",
-};
-
-const tableShellStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 18,
-  overflow: "hidden",
-  background: "#ffffff",
-  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
-};
-
-const tableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const thStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "14px 16px",
-  fontSize: 13,
-  color: "#475569",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const trStyle: CSSProperties = {
-  borderTop: "1px solid #e5e7eb",
-};
-
-const tdStyle: CSSProperties = {
-  padding: "16px",
-  verticalAlign: "middle",
-};
-
-const editButtonStyle: CSSProperties = {
-  display: "inline-flex",
-  borderRadius: 10,
-  padding: "9px 12px",
-  background: "#eff6ff",
-  color: "#1d4ed8",
-  fontWeight: 900,
-  textDecoration: "none",
+const styles: Record<string, CSSProperties> = {
+  page: {
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "28px 16px 56px",
+    background: "#f8fafc",
+    minHeight: "100vh",
+  },
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  topActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  backLink: {
+    color: "#334155",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+  publicLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  primaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 260px",
+    gap: 18,
+    alignItems: "stretch",
+    padding: 22,
+    borderRadius: 24,
+    background: "#0f172a",
+    color: "#ffffff",
+    marginBottom: 16,
+  },
+  heroContent: {
+    minWidth: 0,
+  },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: 34,
+    lineHeight: 1.08,
+    letterSpacing: "-0.04em",
+    wordBreak: "break-word",
+  },
+  statusPillDark: {
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.2)",
+    background: "rgba(255,255,255,0.12)",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  heroSlug: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: 700,
+    wordBreak: "break-word",
+  },
+  heroDescription: {
+    margin: "12px 0 0",
+    color: "#e2e8f0",
+    lineHeight: 1.55,
+    maxWidth: 720,
+  },
+  heroImageWrap: {
+    borderRadius: 18,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    minHeight: 180,
+  },
+  heroImageEmpty: {
+    height: "100%",
+    minHeight: 180,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 46,
+    color: "#94a3b8",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 900,
+    marginTop: 5,
+    wordBreak: "break-word",
+  },
+  section: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.02em",
+  },
+  sectionDescription: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  submitButton: {
+    display: "inline-flex",
+    padding: "13px 20px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+    textDecoration: "none",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  tableWrap: {
+    overflowX: "auto",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHeadRow: {
+    background: "#f8fafc",
+  },
+  th: {
+    textAlign: "left",
+    padding: "14px 16px",
+    fontSize: 12,
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    fontWeight: 900,
+  },
+  tr: {
+    borderTop: "1px solid #e2e8f0",
+  },
+  td: {
+    padding: "16px",
+    verticalAlign: "middle",
+  },
+  tableTitle: {
+    fontWeight: 900,
+    color: "#0f172a",
+  },
+  tableSub: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  inlineLink: {
+    color: "#1683f8",
+    fontWeight: 900,
+    textDecoration: "none",
+  },
+  editButton: {
+    display: "inline-flex",
+    borderRadius: 999,
+    padding: "9px 13px",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontWeight: 900,
+    textDecoration: "none",
+  },
+  statusPill: {
+    display: "inline-flex",
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 900,
+  },
 };
