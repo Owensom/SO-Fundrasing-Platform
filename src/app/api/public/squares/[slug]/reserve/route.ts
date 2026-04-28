@@ -15,6 +15,27 @@ type RouteContext = {
   };
 };
 
+function getRandomAvailableSquares(
+  totalSquares: number,
+  unavailable: Set<number>,
+  count: number,
+) {
+  const available: number[] = [];
+
+  for (let i = 1; i <= totalSquares; i++) {
+    if (!unavailable.has(i)) {
+      available.push(i);
+    }
+  }
+
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+
+  return available.slice(0, count).sort((a, b) => a - b);
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const tenantSlug = getTenantSlugFromRequest(request);
   const slug = context.params.slug;
@@ -28,7 +49,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
+
     const requestedSquares = Array.isArray(body?.squares) ? body.squares : [];
+    const randomCount = Math.max(0, Math.floor(Number(body?.randomCount || 0)));
 
     const customerName = String(body?.customerName ?? "").trim();
     const customerEmail = String(body?.customerEmail ?? "").trim();
@@ -51,18 +74,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     await cleanupExpiredSquaresReservations(game.id);
 
-    const selectedSquares = normaliseSquares(
-      requestedSquares,
-      game.total_squares,
-    );
-
-    if (selectedSquares.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "Choose at least one square" },
-        { status: 400 },
-      );
-    }
-
     const [sales, reservations] = await Promise.all([
       listSquaresSales(game.id),
       getActiveSquaresReservations(game.id),
@@ -82,14 +93,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
+    const selectedSquares =
+      randomCount > 0
+        ? getRandomAvailableSquares(game.total_squares, unavailable, randomCount)
+        : normaliseSquares(requestedSquares, game.total_squares);
+
+    if (selectedSquares.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: "Choose at least one square" },
+        { status: 400 },
+      );
+    }
+
+    if (randomCount > 0 && selectedSquares.length < randomCount) {
+      return NextResponse.json(
+        { ok: false, error: "Not enough squares are available" },
+        { status: 400 },
+      );
+    }
+
     const blocked = selectedSquares.filter((square) => unavailable.has(square));
 
     if (blocked.length > 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Square ${blocked[0]} is no longer available`,
-        },
+        { ok: false, error: `Square ${blocked[0]} is no longer available` },
         { status: 409 },
       );
     }
