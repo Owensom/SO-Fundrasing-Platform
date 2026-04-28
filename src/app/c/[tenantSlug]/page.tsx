@@ -1,11 +1,12 @@
-// src/app/c/[tenantSlug]/page.tsx
 import Link from "next/link";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
 
-type Params = {
-  params: {
+export const dynamic = "force-dynamic";
+
+type PageProps = {
+  params: Promise<{
     tenantSlug: string;
-  };
+  }>;
 };
 
 type Campaign = {
@@ -18,104 +19,219 @@ type Campaign = {
   status: "draft" | "published" | "closed" | "drawn";
 };
 
-export default async function TenantCampaignsPage({ params }: Params) {
-  const tenantSlug = params.tenantSlug;
+function getCampaignUrl(campaign: Campaign) {
+  if (campaign.type === "raffle") return `/r/${campaign.slug}`;
+  if (campaign.type === "squares") return `/s/${campaign.slug}`;
+  if (campaign.type === "event") return `/e/${campaign.slug}`;
+  return "#";
+}
 
-  // Server-side DB call
+function getTypeLabel(type: Campaign["type"]) {
+  if (type === "raffle") return "Raffle";
+  if (type === "squares") return "Squares";
+  return "Event";
+}
+
+export default async function TenantCampaignsPage({ params }: PageProps) {
+  const { tenantSlug } = await params;
+
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
 
-  if (!campaigns.length) {
-    return (
-      <main style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-        <h1>No active campaigns found</h1>
-        <p>This tenant has no published campaigns at the moment.</p>
-      </main>
-    );
-  }
+  const publicCampaigns = campaigns.filter(
+    (campaign) => campaign.status === "published",
+  );
 
   return (
-    <main style={{ maxWidth: 1100, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ marginBottom: 24 }}>Active Campaigns</h1>
+    <main style={styles.page}>
+      <section style={styles.header}>
+        <div style={styles.badge}>Fundraising campaigns</div>
 
-      <div style={{ display: "grid", gap: 24 }}>
-        {campaigns
-          .filter((c) => c.status === "published")
-          .map((campaign) => {
-            let url = "#";
-            if (campaign.type === "raffle") url = `/r/${campaign.slug}`;
-            else if (campaign.type === "squares") url = `/s/${campaign.slug}`;
-            else if (campaign.type === "event") url = `/e/${campaign.slug}`;
+        <h1 style={styles.title}>Active Campaigns</h1>
 
-            return (
-              <Link
-                key={campaign.id}
-                href={url}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "200px 1fr",
-                  gap: 16,
-                  padding: 16,
-                  borderRadius: 12,
-                  border: "1px solid #e2e8f0",
-                  background: "#ffffff",
-                  textDecoration: "none",
-                  color: "#111827",
-                  alignItems: "center",
-                }}
-              >
+        <p style={styles.subtitle}>
+          Choose an active raffle or squares campaign to support.
+        </p>
+      </section>
+
+      {publicCampaigns.length === 0 ? (
+        <section style={styles.emptyCard}>
+          <h2 style={{ margin: 0 }}>No active campaigns found</h2>
+          <p style={styles.muted}>
+            This tenant has no published campaigns at the moment.
+          </p>
+        </section>
+      ) : (
+        <section style={styles.grid}>
+          {publicCampaigns.map((campaign) => (
+            <Link
+              key={campaign.id}
+              href={getCampaignUrl(campaign)}
+              style={styles.card}
+            >
+              <div style={styles.imageWrap}>
                 {campaign.imageUrl ? (
                   <img
                     src={campaign.imageUrl}
                     alt={campaign.title}
-                    style={{
-                      width: "100%",
-                      maxHeight: 140,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                    }}
+                    style={styles.image}
                   />
                 ) : (
-                  <div
-                    style={{
-                      width: "100%",
-                      height: 140,
-                      background: "#f0f0f0",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 8,
-                      fontWeight: 700,
-                      color: "#64748b",
-                    }}
-                  >
-                    No image
-                  </div>
+                  <div style={styles.imageEmpty}>🎟️</div>
+                )}
+              </div>
+
+              <div style={styles.cardBody}>
+                <div style={styles.typePill}>{getTypeLabel(campaign.type)}</div>
+
+                <h2 style={styles.cardTitle}>{campaign.title}</h2>
+
+                {campaign.description ? (
+                  <p style={styles.description}>
+                    {campaign.description.length > 150
+                      ? `${campaign.description.slice(0, 150)}…`
+                      : campaign.description}
+                  </p>
+                ) : (
+                  <p style={styles.descriptionMuted}>
+                    No campaign description added yet.
+                  </p>
                 )}
 
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>
-                    {campaign.title}
-                  </h2>
-                  {campaign.description && (
-                    <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                      {campaign.description}
-                    </p>
-                  )}
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: "#94a3b8",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Type: {campaign.type.toUpperCase()}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-      </div>
+                <div style={styles.button}>View campaign</div>
+              </div>
+            </Link>
+          ))}
+        </section>
+      )}
     </main>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f8fafc",
+    padding: "32px 16px 56px",
+  },
+  header: {
+    maxWidth: 1100,
+    margin: "0 auto 24px",
+  },
+  badge: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#e0f2fe",
+    color: "#0369a1",
+    fontSize: 13,
+    fontWeight: 900,
+    marginBottom: 10,
+  },
+  title: {
+    margin: 0,
+    fontSize: 38,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    color: "#0f172a",
+  },
+  subtitle: {
+    margin: "10px 0 0",
+    color: "#64748b",
+    fontSize: 16,
+    lineHeight: 1.55,
+  },
+  muted: {
+    color: "#64748b",
+    lineHeight: 1.55,
+  },
+  grid: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    display: "grid",
+    gap: 18,
+  },
+  card: {
+    display: "grid",
+    gridTemplateColumns: "220px minmax(0, 1fr)",
+    gap: 18,
+    padding: 16,
+    borderRadius: 22,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    textDecoration: "none",
+    color: "#111827",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  imageWrap: {
+    height: 150,
+    borderRadius: 16,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  imageEmpty: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 42,
+    color: "#94a3b8",
+  },
+  cardBody: {
+    minWidth: 0,
+    display: "grid",
+    alignContent: "center",
+    gap: 8,
+  },
+  typePill: {
+    width: "fit-content",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#ecfdf5",
+    color: "#166534",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.2,
+    color: "#0f172a",
+    letterSpacing: "-0.02em",
+    wordBreak: "break-word",
+  },
+  description: {
+    margin: 0,
+    color: "#475569",
+    lineHeight: 1.5,
+    wordBreak: "break-word",
+  },
+  descriptionMuted: {
+    margin: 0,
+    color: "#94a3b8",
+    lineHeight: 1.5,
+  },
+  button: {
+    width: "fit-content",
+    marginTop: 6,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+  },
+  emptyCard: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: 24,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+};
