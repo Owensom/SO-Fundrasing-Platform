@@ -870,9 +870,9 @@ export default function PublicRafflePage({ slug }: Props) {
     <div style={styles.page}>
       <div style={styles.container}>
         <nav style={styles.navBar}>
-          <Link href="/raffles" style={styles.navLink}>
-            ← Back to public raffles
-          </Link>
+        <Link href={`/c/${raffle.tenantSlug}`} style={styles.navLink}>
+  ← Back to campaigns
+</Link>
 
           {adminReturn ? (
             <Link href={adminReturn} style={styles.adminNavLink}>
