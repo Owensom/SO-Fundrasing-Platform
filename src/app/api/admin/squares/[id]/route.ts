@@ -13,12 +13,15 @@ type RouteContext = {
   };
 };
 
-function parseNumber(value: FormDataEntryValue | string | null | undefined, fallback = 0) {
+function parseNumber(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback = 0,
+) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function parsePrizes(value: string) {
+function parsePrizesJson(value: string) {
   if (!value.trim()) return [];
 
   try {
@@ -26,6 +29,42 @@ function parsePrizes(value: string) {
   } catch {
     return [];
   }
+}
+
+function parsePrizeTable(formData: FormData) {
+  const titles = formData.getAll("prize_title").map((v) => String(v).trim());
+  const descriptions = formData
+    .getAll("prize_description")
+    .map((v) => String(v).trim());
+
+  const prizes = titles
+    .map((title, index) => {
+      if (!title) return null;
+
+      return {
+        title,
+        name: title,
+        description: descriptions[index] ?? "",
+        position: index + 1,
+        sort_order: index + 1,
+        is_public: true,
+      };
+    })
+    .filter(Boolean);
+
+  return normalisePrizes(prizes);
+}
+
+function parsePrizes(formData: FormData, fallback: unknown) {
+  const tablePrizes = parsePrizeTable(formData);
+
+  if (tablePrizes.length > 0) {
+    return tablePrizes;
+  }
+
+  return parsePrizesJson(
+    String(formData.get("prizes") ?? JSON.stringify(fallback ?? [])),
+  );
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
@@ -107,10 +146,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
 
-    const currency = String(formData.get("currency") ?? existing.currency ?? "GBP") as
-      | "GBP"
-      | "USD"
-      | "EUR";
+    const currency = String(
+      formData.get("currency") ?? existing.currency ?? "GBP",
+    ) as "GBP" | "USD" | "EUR";
 
     const status = String(formData.get("status") ?? existing.status) as
       | "draft"
@@ -120,7 +158,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const total_squares = Math.min(
       500,
-      Math.max(1, parseNumber(formData.get("total_squares"), existing.total_squares)),
+      Math.max(
+        1,
+        parseNumber(formData.get("total_squares"), existing.total_squares),
+      ),
     );
 
     const priceMajor = parseNumber(
@@ -128,13 +169,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       existing.price_per_square_cents / 100,
     );
 
-    const price_per_square_cents = Math.round(priceMajor * 100);
+    const price_per_square_cents = Math.max(0, Math.round(priceMajor * 100));
 
     const prizes = parsePrizes(
-      String(
-        formData.get("prizes") ??
-          JSON.stringify(existing.config_json?.prizes ?? []),
-      ),
+      formData,
+      existing.config_json?.prizes ?? [],
     );
 
     const updated = await updateSquaresGame(id, {
@@ -218,7 +257,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       total_squares: totalSquares,
       price_per_square_cents:
         body?.price_per_square_cents != null
-          ? Number(body.price_per_square_cents)
+          ? Math.max(0, Number(body.price_per_square_cents))
           : existing.price_per_square_cents,
       prizes: Array.isArray(body?.prizes)
         ? normalisePrizes(body.prizes)
