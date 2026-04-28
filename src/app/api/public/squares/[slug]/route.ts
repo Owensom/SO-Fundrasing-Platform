@@ -55,6 +55,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       ok: true,
       game: {
         id: game.id,
+        tenantSlug: game.tenant_slug,
         slug: game.slug,
         title: game.title,
         description: game.description ?? "",
