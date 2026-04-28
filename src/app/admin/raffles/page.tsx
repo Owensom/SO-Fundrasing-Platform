@@ -238,23 +238,25 @@ export default async function AdminRafflesPage() {
           }}
         >
           <h2 style={{ margin: 0, color: "#0f172a" }}>No raffles yet</h2>
-          <p style={{ color: "#64748b", margin: "8px 0 18px" }}>
-            Create your first raffle and publish it when ready.
-          </p>
-          <Link
-            href="/admin/raffles/new"
-            style={{
-              display: "inline-flex",
-              padding: "11px 16px",
-              borderRadius: 999,
-              background: "#1683f8",
-              color: "#fff",
-              textDecoration: "none",
-              fontWeight: 800,
-            }}
-          >
-            Create raffle
-          </Link>
+
+<p style={{ color: "#64748b", margin: "8px 0 18px" }}>
+  Create your first raffle and publish it when ready.
+</p>
+
+<Link
+  href="/admin/raffles/new"
+  style={{
+    display: "inline-flex",
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: 800,
+  }}
+>
+  Create raffle
+</Link>
         </section>
       ) : (
         <section style={{ display: "grid", gap: 16 }}>
