@@ -88,7 +88,9 @@ function formatCurrency(value: number, currency: string) {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -112,9 +114,11 @@ function ordinal(position: number) {
 
 function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
   const status = String(rawStatus ?? "").trim().toLowerCase();
+
   if (status === "published") return "published";
   if (status === "drawn") return "drawn";
   if (status === "closed") return "closed";
+
   return "draft";
 }
 
@@ -133,7 +137,6 @@ function normaliseImagePosition(value: unknown) {
 
   return "center";
 }
-
 function toSafeRaffle(input: any): SafeRaffle {
   const raw = input ?? {};
   const config = raw.config_json ?? {};
@@ -144,7 +147,9 @@ function toSafeRaffle(input: any): SafeRaffle {
   const reservedTickets = Array.isArray(raw.reservedTickets)
     ? raw.reservedTickets
     : [];
-  const soldTickets = Array.isArray(raw.soldTickets) ? raw.soldTickets : [];
+  const soldTickets = Array.isArray(raw.soldTickets)
+    ? raw.soldTickets
+    : [];
   const winners = Array.isArray(raw.winners) ? raw.winners : [];
 
   const startNumber = Number(raw.startNumber);
@@ -161,20 +166,25 @@ function toSafeRaffle(input: any): SafeRaffle {
     title: String(raw.title ?? "Raffle"),
     description: String(raw.description ?? ""),
     imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
+
     imagePosition: normaliseImagePosition(
-      raw.imagePosition ?? raw.image_position ?? config.image_position,
+      raw.imagePosition ??
+        raw.image_position ??
+        config.image_position,
     ),
+
     tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
-    drawAt:
-      raw.drawAt ?? raw.draw_at
-        ? String(raw.drawAt ?? raw.draw_at)
-        : null,
+    drawAt: raw.drawAt ?? null,
+
     startNumber: Number.isFinite(startNumber) ? startNumber : 1,
     endNumber: Number.isFinite(endNumber) ? endNumber : 1,
+
     currency: String(raw.currency ?? "GBP"),
+
     ticketPrice: Number.isFinite(Number(raw.ticketPrice))
       ? Number(raw.ticketPrice)
       : 0,
+
     status: normaliseFrontendStatus(raw.status),
 
     colours: colours.map((c: any, index: number) => ({
@@ -189,10 +199,16 @@ function toSafeRaffle(input: any): SafeRaffle {
     offers: offers.map((o: any, index: number) => ({
       id: String(o?.id ?? `offer-${index}`),
       label: String(o?.label ?? `Offer ${index + 1}`),
-      quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
-      price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
+      quantity: Number.isFinite(Number(o?.quantity))
+        ? Number(o.quantity)
+        : 0,
+      price: Number.isFinite(Number(o?.price))
+        ? Number(o.price)
+        : 0,
       isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
-      sortOrder: Number.isFinite(Number(o?.sortOrder ?? o?.sort_order))
+      sortOrder: Number.isFinite(
+        Number(o?.sortOrder ?? o?.sort_order),
+      )
         ? Number(o?.sortOrder ?? o?.sort_order)
         : index,
     })),
@@ -206,17 +222,27 @@ function toSafeRaffle(input: any): SafeRaffle {
         description: String(p?.description ?? ""),
         isPublic: p?.isPublic !== false,
       }))
-      .filter((p: RafflePrize) => p.title.trim().length > 0 && p.isPublic)
-      .sort((a: RafflePrize, b: RafflePrize) => a.position - b.position),
+      .filter(
+        (p: RafflePrize) =>
+          p.title.trim().length > 0 && p.isPublic,
+      )
+      .sort(
+        (a: RafflePrize, b: RafflePrize) =>
+          a.position - b.position,
+      ),
 
     reservedTickets: reservedTickets.map((t: any) => ({
       colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+      number: Number.isFinite(Number(t?.number))
+        ? Number(t.number)
+        : 0,
     })),
 
     soldTickets: soldTickets.map((t: any) => ({
       colour: String(t?.colour ?? ""),
-      number: Number.isFinite(Number(t?.number)) ? Number(t.number) : 0,
+      number: Number.isFinite(Number(t?.number))
+        ? Number(t.number)
+        : 0,
     })),
 
     winnerTicketNumber: Number.isFinite(winnerTicketNumber)
@@ -234,24 +260,38 @@ function toSafeRaffle(input: any): SafeRaffle {
         : null,
 
     winners: winners.map((winner: any) => ({
-      prizePosition: Number(winner.prizePosition ?? winner.prize_position ?? 1),
-      ticketNumber: Number(winner.ticketNumber ?? winner.ticket_number ?? 0),
+      prizePosition: Number(
+        winner.prizePosition ??
+          winner.prize_position ??
+          1,
+      ),
+      ticketNumber: Number(
+        winner.ticketNumber ??
+          winner.ticket_number ??
+          0,
+      ),
       colour:
-        winner.colour != null && String(winner.colour).trim()
+        winner.colour != null &&
+        String(winner.colour).trim()
           ? String(winner.colour)
           : null,
       buyerName:
         winner.buyerName ?? winner.buyer_name
-          ? String(winner.buyerName ?? winner.buyer_name)
+          ? String(
+              winner.buyerName ??
+                winner.buyer_name,
+            )
           : null,
       drawnAt:
         winner.drawnAt ?? winner.drawn_at
-          ? String(winner.drawnAt ?? winner.drawn_at)
+          ? String(
+              winner.drawnAt ??
+                winner.drawn_at,
+            )
           : null,
     })),
   };
 }
-
 function calculateBestPrice(
   quantity: number,
   ticketPrice: number,
@@ -260,7 +300,7 @@ function calculateBestPrice(
   const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
 
   const activeOffers = offers
-    .filter((o) => o.isActive && o.quantity > 0 && o.price > 0)
+    .filter((offer) => offer.isActive && offer.quantity > 0 && offer.price > 0)
     .sort((a, b) => {
       if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
         return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
@@ -282,7 +322,10 @@ function calculateBestPrice(
     appliedOffers: [],
   }));
 
-  dp[0] = { total: 0, appliedOffers: [] };
+  dp[0] = {
+    total: 0,
+    appliedOffers: [],
+  };
 
   for (let i = 1; i <= safeQuantity; i += 1) {
     dp[i] = {
@@ -326,6 +369,7 @@ function calculateBestPrice(
   const total = Number.isFinite(dp[safeQuantity]?.total)
     ? dp[safeQuantity].total
     : 0;
+
   const standardTotal = safeQuantity * ticketPrice;
   const savings = Math.max(standardTotal - total, 0);
 
@@ -366,6 +410,7 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
   const match = colours.find(
     (colour) => colour.name === colourName || colour.id === colourName,
   );
+
   const background = match?.hex || colourName;
 
   return (
@@ -377,6 +422,7 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
         background,
         border: "1px solid #cbd5e1",
         display: "inline-block",
+        flexShrink: 0,
       }}
     />
   );
@@ -388,6 +434,7 @@ function shuffleTickets(tickets: TicketSelection[]) {
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     const current = shuffled[index];
+
     shuffled[index] = shuffled[swapIndex];
     shuffled[swapIndex] = current;
   }
@@ -423,6 +470,7 @@ export default function PublicRafflePage({ slug }: Props) {
         const text = await response.text();
 
         let parsed: any = null;
+
         try {
           parsed = JSON.parse(text);
         } catch {
@@ -456,41 +504,47 @@ export default function PublicRafflePage({ slug }: Props) {
       cancelled = true;
     };
   }, [slug]);
-
-  const availability = useMemo(() => {
+    const availability = useMemo(() => {
     const sold = new Set<string>();
     const reserved = new Set<string>();
 
     if (!raffle) return { sold, reserved };
 
-    for (const t of raffle.soldTickets) {
-      sold.add(makeTicketKey(t.colour, t.number));
+    for (const ticket of raffle.soldTickets) {
+      sold.add(makeTicketKey(ticket.colour, ticket.number));
     }
 
-    for (const t of raffle.reservedTickets) {
-      reserved.add(makeTicketKey(t.colour, t.number));
+    for (const ticket of raffle.reservedTickets) {
+      reserved.add(makeTicketKey(ticket.colour, ticket.number));
     }
 
     return { sold, reserved };
   }, [raffle]);
 
   const basketKeys = useMemo(
-    () => new Set(basket.map((t) => makeTicketKey(t.colour, t.number))),
+    () => new Set(basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number))),
     [basket],
   );
 
   const visibleNumbers = useMemo(() => {
     if (!raffle) return [];
-    if (!Number.isFinite(raffle.startNumber) || !Number.isFinite(raffle.endNumber)) {
+
+    if (
+      !Number.isFinite(raffle.startNumber) ||
+      !Number.isFinite(raffle.endNumber)
+    ) {
       return [];
     }
+
     if (raffle.endNumber < raffle.startNumber) return [];
 
-    const out: number[] = [];
-    for (let n = raffle.startNumber; n <= raffle.endNumber; n += 1) {
-      out.push(n);
+    const numbers: number[] = [];
+
+    for (let number = raffle.startNumber; number <= raffle.endNumber; number += 1) {
+      numbers.push(number);
     }
-    return out;
+
+    return numbers;
   }, [raffle]);
 
   const isPublished = raffle?.status === "published";
@@ -524,6 +578,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
   const estimatedFee =
     pricing.total > 0 ? Math.round(pricing.total * 0.1 * 100) / 100 : 0;
+
   const displayTotal = coverFees ? pricing.total + estimatedFee : pricing.total;
 
   const availableCount = useMemo(() => {
@@ -548,6 +603,7 @@ export default function PublicRafflePage({ slug }: Props) {
     if (!raffle || !selectedColour || !canReserve) return;
 
     const key = makeTicketKey(selectedColour, number);
+
     if (availability.sold.has(key) || availability.reserved.has(key)) return;
 
     setBasket((current) => {
@@ -588,6 +644,7 @@ export default function PublicRafflePage({ slug }: Props) {
     if (!raffle || !canReserve) return;
 
     const requested = Math.max(1, Math.floor(Number(quantity) || 0));
+
     const existingBasketKeys = new Set(
       basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number)),
     );
@@ -633,6 +690,7 @@ export default function PublicRafflePage({ slug }: Props) {
           selected.length === 1 ? "" : "s"
         } could be selected. Not enough tickets are available.`,
       );
+
       return;
     }
 
@@ -656,8 +714,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
     autoSelectTicketQuantity(autoQuantity);
   }
-
-  async function reserveTickets() {
+    async function reserveTickets() {
     if (!raffle || !canReserve) return;
 
     try {
@@ -665,9 +722,17 @@ export default function PublicRafflePage({ slug }: Props) {
       setError("");
       setReservationMessage("");
 
-      if (!buyerName.trim()) throw new Error("Please enter your name.");
-      if (!buyerEmail.trim()) throw new Error("Please enter your email.");
-      if (basket.length === 0) throw new Error("Please select at least one ticket.");
+      if (!buyerName.trim()) {
+        throw new Error("Please enter your name.");
+      }
+
+      if (!buyerEmail.trim()) {
+        throw new Error("Please enter your email.");
+      }
+
+      if (basket.length === 0) {
+        throw new Error("Please select at least one ticket.");
+      }
 
       const selectedTickets = basket.map((ticket) => ({
         ticket_number: ticket.number,
@@ -692,6 +757,7 @@ export default function PublicRafflePage({ slug }: Props) {
       const reserveText = await reserveResponse.text();
 
       let reserveParsed: any = null;
+
       try {
         reserveParsed = JSON.parse(reserveText);
       } catch {
@@ -718,7 +784,7 @@ export default function PublicRafflePage({ slug }: Props) {
         `Reserved until ${String(reserveParsed?.expiresAt ?? "")}`,
       );
 
-      const checkoutResponse = await fetch(`/api/stripe/checkout`, {
+      const checkoutResponse = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -731,6 +797,7 @@ export default function PublicRafflePage({ slug }: Props) {
       const checkoutText = await checkoutResponse.text();
 
       let checkoutParsed: any = null;
+
       try {
         checkoutParsed = JSON.parse(checkoutText);
       } catch {
@@ -773,17 +840,7 @@ export default function PublicRafflePage({ slug }: Props) {
     <div style={styles.page}>
       <div style={styles.container}>
         {raffle.imageUrl ? (
-          <div
-            style={{
-              width: "100%",
-              height: 360,
-              overflow: "hidden",
-              borderRadius: 16,
-              marginBottom: 20,
-              border: "1px solid #e2e8f0",
-              background: "#f8fafc",
-            }}
-          >
+          <div style={styles.imageWrap}>
             <img
               src={raffle.imageUrl}
               alt={raffle.title}
@@ -798,13 +855,20 @@ export default function PublicRafflePage({ slug }: Props) {
           </div>
         ) : null}
 
-        <h1>{raffle.title}</h1>
-        {raffle.description ? <p>{raffle.description}</p> : null}
+        <h1 style={styles.title}>{raffle.title}</h1>
+
+        {raffle.description ? (
+          <p style={styles.description}>{raffle.description}</p>
+        ) : null}
 
         <div style={styles.totalBox}>
-          <div>Ticket price: {formatCurrency(raffle.ticketPrice, raffle.currency)}</div>
+          <div>
+            Ticket price: {formatCurrency(raffle.ticketPrice, raffle.currency)}
+          </div>
           <div>Draw date: {formatDateTime(raffle.drawAt)}</div>
-          <div>Range: {raffle.startNumber} to {raffle.endNumber}</div>
+          <div>
+            Range: {raffle.startNumber} to {raffle.endNumber}
+          </div>
           <div>Status: {raffle.status}</div>
           <div>Available now: {availableCount}</div>
         </div>
@@ -823,8 +887,9 @@ export default function PublicRafflePage({ slug }: Props) {
                     {ordinal(prize.position)}
                   </div>
 
-                  <div>
+                  <div style={styles.prizeContent}>
                     <div style={styles.prizeTitle}>{prize.title}</div>
+
                     {prize.description ? (
                       <div style={styles.prizeDescription}>
                         {prize.description}
@@ -850,21 +915,21 @@ export default function PublicRafflePage({ slug }: Props) {
                     }`}
                     style={styles.winnerCard}
                   >
-                    <div>
+                    <div style={styles.winnerBlock}>
                       <div style={styles.winnerLabel}>Prize</div>
                       <div style={styles.winnerPrize}>
                         {ordinal(winner.prizePosition)}
                       </div>
                     </div>
 
-                    <div>
+                    <div style={styles.winnerBlock}>
                       <div style={styles.winnerLabel}>Ticket</div>
                       <div style={styles.winnerTicket}>
                         #{winner.ticketNumber}
                       </div>
                     </div>
 
-                    <div>
+                    <div style={styles.winnerBlock}>
                       <div style={styles.winnerLabel}>Colour</div>
                       <div style={styles.winnerColour}>
                         {colourSwatch(winner.colour, raffle.colours)}
@@ -876,12 +941,12 @@ export default function PublicRafflePage({ slug }: Props) {
               </div>
             ) : (
               <div style={styles.winnerCard}>
-                <div>
+                <div style={styles.winnerBlock}>
                   <div style={styles.winnerLabel}>Prize</div>
                   <div style={styles.winnerPrize}>1st</div>
                 </div>
 
-                <div>
+                <div style={styles.winnerBlock}>
                   <div style={styles.winnerLabel}>Ticket</div>
                   <div style={styles.winnerTicket}>
                     {raffle.winnerTicketNumber != null
@@ -890,7 +955,7 @@ export default function PublicRafflePage({ slug }: Props) {
                   </div>
                 </div>
 
-                <div>
+                <div style={styles.winnerBlock}>
                   <div style={styles.winnerLabel}>Colour</div>
                   <div style={styles.winnerColour}>
                     {colourSwatch(raffle.winnerColour, raffle.colours)}
@@ -917,8 +982,7 @@ export default function PublicRafflePage({ slug }: Props) {
         {isDraft ? (
           <div style={styles.notice}>This raffle is not published yet.</div>
         ) : null}
-
-        {canReserve ? (
+                {canReserve ? (
           <section style={styles.quickSelect}>
             <div>
               <h2 style={{ margin: 0 }}>Quick buy</h2>
@@ -940,8 +1004,8 @@ export default function PublicRafflePage({ slug }: Props) {
                   min={1}
                   max={availableCount || 1}
                   value={autoQuantity === 0 ? "" : autoQuantity}
-                  onChange={(e) => {
-                    const raw = e.target.value;
+                  onChange={(event) => {
+                    const raw = event.target.value;
 
                     if (raw === "") {
                       setAutoQuantity(0);
@@ -981,6 +1045,7 @@ export default function PublicRafflePage({ slug }: Props) {
             <div style={{ fontWeight: 800, marginBottom: 8 }}>
               Available offers
             </div>
+
             <div style={styles.offerGrid}>
               {raffle.offers
                 .filter((offer) => offer.isActive)
@@ -1002,6 +1067,7 @@ export default function PublicRafflePage({ slug }: Props) {
         ) : null}
 
         <h2 style={styles.heading}>Choose colour</h2>
+
         <div style={styles.colourRow}>
           {raffle.colours.length === 0 ? (
             <div style={styles.notice}>No colours configured.</div>
@@ -1029,6 +1095,7 @@ export default function PublicRafflePage({ slug }: Props) {
         </div>
 
         <h2 style={styles.heading}>Choose numbers</h2>
+
         {selectedColour ? (
           <div style={styles.numberGrid}>
             {visibleNumbers.map((number) => {
@@ -1075,6 +1142,7 @@ export default function PublicRafflePage({ slug }: Props) {
         )}
 
         <h2 style={styles.heading}>Basket</h2>
+
         {basket.length === 0 ? (
           <div style={styles.notice}>No tickets selected yet.</div>
         ) : (
@@ -1087,6 +1155,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 <span>
                   {ticket.colour} #{ticket.number}
                 </span>
+
                 <button
                   type="button"
                   onClick={() => removeFromBasket(ticket)}
@@ -1101,10 +1170,12 @@ export default function PublicRafflePage({ slug }: Props) {
 
         <div style={styles.totalBox}>
           <div>Tickets: {pricing.quantity}</div>
+
           <div>
             Standard total:{" "}
             {formatCurrency(pricing.standardTotal, raffle.currency)}
           </div>
+
           <div>
             Ticket total: {formatCurrency(pricing.total, raffle.currency)}
           </div>
@@ -1115,7 +1186,9 @@ export default function PublicRafflePage({ slug }: Props) {
               {pricing.appliedOffers
                 .map(
                   (offer) =>
-                    `${offer.label}${offer.times > 1 ? ` × ${offer.times}` : ""}`,
+                    `${offer.label}${
+                      offer.times > 1 ? ` × ${offer.times}` : ""
+                    }`,
                 )
                 .join(", ")}
             </div>
@@ -1134,12 +1207,14 @@ export default function PublicRafflePage({ slug }: Props) {
               onChange={(event) => setCoverFees(event.target.checked)}
               disabled={!canReserve || basket.length === 0}
             />
+
             <span>
               <strong>I’d like to cover platform fees</strong>
               <br />
               <span style={{ color: "#64748b", fontSize: 13 }}>
-                Adds approximately {formatCurrency(estimatedFee, raffle.currency)}{" "}
-                so the organiser receives the full ticket value.
+                Adds approximately{" "}
+                {formatCurrency(estimatedFee, raffle.currency)} so the organiser
+                receives the full ticket value.
               </span>
             </span>
           </label>
@@ -1148,22 +1223,25 @@ export default function PublicRafflePage({ slug }: Props) {
         </div>
 
         <h2 style={styles.heading}>Your details</h2>
+
         <div style={styles.form}>
           <input
             value={buyerName}
-            onChange={(e) => setBuyerName(e.target.value)}
+            onChange={(event) => setBuyerName(event.target.value)}
             placeholder="Your name"
             style={styles.input}
             disabled={!canReserve}
           />
+
           <input
             value={buyerEmail}
-            onChange={(e) => setBuyerEmail(e.target.value)}
+            onChange={(event) => setBuyerEmail(event.target.value)}
             placeholder="Your email"
             type="email"
             style={styles.input}
             disabled={!canReserve}
           />
+
           <button
             type="button"
             onClick={reserveTickets}
@@ -1184,6 +1262,7 @@ export default function PublicRafflePage({ slug }: Props) {
         {reservationMessage ? (
           <div style={styles.success}>{reservationMessage}</div>
         ) : null}
+
         {error ? <div style={styles.error}>{error}</div> : null}
       </div>
     </div>
@@ -1194,26 +1273,49 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f8fafc",
-    padding: 24,
+    padding: 16,
   },
   container: {
     maxWidth: 1100,
     margin: "0 auto",
     background: "#ffffff",
     borderRadius: 16,
-    padding: 24,
+    padding: 18,
     boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
   },
   wrap: {
     padding: 24,
   },
+  imageWrap: {
+    width: "100%",
+    height: 360,
+    overflow: "hidden",
+    borderRadius: 16,
+    marginBottom: 20,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  title: {
+    margin: "0 0 8px",
+    fontSize: "clamp(28px, 7vw, 42px)",
+    lineHeight: 1.1,
+    color: "#0f172a",
+  },
+  description: {
+    margin: "0 0 16px",
+    color: "#475569",
+    lineHeight: 1.6,
+    wordBreak: "break-word",
+  },
   heading: {
     marginTop: 24,
     marginBottom: 12,
+    fontSize: "clamp(20px, 5vw, 28px)",
+    lineHeight: 1.2,
   },
   prizesBox: {
     marginTop: 20,
-    padding: 18,
+    padding: 16,
     borderRadius: 16,
     background: "#fff7ed",
     border: "1px solid #fed7aa",
@@ -1225,33 +1327,44 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   prizeCard: {
-    display: "grid",
-    gridTemplateColumns: "90px 1fr",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 12,
     padding: 14,
     borderRadius: 12,
     background: "#ffffff",
     border: "1px solid #fed7aa",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   prizePosition: {
     fontSize: 22,
     fontWeight: 900,
     color: "#c2410c",
+    minWidth: 70,
+    flexShrink: 0,
+  },
+  prizeContent: {
+    flex: "1 1 200px",
+    minWidth: 0,
   },
   prizeTitle: {
     fontSize: 18,
     fontWeight: 900,
     color: "#111827",
+    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   prizeDescription: {
     marginTop: 4,
     fontSize: 14,
     color: "#64748b",
+    lineHeight: 1.45,
+    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   winnersBox: {
     marginTop: 20,
-    padding: 18,
+    padding: 16,
     borderRadius: 16,
     background: "#ecfdf5",
     border: "1px solid #a7f3d0",
@@ -1263,14 +1376,18 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   winnerCard: {
-    display: "grid",
-    gridTemplateColumns: "120px 1fr 1fr",
-    gap: 12,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 14,
     padding: 14,
     borderRadius: 12,
     background: "#ffffff",
     border: "1px solid #bbf7d0",
-    alignItems: "center",
+    alignItems: "flex-start",
+  },
+  winnerBlock: {
+    flex: "1 1 140px",
+    minWidth: 0,
   },
   winnerLabel: {
     fontSize: 12,
@@ -1282,11 +1399,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 24,
     fontWeight: 900,
     color: "#065f46",
+    wordBreak: "break-word",
   },
   winnerTicket: {
     fontSize: 24,
     fontWeight: 900,
     color: "#111827",
+    wordBreak: "break-word",
   },
   winnerColour: {
     display: "inline-flex",
@@ -1295,6 +1414,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 18,
     fontWeight: 800,
     color: "#111827",
+    minWidth: 0,
+    flexWrap: "wrap",
   },
   quickSelect: {
     marginTop: 20,
@@ -1375,7 +1496,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   numberGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(64px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))",
     gap: 8,
   },
   numberButton: {
@@ -1392,15 +1513,18 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 10,
     padding: 12,
     border: "1px solid #e2e8f0",
     borderRadius: 10,
+    flexWrap: "wrap",
   },
   removeButton: {
     border: "none",
     background: "transparent",
     color: "#dc2626",
     fontWeight: 700,
+    cursor: "pointer",
   },
   totalBox: {
     marginTop: 20,
@@ -1411,6 +1535,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gap: 8,
     fontWeight: 700,
+    lineHeight: 1.4,
+    wordBreak: "break-word",
   },
   coverFeesBox: {
     display: "flex",
@@ -1433,6 +1559,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     border: "1px solid #cbd5e1",
     fontSize: 16,
+    minWidth: 0,
   },
   primaryButton: {
     height: 48,
