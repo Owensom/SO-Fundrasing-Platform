@@ -61,6 +61,7 @@ export default function PublicSquaresPage({ params }: Props) {
 
   const [game, setGame] = useState<SquaresGame | null>(null);
   const [selectedSquares, setSelectedSquares] = useState<number[]>([]);
+  const [reservationToken, setReservationToken] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [coverFees, setCoverFees] = useState(false);
@@ -117,6 +118,8 @@ export default function PublicSquaresPage({ params }: Props) {
     if (!game || game.status !== "published") return;
     if (unavailableSquares.has(square)) return;
 
+    setReservationToken("");
+
     setSelectedSquares((current) =>
       current.includes(square)
         ? current.filter((item) => item !== square)
@@ -124,17 +127,41 @@ export default function PublicSquaresPage({ params }: Props) {
     );
   }
 
-  function quickPick(count: number) {
+  async function quickPick(count: number) {
     if (!game) return;
 
-    const available = Array.from(
-      { length: game.totalSquares },
-      (_, index) => index + 1,
-    ).filter((square) => !unavailableSquares.has(square));
+    setBusy(true);
+    setError("");
+    setReservationToken("");
 
-    const shuffled = [...available].sort(() => Math.random() - 0.5);
+    try {
+      const res = await fetch(`/api/public/squares/${slug}/reserve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          randomCount: count,
+          customerName,
+          customerEmail,
+        }),
+      });
 
-    setSelectedSquares(shuffled.slice(0, count).sort((a, b) => a - b));
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Random selection failed");
+      }
+
+      setSelectedSquares(Array.isArray(data.squares) ? data.squares : []);
+      setReservationToken(String(data.reservationToken || ""));
+
+      await loadGame();
+    } catch (err: any) {
+      setError(err.message || "Random selection failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function checkout() {
@@ -144,22 +171,29 @@ export default function PublicSquaresPage({ params }: Props) {
     setError("");
 
     try {
-      const reserveRes = await fetch(`/api/public/squares/${slug}/reserve`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          squares: selectedSquares,
-          customerName,
-          customerEmail,
-        }),
-      });
+      let token = reservationToken;
 
-      const reserveData = await reserveRes.json();
+      if (!token) {
+        const reserveRes = await fetch(`/api/public/squares/${slug}/reserve`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            squares: selectedSquares,
+            customerName,
+            customerEmail,
+          }),
+        });
 
-      if (!reserveRes.ok) {
-        throw new Error(reserveData?.error || "Could not reserve squares");
+        const reserveData = await reserveRes.json();
+
+        if (!reserveRes.ok) {
+          throw new Error(reserveData?.error || "Could not reserve squares");
+        }
+
+        token = String(reserveData.reservationToken || "");
+        setReservationToken(token);
       }
 
       const checkoutRes = await fetch("/api/stripe/checkout/squares", {
@@ -169,7 +203,7 @@ export default function PublicSquaresPage({ params }: Props) {
         },
         body: JSON.stringify({
           gameId: game.id,
-          reservationToken: reserveData.reservationToken,
+          reservationToken: token,
           coverFees,
         }),
       });
@@ -225,7 +259,9 @@ export default function PublicSquaresPage({ params }: Props) {
             Draw date: <strong>{formatDrawDate(game.drawAt)}</strong>
           </p>
 
-          {game.description ? <p style={descriptionStyle}>{game.description}</p> : null}
+          {game.description ? (
+            <p style={descriptionStyle}>{game.description}</p>
+          ) : null}
 
           <div style={infoGridStyle}>
             <div style={infoCardStyle}>
@@ -270,32 +306,9 @@ export default function PublicSquaresPage({ params }: Props) {
         </section>
       ) : null}
 
-      {game.winners?.length > 0 ? (
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Winners</h2>
-          <div style={prizeGridStyle}>
-            {game.winners.map((winner) => (
-              <div key={winner.id} style={winnerCardStyle}>
-                <strong>{winner.prize_title}</strong>
-                <p style={mutedStyle}>
-                  Square #{winner.square_number}
-                  {winner.customer_name ? ` — ${winner.customer_name}` : ""}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <section style={layoutStyle}>
         <div style={cardStyle}>
           <h2 style={sectionTitleStyle}>Choose your squares</h2>
-
-          {game.status !== "published" ? (
-            <p style={{ color: "#b91c1c", fontWeight: 800 }}>
-              This squares game is not currently open.
-            </p>
-          ) : null}
 
           <div style={quickPickStyle}>
             <button type="button" onClick={() => quickPick(1)} style={smallButtonStyle}>
@@ -307,7 +320,14 @@ export default function PublicSquaresPage({ params }: Props) {
             <button type="button" onClick={() => quickPick(10)} style={smallButtonStyle}>
               Random 10
             </button>
-            <button type="button" onClick={() => setSelectedSquares([])} style={smallButtonStyle}>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSquares([]);
+                setReservationToken("");
+              }}
+              style={smallButtonStyle}
+            >
               Clear
             </button>
           </div>
@@ -381,18 +401,28 @@ export default function PublicSquaresPage({ params }: Props) {
             <strong>Total: {money(totalWithFees, game.currency)}</strong>
           </div>
 
+          {reservationToken ? (
+            <p style={reservedNoticeStyle}>
+              Your random squares are reserved for checkout.
+            </p>
+          ) : null}
+
           {error ? (
             <p style={{ color: "#b91c1c", fontWeight: 800 }}>{error}</p>
           ) : null}
 
           <button
             type="button"
-            disabled={busy || selectedSquares.length === 0 || game.status !== "published"}
+            disabled={
+              busy || selectedSquares.length === 0 || game.status !== "published"
+            }
             onClick={checkout}
             style={{
               ...checkoutButtonStyle,
               opacity:
-                busy || selectedSquares.length === 0 || game.status !== "published"
+                busy ||
+                selectedSquares.length === 0 ||
+                game.status !== "published"
                   ? 0.5
                   : 1,
             }}
@@ -515,13 +545,6 @@ const prizeCardStyle = {
   background: "#f8fafc",
 };
 
-const winnerCardStyle = {
-  border: "1px solid #bbf7d0",
-  borderRadius: 14,
-  padding: 14,
-  background: "#f0fdf4",
-};
-
 const quickPickStyle = {
   display: "flex",
   gap: 8,
@@ -598,6 +621,15 @@ const totalBoxStyle = {
   padding: 14,
   background: "#f8fafc",
   marginBottom: 14,
+};
+
+const reservedNoticeStyle = {
+  border: "1px solid #bbf7d0",
+  borderRadius: 12,
+  padding: 10,
+  background: "#f0fdf4",
+  color: "#166534",
+  fontWeight: 800,
 };
 
 const checkoutButtonStyle = {
