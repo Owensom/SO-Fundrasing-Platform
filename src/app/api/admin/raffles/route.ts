@@ -55,6 +55,11 @@ function normaliseImagePosition(value: string) {
   return "center";
 }
 
+function normaliseDrawAt(value: FormDataEntryValue | null) {
+  const clean = String(value ?? "").trim();
+  return clean ? clean : null;
+}
+
 export async function GET(request: NextRequest) {
   const tenantSlug = getTenantSlugFromRequest(request);
 
@@ -102,9 +107,12 @@ export async function POST(request: NextRequest) {
     const slug = slugify(rawSlug || title);
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
+    const draw_at = normaliseDrawAt(formData.get("draw_at"));
+
     const image_position = normaliseImagePosition(
       String(formData.get("image_position") ?? "center"),
     );
+
     const currency = String(formData.get("currency") ?? "EUR").trim();
     const status = String(formData.get("status") ?? "draft").trim();
 
@@ -143,6 +151,7 @@ export async function POST(request: NextRequest) {
       slug,
       description,
       image_url,
+      draw_at,
       image_position,
       currency: currency as "GBP" | "USD" | "EUR",
       ticket_price,
