@@ -28,6 +28,8 @@ export default function DramaticSquaresDraw({
   );
   const [isRevealing, setIsRevealing] = useState(false);
   const [hasRevealed, setHasRevealed] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [burst, setBurst] = useState(false);
 
   const canDraw = soldSquareOptions.length > 0 && Number(prizeNumber) > 0;
 
@@ -39,11 +41,31 @@ export default function DramaticSquaresDraw({
   function startReveal() {
     if (!canDraw || isRevealing) return;
 
-    setIsRevealing(true);
+    setSelectedSquare(null);
     setHasRevealed(false);
+    setBurst(false);
+    setCountdown(3);
+
+    let count = 3;
+
+    const countdownTimer = window.setInterval(() => {
+      count -= 1;
+
+      if (count <= 0) {
+        window.clearInterval(countdownTimer);
+        setCountdown(null);
+        runReveal();
+      } else {
+        setCountdown(count);
+      }
+    }, 800);
+  }
+
+  function runReveal() {
+    setIsRevealing(true);
 
     let ticks = 0;
-    const maxTicks = 36;
+    const maxTicks = 42;
 
     const timer = window.setInterval(() => {
       const random =
@@ -61,17 +83,23 @@ export default function DramaticSquaresDraw({
         setSelectedSquare(finalWinner);
         setIsRevealing(false);
         setHasRevealed(true);
+        setBurst(true);
+
+        window.setTimeout(() => setBurst(false), 1800);
       }
-    }, 90);
+    }, ticks < 22 ? 70 : 120);
   }
 
   return (
     <div style={styles.panel}>
-      <div>
-        <h3 style={styles.title}>Dramatic live draw</h3>
-        <p style={styles.description}>
-          Enter the prize number, start the reveal, then save the final winner.
-        </p>
+      <div style={styles.header}>
+        <div>
+          <div style={styles.kicker}>Live winner experience</div>
+          <h3 style={styles.title}>Dramatic live draw</h3>
+          <p style={styles.description}>
+            Enter the prize number, reveal the winner, then save the result.
+          </p>
+        </div>
       </div>
 
       <label style={styles.field}>
@@ -84,6 +112,7 @@ export default function DramaticSquaresDraw({
             setPrizeNumber(event.target.value);
             setSelectedSquare(null);
             setHasRevealed(false);
+            setBurst(false);
           }}
           placeholder="1"
           style={styles.input}
@@ -92,39 +121,78 @@ export default function DramaticSquaresDraw({
 
       <div style={styles.stage}>
         <div style={styles.stageGlow} />
+        <div style={styles.spotlightLeft} />
+        <div style={styles.spotlightRight} />
+
+        {burst ? (
+          <div style={styles.confettiLayer}>
+            {Array.from({ length: 28 }).map((_, index) => (
+              <span
+                key={index}
+                style={{
+                  ...styles.confetti,
+                  left: `${(index * 37) % 100}%`,
+                  animationDelay: `${(index % 9) * 0.06}s`,
+                }}
+              />
+            ))}
+          </div>
+        ) : null}
 
         <div style={styles.stageContent}>
           <div style={styles.stageEyebrow}>
-            {isRevealing
-              ? "Drawing..."
-              : hasRevealed
-                ? "Winner revealed"
-                : "Ready to draw"}
+            {countdown
+              ? "Get ready"
+              : isRevealing
+                ? "Drawing now"
+                : hasRevealed
+                  ? "Winner revealed"
+                  : "Ready to draw"}
           </div>
 
-          <div style={styles.bigNumber}>
-            {selectedSquare ? `#${selectedSquare.squareNumber}` : "?"}
-          </div>
+          {countdown ? (
+            <div style={styles.countdown}>{countdown}</div>
+          ) : (
+            <>
+              <div
+                style={{
+                  ...styles.bigNumber,
+                  transform: isRevealing ? "scale(1.08)" : "scale(1)",
+                }}
+              >
+                {selectedSquare ? `#${selectedSquare.squareNumber}` : "?"}
+              </div>
 
-          <div style={styles.winnerName}>{displayName}</div>
+              <div style={styles.winnerName}>{displayName}</div>
 
-          <div style={styles.prizeText}>
-            Prize {Number(prizeNumber) > 0 ? prizeNumber : "—"}
-          </div>
+              <div style={styles.prizeText}>
+                Prize {Number(prizeNumber) > 0 ? prizeNumber : "—"}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       <button
         type="button"
         onClick={startReveal}
-        disabled={!canDraw || isRevealing}
+        disabled={!canDraw || isRevealing || countdown !== null}
         style={{
           ...styles.revealButton,
-          opacity: !canDraw || isRevealing ? 0.55 : 1,
-          cursor: !canDraw || isRevealing ? "not-allowed" : "pointer",
+          opacity: !canDraw || isRevealing || countdown !== null ? 0.55 : 1,
+          cursor:
+            !canDraw || isRevealing || countdown !== null
+              ? "not-allowed"
+              : "pointer",
         }}
       >
-        {isRevealing ? "Revealing..." : "Start dramatic reveal"}
+        {countdown
+          ? "Starting..."
+          : isRevealing
+            ? "Revealing..."
+            : hasRevealed
+              ? "Reveal again"
+              : "Start dramatic reveal"}
       </button>
 
       <form
@@ -151,6 +219,19 @@ export default function DramaticSquaresDraw({
           Save revealed winner
         </button>
       </form>
+
+      <style jsx>{`
+        @keyframes fall {
+          0% {
+            transform: translateY(-40px) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(300px) rotate(540deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -158,19 +239,36 @@ export default function DramaticSquaresDraw({
 const styles: Record<string, CSSProperties> = {
   panel: {
     padding: 18,
-    borderRadius: 22,
+    borderRadius: 24,
     background: "#020617",
     border: "1px solid #1e293b",
     display: "grid",
     gap: 14,
     color: "#ffffff",
-    boxShadow: "0 22px 60px rgba(2,6,23,0.35)",
+    boxShadow: "0 24px 70px rgba(2,6,23,0.42)",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  kicker: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "rgba(249,115,22,0.16)",
+    color: "#fed7aa",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    marginBottom: 8,
   },
   title: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 20,
-    letterSpacing: "-0.02em",
+    fontSize: 22,
+    letterSpacing: "-0.03em",
   },
   description: {
     margin: "6px 0 0",
@@ -200,8 +298,8 @@ const styles: Record<string, CSSProperties> = {
   },
   stage: {
     position: "relative",
-    minHeight: 260,
-    borderRadius: 24,
+    minHeight: 330,
+    borderRadius: 28,
     background:
       "radial-gradient(circle at top, #2563eb 0%, #0f172a 42%, #020617 100%)",
     overflow: "hidden",
@@ -209,15 +307,35 @@ const styles: Record<string, CSSProperties> = {
   },
   stageGlow: {
     position: "absolute",
-    inset: -80,
+    inset: -90,
     background:
-      "conic-gradient(from 180deg, rgba(59,130,246,0.4), rgba(34,197,94,0.35), rgba(249,115,22,0.35), rgba(59,130,246,0.4))",
-    filter: "blur(44px)",
-    opacity: 0.7,
+      "conic-gradient(from 180deg, rgba(59,130,246,0.46), rgba(34,197,94,0.36), rgba(249,115,22,0.4), rgba(168,85,247,0.35), rgba(59,130,246,0.46))",
+    filter: "blur(48px)",
+    opacity: 0.75,
+  },
+  spotlightLeft: {
+    position: "absolute",
+    left: -80,
+    top: -20,
+    width: 220,
+    height: 420,
+    background: "rgba(255,255,255,0.08)",
+    transform: "rotate(24deg)",
+    filter: "blur(8px)",
+  },
+  spotlightRight: {
+    position: "absolute",
+    right: -80,
+    top: -20,
+    width: 220,
+    height: 420,
+    background: "rgba(255,255,255,0.08)",
+    transform: "rotate(-24deg)",
+    filter: "blur(8px)",
   },
   stageContent: {
     position: "relative",
-    minHeight: 260,
+    minHeight: 330,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -228,22 +346,30 @@ const styles: Record<string, CSSProperties> = {
   stageEyebrow: {
     fontSize: 13,
     fontWeight: 950,
-    letterSpacing: "0.14em",
+    letterSpacing: "0.16em",
     textTransform: "uppercase",
     color: "#bfdbfe",
-    marginBottom: 10,
+    marginBottom: 12,
+  },
+  countdown: {
+    fontSize: 120,
+    lineHeight: 1,
+    fontWeight: 1000,
+    textShadow: "0 18px 42px rgba(0,0,0,0.5)",
   },
   bigNumber: {
-    fontSize: 86,
+    fontSize: 104,
     lineHeight: 1,
     fontWeight: 1000,
     letterSpacing: "-0.08em",
-    textShadow: "0 12px 34px rgba(0,0,0,0.45)",
+    transition: "transform 110ms ease",
+    textShadow: "0 14px 38px rgba(0,0,0,0.5)",
   },
   winnerName: {
     marginTop: 12,
-    fontSize: 30,
+    fontSize: 36,
     fontWeight: 950,
+    letterSpacing: "-0.04em",
   },
   prizeText: {
     marginTop: 8,
@@ -251,24 +377,42 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
   revealButton: {
-    padding: "14px 20px",
+    padding: "15px 22px",
     border: "none",
     borderRadius: 999,
     background: "#f97316",
     color: "#ffffff",
     fontWeight: 950,
     fontSize: 15,
+    boxShadow: "0 14px 28px rgba(249,115,22,0.28)",
   },
   saveForm: {
     display: "grid",
   },
   saveButton: {
-    padding: "14px 20px",
+    padding: "15px 22px",
     border: "none",
     borderRadius: 999,
     background: "#22c55e",
     color: "#ffffff",
     fontWeight: 950,
     fontSize: 15,
+    boxShadow: "0 14px 28px rgba(34,197,94,0.22)",
+  },
+  confettiLayer: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    overflow: "hidden",
+    zIndex: 3,
+  },
+  confetti: {
+    position: "absolute",
+    top: -20,
+    width: 9,
+    height: 16,
+    borderRadius: 3,
+    background: "#facc15",
+    animation: "fall 1.8s ease-out forwards",
   },
 };
