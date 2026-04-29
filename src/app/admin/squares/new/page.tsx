@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import ImageUploadField from "@/components/ImageUploadField";
 
 export default function NewSquaresGamePage() {
@@ -7,13 +8,13 @@ export default function NewSquaresGamePage() {
       <div style={topBarStyle}>
         <div>
           <p style={navStyle}>
-            <a href="/admin" style={linkStyle}>
+            <Link href="/admin" style={linkStyle}>
               ← Dashboard
-            </a>{" "}
+            </Link>{" "}
             <span style={mutedStyle}>/</span>{" "}
-            <a href="/admin/squares" style={linkStyle}>
+            <Link href="/admin/squares" style={linkStyle}>
               Squares games
-            </a>
+            </Link>
           </p>
 
           <h1 style={titleStyle}>Create squares game</h1>
@@ -150,7 +151,7 @@ export default function NewSquaresGamePage() {
               </thead>
 
               <tbody>
-                Array.from({ length: 20 }).map((_, index) => (
+                {Array.from({ length: 20 }).map((_, index) => (
                   <tr key={index} style={trStyle}>
                     <td style={tdStyle}>
                       <input
