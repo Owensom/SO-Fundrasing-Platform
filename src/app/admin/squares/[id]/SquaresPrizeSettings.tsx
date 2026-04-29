@@ -8,42 +8,47 @@ type Prize = {
   description?: string;
 };
 
-type Props = {
+export default function SquaresPrizeSettings({
+  initialPrizes,
+}: {
   initialPrizes: Prize[];
-};
-
-export default function SquaresPrizeSettings({ initialPrizes }: Props) {
-  const [rows, setRows] = useState<Prize[]>(
+}) {
+  const [prizes, setPrizes] = useState<Prize[]>(
     initialPrizes.length > 0
       ? initialPrizes
       : [{ title: "First prize", description: "" }],
   );
 
-  function updateRow(index: number, field: "title" | "description", value: string) {
-    setRows((current) =>
-      current.map((row, i) =>
-        i === index ? { ...row, [field]: value } : row,
+  function updatePrize(index: number, field: keyof Prize, value: string) {
+    setPrizes((current) =>
+      current.map((prize, prizeIndex) =>
+        prizeIndex === index ? { ...prize, [field]: value } : prize,
       ),
     );
   }
 
   function addPrize() {
-    setRows((current) => [...current, { title: "", description: "" }]);
+    setPrizes((current) => [
+      ...current,
+      { title: "", description: "" },
+    ]);
   }
 
   function removePrize(index: number) {
-    setRows((current) =>
-      current.length <= 1 ? current : current.filter((_, i) => i !== index),
+    setPrizes((current) =>
+      current.length <= 1
+        ? [{ title: "", description: "" }]
+        : current.filter((_, prizeIndex) => prizeIndex !== index),
     );
   }
 
   return (
-    <section style={styles.wrap}>
+    <div style={styles.wrap}>
       <div style={styles.header}>
         <div>
-          <h2 style={styles.title}>Prize settings</h2>
-          <p style={styles.text}>
-            Add, edit or remove prizes. Blank prize names are ignored when saved.
+          <h2 style={styles.title}>Prizes</h2>
+          <p style={styles.help}>
+            Add as many prizes as needed. Blank prize rows are ignored when saved.
           </p>
         </div>
 
@@ -53,25 +58,27 @@ export default function SquaresPrizeSettings({ initialPrizes }: Props) {
       </div>
 
       <div style={styles.list}>
-        {rows.map((row, index) => (
+        {prizes.map((prize, index) => (
           <div key={index} style={styles.row}>
             <div style={styles.position}>{index + 1}</div>
 
             <input
               name="prize_title"
-              value={row.title || row.name || ""}
-              onChange={(event) => updateRow(index, "title", event.target.value)}
+              value={prize.title || prize.name || ""}
+              onChange={(event) =>
+                updatePrize(index, "title", event.target.value)
+              }
               placeholder={`Prize ${index + 1}`}
               style={styles.input}
             />
 
             <input
               name="prize_description"
-              value={row.description || ""}
+              value={prize.description || ""}
               onChange={(event) =>
-                updateRow(index, "description", event.target.value)
+                updatePrize(index, "description", event.target.value)
               }
-              placeholder="Description"
+              placeholder="Optional description"
               style={styles.input}
             />
 
@@ -79,14 +86,13 @@ export default function SquaresPrizeSettings({ initialPrizes }: Props) {
               type="button"
               onClick={() => removePrize(index)}
               style={styles.removeButton}
-              disabled={rows.length <= 1}
             >
               Remove
             </button>
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -106,10 +112,11 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     color: "#0f172a",
   },
-  text: {
+  help: {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: 14,
+    lineHeight: 1.45,
   },
   addButton: {
     padding: "10px 14px",
@@ -126,7 +133,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   row: {
     display: "grid",
-    gridTemplateColumns: "44px minmax(0, 1fr) minmax(0, 1.4fr) auto",
+    gridTemplateColumns: "44px minmax(0, 1fr) minmax(0, 1fr) auto",
     gap: 10,
     alignItems: "center",
     padding: 12,
@@ -135,14 +142,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#f8fafc",
   },
   position: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    background: "#0f172a",
+    color: "#ffffff",
     fontWeight: 900,
   },
   input: {
@@ -152,14 +159,15 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
-    color: "#111827",
+    color: "#0f172a",
+    fontSize: 15,
   },
   removeButton: {
     padding: "10px 12px",
     borderRadius: 10,
     border: "1px solid #fecaca",
-    background: "#fff1f2",
-    color: "#b91c1c",
+    background: "#fef2f2",
+    color: "#991b1b",
     fontWeight: 800,
     cursor: "pointer",
   },
