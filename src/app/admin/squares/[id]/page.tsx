@@ -52,12 +52,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     ? (game.config_json.prizes as Prize[])
     : [];
 
-  const prizeRows =
-    savedPrizes.length > 0
-      ? savedPrizes
-      : [{ title: "First prize", description: "" }];
-
-  const blankPrizeRows = Array.from({ length: 20 });
+  const prizeRows = Array.from({ length: 20 }).map((_, index) => ({
+    title: savedPrizes[index]?.title || savedPrizes[index]?.name || "",
+    description: savedPrizes[index]?.description || "",
+  }));
 
   return (
     <main style={styles.page}>
@@ -208,38 +206,21 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={styles.card}>
           <h2 style={styles.sectionTitle}>Prizes</h2>
           <p style={styles.helpText}>
-            Existing prizes are shown first. Use the blank rows below to add more
-            prizes. Blank rows are ignored when saved.
+            You can add or edit up to 20 prizes. Blank rows are ignored when saved.
           </p>
 
-          {prizeRows.map((p, i) => (
-            <div key={`saved-${i}`} style={styles.grid}>
+          {prizeRows.map((prize, index) => (
+            <div key={`prize-${index}`} style={styles.grid}>
               <input
                 name="prize_title"
-                defaultValue={p.title || p.name || ""}
-                placeholder={`Prize ${i + 1}`}
+                defaultValue={prize.title}
+                placeholder={`Prize ${index + 1}`}
                 style={styles.input}
               />
 
               <input
                 name="prize_description"
-                defaultValue={p.description || ""}
-                placeholder="Description"
-                style={styles.input}
-              />
-            </div>
-          ))}
-
-          {blankPrizeRows.map((_, i) => (
-            <div key={`blank-${i}`} style={styles.grid}>
-              <input
-                name="prize_title"
-                placeholder={`Additional prize ${prizeRows.length + i + 1}`}
-                style={styles.input}
-              />
-
-              <input
-                name="prize_description"
+                defaultValue={prize.description}
                 placeholder="Description"
                 style={styles.input}
               />
@@ -256,10 +237,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <h2 style={styles.sectionTitle}>Winners</h2>
 
         {winners.length ? (
-          winners.map((w) => (
-            <div key={w.id} style={styles.winner}>
-              {w.prize_title} — #{w.square_number} —{" "}
-              {firstNameOnly(w.customer_name)}
+          winners.map((winner) => (
+            <div key={winner.id} style={styles.winner}>
+              {winner.prize_title} — #{winner.square_number} —{" "}
+              {firstNameOnly(winner.customer_name)}
             </div>
           ))
         ) : (
@@ -275,7 +256,11 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { maxWidth: 1100, margin: "40px auto", padding: 20 },
+  page: {
+    maxWidth: 1100,
+    margin: "40px auto",
+    padding: 20,
+  },
 
   topNav: {
     display: "flex",
@@ -331,9 +316,21 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
 
-  eyebrow: { fontSize: 12, color: "#666", fontWeight: 800 },
-  title: { margin: 0, color: "#0f172a" },
-  slug: { color: "#666", margin: "6px 0 0" },
+  eyebrow: {
+    fontSize: 12,
+    color: "#666",
+    fontWeight: 800,
+  },
+
+  title: {
+    margin: 0,
+    color: "#0f172a",
+  },
+
+  slug: {
+    color: "#666",
+    margin: "6px 0 0",
+  },
 
   viewButton: {
     padding: "10px 14px",
@@ -434,5 +431,4 @@ const styles: Record<string, CSSProperties> = {
     border: "none",
     cursor: "pointer",
   },
-};
 };
