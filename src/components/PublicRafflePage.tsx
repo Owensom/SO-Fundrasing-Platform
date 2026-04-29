@@ -920,7 +920,10 @@ export default function PublicRafflePage({ slug }: Props) {
             <div style={styles.prizesTitle}>Prizes</div>
 
             <div style={{ display: "grid", gap: 10 }}>
-              {raffle.prizes.map((prize) => (
+             {(showAllPrizes
+  ? raffle.prizes
+  : raffle.prizes.slice(0, 3)
+).map((prize) => (
                 <div
                   key={`${prize.position}-${prize.title}`}
                   style={styles.prizeCard}
