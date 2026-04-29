@@ -1,175 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTenantSlugFromRequest } from "@/lib/tenant";
-import {
-  createSquaresWinner,
-  getSquaresGameById,
-  listSquaresSales,
-  listSquaresWinners,
-  normalisePrizes,
-} from "../../../../../../../api/_lib/squares-repo";
-import { sendSquaresWinnerEmail } from "@/lib/email";
+import { getSquaresGameById } from "../../../../../../api/_lib/squares-repo";
 import { query } from "@/lib/db";
 
-type RouteContext = {
-  params: {
-    id: string;
-  };
-};
-
-function shuffle<T>(items: T[]) {
-  return [...items].sort(() => Math.random() - 0.5);
+function shuffle<T>(array: T[]): T[] {
+  const arr = array.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const gameId = context.params.id;
-
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 }
-    );
-  }
-
+export async function POST(
+  _req: NextRequest,
+  { params }: { params: { id: string } },
+) {
   try {
-    const game = await getSquaresGameById(gameId);
+    const game = await getSquaresGameById(params.id);
 
     if (!game) {
-      return NextResponse.json(
-        { ok: false, error: "Squares game not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Game not found" }, { status: 404 });
     }
 
-    if (game.tenant_slug !== tenantSlug) {
+    const config = game.config_json || {};
+
+    const sold: any[] = Array.isArray(config.sold) ? config.sold : [];
+    const prizes: any[] = Array.isArray(config.prizes)
+      ? config.prizes
+      : [];
+
+    if (sold.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 }
+        { error: "No sold squares to draw from" },
+        { status: 400 },
       );
     }
-
-    const existingWinners = await listSquaresWinners(gameId);
-
-    if (existingWinners.length > 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Winners have already been drawn.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const prizes = normalisePrizes(game.config_json?.prizes ?? []);
 
     if (prizes.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "No prizes configured." },
-        { status: 400 }
+        { error: "No prizes configured" },
+        { status: 400 },
       );
     }
 
-    const sales = await listSquaresSales(gameId);
-
-    const entries: Array<{
-      square_number: number;
-      customer_name: string | null;
-      customer_email: string | null;
-    }> = [];
-
-    for (const sale of sales) {
-      if (sale.payment_status !== "paid") continue;
-
-      for (const square of sale.squares ?? []) {
-        entries.push({
-          square_number: Number(square),
-          customer_name: sale.customer_name,
-          customer_email: sale.customer_email,
-        });
-      }
-    }
-
-    const validEntries = entries.filter(
-      (entry) =>
-        Number.isInteger(entry.square_number) &&
-        entry.square_number >= 1 &&
-        entry.square_number <= game.total_squares
+    // ✅ NEW: AUTO DRAW RANGE
+    const autoDrawFrom = Number(config.auto_draw_from_prize || 1);
+    const autoDrawTo = Number(
+      config.auto_draw_to_prize || prizes.length,
     );
 
-    if (validEntries.length === 0) {
+    // filter prizes for auto draw
+    const prizesToDraw = prizes.filter((_, index) => {
+      const pos = index + 1;
+      return pos >= autoDrawFrom && pos <= autoDrawTo;
+    });
+
+    if (prizesToDraw.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "No valid paid squares." },
-        { status: 400 }
+        { error: "No prizes fall within auto-draw range" },
+        { status: 400 },
       );
     }
 
-    const uniqueBySquare = new Map<number, (typeof validEntries)[number]>();
+    const shuffledSquares = shuffle(sold);
 
-    for (const entry of validEntries) {
-      if (!uniqueBySquare.has(entry.square_number)) {
-        uniqueBySquare.set(entry.square_number, entry);
-      }
+    const winners = prizesToDraw.map((prize, index) => {
+      const square = shuffledSquares[index];
+
+      if (!square) return null;
+
+      return {
+        game_id: game.id,
+        prize_position: autoDrawFrom + index,
+        prize_title: prize.title || prize.name || `Prize ${index + 1}`,
+        square_number: square.number,
+        customer_name: square.customer_name || null,
+        customer_email: square.customer_email || null,
+      };
+    }).filter(Boolean);
+
+    // save winners
+    for (const winner of winners) {
+      await query(
+        `
+        insert into squares_winners (
+          game_id,
+          prize_position,
+          prize_title,
+          square_number,
+          customer_name,
+          customer_email
+        )
+        values ($1,$2,$3,$4,$5,$6)
+      `,
+        [
+          winner.game_id,
+          winner.prize_position,
+          winner.prize_title,
+          winner.square_number,
+          winner.customer_name,
+          winner.customer_email,
+        ],
+      );
     }
 
-    const shuffled = shuffle(Array.from(uniqueBySquare.values()));
-    const prizeCount = Math.min(prizes.length, shuffled.length);
-
-    const winners = [];
-
-    for (let i = 0; i < prizeCount; i++) {
-      const prize = prizes[i];
-      const winningEntry = shuffled[i];
-
-      const winner = await createSquaresWinner({
-        tenant_slug: tenantSlug,
-        game_id: gameId,
-        prize_index: i,
-        prize_title: prize.title,
-        square_number: winningEntry.square_number,
-        customer_name: winningEntry.customer_name,
-        customer_email: winningEntry.customer_email,
-      });
-
-      winners.push(winner);
-
-      // send email
-      if (winningEntry.customer_email) {
-        try {
-          await sendSquaresWinnerEmail({
-            to: winningEntry.customer_email,
-            name: winningEntry.customer_name,
-            gameTitle: game.title,
-            squareNumber: winningEntry.square_number,
-            prizeTitle: prize.title,
-          });
-        } catch (err) {
-          console.error("Email failed:", err);
-        }
-      }
-    }
-
-    // 🔒 LOCK GAME AFTER DRAW
+    // update status to drawn
     await query(
       `
       update squares_games
-      set status = 'drawn',
-          updated_at = now()
+      set status = 'drawn'
       where id = $1
-        and tenant_slug = $2
-      `,
-      [gameId, tenantSlug]
+    `,
+      [game.id],
     );
 
-    return NextResponse.json({
-      ok: true,
-      winners,
-    });
-  } catch (error) {
-    console.error("Draw squares winners failed:", error);
-
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error(err);
     return NextResponse.json(
-      { ok: false, error: "Internal error" },
-      { status: 500 }
+      { error: "Draw failed" },
+      { status: 500 },
     );
   }
 }
