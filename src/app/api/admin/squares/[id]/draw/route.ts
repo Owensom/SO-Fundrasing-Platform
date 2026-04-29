@@ -75,7 +75,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const config = (game.config_json ?? {}) as any;
-    const prizes = Array.isArray(config.prizes) ? config.prizes : [];
+
+    const prizes: any[] = Array.isArray(config.prizes) ? config.prizes : [];
 
     if (prizes.length === 0) {
       return NextResponse.json(
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
 
     const prizesToDraw = prizes
-      .map((prize, index) => ({
+      .map((prize: any, index: number) => ({
         prize,
         prizeIndex: index,
         prizeNumber: index + 1,
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const soldEntries = sales.flatMap((sale) =>
       Array.isArray(sale.squares)
-        ? sale.squares.map((squareNumber) => ({
+        ? sale.squares.map((squareNumber: number | string) => ({
             squareNumber: Number(squareNumber),
             customerName: sale.customer_name,
             customerEmail: sale.customer_email,
@@ -145,8 +146,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       const prizeTitle =
         String(
-          (prizeItem.prize as any)?.title ??
-            (prizeItem.prize as any)?.name ??
+          prizeItem.prize?.title ??
+            prizeItem.prize?.name ??
             "",
         ).trim() || `Prize ${prizeItem.prizeNumber}`;
 
