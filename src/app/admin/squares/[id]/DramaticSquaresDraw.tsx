@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type SoldSquareOption = {
   squareNumber: number;
@@ -9,11 +9,8 @@ type SoldSquareOption = {
 };
 
 type DramaticSquaresDrawProps = {
-  prizeTitle: string;
-  soldSquares: SoldSquareOption[];
-  selectedSquareNumber?: number | null;
-  isDrawing?: boolean;
-  onDraw?: () => Promise<void> | void;
+  gameId: string;
+  soldSquareOptions: SoldSquareOption[];
 };
 
 function createAudioContext() {
@@ -21,13 +18,11 @@ function createAudioContext() {
     window.AudioContext || (window as any).webkitAudioContext;
 
   if (!AudioContextClass) return null;
-
   return new AudioContextClass();
 }
 
 function playTick(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
@@ -54,7 +49,6 @@ function playTick(audioCtx: AudioContext) {
 
 function playRiserPulse(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
@@ -81,8 +75,8 @@ function playRiserPulse(audioCtx: AudioContext) {
 
 function playWinnerHit(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const master = audioCtx.createGain();
+
   master.gain.setValueAtTime(0.0001, now);
   master.gain.exponentialRampToValueAtTime(0.28, now + 0.025);
   master.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
@@ -104,61 +98,43 @@ function playWinnerHit(audioCtx: AudioContext) {
   shine.start(now);
   shine.stop(now + 0.42);
 
-  const sparkleOne = audioCtx.createOscillator();
+  const sparkle = audioCtx.createOscillator();
   const sparkleGain = audioCtx.createGain();
 
-  sparkleOne.type = "sine";
-  sparkleOne.frequency.setValueAtTime(1320, now + 0.18);
-  sparkleOne.frequency.exponentialRampToValueAtTime(1760, now + 0.48);
+  sparkle.type = "sine";
+  sparkle.frequency.setValueAtTime(1320, now + 0.18);
+  sparkle.frequency.exponentialRampToValueAtTime(1760, now + 0.48);
 
   sparkleGain.gain.setValueAtTime(0.0001, now + 0.18);
   sparkleGain.gain.exponentialRampToValueAtTime(0.09, now + 0.22);
   sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
 
-  sparkleOne.connect(sparkleGain);
+  sparkle.connect(sparkleGain);
   sparkleGain.connect(master);
 
-  sparkleOne.start(now + 0.18);
-  sparkleOne.stop(now + 0.58);
+  sparkle.start(now + 0.18);
+  sparkle.stop(now + 0.58);
 }
 
 export default function DramaticSquaresDraw({
-  prizeTitle,
-  soldSquares,
-  selectedSquareNumber,
-  isDrawing = false,
-  onDraw,
+  gameId,
+  soldSquareOptions,
 }: DramaticSquaresDrawProps) {
-  const [displaySquare, setDisplaySquare] = useState<number | null>(
-    selectedSquareNumber ?? null,
-  );
-  const [localDrawing, setLocalDrawing] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [displaySquare, setDisplaySquare] = useState<number | null>(null);
+  const [winner, setWinner] = useState<SoldSquareOption | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [error, setError] = useState("");
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasPlayedWinnerRef = useRef(false);
-
-  const drawing = isDrawing || localDrawing;
 
   const soldNumbers = useMemo(
     () =>
-      soldSquares
+      soldSquareOptions
         .map((square) => Number(square.squareNumber))
         .filter((number) => Number.isFinite(number) && number > 0),
-    [soldSquares],
+    [soldSquareOptions],
   );
-
-  const winner = useMemo(() => {
-    if (!selectedSquareNumber) return null;
-
-    return (
-      soldSquares.find(
-        (square) => Number(square.squareNumber) === Number(selectedSquareNumber),
-      ) || null
-    );
-  }, [selectedSquareNumber, soldSquares]);
 
   function getAudioContext() {
     if (typeof window === "undefined") return null;
@@ -173,101 +149,95 @@ export default function DramaticSquaresDraw({
   async function unlockAudio() {
     const audioCtx = getAudioContext();
 
-    if (!audioCtx) return;
-
-    if (audioCtx.state === "suspended") {
+    if (audioCtx?.state === "suspended") {
       await audioCtx.resume();
     }
 
-    setAudioEnabled(true);
+    return audioCtx;
   }
 
-  function clearTimers() {
+  function stopSpinner() {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
   }
 
-  async function handleStartDraw() {
+  async function drawWinner() {
     if (!soldNumbers.length || drawing) return;
 
-    await unlockAudio();
+    setError("");
+    setWinner(null);
+    setDrawing(true);
 
-    hasPlayedWinnerRef.current = false;
-    setLocalDrawing(true);
+    const audioCtx = await unlockAudio();
 
-    const audioCtx = getAudioContext();
+    let ticks = 0;
 
-    let speed = 55;
-    let elapsed = 0;
+    stopSpinner();
 
-    clearTimers();
-
-    const runPulse = () => {
+    intervalRef.current = setInterval(() => {
       const randomNumber =
         soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
       setDisplaySquare(randomNumber);
 
-      if (audioCtx && audioEnabled) {
+      if (audioCtx) {
         playTick(audioCtx);
 
-        if (elapsed % 3 === 0) {
+        if (ticks % 3 === 0) {
           playRiserPulse(audioCtx);
         }
       }
 
-      elapsed += 1;
-      speed = Math.min(speed + 8, 180);
-
-      clearTimers();
-
-      intervalRef.current = setInterval(runPulse, speed);
-    };
-
-    intervalRef.current = setInterval(runPulse, speed);
+      ticks += 1;
+    }, 85);
 
     try {
-      await onDraw?.();
-    } finally {
-      timeoutRef.current = setTimeout(() => {
-        clearTimers();
-        setLocalDrawing(false);
-      }, 2600);
+      const response = await fetch(`/api/admin/squares/${gameId}/draw`, {
+        method: "POST",
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Draw failed");
+      }
+
+      const winningSquareNumber = Number(
+        data?.winner?.square_number ??
+          data?.winner?.squareNumber ??
+          data?.square_number ??
+          data?.squareNumber,
+      );
+
+      const matchedWinner =
+        soldSquareOptions.find(
+          (square) => Number(square.squareNumber) === winningSquareNumber,
+        ) || null;
+
+      setTimeout(() => {
+        stopSpinner();
+
+        setDisplaySquare(winningSquareNumber || null);
+        setWinner(matchedWinner);
+
+        if (audioCtx) {
+          playWinnerHit(audioCtx);
+        }
+
+        setDrawing(false);
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 900);
+      }, 2400);
+    } catch (err) {
+      stopSpinner();
+      setDrawing(false);
+      setError(err instanceof Error ? err.message : "Draw failed");
     }
   }
-
-  useEffect(() => {
-    if (!drawing && selectedSquareNumber) {
-      setDisplaySquare(selectedSquareNumber);
-
-      const audioCtx = getAudioContext();
-
-      if (audioCtx && audioEnabled && !hasPlayedWinnerRef.current) {
-        hasPlayedWinnerRef.current = true;
-        playWinnerHit(audioCtx);
-      }
-    }
-  }, [drawing, selectedSquareNumber, audioEnabled]);
-
-  useEffect(() => {
-    return () => {
-      clearTimers();
-
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
-      }
-    };
-  }, []);
-
-  const displayWinnerName =
-    winner?.customerName?.trim() || (selectedSquareNumber ? "Winner" : "");
 
   return (
     <section
@@ -279,7 +249,6 @@ export default function DramaticSquaresDraw({
           "linear-gradient(135deg, rgba(17,24,39,0.98), rgba(55,65,81,0.96))",
         color: "white",
         boxShadow: "0 18px 45px rgba(0,0,0,0.22)",
-        overflow: "hidden",
       }}
     >
       <div style={{ display: "grid", gap: 18 }}>
@@ -297,8 +266,8 @@ export default function DramaticSquaresDraw({
             Dramatic draw
           </p>
 
-          <h2 style={{ margin: "8px 0 0", fontSize: 26, lineHeight: 1.1 }}>
-            {prizeTitle || "Prize draw"}
+          <h2 style={{ margin: "8px 0 0", fontSize: 26 }}>
+            Squares winner draw
           </h2>
         </div>
 
@@ -339,8 +308,8 @@ export default function DramaticSquaresDraw({
             >
               {drawing
                 ? "Drawing..."
-                : displayWinnerName
-                  ? displayWinnerName
+                : winner
+                  ? winner.customerName || "Winner"
                   : "Ready to draw"}
             </p>
           </div>
@@ -348,7 +317,7 @@ export default function DramaticSquaresDraw({
 
         <button
           type="button"
-          onClick={handleStartDraw}
+          onClick={drawWinner}
           disabled={!soldNumbers.length || drawing}
           style={{
             width: "100%",
@@ -369,12 +338,12 @@ export default function DramaticSquaresDraw({
                 : "0 12px 28px rgba(249,115,22,0.34)",
           }}
         >
-          {drawing
-            ? "Drawing..."
-            : selectedSquareNumber
-              ? "Draw again"
-              : "Start draw"}
+          {drawing ? "Drawing..." : "Start dramatic draw"}
         </button>
+
+        {error ? (
+          <p style={{ margin: 0, color: "#fecaca", fontSize: 14 }}>{error}</p>
+        ) : null}
 
         {!soldNumbers.length ? (
           <p style={{ margin: 0, color: "#fecaca", fontSize: 14 }}>
