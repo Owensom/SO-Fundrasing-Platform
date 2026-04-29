@@ -7,6 +7,7 @@ import {
   listSquaresWinners,
 } from "../../../../../api/_lib/squares-repo";
 import ImageUploadField from "@/components/ImageUploadField";
+import SquaresPrizeSettings from "./SquaresPrizeSettings";
 
 type PageProps = {
   params: {
@@ -51,11 +52,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   const savedPrizes = Array.isArray(game.config_json?.prizes)
     ? (game.config_json.prizes as Prize[])
     : [];
-
-  const prizeRows = Array.from({ length: 20 }).map((_, index) => ({
-    title: savedPrizes[index]?.title || savedPrizes[index]?.name || "",
-    description: savedPrizes[index]?.description || "",
-  }));
 
   return (
     <main style={styles.page}>
@@ -204,28 +200,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>Prizes</h2>
-          <p style={styles.helpText}>
-            You can add or edit up to 20 prizes. Blank rows are ignored when saved.
-          </p>
-
-          {prizeRows.map((prize, index) => (
-            <div key={`prize-${index}`} style={styles.grid}>
-              <input
-                name="prize_title"
-                defaultValue={prize.title}
-                placeholder={`Prize ${index + 1}`}
-                style={styles.input}
-              />
-
-              <input
-                name="prize_description"
-                defaultValue={prize.description}
-                placeholder="Description"
-                style={styles.input}
-              />
-            </div>
-          ))}
+          <SquaresPrizeSettings initialPrizes={savedPrizes} />
         </section>
 
         <button type="submit" style={styles.save}>
@@ -261,7 +236,6 @@ const styles: Record<string, CSSProperties> = {
     margin: "40px auto",
     padding: 20,
   },
-
   topNav: {
     display: "flex",
     justifyContent: "space-between",
@@ -269,19 +243,16 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 20,
     flexWrap: "wrap",
   },
-
   navRight: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
   },
-
   navButton: {
     fontWeight: 800,
     textDecoration: "none",
     color: "#111827",
   },
-
   navGhost: {
     padding: "8px 12px",
     border: "1px solid #ddd",
@@ -290,7 +261,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#111827",
     background: "#ffffff",
   },
-
   navActive: {
     padding: "8px 12px",
     borderRadius: 8,
@@ -298,7 +268,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#fff",
     textDecoration: "none",
   },
-
   navPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
@@ -307,7 +276,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 800,
   },
-
   hero: {
     display: "flex",
     justifyContent: "space-between",
@@ -315,23 +283,19 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 20,
     flexWrap: "wrap",
   },
-
   eyebrow: {
     fontSize: 12,
     color: "#666",
     fontWeight: 800,
   },
-
   title: {
     margin: 0,
     color: "#0f172a",
   },
-
   slug: {
     color: "#666",
     margin: "6px 0 0",
   },
-
   viewButton: {
     padding: "10px 14px",
     background: "#111827",
@@ -340,14 +304,12 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     height: "fit-content",
   },
-
   summary: {
     display: "flex",
     gap: 20,
     marginBottom: 20,
     flexWrap: "wrap",
   },
-
   card: {
     border: "1px solid #e5e7eb",
     padding: 16,
@@ -355,30 +317,25 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     background: "#ffffff",
   },
-
   sectionTitle: {
     marginTop: 0,
     color: "#0f172a",
   },
-
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 10,
     marginBottom: 10,
   },
-
   field: {
     display: "grid",
     gap: 6,
   },
-
   label: {
     fontSize: 13,
     fontWeight: 800,
     color: "#334155",
   },
-
   input: {
     width: "100%",
     boxSizing: "border-box",
@@ -388,7 +345,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#111827",
   },
-
   textarea: {
     width: "100%",
     boxSizing: "border-box",
@@ -400,13 +356,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#111827",
   },
-
-  helpText: {
-    color: "#64748b",
-    marginTop: 0,
-    marginBottom: 14,
-  },
-
   save: {
     padding: 12,
     background: "#16a34a",
@@ -417,12 +366,10 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     marginBottom: 20,
   },
-
   winner: {
     padding: 10,
     borderBottom: "1px solid #eee",
   },
-
   draw: {
     padding: 12,
     background: "#2563eb",
