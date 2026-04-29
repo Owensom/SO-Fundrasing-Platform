@@ -1,643 +1,392 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type SoldSquareOption = {
   squareNumber: number;
   customerName: string;
-  customerEmail: string;
+  customerEmail?: string;
 };
 
-type Props = {
-  gameId: string;
-  soldSquareOptions: SoldSquareOption[];
+type DramaticSquaresDrawProps = {
+  prizeTitle: string;
+  soldSquares: SoldSquareOption[];
+  selectedSquareNumber?: number | null;
+  isDrawing?: boolean;
+  onDraw?: () => Promise<void> | void;
 };
 
-let audioCtx: AudioContext | null = null;
+function createAudioContext() {
+  const AudioContextClass =
+    window.AudioContext || (window as any).webkitAudioContext;
 
-function firstNameOnly(name?: string | null) {
-  return name?.trim().split(/\s+/)[0] || "Winner";
+  if (!AudioContextClass) return null;
+
+  return new AudioContextClass();
 }
 
-function getAudio() {
-  if (!audioCtx) {
-    const AudioContextClass =
-      window.AudioContext || (window as any).webkitAudioContext;
-    audioCtx = new AudioContextClass();
-  }
+function playTick(audioCtx: AudioContext) {
+  const now = audioCtx.currentTime;
 
-  return audioCtx;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = "square";
+  osc.frequency.setValueAtTime(1150, now);
+  osc.frequency.exponentialRampToValueAtTime(420, now + 0.045);
+
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(1300, now);
+  filter.Q.setValueAtTime(7, now);
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.16, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.07);
 }
 
-function playDrumHit(volume = 0.12) {
-  try {
-    const ctx = getAudio();
-    const bufferSize = ctx.sampleRate * 0.08;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
+function playRiserPulse(audioCtx: AudioContext) {
+  const now = audioCtx.currentTime;
 
-    for (let i = 0; i < bufferSize; i += 1) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-    }
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
 
-    const noise = ctx.createBufferSource();
-    const gain = ctx.createGain();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(75, now);
+  osc.frequency.linearRampToValueAtTime(135, now + 0.22);
 
-    noise.buffer = buffer;
-    gain.gain.value = volume;
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(500, now);
+  filter.frequency.linearRampToValueAtTime(1200, now + 0.22);
 
-    noise.connect(gain);
-    gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.035, now + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
 
-    noise.start();
-  } catch {
-    // Audio is optional. Some browsers/devices may block it.
-  }
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.26);
 }
 
-function playCountdownBeep() {
-  playDrumHit(0.08);
-}
+function playWinnerHit(audioCtx: AudioContext) {
+  const now = audioCtx.currentTime;
 
-function playRevealTick(speedFactor = 1) {
-  playDrumHit(0.04 * speedFactor);
-}
+  const master = audioCtx.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.28, now + 0.025);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+  master.connect(audioCtx.destination);
 
-function playWinnerChime() {
-  try {
-    const ctx = getAudio();
+  const bass = audioCtx.createOscillator();
+  bass.type = "triangle";
+  bass.frequency.setValueAtTime(190, now);
+  bass.frequency.exponentialRampToValueAtTime(55, now + 0.75);
+  bass.connect(master);
+  bass.start(now);
+  bass.stop(now + 1.1);
 
-    function tone(freq: number, delayMs: number, duration = 0.4) {
-      window.setTimeout(() => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+  const shine = audioCtx.createOscillator();
+  shine.type = "square";
+  shine.frequency.setValueAtTime(880, now);
+  shine.frequency.exponentialRampToValueAtTime(330, now + 0.38);
+  shine.connect(master);
+  shine.start(now);
+  shine.stop(now + 0.42);
 
-        osc.frequency.value = freq;
-        osc.type = "triangle";
+  const sparkleOne = audioCtx.createOscillator();
+  const sparkleGain = audioCtx.createGain();
 
-        gain.gain.value = 0.12;
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          ctx.currentTime + duration,
-        );
+  sparkleOne.type = "sine";
+  sparkleOne.frequency.setValueAtTime(1320, now + 0.18);
+  sparkleOne.frequency.exponentialRampToValueAtTime(1760, now + 0.48);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+  sparkleGain.gain.setValueAtTime(0.0001, now + 0.18);
+  sparkleGain.gain.exponentialRampToValueAtTime(0.09, now + 0.22);
+  sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
 
-        osc.start();
-        osc.stop(ctx.currentTime + duration);
-      }, delayMs);
-    }
+  sparkleOne.connect(sparkleGain);
+  sparkleGain.connect(master);
 
-    tone(440, 0);
-    tone(660, 100);
-    tone(880, 200);
-    tone(1100, 300);
-  } catch {
-    // Audio is optional.
-  }
+  sparkleOne.start(now + 0.18);
+  sparkleOne.stop(now + 0.58);
 }
 
 export default function DramaticSquaresDraw({
-  gameId,
-  soldSquareOptions,
-}: Props) {
-  const [prizeNumber, setPrizeNumber] = useState("");
-  const [selectedSquare, setSelectedSquare] = useState<SoldSquareOption | null>(
-    null,
+  prizeTitle,
+  soldSquares,
+  selectedSquareNumber,
+  isDrawing = false,
+  onDraw,
+}: DramaticSquaresDrawProps) {
+  const [displaySquare, setDisplaySquare] = useState<number | null>(
+    selectedSquareNumber ?? null,
   );
-  const [isRevealing, setIsRevealing] = useState(false);
-  const [hasRevealed, setHasRevealed] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [burst, setBurst] = useState(false);
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [localDrawing, setLocalDrawing] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
 
-  const canDraw = soldSquareOptions.length > 0 && Number(prizeNumber) > 0;
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPlayedWinnerRef = useRef(false);
 
-  const displayName = useMemo(() => {
-    if (!selectedSquare) return "Waiting...";
-    return firstNameOnly(selectedSquare.customerName);
-  }, [selectedSquare]);
+  const drawing = isDrawing || localDrawing;
 
-  function startReveal() {
-    if (!canDraw || isRevealing || countdown !== null) return;
+  const soldNumbers = useMemo(
+    () =>
+      soldSquares
+        .map((square) => Number(square.squareNumber))
+        .filter((number) => Number.isFinite(number) && number > 0),
+    [soldSquares],
+  );
 
-    setSelectedSquare(null);
-    setHasRevealed(false);
-    setBurst(false);
-    setCountdown(3);
-    playCountdownBeep();
+  const winner = useMemo(() => {
+    if (!selectedSquareNumber) return null;
 
-    let count = 3;
+    return (
+      soldSquares.find(
+        (square) => Number(square.squareNumber) === Number(selectedSquareNumber),
+      ) || null
+    );
+  }, [selectedSquareNumber, soldSquares]);
 
-    const countdownTimer = window.setInterval(() => {
-      count -= 1;
+  function getAudioContext() {
+    if (typeof window === "undefined") return null;
 
-      if (count <= 0) {
-        window.clearInterval(countdownTimer);
-        setCountdown(null);
-        runReveal();
-      } else {
-        setCountdown(count);
-        playCountdownBeep();
-      }
-    }, 800);
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = createAudioContext();
+    }
+
+    return audioCtxRef.current;
   }
 
-  function runReveal() {
-    setIsRevealing(true);
+  async function unlockAudio() {
+    const audioCtx = getAudioContext();
 
-    let ticks = 0;
-    const maxTicks = 42;
+    if (!audioCtx) return;
 
-    const timer = window.setInterval(() => {
-      const random =
-        soldSquareOptions[Math.floor(Math.random() * soldSquareOptions.length)];
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
 
-      setSelectedSquare(random);
-
-      const speedFactor = ticks < 20 ? 0.6 : ticks < 35 ? 1 : 1.6;
-      playRevealTick(speedFactor);
-
-      ticks += 1;
-
-      if (ticks >= maxTicks) {
-        window.clearInterval(timer);
-
-        const finalWinner =
-          soldSquareOptions[Math.floor(Math.random() * soldSquareOptions.length)];
-
-        setSelectedSquare(finalWinner);
-        setIsRevealing(false);
-        setHasRevealed(true);
-        setBurst(true);
-        playWinnerChime();
-
-        window.setTimeout(() => setBurst(false), 2400);
-      }
-    }, ticks < 22 ? 70 : 120);
+    setAudioEnabled(true);
   }
+
+  function clearTimers() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }
+
+  async function handleStartDraw() {
+    if (!soldNumbers.length || drawing) return;
+
+    await unlockAudio();
+
+    hasPlayedWinnerRef.current = false;
+    setLocalDrawing(true);
+
+    const audioCtx = getAudioContext();
+
+    let speed = 55;
+    let elapsed = 0;
+
+    clearTimers();
+
+    const runPulse = () => {
+      const randomNumber =
+        soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
+
+      setDisplaySquare(randomNumber);
+
+      if (audioCtx && audioEnabled) {
+        playTick(audioCtx);
+
+        if (elapsed % 3 === 0) {
+          playRiserPulse(audioCtx);
+        }
+      }
+
+      elapsed += 1;
+      speed = Math.min(speed + 8, 180);
+
+      clearTimers();
+
+      intervalRef.current = setInterval(runPulse, speed);
+    };
+
+    intervalRef.current = setInterval(runPulse, speed);
+
+    try {
+      await onDraw?.();
+    } finally {
+      timeoutRef.current = setTimeout(() => {
+        clearTimers();
+        setLocalDrawing(false);
+      }, 2600);
+    }
+  }
+
+  useEffect(() => {
+    if (!drawing && selectedSquareNumber) {
+      setDisplaySquare(selectedSquareNumber);
+
+      const audioCtx = getAudioContext();
+
+      if (audioCtx && audioEnabled && !hasPlayedWinnerRef.current) {
+        hasPlayedWinnerRef.current = true;
+        playWinnerHit(audioCtx);
+      }
+    }
+  }, [drawing, selectedSquareNumber, audioEnabled]);
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
+
+  const displayWinnerName =
+    winner?.customerName?.trim() || (selectedSquareNumber ? "Winner" : "");
 
   return (
-    <div style={isFullScreen ? styles.fullScreenShell : styles.panel}>
-      <div style={isFullScreen ? styles.fullScreenInner : undefined}>
-        <div style={styles.header}>
-          <div>
-            <div style={styles.kicker}>Live winner experience</div>
-            <h3 style={isFullScreen ? styles.fullScreenTitle : styles.title}>
-              Dramatic live draw
-            </h3>
-            <p style={styles.description}>
-              Enter the prize number, reveal the winner, then save the result.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsFullScreen((value) => !value)}
-            style={styles.fullScreenButton}
+    <section
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 18,
+        padding: 24,
+        background:
+          "linear-gradient(135deg, rgba(17,24,39,0.98), rgba(55,65,81,0.96))",
+        color: "white",
+        boxShadow: "0 18px 45px rgba(0,0,0,0.22)",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ display: "grid", gap: 18 }}>
+        <div>
+          <p
+            style={{
+              margin: 0,
+              color: "#d1d5db",
+              fontSize: 13,
+              textTransform: "uppercase",
+              letterSpacing: "0.12em",
+              fontWeight: 800,
+            }}
           >
-            {isFullScreen ? "Exit full screen" : "Full screen"}
-          </button>
+            Dramatic draw
+          </p>
+
+          <h2 style={{ margin: "8px 0 0", fontSize: 26, lineHeight: 1.1 }}>
+            {prizeTitle || "Prize draw"}
+          </h2>
         </div>
 
-        <label style={styles.field}>
-          <span style={styles.label}>Prize number</span>
-          <input
-            type="number"
-            min={1}
-            value={prizeNumber}
-            onChange={(event) => {
-              setPrizeNumber(event.target.value);
-              setSelectedSquare(null);
-              setHasRevealed(false);
-              setBurst(false);
-            }}
-            placeholder="1"
-            style={styles.input}
-          />
-        </label>
-
-        <div style={isFullScreen ? styles.fullScreenStage : styles.stage}>
-          <div style={styles.stageGlow} />
-          <div style={styles.spotlightLeft} />
-          <div style={styles.spotlightRight} />
-
-          {burst ? (
-            <div style={styles.confettiLayer}>
-              {Array.from({ length: isFullScreen ? 90 : 46 }).map((_, index) => {
-                const size = 6 + Math.random() * 10;
-                const left = Math.random() * 100;
-                const delay = Math.random() * 0.7;
-                const duration = 1.7 + Math.random() * 1.5;
-                const rotate = Math.random() * 360;
-                const drift = -90 + Math.random() * 180;
-                const colors = [
-                  "#facc15",
-                  "#22c55e",
-                  "#38bdf8",
-                  "#f472b6",
-                  "#fb923c",
-                  "#a78bfa",
-                  "#ffffff",
-                ];
-                const color = colors[Math.floor(Math.random() * colors.length)];
-
-                return (
-                  <span
-                    key={index}
-                    style={{
-                      ...styles.confetti,
-                      left: `${left}%`,
-                      width: size,
-                      height: size * 1.6,
-                      background: color,
-                      transform: `translateX(0px) rotate(${rotate}deg)`,
-                      animation: `confettiFall ${duration}s ease-out ${delay}s forwards`,
-                      ["--drift" as any]: `${drift}px`,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ) : null}
-
-          <div
-            style={
-              isFullScreen ? styles.fullScreenStageContent : styles.stageContent
-            }
-          >
-            <div style={styles.stageEyebrow}>
-              {countdown
-                ? "Get ready"
-                : isRevealing
-                  ? "Drawing now"
-                  : hasRevealed
-                    ? "Winner revealed"
-                    : "Ready to draw"}
+        <div
+          style={{
+            display: "grid",
+            placeItems: "center",
+            minHeight: 190,
+            borderRadius: 18,
+            background:
+              "radial-gradient(circle, rgba(250,204,21,0.24), rgba(255,255,255,0.06) 45%, rgba(0,0,0,0.18))",
+            border: "1px solid rgba(255,255,255,0.14)",
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                fontSize: 72,
+                lineHeight: 1,
+                fontWeight: 950,
+                letterSpacing: "-0.08em",
+                textShadow: drawing
+                  ? "0 0 26px rgba(250,204,21,0.9)"
+                  : "0 0 18px rgba(255,255,255,0.25)",
+                transform: drawing ? "scale(1.04)" : "scale(1)",
+                transition: "transform 120ms ease, text-shadow 120ms ease",
+              }}
+            >
+              {displaySquare ? `#${displaySquare}` : "—"}
             </div>
 
-            {countdown ? (
-              <div
-                style={
-                  isFullScreen ? styles.fullScreenCountdown : styles.countdown
-                }
-              >
-                {countdown}
-              </div>
-            ) : (
-              <>
-                <div
-                  style={{
-                    ...(isFullScreen
-                      ? styles.fullScreenBigNumber
-                      : styles.bigNumber),
-                    transform: isRevealing ? "scale(1.08)" : "scale(1)",
-                  }}
-                >
-                  {selectedSquare ? `#${selectedSquare.squareNumber}` : "?"}
-                </div>
-
-                <div
-                  style={
-                    isFullScreen
-                      ? styles.fullScreenWinnerName
-                      : styles.winnerName
-                  }
-                >
-                  {displayName}
-                </div>
-
-                <div style={styles.prizeText}>
-                  Prize {Number(prizeNumber) > 0 ? prizeNumber : "—"}
-                </div>
-              </>
-            )}
+            <p
+              style={{
+                margin: "12px 0 0",
+                color: "#e5e7eb",
+                fontWeight: 800,
+              }}
+            >
+              {drawing
+                ? "Drawing..."
+                : displayWinnerName
+                  ? displayWinnerName
+                  : "Ready to draw"}
+            </p>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={startReveal}
-          disabled={!canDraw || isRevealing || countdown !== null}
+          onClick={handleStartDraw}
+          disabled={!soldNumbers.length || drawing}
           style={{
-            ...styles.revealButton,
-            opacity: !canDraw || isRevealing || countdown !== null ? 0.55 : 1,
-            cursor:
-              !canDraw || isRevealing || countdown !== null
-                ? "not-allowed"
-                : "pointer",
+            width: "100%",
+            border: 0,
+            borderRadius: 14,
+            padding: "14px 18px",
+            cursor: !soldNumbers.length || drawing ? "not-allowed" : "pointer",
+            background:
+              !soldNumbers.length || drawing
+                ? "#9ca3af"
+                : "linear-gradient(135deg, #facc15, #f97316)",
+            color: "#111827",
+            fontSize: 16,
+            fontWeight: 950,
+            boxShadow:
+              !soldNumbers.length || drawing
+                ? "none"
+                : "0 12px 28px rgba(249,115,22,0.34)",
           }}
         >
-          {countdown
-            ? "Starting..."
-            : isRevealing
-              ? "Revealing..."
-              : hasRevealed
-                ? "Reveal again"
-                : "Start dramatic reveal"}
+          {drawing
+            ? "Drawing..."
+            : selectedSquareNumber
+              ? "Draw again"
+              : "Start draw"}
         </button>
 
-        <form
-          action={`/api/admin/squares/${gameId}/draw/manual`}
-          method="post"
-          style={styles.saveForm}
-        >
-          <input type="hidden" name="prize_number" value={prizeNumber} />
-          <input
-            type="hidden"
-            name="square_number"
-            value={selectedSquare?.squareNumber ?? ""}
-          />
-
-          <button
-            type="submit"
-            disabled={!hasRevealed || !selectedSquare}
-            style={{
-              ...styles.saveButton,
-              opacity: !hasRevealed || !selectedSquare ? 0.55 : 1,
-              cursor:
-                !hasRevealed || !selectedSquare ? "not-allowed" : "pointer",
-            }}
-          >
-            Save revealed winner
-          </button>
-        </form>
+        {!soldNumbers.length ? (
+          <p style={{ margin: 0, color: "#fecaca", fontSize: 14 }}>
+            No sold squares available to draw from yet.
+          </p>
+        ) : (
+          <p style={{ margin: 0, color: "#d1d5db", fontSize: 13 }}>
+            Uses upgraded generated sound: spinner ticks, tension pulses, and a
+            final winner hit.
+          </p>
+        )}
       </div>
-
-      <style jsx>{`
-        @keyframes confettiFall {
-          0% {
-            transform: translate3d(0, -40px, 0) rotate(0deg);
-            opacity: 1;
-          }
-
-          45% {
-            transform: translate3d(calc(var(--drift) * 0.45), 220px, 0)
-              rotate(220deg);
-            opacity: 0.95;
-          }
-
-          100% {
-            transform: translate3d(var(--drift), 680px, 0) rotate(620deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
-    </div>
+    </section>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  panel: {
-    padding: 18,
-    borderRadius: 24,
-    background: "#020617",
-    border: "1px solid #1e293b",
-    display: "grid",
-    gap: 14,
-    color: "#ffffff",
-    boxShadow: "0 24px 70px rgba(2,6,23,0.42)",
-  },
-  fullScreenShell: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 9999,
-    padding: 22,
-    background:
-      "radial-gradient(circle at top, #1d4ed8 0%, #020617 46%, #000000 100%)",
-    color: "#ffffff",
-    overflowY: "auto",
-  },
-  fullScreenInner: {
-    maxWidth: 1280,
-    margin: "0 auto",
-    display: "grid",
-    gap: 16,
-    minHeight: "100%",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  kicker: {
-    display: "inline-flex",
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "rgba(249,115,22,0.16)",
-    color: "#fed7aa",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-    marginBottom: 8,
-  },
-  title: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: 22,
-    letterSpacing: "-0.03em",
-  },
-  fullScreenTitle: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: 42,
-    letterSpacing: "-0.05em",
-  },
-  description: {
-    margin: "6px 0 0",
-    color: "#cbd5e1",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  fullScreenButton: {
-    padding: "11px 15px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.1)",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-  },
-  label: {
-    color: "#e2e8f0",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  input: {
-    width: "100%",
-    minHeight: 46,
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: "1px solid #334155",
-    background: "#0f172a",
-    color: "#ffffff",
-    fontSize: 16,
-    boxSizing: "border-box",
-  },
-  stage: {
-    position: "relative",
-    minHeight: 330,
-    borderRadius: 28,
-    background:
-      "radial-gradient(circle at top, #2563eb 0%, #0f172a 42%, #020617 100%)",
-    overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.16)",
-  },
-  fullScreenStage: {
-    position: "relative",
-    minHeight: "calc(100vh - 260px)",
-    borderRadius: 34,
-    background:
-      "radial-gradient(circle at top, #2563eb 0%, #0f172a 42%, #020617 100%)",
-    overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "0 30px 120px rgba(0,0,0,0.5)",
-  },
-  stageGlow: {
-    position: "absolute",
-    inset: -90,
-    background:
-      "conic-gradient(from 180deg, rgba(59,130,246,0.46), rgba(34,197,94,0.36), rgba(249,115,22,0.4), rgba(168,85,247,0.35), rgba(59,130,246,0.46))",
-    filter: "blur(48px)",
-    opacity: 0.75,
-  },
-  spotlightLeft: {
-    position: "absolute",
-    left: -80,
-    top: -20,
-    width: 220,
-    height: 420,
-    background: "rgba(255,255,255,0.08)",
-    transform: "rotate(24deg)",
-    filter: "blur(8px)",
-  },
-  spotlightRight: {
-    position: "absolute",
-    right: -80,
-    top: -20,
-    width: 220,
-    height: 420,
-    background: "rgba(255,255,255,0.08)",
-    transform: "rotate(-24deg)",
-    filter: "blur(8px)",
-  },
-  stageContent: {
-    position: "relative",
-    minHeight: 330,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    padding: 24,
-  },
-  fullScreenStageContent: {
-    position: "relative",
-    minHeight: "calc(100vh - 260px)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    padding: 32,
-  },
-  stageEyebrow: {
-    fontSize: 13,
-    fontWeight: 950,
-    letterSpacing: "0.16em",
-    textTransform: "uppercase",
-    color: "#bfdbfe",
-    marginBottom: 12,
-  },
-  countdown: {
-    fontSize: 120,
-    lineHeight: 1,
-    fontWeight: 1000,
-    textShadow: "0 18px 42px rgba(0,0,0,0.5)",
-  },
-  fullScreenCountdown: {
-    fontSize: "min(24vw, 220px)",
-    lineHeight: 1,
-    fontWeight: 1000,
-    textShadow: "0 24px 60px rgba(0,0,0,0.55)",
-  },
-  bigNumber: {
-    fontSize: 104,
-    lineHeight: 1,
-    fontWeight: 1000,
-    letterSpacing: "-0.08em",
-    transition: "transform 110ms ease",
-    textShadow: "0 14px 38px rgba(0,0,0,0.5)",
-  },
-  fullScreenBigNumber: {
-    fontSize: "min(23vw, 220px)",
-    lineHeight: 1,
-    fontWeight: 1000,
-    letterSpacing: "-0.08em",
-    transition: "transform 110ms ease",
-    textShadow: "0 24px 70px rgba(0,0,0,0.58)",
-  },
-  winnerName: {
-    marginTop: 12,
-    fontSize: 36,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-  },
-  fullScreenWinnerName: {
-    marginTop: 14,
-    fontSize: "min(8vw, 82px)",
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-  prizeText: {
-    marginTop: 8,
-    color: "#cbd5e1",
-    fontWeight: 900,
-  },
-  revealButton: {
-    padding: "15px 22px",
-    border: "none",
-    borderRadius: 999,
-    background: "#f97316",
-    color: "#ffffff",
-    fontWeight: 950,
-    fontSize: 15,
-    boxShadow: "0 14px 28px rgba(249,115,22,0.28)",
-  },
-  saveForm: {
-    display: "grid",
-  },
-  saveButton: {
-    padding: "15px 22px",
-    border: "none",
-    borderRadius: 999,
-    background: "#22c55e",
-    color: "#ffffff",
-    fontWeight: 950,
-    fontSize: 15,
-    boxShadow: "0 14px 28px rgba(34,197,94,0.22)",
-  },
-  confettiLayer: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-    overflow: "hidden",
-    zIndex: 3,
-  },
-  confetti: {
-    position: "absolute",
-    top: -28,
-    borderRadius: 3,
-    opacity: 0.92,
-    boxShadow: "0 0 10px rgba(255,255,255,0.2)",
-  },
-};
