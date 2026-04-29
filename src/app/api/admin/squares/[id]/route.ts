@@ -1,422 +1,282 @@
-import type { CSSProperties } from "react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { NextRequest, NextResponse } from "next/server";
+import { getTenantSlugFromRequest } from "@/lib/tenant";
 import {
   getSquaresGameById,
-  listSquaresWinners,
-} from "../../../../../api/_lib/squares-repo";
-import ImageUploadField from "@/components/ImageUploadField";
-import SquaresPrizeSettings from "./SquaresPrizeSettings";
+  normalisePrizes,
+  updateSquaresGame,
+  slugify,
+} from "../../../../../../../api/_lib/squares-repo";
 
-type PageProps = {
+type RouteContext = {
   params: {
     id: string;
   };
 };
 
-type Prize = {
-  title?: string;
-  name?: string;
-  description?: string;
-};
-
-function firstNameOnly(name?: string | null) {
-  return name?.trim().split(/\s+/)[0] || "Winner";
+function parseNumber(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback = 0,
+) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function moneyFromCents(cents: number | null | undefined) {
-  return (Number(cents || 0) / 100).toFixed(2);
-}
+function parsePrizeRows(formData: FormData) {
+  const titles = formData.getAll("prize_title");
+  const descriptions = formData.getAll("prize_description");
 
-function formatDateTimeLocal(value: string | null | undefined) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toISOString().slice(0, 16);
-}
-
-export default async function AdminSquaresEditPage({ params }: PageProps) {
-  const tenantSlug = await getTenantSlugFromHeaders();
-  const game = await getSquaresGameById(params.id);
-
-  if (!tenantSlug || !game || game.tenant_slug !== tenantSlug) {
-    notFound();
-  }
-
-  const winners = await listSquaresWinners(game.id);
-  const currency = game.currency || "GBP";
-  const config = (game.config_json ?? {}) as any;
-
-  const savedPrizes = Array.isArray(config.prizes)
-    ? (config.prizes as Prize[])
-    : [];
-
-  return (
-    <main style={styles.page}>
-      <section style={styles.topNav}>
-        <Link href="/admin" style={styles.navButton}>
-          ← Dashboard
-        </Link>
-
-        <div style={styles.navRight}>
-          <Link href="/admin/raffles" style={styles.navGhost}>
-            Raffles
-          </Link>
-
-          <Link href="/admin/squares" style={styles.navActive}>
-            Squares
-          </Link>
-
-          <Link href={`/c/${tenantSlug}`} style={styles.navGhost}>
-            Public campaigns
-          </Link>
-
-          <Link href="/admin/squares/new" style={styles.navPrimary}>
-            + Create squares
-          </Link>
-        </div>
-      </section>
-
-      <section style={styles.hero}>
-        <div>
-          <div style={styles.eyebrow}>Squares editor</div>
-          <h1 style={styles.title}>{game.title}</h1>
-          <p style={styles.slug}>/s/{game.slug}</p>
-        </div>
-
-        <Link href={`/s/${game.slug}`} target="_blank" style={styles.viewButton}>
-          View public page ↗
-        </Link>
-      </section>
-
-      <section style={styles.summary}>
-        <div>
-          <strong>Status:</strong> {game.status}
-        </div>
-        <div>
-          <strong>Squares:</strong> {game.total_squares}
-        </div>
-        <div>
-          <strong>Price:</strong> {moneyFromCents(game.price_per_square_cents)}{" "}
-          {currency}
-        </div>
-      </section>
-
-      <form action={`/api/admin/squares/${game.id}`} method="post">
-        <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>Game details</h2>
-
-          <div style={styles.grid}>
-            <input
-              name="title"
-              defaultValue={game.title}
-              placeholder="Title"
-              required
-              style={styles.input}
-            />
-
-            <input
-              name="slug"
-              defaultValue={game.slug}
-              placeholder="Slug"
-              required
-              style={styles.input}
-            />
-          </div>
-
-          <textarea
-            name="description"
-            defaultValue={game.description ?? ""}
-            placeholder="Description"
-            style={styles.textarea}
-          />
-
-          <div style={{ marginTop: 12 }}>
-            <ImageUploadField currentImageUrl={game.image_url || ""} />
-          </div>
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>Squares setup</h2>
-
-          <div style={styles.grid}>
-            <label style={styles.field}>
-              <span style={styles.label}>Draw date</span>
-              <input
-                name="draw_at"
-                type="datetime-local"
-                defaultValue={formatDateTimeLocal(game.draw_at)}
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Number of squares</span>
-              <input
-                name="total_squares"
-                type="number"
-                min={1}
-                max={500}
-                defaultValue={game.total_squares}
-                required
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Price per square</span>
-              <input
-                name="price_per_square"
-                type="number"
-                min={0}
-                step="0.01"
-                defaultValue={moneyFromCents(game.price_per_square_cents)}
-                required
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Currency</span>
-              <select name="currency" defaultValue={currency} style={styles.input}>
-                <option value="GBP">GBP</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Status</span>
-              <select name="status" defaultValue={game.status} style={styles.input}>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed</option>
-                <option value="drawn">Drawn</option>
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <section style={styles.card}>
-          <SquaresPrizeSettings initialPrizes={savedPrizes} />
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>Auto draw range</h2>
-          <p style={styles.helpText}>
-            Choose which prize numbers the randomizer should draw. Example: set
-            from 6 to 999 to keep the top 5 prizes for a live draw.
-          </p>
-
-          <div style={styles.grid}>
-            <label style={styles.field}>
-              <span style={styles.label}>Auto draw from prize number</span>
-              <input
-                name="auto_draw_from_prize"
-                type="number"
-                min={1}
-                defaultValue={Number(config.auto_draw_from_prize || 1)}
-                placeholder="6"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Auto draw to prize number</span>
-              <input
-                name="auto_draw_to_prize"
-                type="number"
-                min={1}
-                defaultValue={Number(config.auto_draw_to_prize || 999)}
-                placeholder="999"
-                style={styles.input}
-              />
-            </label>
-          </div>
-        </section>
-
-        <button type="submit" style={styles.save}>
-          Save squares game
-        </button>
-      </form>
-
-      <section style={styles.card}>
-        <h2 style={styles.sectionTitle}>Winners</h2>
-
-        {winners.length ? (
-          winners.map((winner) => (
-            <div key={winner.id} style={styles.winner}>
-              {winner.prize_title} — #{winner.square_number} —{" "}
-              {firstNameOnly(winner.customer_name)}
-            </div>
-          ))
-        ) : (
-          <form action={`/api/admin/squares/${game.id}/draw`} method="post">
-            <button type="submit" style={styles.draw}>
-              Draw winners
-            </button>
-          </form>
-        )}
-      </section>
-    </main>
+  return normalisePrizes(
+    titles.map((title, index) => ({
+      title: String(title ?? "").trim(),
+      description: String(descriptions[index] ?? "").trim(),
+    })),
   );
 }
 
-const styles: Record<string, CSSProperties> = {
-  page: {
-    maxWidth: 1100,
-    margin: "40px auto",
-    padding: 20,
-  },
-  topNav: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  navRight: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  navButton: {
-    fontWeight: 800,
-    textDecoration: "none",
-    color: "#111827",
-  },
-  navGhost: {
-    padding: "8px 12px",
-    border: "1px solid #ddd",
-    borderRadius: 8,
-    textDecoration: "none",
-    color: "#111827",
-    background: "#ffffff",
-  },
-  navActive: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: "#111827",
-    color: "#fff",
-    textDecoration: "none",
-  },
-  navPrimary: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: "#2563eb",
-    color: "#fff",
-    textDecoration: "none",
-    fontWeight: 800,
-  },
-  hero: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  eyebrow: {
-    fontSize: 12,
-    color: "#666",
-    fontWeight: 800,
-  },
-  title: {
-    margin: 0,
-    color: "#0f172a",
-  },
-  slug: {
-    color: "#666",
-    margin: "6px 0 0",
-  },
-  viewButton: {
-    padding: "10px 14px",
-    background: "#111827",
-    color: "#fff",
-    borderRadius: 8,
-    textDecoration: "none",
-    height: "fit-content",
-  },
-  summary: {
-    display: "flex",
-    gap: 20,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  card: {
-    border: "1px solid #e5e7eb",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    background: "#ffffff",
-  },
-  sectionTitle: {
-    marginTop: 0,
-    color: "#0f172a",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 10,
-    marginBottom: 10,
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 800,
-    color: "#334155",
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: 10,
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    background: "#ffffff",
-    color: "#111827",
-  },
-  textarea: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: 10,
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    marginBottom: 10,
-    minHeight: 100,
-    background: "#ffffff",
-    color: "#111827",
-  },
-  helpText: {
-    color: "#64748b",
-    marginTop: 0,
-    marginBottom: 14,
-    lineHeight: 1.5,
-  },
-  save: {
-    padding: 12,
-    background: "#16a34a",
-    color: "#fff",
-    borderRadius: 10,
-    border: "none",
-    fontWeight: 800,
-    cursor: "pointer",
-    marginBottom: 20,
-  },
-  winner: {
-    padding: 10,
-    borderBottom: "1px solid #eee",
-  },
-  draw: {
-    padding: 12,
-    background: "#2563eb",
-    color: "#fff",
-    borderRadius: 10,
-    border: "none",
-    cursor: "pointer",
-  },
-};
+function parseDrawAt(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+  const id = context.params.id;
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const game = await getSquaresGameById(id);
+
+    if (!game) {
+      return NextResponse.json(
+        { ok: false, error: "Squares game not found" },
+        { status: 404 },
+      );
+    }
+
+    if (game.tenant_slug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Forbidden" },
+        { status: 403 },
+      );
+    }
+
+    return NextResponse.json({ ok: true, item: game });
+  } catch (error) {
+    console.error("GET admin square failed:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+  const id = context.params.id;
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const existing = await getSquaresGameById(id);
+
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, error: "Squares game not found" },
+        { status: 404 },
+      );
+    }
+
+    if (existing.tenant_slug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Forbidden" },
+        { status: 403 },
+      );
+    }
+
+    const formData = await request.formData();
+
+    const title = String(formData.get("title") ?? existing.title).trim();
+    const rawSlug = String(formData.get("slug") ?? existing.slug).trim();
+    const slug = slugify(rawSlug || existing.slug);
+
+    const description = String(formData.get("description") ?? "").trim();
+    const image_url = String(formData.get("image_url") ?? "").trim();
+
+    const currency = String(formData.get("currency") ?? existing.currency ?? "GBP") as
+      | "GBP"
+      | "USD"
+      | "EUR";
+
+    const status = String(formData.get("status") ?? existing.status) as
+      | "draft"
+      | "published"
+      | "closed"
+      | "drawn";
+
+    const total_squares = Math.min(
+      500,
+      Math.max(1, parseNumber(formData.get("total_squares"), existing.total_squares)),
+    );
+
+    const priceMajor = parseNumber(
+      formData.get("price_per_square"),
+      existing.price_per_square_cents / 100,
+    );
+
+    const price_per_square_cents = Math.round(priceMajor * 100);
+
+    const prizes = parsePrizeRows(formData);
+
+    const currentConfig = existing.config_json ?? {};
+
+    const auto_draw_from_prize = Math.max(
+      1,
+      Math.floor(parseNumber(formData.get("auto_draw_from_prize"), 1)),
+    );
+
+    const auto_draw_to_prize = Math.max(
+      auto_draw_from_prize,
+      Math.floor(parseNumber(formData.get("auto_draw_to_prize"), 999)),
+    );
+
+    const updated = await updateSquaresGame(id, {
+      tenant_slug: tenantSlug,
+      title: title || existing.title,
+      slug: slug || existing.slug,
+      description,
+      image_url,
+      draw_at: parseDrawAt(formData.get("draw_at")),
+      currency,
+      status,
+      total_squares,
+      price_per_square_cents,
+      prizes,
+      sold: currentConfig.sold ?? [],
+      reserved: currentConfig.reserved ?? [],
+      auto_draw_from_prize,
+      auto_draw_to_prize,
+    } as any);
+
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Update failed" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.redirect(new URL(`/admin/squares/${id}`, request.url), {
+      status: 303,
+    });
+  } catch (error) {
+    console.error("POST admin square failed:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PUT(request: NextRequest, context: RouteContext) {
+  const tenantSlug = getTenantSlugFromRequest(request);
+  const id = context.params.id;
+
+  if (!tenantSlug) {
+    return NextResponse.json(
+      { ok: false, error: "Tenant not found" },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const existing = await getSquaresGameById(id);
+
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, error: "Squares game not found" },
+        { status: 404 },
+      );
+    }
+
+    if (existing.tenant_slug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Forbidden" },
+        { status: 403 },
+      );
+    }
+
+    const body = await request.json();
+    const currentConfig = existing.config_json ?? {};
+
+    const totalSquares =
+      body?.total_squares != null
+        ? Math.min(500, Math.max(1, Number(body.total_squares)))
+        : existing.total_squares;
+
+    const autoDrawFrom = Math.max(
+      1,
+      Math.floor(Number(body?.auto_draw_from_prize ?? currentConfig.auto_draw_from_prize ?? 1)),
+    );
+
+    const autoDrawTo = Math.max(
+      autoDrawFrom,
+      Math.floor(Number(body?.auto_draw_to_prize ?? currentConfig.auto_draw_to_prize ?? 999)),
+    );
+
+    const updated = await updateSquaresGame(id, {
+      tenant_slug: tenantSlug,
+      title: String(body?.title ?? existing.title),
+      slug: slugify(String(body?.slug ?? existing.slug)),
+      description: String(body?.description ?? existing.description ?? ""),
+      image_url: String(body?.image_url ?? existing.image_url ?? ""),
+      draw_at: body?.draw_at ?? existing.draw_at ?? null,
+      currency: body?.currency ?? existing.currency ?? "GBP",
+      status: body?.status ?? existing.status,
+      total_squares: totalSquares,
+      price_per_square_cents:
+        body?.price_per_square_cents != null
+          ? Number(body.price_per_square_cents)
+          : existing.price_per_square_cents,
+      prizes: Array.isArray(body?.prizes)
+        ? normalisePrizes(body.prizes)
+        : normalisePrizes(currentConfig.prizes ?? []),
+      sold: currentConfig.sold ?? [],
+      reserved: currentConfig.reserved ?? [],
+      auto_draw_from_prize: autoDrawFrom,
+      auto_draw_to_prize: autoDrawTo,
+    } as any);
+
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Update failed" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ ok: true, item: updated });
+  } catch (error) {
+    console.error("PUT admin square failed:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 },
+    );
+  }
+}
