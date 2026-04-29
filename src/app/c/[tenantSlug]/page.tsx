@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
 
@@ -17,8 +18,8 @@ type Campaign = {
   type: "raffle" | "squares" | "event";
   title: string;
   slug: string;
-  description?: string;
-  imageUrl?: string;
+  description?: string | null;
+  imageUrl?: string | null;
   status: "draft" | "published" | "closed" | "drawn";
 };
 
@@ -48,7 +49,6 @@ export default async function TenantCampaignsPage({
   const { tenantSlug } = await params;
 
   const adminReturn = getSafeAdminReturn(searchParams?.adminReturn);
-
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
 
   const publicCampaigns = campaigns.filter(
@@ -58,11 +58,10 @@ export default async function TenantCampaignsPage({
   return (
     <main style={styles.page}>
       <section style={styles.header}>
-        {/* ✅ NEW: admin back button */}
         {adminReturn ? (
           <div style={{ marginBottom: 16 }}>
             <Link href={adminReturn} style={styles.adminBack}>
-              ← Back to admin raffles
+              ← Back to admin
             </Link>
           </div>
         ) : null}
@@ -87,7 +86,7 @@ export default async function TenantCampaignsPage({
         <section style={styles.grid}>
           {publicCampaigns.map((campaign) => (
             <Link
-              key={campaign.id}
+              key={`${campaign.type}-${campaign.id}`}
               href={getCampaignUrl(campaign)}
               style={styles.card}
             >
@@ -99,7 +98,9 @@ export default async function TenantCampaignsPage({
                     style={styles.image}
                   />
                 ) : (
-                  <div style={styles.imageEmpty}>🎟️</div>
+                  <div style={styles.imageEmpty}>
+                    {campaign.type === "squares" ? "🔲" : "🎟️"}
+                  </div>
                 )}
               </div>
 
@@ -130,7 +131,7 @@ export default async function TenantCampaignsPage({
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f8fafc",
@@ -177,39 +178,38 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
   },
-grid: {
-  maxWidth: 1100,
-  margin: "0 auto",
-  display: "grid",
-  gap: 18,
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-},
-card: {
-  display: "grid",
-  gridTemplateColumns: "1fr", // ✅ single column
-  gap: 12,
-  padding: 16,
-  borderRadius: 22,
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  textDecoration: "none",
-  color: "#111827",
-  boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-},
-imageWrap: {
-  height: 180,
-  borderRadius: 16,
-  overflow: "hidden",
-  background: "#f1f5f9",
-  border: "1px solid #e2e8f0",
-},
-image: {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  display: "block",
-},
-
+  grid: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    display: "grid",
+    gap: 18,
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  },
+  card: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 12,
+    padding: 16,
+    borderRadius: 22,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    textDecoration: "none",
+    color: "#111827",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  imageWrap: {
+    height: 180,
+    borderRadius: 16,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
   imageEmpty: {
     height: "100%",
     display: "flex",
