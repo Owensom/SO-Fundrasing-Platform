@@ -53,5 +53,5 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { ok: false, error: "Delete failed" },
       { status: 500 },
     );
-  }
+  
 }
