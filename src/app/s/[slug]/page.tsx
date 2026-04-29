@@ -82,6 +82,7 @@ function ordinal(position: number) {
 
 export default function PublicSquaresPage({ params }: Props) {
   const { slug } = params;
+  const [showAllPrizes, setShowAllPrizes] = useState(false);
 
   const [game, setGame] = useState<SquaresGame | null>(null);
   const [selectedSquares, setSelectedSquares] = useState<number[]>([]);
