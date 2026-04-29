@@ -7,16 +7,15 @@ export type Campaign = {
   description: string;
   tenant_slug: string;
   type: "raffle" | "squares" | "event";
-  image_url?: string;
-  imageUrl?: string;
+  image_url?: string | null;
+  imageUrl?: string | null;
   status: "draft" | "published" | "closed" | "drawn";
+  created_at?: string;
 };
 
 export async function getCampaignBySlug(slug: string): Promise<Campaign | null> {
   return queryOne<Campaign>(
     `
-    select *
-    from (
       select
         id,
         title,
@@ -29,6 +28,7 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
         status,
         created_at
       from raffles
+      where slug = $1
 
       union all
 
@@ -44,10 +44,9 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
         status,
         created_at
       from squares_games
-    ) campaigns
-    where slug = $1
-    order by created_at desc
-    limit 1
+      where slug = $1
+
+      limit 1
     `,
     [slug],
   );
@@ -58,17 +57,6 @@ export async function getAllCampaignsForTenant(
 ): Promise<Campaign[]> {
   return query<Campaign>(
     `
-    select
-      id,
-      title,
-      slug,
-      description,
-      tenant_slug,
-      type,
-      image_url,
-      "imageUrl",
-      status
-    from (
       select
         id,
         title,
@@ -98,8 +86,8 @@ export async function getAllCampaignsForTenant(
         created_at
       from squares_games
       where tenant_slug = $1
-    ) campaigns
-    order by created_at desc
+
+      order by created_at desc
     `,
     [tenantSlug],
   );
