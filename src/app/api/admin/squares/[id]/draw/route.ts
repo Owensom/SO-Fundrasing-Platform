@@ -32,7 +32,27 @@ function parseRangeValue(value: unknown, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
-export async function POST(_request: NextRequest, context: RouteContext) {
+function getAutoDrawFrom(config: any) {
+  return parseRangeValue(
+    config?.auto_draw_from_prize ??
+      config?.autoDrawFromPrize ??
+      config?.auto_draw_from ??
+      config?.draw_from_prize,
+    1,
+  );
+}
+
+function getAutoDrawTo(config: any, prizeCount: number) {
+  return parseRangeValue(
+    config?.auto_draw_to_prize ??
+      config?.autoDrawToPrize ??
+      config?.auto_draw_to ??
+      config?.draw_to_prize,
+    prizeCount,
+  );
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
   const id = context.params.id;
 
   try {
@@ -49,17 +69,44 @@ export async function POST(_request: NextRequest, context: RouteContext) {
 
     if (existingWinners.length > 0) {
       return NextResponse.redirect(
-        new URL(`/admin/squares/${game.id}`, _request.url),
+        new URL(`/admin/squares/${game.id}`, request.url),
         { status: 303 },
       );
     }
 
-    const config = game.config_json ?? {};
+    const config = (game.config_json ?? {}) as any;
     const prizes = Array.isArray(config.prizes) ? config.prizes : [];
 
     if (prizes.length === 0) {
       return NextResponse.json(
         { ok: false, error: "No prizes configured" },
+        { status: 400 },
+      );
+    }
+
+    const autoDrawFrom = Math.max(1, getAutoDrawFrom(config));
+    const autoDrawTo = Math.max(
+      autoDrawFrom,
+      Math.min(getAutoDrawTo(config, prizes.length), prizes.length),
+    );
+
+    const prizesToDraw = prizes
+      .map((prize, index) => ({
+        prize,
+        prizeIndex: index,
+        prizeNumber: index + 1,
+      }))
+      .filter(
+        (item) =>
+          item.prizeNumber >= autoDrawFrom && item.prizeNumber <= autoDrawTo,
+      );
+
+    if (prizesToDraw.length === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `No prizes found within auto draw range ${autoDrawFrom}-${autoDrawTo}`,
+        },
         { status: 400 },
       );
     }
@@ -86,34 +133,6 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     if (validSoldEntries.length === 0) {
       return NextResponse.json(
         { ok: false, error: "No sold squares to draw from" },
-        { status: 400 },
-      );
-    }
-
-    const autoDrawFrom = parseRangeValue(
-      (config as any).auto_draw_from_prize,
-      1,
-    );
-
-    const autoDrawTo = parseRangeValue(
-      (config as any).auto_draw_to_prize,
-      prizes.length,
-    );
-
-    const prizesToDraw = prizes
-      .map((prize, index) => ({
-        prize,
-        prizeIndex: index,
-        prizeNumber: index + 1,
-      }))
-      .filter(
-        (item) =>
-          item.prizeNumber >= autoDrawFrom && item.prizeNumber <= autoDrawTo,
-      );
-
-    if (prizesToDraw.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "No prizes found within auto draw range" },
         { status: 400 },
       );
     }
@@ -155,10 +174,12 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       prizes,
       sold: config.sold ?? [],
       reserved: config.reserved ?? [],
-    });
+      auto_draw_from_prize: autoDrawFrom,
+      auto_draw_to_prize: autoDrawTo,
+    } as any);
 
     return NextResponse.redirect(
-      new URL(`/admin/squares/${game.id}`, _request.url),
+      new URL(`/admin/squares/${game.id}`, request.url),
       { status: 303 },
     );
   } catch (error) {
