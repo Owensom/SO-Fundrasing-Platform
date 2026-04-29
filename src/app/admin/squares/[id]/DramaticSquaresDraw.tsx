@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 
 type SoldSquareOption = {
@@ -42,7 +43,7 @@ export default function DramaticSquaresDraw({
     setHasRevealed(false);
 
     let ticks = 0;
-    const maxTicks = 34;
+    const maxTicks = 36;
 
     const timer = window.setInterval(() => {
       const random =
@@ -66,27 +67,23 @@ export default function DramaticSquaresDraw({
 
   return (
     <div style={styles.panel}>
-      <div style={styles.header}>
-        <div>
-          <h3 style={styles.title}>Dramatic live draw</h3>
-          <p style={styles.description}>
-            Enter the prize number, start the reveal, then save the final winner.
-          </p>
-        </div>
+      <div>
+        <h3 style={styles.title}>Dramatic live draw</h3>
+        <p style={styles.description}>
+          Enter the prize number, start the reveal, then save the final winner.
+        </p>
       </div>
 
       <label style={styles.field}>
         <span style={styles.label}>Prize number</span>
         <input
-          name="display_prize_number"
           type="number"
           min={1}
-          required
           value={prizeNumber}
           onChange={(event) => {
             setPrizeNumber(event.target.value);
-            setHasRevealed(false);
             setSelectedSquare(null);
+            setHasRevealed(false);
           }}
           placeholder="1"
           style={styles.input}
@@ -105,12 +102,7 @@ export default function DramaticSquaresDraw({
                 : "Ready to draw"}
           </div>
 
-          <div
-            style={{
-              ...styles.bigNumber,
-              transform: isRevealing ? "scale(1.06)" : "scale(1)",
-            }}
-          >
+          <div style={styles.bigNumber}>
             {selectedSquare ? `#${selectedSquare.squareNumber}` : "?"}
           </div>
 
@@ -163,7 +155,7 @@ export default function DramaticSquaresDraw({
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   panel: {
     padding: 18,
     borderRadius: 22,
@@ -174,13 +166,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ffffff",
     boxShadow: "0 22px 60px rgba(2,6,23,0.35)",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-  },
   title: {
     margin: 0,
+    color: "#ffffff",
     fontSize: 20,
     letterSpacing: "-0.02em",
   },
@@ -250,7 +238,6 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1,
     fontWeight: 1000,
     letterSpacing: "-0.08em",
-    transition: "transform 120ms ease",
     textShadow: "0 12px 34px rgba(0,0,0,0.45)",
   },
   winnerName: {
