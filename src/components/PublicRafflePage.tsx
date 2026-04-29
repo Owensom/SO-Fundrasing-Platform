@@ -1683,4 +1683,15 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #fecaca",
     color: "#991b1b",
   },
+  
+showMoreButton: {
+    marginTop: 12,
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid #fdba74",
+    background: "#fff7ed",
+    color: "#9a3412",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
 };
