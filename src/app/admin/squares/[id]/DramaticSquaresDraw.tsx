@@ -3,9 +3,12 @@
 import { useMemo, useRef, useState } from "react";
 
 type SoldSquareOption = {
-  squareNumber: number;
-  customerName: string;
+  squareNumber?: number;
+  square_number?: number;
+  customerName?: string;
+  customer_name?: string;
   customerEmail?: string;
+  customer_email?: string;
 };
 
 type DramaticSquaresDrawProps = {
@@ -13,76 +16,144 @@ type DramaticSquaresDrawProps = {
   soldSquareOptions: SoldSquareOption[];
 };
 
+type ConfettiPiece = {
+  id: number;
+  left: number;
+  delay: number;
+  duration: number;
+  width: number;
+  height: number;
+  rotate: number;
+  hue: number;
+};
+
+function getSquareNumber(item: SoldSquareOption) {
+  return Number(item.squareNumber ?? item.square_number);
+}
+
+function getCustomerName(item: SoldSquareOption) {
+  return item.customerName ?? item.customer_name ?? "Winner";
+}
+
+function getCustomerEmail(item: SoldSquareOption) {
+  return item.customerEmail ?? item.customer_email ?? "";
+}
+
 function createAudioContext() {
   const AudioContextClass =
     window.AudioContext || (window as any).webkitAudioContext;
+
   return AudioContextClass ? new AudioContextClass() : null;
 }
 
 function playTick(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
+
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "square";
-  osc.frequency.setValueAtTime(1200, now);
-  osc.frequency.exponentialRampToValueAtTime(320, now + 0.05);
+  osc.frequency.setValueAtTime(1250, now);
+  osc.frequency.exponentialRampToValueAtTime(360, now + 0.055);
 
-  gain.gain.setValueAtTime(0.18, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(1300, now);
+  filter.Q.setValueAtTime(8, now);
 
-  osc.connect(gain);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
+
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 0.06);
+  osc.stop(now + 0.075);
 }
 
 function playRiser(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
+
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(80, now);
-  osc.frequency.linearRampToValueAtTime(150, now + 0.22);
+  osc.frequency.setValueAtTime(72, now);
+  osc.frequency.linearRampToValueAtTime(145, now + 0.26);
 
-  gain.gain.setValueAtTime(0.035, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(520, now);
+  filter.frequency.linearRampToValueAtTime(1250, now + 0.26);
 
-  osc.connect(gain);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.045, now + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 0.25);
+  osc.stop(now + 0.3);
 }
 
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-  const gain = audioCtx.createGain();
 
-  gain.gain.setValueAtTime(0.28, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 1);
+  const master = audioCtx.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.3, now + 0.025);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
+  master.connect(audioCtx.destination);
 
   const bass = audioCtx.createOscillator();
   bass.type = "triangle";
-  bass.frequency.setValueAtTime(220, now);
-  bass.frequency.exponentialRampToValueAtTime(60, now + 0.7);
-
-  const shine = audioCtx.createOscillator();
-  shine.type = "sine";
-  shine.frequency.setValueAtTime(900, now);
-  shine.frequency.exponentialRampToValueAtTime(1500, now + 0.4);
-
-  bass.connect(gain);
-  shine.connect(gain);
-  gain.connect(audioCtx.destination);
-
+  bass.frequency.setValueAtTime(210, now);
+  bass.frequency.exponentialRampToValueAtTime(58, now + 0.75);
+  bass.connect(master);
   bass.start(now);
-  shine.start(now + 0.08);
+  bass.stop(now + 1.1);
 
-  bass.stop(now + 1);
-  shine.stop(now + 0.55);
+  const hit = audioCtx.createOscillator();
+  hit.type = "square";
+  hit.frequency.setValueAtTime(920, now);
+  hit.frequency.exponentialRampToValueAtTime(300, now + 0.42);
+  hit.connect(master);
+  hit.start(now);
+  hit.stop(now + 0.45);
+
+  const sparkle = audioCtx.createOscillator();
+  const sparkleGain = audioCtx.createGain();
+
+  sparkle.type = "sine";
+  sparkle.frequency.setValueAtTime(1320, now + 0.18);
+  sparkle.frequency.exponentialRampToValueAtTime(1780, now + 0.55);
+
+  sparkleGain.gain.setValueAtTime(0.0001, now + 0.18);
+  sparkleGain.gain.exponentialRampToValueAtTime(0.09, now + 0.24);
+  sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+
+  sparkle.connect(sparkleGain);
+  sparkleGain.connect(master);
+
+  sparkle.start(now + 0.18);
+  sparkle.stop(now + 0.65);
+}
+
+function makeConfetti(): ConfettiPiece[] {
+  return Array.from({ length: 120 }).map((_, index) => ({
+    id: index,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 1.8 + Math.random() * 1.8,
+    width: 7 + Math.random() * 8,
+    height: 10 + Math.random() * 14,
+    rotate: Math.random() * 360,
+    hue: Math.random() * 360,
+  }));
 }
 
 export default function DramaticSquaresDraw({
@@ -95,8 +166,8 @@ export default function DramaticSquaresDraw({
   const [winner, setWinner] = useState<SoldSquareOption | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
   const [error, setError] = useState("");
+  const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -104,7 +175,7 @@ export default function DramaticSquaresDraw({
   const soldNumbers = useMemo(
     () =>
       soldSquareOptions
-        .map((item) => Number(item.squareNumber))
+        .map(getSquareNumber)
         .filter((number) => Number.isFinite(number) && number > 0),
     [soldSquareOptions],
   );
@@ -136,6 +207,13 @@ export default function DramaticSquaresDraw({
     }
   }
 
+  function closeDraw() {
+    stopTimer();
+    setIsOpen(false);
+    setDrawing(false);
+    setSaving(false);
+  }
+
   async function startDraw() {
     const parsedPrizeNumber = Number(prizeNumber);
 
@@ -148,8 +226,9 @@ export default function DramaticSquaresDraw({
 
     setError("");
     setWinner(null);
-    setShowConfetti(false);
+    setConfetti([]);
     setDrawing(true);
+    setSaving(false);
 
     const audioCtx = await unlockAudio();
 
@@ -158,10 +237,10 @@ export default function DramaticSquaresDraw({
     stopTimer();
 
     timerRef.current = setInterval(() => {
-      const randomNumber =
+      const randomSquare =
         soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
-      setDisplaySquare(randomNumber);
+      setDisplaySquare(randomSquare);
 
       if (audioCtx) {
         playTick(audioCtx);
@@ -169,9 +248,9 @@ export default function DramaticSquaresDraw({
       }
 
       ticks += 1;
-    }, 75);
+    }, 72);
 
-    setTimeout(async () => {
+    window.setTimeout(async () => {
       stopTimer();
 
       const winningSquareNumber =
@@ -179,7 +258,7 @@ export default function DramaticSquaresDraw({
 
       const matchedWinner =
         soldSquareOptions.find(
-          (item) => Number(item.squareNumber) === winningSquareNumber,
+          (item) => getSquareNumber(item) === winningSquareNumber,
         ) || null;
 
       setDisplaySquare(winningSquareNumber);
@@ -189,7 +268,7 @@ export default function DramaticSquaresDraw({
 
       if (audioCtx) playWinner(audioCtx);
 
-      setShowConfetti(true);
+      setConfetti(makeConfetti());
 
       try {
         const formData = new FormData();
@@ -207,7 +286,9 @@ export default function DramaticSquaresDraw({
           throw new Error(data?.error || "Draw failed");
         }
 
-        setTimeout(() => {
+        setSaving(false);
+
+        window.setTimeout(() => {
           window.location.reload();
         }, 1800);
       } catch (err) {
@@ -230,12 +311,19 @@ export default function DramaticSquaresDraw({
         <h2 style={{ margin: "0 0 8px", fontSize: 22 }}>Dramatic draw</h2>
 
         <p style={{ margin: "0 0 16px", color: "#6b7280" }}>
-          Open a full-screen winner draw with sound and confetti.
+          Open a full-screen winner draw with sound, suspense, saving, and
+          confetti.
         </p>
 
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true);
+            setError("");
+            setWinner(null);
+            setDisplaySquare(null);
+            setConfetti([]);
+          }}
           disabled={!soldNumbers.length}
           style={{
             border: 0,
@@ -269,40 +357,74 @@ export default function DramaticSquaresDraw({
             display: "grid",
             placeItems: "center",
             padding: 24,
+            overflow: "hidden",
           }}
         >
-          {showConfetti ? (
+          <style>{`
+            @keyframes confettiFall {
+              0% {
+                transform: translate3d(0, -20vh, 0) rotate(0deg);
+                opacity: 1;
+              }
+              100% {
+                transform: translate3d(var(--drift), 115vh, 0) rotate(900deg);
+                opacity: 0;
+              }
+            }
+
+            @keyframes winnerPulse {
+              0%, 100% {
+                transform: scale(1);
+              }
+              50% {
+                transform: scale(1.06);
+              }
+            }
+
+            @keyframes glowPulse {
+              0%, 100% {
+                box-shadow: 0 0 38px rgba(250,204,21,0.25);
+              }
+              50% {
+                box-shadow: 0 0 85px rgba(250,204,21,0.85);
+              }
+            }
+          `}</style>
+
+          {confetti.length ? (
             <div
               style={{
                 position: "absolute",
                 inset: 0,
                 pointerEvents: "none",
                 overflow: "hidden",
-                fontSize: 34,
               }}
             >
-              {Array.from({ length: 42 }).map((_, index) => (
+              {confetti.map((piece) => (
                 <span
-                  key={index}
-                  style={{
-                    position: "absolute",
-                    left: `${(index * 23) % 100}%`,
-                    top: `${(index * 17) % 100}%`,
-                  }}
-                >
-                  🎉
-                </span>
+                  key={piece.id}
+                  style={
+                    {
+                      position: "absolute",
+                      top: "-12vh",
+                      left: `${piece.left}%`,
+                      width: piece.width,
+                      height: piece.height,
+                      borderRadius: 3,
+                      background: `hsl(${piece.hue}, 92%, 58%)`,
+                      transform: `rotate(${piece.rotate}deg)`,
+                      animation: `confettiFall ${piece.duration}s linear ${piece.delay}s forwards`,
+                      "--drift": `${Math.random() * 240 - 120}px`,
+                    } as React.CSSProperties
+                  }
+                />
               ))}
             </div>
           ) : null}
 
           <button
             type="button"
-            onClick={() => {
-              stopTimer();
-              setIsOpen(false);
-              setDrawing(false);
-            }}
+            onClick={closeDraw}
             style={{
               position: "absolute",
               top: 18,
@@ -314,12 +436,20 @@ export default function DramaticSquaresDraw({
               padding: "10px 14px",
               cursor: "pointer",
               fontWeight: 800,
+              zIndex: 2,
             }}
           >
             Close
           </button>
 
-          <div style={{ width: "min(760px, 100%)", textAlign: "center" }}>
+          <div
+            style={{
+              width: "min(780px, 100%)",
+              textAlign: "center",
+              position: "relative",
+              zIndex: 1,
+            }}
+          >
             <p
               style={{
                 margin: 0,
@@ -333,7 +463,13 @@ export default function DramaticSquaresDraw({
               Squares draw
             </p>
 
-            <h1 style={{ margin: "12px 0 24px", fontSize: 44 }}>
+            <h1
+              style={{
+                margin: "12px 0 24px",
+                fontSize: "clamp(34px, 6vw, 60px)",
+                lineHeight: 1,
+              }}
+            >
               Pick a winner
             </h1>
 
@@ -368,47 +504,56 @@ export default function DramaticSquaresDraw({
                 margin: "0 auto 22px",
                 display: "grid",
                 placeItems: "center",
-                width: 280,
-                height: 280,
+                width: "min(320px, 70vw)",
+                height: "min(320px, 70vw)",
                 borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(250,204,21,0.35), rgba(249,115,22,0.18), rgba(255,255,255,0.05))",
-                border: "2px solid rgba(250,204,21,0.55)",
-                boxShadow: drawing
-                  ? "0 0 70px rgba(250,204,21,0.75)"
-                  : "0 0 40px rgba(250,204,21,0.25)",
+                  "radial-gradient(circle, rgba(250,204,21,0.38), rgba(249,115,22,0.2), rgba(255,255,255,0.06))",
+                border: "2px solid rgba(250,204,21,0.6)",
+                animation: drawing || winner ? "glowPulse 900ms infinite" : "",
               }}
             >
               <div
                 style={{
-                  fontSize: 84,
+                  fontSize: "clamp(72px, 15vw, 118px)",
+                  lineHeight: 1,
                   fontWeight: 950,
                   letterSpacing: "-0.08em",
-                  textShadow: "0 0 26px rgba(250,204,21,0.8)",
+                  textShadow: "0 0 28px rgba(250,204,21,0.85)",
+                  animation: drawing ? "winnerPulse 180ms infinite" : "",
                 }}
               >
                 {displaySquare ? `#${displaySquare}` : "—"}
               </div>
             </div>
 
-            <h2 style={{ margin: 0, fontSize: 30 }}>
+            <h2 style={{ margin: 0, fontSize: "clamp(26px, 4vw, 38px)" }}>
               {drawing
                 ? "Drawing..."
                 : saving
                   ? "Saving winner..."
                   : winner
-                    ? winner.customerName || "Winner"
+                    ? getCustomerName(winner)
                     : "Ready"}
             </h2>
 
-            {winner?.customerEmail ? (
+            {winner && getCustomerEmail(winner) ? (
               <p style={{ margin: "8px 0 0", color: "#d1d5db" }}>
-                {winner.customerEmail}
+                {getCustomerEmail(winner)}
               </p>
             ) : null}
 
             {error ? (
-              <p style={{ margin: "18px 0 0", color: "#fecaca" }}>{error}</p>
+              <p
+                style={{
+                  margin: "18px auto 0",
+                  color: "#fecaca",
+                  maxWidth: 520,
+                  fontWeight: 800,
+                }}
+              >
+                {error}
+              </p>
             ) : null}
 
             <button
@@ -431,6 +576,10 @@ export default function DramaticSquaresDraw({
                     ? "#9ca3af"
                     : "linear-gradient(135deg, #facc15, #f97316)",
                 color: "#111827",
+                boxShadow:
+                  drawing || saving || !soldNumbers.length
+                    ? "none"
+                    : "0 18px 38px rgba(249,115,22,0.35)",
               }}
             >
               {drawing ? "Drawing..." : saving ? "Saving..." : "Start draw"}
