@@ -377,4 +377,156 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 </div>
 
                 <div>
-                  <div style={
+                  <div style={styles.winnerLabel}>Winner</div>
+                  <div style={styles.winnerValue}>
+                    {firstNameOnly(winner.customer_name)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={styles.noWinnersBox}>
+            No winners have been drawn yet.
+          </div>
+        )}
+
+        <div style={styles.drawGrid}>
+          {/* AUTO DRAW */}
+          <form
+            action={`/api/admin/squares/${game.id}/draw/auto`}
+            method="post"
+            style={styles.drawPanel}
+          >
+            <h3 style={styles.subTitle}>Automatic random draw</h3>
+            <p style={styles.sectionDescription}>
+              Randomly draw remaining undrawn prizes using the saved auto draw range.
+            </p>
+
+            <button type="submit" style={styles.drawButton}>
+              Auto draw remaining winners
+            </button>
+          </form>
+
+          {/* MANUAL DRAW */}
+          <form
+            action={`/api/admin/squares/${game.id}/draw/manual`}
+            method="post"
+            style={styles.drawPanel}
+          >
+            <h3 style={styles.subTitle}>Manual live draw</h3>
+            <p style={styles.sectionDescription}>
+              Enter a prize number and winning square number from your live draw.
+            </p>
+
+            <div style={styles.twoColumn}>
+              <Field label="Prize number">
+                <input
+                  name="prize_number"
+                  type="number"
+                  min={1}
+                  required
+                  placeholder="1"
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Winning square number">
+                <input
+                  name="square_number"
+                  type="number"
+                  min={1}
+                  max={totalSquares}
+                  required
+                  placeholder="27"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <button type="submit" style={styles.manualDrawButton}>
+              Save manual winner
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+/* =========================
+   COMPONENTS
+========================= */
+
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div style={styles.summaryCard}>
+      <div style={styles.summaryLabel}>{label}</div>
+      <div style={styles.summaryValue}>{value}</div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/* =========================
+   STYLES (FULL)
+========================= */
+
+const styles: Record<string, CSSProperties> = {
+  /* keep your existing styles above unchanged */
+
+  noWinnersBox: {
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+    marginBottom: 14,
+  },
+
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 14,
+  },
+
+  drawPanel: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+  },
+
+  manualDrawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+};
