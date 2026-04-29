@@ -6,6 +6,8 @@ import {
   listSquaresWinners,
 } from "../../../../../../../api/_lib/squares-repo";
 
+export const dynamic = "force-dynamic";
+
 type RouteContext = {
   params: {
     id: string;
@@ -17,14 +19,7 @@ function parsePositiveInteger(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
 }
 
-function getPrizeTitle(game: Awaited<ReturnType<typeof getSquaresGameById>>, prizeIndex: number) {
-  const prizes = game?.config_json?.prizes ?? [];
-  const prize = prizes[prizeIndex - 1];
-
-  return prize?.title?.trim() || `${prizeIndex}${getOrdinalSuffix(prizeIndex)} Prize`;
-}
-
-function getOrdinalSuffix(value: number) {
+function ordinal(value: number) {
   const mod10 = value % 10;
   const mod100 = value % 100;
 
@@ -36,9 +31,8 @@ function getOrdinalSuffix(value: number) {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const gameId = context.params.id;
-
   try {
+    const gameId = context.params.id;
     const game = await getSquaresGameById(gameId);
 
     if (!game) {
@@ -60,15 +54,34 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const existingWinners = await listSquaresWinners(gameId);
+    const winners = await listSquaresWinners(gameId);
 
-    const prizeAlreadyDrawn = existingWinners.some(
+    const existingPrizeWinner = winners.find(
       (winner) => Number(winner.prize_index) === prizeNumber,
     );
 
-    if (prizeAlreadyDrawn) {
+    if (existingPrizeWinner) {
       return NextResponse.json(
-        { ok: false, error: `Prize ${prizeNumber} has already been drawn` },
+        {
+          ok: false,
+          error: `Prize ${prizeNumber} has already been drawn`,
+          winner: existingPrizeWinner,
+        },
+        { status: 400 },
+      );
+    }
+
+    const existingSquareWinner = winners.find(
+      (winner) => Number(winner.square_number) === squareNumber,
+    );
+
+    if (existingSquareWinner) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Square #${squareNumber} has already won a prize`,
+          winner: existingSquareWinner,
+        },
         { status: 400 },
       );
     }
@@ -88,11 +101,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
+    const prizes = game.config_json?.prizes ?? [];
+    const prize = prizes[prizeNumber - 1];
+
+    const prizeTitle =
+      prize?.title?.trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`;
+
     const winner = await createSquaresWinner({
       tenant_slug: game.tenant_slug,
       game_id: game.id,
       prize_index: prizeNumber,
-      prize_title: getPrizeTitle(game, prizeNumber),
+      prize_title: prizeTitle,
       square_number: squareNumber,
       customer_name: matchingSale.customer_name,
       customer_email: matchingSale.customer_email,
