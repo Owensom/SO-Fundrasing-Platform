@@ -18,6 +18,52 @@ function firstNameOnly(name?: string | null) {
   return name?.trim().split(/\s+/)[0] || "Winner";
 }
 
+function playTone(frequency: number, duration: number, volume = 0.08) {
+  try {
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
+
+    const audioContext = new AudioContextClass();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.value = frequency;
+
+    gain.gain.value = volume;
+    gain.gain.exponentialRampToValueAtTime(
+      0.001,
+      audioContext.currentTime + duration,
+    );
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + duration);
+
+    oscillator.onended = () => {
+      audioContext.close().catch(() => {});
+    };
+  } catch {
+    // Browser blocked audio or unsupported device.
+  }
+}
+
+function playCountdownBeep() {
+  playTone(620, 0.12, 0.08);
+}
+
+function playRevealTick() {
+  playTone(180 + Math.random() * 120, 0.045, 0.035);
+}
+
+function playWinnerChime() {
+  playTone(523.25, 0.16, 0.09);
+  window.setTimeout(() => playTone(659.25, 0.16, 0.09), 150);
+  window.setTimeout(() => playTone(783.99, 0.28, 0.1), 310);
+}
+
 export default function DramaticSquaresDraw({
   gameId,
   soldSquareOptions,
@@ -45,6 +91,7 @@ export default function DramaticSquaresDraw({
     setHasRevealed(false);
     setBurst(false);
     setCountdown(3);
+    playCountdownBeep();
 
     let count = 3;
 
@@ -57,6 +104,7 @@ export default function DramaticSquaresDraw({
         runReveal();
       } else {
         setCountdown(count);
+        playCountdownBeep();
       }
     }, 800);
   }
@@ -72,6 +120,7 @@ export default function DramaticSquaresDraw({
         soldSquareOptions[Math.floor(Math.random() * soldSquareOptions.length)];
 
       setSelectedSquare(random);
+      playRevealTick();
       ticks += 1;
 
       if (ticks >= maxTicks) {
@@ -84,6 +133,7 @@ export default function DramaticSquaresDraw({
         setIsRevealing(false);
         setHasRevealed(true);
         setBurst(true);
+        playWinnerChime();
 
         window.setTimeout(() => setBurst(false), 1800);
       }
