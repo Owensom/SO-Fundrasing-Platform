@@ -29,11 +29,70 @@ function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function formatMoney(cents: number | null | undefined, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `${moneyFromCents(cents)} ${currency || "GBP"}`;
+  }
+}
+
 function formatDateTimeLocal(value: string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 16);
+}
+
+function formatDrawDate(value: string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function getProgressPercent(sold: number, total: number) {
+  if (!total || total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
+}
+
+function statusStyle(status: string): CSSProperties {
+  if (status === "published") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (status === "drawn") {
+    return {
+      background: "#dbeafe",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
+  }
+
+  if (status === "closed") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
 }
 
 export default async function AdminSquaresEditPage({ params }: PageProps) {
@@ -52,165 +111,286 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     ? (config.prizes as Prize[])
     : [];
 
+  const soldSquares = Array.isArray(config.sold) ? config.sold.length : 0;
+  const totalSquares = Number(game.total_squares || 0);
+  const remainingSquares = Math.max(totalSquares - soldSquares, 0);
+  const progress = getProgressPercent(soldSquares, totalSquares);
+
   return (
     <main style={styles.page}>
-      {/* HEADER */}
-      <section style={styles.header}>
-        <div>
-          <div style={styles.badge}>Squares editor</div>
-          <h1 style={styles.title}>{game.title}</h1>
-          <p style={styles.slug}>/s/{game.slug}</p>
+      <section style={styles.topBar}>
+        <Link href="/admin/squares" style={styles.backLink}>
+          ← Back to squares
+        </Link>
+
+        <Link href={`/s/${game.slug}`} target="_blank" style={styles.publicLink}>
+          View campaign page
+        </Link>
+      </section>
+
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.eyebrow}>Squares editor</div>
+
+          <div style={styles.heroTitleRow}>
+            <h1 style={styles.heroTitle}>{game.title}</h1>
+
+            <span style={{ ...styles.statusPill, ...statusStyle(game.status) }}>
+              {game.status}
+            </span>
+          </div>
+
+          <p style={styles.heroSlug}>/s/{game.slug}</p>
+
+          {game.description ? (
+            <p style={styles.heroDescription}>{game.description}</p>
+          ) : (
+            <p style={styles.heroDescriptionMuted}>No description added yet.</p>
+          )}
         </div>
 
-        <div style={styles.nav}>
-          <Link href="/admin" style={styles.navButton}>
-            ← Dashboard
-          </Link>
-
-          <Link href="/admin/raffles" style={styles.navButton}>
-            Raffles
-          </Link>
-
-          <Link href="/admin/squares" style={styles.navActive}>
-            Squares
-          </Link>
-
-          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
-            Public page
-          </Link>
+        <div style={styles.heroImageWrap}>
+          {game.image_url ? (
+            <img src={game.image_url} alt={game.title} style={styles.heroImage} />
+          ) : (
+            <div style={styles.heroImageEmpty}>🔲</div>
+          )}
         </div>
       </section>
 
-      {/* SUMMARY */}
-      <section style={styles.stats}>
-        <Stat label="Status" value={game.status} />
-        <Stat label="Squares" value={game.total_squares} />
-        <Stat
-          label="Price"
-          value={`${moneyFromCents(game.price_per_square_cents)} ${currency}`}
-        />
+      <section style={styles.summaryGrid}>
+        <SummaryCard label="Price" value={formatMoney(game.price_per_square_cents, currency)} />
+        <SummaryCard label="Draw date" value={formatDrawDate(game.draw_at)} />
+        <SummaryCard label="Total squares" value={totalSquares} />
+        <SummaryCard label="Sold" value={soldSquares} />
+        <SummaryCard label="Remaining" value={remainingSquares} />
       </section>
 
-      <form action={`/api/admin/squares/${game.id}`} method="post">
-        {/* DETAILS */}
-        <section style={styles.card}>
-          <h2>Game details</h2>
-
-          <div style={styles.grid}>
-            <input
-              name="title"
-              defaultValue={game.title}
-              placeholder="Title"
-              style={styles.input}
-            />
-
-            <input
-              name="slug"
-              defaultValue={game.slug}
-              placeholder="Slug"
-              style={styles.input}
-            />
+      <section style={styles.progressCard}>
+        <div style={styles.progressHeader}>
+          <div>
+            <strong style={{ color: "#0f172a" }}>Sales progress</strong>
+            <div style={styles.mutedSmall}>
+              {soldSquares} sold from {totalSquares} squares
+            </div>
           </div>
 
-          <textarea
-            name="description"
-            defaultValue={game.description ?? ""}
-            placeholder="Description"
-            style={styles.textarea}
-          />
+          <div style={styles.progressPercent}>{progress}%</div>
+        </div>
 
-          <ImageUploadField currentImageUrl={game.image_url || ""} />
-        </section>
+        <div style={styles.progressTrack}>
+          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+        </div>
+      </section>
 
-        {/* SETUP */}
-        <section style={styles.card}>
-          <h2>Squares setup</h2>
+      <form action={`/api/admin/squares/${game.id}`} method="post" style={styles.form}>
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Edit squares game</h2>
+              <p style={styles.sectionDescription}>
+                Update the public details, image, pricing and draw settings.
+              </p>
+            </div>
 
-          <div style={styles.grid}>
-            <input
-              name="draw_at"
-              type="datetime-local"
-              defaultValue={formatDateTimeLocal(game.draw_at)}
-              style={styles.input}
+            <button type="submit" style={styles.submitButton}>
+              Save squares
+            </button>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Title">
+              <input name="title" defaultValue={game.title} required style={styles.input} />
+            </Field>
+
+            <Field label="Slug">
+              <input name="slug" defaultValue={game.slug} required style={styles.input} />
+            </Field>
+          </div>
+
+          <Field label="Description">
+            <textarea
+              name="description"
+              rows={4}
+              defaultValue={game.description ?? ""}
+              style={styles.textarea}
             />
+          </Field>
 
-            <input
-              name="total_squares"
-              type="number"
-              defaultValue={game.total_squares}
-              style={styles.input}
-            />
+          <div style={styles.mediaBox}>
+            <div>
+              <h3 style={styles.subTitle}>Squares image</h3>
+              <p style={styles.sectionDescription}>
+                Upload or replace the public image for this squares game.
+              </p>
+              <ImageUploadField currentImageUrl={game.image_url || ""} />
+            </div>
 
-            <input
-              name="price_per_square"
-              type="number"
-              step="0.01"
-              defaultValue={moneyFromCents(game.price_per_square_cents)}
-              style={styles.input}
-            />
-
-            <select name="currency" defaultValue={currency} style={styles.input}>
-              <option value="GBP">GBP</option>
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-            </select>
-
-            <select name="status" defaultValue={game.status} style={styles.input}>
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="closed">Closed</option>
-              <option value="drawn">Drawn</option>
-            </select>
+            <div style={styles.previewBox}>
+              {game.image_url ? (
+                <img src={game.image_url} alt={game.title} style={styles.previewImage} />
+              ) : (
+                <div style={styles.emptyPreview}>🔲</div>
+              )}
+            </div>
           </div>
         </section>
 
-        {/* PRIZES */}
-        <section style={styles.card}>
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Squares setup</h2>
+              <p style={styles.sectionDescription}>
+                Configure board size, pricing, draw date and status.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.threeColumn}>
+            <Field label="Draw date">
+              <input
+                name="draw_at"
+                type="datetime-local"
+                defaultValue={formatDateTimeLocal(game.draw_at)}
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Total squares">
+              <input
+                name="total_squares"
+                type="number"
+                min={1}
+                max={500}
+                defaultValue={game.total_squares}
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Price per square">
+              <input
+                name="price_per_square"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={moneyFromCents(game.price_per_square_cents)}
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Currency">
+              <select name="currency" defaultValue={currency} style={styles.input}>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
+
+            <Field label="Status">
+              <select name="status" defaultValue={game.status} style={styles.input}>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed</option>
+                <option value="drawn">Drawn</option>
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        <section style={styles.section}>
           <SquaresPrizeSettings initialPrizes={savedPrizes} />
         </section>
 
-        {/* AUTO DRAW */}
-        <section style={styles.card}>
-          <h2>Auto draw range</h2>
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Auto draw range</h2>
+              <p style={styles.sectionDescription}>
+                Choose which prize numbers the randomizer should draw. Example:
+                set from 6 to 999 to keep the top 5 prizes for a live draw.
+              </p>
+            </div>
+          </div>
 
-          <div style={styles.grid}>
-            <input
-              name="auto_draw_from_prize"
-              type="number"
-              defaultValue={config.auto_draw_from_prize || 1}
-              placeholder="From"
-              style={styles.input}
-            />
+          <div style={styles.twoColumn}>
+            <Field label="Auto draw from prize number">
+              <input
+                name="auto_draw_from_prize"
+                type="number"
+                min={1}
+                defaultValue={Number(config.auto_draw_from_prize || 1)}
+                placeholder="6"
+                style={styles.input}
+              />
+            </Field>
 
-            <input
-              name="auto_draw_to_prize"
-              type="number"
-              defaultValue={config.auto_draw_to_prize || 999}
-              placeholder="To"
-              style={styles.input}
-            />
+            <Field label="Auto draw to prize number">
+              <input
+                name="auto_draw_to_prize"
+                type="number"
+                min={1}
+                defaultValue={Number(config.auto_draw_to_prize || 999)}
+                placeholder="999"
+                style={styles.input}
+              />
+            </Field>
           </div>
         </section>
 
-        <button type="submit" style={styles.save}>
-          Save
-        </button>
+        <section style={styles.submitBar}>
+          <div>
+            <strong style={{ color: "#0f172a" }}>Save changes</strong>
+            <div style={styles.mutedSmall}>
+              This updates the public squares page and admin values.
+            </div>
+          </div>
+
+          <button type="submit" style={styles.submitButton}>
+            Save squares
+          </button>
+        </section>
       </form>
 
-      {/* WINNERS */}
-      <section style={styles.card}>
-        <h2>Winners</h2>
+      <section style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>Winners</h2>
+            <p style={styles.sectionDescription}>
+              Draw or view winning squares for this game.
+            </p>
+          </div>
+        </div>
 
         {winners.length ? (
-          winners.map((w) => (
-            <div key={w.id} style={styles.winner}>
-              {w.prize_title} — #{w.square_number} —{" "}
-              {firstNameOnly(w.customer_name)}
-            </div>
-          ))
+          <div style={styles.winnerList}>
+            {winners.map((winner) => (
+              <div key={winner.id} style={styles.winnerCard}>
+                <div>
+                  <div style={styles.winnerLabel}>Prize</div>
+                  <div style={styles.winnerValue}>{winner.prize_title}</div>
+                </div>
+
+                <div>
+                  <div style={styles.winnerLabel}>Square</div>
+                  <div style={styles.winnerValue}>#{winner.square_number}</div>
+                </div>
+
+                <div>
+                  <div style={styles.winnerLabel}>Winner</div>
+                  <div style={styles.winnerValue}>
+                    {firstNameOnly(winner.customer_name)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <form action={`/api/admin/squares/${game.id}/draw`} method="post">
-            <button style={styles.draw}>Draw winners</button>
+            <button type="submit" style={styles.drawButton}>
+              Draw winners
+            </button>
           </form>
         )}
       </section>
@@ -218,137 +398,378 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   );
 }
 
-function Stat({ label, value }: any) {
+function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
-      <div style={styles.statValue}>{value}</div>
+    <div style={styles.summaryCard}>
+      <div style={styles.summaryLabel}>{label}</div>
+      <div style={styles.summaryValue}>{value}</div>
     </div>
   );
 }
 
-/* ================= STYLES ================= */
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: 1100,
+    maxWidth: 1180,
     margin: "0 auto",
-    padding: 24,
+    padding: "28px 16px 56px",
     background: "#f8fafc",
+    minHeight: "100vh",
   },
-
-  header: {
+  topBar: {
     display: "flex",
     justifyContent: "space-between",
-    marginBottom: 20,
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 16,
     flexWrap: "wrap",
   },
-
-  badge: {
-    fontSize: 12,
-    fontWeight: 900,
-    color: "#0369a1",
+  backLink: {
+    color: "#334155",
+    textDecoration: "none",
+    fontWeight: 800,
   },
-
-  title: {
-    margin: "4px 0",
-  },
-
-  slug: {
-    color: "#64748b",
-  },
-
-  nav: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-
-  navButton: {
+  publicLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    border: "1px solid #ddd",
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
   },
-
-  navActive: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#111",
-    color: "#fff",
-    textDecoration: "none",
-  },
-
-  stats: {
+  hero: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))",
-    gap: 10,
-    marginBottom: 20,
-  },
-
-  statCard: {
-    padding: 14,
-    borderRadius: 12,
-    background: "#fff",
-    border: "1px solid #eee",
-  },
-
-  statLabel: {
-    fontSize: 12,
-    color: "#64748b",
-  },
-
-  statValue: {
-    fontWeight: 900,
-  },
-
-  card: {
-    background: "#fff",
-    border: "1px solid #eee",
-    borderRadius: 14,
-    padding: 16,
+    gridTemplateColumns: "minmax(0, 1fr) 260px",
+    gap: 18,
+    alignItems: "stretch",
+    padding: 22,
+    borderRadius: 24,
+    background: "#0f172a",
+    color: "#ffffff",
     marginBottom: 16,
   },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
+  heroContent: {
+    minWidth: 0,
   },
-
-  input: {
-    padding: 10,
-    borderRadius: 8,
-    border: "1px solid #ddd",
+  eyebrow: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
   },
-
-  textarea: {
-    width: "100%",
-    padding: 10,
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    marginTop: 10,
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
-
-  save: {
-    padding: 12,
-    background: "#16a34a",
-    color: "#fff",
-    borderRadius: 10,
-    border: "none",
+  heroTitle: {
+    margin: 0,
+    fontSize: 34,
+    lineHeight: 1.08,
+    letterSpacing: "-0.04em",
+    wordBreak: "break-word",
+  },
+  statusPill: {
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
     fontWeight: 900,
   },
-
-  winner: {
-    padding: 10,
-    borderBottom: "1px solid #eee",
+  heroSlug: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: 700,
+    wordBreak: "break-word",
   },
-
-  draw: {
-    padding: 12,
-    background: "#2563eb",
-    color: "#fff",
-    borderRadius: 10,
+  heroDescription: {
+    margin: "12px 0 0",
+    color: "#e2e8f0",
+    lineHeight: 1.55,
+    maxWidth: 720,
+  },
+  heroDescriptionMuted: {
+    margin: "12px 0 0",
+    color: "#94a3b8",
+    lineHeight: 1.55,
+  },
+  heroImageWrap: {
+    borderRadius: 18,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    minHeight: 180,
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  heroImageEmpty: {
+    height: "100%",
+    minHeight: 180,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 46,
+    color: "#94a3b8",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 900,
+    marginTop: 5,
+    wordBreak: "break-word",
+  },
+  progressCard: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  progressHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  progressPercent: {
+    color: "#166534",
+    fontWeight: 900,
+    fontSize: 18,
+  },
+  progressTrack: {
+    height: 10,
+    background: "#e2e8f0",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    background: "#16a34a",
+    borderRadius: 999,
+  },
+  form: {
+    display: "grid",
+    gap: 0,
+  },
+  section: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.02em",
+  },
+  sectionDescription: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  twoColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+    marginBottom: 12,
+  },
+  threeColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 12,
+  },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gap: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
+  },
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  emptyPreview: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    fontSize: 42,
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    marginBottom: 16,
+  },
+  submitButton: {
+    padding: "13px 20px",
     border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  winnerList: {
+    display: "grid",
+    gap: 10,
+  },
+  winnerCard: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) 120px minmax(0, 1fr)",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    alignItems: "start",
+  },
+  winnerLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+    marginBottom: 4,
+  },
+  winnerValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 900,
+    wordBreak: "break-word",
+  },
+  drawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
   },
 };
