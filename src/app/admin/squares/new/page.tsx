@@ -150,7 +150,7 @@ export default function NewSquaresGamePage() {
               </thead>
 
               <tbody>
-                {Array.from({ length: 5 }).map((_, index) => (
+                Array.from({ length: 20 }).map((_, index) => (
                   <tr key={index} style={trStyle}>
                     <td style={tdStyle}>
                       <input
