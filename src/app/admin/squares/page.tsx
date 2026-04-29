@@ -203,11 +203,8 @@ export default async function AdminSquaresListPage() {
                       />
 
                       <Detail label="Draw date" value={formatDrawDate(game.draw_at)} />
-
                       <Detail label="Total" value={total} />
-
                       <Detail label="Sold" value={sold} />
-
                       <Detail label="Remaining" value={remaining} />
                     </div>
 
@@ -241,6 +238,16 @@ export default async function AdminSquaresListPage() {
                       >
                         View campaign page
                       </a>
+
+                      <form
+                        action={`/api/admin/squares/${game.id}/delete`}
+                        method="post"
+                        style={styles.deleteForm}
+                      >
+                        <button type="submit" style={styles.deleteButton}>
+                          Delete
+                        </button>
+                      </form>
                     </div>
                   </div>
                 </div>
@@ -499,6 +506,18 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
   },
+  deleteForm: {
+    margin: 0,
+  },
+  deleteButton: {
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
   emptyCard: {
     padding: 24,
     borderRadius: 22,
@@ -508,4 +527,5 @@ const styles: Record<string, CSSProperties> = {
   muted: {
     color: "#64748b",
   },
+};
 };
