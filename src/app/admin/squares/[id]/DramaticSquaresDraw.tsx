@@ -14,54 +14,89 @@ type Props = {
   soldSquareOptions: SoldSquareOption[];
 };
 
+let audioCtx: AudioContext | null = null;
+
 function firstNameOnly(name?: string | null) {
   return name?.trim().split(/\s+/)[0] || "Winner";
 }
 
-function playTone(frequency: number, duration: number, volume = 0.08) {
-  try {
+function getAudio() {
+  if (!audioCtx) {
     const AudioContextClass =
       window.AudioContext || (window as any).webkitAudioContext;
+    audioCtx = new AudioContextClass();
+  }
 
-    const audioContext = new AudioContextClass();
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
+  return audioCtx;
+}
 
-    oscillator.type = "sine";
-    oscillator.frequency.value = frequency;
+function playDrumHit(volume = 0.12) {
+  try {
+    const ctx = getAudio();
+    const bufferSize = ctx.sampleRate * 0.08;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
 
+    for (let i = 0; i < bufferSize; i += 1) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+
+    const noise = ctx.createBufferSource();
+    const gain = ctx.createGain();
+
+    noise.buffer = buffer;
     gain.gain.value = volume;
-    gain.gain.exponentialRampToValueAtTime(
-      0.001,
-      audioContext.currentTime + duration,
-    );
 
-    oscillator.connect(gain);
-    gain.connect(audioContext.destination);
+    noise.connect(gain);
+    gain.connect(ctx.destination);
 
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + duration);
-
-    oscillator.onended = () => {
-      audioContext.close().catch(() => {});
-    };
+    noise.start();
   } catch {
-    // Browser blocked audio or unsupported device.
+    // Audio is optional. Some browsers/devices may block it.
   }
 }
 
 function playCountdownBeep() {
-  playTone(620, 0.12, 0.08);
+  playDrumHit(0.08);
 }
 
-function playRevealTick() {
-  playTone(180 + Math.random() * 120, 0.045, 0.035);
+function playRevealTick(speedFactor = 1) {
+  playDrumHit(0.04 * speedFactor);
 }
 
 function playWinnerChime() {
-  playTone(523.25, 0.16, 0.09);
-  window.setTimeout(() => playTone(659.25, 0.16, 0.09), 150);
-  window.setTimeout(() => playTone(783.99, 0.28, 0.1), 310);
+  try {
+    const ctx = getAudio();
+
+    function tone(freq: number, delayMs: number, duration = 0.4) {
+      window.setTimeout(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.frequency.value = freq;
+        osc.type = "triangle";
+
+        gain.gain.value = 0.12;
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          ctx.currentTime + duration,
+        );
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      }, delayMs);
+    }
+
+    tone(440, 0);
+    tone(660, 100);
+    tone(880, 200);
+    tone(1100, 300);
+  } catch {
+    // Audio is optional.
+  }
 }
 
 export default function DramaticSquaresDraw({
@@ -121,7 +156,10 @@ export default function DramaticSquaresDraw({
         soldSquareOptions[Math.floor(Math.random() * soldSquareOptions.length)];
 
       setSelectedSquare(random);
-      playRevealTick();
+
+      const speedFactor = ticks < 20 ? 0.6 : ticks < 35 ? 1 : 1.6;
+      playRevealTick(speedFactor);
+
       ticks += 1;
 
       if (ticks >= maxTicks) {
@@ -136,7 +174,7 @@ export default function DramaticSquaresDraw({
         setBurst(true);
         playWinnerChime();
 
-        window.setTimeout(() => setBurst(false), 1800);
+        window.setTimeout(() => setBurst(false), 2400);
       }
     }, ticks < 22 ? 70 : 120);
   }
@@ -188,16 +226,40 @@ export default function DramaticSquaresDraw({
 
           {burst ? (
             <div style={styles.confettiLayer}>
-              {Array.from({ length: isFullScreen ? 60 : 28 }).map((_, index) => (
-                <span
-                  key={index}
-                  style={{
-                    ...styles.confetti,
-                    left: `${(index * 37) % 100}%`,
-                    animationDelay: `${(index % 12) * 0.05}s`,
-                  }}
-                />
-              ))}
+              {Array.from({ length: isFullScreen ? 90 : 46 }).map((_, index) => {
+                const size = 6 + Math.random() * 10;
+                const left = Math.random() * 100;
+                const delay = Math.random() * 0.7;
+                const duration = 1.7 + Math.random() * 1.5;
+                const rotate = Math.random() * 360;
+                const drift = -90 + Math.random() * 180;
+                const colors = [
+                  "#facc15",
+                  "#22c55e",
+                  "#38bdf8",
+                  "#f472b6",
+                  "#fb923c",
+                  "#a78bfa",
+                  "#ffffff",
+                ];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+
+                return (
+                  <span
+                    key={index}
+                    style={{
+                      ...styles.confetti,
+                      left: `${left}%`,
+                      width: size,
+                      height: size * 1.6,
+                      background: color,
+                      transform: `translateX(0px) rotate(${rotate}deg)`,
+                      animation: `confettiFall ${duration}s ease-out ${delay}s forwards`,
+                      ["--drift" as any]: `${drift}px`,
+                    }}
+                  />
+                );
+              })}
             </div>
           ) : null}
 
@@ -305,13 +367,20 @@ export default function DramaticSquaresDraw({
       </div>
 
       <style jsx>{`
-        @keyframes fall {
+        @keyframes confettiFall {
           0% {
-            transform: translateY(-40px) rotate(0deg);
+            transform: translate3d(0, -40px, 0) rotate(0deg);
             opacity: 1;
           }
+
+          45% {
+            transform: translate3d(calc(var(--drift) * 0.45), 220px, 0)
+              rotate(220deg);
+            opacity: 0.95;
+          }
+
           100% {
-            transform: translateY(520px) rotate(540deg);
+            transform: translate3d(var(--drift), 680px, 0) rotate(620deg);
             opacity: 0;
           }
         }
@@ -566,11 +635,9 @@ const styles: Record<string, CSSProperties> = {
   },
   confetti: {
     position: "absolute",
-    top: -20,
-    width: 9,
-    height: 16,
+    top: -28,
     borderRadius: 3,
-    background: "#facc15",
-    animation: "fall 1.8s ease-out forwards",
+    opacity: 0.92,
+    boxShadow: "0 0 10px rgba(255,255,255,0.2)",
   },
 };
