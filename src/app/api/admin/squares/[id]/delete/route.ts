@@ -24,9 +24,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const game = await getSquaresGameById(id);
 
     if (!game) {
-      return NextResponse.redirect(new URL("/admin/squares", request.url), {
-        status: 303,
-      });
+      return NextResponse.redirect(
+        new URL("/admin/squares", request.url),
+        { status: 303 },
+      );
     }
 
     if (game.tenant_slug !== tenantSlug) {
@@ -43,9 +44,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       [id, tenantSlug],
     );
 
-    return NextResponse.redirect(new URL("/admin/squares", request.url), {
-      status: 303,
-    });
+    return NextResponse.redirect(
+      new URL("/admin/squares", request.url),
+      { status: 303 },
+    );
   } catch (error) {
     console.error("Delete squares game failed:", error);
 
@@ -53,5 +55,5 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { ok: false, error: "Delete failed" },
       { status: 500 },
     );
-  
+  }
 }
