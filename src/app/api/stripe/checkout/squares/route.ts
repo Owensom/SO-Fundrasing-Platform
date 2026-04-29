@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const quantity = Array.isArray(reservation.squares)
-      ? reservation.squares.length
-      : 0;
+    const squares = Array.isArray(reservation.squares)
+      ? reservation.squares.map((square) => Number(square)).filter(Number.isFinite)
+      : [];
+
+    const quantity = squares.length;
 
     if (quantity <= 0) {
       return NextResponse.json(
@@ -75,12 +77,15 @@ export async function POST(req: NextRequest) {
     }
 
     const baseAmount = pricePerSquareCents * quantity;
-    const fee = coverFees ? Math.round(baseAmount * 0.1) : 0;
-    const totalAmount = baseAmount + fee;
+    const platformFeeCents = coverFees ? Math.round(baseAmount * 0.1) : 0;
+    const totalAmount = baseAmount + platformFeeCents;
+    const netAmountCents = baseAmount;
 
     const origin = req.nextUrl.origin;
     const successUrl = `${origin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${origin}/s/${game.slug}`;
+
+    const squaresJson = JSON.stringify(squares);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -91,7 +96,7 @@ export async function POST(req: NextRequest) {
           price_data: {
             currency: String(game.currency || "GBP").toLowerCase(),
             product_data: {
-              name: game.title,
+              name: game.title || "Squares Game",
               description: `${quantity} square${quantity === 1 ? "" : "s"}`,
             },
             unit_amount: totalAmount,
@@ -105,12 +110,20 @@ export async function POST(req: NextRequest) {
 
       metadata: {
         type: "squares",
-        squares_game_id: game.id,
         game_id: game.id,
+        squares_game_id: game.id,
+        game_title: game.title || "Squares Game",
         tenant_slug: game.tenant_slug,
         reservation_token: reservationToken,
         quantity: String(quantity),
-        squares: JSON.stringify(reservation.squares ?? []),
+        platform_fee_cents: String(platformFeeCents),
+        net_amount_cents: String(netAmountCents),
+
+        // Important: webhook currently reads this exact key.
+        squares_json: squaresJson,
+
+        // Keep old key too, harmless backward compatibility.
+        squares: squaresJson,
       },
     });
 
@@ -126,7 +139,7 @@ export async function POST(req: NextRequest) {
     console.error("Stripe squares checkout error:", err);
 
     return NextResponse.json(
-      { ok: false, error: err.message || "Checkout failed" },
+      { ok: false, error: err?.message || "Checkout failed" },
       { status: 500 },
     );
   }
