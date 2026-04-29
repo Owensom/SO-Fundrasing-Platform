@@ -76,6 +76,7 @@ export default function DramaticSquaresDraw({
   const [hasRevealed, setHasRevealed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [burst, setBurst] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   const canDraw = soldSquareOptions.length > 0 && Number(prizeNumber) > 0;
 
@@ -85,7 +86,7 @@ export default function DramaticSquaresDraw({
   }, [selectedSquare]);
 
   function startReveal() {
-    if (!canDraw || isRevealing) return;
+    if (!canDraw || isRevealing || countdown !== null) return;
 
     setSelectedSquare(null);
     setHasRevealed(false);
@@ -141,134 +142,167 @@ export default function DramaticSquaresDraw({
   }
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.header}>
-        <div>
-          <div style={styles.kicker}>Live winner experience</div>
-          <h3 style={styles.title}>Dramatic live draw</h3>
-          <p style={styles.description}>
-            Enter the prize number, reveal the winner, then save the result.
-          </p>
+    <div style={isFullScreen ? styles.fullScreenShell : styles.panel}>
+      <div style={isFullScreen ? styles.fullScreenInner : undefined}>
+        <div style={styles.header}>
+          <div>
+            <div style={styles.kicker}>Live winner experience</div>
+            <h3 style={isFullScreen ? styles.fullScreenTitle : styles.title}>
+              Dramatic live draw
+            </h3>
+            <p style={styles.description}>
+              Enter the prize number, reveal the winner, then save the result.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsFullScreen((value) => !value)}
+            style={styles.fullScreenButton}
+          >
+            {isFullScreen ? "Exit full screen" : "Full screen"}
+          </button>
         </div>
-      </div>
 
-      <label style={styles.field}>
-        <span style={styles.label}>Prize number</span>
-        <input
-          type="number"
-          min={1}
-          value={prizeNumber}
-          onChange={(event) => {
-            setPrizeNumber(event.target.value);
-            setSelectedSquare(null);
-            setHasRevealed(false);
-            setBurst(false);
-          }}
-          placeholder="1"
-          style={styles.input}
-        />
-      </label>
+        <label style={styles.field}>
+          <span style={styles.label}>Prize number</span>
+          <input
+            type="number"
+            min={1}
+            value={prizeNumber}
+            onChange={(event) => {
+              setPrizeNumber(event.target.value);
+              setSelectedSquare(null);
+              setHasRevealed(false);
+              setBurst(false);
+            }}
+            placeholder="1"
+            style={styles.input}
+          />
+        </label>
 
-      <div style={styles.stage}>
-        <div style={styles.stageGlow} />
-        <div style={styles.spotlightLeft} />
-        <div style={styles.spotlightRight} />
+        <div style={isFullScreen ? styles.fullScreenStage : styles.stage}>
+          <div style={styles.stageGlow} />
+          <div style={styles.spotlightLeft} />
+          <div style={styles.spotlightRight} />
 
-        {burst ? (
-          <div style={styles.confettiLayer}>
-            {Array.from({ length: 28 }).map((_, index) => (
-              <span
-                key={index}
-                style={{
-                  ...styles.confetti,
-                  left: `${(index * 37) % 100}%`,
-                  animationDelay: `${(index % 9) * 0.06}s`,
-                }}
-              />
-            ))}
-          </div>
-        ) : null}
+          {burst ? (
+            <div style={styles.confettiLayer}>
+              {Array.from({ length: isFullScreen ? 60 : 28 }).map((_, index) => (
+                <span
+                  key={index}
+                  style={{
+                    ...styles.confetti,
+                    left: `${(index * 37) % 100}%`,
+                    animationDelay: `${(index % 12) * 0.05}s`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
 
-        <div style={styles.stageContent}>
-          <div style={styles.stageEyebrow}>
-            {countdown
-              ? "Get ready"
-              : isRevealing
-                ? "Drawing now"
-                : hasRevealed
-                  ? "Winner revealed"
-                  : "Ready to draw"}
-          </div>
+          <div
+            style={
+              isFullScreen ? styles.fullScreenStageContent : styles.stageContent
+            }
+          >
+            <div style={styles.stageEyebrow}>
+              {countdown
+                ? "Get ready"
+                : isRevealing
+                  ? "Drawing now"
+                  : hasRevealed
+                    ? "Winner revealed"
+                    : "Ready to draw"}
+            </div>
 
-          {countdown ? (
-            <div style={styles.countdown}>{countdown}</div>
-          ) : (
-            <>
+            {countdown ? (
               <div
-                style={{
-                  ...styles.bigNumber,
-                  transform: isRevealing ? "scale(1.08)" : "scale(1)",
-                }}
+                style={
+                  isFullScreen ? styles.fullScreenCountdown : styles.countdown
+                }
               >
-                {selectedSquare ? `#${selectedSquare.squareNumber}` : "?"}
+                {countdown}
               </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    ...(isFullScreen
+                      ? styles.fullScreenBigNumber
+                      : styles.bigNumber),
+                    transform: isRevealing ? "scale(1.08)" : "scale(1)",
+                  }}
+                >
+                  {selectedSquare ? `#${selectedSquare.squareNumber}` : "?"}
+                </div>
 
-              <div style={styles.winnerName}>{displayName}</div>
+                <div
+                  style={
+                    isFullScreen
+                      ? styles.fullScreenWinnerName
+                      : styles.winnerName
+                  }
+                >
+                  {displayName}
+                </div>
 
-              <div style={styles.prizeText}>
-                Prize {Number(prizeNumber) > 0 ? prizeNumber : "—"}
-              </div>
-            </>
-          )}
+                <div style={styles.prizeText}>
+                  Prize {Number(prizeNumber) > 0 ? prizeNumber : "—"}
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={startReveal}
-        disabled={!canDraw || isRevealing || countdown !== null}
-        style={{
-          ...styles.revealButton,
-          opacity: !canDraw || isRevealing || countdown !== null ? 0.55 : 1,
-          cursor:
-            !canDraw || isRevealing || countdown !== null
-              ? "not-allowed"
-              : "pointer",
-        }}
-      >
-        {countdown
-          ? "Starting..."
-          : isRevealing
-            ? "Revealing..."
-            : hasRevealed
-              ? "Reveal again"
-              : "Start dramatic reveal"}
-      </button>
-
-      <form
-        action={`/api/admin/squares/${gameId}/draw/manual`}
-        method="post"
-        style={styles.saveForm}
-      >
-        <input type="hidden" name="prize_number" value={prizeNumber} />
-        <input
-          type="hidden"
-          name="square_number"
-          value={selectedSquare?.squareNumber ?? ""}
-        />
 
         <button
-          type="submit"
-          disabled={!hasRevealed || !selectedSquare}
+          type="button"
+          onClick={startReveal}
+          disabled={!canDraw || isRevealing || countdown !== null}
           style={{
-            ...styles.saveButton,
-            opacity: !hasRevealed || !selectedSquare ? 0.55 : 1,
-            cursor: !hasRevealed || !selectedSquare ? "not-allowed" : "pointer",
+            ...styles.revealButton,
+            opacity: !canDraw || isRevealing || countdown !== null ? 0.55 : 1,
+            cursor:
+              !canDraw || isRevealing || countdown !== null
+                ? "not-allowed"
+                : "pointer",
           }}
         >
-          Save revealed winner
+          {countdown
+            ? "Starting..."
+            : isRevealing
+              ? "Revealing..."
+              : hasRevealed
+                ? "Reveal again"
+                : "Start dramatic reveal"}
         </button>
-      </form>
+
+        <form
+          action={`/api/admin/squares/${gameId}/draw/manual`}
+          method="post"
+          style={styles.saveForm}
+        >
+          <input type="hidden" name="prize_number" value={prizeNumber} />
+          <input
+            type="hidden"
+            name="square_number"
+            value={selectedSquare?.squareNumber ?? ""}
+          />
+
+          <button
+            type="submit"
+            disabled={!hasRevealed || !selectedSquare}
+            style={{
+              ...styles.saveButton,
+              opacity: !hasRevealed || !selectedSquare ? 0.55 : 1,
+              cursor:
+                !hasRevealed || !selectedSquare ? "not-allowed" : "pointer",
+            }}
+          >
+            Save revealed winner
+          </button>
+        </form>
+      </div>
 
       <style jsx>{`
         @keyframes fall {
@@ -277,7 +311,7 @@ export default function DramaticSquaresDraw({
             opacity: 1;
           }
           100% {
-            transform: translateY(300px) rotate(540deg);
+            transform: translateY(520px) rotate(540deg);
             opacity: 0;
           }
         }
@@ -297,10 +331,29 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     boxShadow: "0 24px 70px rgba(2,6,23,0.42)",
   },
+  fullScreenShell: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    padding: 22,
+    background:
+      "radial-gradient(circle at top, #1d4ed8 0%, #020617 46%, #000000 100%)",
+    color: "#ffffff",
+    overflowY: "auto",
+  },
+  fullScreenInner: {
+    maxWidth: 1280,
+    margin: "0 auto",
+    display: "grid",
+    gap: 16,
+    minHeight: "100%",
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
   kicker: {
     display: "inline-flex",
@@ -320,11 +373,26 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     letterSpacing: "-0.03em",
   },
+  fullScreenTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 42,
+    letterSpacing: "-0.05em",
+  },
   description: {
     margin: "6px 0 0",
     color: "#cbd5e1",
     fontSize: 14,
     lineHeight: 1.45,
+  },
+  fullScreenButton: {
+    padding: "11px 15px",
+    border: "1px solid rgba(255,255,255,0.2)",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.1)",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
   },
   field: {
     display: "grid",
@@ -354,6 +422,16 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at top, #2563eb 0%, #0f172a 42%, #020617 100%)",
     overflow: "hidden",
     border: "1px solid rgba(255,255,255,0.16)",
+  },
+  fullScreenStage: {
+    position: "relative",
+    minHeight: "calc(100vh - 260px)",
+    borderRadius: 34,
+    background:
+      "radial-gradient(circle at top, #2563eb 0%, #0f172a 42%, #020617 100%)",
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.18)",
+    boxShadow: "0 30px 120px rgba(0,0,0,0.5)",
   },
   stageGlow: {
     position: "absolute",
@@ -393,6 +471,16 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     padding: 24,
   },
+  fullScreenStageContent: {
+    position: "relative",
+    minHeight: "calc(100vh - 260px)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    padding: 32,
+  },
   stageEyebrow: {
     fontSize: 13,
     fontWeight: 950,
@@ -407,6 +495,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 1000,
     textShadow: "0 18px 42px rgba(0,0,0,0.5)",
   },
+  fullScreenCountdown: {
+    fontSize: "min(24vw, 220px)",
+    lineHeight: 1,
+    fontWeight: 1000,
+    textShadow: "0 24px 60px rgba(0,0,0,0.55)",
+  },
   bigNumber: {
     fontSize: 104,
     lineHeight: 1,
@@ -415,11 +509,25 @@ const styles: Record<string, CSSProperties> = {
     transition: "transform 110ms ease",
     textShadow: "0 14px 38px rgba(0,0,0,0.5)",
   },
+  fullScreenBigNumber: {
+    fontSize: "min(23vw, 220px)",
+    lineHeight: 1,
+    fontWeight: 1000,
+    letterSpacing: "-0.08em",
+    transition: "transform 110ms ease",
+    textShadow: "0 24px 70px rgba(0,0,0,0.58)",
+  },
   winnerName: {
     marginTop: 12,
     fontSize: 36,
     fontWeight: 950,
     letterSpacing: "-0.04em",
+  },
+  fullScreenWinnerName: {
+    marginTop: 14,
+    fontSize: "min(8vw, 82px)",
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
   },
   prizeText: {
     marginTop: 8,
