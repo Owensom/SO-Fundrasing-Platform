@@ -941,6 +941,15 @@ export default function PublicRafflePage({ slug }: Props) {
                 </div>
               ))}
             </div>
+            {raffle.prizes.length > 3 ? (
+  <button
+    type="button"
+    onClick={() => setShowAllPrizes((value) => !value)}
+    style={styles.showMoreButton}
+  >
+    {showAllPrizes ? "Hide prizes" : "Show all prizes"}
+  </button>
+) : null}
           </section>
         ) : null}
 
