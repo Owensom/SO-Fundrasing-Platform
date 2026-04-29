@@ -48,9 +48,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   const winners = await listSquaresWinners(game.id);
   const currency = game.currency || "GBP";
+  const config = (game.config_json ?? {}) as any;
 
-  const savedPrizes = Array.isArray(game.config_json?.prizes)
-    ? (game.config_json.prizes as Prize[])
+  const savedPrizes = Array.isArray(config.prizes)
+    ? (config.prizes as Prize[])
     : [];
 
   return (
@@ -201,6 +202,40 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
         <section style={styles.card}>
           <SquaresPrizeSettings initialPrizes={savedPrizes} />
+        </section>
+
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>Auto draw range</h2>
+          <p style={styles.helpText}>
+            Choose which prize numbers the randomizer should draw. Example: set
+            from 6 to 999 to keep the top 5 prizes for a live draw.
+          </p>
+
+          <div style={styles.grid}>
+            <label style={styles.field}>
+              <span style={styles.label}>Auto draw from prize number</span>
+              <input
+                name="auto_draw_from_prize"
+                type="number"
+                min={1}
+                defaultValue={Number(config.auto_draw_from_prize || 1)}
+                placeholder="6"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Auto draw to prize number</span>
+              <input
+                name="auto_draw_to_prize"
+                type="number"
+                min={1}
+                defaultValue={Number(config.auto_draw_to_prize || 999)}
+                placeholder="999"
+                style={styles.input}
+              />
+            </label>
+          </div>
         </section>
 
         <button type="submit" style={styles.save}>
@@ -355,6 +390,12 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 100,
     background: "#ffffff",
     color: "#111827",
+  },
+  helpText: {
+    color: "#64748b",
+    marginTop: 0,
+    marginBottom: 14,
+    lineHeight: 1.5,
   },
   save: {
     padding: 12,
