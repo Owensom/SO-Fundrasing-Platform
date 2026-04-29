@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   getSquaresGameById,
+  listSquaresSales,
   listSquaresWinners,
 } from "../../../../../api/_lib/squares-repo";
 import ImageUploadField from "@/components/ImageUploadField";
@@ -19,6 +20,12 @@ type Prize = {
   title?: string;
   name?: string;
   description?: string;
+};
+
+type SoldSquareOption = {
+  squareNumber: number;
+  customerName: string;
+  customerEmail: string;
 };
 
 function firstNameOnly(name?: string | null) {
@@ -104,6 +111,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   }
 
   const winners = await listSquaresWinners(game.id);
+  const sales = await listSquaresSales(game.id);
+
   const currency = game.currency || "GBP";
   const config = (game.config_json ?? {}) as any;
 
@@ -111,7 +120,25 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     ? (config.prizes as Prize[])
     : [];
 
-  const soldSquares = Array.isArray(config.sold) ? config.sold.length : 0;
+  const soldSquareOptions: SoldSquareOption[] = sales
+    .flatMap((sale: any) =>
+      Array.isArray(sale.squares)
+        ? sale.squares.map((squareNumber: number | string) => ({
+            squareNumber: Number(squareNumber),
+            customerName: String(sale.customer_name || "Supporter"),
+            customerEmail: String(sale.customer_email || ""),
+          }))
+        : [],
+    )
+    .filter(
+      (entry) =>
+        Number.isInteger(entry.squareNumber) &&
+        entry.squareNumber >= 1 &&
+        entry.squareNumber <= Number(game.total_squares || 0),
+    )
+    .sort((a, b) => a.squareNumber - b.squareNumber);
+
+  const soldSquares = soldSquareOptions.length;
   const totalSquares = Number(game.total_squares || 0);
   const remainingSquares = Math.max(totalSquares - soldSquares, 0);
   const progress = getProgressPercent(soldSquares, totalSquares);
@@ -352,7 +379,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           </button>
         </section>
       </form>
-            <section style={styles.section}>
+
+      <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <h2 style={styles.sectionTitle}>Winners</h2>
@@ -386,13 +414,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             ))}
           </div>
         ) : (
-          <div style={styles.noWinnersBox}>
-            No winners have been drawn yet.
-          </div>
+          <div style={styles.noWinnersBox}>No winners have been drawn yet.</div>
         )}
 
         <div style={styles.drawGrid}>
-          {/* AUTO DRAW */}
           <form
             action={`/api/admin/squares/${game.id}/draw/auto`}
             method="post"
@@ -408,7 +433,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             </button>
           </form>
 
-          {/* MANUAL DRAW */}
           <form
             action={`/api/admin/squares/${game.id}/draw/manual`}
             method="post"
@@ -416,35 +440,57 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           >
             <h3 style={styles.subTitle}>Manual live draw</h3>
             <p style={styles.sectionDescription}>
-              Enter a prize number and winning square number from your live draw.
+              Choose a sold square below, then save it against the prize number.
             </p>
 
-            <div style={styles.twoColumn}>
-              <Field label="Prize number">
-                <input
-                  name="prize_number"
-                  type="number"
-                  min={1}
-                  required
-                  placeholder="1"
-                  style={styles.input}
-                />
-              </Field>
+            <Field label="Prize number">
+              <input
+                name="prize_number"
+                type="number"
+                min={1}
+                required
+                placeholder="1"
+                style={styles.input}
+              />
+            </Field>
 
-              <Field label="Winning square number">
-                <input
-                  name="square_number"
-                  type="number"
-                  min={1}
-                  max={totalSquares}
-                  required
-                  placeholder="27"
-                  style={styles.input}
-                />
-              </Field>
+            <div>
+              <div style={styles.label}>Choose sold square</div>
+
+              {soldSquareOptions.length ? (
+                <div style={styles.soldSquareGrid}>
+                  {soldSquareOptions.map((entry) => (
+                    <label
+                      key={`${entry.squareNumber}-${entry.customerEmail}`}
+                      style={styles.soldSquareOption}
+                      title={`${entry.customerName}${entry.customerEmail ? ` — ${entry.customerEmail}` : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="square_number"
+                        value={entry.squareNumber}
+                        required
+                        style={styles.soldSquareRadio}
+                      />
+                      <span style={styles.soldSquareNumber}>#{entry.squareNumber}</span>
+                      <span style={styles.soldSquareName}>
+                        {firstNameOnly(entry.customerName)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div style={styles.noWinnersBox}>
+                  No sold squares are available for manual draw yet.
+                </div>
+              )}
             </div>
 
-            <button type="submit" style={styles.manualDrawButton}>
+            <button
+              type="submit"
+              style={styles.manualDrawButton}
+              disabled={!soldSquareOptions.length}
+            >
               Save manual winner
             </button>
           </form>
@@ -454,17 +500,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   );
 }
 
-/* =========================
-   COMPONENTS
-========================= */
-
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={styles.summaryCard}>
       <div style={styles.summaryLabel}>{label}</div>
@@ -487,10 +523,6 @@ function Field({
     </label>
   );
 }
-
-/* =========================
-   STYLES (FULL)
-========================= */
 
 const styles: Record<string, CSSProperties> = {
   page: {
@@ -537,7 +569,9 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     marginBottom: 16,
   },
-  heroContent: { minWidth: 0 },
+  heroContent: {
+    minWidth: 0,
+  },
   eyebrow: {
     display: "inline-flex",
     padding: "5px 9px",
@@ -719,6 +753,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
     fontWeight: 900,
+    marginBottom: 6,
   },
   input: {
     width: "100%",
@@ -731,7 +766,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxSizing: "border-box",
   },
-  textarea: {
+    textarea: {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 12,
@@ -871,5 +906,42 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
+  },
+  soldSquareGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(86px, 1fr))",
+    gap: 8,
+    maxHeight: 280,
+    overflowY: "auto",
+    padding: 10,
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  soldSquareOption: {
+    display: "grid",
+    gap: 4,
+    padding: "9px 8px",
+    borderRadius: 12,
+    background: "#f8fafc",
+    border: "1px solid #cbd5e1",
+    cursor: "pointer",
+    textAlign: "center",
+  },
+  soldSquareRadio: {
+    margin: "0 auto",
+  },
+  soldSquareNumber: {
+    color: "#0f172a",
+    fontWeight: 950,
+    fontSize: 14,
+  },
+  soldSquareName: {
+    color: "#64748b",
+    fontWeight: 800,
+    fontSize: 12,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 };
