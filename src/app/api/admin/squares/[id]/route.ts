@@ -3,9 +3,9 @@ import { getTenantSlugFromRequest } from "@/lib/tenant";
 import {
   getSquaresGameById,
   normalisePrizes,
-  updateSquaresGame,
   slugify,
-} from "../../../../../../../api/_lib/squares-repo";
+} from "../../../../../../api/_lib/squares-repo";
+import { query } from "@/lib/db";
 
 type RouteContext = {
   params: {
@@ -74,7 +74,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: true, item: game });
   } catch (error) {
     console.error("GET admin square failed:", error);
-
     return NextResponse.json(
       { ok: false, error: "Internal error" },
       { status: 500 },
@@ -114,25 +113,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const title = String(formData.get("title") ?? existing.title).trim();
     const rawSlug = String(formData.get("slug") ?? existing.slug).trim();
-    const slug = slugify(rawSlug || existing.slug);
+    const cleanSlug = slugify(rawSlug || existing.slug);
 
     const description = String(formData.get("description") ?? "").trim();
-    const image_url = String(formData.get("image_url") ?? "").trim();
+    const imageUrl = String(
+      formData.get("image_url") ?? existing.image_url ?? "",
+    ).trim();
 
-    const currency = String(formData.get("currency") ?? existing.currency ?? "GBP") as
-      | "GBP"
-      | "USD"
-      | "EUR";
+    const currency = String(
+      formData.get("currency") ?? existing.currency ?? "GBP",
+    );
 
-    const status = String(formData.get("status") ?? existing.status) as
-      | "draft"
-      | "published"
-      | "closed"
-      | "drawn";
+    const status = String(formData.get("status") ?? existing.status);
 
-    const total_squares = Math.min(
+    const totalSquares = Math.min(
       500,
-      Math.max(1, parseNumber(formData.get("total_squares"), existing.total_squares)),
+      Math.max(
+        1,
+        parseNumber(formData.get("total_squares"), existing.total_squares),
+      ),
     );
 
     const priceMajor = parseNumber(
@@ -140,140 +139,72 @@ export async function POST(request: NextRequest, context: RouteContext) {
       existing.price_per_square_cents / 100,
     );
 
-    const price_per_square_cents = Math.round(priceMajor * 100);
-
+    const pricePerSquareCents = Math.round(priceMajor * 100);
+    const drawAt = parseDrawAt(formData.get("draw_at"));
     const prizes = parsePrizeRows(formData);
 
     const currentConfig = existing.config_json ?? {};
 
-    const auto_draw_from_prize = Math.max(
+    const autoDrawFromPrize = Math.max(
       1,
       Math.floor(parseNumber(formData.get("auto_draw_from_prize"), 1)),
     );
 
-    const auto_draw_to_prize = Math.max(
-      auto_draw_from_prize,
+    const autoDrawToPrize = Math.max(
+      autoDrawFromPrize,
       Math.floor(parseNumber(formData.get("auto_draw_to_prize"), 999)),
     );
 
-    const updated = await updateSquaresGame(id, {
-      tenant_slug: tenantSlug,
-      title: title || existing.title,
-      slug: slug || existing.slug,
-      description,
-      image_url,
-      draw_at: parseDrawAt(formData.get("draw_at")),
-      currency,
-      status,
-      total_squares,
-      price_per_square_cents,
+    const config = {
+      ...currentConfig,
       prizes,
-      sold: currentConfig.sold ?? [],
-      reserved: currentConfig.reserved ?? [],
-      auto_draw_from_prize,
-      auto_draw_to_prize,
-    } as any);
+      sold: Array.isArray(currentConfig.sold) ? currentConfig.sold : [],
+      reserved: Array.isArray(currentConfig.reserved)
+        ? currentConfig.reserved
+        : [],
+      auto_draw_from_prize: autoDrawFromPrize,
+      auto_draw_to_prize: autoDrawToPrize,
+    };
 
-    if (!updated) {
-      return NextResponse.json(
-        { ok: false, error: "Update failed" },
-        { status: 500 },
-      );
-    }
+    await query(
+      `
+        update squares_games
+        set
+          slug = $2,
+          title = $3,
+          description = $4,
+          image_url = $5,
+          draw_at = $6,
+          status = $7,
+          currency = $8,
+          price_per_square_cents = $9,
+          total_squares = $10,
+          config_json = $11::jsonb,
+          updated_at = now()
+        where id = $1
+          and tenant_slug = $12
+      `,
+      [
+        existing.id,
+        cleanSlug || existing.slug,
+        title || existing.title,
+        description,
+        imageUrl,
+        drawAt,
+        status,
+        currency,
+        pricePerSquareCents,
+        totalSquares,
+        JSON.stringify(config),
+        tenantSlug,
+      ],
+    );
 
     return NextResponse.redirect(new URL(`/admin/squares/${id}`, request.url), {
       status: 303,
     });
   } catch (error) {
     console.error("POST admin square failed:", error);
-
-    return NextResponse.json(
-      { ok: false, error: "Internal error" },
-      { status: 500 },
-    );
-  }
-}
-
-export async function PUT(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const id = context.params.id;
-
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
-  }
-
-  try {
-    const existing = await getSquaresGameById(id);
-
-    if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: "Squares game not found" },
-        { status: 404 },
-      );
-    }
-
-    if (existing.tenant_slug !== tenantSlug) {
-      return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 },
-      );
-    }
-
-    const body = await request.json();
-    const currentConfig = existing.config_json ?? {};
-
-    const totalSquares =
-      body?.total_squares != null
-        ? Math.min(500, Math.max(1, Number(body.total_squares)))
-        : existing.total_squares;
-
-    const autoDrawFrom = Math.max(
-      1,
-      Math.floor(Number(body?.auto_draw_from_prize ?? currentConfig.auto_draw_from_prize ?? 1)),
-    );
-
-    const autoDrawTo = Math.max(
-      autoDrawFrom,
-      Math.floor(Number(body?.auto_draw_to_prize ?? currentConfig.auto_draw_to_prize ?? 999)),
-    );
-
-    const updated = await updateSquaresGame(id, {
-      tenant_slug: tenantSlug,
-      title: String(body?.title ?? existing.title),
-      slug: slugify(String(body?.slug ?? existing.slug)),
-      description: String(body?.description ?? existing.description ?? ""),
-      image_url: String(body?.image_url ?? existing.image_url ?? ""),
-      draw_at: body?.draw_at ?? existing.draw_at ?? null,
-      currency: body?.currency ?? existing.currency ?? "GBP",
-      status: body?.status ?? existing.status,
-      total_squares: totalSquares,
-      price_per_square_cents:
-        body?.price_per_square_cents != null
-          ? Number(body.price_per_square_cents)
-          : existing.price_per_square_cents,
-      prizes: Array.isArray(body?.prizes)
-        ? normalisePrizes(body.prizes)
-        : normalisePrizes(currentConfig.prizes ?? []),
-      sold: currentConfig.sold ?? [],
-      reserved: currentConfig.reserved ?? [],
-      auto_draw_from_prize: autoDrawFrom,
-      auto_draw_to_prize: autoDrawTo,
-    } as any);
-
-    if (!updated) {
-      return NextResponse.json(
-        { ok: false, error: "Update failed" },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({ ok: true, item: updated });
-  } catch (error) {
-    console.error("PUT admin square failed:", error);
-
     return NextResponse.json(
       { ok: false, error: "Internal error" },
       { status: 500 },
