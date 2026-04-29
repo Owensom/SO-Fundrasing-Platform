@@ -352,13 +352,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           </button>
         </section>
       </form>
-
-      <section style={styles.section}>
+      
+          <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <h2 style={styles.sectionTitle}>Winners</h2>
             <p style={styles.sectionDescription}>
-              Draw or view winning squares for this game.
+              Draw automatic winners or manually choose live draw winners.
             </p>
           </div>
         </div>
@@ -387,11 +387,62 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             ))}
           </div>
         ) : (
-          <form action={`/api/admin/squares/${game.id}/draw`} method="post">
-            <button type="submit" style={styles.drawButton}>
-              Draw winners
-            </button>
-          </form>
+          <div style={styles.drawGrid}>
+            <form
+              action={`/api/admin/squares/${game.id}/draw/auto`}
+              method="post"
+              style={styles.drawPanel}
+            >
+              <h3 style={styles.subTitle}>Automatic random draw</h3>
+              <p style={styles.sectionDescription}>
+                Randomly draw winners using the saved auto draw prize range.
+              </p>
+
+              <button type="submit" style={styles.drawButton}>
+                Auto draw winners
+              </button>
+            </form>
+
+            <form
+              action={`/api/admin/squares/${game.id}/draw/manual`}
+              method="post"
+              style={styles.drawPanel}
+            >
+              <h3 style={styles.subTitle}>Manual live draw</h3>
+              <p style={styles.sectionDescription}>
+                Enter a prize number and winning square number from your live draw.
+              </p>
+
+              <div style={styles.twoColumn}>
+                <Field label="Prize number">
+                  <input
+                    name="prize_number"
+                    type="number"
+                    min={1}
+                    required
+                    placeholder="1"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Winning square number">
+                  <input
+                    name="square_number"
+                    type="number"
+                    min={1}
+                    max={totalSquares}
+                    required
+                    placeholder="27"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <button type="submit" style={styles.manualDrawButton}>
+                Save manual winner
+              </button>
+            </form>
+          </div>
         )}
       </section>
     </main>
@@ -768,6 +819,28 @@ const styles: Record<string, CSSProperties> = {
     border: "none",
     borderRadius: 999,
     background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 14,
+  },
+  drawPanel: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+  },
+  manualDrawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#0f172a",
     color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
