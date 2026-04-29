@@ -462,7 +462,7 @@ export default function PublicRafflePage({ slug }: Props) {
   const [coverFees, setCoverFees] = useState(false);
   const [reservationMessage, setReservationMessage] = useState("");
   const [adminReturn, setAdminReturn] = useState("");
-
+  const [showAllPrizes, setShowAllPrizes] = useState(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setAdminReturn(getSafeAdminReturn(params.get("adminReturn")));
