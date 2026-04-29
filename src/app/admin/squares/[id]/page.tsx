@@ -24,8 +24,17 @@ function firstNameOnly(name?: string | null) {
   return name?.trim().split(/\s+/)[0] || "Winner";
 }
 
-function moneyFromCents(cents: number) {
+function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function formatDateTimeLocal(value: string | null | undefined) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toISOString().slice(0, 16);
 }
 
 export default async function AdminSquaresEditPage({ params }: PageProps) {
@@ -37,7 +46,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   }
 
   const winners = await listSquaresWinners(game.id);
-
   const currency = game.currency || "GBP";
 
   const savedPrizes = Array.isArray(game.config_json?.prizes)
@@ -49,9 +57,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
       ? savedPrizes
       : [{ title: "First prize", description: "" }];
 
+  const blankPrizeRows = Array.from({ length: 20 });
+
   return (
     <main style={styles.page}>
-      {/* ✅ DASHBOARD NAV (matches raffles) */}
       <section style={styles.topNav}>
         <Link href="/admin" style={styles.navButton}>
           ← Dashboard
@@ -76,7 +85,6 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* HERO */}
       <section style={styles.hero}>
         <div>
           <div style={styles.eyebrow}>Squares editor</div>
@@ -84,16 +92,11 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <p style={styles.slug}>/s/{game.slug}</p>
         </div>
 
-        <Link
-          href={`/s/${game.slug}`}
-          target="_blank"
-          style={styles.viewButton}
-        >
+        <Link href={`/s/${game.slug}`} target="_blank" style={styles.viewButton}>
           View public page ↗
         </Link>
       </section>
 
-      {/* SUMMARY */}
       <section style={styles.summary}>
         <div>
           <strong>Status:</strong> {game.status}
@@ -108,15 +111,15 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
       </section>
 
       <form action={`/api/admin/squares/${game.id}`} method="post">
-        {/* DETAILS */}
         <section style={styles.card}>
-          <h2>Game details</h2>
+          <h2 style={styles.sectionTitle}>Game details</h2>
 
           <div style={styles.grid}>
             <input
               name="title"
               defaultValue={game.title}
               placeholder="Title"
+              required
               style={styles.input}
             />
 
@@ -124,6 +127,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               name="slug"
               defaultValue={game.slug}
               placeholder="Slug"
+              required
               style={styles.input}
             />
           </div>
@@ -135,59 +139,81 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             style={styles.textarea}
           />
 
-          {/* ✅ IMAGE FIXED */}
-          <ImageUploadField currentImageUrl={game.image_url || ""} />
-        </section>
-
-        {/* SETUP */}
-        <section style={styles.card}>
-          <h2>Squares setup</h2>
-
-          <div style={styles.grid}>
-            <input
-              name="total_squares"
-              type="number"
-              defaultValue={game.total_squares}
-              style={styles.input}
-            />
-
-            <input
-              name="price_per_square"
-              type="number"
-              step="0.01"
-              defaultValue={moneyFromCents(game.price_per_square_cents)}
-              style={styles.input}
-            />
-
-            <select
-              name="currency"
-              defaultValue={currency}
-              style={styles.input}
-            >
-              <option value="GBP">GBP</option>
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-            </select>
-
-            <select
-              name="status"
-              defaultValue={game.status}
-              style={styles.input}
-            >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="closed">Closed</option>
-              <option value="drawn">Drawn</option>
-            </select>
+          <div style={{ marginTop: 12 }}>
+            <ImageUploadField currentImageUrl={game.image_url || ""} />
           </div>
         </section>
 
-        {/* PRIZES */}
         <section style={styles.card}>
-          <h2>Prizes</h2>
+          <h2 style={styles.sectionTitle}>Squares setup</h2>
+
+          <div style={styles.grid}>
+            <label style={styles.field}>
+              <span style={styles.label}>Draw date</span>
+              <input
+                name="draw_at"
+                type="datetime-local"
+                defaultValue={formatDateTimeLocal(game.draw_at)}
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Number of squares</span>
+              <input
+                name="total_squares"
+                type="number"
+                min={1}
+                max={500}
+                defaultValue={game.total_squares}
+                required
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Price per square</span>
+              <input
+                name="price_per_square"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={moneyFromCents(game.price_per_square_cents)}
+                required
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Currency</span>
+              <select name="currency" defaultValue={currency} style={styles.input}>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Status</span>
+              <select name="status" defaultValue={game.status} style={styles.input}>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed</option>
+                <option value="drawn">Drawn</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>Prizes</h2>
+          <p style={styles.helpText}>
+            Existing prizes are shown first. Use the blank rows below to add more
+            prizes. Blank rows are ignored when saved.
+          </p>
 
           {prizeRows.map((p, i) => (
-            <div key={i} style={styles.grid}>
+            <div key={`saved-${i}`} style={styles.grid}>
               <input
                 name="prize_title"
                 defaultValue={p.title || p.name || ""}
@@ -203,6 +229,22 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               />
             </div>
           ))}
+
+          {blankPrizeRows.map((_, i) => (
+            <div key={`blank-${i}`} style={styles.grid}>
+              <input
+                name="prize_title"
+                placeholder={`Additional prize ${prizeRows.length + i + 1}`}
+                style={styles.input}
+              />
+
+              <input
+                name="prize_description"
+                placeholder="Description"
+                style={styles.input}
+              />
+            </div>
+          ))}
         </section>
 
         <button type="submit" style={styles.save}>
@@ -210,9 +252,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </button>
       </form>
 
-      {/* WINNERS */}
       <section style={styles.card}>
-        <h2>Winners</h2>
+        <h2 style={styles.sectionTitle}>Winners</h2>
 
         {winners.length ? (
           winners.map((w) => (
@@ -223,7 +264,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           ))
         ) : (
           <form action={`/api/admin/squares/${game.id}/draw`} method="post">
-            <button style={styles.draw}>Draw winners</button>
+            <button type="submit" style={styles.draw}>
+              Draw winners
+            </button>
           </form>
         )}
       </section>
@@ -231,32 +274,42 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   );
 }
 
-/* ================= STYLES ================= */
-
 const styles: Record<string, CSSProperties> = {
   page: { maxWidth: 1100, margin: "40px auto", padding: 20 },
 
   topNav: {
     display: "flex",
     justifyContent: "space-between",
+    gap: 12,
     marginBottom: 20,
+    flexWrap: "wrap",
   },
 
-  navRight: { display: "flex", gap: 10 },
+  navRight: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
 
-  navButton: { fontWeight: 800, textDecoration: "none" },
+  navButton: {
+    fontWeight: 800,
+    textDecoration: "none",
+    color: "#111827",
+  },
 
   navGhost: {
     padding: "8px 12px",
     border: "1px solid #ddd",
     borderRadius: 8,
     textDecoration: "none",
+    color: "#111827",
+    background: "#ffffff",
   },
 
   navActive: {
     padding: "8px 12px",
     borderRadius: 8,
-    background: "#111",
+    background: "#111827",
     color: "#fff",
     textDecoration: "none",
   },
@@ -273,53 +326,88 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     display: "flex",
     justifyContent: "space-between",
+    gap: 16,
     marginBottom: 20,
+    flexWrap: "wrap",
   },
 
-  eyebrow: { fontSize: 12, color: "#666" },
-  title: { margin: 0 },
-  slug: { color: "#666" },
+  eyebrow: { fontSize: 12, color: "#666", fontWeight: 800 },
+  title: { margin: 0, color: "#0f172a" },
+  slug: { color: "#666", margin: "6px 0 0" },
 
   viewButton: {
     padding: "10px 14px",
-    background: "#111",
+    background: "#111827",
     color: "#fff",
     borderRadius: 8,
     textDecoration: "none",
+    height: "fit-content",
   },
 
   summary: {
     display: "flex",
     gap: 20,
     marginBottom: 20,
+    flexWrap: "wrap",
   },
 
   card: {
-    border: "1px solid #eee",
+    border: "1px solid #e5e7eb",
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
+    background: "#ffffff",
+  },
+
+  sectionTitle: {
+    marginTop: 0,
+    color: "#0f172a",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 10,
     marginBottom: 10,
   },
 
+  field: {
+    display: "grid",
+    gap: 6,
+  },
+
+  label: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#334155",
+  },
+
   input: {
+    width: "100%",
+    boxSizing: "border-box",
     padding: 10,
     borderRadius: 8,
     border: "1px solid #ddd",
+    background: "#ffffff",
+    color: "#111827",
   },
 
   textarea: {
     width: "100%",
+    boxSizing: "border-box",
     padding: 10,
     borderRadius: 8,
     border: "1px solid #ddd",
     marginBottom: 10,
+    minHeight: 100,
+    background: "#ffffff",
+    color: "#111827",
+  },
+
+  helpText: {
+    color: "#64748b",
+    marginTop: 0,
+    marginBottom: 14,
   },
 
   save: {
@@ -329,6 +417,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 10,
     border: "none",
     fontWeight: 800,
+    cursor: "pointer",
+    marginBottom: 20,
   },
 
   winner: {
@@ -342,5 +432,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#fff",
     borderRadius: 10,
     border: "none",
+    cursor: "pointer",
   },
+};
 };
