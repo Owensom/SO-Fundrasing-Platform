@@ -602,3 +602,10 @@ export async function listEventOrderItems(
     [orderId],
   );
 }
+export async function deleteEvent(id: string): Promise<void> {
+  await query(`delete from event_order_items where event_id = $1`, [id]);
+  await query(`delete from event_orders where event_id = $1`, [id]);
+  await query(`delete from event_seats where event_id = $1`, [id]);
+  await query(`delete from event_ticket_types where event_id = $1`, [id]);
+  await query(`delete from events where id = $1`, [id]);
+}
