@@ -143,8 +143,8 @@ export async function POST(request: NextRequest) {
           r.raffle_id,
           r.ticket_number,
           coalesce(nullif(r.colour, ''), 'default'),
-          r.buyer_name,
-          r.buyer_email,
+          coalesce(r.buyer_name, $7),
+          coalesce(r.buyer_email, $8),
           $3,
           $4,
           r.reservation_token,
@@ -173,6 +173,8 @@ export async function POST(request: NextRequest) {
           grossAmountCents,
           paymentIntentId,
           session.id,
+          name,
+          email,
         ],
       );
 
