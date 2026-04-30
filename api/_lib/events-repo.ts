@@ -46,6 +46,7 @@ export type EventItem = {
   currency: string;
   event_type: EventType;
   status: EventStatus;
+  capacity: number | null;
   created_at: string;
   updated_at: string;
   ticket_types?: EventTicketType[];
@@ -89,6 +90,7 @@ export type CreateEventInput = {
   currency?: string;
   eventType?: EventType;
   status?: EventStatus;
+  capacity?: number | null;
 };
 
 export type UpdateEventInput = {
@@ -102,6 +104,7 @@ export type UpdateEventInput = {
   currency?: string;
   eventType?: EventType;
   status?: EventStatus;
+  capacity?: number | null;
 };
 
 function normaliseEventType(value: string | null | undefined): EventType {
@@ -223,9 +226,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       ends_at,
       currency,
       event_type,
-      status
+      status,
+      capacity
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
     returning *
     `,
     [
@@ -240,6 +244,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       input.currency || "GBP",
       normaliseEventType(input.eventType),
       normaliseStatus(input.status),
+      input.capacity ?? null,
     ],
   );
 
@@ -271,6 +276,7 @@ export async function updateEvent(
       currency = $9,
       event_type = $10,
       status = $11,
+      capacity = $12,
       updated_at = now()
     where id = $1
     returning *
@@ -287,20 +293,10 @@ export async function updateEvent(
       input.currency ?? existing.currency,
       normaliseEventType(input.eventType ?? existing.event_type),
       normaliseStatus(input.status ?? existing.status),
+      input.capacity ?? existing.capacity,
     ],
   );
 }
-
-export async function deleteEvent(id: string): Promise<void> {
-  await query(
-    `
-    delete from events
-    where id = $1
-    `,
-    [id],
-  );
-}
-
 /* =========================
    TICKET TYPES
 ========================= */
@@ -327,8 +323,8 @@ export async function createEventTicketType(input: {
   capacity?: number | null;
   sortOrder?: number;
   isActive?: boolean;
-}): Promise<EventTicketType> {
-  const created = await queryOne<EventTicketType>(
+}) {
+  return queryOne<EventTicketType>(
     `
     insert into event_ticket_types (
       event_id,
@@ -352,93 +348,59 @@ export async function createEventTicketType(input: {
       input.isActive ?? true,
     ],
   );
-
-  if (!created) {
-    throw new Error("Failed to create event ticket type");
-  }
-
-  return created;
 }
 
 export async function updateEventTicketType(
   id: string,
   input: {
-    name: string;
+    name?: string;
     description?: string | null;
-    price: number;
+    price?: number;
     capacity?: number | null;
     sortOrder?: number;
     isActive?: boolean;
   },
-): Promise<EventTicketType | null> {
+) {
   return queryOne<EventTicketType>(
     `
     update event_ticket_types
     set
-      name = $2,
-      description = $3,
-      price = $4,
-      capacity = $5,
-      sort_order = $6,
-      is_active = $7
+      name = coalesce($2, name),
+      description = coalesce($3, description),
+      price = coalesce($4, price),
+      capacity = coalesce($5, capacity),
+      sort_order = coalesce($6, sort_order),
+      is_active = coalesce($7, is_active)
     where id = $1
     returning *
     `,
     [
       id,
       input.name,
-      input.description ?? null,
+      input.description,
       input.price,
-      input.capacity ?? null,
-      input.sortOrder ?? 0,
-      input.isActive ?? true,
+      input.capacity,
+      input.sortOrder,
+      input.isActive,
     ],
   );
 }
 
-export async function deleteEventTicketType(id: string): Promise<void> {
-  await query(
-    `
-    delete from event_ticket_types
-    where id = $1
-    `,
-    [id],
-  );
+export async function deleteEventTicketType(id: string) {
+  return query(`delete from event_ticket_types where id = $1`, [id]);
 }
 
-export async function deleteEventTicketTypes(eventId: string): Promise<void> {
-  await query(
-    `
-    delete from event_ticket_types
-    where event_id = $1
-    `,
-    [eventId],
-  );
+export async function deleteEventTicketTypes(eventId: string) {
+  return query(`delete from event_ticket_types where event_id = $1`, [
+    eventId,
+  ]);
 }
 
 /* =========================
-   SEATS / TABLE SEATS
+   SEATS / TABLES
 ========================= */
 
-export async function listEventSeats(eventId: string): Promise<EventSeat[]> {
-  return query<EventSeat>(
-    `
-    select *
-    from event_seats
-    where event_id = $1
-    order by
-      nullif(table_number, '')::int asc nulls last,
-      table_number asc nulls last,
-      row_label asc nulls last,
-      nullif(seat_number, '')::int asc nulls last,
-      seat_number asc nulls last,
-      created_at asc
-    `,
-    [eventId],
-  );
-}
-
-export async function listAvailableEventSeats(
+export async function listEventSeats(
   eventId: string,
 ): Promise<EventSeat[]> {
   return query<EventSeat>(
@@ -446,14 +408,11 @@ export async function listAvailableEventSeats(
     select *
     from event_seats
     where event_id = $1
-      and status = 'available'
     order by
-      nullif(table_number, '')::int asc nulls last,
-      table_number asc nulls last,
-      row_label asc nulls last,
-      nullif(seat_number, '')::int asc nulls last,
-      seat_number asc nulls last,
-      created_at asc
+      coalesce(section, ''),
+      coalesce(row_label, ''),
+      coalesce(table_number, ''),
+      coalesce(seat_number, '')
     `,
     [eventId],
   );
@@ -467,8 +426,8 @@ export async function createEventSeat(input: {
   seatNumber?: string | null;
   tableNumber?: string | null;
   status?: EventSeatStatus;
-}): Promise<EventSeat> {
-  const created = await queryOne<EventSeat>(
+}) {
+  return queryOne<EventSeat>(
     `
     insert into event_seats (
       event_id,
@@ -492,12 +451,6 @@ export async function createEventSeat(input: {
       normaliseSeatStatus(input.status),
     ],
   );
-
-  if (!created) {
-    throw new Error("Failed to create event seat");
-  }
-
-  return created;
 }
 
 export async function updateEventSeat(
@@ -512,254 +465,51 @@ export async function updateEventSeat(
     customerName?: string | null;
     customerEmail?: string | null;
   },
-): Promise<EventSeat | null> {
-  const existing = await queryOne<EventSeat>(
-    `
-    select *
-    from event_seats
-    where id = $1
-    limit 1
-    `,
-    [id],
-  );
-
-  if (!existing) return null;
-
+) {
   return queryOne<EventSeat>(
     `
     update event_seats
     set
-      ticket_type_id = $2,
-      section = $3,
-      row_label = $4,
-      seat_number = $5,
-      table_number = $6,
-      status = $7,
-      customer_name = $8,
-      customer_email = $9,
+      ticket_type_id = coalesce($2, ticket_type_id),
+      section = coalesce($3, section),
+      row_label = coalesce($4, row_label),
+      seat_number = coalesce($5, seat_number),
+      table_number = coalesce($6, table_number),
+      status = coalesce($7, status),
+      customer_name = coalesce($8, customer_name),
+      customer_email = coalesce($9, customer_email),
       updated_at = now()
     where id = $1
     returning *
     `,
     [
       id,
-      input.ticketTypeId ?? existing.ticket_type_id,
-      input.section ?? existing.section,
-      input.rowLabel ?? existing.row_label,
-      input.seatNumber ?? existing.seat_number,
-      input.tableNumber ?? existing.table_number,
-      normaliseSeatStatus(input.status ?? existing.status),
-      input.customerName ?? existing.customer_name,
-      input.customerEmail ?? existing.customer_email,
+      input.ticketTypeId,
+      input.section,
+      input.rowLabel,
+      input.seatNumber,
+      input.tableNumber,
+      input.status,
+      input.customerName,
+      input.customerEmail,
     ],
   );
 }
 
-export async function deleteEventSeat(id: string): Promise<void> {
-  await query(
-    `
-    delete from event_seats
-    where id = $1
-    `,
-    [id],
-  );
+export async function deleteEventSeat(id: string) {
+  return query(`delete from event_seats where id = $1`, [id]);
 }
 
-export async function deleteEventSeats(eventId: string): Promise<void> {
-  await query(
-    `
-    delete from event_seats
-    where event_id = $1
-    `,
-    [eventId],
-  );
-}
-
-export async function reserveEventSeat(input: {
-  seatId: string;
-  stripeSessionId: string;
-  customerName?: string | null;
-  customerEmail?: string | null;
-}): Promise<EventSeat | null> {
-  return queryOne<EventSeat>(
-    `
-    update event_seats
-    set
-      status = 'reserved',
-      stripe_session_id = $2,
-      customer_name = $3,
-      customer_email = $4,
-      updated_at = now()
-    where id = $1
-      and status = 'available'
-    returning *
-    `,
-    [
-      input.seatId,
-      input.stripeSessionId,
-      input.customerName ?? null,
-      input.customerEmail ?? null,
-    ],
-  );
-}
-
-export async function markEventSeatSold(input: {
-  seatId: string;
-  orderId: string;
-  stripeSessionId: string;
-  customerName?: string | null;
-  customerEmail?: string | null;
-}): Promise<EventSeat | null> {
-  return queryOne<EventSeat>(
-    `
-    update event_seats
-    set
-      status = 'sold',
-      order_id = $2,
-      stripe_session_id = $3,
-      customer_name = $4,
-      customer_email = $5,
-      updated_at = now()
-    where id = $1
-    returning *
-    `,
-    [
-      input.seatId,
-      input.orderId,
-      input.stripeSessionId,
-      input.customerName ?? null,
-      input.customerEmail ?? null,
-    ],
-  );
+export async function deleteEventSeats(eventId: string) {
+  return query(`delete from event_seats where event_id = $1`, [eventId]);
 }
 
 /* =========================
-   ORDERS
+   EVENT DELETE
 ========================= */
 
-export async function createEventOrder(input: {
-  tenantSlug: string;
-  eventId: string;
-  stripeSessionId?: string | null;
-  customerName?: string | null;
-  customerEmail?: string | null;
-  amountTotal: number;
-  currency: string;
-  status?: string;
-}): Promise<EventOrder> {
-  const created = await queryOne<EventOrder>(
-    `
-    insert into event_orders (
-      tenant_slug,
-      event_id,
-      stripe_session_id,
-      customer_name,
-      customer_email,
-      amount_total,
-      currency,
-      status
-    )
-    values ($1,$2,$3,$4,$5,$6,$7,$8)
-    returning *
-    `,
-    [
-      input.tenantSlug,
-      input.eventId,
-      input.stripeSessionId ?? null,
-      input.customerName ?? null,
-      input.customerEmail ?? null,
-      input.amountTotal,
-      input.currency,
-      input.status ?? "pending",
-    ],
-  );
-
-  if (!created) {
-    throw new Error("Failed to create event order");
-  }
-
-  return created;
-}
-
-export async function getEventOrderByStripeSessionId(
-  stripeSessionId: string,
-): Promise<EventOrder | null> {
-  return queryOne<EventOrder>(
-    `
-    select *
-    from event_orders
-    where stripe_session_id = $1
-    limit 1
-    `,
-    [stripeSessionId],
-  );
-}
-
-export async function markEventOrderPaid(
-  stripeSessionId: string,
-): Promise<EventOrder | null> {
-  return queryOne<EventOrder>(
-    `
-    update event_orders
-    set status = 'paid'
-    where stripe_session_id = $1
-    returning *
-    `,
-    [stripeSessionId],
-  );
-}
-
-export async function createEventOrderItem(input: {
-  orderId: string;
-  eventId: string;
-  ticketTypeId?: string | null;
-  seatId?: string | null;
-  label: string;
-  quantity: number;
-  unitAmount: number;
-}): Promise<EventOrderItem> {
-  const created = await queryOne<EventOrderItem>(
-    `
-    insert into event_order_items (
-      order_id,
-      event_id,
-      ticket_type_id,
-      seat_id,
-      label,
-      quantity,
-      unit_amount
-    )
-    values ($1,$2,$3,$4,$5,$6,$7)
-    returning *
-    `,
-    [
-      input.orderId,
-      input.eventId,
-      input.ticketTypeId ?? null,
-      input.seatId ?? null,
-      input.label,
-      input.quantity,
-      input.unitAmount,
-    ],
-  );
-
-  if (!created) {
-    throw new Error("Failed to create event order item");
-  }
-
-  return created;
-}
-
-export async function listEventOrderItems(
-  orderId: string,
-): Promise<EventOrderItem[]> {
-  return query<EventOrderItem>(
-    `
-    select *
-    from event_order_items
-    where order_id = $1
-    order by created_at asc
-    `,
-    [orderId],
-  );
+export async function deleteEvent(id: string) {
+  await query(`delete from event_seats where event_id = $1`, [id]);
+  await query(`delete from event_ticket_types where event_id = $1`, [id]);
+  return query(`delete from events where id = $1`, [id]);
 }
