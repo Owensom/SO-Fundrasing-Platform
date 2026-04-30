@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getEventBySlug } from "@/api/_lib/events-repo";
+import { getEventBySlug } from "../../../../api/_lib/events-repo";
 
 type PageProps = {
   params: {
@@ -44,18 +44,16 @@ function seatLabel(seat: {
   }
 
   if (seat.row_label) {
-    return `${seat.section ? `${seat.section} · ` : ""}Row ${seat.row_label}, Seat ${
-      seat.seat_number || "?"
-    }`;
+    return `${seat.section ? `${seat.section} · ` : ""}Row ${
+      seat.row_label
+    }, Seat ${seat.seat_number || "?"}`;
   }
 
   return `Seat ${seat.seat_number || "?"}`;
 }
 
 export default async function PublicEventPage({ params }: PageProps) {
-  const headerStore = headers();
-  const tenantSlug = getTenantSlugFromHeaders(headerStore);
-
+  const tenantSlug = getTenantSlugFromHeaders(headers());
   const event = await getEventBySlug(tenantSlug, params.slug);
 
   if (!event || event.status !== "published") {
@@ -115,7 +113,9 @@ export default async function PublicEventPage({ params }: PageProps) {
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
                   Date & time
                 </p>
-                <p className="mt-1 text-lg font-black">{formatDate(event.starts_at)}</p>
+                <p className="mt-1 text-lg font-black">
+                  {formatDate(event.starts_at)}
+                </p>
               </div>
 
               <div className="rounded-2xl bg-slate-900 p-4">
@@ -159,14 +159,17 @@ export default async function PublicEventPage({ params }: PageProps) {
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div>
-                        <h3 className="text-xl font-black">{ticketType.name}</h3>
+                        <h3 className="text-xl font-black">
+                          {ticketType.name}
+                        </h3>
                         {ticketType.description && (
                           <p className="mt-2 text-sm text-slate-400">
                             {ticketType.description}
                           </p>
                         )}
                         <p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Capacity: {ticketType.capacity || "Available while stocks last"}
+                          Capacity:{" "}
+                          {ticketType.capacity || "Available while stocks last"}
                         </p>
                       </div>
 
