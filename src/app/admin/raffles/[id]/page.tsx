@@ -106,6 +106,7 @@ function formatDateTimeLocal(value: string | null | undefined) {
 
   return date.toISOString().slice(0, 16);
 }
+
 function formatDrawDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
@@ -117,7 +118,6 @@ function formatDrawDate(value: string | null | undefined) {
     timeStyle: "short",
   }).format(date);
 }
-
 function formatMoney(cents: number, currency: string) {
   try {
     return new Intl.NumberFormat("en-GB", {
@@ -179,6 +179,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
   const config = (raffle.config_json as any) ?? {};
   const imagePosition = normaliseImagePosition(config.image_position);
+
+  const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
+  const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
 
   const colours = Array.isArray(config.colours)
     ? config.colours.map(colourToText).filter(Boolean)
@@ -258,12 +261,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <div style={styles.heroTitleRow}>
             <h1 style={styles.heroTitle}>{raffle.title}</h1>
 
-            <div
-              style={{
-                ...styles.statusPill,
-                ...statusStyle,
-              }}
-            >
+            <div style={{ ...styles.statusPill, ...statusStyle }}>
               {raffle.status}
             </div>
           </div>
@@ -409,7 +407,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
           <div style={styles.twoColumn}>
             <Field label="Image focus">
-              <select name="image_position" defaultValue={imagePosition} style={styles.input}>
+              <select
+                name="image_position"
+                defaultValue={imagePosition}
+                style={styles.input}
+              >
                 {IMAGE_POSITIONS.map((position) => (
                   <option key={position.value} value={position.value}>
                     {position.label}
@@ -525,7 +527,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
               />
             </Field>
           </section>
-                    <section style={styles.innerPanel}>
+
+          <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
                 <h3 style={styles.subTitle}>Offers</h3>
@@ -580,6 +583,41 @@ export default async function AdminRafflePage({ params }: PageProps) {
               Leave unused rows blank. Save the raffle to apply changes.
             </p>
           </section>
+                    <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Auto draw range</h3>
+                <p style={styles.sectionDescription}>
+                  Choose which prize numbers the randomizer should draw. Example:
+                  set from 6 to 999 to keep the top prizes for a live draw.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.twoColumn}>
+              <Field label="Auto draw from prize number">
+                <input
+                  name="auto_draw_from_prize"
+                  type="number"
+                  min={1}
+                  defaultValue={autoDrawFromPrize}
+                  placeholder="6"
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Auto draw to prize number">
+                <input
+                  name="auto_draw_to_prize"
+                  type="number"
+                  min={1}
+                  defaultValue={autoDrawToPrize}
+                  placeholder="999"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+          </section>
 
           <section style={styles.submitBar}>
             <div>
@@ -612,22 +650,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
       <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
-            <h2 style={styles.sectionTitle}>Dramatic raffle draw</h2>
-            <p style={styles.sectionDescription}>
-              Manually draw prize winners with a full-screen dramatic draw.
-            </p>
-          </div>
-        </div>
-
-        <DramaticRaffleDraw raffleId={raffle.id} soldTickets={soldTickets} />
-      </section>
-
-      <section style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
             <h2 style={styles.sectionTitle}>Winners</h2>
             <p style={styles.sectionDescription}>
-              Winning ticket results for this raffle.
+              View winners, auto draw remaining prizes, or manually add a live draw winner.
             </p>
           </div>
         </div>
@@ -658,7 +683,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 <div>
                   <div style={styles.winnerLabel}>Buyer</div>
                   <div style={styles.winnerValue}>
-                    {winner.buyer_name || "—"}
+                    {winner.buyer_name || "Supporter"}
                   </div>
                   <div style={styles.winnerEmail}>
                     {winner.buyer_email || "—"}
@@ -670,6 +695,37 @@ export default async function AdminRafflePage({ params }: PageProps) {
         ) : (
           <div style={styles.emptyBox}>No winners yet.</div>
         )}
+
+        <div style={styles.drawGrid}>
+          <form
+            action={`/api/admin/raffles/${raffle.id}/draw/auto`}
+            method="post"
+            style={styles.drawPanel}
+          >
+            <input
+              type="hidden"
+              name="from_prize"
+              value={autoDrawFromPrize}
+            />
+            <input
+              type="hidden"
+              name="to_prize"
+              value={autoDrawToPrize}
+            />
+
+            <h3 style={styles.subTitle}>Automatic random draw</h3>
+
+            <p style={styles.sectionDescription}>
+              Randomly draw remaining undrawn prizes using the saved auto draw range.
+            </p>
+
+            <button type="submit" style={styles.drawButton}>
+              Auto draw remaining winners
+            </button>
+          </form>
+
+          <DramaticRaffleDraw raffleId={raffle.id} soldTickets={soldTickets} />
+        </div>
       </section>
     </main>
   );
@@ -1068,6 +1124,7 @@ const styles: Record<string, React.CSSProperties> = {
   winnerList: {
     display: "grid",
     gap: 10,
+    marginBottom: 14,
   },
   winnerCard: {
     display: "grid",
@@ -1101,8 +1158,31 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 16,
     borderRadius: 16,
     background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    border: "1px dashed #cbd5e1",
     color: "#64748b",
-    fontWeight: 700,
+    fontWeight: 800,
+    marginBottom: 14,
+  },
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 14,
+  },
+  drawPanel: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+  },
+  drawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
   },
 };
