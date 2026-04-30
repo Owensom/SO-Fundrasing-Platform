@@ -9,7 +9,7 @@ import {
   listEvents,
   slugifyEventTitle,
   type EventType,
-} from "@/api/_lib/events-repo";
+} from "../../../api/_lib/events-repo";
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
@@ -54,7 +54,9 @@ async function createEventAction(formData: FormData) {
   const location = String(formData.get("location") || "").trim();
   const startsAt = String(formData.get("starts_at") || "").trim();
   const currency = String(formData.get("currency") || "GBP").trim() || "GBP";
-  const eventType = String(formData.get("event_type") || "general_admission") as EventType;
+  const eventType = String(
+    formData.get("event_type") || "general_admission",
+  ) as EventType;
 
   if (!title) {
     redirect("/admin/events?error=missing-title");
@@ -118,8 +120,8 @@ export default async function AdminEventsPage({
                 Events & Tickets
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-slate-300 md:text-base">
-                Create admission tickets, reserved seating events, lectures, cinema-style rows,
-                theatre seating, or table-based fundraisers.
+                Create admission tickets, reserved seating events, lectures,
+                cinema-style rows, theatre seating, or table-based fundraisers.
               </p>
             </div>
 
@@ -136,7 +138,8 @@ export default async function AdminEventsPage({
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-2xl font-black">Create event</h2>
             <p className="mt-2 text-sm text-slate-300">
-              Start with the basics. Ticket types, seats and tables are managed on the next screen.
+              Start with the basics. Ticket types, seats and tables are managed
+              on the next screen.
             </p>
 
             {searchParams?.error === "missing-title" && (
@@ -147,7 +150,9 @@ export default async function AdminEventsPage({
 
             <form action={createEventAction} className="mt-6 space-y-4">
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Event title</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Event title
+                </span>
                 <input
                   name="title"
                   required
@@ -157,7 +162,9 @@ export default async function AdminEventsPage({
               </label>
 
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Description</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Description
+                </span>
                 <textarea
                   name="description"
                   rows={4}
@@ -167,7 +174,9 @@ export default async function AdminEventsPage({
               </label>
 
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Location</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Location
+                </span>
                 <input
                   name="location"
                   placeholder="Venue, hall, cinema, school..."
@@ -177,7 +186,9 @@ export default async function AdminEventsPage({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Start date/time</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    Start date/time
+                  </span>
                   <input
                     name="starts_at"
                     type="datetime-local"
@@ -186,7 +197,9 @@ export default async function AdminEventsPage({
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Currency</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    Currency
+                  </span>
                   <select
                     name="currency"
                     defaultValue="GBP"
@@ -200,14 +213,20 @@ export default async function AdminEventsPage({
               </div>
 
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Event type</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Event type
+                </span>
                 <select
                   name="event_type"
                   defaultValue="general_admission"
                   className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 focus:border-amber-300"
                 >
-                  <option value="general_admission">General admission tickets</option>
-                  <option value="reserved_seating">Seat numbers and rows</option>
+                  <option value="general_admission">
+                    General admission tickets
+                  </option>
+                  <option value="reserved_seating">
+                    Seat numbers and rows
+                  </option>
                   <option value="tables">Tables with seat numbers</option>
                 </select>
               </label>
@@ -259,14 +278,18 @@ export default async function AdminEventsPage({
                           </span>
                         </div>
 
-                        <h3 className="mt-3 text-xl font-black">{event.title}</h3>
+                        <h3 className="mt-3 text-xl font-black">
+                          {event.title}
+                        </h3>
 
                         <p className="mt-2 text-sm text-slate-400">
                           {formatDate(event.starts_at)}
                         </p>
 
                         {event.location && (
-                          <p className="mt-1 text-sm text-slate-400">{event.location}</p>
+                          <p className="mt-1 text-sm text-slate-400">
+                            {event.location}
+                          </p>
                         )}
 
                         <p className="mt-2 text-xs text-slate-500">
@@ -299,7 +322,9 @@ export default async function AdminEventsPage({
                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
                           Currency
                         </p>
-                        <p className="mt-1 text-lg font-black">{event.currency}</p>
+                        <p className="mt-1 text-lg font-black">
+                          {event.currency}
+                        </p>
                       </div>
 
                       <div className="rounded-2xl bg-white/[0.04] p-4">
@@ -315,7 +340,9 @@ export default async function AdminEventsPage({
                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
                           Starting from
                         </p>
-                        <p className="mt-1 text-lg font-black">£{moneyFromCents(0)}</p>
+                        <p className="mt-1 text-lg font-black">
+                          £{moneyFromCents(0)}
+                        </p>
                       </div>
                     </div>
                   </div>
