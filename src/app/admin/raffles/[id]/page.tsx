@@ -6,6 +6,10 @@ import { query } from "@/lib/db";
 import RaffleAdminActions from "./RaffleAdminActions";
 import PrizeSettings from "./PrizeSettings";
 import ImageUploadField from "@/components/ImageUploadField";
+import DramaticRaffleDraw from "./DramaticRaffleDraw";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type PageProps = {
   params: Promise<{
@@ -17,10 +21,16 @@ type WinnerRow = {
   id: string;
   raffle_id: string;
   prize_position: number;
+  prize_title: string | null;
   ticket_number: number;
   colour: string | null;
   buyer_name: string | null;
   buyer_email: string | null;
+};
+
+type SoldTicketRow = {
+  ticket_number: number;
+  colour: string | null;
 };
 
 const PRESET_COLOURS = [
@@ -96,7 +106,6 @@ function formatDateTimeLocal(value: string | null | undefined) {
 
   return date.toISOString().slice(0, 16);
 }
-
 function formatDrawDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
@@ -204,25 +213,42 @@ export default async function AdminRafflePage({ params }: PageProps) {
     [raffle.id],
   );
 
-  const soldTickets = Number(raffle.sold_tickets || 0);
-  const totalTickets = Number(raffle.total_tickets || 0);
-  const remainingTickets = Math.max(totalTickets - soldTickets, 0);
-  const progress = getProgressPercent(soldTickets, totalTickets);
-  const statusStyle = getStatusStyle(raffle.status);
+  const soldTicketRows = await query<SoldTicketRow>(
+    `
+    select ticket_number, colour
+    from raffle_ticket_sales
+    where raffle_id = $1
+    order by created_at asc
+    `,
+    [raffle.id],
+  );
 
-  return (
+  const soldTickets = soldTicketRows
+    .map((ticket) => ({
+      ticketNumber: Number(ticket.ticket_number),
+      colour: ticket.colour,
+    }))
+    .filter((ticket) => Number.isFinite(ticket.ticketNumber));
+
+  const soldTicketsCount = Number(raffle.sold_tickets || 0);
+  const totalTickets = Number(raffle.total_tickets || 0);
+  const remainingTickets = Math.max(totalTickets - soldTicketsCount, 0);
+  const progress = getProgressPercent(soldTicketsCount, totalTickets);
+  const statusStyle = getStatusStyle(raffle.status);
+    return (
     <main style={styles.page}>
       <section style={styles.topBar}>
         <Link href="/admin/raffles" style={styles.backLink}>
           ← Back to raffles
         </Link>
-<Link
-  href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
-  target="_blank"
-  style={styles.publicLink}
->
-  View campaign page
-</Link>
+
+        <Link
+          href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
+          target="_blank"
+          style={styles.publicLink}
+        >
+          View campaign page
+        </Link>
       </section>
 
       <section style={styles.hero}>
@@ -277,7 +303,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
         />
         <SummaryCard label="Draw date" value={formatDrawDate(raffle.draw_at)} />
         <SummaryCard label="Total tickets" value={totalTickets} />
-        <SummaryCard label="Sold" value={soldTickets} />
+        <SummaryCard label="Sold" value={soldTicketsCount} />
         <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
 
@@ -286,7 +312,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <div>
             <strong style={{ color: "#0f172a" }}>Sales progress</strong>
             <div style={styles.mutedSmall}>
-              {soldTickets} sold from {totalTickets} tickets
+              {soldTicketsCount} sold from {totalTickets} tickets
             </div>
           </div>
 
@@ -352,8 +378,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               style={styles.textarea}
             />
           </Field>
-
-          <div style={styles.mediaBox}>
+                    <div style={styles.mediaBox}>
             <div>
               <h3 style={styles.subTitle}>Raffle image</h3>
               <p style={styles.sectionDescription}>
@@ -500,8 +525,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               />
             </Field>
           </section>
-
-          <section style={styles.innerPanel}>
+                    <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
                 <h3 style={styles.subTitle}>Offers</h3>
@@ -585,55 +609,68 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <PrizeSettings raffleId={raffle.id} initialPrizes={config.prizes ?? []} />
       </section>
 
-      {raffle.status === "drawn" && (
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>Winners</h2>
-              <p style={styles.sectionDescription}>
-                Winning ticket results for this raffle.
-              </p>
-            </div>
+      <section style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>Dramatic raffle draw</h2>
+            <p style={styles.sectionDescription}>
+              Manually draw prize winners with a full-screen dramatic draw.
+            </p>
           </div>
+        </div>
 
-          {winners.length ? (
-            <div style={styles.winnerList}>
-              {winners.map((winner) => (
-                <div key={winner.id} style={styles.winnerCard}>
-                  <div>
-                    <div style={styles.winnerLabel}>Prize</div>
-                    <div style={styles.winnerValue}>{winner.prize_position}</div>
-                  </div>
+        <DramaticRaffleDraw raffleId={raffle.id} soldTickets={soldTickets} />
+      </section>
 
-                  <div>
-                    <div style={styles.winnerLabel}>Ticket</div>
-                    <div style={styles.winnerValue}>#{winner.ticket_number}</div>
-                  </div>
+      <section style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>Winners</h2>
+            <p style={styles.sectionDescription}>
+              Winning ticket results for this raffle.
+            </p>
+          </div>
+        </div>
 
-                  <div>
-                    <div style={styles.winnerLabel}>Colour</div>
-                    <div style={styles.winnerValue}>
-                      {winner.colour || "No colour"}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={styles.winnerLabel}>Buyer</div>
-                    <div style={styles.winnerValue}>
-                      {winner.buyer_name || "—"}
-                    </div>
-                    <div style={styles.winnerEmail}>
-                      {winner.buyer_email || "—"}
-                    </div>
+        {winners.length ? (
+          <div style={styles.winnerList}>
+            {winners.map((winner) => (
+              <div key={winner.id} style={styles.winnerCard}>
+                <div>
+                  <div style={styles.winnerLabel}>Prize</div>
+                  <div style={styles.winnerValue}>
+                    {winner.prize_title || `Prize ${winner.prize_position}`}
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div style={styles.emptyBox}>No winners yet.</div>
-          )}
-        </section>
-      )}
+
+                <div>
+                  <div style={styles.winnerLabel}>Ticket</div>
+                  <div style={styles.winnerValue}>#{winner.ticket_number}</div>
+                </div>
+
+                <div>
+                  <div style={styles.winnerLabel}>Colour</div>
+                  <div style={styles.winnerValue}>
+                    {winner.colour || "No colour"}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={styles.winnerLabel}>Buyer</div>
+                  <div style={styles.winnerValue}>
+                    {winner.buyer_name || "—"}
+                  </div>
+                  <div style={styles.winnerEmail}>
+                    {winner.buyer_email || "—"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={styles.emptyBox}>No winners yet.</div>
+        )}
+      </section>
     </main>
   );
 }
@@ -661,7 +698,6 @@ function Field({
     </label>
   );
 }
-
 const styles: Record<string, React.CSSProperties> = {
   page: {
     maxWidth: 1180,
@@ -1035,7 +1071,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   winnerCard: {
     display: "grid",
-    gridTemplateColumns: "90px 110px 150px minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(0, 1.2fr) 110px 150px minmax(0, 1fr)",
     gap: 12,
     padding: 14,
     borderRadius: 16,
