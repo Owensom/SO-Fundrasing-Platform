@@ -79,6 +79,22 @@ export default async function AdminHomePage() {
               Launch a new squares game with draw date, image and prizes.
             </div>
           </Link>
+
+          <Link href="/admin/events" style={styles.card}>
+            <div style={styles.cardIcon}>🎫</div>
+            <div style={styles.cardTitle}>Manage Events</div>
+            <div style={styles.cardDesc}>
+              View, edit and manage admission tickets, seats and table plans.
+            </div>
+          </Link>
+
+          <Link href="/admin/events" style={styles.card}>
+            <div style={styles.cardIcon}>➕</div>
+            <div style={styles.cardTitle}>Create Event</div>
+            <div style={styles.cardDesc}>
+              Launch a new event with tickets, rows, seats or tables.
+            </div>
+          </Link>
         </div>
       </section>
 
