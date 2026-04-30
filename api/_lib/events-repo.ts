@@ -2,6 +2,7 @@ import { query, queryOne } from "@/lib/db";
 
 export type EventType = "general_admission" | "reserved_seating" | "tables";
 export type EventStatus = "draft" | "published" | "closed";
+export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 
 export type EventTicketType = {
   id: string;
@@ -23,7 +24,7 @@ export type EventSeat = {
   row_label: string | null;
   seat_number: string | null;
   table_number: string | null;
-  status: string;
+  status: EventSeatStatus;
   customer_name: string | null;
   customer_email: string | null;
   stripe_session_id: string | null;
@@ -113,6 +114,14 @@ function normaliseStatus(value: string | null | undefined): EventStatus {
   return "draft";
 }
 
+function normaliseSeatStatus(value: string | null | undefined): EventSeatStatus {
+  if (value === "reserved" || value === "sold" || value === "blocked") {
+    return value;
+  }
+
+  return "available";
+}
+
 export function slugifyEventTitle(value: string): string {
   const slug = value
     .toLowerCase()
@@ -176,6 +185,7 @@ export async function getEventById(id: string): Promise<EventItem | null> {
   );
 
   if (!event) return null;
+
   return hydrateEvent(event);
 }
 
@@ -195,6 +205,7 @@ export async function getEventBySlug(
   );
 
   if (!event) return null;
+
   return hydrateEvent(event);
 }
 
@@ -232,7 +243,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
     ],
   );
 
-  if (!created) throw new Error("Failed to create event");
+  if (!created) {
+    throw new Error("Failed to create event");
+  }
+
   return created;
 }
 
@@ -287,6 +301,10 @@ export async function deleteEvent(id: string): Promise<void> {
   );
 }
 
+/* =========================
+   TICKET TYPES
+========================= */
+
 export async function listEventTicketTypes(
   eventId: string,
 ): Promise<EventTicketType[]> {
@@ -335,7 +353,10 @@ export async function createEventTicketType(input: {
     ],
   );
 
-  if (!created) throw new Error("Failed to create event ticket type");
+  if (!created) {
+    throw new Error("Failed to create event ticket type");
+  }
+
   return created;
 }
 
@@ -395,6 +416,10 @@ export async function deleteEventTicketTypes(eventId: string): Promise<void> {
   );
 }
 
+/* =========================
+   SEATS / TABLE SEATS
+========================= */
+
 export async function listEventSeats(eventId: string): Promise<EventSeat[]> {
   return query<EventSeat>(
     `
@@ -402,8 +427,10 @@ export async function listEventSeats(eventId: string): Promise<EventSeat[]> {
     from event_seats
     where event_id = $1
     order by
+      nullif(table_number, '')::int asc nulls last,
       table_number asc nulls last,
       row_label asc nulls last,
+      nullif(seat_number, '')::int asc nulls last,
       seat_number asc nulls last,
       created_at asc
     `,
@@ -421,8 +448,10 @@ export async function listAvailableEventSeats(
     where event_id = $1
       and status = 'available'
     order by
+      nullif(table_number, '')::int asc nulls last,
       table_number asc nulls last,
       row_label asc nulls last,
+      nullif(seat_number, '')::int asc nulls last,
       seat_number asc nulls last,
       created_at asc
     `,
@@ -437,6 +466,7 @@ export async function createEventSeat(input: {
   rowLabel?: string | null;
   seatNumber?: string | null;
   tableNumber?: string | null;
+  status?: EventSeatStatus;
 }): Promise<EventSeat> {
   const created = await queryOne<EventSeat>(
     `
@@ -446,9 +476,10 @@ export async function createEventSeat(input: {
       section,
       row_label,
       seat_number,
-      table_number
+      table_number,
+      status
     )
-    values ($1,$2,$3,$4,$5,$6)
+    values ($1,$2,$3,$4,$5,$6,$7)
     returning *
     `,
     [
@@ -458,11 +489,80 @@ export async function createEventSeat(input: {
       input.rowLabel ?? null,
       input.seatNumber ?? null,
       input.tableNumber ?? null,
+      normaliseSeatStatus(input.status),
     ],
   );
 
-  if (!created) throw new Error("Failed to create event seat");
+  if (!created) {
+    throw new Error("Failed to create event seat");
+  }
+
   return created;
+}
+
+export async function updateEventSeat(
+  id: string,
+  input: {
+    ticketTypeId?: string | null;
+    section?: string | null;
+    rowLabel?: string | null;
+    seatNumber?: string | null;
+    tableNumber?: string | null;
+    status?: EventSeatStatus;
+    customerName?: string | null;
+    customerEmail?: string | null;
+  },
+): Promise<EventSeat | null> {
+  const existing = await queryOne<EventSeat>(
+    `
+    select *
+    from event_seats
+    where id = $1
+    limit 1
+    `,
+    [id],
+  );
+
+  if (!existing) return null;
+
+  return queryOne<EventSeat>(
+    `
+    update event_seats
+    set
+      ticket_type_id = $2,
+      section = $3,
+      row_label = $4,
+      seat_number = $5,
+      table_number = $6,
+      status = $7,
+      customer_name = $8,
+      customer_email = $9,
+      updated_at = now()
+    where id = $1
+    returning *
+    `,
+    [
+      id,
+      input.ticketTypeId ?? existing.ticket_type_id,
+      input.section ?? existing.section,
+      input.rowLabel ?? existing.row_label,
+      input.seatNumber ?? existing.seat_number,
+      input.tableNumber ?? existing.table_number,
+      normaliseSeatStatus(input.status ?? existing.status),
+      input.customerName ?? existing.customer_name,
+      input.customerEmail ?? existing.customer_email,
+    ],
+  );
+}
+
+export async function deleteEventSeat(id: string): Promise<void> {
+  await query(
+    `
+    delete from event_seats
+    where id = $1
+    `,
+    [id],
+  );
 }
 
 export async function deleteEventSeats(eventId: string): Promise<void> {
@@ -533,6 +633,10 @@ export async function markEventSeatSold(input: {
   );
 }
 
+/* =========================
+   ORDERS
+========================= */
+
 export async function createEventOrder(input: {
   tenantSlug: string;
   eventId: string;
@@ -570,7 +674,10 @@ export async function createEventOrder(input: {
     ],
   );
 
-  if (!created) throw new Error("Failed to create event order");
+  if (!created) {
+    throw new Error("Failed to create event order");
+  }
+
   return created;
 }
 
@@ -636,7 +743,10 @@ export async function createEventOrderItem(input: {
     ],
   );
 
-  if (!created) throw new Error("Failed to create event order item");
+  if (!created) {
+    throw new Error("Failed to create event order item");
+  }
+
   return created;
 }
 
