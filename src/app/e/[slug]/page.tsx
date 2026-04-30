@@ -259,4 +259,4 @@ export default async function PublicEventPage({ params }: PageProps) {
       </div>
     </main>
   );
-}
+
