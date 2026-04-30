@@ -7,21 +7,22 @@ import {
   createEventSeat,
   createEventTicketType,
   deleteEvent,
-  deleteEventSeat,
   deleteEventSeats,
   deleteEventTicketType,
   deleteEventTicketTypes,
   getEventById,
   updateEvent,
-  updateEventSeat,
   updateEventTicketType,
-  type EventSeatStatus,
   type EventType,
 } from "../../../../../api/_lib/events-repo";
 
 type PageProps = {
   params: {
     id: string;
+  };
+  searchParams?: {
+    saved?: string;
+    error?: string;
   };
 };
 
@@ -66,39 +67,62 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
-function capacityLabel(
-  eventType: string,
-  eventCapacity: number | null | undefined,
-  seatCount: number,
-) {
-  if (eventType === "reserved_seating" || eventType === "tables") {
-    return `${seatCount} generated seats`;
+function numericSort(a: string | null, b: string | null) {
+  const aNumber = Number(a);
+  const bNumber = Number(b);
+
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    return aNumber - bNumber;
   }
 
-  return eventCapacity ? `${eventCapacity} tickets` : "Unlimited";
+  return String(a || "").localeCompare(String(b || ""));
 }
 
-function rowLabelFromNumber(value: number) {
-  return String(value);
+function groupBy<T>(items: T[], getKey: (item: T) => string) {
+  return items.reduce<Record<string, T[]>>((groups, item) => {
+    const key = getKey(item);
+    groups[key] = groups[key] || [];
+    groups[key].push(item);
+    return groups;
+  }, {});
 }
 
-function seatLabel(seat: {
-  section: string | null;
-  row_label: string | null;
-  table_number: string | null;
-  seat_number: string | null;
-}) {
-  if (seat.table_number) {
-    return `Table ${seat.table_number}, Seat ${seat.seat_number || "?"}`;
+function seatBoxStyle(status: string): CSSProperties {
+  const base = styles.seatBox;
+
+  if (status === "sold") {
+    return {
+      ...base,
+      background: "#fee2e2",
+      borderColor: "#fecaca",
+      color: "#991b1b",
+    };
   }
 
-  if (seat.row_label) {
-    return `${seat.section ? `${seat.section} · ` : ""}Row ${
-      seat.row_label
-    }, Seat ${seat.seat_number || "?"}`;
+  if (status === "reserved") {
+    return {
+      ...base,
+      background: "#fef3c7",
+      borderColor: "#fde68a",
+      color: "#92400e",
+    };
   }
 
-  return `Seat ${seat.seat_number || "?"}`;
+  if (status === "blocked") {
+    return {
+      ...base,
+      background: "#e2e8f0",
+      borderColor: "#cbd5e1",
+      color: "#334155",
+    };
+  }
+
+  return {
+    ...base,
+    background: "#dcfce7",
+    borderColor: "#bbf7d0",
+    color: "#166534",
+  };
 }
 
 /* =========================
@@ -162,11 +186,6 @@ async function addTicketTypeAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
   const name = String(formData.get("name") || "").trim();
-  const description = String(formData.get("description") || "").trim();
-  const price = poundsToCents(formData.get("price"));
-  const capacity = positiveInteger(formData.get("capacity"), 0);
-  const sortOrder = positiveInteger(formData.get("sort_order"), 0);
-  const isActive = String(formData.get("is_active") || "true") === "true";
 
   if (!eventId || !name) {
     redirect(`/admin/events/${eventId}?error=missing-ticket#tickets`);
@@ -175,11 +194,11 @@ async function addTicketTypeAction(formData: FormData) {
   await createEventTicketType({
     eventId,
     name,
-    description: description || null,
-    price,
-    capacity: capacity || null,
-    sortOrder,
-    isActive,
+    description: String(formData.get("description") || "").trim() || null,
+    price: poundsToCents(formData.get("price")),
+    capacity: positiveInteger(formData.get("capacity"), 0) || null,
+    sortOrder: positiveInteger(formData.get("sort_order"), 0),
+    isActive: String(formData.get("is_active") || "true") === "true",
   });
 
   redirect(`/admin/events/${eventId}?saved=ticket#tickets`);
@@ -194,11 +213,6 @@ async function updateTicketTypeAction(formData: FormData) {
   const eventId = String(formData.get("event_id") || "").trim();
   const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
   const name = String(formData.get("name") || "").trim();
-  const description = String(formData.get("description") || "").trim();
-  const price = poundsToCents(formData.get("price"));
-  const capacity = positiveInteger(formData.get("capacity"), 0);
-  const sortOrder = positiveInteger(formData.get("sort_order"), 0);
-  const isActive = String(formData.get("is_active") || "true") === "true";
 
   if (!eventId || !ticketTypeId || !name) {
     redirect(`/admin/events/${eventId}?error=missing-ticket#tickets`);
@@ -206,11 +220,11 @@ async function updateTicketTypeAction(formData: FormData) {
 
   await updateEventTicketType(ticketTypeId, {
     name,
-    description: description || null,
-    price,
-    capacity: capacity || null,
-    sortOrder,
-    isActive,
+    description: String(formData.get("description") || "").trim() || null,
+    price: poundsToCents(formData.get("price")),
+    capacity: positiveInteger(formData.get("capacity"), 0) || null,
+    sortOrder: positiveInteger(formData.get("sort_order"), 0),
+    isActive: String(formData.get("is_active") || "true") === "true",
   });
 
   redirect(`/admin/events/${eventId}?saved=ticket-updated#tickets`);
@@ -225,9 +239,7 @@ async function deleteTicketTypeAction(formData: FormData) {
   const eventId = String(formData.get("event_id") || "").trim();
   const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
 
-  if (ticketTypeId) {
-    await deleteEventTicketType(ticketTypeId);
-  }
+  if (ticketTypeId) await deleteEventTicketType(ticketTypeId);
 
   redirect(`/admin/events/${eventId}?saved=ticket-deleted#tickets`);
 }
@@ -240,9 +252,7 @@ async function clearTicketTypesAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) {
-    await deleteEventTicketTypes(eventId);
-  }
+  if (eventId) await deleteEventTicketTypes(eventId);
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
@@ -259,34 +269,33 @@ async function generateSeatsAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
   const section = String(formData.get("section") || "").trim();
-  const rowFrom = positiveInteger(formData.get("row_from"), 0);
-  const rowTo = positiveInteger(formData.get("row_to"), 0);
+  const rowsRaw = String(formData.get("rows") || "").trim();
   const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
   const aisleAfter = positiveInteger(formData.get("aisle_after"), 0);
   const ticketTypeId =
     String(formData.get("ticket_type_id") || "").trim() || null;
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
-  if (!eventId || rowFrom <= 0 || rowTo <= 0 || seatsPerRow <= 0) {
+  if (!eventId || !rowsRaw || seatsPerRow <= 0) {
     redirect(`/admin/events/${eventId}?error=missing-seats#seating`);
   }
-
-  const startRow = Math.min(rowFrom, rowTo);
-  const endRow = Math.max(rowFrom, rowTo);
 
   if (clearExisting) {
     await deleteEventSeats(eventId);
   }
 
-  for (let row = startRow; row <= endRow; row += 1) {
-    const rowLabel = rowLabelFromNumber(row);
+  const rows = rowsRaw
+    .split(",")
+    .map((row) => row.trim())
+    .filter(Boolean);
 
+  for (const row of rows) {
     for (let seat = 1; seat <= seatsPerRow; seat += 1) {
       await createEventSeat({
         eventId,
         ticketTypeId,
         section: section || null,
-        rowLabel,
+        rowLabel: row,
         seatNumber: String(seat),
         tableNumber: null,
         aisleAfter: aisleAfter || null,
@@ -337,62 +346,6 @@ async function generateTablesAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=tables#seating`);
 }
 
-async function updateSeatAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const seatId = String(formData.get("seat_id") || "").trim();
-  const ticketTypeId =
-    String(formData.get("ticket_type_id") || "").trim() || null;
-  const section = String(formData.get("section") || "").trim();
-  const rowLabel = String(formData.get("row_label") || "").trim();
-  const tableNumber = String(formData.get("table_number") || "").trim();
-  const seatNumber = String(formData.get("seat_number") || "").trim();
-  const aisleAfter = positiveInteger(formData.get("aisle_after"), 0);
-  const status = String(
-    formData.get("status") || "available",
-  ) as EventSeatStatus;
-  const customerName = String(formData.get("customer_name") || "").trim();
-  const customerEmail = String(formData.get("customer_email") || "").trim();
-
-  if (!eventId || !seatId) {
-    redirect(`/admin/events/${eventId}?error=missing-seat#seating`);
-  }
-
-  await updateEventSeat(seatId, {
-    ticketTypeId,
-    section: section || null,
-    rowLabel: rowLabel || null,
-    tableNumber: tableNumber || null,
-    seatNumber: seatNumber || null,
-    aisleAfter: aisleAfter || null,
-    status,
-    customerName: customerName || null,
-    customerEmail: customerEmail || null,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=seat-updated#seating`);
-}
-
-async function deleteSeatAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const seatId = String(formData.get("seat_id") || "").trim();
-
-  if (seatId) {
-    await deleteEventSeat(seatId);
-  }
-
-  redirect(`/admin/events/${eventId}?saved=seat-deleted#seating`);
-}
-
 async function clearSeatsAction(formData: FormData) {
   "use server";
 
@@ -401,16 +354,10 @@ async function clearSeatsAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) {
-    await deleteEventSeats(eventId);
-  }
+  if (eventId) await deleteEventSeats(eventId);
 
   redirect(`/admin/events/${eventId}?saved=seats-cleared#seating`);
 }
-
-/* =========================
-   DELETE EVENT
-========================= */
 
 async function deleteEventAction(formData: FormData) {
   "use server";
@@ -420,21 +367,14 @@ async function deleteEventAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) {
-    await deleteEvent(eventId);
-  }
+  if (eventId) await deleteEvent(eventId);
 
   redirect("/admin/events");
 }
 export default async function AdminEventManagePage({
   params,
   searchParams,
-}: PageProps & {
-  searchParams?: {
-    saved?: string;
-    error?: string;
-  };
-}) {
+}: PageProps) {
   const session = await auth();
   if (!session?.user) redirect("/admin/login");
 
@@ -520,7 +460,13 @@ export default async function AdminEventManagePage({
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
           <SummaryCard
             label="Capacity"
-            value={capacityLabel(event.event_type, event.capacity, seats.length)}
+            value={
+              event.event_type === "general_admission"
+                ? event.capacity
+                  ? `${event.capacity} tickets`
+                  : "Unlimited"
+                : `${seats.length} generated seats`
+            }
           />
           <SummaryCard label="Available" value={availableSeats} />
           <SummaryCard label="Reserved" value={reservedSeats} />
@@ -637,8 +583,7 @@ export default async function AdminEventManagePage({
                   <option value="USD">USD</option>
                 </select>
               </Field>
-
-              <Field label="Type">
+                            <Field label="Type">
                 <select
                   name="event_type"
                   defaultValue={event.event_type}
@@ -669,14 +614,14 @@ export default async function AdminEventManagePage({
           </form>
         </div>
       </section>
-            <section id="tickets" style={styles.section}>
+
+      <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 2</p>
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
-              Add, edit, hide or delete ticket types. Ticket types can also be
-              linked to rows, seats and tables.
+              Add, edit, hide or delete ticket types.
             </p>
           </div>
         </div>
@@ -689,20 +634,11 @@ export default async function AdminEventManagePage({
               <input type="hidden" name="event_id" value={event.id} />
 
               <Field label="Ticket name">
-                <input
-                  name="name"
-                  required
-                  placeholder="Standard, VIP, Adult, Child..."
-                  style={styles.input}
-                />
+                <input name="name" required style={styles.input} />
               </Field>
 
               <Field label="Description">
-                <input
-                  name="description"
-                  placeholder="Optional"
-                  style={styles.input}
-                />
+                <input name="description" style={styles.input} />
               </Field>
 
               <div style={styles.threeCol}>
@@ -710,19 +646,16 @@ export default async function AdminEventManagePage({
                   <input
                     name="price"
                     type="number"
-                    min="0"
                     step="0.01"
-                    placeholder="10.00"
                     style={styles.input}
                   />
                 </Field>
 
-                <Field label="Ticket type limit">
+                <Field label="Ticket limit">
                   <input
                     name="capacity"
                     type="number"
                     min="0"
-                    placeholder="Optional"
                     style={styles.input}
                   />
                 </Field>
@@ -792,18 +725,16 @@ export default async function AdminEventManagePage({
                           <input
                             name="price"
                             type="number"
-                            min="0"
                             step="0.01"
                             defaultValue={moneyFromCents(ticketType.price)}
                             style={styles.input}
                           />
                         </Field>
 
-                        <Field label="Ticket type limit">
+                        <Field label="Ticket limit">
                           <input
                             name="capacity"
                             type="number"
-                            min="0"
                             defaultValue={ticketType.capacity || ""}
                             style={styles.input}
                           />
@@ -813,7 +744,6 @@ export default async function AdminEventManagePage({
                           <input
                             name="sort_order"
                             type="number"
-                            min="0"
                             defaultValue={ticketType.sort_order}
                             style={styles.input}
                           />
@@ -831,15 +761,9 @@ export default async function AdminEventManagePage({
                         </Field>
                       </div>
 
-                      <div style={styles.ticketActionRow}>
-                        <span style={styles.priceBadge}>
-                          {event.currency} {moneyFromCents(ticketType.price)}
-                        </span>
-
-                        <button type="submit" style={styles.primaryButton}>
-                          Save ticket type
-                        </button>
-                      </div>
+                      <button type="submit" style={styles.primaryButton}>
+                        Save ticket type
+                      </button>
                     </form>
 
                     <form action={deleteTicketTypeAction}>
@@ -873,7 +797,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 3</p>
             <h2 style={styles.sectionTitle}>Seating & Tables</h2>
             <p style={styles.sectionText}>
-              Generate mixed row layouts, add an aisle, and manage table seats.
+              Generate row/table layouts and manage the event from the visual grid.
             </p>
           </div>
         </div>
@@ -882,7 +806,7 @@ export default async function AdminEventManagePage({
           <form action={generateSeatsAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <h3 style={styles.panelTitle}>Generate row batch</h3>
+            <h3 style={styles.panelTitle}>Generate rows</h3>
 
             <Field label="Ticket type">
               <select name="ticket_type_id" style={styles.input}>
@@ -898,32 +822,20 @@ export default async function AdminEventManagePage({
             <Field label="Section">
               <input
                 name="section"
-                placeholder="Main hall, balcony, screen 1..."
+                placeholder="Main hall, balcony..."
                 style={styles.input}
               />
             </Field>
 
-            <div style={styles.threeCol}>
-              <Field label="Rows from">
-                <input
-                  name="row_from"
-                  type="number"
-                  min="1"
-                  placeholder="1"
-                  style={styles.input}
-                />
-              </Field>
+            <Field label="Rows">
+              <input
+                name="rows"
+                placeholder="1,2,3,4,5,6"
+                style={styles.input}
+              />
+            </Field>
 
-              <Field label="Rows to">
-                <input
-                  name="row_to"
-                  type="number"
-                  min="1"
-                  placeholder="6"
-                  style={styles.input}
-                />
-              </Field>
-
+            <div style={styles.twoCol}>
               <Field label="Seats per row">
                 <input
                   name="seats_per_row"
@@ -933,17 +845,17 @@ export default async function AdminEventManagePage({
                   style={styles.input}
                 />
               </Field>
-            </div>
 
-            <Field label="Aisle after seat">
-              <input
-                name="aisle_after"
-                type="number"
-                min="0"
-                placeholder="Example: 6"
-                style={styles.input}
-              />
-            </Field>
+              <Field label="Aisle after seat">
+                <input
+                  name="aisle_after"
+                  type="number"
+                  min="0"
+                  placeholder="6"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
 
             <label style={styles.checkboxLabel}>
               <input type="checkbox" name="clear_existing" value="yes" />
@@ -951,19 +863,14 @@ export default async function AdminEventManagePage({
             </label>
 
             <button type="submit" style={styles.primaryButton}>
-              Generate row batch
+              Generate rows
             </button>
-
-            <p style={styles.helpText}>
-              Example: rows 1 to 6 with 12 seats and aisle after 6. Add another
-              batch for rows 8 to 10 with 10 seats.
-            </p>
           </form>
 
           <form action={generateTablesAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <h3 style={styles.panelTitle}>Generate table seats</h3>
+            <h3 style={styles.panelTitle}>Generate tables</h3>
 
             <Field label="Ticket type">
               <select name="ticket_type_id" style={styles.input}>
@@ -982,7 +889,6 @@ export default async function AdminEventManagePage({
                   name="table_count"
                   type="number"
                   min="1"
-                  placeholder="10"
                   style={styles.input}
                 />
               </Field>
@@ -992,7 +898,6 @@ export default async function AdminEventManagePage({
                   name="seats_per_table"
                   type="number"
                   min="1"
-                  placeholder="8"
                   style={styles.input}
                 />
               </Field>
@@ -1014,7 +919,8 @@ export default async function AdminEventManagePage({
             <div>
               <h3 style={styles.panelTitle}>Visual seating grid</h3>
               <p style={styles.sectionText}>
-                Aisles are shown as gaps. Seat colour shows the current status.
+                The aisle stays centred across different row lengths. Seat colours
+                show availability, reserved, sold and blocked states.
               </p>
             </div>
 
@@ -1046,152 +952,9 @@ export default async function AdminEventManagePage({
             </div>
           )}
         </div>
-
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h3 style={styles.panelTitle}>Edit individual seats</h3>
-              <p style={styles.sectionText}>
-                Edit linked ticket type, label, aisle, status and customer fields.
-              </p>
-            </div>
-          </div>
-
-          {seats.length === 0 ? (
-            <div style={styles.emptyBox}>No seats generated yet.</div>
-          ) : (
-            <div style={styles.seatList}>
-              {seats.map((seat) => (
-                <div key={seat.id} style={styles.seatCard}>
-                  <div style={styles.seatHeader}>
-                    <div>
-                      <strong style={styles.cardTitle}>{seatLabel(seat)}</strong>
-                      <p style={styles.cardText}>
-                        Status: <strong>{seat.status}</strong>
-                      </p>
-                    </div>
-
-                    <span style={statusBadgeStyle(seat.status)}>
-                      {seat.status}
-                    </span>
-                  </div>
-
-                  <form action={updateSeatAction} style={styles.form}>
-                    <input type="hidden" name="event_id" value={event.id} />
-                    <input type="hidden" name="seat_id" value={seat.id} />
-
-                    <div style={styles.threeCol}>
-                      <Field label="Ticket type">
-                        <select
-                          name="ticket_type_id"
-                          defaultValue={seat.ticket_type_id || ""}
-                          style={styles.input}
-                        >
-                          <option value="">No linked ticket type</option>
-                          {ticketTypes.map((ticketType) => (
-                            <option key={ticketType.id} value={ticketType.id}>
-                              {ticketType.name}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-
-                      <Field label="Section">
-                        <input
-                          name="section"
-                          defaultValue={seat.section || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Status">
-                        <select
-                          name="status"
-                          defaultValue={seat.status}
-                          style={styles.input}
-                        >
-                          <option value="available">Available</option>
-                          <option value="reserved">Reserved</option>
-                          <option value="sold">Sold</option>
-                          <option value="blocked">Blocked</option>
-                        </select>
-                      </Field>
-                    </div>
-
-                    <div style={styles.fourCol}>
-                      <Field label="Row">
-                        <input
-                          name="row_label"
-                          defaultValue={seat.row_label || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Table">
-                        <input
-                          name="table_number"
-                          defaultValue={seat.table_number || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Seat">
-                        <input
-                          name="seat_number"
-                          defaultValue={seat.seat_number || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Aisle after">
-                        <input
-                          name="aisle_after"
-                          type="number"
-                          min="0"
-                          defaultValue={seat.aisle_after || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-                    </div>
-
-                    <div style={styles.twoCol}>
-                      <Field label="Customer name">
-                        <input
-                          name="customer_name"
-                          defaultValue={seat.customer_name || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Customer email">
-                        <input
-                          name="customer_email"
-                          type="email"
-                          defaultValue={seat.customer_email || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-                    </div>
-
-                    <button type="submit" style={styles.primaryButton}>
-                      Save seat
-                    </button>
-                  </form>
-
-                  <form action={deleteSeatAction}>
-                    <input type="hidden" name="event_id" value={event.id} />
-                    <input type="hidden" name="seat_id" value={seat.id} />
-                    <button type="submit" style={styles.dangerOutlineButton}>
-                      Delete this seat
-                    </button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </section>
-            <section id="orders" style={styles.section}>
+
+      <section id="orders" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 4</p>
@@ -1218,7 +981,6 @@ export default async function AdminEventManagePage({
     </main>
   );
 }
-
 function SummaryCard({
   label,
   value,
@@ -1249,99 +1011,6 @@ function Field({
   );
 }
 
-function numericSort(a: string | null, b: string | null) {
-  const aNumber = Number(a);
-  const bNumber = Number(b);
-
-  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
-    return aNumber - bNumber;
-  }
-
-  return String(a || "").localeCompare(String(b || ""));
-}
-
-function groupBy<T>(items: T[], getKey: (item: T) => string) {
-  return items.reduce<Record<string, T[]>>((groups, item) => {
-    const key = getKey(item);
-    groups[key] = groups[key] || [];
-    groups[key].push(item);
-    return groups;
-  }, {});
-}
-
-function statusBadgeStyle(status: string): CSSProperties {
-  if (status === "sold") {
-    return {
-      ...styles.statusBadge,
-      background: "#fee2e2",
-      color: "#991b1b",
-    };
-  }
-
-  if (status === "reserved") {
-    return {
-      ...styles.statusBadge,
-      background: "#fef3c7",
-      color: "#92400e",
-    };
-  }
-
-  if (status === "blocked") {
-    return {
-      ...styles.statusBadge,
-      background: "#e2e8f0",
-      color: "#334155",
-    };
-  }
-
-  return {
-    ...styles.statusBadge,
-    background: "#dcfce7",
-    color: "#166534",
-  };
-}
-
-function seatBoxStyle(status: string, hasAisleAfter: boolean): CSSProperties {
-  const base: CSSProperties = {
-    ...styles.seatBox,
-    marginRight: hasAisleAfter ? 24 : 4,
-  };
-
-  if (status === "sold") {
-    return {
-      ...base,
-      background: "#fee2e2",
-      borderColor: "#fecaca",
-      color: "#991b1b",
-    };
-  }
-
-  if (status === "reserved") {
-    return {
-      ...base,
-      background: "#fef3c7",
-      borderColor: "#fde68a",
-      color: "#92400e",
-    };
-  }
-
-  if (status === "blocked") {
-    return {
-      ...base,
-      background: "#e2e8f0",
-      borderColor: "#cbd5e1",
-      color: "#334155",
-    };
-  }
-
-  return {
-    ...base,
-    background: "#dcfce7",
-    borderColor: "#bbf7d0",
-    color: "#166534",
-  };
-}
-
 function SeatRowGrid({
   seats,
 }: {
@@ -1369,33 +1038,61 @@ function SeatRowGrid({
 
               {Object.entries(byRow)
                 .sort(([a], [b]) => numericSort(a, b))
-                .map(([row, rowSeats]) => (
-                  <div key={`${section}-${row}`} style={styles.rowLine}>
-                    <div style={styles.rowLabel}>Row {row}</div>
+                .map(([row, rowSeats]) => {
+                  const sortedSeats = rowSeats
+                    .slice()
+                    .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
-                    <div style={styles.seatLine}>
-                      {rowSeats
-                        .slice()
-                        .sort((a, b) => numericSort(a.seat_number, b.seat_number))
-                        .map((seat) => {
-                          const seatNumber = Number(seat.seat_number || 0);
-                          const hasAisleAfter =
-                            Number(seat.aisle_after || 0) > 0 &&
-                            seatNumber === Number(seat.aisle_after || 0);
+                  const aisleAfter =
+                    sortedSeats.find((seat) => Number(seat.aisle_after || 0) > 0)
+                      ?.aisle_after || null;
 
-                          return (
+                  const leftSeats = aisleAfter
+                    ? sortedSeats.filter(
+                        (seat) => Number(seat.seat_number || 0) <= Number(aisleAfter),
+                      )
+                    : sortedSeats;
+
+                  const rightSeats = aisleAfter
+                    ? sortedSeats.filter(
+                        (seat) => Number(seat.seat_number || 0) > Number(aisleAfter),
+                      )
+                    : [];
+
+                  return (
+                    <div key={`${section}-${row}`} style={styles.rowLineCentered}>
+                      <div style={styles.rowLabel}>Row {row}</div>
+
+                      <div style={styles.rowCenterWrap}>
+                        <div style={styles.leftSeatBlock}>
+                          {leftSeats.map((seat) => (
                             <span
                               key={seat.id}
                               title={`Row ${row}, Seat ${seat.seat_number} — ${seat.status}`}
-                              style={seatBoxStyle(seat.status, hasAisleAfter)}
+                              style={seatBoxStyle(seat.status)}
                             >
                               {seat.seat_number}
                             </span>
-                          );
-                        })}
+                          ))}
+                        </div>
+
+                        <div style={styles.aisleGap} />
+
+                        <div style={styles.rightSeatBlock}>
+                          {rightSeats.map((seat) => (
+                            <span
+                              key={seat.id}
+                              title={`Row ${row}, Seat ${seat.seat_number} — ${seat.status}`}
+                              style={seatBoxStyle(seat.status)}
+                            >
+                              {seat.seat_number}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           );
         })}
@@ -1431,7 +1128,7 @@ function TableSeatGrid({
                   <span
                     key={seat.id}
                     title={`Table ${table}, Seat ${seat.seat_number} — ${seat.status}`}
-                    style={seatBoxStyle(seat.status, false)}
+                    style={seatBoxStyle(seat.status)}
                   >
                     {seat.seat_number}
                   </span>
@@ -1461,9 +1158,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     marginBottom: 16,
   },
-  heroContent: {
-    minWidth: 0,
-  },
+  heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
     padding: "5px 9px",
@@ -1600,9 +1295,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
   },
-  sectionHeader: {
-    marginBottom: 16,
-  },
+  sectionHeader: { marginBottom: 16 },
   sectionEyebrow: {
     margin: "0 0 6px",
     color: "#2563eb",
@@ -1794,34 +1487,12 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
   },
-  ticketActionRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  priceBadge: {
-    whiteSpace: "nowrap",
-    background: "#facc15",
-    color: "#111827",
-    borderRadius: 999,
-    padding: "7px 10px",
-    fontWeight: 900,
-    height: "fit-content",
-  },
   checkboxLabel: {
     display: "flex",
     gap: 8,
     alignItems: "center",
     fontWeight: 900,
     color: "#334155",
-  },
-  helpText: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
   },
   emptyBox: {
     padding: 16,
@@ -1864,7 +1535,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
-  rowLine: {
+  rowLineCentered: {
     display: "grid",
     gridTemplateColumns: "80px 1fr",
     gap: 10,
@@ -1876,11 +1547,25 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
-  seatLine: {
-    display: "flex",
+  rowCenterWrap: {
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
+    minWidth: 420,
+  },
+  leftSeatBlock: {
+    display: "flex",
+    justifyContent: "flex-end",
     gap: 4,
-    minHeight: 34,
+  },
+  rightSeatBlock: {
+    display: "flex",
+    justifyContent: "flex-start",
+    gap: 4,
+  },
+  aisleGap: {
+    width: 34,
+    minWidth: 34,
   },
   seatBox: {
     minWidth: 30,
@@ -1916,44 +1601,6 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexWrap: "wrap",
     gap: 5,
-  },
-  seatList: {
-    display: "grid",
-    gap: 12,
-  },
-  seatCard: {
-    display: "grid",
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  seatHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  cardTitle: {
-    color: "#0f172a",
-    fontSize: 16,
-  },
-  cardText: {
-    color: "#64748b",
-    fontSize: 13,
-    margin: "4px 0 0",
-  },
-  statusBadge: {
-    display: "inline-flex",
-    padding: "5px 8px",
-    borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#334155",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
   },
   dangerSection: {
     padding: 18,
