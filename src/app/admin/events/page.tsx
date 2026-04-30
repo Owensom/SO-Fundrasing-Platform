@@ -9,7 +9,7 @@ import {
   listEvents,
   slugifyEventTitle,
   type EventType,
-} from "../../../api/_lib/events-repo";
+} from "../../../../api/_lib/events-repo";
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
@@ -46,8 +46,7 @@ async function createEventAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const headerStore = headers();
-  const tenantSlug = getTenantSlugFromHeaders(headerStore);
+  const tenantSlug = getTenantSlugFromHeaders(headers());
 
   const title = String(formData.get("title") || "").trim();
   const description = String(formData.get("description") || "").trim();
@@ -58,12 +57,9 @@ async function createEventAction(formData: FormData) {
     formData.get("event_type") || "general_admission",
   ) as EventType;
 
-  if (!title) {
-    redirect("/admin/events?error=missing-title");
-  }
+  if (!title) redirect("/admin/events?error=missing-title");
 
-  const baseSlug = slugifyEventTitle(title);
-  const slug = `${baseSlug}-${Date.now().toString().slice(-5)}`;
+  const slug = `${slugifyEventTitle(title)}-${Date.now().toString().slice(-5)}`;
 
   const event = await createEvent({
     tenantSlug,
@@ -87,10 +83,7 @@ async function deleteEventAction(formData: FormData) {
   if (!session?.user) redirect("/login");
 
   const id = String(formData.get("id") || "").trim();
-
-  if (id) {
-    await deleteEvent(id);
-  }
+  if (id) await deleteEvent(id);
 
   redirect("/admin/events");
 }
@@ -103,8 +96,7 @@ export default async function AdminEventsPage({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const headerStore = headers();
-  const tenantSlug = getTenantSlugFromHeaders(headerStore);
+  const tenantSlug = getTenantSlugFromHeaders(headers());
   const events = await listEvents(tenantSlug);
 
   return (
@@ -157,7 +149,7 @@ export default async function AdminEventsPage({
                   name="title"
                   required
                   placeholder="Charity dinner, theatre night, lecture..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-amber-300"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
                 />
               </label>
 
@@ -169,7 +161,7 @@ export default async function AdminEventsPage({
                   name="description"
                   rows={4}
                   placeholder="Describe the event..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-amber-300"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
                 />
               </label>
 
@@ -180,7 +172,7 @@ export default async function AdminEventsPage({
                 <input
                   name="location"
                   placeholder="Venue, hall, cinema, school..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-amber-300"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
                 />
               </label>
 
@@ -192,7 +184,7 @@ export default async function AdminEventsPage({
                   <input
                     name="starts_at"
                     type="datetime-local"
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 focus:border-amber-300"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
                   />
                 </label>
 
@@ -203,7 +195,7 @@ export default async function AdminEventsPage({
                   <select
                     name="currency"
                     defaultValue="GBP"
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 focus:border-amber-300"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
                   >
                     <option value="GBP">GBP</option>
                     <option value="EUR">EUR</option>
@@ -219,7 +211,7 @@ export default async function AdminEventsPage({
                 <select
                   name="event_type"
                   defaultValue="general_admission"
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 focus:border-amber-300"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
                 >
                   <option value="general_admission">
                     General admission tickets
@@ -233,7 +225,7 @@ export default async function AdminEventsPage({
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-amber-300 px-5 py-4 text-sm font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-200"
+                className="w-full rounded-2xl bg-amber-300 px-5 py-4 text-sm font-black uppercase tracking-wide text-slate-950 hover:bg-amber-200"
               >
                 Create event
               </button>
