@@ -66,12 +66,20 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
-function capacityLabel(eventType: string, seatCount: number) {
+function capacityLabel(
+  eventType: string,
+  eventCapacity: number | null | undefined,
+  seatCount: number,
+) {
   if (eventType === "reserved_seating" || eventType === "tables") {
     return `${seatCount} generated seats`;
   }
 
-  return "Ticket type limits";
+  return eventCapacity ? `${eventCapacity} tickets` : "Unlimited";
+}
+
+function rowLabelFromNumber(value: number) {
+  return String(value);
 }
 
 function seatLabel(seat: {
@@ -111,6 +119,7 @@ async function updateEventAction(formData: FormData) {
   const location = String(formData.get("location") || "").trim();
   const startsAt = String(formData.get("starts_at") || "").trim();
   const endsAt = String(formData.get("ends_at") || "").trim();
+  const capacity = positiveInteger(formData.get("capacity"), 0);
   const currency = String(formData.get("currency") || "GBP").trim() || "GBP";
   const eventType = String(
     formData.get("event_type") || "general_admission",
@@ -132,6 +141,7 @@ async function updateEventAction(formData: FormData) {
     location: location || null,
     startsAt: startsAt ? new Date(startsAt).toISOString() : null,
     endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+    capacity: capacity || null,
     currency,
     eventType,
     status,
@@ -249,26 +259,28 @@ async function generateSeatsAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
   const section = String(formData.get("section") || "").trim();
-  const rowsRaw = String(formData.get("rows") || "").trim();
+  const rowFrom = positiveInteger(formData.get("row_from"), 0);
+  const rowTo = positiveInteger(formData.get("row_to"), 0);
   const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
+  const aisleAfter = positiveInteger(formData.get("aisle_after"), 0);
   const ticketTypeId =
     String(formData.get("ticket_type_id") || "").trim() || null;
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
-  if (!eventId || !rowsRaw || seatsPerRow <= 0) {
+  if (!eventId || rowFrom <= 0 || rowTo <= 0 || seatsPerRow <= 0) {
     redirect(`/admin/events/${eventId}?error=missing-seats#seating`);
   }
+
+  const startRow = Math.min(rowFrom, rowTo);
+  const endRow = Math.max(rowFrom, rowTo);
 
   if (clearExisting) {
     await deleteEventSeats(eventId);
   }
 
-  const rows = rowsRaw
-    .split(",")
-    .map((row) => row.trim())
-    .filter(Boolean);
+  for (let row = startRow; row <= endRow; row += 1) {
+    const rowLabel = rowLabelFromNumber(row);
 
-  for (const rowLabel of rows) {
     for (let seat = 1; seat <= seatsPerRow; seat += 1) {
       await createEventSeat({
         eventId,
@@ -277,6 +289,7 @@ async function generateSeatsAction(formData: FormData) {
         rowLabel,
         seatNumber: String(seat),
         tableNumber: null,
+        aisleAfter: aisleAfter || null,
         status: "available",
       });
     }
@@ -315,6 +328,7 @@ async function generateTablesAction(formData: FormData) {
         rowLabel: null,
         seatNumber: String(seat),
         tableNumber: String(table),
+        aisleAfter: null,
         status: "available",
       });
     }
@@ -337,6 +351,7 @@ async function updateSeatAction(formData: FormData) {
   const rowLabel = String(formData.get("row_label") || "").trim();
   const tableNumber = String(formData.get("table_number") || "").trim();
   const seatNumber = String(formData.get("seat_number") || "").trim();
+  const aisleAfter = positiveInteger(formData.get("aisle_after"), 0);
   const status = String(
     formData.get("status") || "available",
   ) as EventSeatStatus;
@@ -353,6 +368,7 @@ async function updateSeatAction(formData: FormData) {
     rowLabel: rowLabel || null,
     tableNumber: tableNumber || null,
     seatNumber: seatNumber || null,
+    aisleAfter: aisleAfter || null,
     status,
     customerName: customerName || null,
     customerEmail: customerEmail || null,
@@ -428,6 +444,9 @@ export default async function AdminEventManagePage({
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
 
+  const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
+  const tableSeats = seats.filter((seat) => seat.table_number);
+
   const soldSeats = seats.filter((seat) => seat.status === "sold").length;
   const reservedSeats = seats.filter((seat) => seat.status === "reserved").length;
   const blockedSeats = seats.filter((seat) => seat.status === "blocked").length;
@@ -492,7 +511,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Edit the main event details, image, status and public page settings.
+              Edit the main event details, image, capacity, status and public page settings.
             </p>
           </div>
         </div>
@@ -501,7 +520,7 @@ export default async function AdminEventManagePage({
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
           <SummaryCard
             label="Capacity"
-            value={capacityLabel(event.event_type, seats.length)}
+            value={capacityLabel(event.event_type, event.capacity, seats.length)}
           />
           <SummaryCard label="Available" value={availableSeats} />
           <SummaryCard label="Reserved" value={reservedSeats} />
@@ -574,16 +593,15 @@ export default async function AdminEventManagePage({
                 />
               </Field>
 
-              <Field label="Currency">
-                <select
-                  name="currency"
-                  defaultValue={event.currency}
+              <Field label="General admission capacity">
+                <input
+                  name="capacity"
+                  type="number"
+                  min="0"
+                  defaultValue={event.capacity || ""}
+                  placeholder="Leave blank for unlimited"
                   style={styles.input}
-                >
-                  <option value="GBP">GBP</option>
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                </select>
+                />
               </Field>
             </div>
 
@@ -607,7 +625,19 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
-            <div style={styles.twoCol}>
+            <div style={styles.threeCol}>
+              <Field label="Currency">
+                <select
+                  name="currency"
+                  defaultValue={event.currency}
+                  style={styles.input}
+                >
+                  <option value="GBP">GBP</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </Field>
+
               <Field label="Type">
                 <select
                   name="event_type"
@@ -646,7 +676,7 @@ export default async function AdminEventManagePage({
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
               Add, edit, hide or delete ticket types. Ticket types can also be
-              linked to seats and tables.
+              linked to rows, seats and tables.
             </p>
           </div>
         </div>
@@ -687,12 +717,12 @@ export default async function AdminEventManagePage({
                   />
                 </Field>
 
-                <Field label="Capacity">
+                <Field label="Ticket type limit">
                   <input
                     name="capacity"
                     type="number"
                     min="0"
-                    placeholder="Optional ticket limit"
+                    placeholder="Optional"
                     style={styles.input}
                   />
                 </Field>
@@ -769,7 +799,7 @@ export default async function AdminEventManagePage({
                           />
                         </Field>
 
-                        <Field label="Capacity">
+                        <Field label="Ticket type limit">
                           <input
                             name="capacity"
                             type="number"
@@ -843,7 +873,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 3</p>
             <h2 style={styles.sectionTitle}>Seating & Tables</h2>
             <p style={styles.sectionText}>
-              Generate, edit, block, reserve, sell or delete individual seats and table seats.
+              Generate mixed row layouts, add an aisle, and manage table seats.
             </p>
           </div>
         </div>
@@ -852,7 +882,7 @@ export default async function AdminEventManagePage({
           <form action={generateSeatsAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <h3 style={styles.panelTitle}>Generate row seats</h3>
+            <h3 style={styles.panelTitle}>Generate row batch</h3>
 
             <Field label="Ticket type">
               <select name="ticket_type_id" style={styles.input}>
@@ -868,14 +898,30 @@ export default async function AdminEventManagePage({
             <Field label="Section">
               <input
                 name="section"
-                placeholder="Main hall, balcony, etc."
+                placeholder="Main hall, balcony, screen 1..."
                 style={styles.input}
               />
             </Field>
 
-            <div style={styles.twoCol}>
-              <Field label="Rows">
-                <input name="rows" placeholder="A,B,C,D" style={styles.input} />
+            <div style={styles.threeCol}>
+              <Field label="Rows from">
+                <input
+                  name="row_from"
+                  type="number"
+                  min="1"
+                  placeholder="1"
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Rows to">
+                <input
+                  name="row_to"
+                  type="number"
+                  min="1"
+                  placeholder="6"
+                  style={styles.input}
+                />
               </Field>
 
               <Field label="Seats per row">
@@ -883,11 +929,21 @@ export default async function AdminEventManagePage({
                   name="seats_per_row"
                   type="number"
                   min="1"
-                  placeholder="10"
+                  placeholder="12"
                   style={styles.input}
                 />
               </Field>
             </div>
+
+            <Field label="Aisle after seat">
+              <input
+                name="aisle_after"
+                type="number"
+                min="0"
+                placeholder="Example: 6"
+                style={styles.input}
+              />
+            </Field>
 
             <label style={styles.checkboxLabel}>
               <input type="checkbox" name="clear_existing" value="yes" />
@@ -895,8 +951,13 @@ export default async function AdminEventManagePage({
             </label>
 
             <button type="submit" style={styles.primaryButton}>
-              Generate row seats
+              Generate row batch
             </button>
+
+            <p style={styles.helpText}>
+              Example: rows 1 to 6 with 12 seats and aisle after 6. Add another
+              batch for rows 8 to 10 with 10 seats.
+            </p>
           </form>
 
           <form action={generateTablesAction} style={styles.panel}>
@@ -951,9 +1012,9 @@ export default async function AdminEventManagePage({
         <div style={styles.panel}>
           <div style={styles.panelHeader}>
             <div>
-              <h3 style={styles.panelTitle}>Generated seats / table seats</h3>
+              <h3 style={styles.panelTitle}>Visual seating grid</h3>
               <p style={styles.sectionText}>
-                Edit linked ticket type, label, status and customer fields.
+                Aisles are shown as gaps. Seat colour shows the current status.
               </p>
             </div>
 
@@ -963,6 +1024,37 @@ export default async function AdminEventManagePage({
                 Clear all seats/tables
               </button>
             </form>
+          </div>
+
+          {rowSeats.length === 0 && tableSeats.length === 0 ? (
+            <div style={styles.emptyBox}>No seats generated yet.</div>
+          ) : (
+            <div style={styles.visualWrap}>
+              {rowSeats.length > 0 && (
+                <div style={styles.visualPanel}>
+                  <h4 style={styles.visualTitle}>Rows</h4>
+                  <SeatRowGrid seats={rowSeats} />
+                </div>
+              )}
+
+              {tableSeats.length > 0 && (
+                <div style={styles.visualPanel}>
+                  <h4 style={styles.visualTitle}>Tables</h4>
+                  <TableSeatGrid seats={tableSeats} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <h3 style={styles.panelTitle}>Edit individual seats</h3>
+              <p style={styles.sectionText}>
+                Edit linked ticket type, label, aisle, status and customer fields.
+              </p>
+            </div>
           </div>
 
           {seats.length === 0 ? (
@@ -979,7 +1071,9 @@ export default async function AdminEventManagePage({
                       </p>
                     </div>
 
-                    <span style={styles.statusBadge}>{seat.status}</span>
+                    <span style={statusBadgeStyle(seat.status)}>
+                      {seat.status}
+                    </span>
                   </div>
 
                   <form action={updateSeatAction} style={styles.form}>
@@ -1024,7 +1118,7 @@ export default async function AdminEventManagePage({
                       </Field>
                     </div>
 
-                    <div style={styles.threeCol}>
+                    <div style={styles.fourCol}>
                       <Field label="Row">
                         <input
                           name="row_label"
@@ -1045,6 +1139,16 @@ export default async function AdminEventManagePage({
                         <input
                           name="seat_number"
                           defaultValue={seat.seat_number || ""}
+                          style={styles.input}
+                        />
+                      </Field>
+
+                      <Field label="Aisle after">
+                        <input
+                          name="aisle_after"
+                          type="number"
+                          min="0"
+                          defaultValue={seat.aisle_after || ""}
                           style={styles.input}
                         />
                       </Field>
@@ -1145,6 +1249,199 @@ function Field({
   );
 }
 
+function numericSort(a: string | null, b: string | null) {
+  const aNumber = Number(a);
+  const bNumber = Number(b);
+
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    return aNumber - bNumber;
+  }
+
+  return String(a || "").localeCompare(String(b || ""));
+}
+
+function groupBy<T>(items: T[], getKey: (item: T) => string) {
+  return items.reduce<Record<string, T[]>>((groups, item) => {
+    const key = getKey(item);
+    groups[key] = groups[key] || [];
+    groups[key].push(item);
+    return groups;
+  }, {});
+}
+
+function statusBadgeStyle(status: string): CSSProperties {
+  if (status === "sold") {
+    return {
+      ...styles.statusBadge,
+      background: "#fee2e2",
+      color: "#991b1b",
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      ...styles.statusBadge,
+      background: "#fef3c7",
+      color: "#92400e",
+    };
+  }
+
+  if (status === "blocked") {
+    return {
+      ...styles.statusBadge,
+      background: "#e2e8f0",
+      color: "#334155",
+    };
+  }
+
+  return {
+    ...styles.statusBadge,
+    background: "#dcfce7",
+    color: "#166534",
+  };
+}
+
+function seatBoxStyle(status: string, hasAisleAfter: boolean): CSSProperties {
+  const base: CSSProperties = {
+    ...styles.seatBox,
+    marginRight: hasAisleAfter ? 24 : 4,
+  };
+
+  if (status === "sold") {
+    return {
+      ...base,
+      background: "#fee2e2",
+      borderColor: "#fecaca",
+      color: "#991b1b",
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      ...base,
+      background: "#fef3c7",
+      borderColor: "#fde68a",
+      color: "#92400e",
+    };
+  }
+
+  if (status === "blocked") {
+    return {
+      ...base,
+      background: "#e2e8f0",
+      borderColor: "#cbd5e1",
+      color: "#334155",
+    };
+  }
+
+  return {
+    ...base,
+    background: "#dcfce7",
+    borderColor: "#bbf7d0",
+    color: "#166534",
+  };
+}
+
+function SeatRowGrid({
+  seats,
+}: {
+  seats: {
+    id: string;
+    section: string | null;
+    row_label: string | null;
+    seat_number: string | null;
+    aisle_after: number | null;
+    status: string;
+  }[];
+}) {
+  const bySection = groupBy(seats, (seat) => seat.section || "Main");
+
+  return (
+    <div style={styles.gridStack}>
+      {Object.entries(bySection)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([section, sectionSeats]) => {
+          const byRow = groupBy(sectionSeats, (seat) => seat.row_label || "No row");
+
+          return (
+            <div key={section} style={styles.sectionBlock}>
+              <div style={styles.gridSectionTitle}>{section}</div>
+
+              {Object.entries(byRow)
+                .sort(([a], [b]) => numericSort(a, b))
+                .map(([row, rowSeats]) => (
+                  <div key={`${section}-${row}`} style={styles.rowLine}>
+                    <div style={styles.rowLabel}>Row {row}</div>
+
+                    <div style={styles.seatLine}>
+                      {rowSeats
+                        .slice()
+                        .sort((a, b) => numericSort(a.seat_number, b.seat_number))
+                        .map((seat) => {
+                          const seatNumber = Number(seat.seat_number || 0);
+                          const hasAisleAfter =
+                            Number(seat.aisle_after || 0) > 0 &&
+                            seatNumber === Number(seat.aisle_after || 0);
+
+                          return (
+                            <span
+                              key={seat.id}
+                              title={`Row ${row}, Seat ${seat.seat_number} — ${seat.status}`}
+                              style={seatBoxStyle(seat.status, hasAisleAfter)}
+                            >
+                              {seat.seat_number}
+                            </span>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+function TableSeatGrid({
+  seats,
+}: {
+  seats: {
+    id: string;
+    table_number: string | null;
+    seat_number: string | null;
+    status: string;
+  }[];
+}) {
+  const byTable = groupBy(seats, (seat) => seat.table_number || "No table");
+
+  return (
+    <div style={styles.tableGrid}>
+      {Object.entries(byTable)
+        .sort(([a], [b]) => numericSort(a, b))
+        .map(([table, tableSeats]) => (
+          <div key={table} style={styles.tableCard}>
+            <div style={styles.tableTitle}>Table {table}</div>
+
+            <div style={styles.tableSeatWrap}>
+              {tableSeats
+                .slice()
+                .sort((a, b) => numericSort(a.seat_number, b.seat_number))
+                .map((seat) => (
+                  <span
+                    key={seat.id}
+                    title={`Table ${table}, Seat ${seat.seat_number} — ${seat.status}`}
+                    style={seatBoxStyle(seat.status, false)}
+                  >
+                    {seat.seat_number}
+                  </span>
+                ))}
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
 const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
@@ -1349,6 +1646,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 24,
     fontWeight: 900,
+    wordBreak: "break-word",
   },
   panel: {
     padding: 16,
@@ -1519,6 +1817,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     color: "#334155",
   },
+  helpText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
   emptyBox: {
     padding: 16,
     borderRadius: 16,
@@ -1526,6 +1830,92 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
+  },
+  visualWrap: {
+    display: "grid",
+    gap: 16,
+  },
+  visualPanel: {
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflowX: "auto",
+  },
+  visualTitle: {
+    margin: "0 0 12px",
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 900,
+  },
+  gridStack: {
+    display: "grid",
+    gap: 18,
+    minWidth: "max-content",
+  },
+  sectionBlock: {
+    display: "grid",
+    gap: 8,
+  },
+  gridSectionTitle: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+  rowLine: {
+    display: "grid",
+    gridTemplateColumns: "80px 1fr",
+    gap: 10,
+    alignItems: "center",
+  },
+  rowLabel: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+  seatLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    minHeight: 34,
+  },
+  seatBox: {
+    minWidth: 30,
+    height: 30,
+    padding: "0 6px",
+    borderRadius: 8,
+    border: "1px solid #cbd5e1",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 900,
+    boxSizing: "border-box",
+  },
+  tableGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 12,
+  },
+  tableCard: {
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  tableTitle: {
+    marginBottom: 10,
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 900,
+  },
+  tableSeatWrap: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 5,
   },
   seatList: {
     display: "grid",
