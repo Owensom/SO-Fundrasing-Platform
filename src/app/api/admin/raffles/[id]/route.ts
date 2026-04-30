@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { queryOne } from "@/lib/db";
 import {
   getRaffleById,
   updateRaffle,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/raffles";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function normaliseImagePosition(value: unknown) {
   const clean = String(value ?? "").trim().toLowerCase();
@@ -27,12 +29,18 @@ function normaliseImagePosition(value: unknown) {
   return "center";
 }
 
+function parsePositiveInteger(value: FormDataEntryValue | null, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
     const user = await auth();
+
     if (!user) {
       return NextResponse.redirect(new URL("/admin/login", req.url), {
         status: 303,
@@ -42,6 +50,7 @@ export async function POST(
     const tenantSlug = getTenantSlugFromHeaders();
 
     const raffle = await getRaffleById(params.id);
+
     if (!raffle || raffle.tenant_slug !== tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Not found" },
@@ -69,6 +78,16 @@ export async function POST(
     const endNumber = Number(formData.get("endNumber") || 1);
     const total_tickets = Math.max(0, endNumber - startNumber + 1);
 
+    const autoDrawFromPrize = parsePositiveInteger(
+      formData.get("auto_draw_from_prize"),
+      1,
+    );
+
+    const autoDrawToPrize = parsePositiveInteger(
+      formData.get("auto_draw_to_prize"),
+      999,
+    );
+
     const status = String(formData.get("status") || "draft");
     const currency = String(formData.get("currency") || "GBP");
 
@@ -89,7 +108,7 @@ export async function POST(
     const offerCount = Number(formData.get("offer_count") || 0);
     const offers: any[] = [];
 
-    for (let i = 0; i < offerCount; i++) {
+    for (let i = 0; i < offerCount; i += 1) {
       const quantity = Number(formData.get(`offer_quantity_${i}`));
       const price = Number(formData.get(`offer_price_${i}`));
       const active = formData.get(`offer_active_${i}`) === "true";
@@ -122,6 +141,29 @@ export async function POST(
     await updateRaffleOffers(params.id, tenantSlug, offers);
     await updateRaffleColours(params.id, tenantSlug, colours);
     await updateRaffleImagePosition(params.id, tenantSlug, image_position);
+
+    await queryOne(
+      `
+      update raffles
+      set
+        config_json = jsonb_set(
+          jsonb_set(
+            coalesce(config_json, '{}'::jsonb),
+            '{auto_draw_from_prize}',
+            to_jsonb($3::int),
+            true
+          ),
+          '{auto_draw_to_prize}',
+          to_jsonb($4::int),
+          true
+        ),
+        updated_at = now()
+      where id = $1
+        and tenant_slug = $2
+      returning id
+      `,
+      [params.id, tenantSlug, autoDrawFromPrize, autoDrawToPrize],
+    );
 
     return NextResponse.redirect(
       new URL(`/admin/raffles/${params.id}`, req.url),
