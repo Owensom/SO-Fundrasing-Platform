@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { headers } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   createEvent,
@@ -46,7 +45,7 @@ async function createEventAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const tenantSlug = getTenantSlugFromHeaders(headers());
+  const tenantSlug = getTenantSlugFromHeaders();
 
   const title = String(formData.get("title") || "").trim();
   const description = String(formData.get("description") || "").trim();
@@ -96,7 +95,7 @@ export default async function AdminEventsPage({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const tenantSlug = getTenantSlugFromHeaders(headers());
+  const tenantSlug = getTenantSlugFromHeaders();
   const events = await listEvents(tenantSlug);
 
   return (
