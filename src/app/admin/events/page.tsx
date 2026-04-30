@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -43,9 +44,9 @@ async function createEventAction(formData: FormData) {
   "use server";
 
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/admin/login");
 
-  const tenantSlug = getTenantSlugFromHeaders();
+  const tenantSlug = await getTenantSlugFromHeaders();
 
   const title = String(formData.get("title") || "").trim();
   const description = String(formData.get("description") || "").trim();
@@ -79,7 +80,7 @@ async function deleteEventAction(formData: FormData) {
   "use server";
 
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/admin/login");
 
   const id = String(formData.get("id") || "").trim();
   if (id) await deleteEvent(id);
@@ -93,256 +94,492 @@ export default async function AdminEventsPage({
   searchParams?: { error?: string };
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/admin/login");
 
-  const tenantSlug = getTenantSlugFromHeaders();
+  const tenantSlug = await getTenantSlugFromHeaders();
   const events = await listEvents(tenantSlug);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Admin
-              </p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-5xl">
-                Events & Tickets
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm text-slate-300 md:text-base">
-                Create admission tickets, reserved seating events, lectures,
-                cinema-style rows, theatre seating, or table-based fundraisers.
-              </p>
-            </div>
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div>
+          <p style={styles.eyebrow}>Admin</p>
+          <h1 style={styles.title}>Events & Tickets</h1>
+          <p style={styles.heroText}>
+            Create admission tickets, reserved seating events, lectures,
+            cinema-style rows, theatre seating, or table-based fundraisers.
+          </p>
+        </div>
 
-            <Link
-              href="/admin"
-              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
-            >
-              Back to admin
-            </Link>
-          </div>
-        </section>
+        <Link href="/admin" style={styles.backButton}>
+          Back to admin
+        </Link>
+      </section>
 
-        <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
-            <h2 className="text-2xl font-black">Create event</h2>
-            <p className="mt-2 text-sm text-slate-300">
-              Start with the basics. Ticket types, seats and tables are managed
-              on the next screen.
+      <section style={styles.layout}>
+        <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <p style={styles.sectionEyebrow}>Step 1</p>
+            <h2 style={styles.sectionTitle}>Create event</h2>
+            <p style={styles.sectionText}>
+              Start with the event shell. Ticket prices, seat rows and tables
+              are managed after creation.
             </p>
+          </div>
 
-            {searchParams?.error === "missing-title" && (
-              <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm font-semibold text-red-100">
-                Please enter an event title.
-              </div>
-            )}
+          {searchParams?.error === "missing-title" && (
+            <div style={styles.errorBox}>Please enter an event title.</div>
+          )}
 
-            <form action={createEventAction} className="mt-6 space-y-4">
-              <label className="block">
-                <span className="text-sm font-bold text-slate-200">
-                  Event title
-                </span>
-                <input
-                  name="title"
-                  required
-                  placeholder="Charity dinner, theatre night, lecture..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                />
+          <form action={createEventAction} style={styles.form}>
+            <label style={styles.label}>
+              Event title
+              <input
+                name="title"
+                required
+                placeholder="Charity dinner, theatre night, lecture..."
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.label}>
+              Description
+              <textarea
+                name="description"
+                rows={5}
+                placeholder="Describe the event..."
+                style={styles.textarea}
+              />
+            </label>
+
+            <label style={styles.label}>
+              Location
+              <input
+                name="location"
+                placeholder="Venue, hall, cinema, school..."
+                style={styles.input}
+              />
+            </label>
+
+            <div style={styles.twoCol}>
+              <label style={styles.label}>
+                Start date/time
+                <input name="starts_at" type="datetime-local" style={styles.input} />
               </label>
 
-              <label className="block">
-                <span className="text-sm font-bold text-slate-200">
-                  Description
-                </span>
-                <textarea
-                  name="description"
-                  rows={4}
-                  placeholder="Describe the event..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-bold text-slate-200">
-                  Location
-                </span>
-                <input
-                  name="location"
-                  placeholder="Venue, hall, cinema, school..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                />
-              </label>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-bold text-slate-200">
-                    Start date/time
-                  </span>
-                  <input
-                    name="starts_at"
-                    type="datetime-local"
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="text-sm font-bold text-slate-200">
-                    Currency
-                  </span>
-                  <select
-                    name="currency"
-                    defaultValue="GBP"
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
-                  >
-                    <option value="GBP">GBP</option>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                  </select>
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-bold text-slate-200">
-                  Event type
-                </span>
-                <select
-                  name="event_type"
-                  defaultValue="general_admission"
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
-                >
-                  <option value="general_admission">
-                    General admission tickets
-                  </option>
-                  <option value="reserved_seating">
-                    Seat numbers and rows
-                  </option>
-                  <option value="tables">Tables with seat numbers</option>
+              <label style={styles.label}>
+                Currency
+                <select name="currency" defaultValue="GBP" style={styles.input}>
+                  <option value="GBP">GBP</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
                 </select>
               </label>
+            </div>
 
-              <button
-                type="submit"
-                className="w-full rounded-2xl bg-amber-300 px-5 py-4 text-sm font-black uppercase tracking-wide text-slate-950 hover:bg-amber-200"
+            <label style={styles.label}>
+              Event type
+              <select
+                name="event_type"
+                defaultValue="general_admission"
+                style={styles.input}
               >
-                Create event
-              </button>
-            </form>
+                <option value="general_admission">General admission tickets</option>
+                <option value="reserved_seating">Seat numbers and rows</option>
+                <option value="tables">Tables with seat numbers</option>
+              </select>
+            </label>
+
+            <button type="submit" style={styles.primaryButton}>
+              Create event
+            </button>
+          </form>
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.sectionHeaderRow}>
+            <div>
+              <p style={styles.sectionEyebrow}>Step 2</p>
+              <h2 style={styles.sectionTitle}>Your events</h2>
+              <p style={styles.sectionText}>
+                Manage event setup, ticket prices, seats and public status.
+              </p>
+            </div>
+            <span style={styles.countBadge}>{events.length}</span>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-black">Your events</h2>
-                <p className="mt-2 text-sm text-slate-300">
-                  Manage event setup, tickets, seats and public status.
+          <div style={styles.eventList}>
+            {events.length === 0 ? (
+              <div style={styles.emptyState}>
+                <h3 style={styles.emptyTitle}>No events yet</h3>
+                <p style={styles.emptyText}>
+                  Create your first admission, seating or table event.
                 </p>
               </div>
-              <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-bold text-slate-200">
-                {events.length}
-              </span>
-            </div>
-
-            <div className="mt-6 space-y-4">
-              {events.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
-                  <p className="text-lg font-black">No events yet</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Create your first admission, seating or table event.
-                  </p>
-                </div>
-              ) : (
-                events.map((event) => (
-                  <div
-                    key={event.id}
-                    className="rounded-3xl border border-white/10 bg-slate-900/80 p-5"
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
-                            {eventTypeLabel(event.event_type)}
-                          </span>
-                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-200">
-                            {statusLabel(event.status)}
-                          </span>
-                        </div>
-
-                        <h3 className="mt-3 text-xl font-black">
-                          {event.title}
-                        </h3>
-
-                        <p className="mt-2 text-sm text-slate-400">
-                          {formatDate(event.starts_at)}
-                        </p>
-
-                        {event.location && (
-                          <p className="mt-1 text-sm text-slate-400">
-                            {event.location}
-                          </p>
-                        )}
-
-                        <p className="mt-2 text-xs text-slate-500">
-                          Public slug: /e/{event.slug}
-                        </p>
+            ) : (
+              events.map((event) => (
+                <article key={event.id} style={styles.eventCard}>
+                  <div style={styles.eventTop}>
+                    <div>
+                      <div style={styles.badgeRow}>
+                        <span style={styles.goldBadge}>
+                          {eventTypeLabel(event.event_type)}
+                        </span>
+                        <span style={styles.darkBadge}>
+                          {statusLabel(event.status)}
+                        </span>
                       </div>
 
-                      <div className="flex flex-col gap-2 md:min-w-40">
-                        <Link
-                          href={`/admin/events/${event.id}`}
-                          className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-950 hover:bg-slate-200"
-                        >
-                          Manage
-                        </Link>
+                      <h3 style={styles.eventTitle}>{event.title}</h3>
+                      <p style={styles.eventMeta}>{formatDate(event.starts_at)}</p>
 
-                        <form action={deleteEventAction}>
-                          <input type="hidden" name="id" value={event.id} />
-                          <button
-                            type="submit"
-                            className="w-full rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-bold text-red-100 hover:bg-red-500/10"
-                          >
-                            Delete
-                          </button>
-                        </form>
-                      </div>
+                      {event.location && (
+                        <p style={styles.eventMeta}>{event.location}</p>
+                      )}
+
+                      <p style={styles.slugText}>Public slug: /e/{event.slug}</p>
                     </div>
 
-                    <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-3">
-                      <div className="rounded-2xl bg-white/[0.04] p-4">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Currency
-                        </p>
-                        <p className="mt-1 text-lg font-black">
-                          {event.currency}
-                        </p>
-                      </div>
+                    <div style={styles.actions}>
+                      <Link href={`/admin/events/${event.id}`} style={styles.manageButton}>
+                        Manage
+                      </Link>
 
-                      <div className="rounded-2xl bg-white/[0.04] p-4">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Created
-                        </p>
-                        <p className="mt-1 text-sm font-bold">
-                          {formatDate(event.created_at)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl bg-white/[0.04] p-4">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Starting from
-                        </p>
-                        <p className="mt-1 text-lg font-black">
-                          £{moneyFromCents(0)}
-                        </p>
-                      </div>
+                      <form action={deleteEventAction}>
+                        <input type="hidden" name="id" value={event.id} />
+                        <button type="submit" style={styles.deleteButton}>
+                          Delete
+                        </button>
+                      </form>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+
+                  <div style={styles.statsGrid}>
+                    <div style={styles.statBox}>
+                      <p style={styles.statLabel}>Currency</p>
+                      <p style={styles.statValue}>{event.currency}</p>
+                    </div>
+
+                    <div style={styles.statBox}>
+                      <p style={styles.statLabel}>Created</p>
+                      <p style={styles.statValueSmall}>{formatDate(event.created_at)}</p>
+                    </div>
+
+                    <div style={styles.statBox}>
+                      <p style={styles.statLabel}>Starting from</p>
+                      <p style={styles.statValue}>£{moneyFromCents(0)}</p>
+                    </div>
+                  </div>
+                </article>
+              ))
+            )}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f8fafc",
+    padding: 16,
+    color: "#0f172a",
+  },
+  hero: {
+    maxWidth: 1100,
+    margin: "24px auto 16px",
+    padding: 24,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+  },
+  eyebrow: {
+    margin: "0 0 8px",
+    color: "#2563eb",
+    fontWeight: 900,
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  title: {
+    margin: 0,
+    fontSize: "clamp(30px, 6vw, 44px)",
+    fontWeight: 950,
+    lineHeight: 1.05,
+    color: "#0f172a",
+  },
+  heroText: {
+    margin: "12px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.5,
+    maxWidth: 740,
+  },
+  backButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid #111827",
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 800,
+    textDecoration: "none",
+    whiteSpace: "nowrap",
+  },
+  layout: {
+    maxWidth: 1100,
+    margin: "0 auto 16px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
+    gap: 16,
+  },
+  panel: {
+    padding: 20,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionHeaderRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  sectionEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontWeight: 900,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+  sectionText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  errorBox: {
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 14,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  form: {
+    display: "grid",
+    gap: 14,
+  },
+  label: {
+    display: "grid",
+    gap: 6,
+    fontSize: 14,
+    fontWeight: 850,
+    color: "#334155",
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#0f172a",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#0f172a",
+    fontSize: 14,
+    outline: "none",
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+  primaryButton: {
+    width: "100%",
+    padding: "13px 16px",
+    borderRadius: 16,
+    border: "1px solid #111827",
+    background: "#111827",
+    color: "#ffffff",
+    fontWeight: 950,
+    fontSize: 14,
+    cursor: "pointer",
+  },
+  countBadge: {
+    minWidth: 34,
+    height: 34,
+    borderRadius: 999,
+    background: "#eef2ff",
+    color: "#1d4ed8",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+  },
+  eventList: {
+    display: "grid",
+    gap: 14,
+  },
+  emptyState: {
+    padding: 28,
+    borderRadius: 18,
+    border: "1px dashed #cbd5e1",
+    background: "#f8fafc",
+    textAlign: "center",
+  },
+  emptyTitle: {
+    margin: 0,
+    fontSize: 18,
+    fontWeight: 950,
+  },
+  emptyText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+  },
+  eventCard: {
+    padding: 18,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  eventTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+  },
+  badgeRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  goldBadge: {
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#111827",
+    padding: "5px 9px",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  darkBadge: {
+    borderRadius: 999,
+    background: "#e2e8f0",
+    color: "#334155",
+    padding: "5px 9px",
+    fontSize: 11,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  eventTitle: {
+    margin: "12px 0 0",
+    fontSize: 22,
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+  eventMeta: {
+    margin: "6px 0 0",
+    color: "#475569",
+    fontSize: 14,
+  },
+  slugText: {
+    margin: "8px 0 0",
+    color: "#94a3b8",
+    fontSize: 12,
+  },
+  actions: {
+    display: "grid",
+    gap: 8,
+    minWidth: 110,
+  },
+  manageButton: {
+    padding: "10px 12px",
+    borderRadius: 14,
+    background: "#111827",
+    color: "#ffffff",
+    fontWeight: 900,
+    textDecoration: "none",
+    textAlign: "center",
+    fontSize: 14,
+  },
+  deleteButton: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 14,
+    background: "#fff",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  statsGrid: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTop: "1px solid #e2e8f0",
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 10,
+  },
+  statBox: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  statLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+  statValue: {
+    margin: "6px 0 0",
+    fontSize: 18,
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+  statValueSmall: {
+    margin: "6px 0 0",
+    fontSize: 13,
+    fontWeight: 900,
+    color: "#0f172a",
+  },
+};
