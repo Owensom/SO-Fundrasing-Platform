@@ -151,6 +151,19 @@ export async function listPublishedEvents(
   );
 }
 
+export async function hydrateEvent(event: EventItem): Promise<EventItem> {
+  const [ticketTypes, seats] = await Promise.all([
+    listEventTicketTypes(event.id),
+    listEventSeats(event.id),
+  ]);
+
+  return {
+    ...event,
+    ticket_types: ticketTypes,
+    seats,
+  };
+}
+
 export async function getEventById(id: string): Promise<EventItem | null> {
   const event = await queryOne<EventItem>(
     `
@@ -163,7 +176,6 @@ export async function getEventById(id: string): Promise<EventItem | null> {
   );
 
   if (!event) return null;
-
   return hydrateEvent(event);
 }
 
@@ -183,7 +195,6 @@ export async function getEventBySlug(
   );
 
   if (!event) return null;
-
   return hydrateEvent(event);
 }
 
@@ -221,10 +232,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
     ],
   );
 
-  if (!created) {
-    throw new Error("Failed to create event");
-  }
-
+  if (!created) throw new Error("Failed to create event");
   return created;
 }
 
@@ -279,19 +287,6 @@ export async function deleteEvent(id: string): Promise<void> {
   );
 }
 
-export async function hydrateEvent(event: EventItem): Promise<EventItem> {
-  const [ticketTypes, seats] = await Promise.all([
-    listEventTicketTypes(event.id),
-    listEventSeats(event.id),
-  ]);
-
-  return {
-    ...event,
-    ticket_types: ticketTypes,
-    seats,
-  };
-}
-
 export async function listEventTicketTypes(
   eventId: string,
 ): Promise<EventTicketType[]> {
@@ -340,45 +335,54 @@ export async function createEventTicketType(input: {
     ],
   );
 
-  if (!created) {
-    throw new Error("Failed to create event ticket type");
-  }
-
+  if (!created) throw new Error("Failed to create event ticket type");
   return created;
 }
 
-export async function replaceEventTicketTypes(
-  eventId: string,
-  ticketTypes: Array<{
+export async function updateEventTicketType(
+  id: string,
+  input: {
     name: string;
     description?: string | null;
     price: number;
     capacity?: number | null;
     sortOrder?: number;
     isActive?: boolean;
-  }>,
-): Promise<EventTicketType[]> {
-  await deleteEventTicketTypes(eventId);
+  },
+): Promise<EventTicketType | null> {
+  return queryOne<EventTicketType>(
+    `
+    update event_ticket_types
+    set
+      name = $2,
+      description = $3,
+      price = $4,
+      capacity = $5,
+      sort_order = $6,
+      is_active = $7
+    where id = $1
+    returning *
+    `,
+    [
+      id,
+      input.name,
+      input.description ?? null,
+      input.price,
+      input.capacity ?? null,
+      input.sortOrder ?? 0,
+      input.isActive ?? true,
+    ],
+  );
+}
 
-  const created: EventTicketType[] = [];
-
-  for (const ticketType of ticketTypes) {
-    if (!ticketType.name.trim()) continue;
-
-    created.push(
-      await createEventTicketType({
-        eventId,
-        name: ticketType.name.trim(),
-        description: ticketType.description ?? null,
-        price: ticketType.price,
-        capacity: ticketType.capacity ?? null,
-        sortOrder: ticketType.sortOrder ?? created.length,
-        isActive: ticketType.isActive ?? true,
-      }),
-    );
-  }
-
-  return created;
+export async function deleteEventTicketType(id: string): Promise<void> {
+  await query(
+    `
+    delete from event_ticket_types
+    where id = $1
+    `,
+    [id],
+  );
 }
 
 export async function deleteEventTicketTypes(eventId: string): Promise<void> {
@@ -457,40 +461,7 @@ export async function createEventSeat(input: {
     ],
   );
 
-  if (!created) {
-    throw new Error("Failed to create event seat");
-  }
-
-  return created;
-}
-
-export async function replaceEventSeats(
-  eventId: string,
-  seats: Array<{
-    ticketTypeId?: string | null;
-    section?: string | null;
-    rowLabel?: string | null;
-    seatNumber?: string | null;
-    tableNumber?: string | null;
-  }>,
-): Promise<EventSeat[]> {
-  await deleteEventSeats(eventId);
-
-  const created: EventSeat[] = [];
-
-  for (const seat of seats) {
-    created.push(
-      await createEventSeat({
-        eventId,
-        ticketTypeId: seat.ticketTypeId ?? null,
-        section: seat.section ?? null,
-        rowLabel: seat.rowLabel ?? null,
-        seatNumber: seat.seatNumber ?? null,
-        tableNumber: seat.tableNumber ?? null,
-      }),
-    );
-  }
-
+  if (!created) throw new Error("Failed to create event seat");
   return created;
 }
 
@@ -599,10 +570,7 @@ export async function createEventOrder(input: {
     ],
   );
 
-  if (!created) {
-    throw new Error("Failed to create event order");
-  }
-
+  if (!created) throw new Error("Failed to create event order");
   return created;
 }
 
@@ -668,10 +636,7 @@ export async function createEventOrderItem(input: {
     ],
   );
 
-  if (!created) {
-    throw new Error("Failed to create event order item");
-  }
-
+  if (!created) throw new Error("Failed to create event order item");
   return created;
 }
 
