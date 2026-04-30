@@ -66,6 +66,14 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
+function capacityLabel(eventType: string, seatCount: number) {
+  if (eventType === "reserved_seating" || eventType === "tables") {
+    return `${seatCount} generated seats`;
+  }
+
+  return "Ticket type limits";
+}
+
 function seatLabel(seat: {
   section: string | null;
   row_label: string | null;
@@ -402,7 +410,6 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
-
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -492,7 +499,10 @@ export default async function AdminEventManagePage({
 
         <div style={styles.statsGrid}>
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
-          <SummaryCard label="Seats/tables" value={seats.length} />
+          <SummaryCard
+            label="Capacity"
+            value={capacityLabel(event.event_type, seats.length)}
+          />
           <SummaryCard label="Available" value={availableSeats} />
           <SummaryCard label="Reserved" value={reservedSeats} />
           <SummaryCard label="Sold" value={soldSeats} />
@@ -629,14 +639,14 @@ export default async function AdminEventManagePage({
           </form>
         </div>
       </section>
-
-      <section id="tickets" style={styles.section}>
+            <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 2</p>
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
-              Add, edit, hide or delete ticket types. Ticket types can also be linked to seats and tables.
+              Add, edit, hide or delete ticket types. Ticket types can also be
+              linked to seats and tables.
             </p>
           </div>
         </div>
@@ -682,7 +692,7 @@ export default async function AdminEventManagePage({
                     name="capacity"
                     type="number"
                     min="0"
-                    placeholder="100"
+                    placeholder="Optional ticket limit"
                     style={styles.input}
                   />
                 </Field>
@@ -858,7 +868,7 @@ export default async function AdminEventManagePage({
             <Field label="Section">
               <input
                 name="section"
-                placeholder="Main hall, balcony, screen 1..."
+                placeholder="Main hall, balcony, etc."
                 style={styles.input}
               />
             </Field>
@@ -1077,8 +1087,7 @@ export default async function AdminEventManagePage({
           )}
         </div>
       </section>
-
-      <section id="orders" style={styles.section}>
+            <section id="orders" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 4</p>
@@ -1105,6 +1114,7 @@ export default async function AdminEventManagePage({
     </main>
   );
 }
+
 function SummaryCard({
   label,
   value,
