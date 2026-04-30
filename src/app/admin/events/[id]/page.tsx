@@ -821,4 +821,4 @@ export default async function AdminEventManagePage({
     </main>
   );
 }
-}
+
