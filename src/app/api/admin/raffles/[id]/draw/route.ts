@@ -16,6 +16,8 @@ type TicketRow = {
   sale_id: string;
   ticket_number: number;
   colour: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
 };
 
 function parsePositiveInteger(value: FormDataEntryValue | null) {
@@ -36,6 +38,7 @@ function ordinal(value: number) {
 
 function getPrizeTitle(config: any, prizePosition: number) {
   const prizes = Array.isArray(config?.prizes) ? config.prizes : [];
+
   const prize = prizes.find(
     (item: any, index: number) =>
       Number(item?.position ?? index + 1) === prizePosition,
@@ -131,7 +134,9 @@ export async function POST(
       select
         id as sale_id,
         ticket_number,
-        colour
+        colour,
+        buyer_name,
+        buyer_email
       from raffle_ticket_sales
       where raffle_id = $1
         and ticket_number = $2
@@ -173,8 +178,8 @@ export async function POST(
         soldTicket.ticket_number,
         soldTicket.colour,
         soldTicket.sale_id,
-        null,
-        null,
+        soldTicket.buyer_name,
+        soldTicket.buyer_email,
       ],
     );
 
