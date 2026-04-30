@@ -10,7 +10,7 @@ import {
   getEventById,
   updateEvent,
   type EventType,
-} from "@/api/_lib/events-repo";
+} from "../../../../../api/_lib/events-repo";
 
 type PageProps = {
   params: {
@@ -87,8 +87,13 @@ async function updateEventAction(formData: FormData) {
   const startsAt = String(formData.get("starts_at") || "").trim();
   const endsAt = String(formData.get("ends_at") || "").trim();
   const currency = String(formData.get("currency") || "GBP").trim() || "GBP";
-  const eventType = String(formData.get("event_type") || "general_admission") as EventType;
-  const status = String(formData.get("status") || "draft") as "draft" | "published" | "closed";
+  const eventType = String(
+    formData.get("event_type") || "general_admission",
+  ) as EventType;
+  const status = String(formData.get("status") || "draft") as
+    | "draft"
+    | "published"
+    | "closed";
 
   if (!id || !title || !slug) {
     redirect(`/admin/events/${id}?error=missing-required`);
@@ -165,7 +170,8 @@ async function generateSeatsAction(formData: FormData) {
   const section = String(formData.get("section") || "").trim();
   const rowsRaw = String(formData.get("rows") || "").trim();
   const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
-  const ticketTypeId = String(formData.get("ticket_type_id") || "").trim() || null;
+  const ticketTypeId =
+    String(formData.get("ticket_type_id") || "").trim() || null;
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
   if (!eventId || !rowsRaw || seatsPerRow <= 0) {
@@ -206,7 +212,8 @@ async function generateTablesAction(formData: FormData) {
   const eventId = String(formData.get("event_id") || "").trim();
   const tableCount = positiveInteger(formData.get("table_count"), 0);
   const seatsPerTable = positiveInteger(formData.get("seats_per_table"), 0);
-  const ticketTypeId = String(formData.get("ticket_type_id") || "").trim() || null;
+  const ticketTypeId =
+    String(formData.get("ticket_type_id") || "").trim() || null;
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
   if (!eventId || tableCount <= 0 || seatsPerTable <= 0) {
@@ -308,7 +315,8 @@ export default async function AdminEventManagePage({
                 </span>
               </div>
               <p className="mt-4 text-sm text-slate-300">
-                Public page: <span className="font-bold text-white">/e/{event.slug}</span>
+                Public page:{" "}
+                <span className="font-bold text-white">/e/{event.slug}</span>
               </p>
             </div>
 
@@ -398,7 +406,9 @@ export default async function AdminEventManagePage({
               </label>
 
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Description</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Description
+                </span>
                 <textarea
                   name="description"
                   rows={5}
@@ -408,7 +418,9 @@ export default async function AdminEventManagePage({
               </label>
 
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Image URL</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Image URL
+                </span>
                 <input
                   name="image_url"
                   defaultValue={event.image_url || ""}
@@ -418,7 +430,9 @@ export default async function AdminEventManagePage({
               </label>
 
               <label className="block">
-                <span className="text-sm font-bold text-slate-200">Location</span>
+                <span className="text-sm font-bold text-slate-200">
+                  Location
+                </span>
                 <input
                   name="location"
                   defaultValue={event.location || ""}
@@ -428,7 +442,9 @@ export default async function AdminEventManagePage({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Starts at</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    Starts at
+                  </span>
                   <input
                     name="starts_at"
                     type="datetime-local"
@@ -438,7 +454,9 @@ export default async function AdminEventManagePage({
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Ends at</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    Ends at
+                  </span>
                   <input
                     name="ends_at"
                     type="datetime-local"
@@ -450,7 +468,9 @@ export default async function AdminEventManagePage({
 
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Currency</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    Currency
+                  </span>
                   <select
                     name="currency"
                     defaultValue={event.currency}
@@ -476,7 +496,9 @@ export default async function AdminEventManagePage({
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Status</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    Status
+                  </span>
                   <select
                     name="status"
                     defaultValue={event.status}
@@ -491,7 +513,7 @@ export default async function AdminEventManagePage({
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-amber-300 px-5 py-4 text-sm font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-200"
+                className="w-full rounded-2xl bg-amber-300 px-5 py-4 text-sm font-black uppercase tracking-wide text-slate-950 hover:bg-amber-200"
               >
                 Save event details
               </button>
@@ -501,66 +523,45 @@ export default async function AdminEventManagePage({
           <div className="space-y-6">
             <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
               <h2 className="text-2xl font-black">Add ticket type</h2>
-              <p className="mt-2 text-sm text-slate-300">
-                Use this for admission tickets, seat prices, table seat prices or VIP tiers.
-              </p>
-
               <form action={addTicketTypeAction} className="mt-6 space-y-4">
                 <input type="hidden" name="event_id" value={event.id} />
 
-                <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Name</span>
-                  <input
-                    name="name"
-                    required
-                    placeholder="Standard, VIP, Adult, Child..."
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                  />
-                </label>
+                <input
+                  name="name"
+                  required
+                  placeholder="Standard, VIP, Adult, Child..."
+                  className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                />
 
-                <label className="block">
-                  <span className="text-sm font-bold text-slate-200">Description</span>
-                  <input
-                    name="description"
-                    placeholder="Optional"
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                  />
-                </label>
+                <input
+                  name="description"
+                  placeholder="Optional description"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                />
 
                 <div className="grid gap-4 md:grid-cols-3">
-                  <label className="block">
-                    <span className="text-sm font-bold text-slate-200">Price</span>
-                    <input
-                      name="price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="10.00"
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-bold text-slate-200">Capacity</span>
-                    <input
-                      name="capacity"
-                      type="number"
-                      min="0"
-                      placeholder="100"
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-bold text-slate-200">Order</span>
-                    <input
-                      name="sort_order"
-                      type="number"
-                      min="0"
-                      defaultValue={ticketTypes.length}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
-                    />
-                  </label>
+                  <input
+                    name="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="10.00"
+                    className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                  />
+                  <input
+                    name="capacity"
+                    type="number"
+                    min="0"
+                    placeholder="100"
+                    className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                  />
+                  <input
+                    name="sort_order"
+                    type="number"
+                    min="0"
+                    defaultValue={ticketTypes.length}
+                    className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300"
+                  />
                 </div>
 
                 <button
@@ -618,9 +619,6 @@ export default async function AdminEventManagePage({
               {ticketTypes.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
                   <p className="text-lg font-black">No ticket types yet</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Add at least one ticket type before checkout is connected.
-                  </p>
                 </div>
               ) : (
                 ticketTypes.map((ticketType) => (
@@ -656,57 +654,40 @@ export default async function AdminEventManagePage({
             <div className="mt-6 space-y-6">
               <form action={generateSeatsAction} className="rounded-3xl bg-slate-900 p-5">
                 <input type="hidden" name="event_id" value={event.id} />
-
                 <h3 className="text-xl font-black">Rows and seat numbers</h3>
-                <p className="mt-2 text-sm text-slate-400">
-                  Example rows: A,B,C,D with 12 seats per row.
-                </p>
 
                 <div className="mt-4 space-y-4">
-                  <label className="block">
-                    <span className="text-sm font-bold text-slate-200">Ticket type</span>
-                    <select
-                      name="ticket_type_id"
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-amber-300"
-                    >
-                      <option value="">No linked ticket type</option>
-                      {ticketTypes.map((ticketType) => (
-                        <option key={ticketType.id} value={ticketType.id}>
-                          {ticketType.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <select
+                    name="ticket_type_id"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-amber-300"
+                  >
+                    <option value="">No linked ticket type</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
 
-                  <label className="block">
-                    <span className="text-sm font-bold text-slate-200">Section</span>
-                    <input
-                      name="section"
-                      placeholder="Main hall, balcony, screen 1..."
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                    />
-                  </label>
+                  <input
+                    name="section"
+                    placeholder="Main hall, balcony..."
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                  />
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block">
-                      <span className="text-sm font-bold text-slate-200">Rows</span>
-                      <input
-                        name="rows"
-                        placeholder="A,B,C,D"
-                        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="text-sm font-bold text-slate-200">Seats per row</span>
-                      <input
-                        name="seats_per_row"
-                        type="number"
-                        min="1"
-                        placeholder="12"
-                        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                      />
-                    </label>
+                    <input
+                      name="rows"
+                      placeholder="A,B,C,D"
+                      className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                    />
+                    <input
+                      name="seats_per_row"
+                      type="number"
+                      min="1"
+                      placeholder="12"
+                      className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                    />
                   </div>
 
                   <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm font-bold text-slate-200">
@@ -725,50 +706,36 @@ export default async function AdminEventManagePage({
 
               <form action={generateTablesAction} className="rounded-3xl bg-slate-900 p-5">
                 <input type="hidden" name="event_id" value={event.id} />
-
                 <h3 className="text-xl font-black">Tables with seats</h3>
-                <p className="mt-2 text-sm text-slate-400">
-                  Example: 20 tables with 10 seats per table.
-                </p>
 
                 <div className="mt-4 space-y-4">
-                  <label className="block">
-                    <span className="text-sm font-bold text-slate-200">Ticket type</span>
-                    <select
-                      name="ticket_type_id"
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-amber-300"
-                    >
-                      <option value="">No linked ticket type</option>
-                      {ticketTypes.map((ticketType) => (
-                        <option key={ticketType.id} value={ticketType.id}>
-                          {ticketType.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <select
+                    name="ticket_type_id"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-amber-300"
+                  >
+                    <option value="">No linked ticket type</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block">
-                      <span className="text-sm font-bold text-slate-200">Tables</span>
-                      <input
-                        name="table_count"
-                        type="number"
-                        min="1"
-                        placeholder="20"
-                        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="text-sm font-bold text-slate-200">Seats per table</span>
-                      <input
-                        name="seats_per_table"
-                        type="number"
-                        min="1"
-                        placeholder="10"
-                        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
-                      />
-                    </label>
+                    <input
+                      name="table_count"
+                      type="number"
+                      min="1"
+                      placeholder="20"
+                      className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                    />
+                    <input
+                      name="seats_per_table"
+                      type="number"
+                      min="1"
+                      placeholder="10"
+                      className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-300"
+                    />
                   </div>
 
                   <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm font-bold text-slate-200">
@@ -789,25 +756,12 @@ export default async function AdminEventManagePage({
         </section>
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-2xl font-black">Seats / table seats</h2>
-              <p className="mt-2 text-sm text-slate-300">
-                These are used for reserved seating and table events.
-              </p>
-            </div>
-            <p className="text-sm font-bold text-slate-400">
-              {formatDate(event.starts_at)}
-            </p>
-          </div>
+          <h2 className="text-2xl font-black">Seats / table seats</h2>
 
           <div className="mt-6 overflow-hidden rounded-3xl border border-white/10">
             {seats.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="text-lg font-black">No seats generated yet</p>
-                <p className="mt-2 text-sm text-slate-400">
-                  Generate row seats or table seats above.
-                </p>
               </div>
             ) : (
               <div className="max-h-[520px] overflow-auto">
@@ -866,4 +820,5 @@ export default async function AdminEventManagePage({
       </div>
     </main>
   );
+}
 }
