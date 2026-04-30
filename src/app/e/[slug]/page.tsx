@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
 
@@ -53,7 +52,7 @@ function seatLabel(seat: {
 }
 
 export default async function PublicEventPage({ params }: PageProps) {
-  const tenantSlug = getTenantSlugFromHeaders(headers());
+  const tenantSlug = getTenantSlugFromHeaders();
   const event = await getEventBySlug(tenantSlug, params.slug);
 
   if (!event || event.status !== "published") {
@@ -257,6 +256,6 @@ export default async function PublicEventPage({ params }: PageProps) {
           </div>
         </section>
       </div>
-      </main>
+    </main>
   );
 }
