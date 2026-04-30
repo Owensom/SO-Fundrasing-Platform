@@ -87,6 +87,61 @@ function groupBy<T>(items: T[], getKey: (item: T) => string) {
   }, {});
 }
 
+function expandRows(value: string): string[] {
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const rows: string[] = [];
+
+  for (const part of parts) {
+    if (part.includes("-")) {
+      const [rawStart, rawEnd] = part.split("-").map((item) => item.trim());
+
+      const startNumber = Number(rawStart);
+      const endNumber = Number(rawEnd);
+
+      if (Number.isFinite(startNumber) && Number.isFinite(endNumber)) {
+        const start = Math.min(startNumber, endNumber);
+        const end = Math.max(startNumber, endNumber);
+
+        for (let row = start; row <= end; row += 1) {
+          rows.push(String(row));
+        }
+
+        continue;
+      }
+
+      if (
+        rawStart.length === 1 &&
+        rawEnd.length === 1 &&
+        /^[A-Za-z]$/.test(rawStart) &&
+        /^[A-Za-z]$/.test(rawEnd)
+      ) {
+        const start = Math.min(
+          rawStart.toUpperCase().charCodeAt(0),
+          rawEnd.toUpperCase().charCodeAt(0),
+        );
+        const end = Math.max(
+          rawStart.toUpperCase().charCodeAt(0),
+          rawEnd.toUpperCase().charCodeAt(0),
+        );
+
+        for (let code = start; code <= end; code += 1) {
+          rows.push(String.fromCharCode(code));
+        }
+
+        continue;
+      }
+    }
+
+    rows.push(part);
+  }
+
+  return Array.from(new Set(rows));
+}
+
 function seatBoxStyle(status: string): CSSProperties {
   const base = styles.seatBox;
 
@@ -124,11 +179,6 @@ function seatBoxStyle(status: string): CSSProperties {
     color: "#166534",
   };
 }
-
-/* =========================
-   EVENT DETAILS
-========================= */
-
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -173,10 +223,6 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
-
-/* =========================
-   TICKET TYPES
-========================= */
 
 async function addTicketTypeAction(formData: FormData) {
   "use server";
@@ -257,10 +303,6 @@ async function clearTicketTypesAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
 
-/* =========================
-   SEATS / TABLES
-========================= */
-
 async function generateSeatsAction(formData: FormData) {
   "use server";
 
@@ -277,17 +319,14 @@ async function generateSeatsAction(formData: FormData) {
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
   if (!eventId || !rowsRaw || seatsPerRow <= 0) {
-    redirect(`/admin/events/${eventId}?error=missing-seats#seating`);
+    redirect(`/admin/events/${eventId}?error=missing-seats#row-seating`);
   }
 
   if (clearExisting) {
     await deleteEventSeats(eventId);
   }
 
-  const rows = rowsRaw
-    .split(",")
-    .map((row) => row.trim())
-    .filter(Boolean);
+  const rows = expandRows(rowsRaw);
 
   for (const row of rows) {
     for (let seat = 1; seat <= seatsPerRow; seat += 1) {
@@ -304,7 +343,7 @@ async function generateSeatsAction(formData: FormData) {
     }
   }
 
-  redirect(`/admin/events/${eventId}?saved=seats#seating`);
+  redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
 
 async function generateTablesAction(formData: FormData) {
@@ -321,7 +360,7 @@ async function generateTablesAction(formData: FormData) {
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
   if (!eventId || tableCount <= 0 || seatsPerTable <= 0) {
-    redirect(`/admin/events/${eventId}?error=missing-tables#seating`);
+    redirect(`/admin/events/${eventId}?error=missing-tables#table-seating`);
   }
 
   if (clearExisting) {
@@ -343,7 +382,7 @@ async function generateTablesAction(formData: FormData) {
     }
   }
 
-  redirect(`/admin/events/${eventId}?saved=tables#seating`);
+  redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
 
 async function clearSeatsAction(formData: FormData) {
@@ -356,7 +395,7 @@ async function clearSeatsAction(formData: FormData) {
 
   if (eventId) await deleteEventSeats(eventId);
 
-  redirect(`/admin/events/${eventId}?saved=seats-cleared#seating`);
+  redirect(`/admin/events/${eventId}?saved=seats-cleared#row-seating`);
 }
 
 async function deleteEventAction(formData: FormData) {
@@ -431,7 +470,8 @@ export default async function AdminEventManagePage({
       <nav style={styles.tabs}>
         <a href="#overview" style={styles.tab}>Overview</a>
         <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
-        <a href="#seating" style={styles.tab}>Seating & Tables</a>
+        <a href="#row-seating" style={styles.tab}>Row Seating</a>
+        <a href="#table-seating" style={styles.tab}>Table Seating</a>
         <a href="#orders" style={styles.tab}>Orders</a>
       </nav>
 
@@ -550,8 +590,7 @@ export default async function AdminEventManagePage({
                 />
               </Field>
             </div>
-
-            <div style={styles.twoCol}>
+                        <div style={styles.twoCol}>
               <Field label="Starts at">
                 <input
                   name="starts_at"
@@ -583,7 +622,8 @@ export default async function AdminEventManagePage({
                   <option value="USD">USD</option>
                 </select>
               </Field>
-                            <Field label="Type">
+
+              <Field label="Type">
                 <select
                   name="event_type"
                   defaultValue={event.event_type}
@@ -791,13 +831,14 @@ export default async function AdminEventManagePage({
           </div>
         </div>
       </section>
-            <section id="seating" style={styles.section}>
+            <section id="row-seating" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 3</p>
-            <h2 style={styles.sectionTitle}>Seating & Tables</h2>
+            <h2 style={styles.sectionTitle}>Row Seating</h2>
             <p style={styles.sectionText}>
-              Generate row/table layouts and manage the event from the visual grid.
+              Generate row layouts using comma lists or ranges. Examples: 1-3,
+              1-3,8-10, A-C, A,B,C.
             </p>
           </div>
         </div>
@@ -806,7 +847,7 @@ export default async function AdminEventManagePage({
           <form action={generateSeatsAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <h3 style={styles.panelTitle}>Generate rows</h3>
+            <h3 style={styles.panelTitle}>Generate row seating</h3>
 
             <Field label="Ticket type">
               <select name="ticket_type_id" style={styles.input}>
@@ -830,7 +871,7 @@ export default async function AdminEventManagePage({
             <Field label="Rows">
               <input
                 name="rows"
-                placeholder="1,2,3,4,5,6"
+                placeholder="1-3 or A-C or 1-3,8-10"
                 style={styles.input}
               />
             </Field>
@@ -863,14 +904,79 @@ export default async function AdminEventManagePage({
             </label>
 
             <button type="submit" style={styles.primaryButton}>
-              Generate rows
+              Generate row seating
             </button>
           </form>
 
+          <div style={styles.panel}>
+            <h3 style={styles.panelTitle}>Row seating summary</h3>
+
+            <div style={styles.statsGridCompact}>
+              <SummaryCard label="Row seats" value={rowSeats.length} />
+              <SummaryCard
+                label="Available"
+                value={rowSeats.filter((seat) => seat.status === "available").length}
+              />
+              <SummaryCard
+                label="Reserved"
+                value={rowSeats.filter((seat) => seat.status === "reserved").length}
+              />
+              <SummaryCard
+                label="Sold"
+                value={rowSeats.filter((seat) => seat.status === "sold").length}
+              />
+            </div>
+
+            <p style={styles.sectionText}>
+              Use separate batches for different row sizes, for example rows 1-6
+              with 12 seats, then rows 8-10 with 10 seats.
+            </p>
+          </div>
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <h3 style={styles.panelTitle}>Row seating grid</h3>
+              <p style={styles.sectionText}>
+                The aisle stays centred across rows with different seat counts.
+              </p>
+            </div>
+
+            <form action={clearSeatsAction}>
+              <input type="hidden" name="event_id" value={event.id} />
+              <button type="submit" style={styles.dangerOutlineButton}>
+                Clear all seats/tables
+              </button>
+            </form>
+          </div>
+
+          {rowSeats.length === 0 ? (
+            <div style={styles.emptyBox}>No row seats generated yet.</div>
+          ) : (
+            <div style={styles.visualPanel}>
+              <SeatRowGrid seats={rowSeats} />
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section id="table-seating" style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <p style={styles.sectionEyebrow}>Section 4</p>
+            <h2 style={styles.sectionTitle}>Table Seating</h2>
+            <p style={styles.sectionText}>
+              Generate table layouts separately from row seating.
+            </p>
+          </div>
+        </div>
+
+        <div style={styles.twoPanel}>
           <form action={generateTablesAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <h3 style={styles.panelTitle}>Generate tables</h3>
+            <h3 style={styles.panelTitle}>Generate table seating</h3>
 
             <Field label="Ticket type">
               <select name="ticket_type_id" style={styles.input}>
@@ -889,6 +995,7 @@ export default async function AdminEventManagePage({
                   name="table_count"
                   type="number"
                   min="1"
+                  placeholder="10"
                   style={styles.input}
                 />
               </Field>
@@ -898,6 +1005,7 @@ export default async function AdminEventManagePage({
                   name="seats_per_table"
                   type="number"
                   min="1"
+                  placeholder="8"
                   style={styles.input}
                 />
               </Field>
@@ -909,55 +1017,59 @@ export default async function AdminEventManagePage({
             </label>
 
             <button type="submit" style={styles.primaryButton}>
-              Generate tables
+              Generate table seating
             </button>
           </form>
+
+          <div style={styles.panel}>
+            <h3 style={styles.panelTitle}>Table seating summary</h3>
+
+            <div style={styles.statsGridCompact}>
+              <SummaryCard label="Table seats" value={tableSeats.length} />
+              <SummaryCard
+                label="Available"
+                value={tableSeats.filter((seat) => seat.status === "available").length}
+              />
+              <SummaryCard
+                label="Reserved"
+                value={tableSeats.filter((seat) => seat.status === "reserved").length}
+              />
+              <SummaryCard
+                label="Sold"
+                value={tableSeats.filter((seat) => seat.status === "sold").length}
+              />
+            </div>
+
+            <p style={styles.sectionText}>
+              Tables are shown separately so dinner/table-plan events do not mix
+              with theatre-style rows.
+            </p>
+          </div>
         </div>
 
         <div style={styles.panel}>
           <div style={styles.panelHeader}>
             <div>
-              <h3 style={styles.panelTitle}>Visual seating grid</h3>
+              <h3 style={styles.panelTitle}>Table seating grid</h3>
               <p style={styles.sectionText}>
-                The aisle stays centred across different row lengths. Seat colours
-                show availability, reserved, sold and blocked states.
+                Tables are grouped by table number.
               </p>
             </div>
-
-            <form action={clearSeatsAction}>
-              <input type="hidden" name="event_id" value={event.id} />
-              <button type="submit" style={styles.dangerOutlineButton}>
-                Clear all seats/tables
-              </button>
-            </form>
           </div>
 
-          {rowSeats.length === 0 && tableSeats.length === 0 ? (
-            <div style={styles.emptyBox}>No seats generated yet.</div>
+          {tableSeats.length === 0 ? (
+            <div style={styles.emptyBox}>No table seats generated yet.</div>
           ) : (
-            <div style={styles.visualWrap}>
-              {rowSeats.length > 0 && (
-                <div style={styles.visualPanel}>
-                  <h4 style={styles.visualTitle}>Rows</h4>
-                  <SeatRowGrid seats={rowSeats} />
-                </div>
-              )}
-
-              {tableSeats.length > 0 && (
-                <div style={styles.visualPanel}>
-                  <h4 style={styles.visualTitle}>Tables</h4>
-                  <TableSeatGrid seats={tableSeats} />
-                </div>
-              )}
+            <div style={styles.visualPanel}>
+              <TableSeatGrid seats={tableSeats} />
             </div>
           )}
         </div>
       </section>
-
-      <section id="orders" style={styles.section}>
+            <section id="orders" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
-            <p style={styles.sectionEyebrow}>Section 4</p>
+            <p style={styles.sectionEyebrow}>Section 5</p>
             <h2 style={styles.sectionTitle}>Orders</h2>
             <p style={styles.sectionText}>
               Event orders will appear here once checkout is connected.
@@ -981,6 +1093,7 @@ export default async function AdminEventManagePage({
     </main>
   );
 }
+
 function SummaryCard({
   label,
   value,
@@ -1322,6 +1435,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     marginBottom: 16,
   },
+  statsGridCompact: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: 10,
+    marginBottom: 12,
+  },
   statBox: {
     padding: 15,
     borderRadius: 18,
@@ -1502,22 +1621,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontWeight: 800,
   },
-  visualWrap: {
-    display: "grid",
-    gap: 16,
-  },
   visualPanel: {
     padding: 14,
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflowX: "auto",
-  },
-  visualTitle: {
-    margin: "0 0 12px",
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 900,
   },
   gridStack: {
     display: "grid",
