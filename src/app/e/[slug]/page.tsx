@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import PublicSeatSelector from "@/components/events/PublicSeatSelector";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
+import PublicSeatSelector from "@/components/events/PublicSeatSelector";
 
 type PageProps = {
   params: {
     slug: string;
+  };
+  searchParams?: {
+    checkout?: string;
+    session_id?: string;
   };
 };
 
@@ -33,7 +37,10 @@ function eventTypeLabel(type: string) {
   return "General admission";
 }
 
-export default async function PublicEventPage({ params }: PageProps) {
+export default async function PublicEventPage({
+  params,
+  searchParams,
+}: PageProps) {
   const tenantSlug = getTenantSlugFromHeaders();
   const event = await getEventBySlug(tenantSlug, params.slug);
 
@@ -41,9 +48,10 @@ export default async function PublicEventPage({ params }: PageProps) {
     notFound();
   }
 
-  const ticketTypes = event.ticket_types || [];
+  const ticketTypes = (event.ticket_types || []).filter(
+    (ticketType) => ticketType.is_active,
+  );
   const seats = event.seats || [];
-  const availableSeats = seats.filter((seat) => seat.status === "available");
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
@@ -54,6 +62,24 @@ export default async function PublicEventPage({ params }: PageProps) {
         >
           ← Back to all campaigns
         </Link>
+
+        {searchParams?.checkout === "success" && (
+          <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-100">
+            <p className="text-lg font-black">Payment successful</p>
+            <p className="mt-1 text-sm text-emerald-100/80">
+              Thank you. Your seats have been confirmed.
+            </p>
+          </div>
+        )}
+
+        {searchParams?.checkout === "cancelled" && (
+          <div className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-amber-100">
+            <p className="text-lg font-black">Checkout cancelled</p>
+            <p className="mt-1 text-sm text-amber-100/80">
+              Your order was not completed. You can choose seats again below.
+            </p>
+          </div>
+        )}
 
         <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-2xl">
           {event.image_url ? (
@@ -117,11 +143,12 @@ export default async function PublicEventPage({ params }: PageProps) {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+        <section className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-3xl font-black">Tickets</h2>
             <p className="mt-2 text-sm text-slate-300">
-              Choose your seats. Checkout will be connected in the next step.
+              Choose seats on the map. Normal seats can be bought using the
+              available public ticket choices.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -157,13 +184,13 @@ export default async function PublicEventPage({ params }: PageProps) {
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-3xl font-black">
-              {event.event_type === "tables" ? "Table seats" : "Choose seats"}
+              {event.event_type === "tables" ? "Choose table seats" : "Choose seats"}
             </h2>
 
             <p className="mt-2 text-sm text-slate-300">
               {event.event_type === "general_admission"
                 ? "This event uses general admission tickets."
-                : "Available seats are shown below."}
+                : "Select your seats, then continue securely to Stripe checkout."}
             </p>
 
             <div className="mt-6">
@@ -171,10 +198,10 @@ export default async function PublicEventPage({ params }: PageProps) {
                 <div className="rounded-3xl bg-slate-900 p-6">
                   <p className="text-lg font-black">No seat selection needed</p>
                   <p className="mt-2 text-sm text-slate-400">
-                    Guests only need to choose a ticket type and quantity.
+                    General admission checkout will be connected separately.
                   </p>
                 </div>
-              ) : availableSeats.length === 0 ? (
+              ) : seats.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
                   <p className="text-lg font-black">No seats available</p>
                   <p className="mt-2 text-sm text-slate-400">
@@ -183,6 +210,7 @@ export default async function PublicEventPage({ params }: PageProps) {
                 </div>
               ) : (
                 <PublicSeatSelector
+                  eventId={event.id}
                   eventType={event.event_type}
                   seats={seats}
                   ticketTypes={ticketTypes}
