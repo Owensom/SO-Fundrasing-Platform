@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 type Colour = {
   id: string;
@@ -9,50 +9,36 @@ type Colour = {
   sortOrder?: number;
 };
 
-type TicketRef = {
+type Ticket = {
   colour: string;
-  number?: number;
-  ticket_number?: number;
-};
-
-type Raffle = {
-  id: string;
-  slug: string;
-  title: string;
-  description?: string;
-  startNumber: number;
-  endNumber: number;
-  colours: Colour[];
-  soldTickets?: TicketRef[];
-  reservedTickets?: TicketRef[];
-  config_json?: any;
+  number: number;
 };
 
 type Props = {
-  raffle: Raffle;
+  raffle: any;
 };
+
+function formatCurrencyFromCents(cents: number, currency: string) {
+  const major = Number(cents || 0) / 100;
+
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number.isFinite(major) ? major : 0);
+  } catch {
+    return `${currency || "GBP"} ${(Number.isFinite(major) ? major : 0).toFixed(
+      2,
+    )}`;
+  }
+}
 
 function normalise(value: string) {
   return String(value || "").trim().toLowerCase();
 }
 
-function ticketNumber(ticket: TicketRef) {
-  return Number(ticket.number ?? ticket.ticket_number);
-}
-
 function ticketKey(colour: string, number: number) {
-  return `${normalise(colour)}:${number}`;
-}
-
-function moneyFromCents(cents: number, currency = "GBP") {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-    }).format(cents / 100);
-  } catch {
-    return `£${(cents / 100).toFixed(2)}`;
-  }
+  return `${normalise(colour)}:${Number(number)}`;
 }
 
 function getTicketPrice(config: any) {
@@ -78,13 +64,8 @@ function getCorrectAnswer(config: any) {
   ).trim();
 }
 
-function sortColours(colours: Colour[]) {
-  return [...colours].sort((a, b) => {
-    const aOrder = Number.isFinite(Number(a.sortOrder)) ? Number(a.sortOrder) : 999;
-    const bOrder = Number.isFinite(Number(b.sortOrder)) ? Number(b.sortOrder) : 999;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.name.localeCompare(b.name);
-  });
+function getTicketNumber(ticket: any) {
+  return Number(ticket?.number ?? ticket?.ticket_number);
 }
 
 export default function RaffleClient({ raffle }: Props) {
@@ -94,13 +75,23 @@ export default function RaffleClient({ raffle }: Props) {
   const entryQuestion = getEntryQuestion(config);
   const correctAnswer = getCorrectAnswer(config);
 
-  const colours = useMemo(() => {
-    const safe =
+  const colours: Colour[] = useMemo(() => {
+    const list =
       Array.isArray(raffle.colours) && raffle.colours.length
         ? raffle.colours
         : [{ id: "default", name: "Default", sortOrder: 0 }];
 
-    return sortColours(safe);
+    return [...list].sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a.sortOrder))
+        ? Number(a.sortOrder)
+        : 999;
+      const bOrder = Number.isFinite(Number(b.sortOrder))
+        ? Number(b.sortOrder)
+        : 999;
+
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return String(a.name).localeCompare(String(b.name));
+    });
   }, [raffle.colours]);
 
   const numbers = useMemo(() => {
@@ -108,40 +99,37 @@ export default function RaffleClient({ raffle }: Props) {
     const end = Number(raffle.endNumber || 100);
     const list: number[] = [];
 
-    for (let i = start; i <= end; i += 1) {
-      list.push(i);
+    for (let number = start; number <= end; number += 1) {
+      list.push(number);
     }
 
     return list;
   }, [raffle.startNumber, raffle.endNumber]);
 
-  const soldSet = useMemo(() => {
-    return new Set(
-      (raffle.soldTickets || [])
-        .map((ticket) => ticketKey(ticket.colour, ticketNumber(ticket)))
-        .filter(Boolean),
-    );
-  }, [raffle.soldTickets]);
+  const unavailableTickets = useMemo(() => {
+    const set = new Set<string>();
 
-  const reservedSet = useMemo(() => {
-    return new Set(
-      (raffle.reservedTickets || [])
-        .map((ticket) => ticketKey(ticket.colour, ticketNumber(ticket)))
-        .filter(Boolean),
-    );
-  }, [raffle.reservedTickets]);
+    for (const ticket of raffle.soldTickets || []) {
+      set.add(ticketKey(ticket.colour, getTicketNumber(ticket)));
+    }
 
-  const [selectedTickets, setSelectedTickets] = useState<
-    { colour: string; number: number }[]
-  >([]);
-  const [quickBuyCount, setQuickBuyCount] = useState(1);
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
+    for (const ticket of raffle.reservedTickets || []) {
+      set.add(ticketKey(ticket.colour, getTicketNumber(ticket)));
+    }
+
+    return set;
+  }, [raffle.soldTickets, raffle.reservedTickets]);
+
+  const [selectedTickets, setSelectedTickets] = useState<Ticket[]>([]);
+  const [autoQuantity, setAutoQuantity] = useState(1);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [entryAnswer, setEntryAnswer] = useState("");
   const [coverFees, setCoverFees] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [reservationMessage, setReservationMessage] = useState("");
 
   const selectedSet = useMemo(() => {
     return new Set(
@@ -150,29 +138,29 @@ export default function RaffleClient({ raffle }: Props) {
   }, [selectedTickets]);
 
   const availableTickets = useMemo(() => {
-    const list: { colour: string; number: number }[] = [];
+    const list: Ticket[] = [];
 
     for (const colour of colours) {
       for (const number of numbers) {
         const key = ticketKey(colour.name, number);
 
-        if (!soldSet.has(key) && !reservedSet.has(key)) {
+        if (!unavailableTickets.has(key)) {
           list.push({ colour: colour.name, number });
         }
       }
     }
 
     return list;
-  }, [colours, numbers, soldSet, reservedSet]);
+  }, [colours, numbers, unavailableTickets]);
 
-  const ticketTotalCents = selectedTickets.length * ticketPriceCents;
-  const platformFeeCents = coverFees ? Math.ceil(ticketTotalCents * 0.03) : 0;
-  const totalTodayCents = ticketTotalCents + platformFeeCents;
+  const subtotalCents = selectedTickets.length * ticketPriceCents;
+  const feeCents = coverFees ? Math.round(subtotalCents * 0.1) : 0;
+  const totalCents = subtotalCents + feeCents;
 
   function toggleTicket(colour: string, number: number) {
     const key = ticketKey(colour, number);
 
-    if (soldSet.has(key) || reservedSet.has(key)) return;
+    if (unavailableTickets.has(key)) return;
 
     setSelectedTickets((current) => {
       const exists = current.some(
@@ -185,19 +173,26 @@ export default function RaffleClient({ raffle }: Props) {
         );
       }
 
-      return [...current, { colour, number }];
+      return [...current, { colour, number }].sort((a, b) => {
+        const colourCompare = a.colour.localeCompare(b.colour);
+        if (colourCompare !== 0) return colourCompare;
+        return a.number - b.number;
+      });
     });
+
+    setError("");
+    setReservationMessage("");
   }
 
   function clearBasket() {
     setSelectedTickets([]);
     setError("");
+    setReservationMessage("");
   }
 
-  function autoSelectTickets() {
-    setError("");
+  function autoSelectTickets(quantity: number) {
+    const requested = Math.max(1, Math.floor(Number(quantity) || 0));
 
-    const count = Math.max(1, Number(quickBuyCount || 1));
     const alreadySelected = new Set(
       selectedTickets.map((ticket) => ticketKey(ticket.colour, ticket.number)),
     );
@@ -206,20 +201,23 @@ export default function RaffleClient({ raffle }: Props) {
       (ticket) => !alreadySelected.has(ticketKey(ticket.colour, ticket.number)),
     );
 
-    if (remaining.length < count) {
+    if (remaining.length < requested) {
       setError("There are not enough available tickets left.");
       return;
     }
 
     const shuffled = [...remaining].sort(() => Math.random() - 0.5);
-    setSelectedTickets((current) => [...current, ...shuffled.slice(0, count)]);
+    setSelectedTickets((current) => [...current, ...shuffled.slice(0, requested)]);
+    setAutoQuantity(requested);
+    setError("");
+    setReservationMessage("");
   }
 
   function validate() {
-    if (!selectedTickets.length) return "Please select at least one ticket.";
-    if (!buyerName.trim()) return "Please enter your name.";
-    if (!buyerEmail.trim() || !buyerEmail.includes("@")) {
-      return "Please enter a valid email address.";
+    if (!customerName.trim()) return "Please enter your name.";
+    if (!customerEmail.trim()) return "Please enter your email.";
+    if (selectedTickets.length === 0) {
+      return "Please select at least one ticket.";
     }
 
     if (entryQuestion) {
@@ -237,19 +235,18 @@ export default function RaffleClient({ raffle }: Props) {
     return "";
   }
 
-  async function reserveAndPay() {
-    setError("");
-
-    const validationError = validate();
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setBusy(true);
-
+  async function reserveTickets() {
     try {
+      setSaving(true);
+      setError("");
+      setReservationMessage("");
+
+      const validationError = validate();
+
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
       const selectedTicketsForApi = selectedTickets.map((ticket) => ({
         colour: ticket.colour,
         number: ticket.number,
@@ -258,19 +255,17 @@ export default function RaffleClient({ raffle }: Props) {
 
       const reserveResponse = await fetch(`/api/raffles/${raffle.slug}/reserve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           raffleId: raffle.id,
           raffleSlug: raffle.slug,
           slug: raffle.slug,
-          buyerName: buyerName.trim(),
-          buyerEmail: buyerEmail.trim(),
-          customerName: buyerName.trim(),
-          customerEmail: buyerEmail.trim(),
           selectedTickets: selectedTicketsForApi,
           tickets: selectedTicketsForApi,
+          buyerName: customerName.trim(),
+          buyerEmail: customerEmail.trim(),
+          customerName: customerName.trim(),
+          customerEmail: customerEmail.trim(),
           entryAnswer: entryAnswer.trim(),
           legalAnswer: entryAnswer.trim(),
           termsAccepted,
@@ -278,28 +273,41 @@ export default function RaffleClient({ raffle }: Props) {
         }),
       });
 
-      const reserveData = await reserveResponse.json().catch(() => null);
+      const reserveText = await reserveResponse.text();
 
-      if (!reserveResponse.ok || reserveData?.ok === false) {
+      let reserveParsed: any = null;
+
+      try {
+        reserveParsed = JSON.parse(reserveText);
+      } catch {
         throw new Error(
-          reserveData?.error ||
-            reserveData?.message ||
-            "These tickets could not be reserved. Please choose again.",
+          `Reserve API did not return JSON: ${reserveText.slice(0, 120)}`,
         );
       }
 
-      const reservationToken =
-        reserveData?.reservationToken ||
-        reserveData?.reservation_token ||
-        reserveData?.token ||
-        reserveData?.reservation?.token ||
-        "";
+      if (!reserveResponse.ok || reserveParsed?.ok === false) {
+        throw new Error(reserveParsed?.error || "Reserve failed");
+      }
+
+      const reservationToken = String(
+        reserveParsed?.reservationToken ??
+          reserveParsed?.reservation_token ??
+          reserveParsed?.token ??
+          reserveParsed?.reservation?.token ??
+          "",
+      ).trim();
+
+      if (!reservationToken) {
+        throw new Error(
+          "Reservation succeeded but no reservation token was returned.",
+        );
+      }
+
+      setReservationMessage("Tickets reserved. Redirecting to checkout...");
 
       const checkoutResponse = await fetch("/api/stripe/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "raffle",
           productType: "raffle",
@@ -308,12 +316,12 @@ export default function RaffleClient({ raffle }: Props) {
           slug: raffle.slug,
           reservationToken,
           reservation_token: reservationToken,
-          buyerName: buyerName.trim(),
-          buyerEmail: buyerEmail.trim(),
-          customerName: buyerName.trim(),
-          customerEmail: buyerEmail.trim(),
           selectedTickets: selectedTicketsForApi,
           tickets: selectedTicketsForApi,
+          buyerName: customerName.trim(),
+          buyerEmail: customerEmail.trim(),
+          customerName: customerName.trim(),
+          customerEmail: customerEmail.trim(),
           entryAnswer: entryAnswer.trim(),
           legalAnswer: entryAnswer.trim(),
           termsAccepted,
@@ -321,117 +329,84 @@ export default function RaffleClient({ raffle }: Props) {
         }),
       });
 
-      const checkoutData = await checkoutResponse.json().catch(() => null);
+      const checkoutText = await checkoutResponse.text();
 
-      if (!checkoutResponse.ok || checkoutData?.ok === false) {
+      let checkoutParsed: any = null;
+
+      try {
+        checkoutParsed = JSON.parse(checkoutText);
+      } catch {
         throw new Error(
-          checkoutData?.error ||
-            checkoutData?.message ||
-            "Checkout could not be started.",
+          `Checkout API did not return JSON: ${checkoutText.slice(0, 120)}`,
         );
       }
 
-      const url =
-        checkoutData?.url ||
-        checkoutData?.checkoutUrl ||
-        checkoutData?.sessionUrl;
-
-      if (!url) {
-        throw new Error("Checkout was created but no Stripe URL was returned.");
+      if (!checkoutResponse.ok || checkoutParsed?.ok === false) {
+        throw new Error(checkoutParsed?.error || "Checkout failed");
       }
 
-      window.location.href = url;
-    } catch (err: any) {
-      setError(err?.message || "Checkout failed. Please try again.");
-      setBusy(false);
+      const checkoutUrl = String(
+        checkoutParsed?.url ??
+          checkoutParsed?.checkoutUrl ??
+          checkoutParsed?.sessionUrl ??
+          "",
+      ).trim();
+
+      if (!checkoutUrl) {
+        throw new Error(
+          "Checkout session created but no checkout URL was returned.",
+        );
+      }
+
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reserve failed");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <div style={{ display: "grid", gap: 28 }}>
-      <section
-        style={{
-          border: "1px solid #bae6fd",
-          background: "#eff6ff",
-          borderRadius: 18,
-          padding: 18,
-        }}
-      >
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 26,
-            lineHeight: 1.1,
-            letterSpacing: "-0.04em",
-            color: "#020617",
-          }}
-        >
-          Quick buy
-        </h2>
+    <div style={{ display: "grid", gap: 24 }}>
+      <section style={styles.quickSelect}>
+        <div>
+          <h2 style={{ margin: 0 }}>Quick buy</h2>
+          <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+            Choose how many tickets you would like and we’ll randomly
+            auto-select available numbers.
+          </p>
+        </div>
 
-        <p
-          style={{
-            margin: "8px 0 16px",
-            color: "#64748b",
-            fontSize: 16,
-            lineHeight: 1.5,
-          }}
-        >
-          Choose how many tickets you would like and we’ll randomly auto-select
-          available numbers.
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "end",
-          }}
-        >
+        <div style={styles.quickControls}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 800,
-                color: "#334155",
-              }}
-            >
-              Number of tickets
-            </span>
-
+            <span style={styles.smallLabel}>Number of tickets</span>
             <input
               type="number"
               min={1}
-              value={quickBuyCount}
-              onChange={(event) =>
-                setQuickBuyCount(Math.max(1, Number(event.target.value || 1)))
-              }
-              style={{
-                width: 150,
-                border: "1px solid #93c5fd",
-                borderRadius: 10,
-                padding: "13px 14px",
-                fontWeight: 800,
-                fontSize: 16,
-                background: "#ffffff",
+              max={availableTickets.length || 1}
+              value={autoQuantity === 0 ? "" : autoQuantity}
+              onChange={(event) => {
+                const raw = event.target.value;
+
+                if (raw === "") {
+                  setAutoQuantity(0);
+                  return;
+                }
+
+                const parsed = Number(raw);
+                if (!Number.isFinite(parsed)) return;
+
+                setAutoQuantity(parsed);
               }}
+              style={styles.quantityInput}
             />
           </label>
 
           <button
             type="button"
-            onClick={autoSelectTickets}
-            disabled={busy}
-            style={{
-              border: 0,
-              borderRadius: 10,
-              padding: "14px 18px",
-              background: "#2563eb",
-              color: "#ffffff",
-              fontWeight: 900,
-              cursor: busy ? "not-allowed" : "pointer",
-            }}
+            onClick={() => autoSelectTickets(autoQuantity)}
+            style={styles.autoButton}
+            disabled={saving}
           >
             Auto select
           </button>
@@ -439,371 +414,374 @@ export default function RaffleClient({ raffle }: Props) {
           <button
             type="button"
             onClick={clearBasket}
-            disabled={busy}
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: 10,
-              padding: "14px 18px",
-              background: "#ffffff",
-              color: "#334155",
-              fontWeight: 900,
-              cursor: busy ? "not-allowed" : "pointer",
-            }}
+            style={styles.clearButton}
+            disabled={saving}
           >
             Clear basket
           </button>
         </div>
       </section>
 
-      <section>
-        <h2
-          style={{
-            margin: "0 0 16px",
-            fontSize: 30,
-            lineHeight: 1.1,
-            letterSpacing: "-0.04em",
-            color: "#020617",
-          }}
-        >
-          Choose tickets
-        </h2>
+      <h2 style={styles.heading}>Choose tickets</h2>
 
-        <div style={{ display: "grid", gap: 24 }}>
-          {colours.map((colour) => (
-            <div key={colour.id || colour.name}>
-              <h3
-                style={{
-                  margin: "0 0 10px",
-                  fontSize: 18,
-                  color: "#0f172a",
-                }}
+      <div style={{ display: "grid", gap: 22 }}>
+        {colours.map((colour) => (
+          <section key={colour.id || colour.name}>
+            <h3 style={styles.colourHeading}>{colour.name}</h3>
+
+            <div style={styles.numberGrid}>
+              {numbers.map((number) => {
+                const key = ticketKey(colour.name, number);
+                const isUnavailable = unavailableTickets.has(key);
+                const isSelected = selectedSet.has(key);
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleTicket(colour.name, number)}
+                    disabled={isUnavailable || saving}
+                    style={{
+                      ...styles.numberButton,
+                      background: isSelected
+                        ? "#2563eb"
+                        : isUnavailable
+                          ? "#111827"
+                          : "#ffffff",
+                      color: isSelected || isUnavailable ? "#ffffff" : "#111827",
+                      cursor:
+                        isUnavailable || saving ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {number}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <h2 style={styles.heading}>Basket</h2>
+
+      {selectedTickets.length === 0 ? (
+        <div style={styles.notice}>No tickets selected yet.</div>
+      ) : (
+        <div style={styles.basket}>
+          {selectedTickets.map((ticket) => (
+            <div key={ticketKey(ticket.colour, ticket.number)} style={styles.basketRow}>
+              <span>
+                {ticket.colour} ticket #{ticket.number}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => toggleTicket(ticket.colour, ticket.number)}
+                style={styles.removeButton}
               >
-                {colour.name} tickets
-              </h3>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(58px, 1fr))",
-                  gap: 8,
-                }}
-              >
-                {numbers.map((number) => {
-                  const key = ticketKey(colour.name, number);
-                  const isSold = soldSet.has(key);
-                  const isReserved = reservedSet.has(key);
-                  const isSelected = selectedSet.has(key);
-                  const unavailable = isSold || isReserved;
-
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      disabled={unavailable || busy}
-                      onClick={() => toggleTicket(colour.name, number)}
-                      style={{
-                        minHeight: 50,
-                        borderRadius: 10,
-                        border: isSelected
-                          ? "1px solid #0f172a"
-                          : "1px solid #cbd5e1",
-                        background: isSelected
-                          ? "#0f172a"
-                          : unavailable
-                            ? "#e2e8f0"
-                            : "#ffffff",
-                        color: isSelected
-                          ? "#ffffff"
-                          : unavailable
-                            ? "#94a3b8"
-                            : "#1e293b",
-                        fontWeight: 900,
-                        cursor: unavailable || busy ? "not-allowed" : "pointer",
-                        boxShadow: isSelected
-                          ? "0 8px 18px rgba(15,23,42,0.22)"
-                          : "0 1px 2px rgba(15,23,42,0.04)",
-                      }}
-                    >
-                      {number}
-                    </button>
-                  );
-                })}
-              </div>
+                Remove
+              </button>
             </div>
           ))}
         </div>
-      </section>
+      )}
 
-      <section>
-        <h2
-          style={{
-            margin: "0 0 12px",
-            fontSize: 30,
-            lineHeight: 1.1,
-            letterSpacing: "-0.04em",
-            color: "#020617",
-          }}
-        >
-          Basket
-        </h2>
+      <div style={styles.totalBox}>
+        <div>Tickets: {selectedTickets.length}</div>
 
-        <div
-          style={{
-            border: "1px solid #e2e8f0",
-            background: "#f8fafc",
-            borderRadius: 10,
-            padding: 14,
-            color: "#64748b",
-            minHeight: 48,
-          }}
-        >
-          {selectedTickets.length === 0 ? (
-            <span>No tickets selected yet.</span>
-          ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {selectedTickets.map((ticket) => (
-                <button
-                  key={ticketKey(ticket.colour, ticket.number)}
-                  type="button"
-                  onClick={() => toggleTicket(ticket.colour, ticket.number)}
-                  style={{
-                    border: "1px solid #bfdbfe",
-                    background: "#ffffff",
-                    color: "#1d4ed8",
-                    borderRadius: 999,
-                    padding: "8px 11px",
-                    fontWeight: 900,
-                    cursor: "pointer",
-                  }}
-                >
-                  {ticket.colour} {ticket.number} ×
-                </button>
-              ))}
-            </div>
-          )}
+        <div>
+          Ticket total: {formatCurrencyFromCents(subtotalCents, currency)}
         </div>
 
-        <div
-          style={{
-            marginTop: 18,
-            border: "1px solid #e2e8f0",
-            background: "#f8fafc",
-            borderRadius: 10,
-            padding: 16,
-            color: "#020617",
-          }}
-        >
-          <p style={{ margin: "0 0 8px", fontWeight: 900 }}>
-            Tickets: {selectedTickets.length}
-          </p>
-
-          <p style={{ margin: "0 0 12px", fontWeight: 900 }}>
-            Ticket total: {moneyFromCents(ticketTotalCents, currency)}
-          </p>
-
-          <label
-            style={{
-              display: "flex",
-              gap: 12,
-              alignItems: "flex-start",
-              border: "1px solid #e2e8f0",
-              background: "#ffffff",
-              borderRadius: 10,
-              padding: 14,
-              fontWeight: 900,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={coverFees}
-              onChange={(event) => setCoverFees(event.target.checked)}
-              style={{ width: 18, height: 18, marginTop: 2 }}
-            />
-
-            <span>
-              I’d like to cover platform fees
-              <br />
-              <span
-                style={{
-                  color: "#64748b",
-                  fontWeight: 700,
-                  fontSize: 13,
-                }}
-              >
-                Adds approximately {moneyFromCents(platformFeeCents, currency)} so
-                the organiser receives the full ticket value.
-              </span>
-            </span>
-          </label>
-
-          <p style={{ margin: "14px 0 0", fontWeight: 950 }}>
-            Total today: {moneyFromCents(totalTodayCents, currency)}
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <h2
-          style={{
-            margin: "0 0 16px",
-            fontSize: 30,
-            lineHeight: 1.1,
-            letterSpacing: "-0.04em",
-            color: "#020617",
-          }}
-        >
-          Your details
-        </h2>
-
-        <div style={{ display: "grid", gap: 12 }}>
+        <label style={styles.coverFeesBox}>
           <input
-            value={buyerName}
-            onChange={(event) => setBuyerName(event.target.value)}
-            placeholder="Your name"
-            autoComplete="name"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              border: "1px solid #cbd5e1",
-              borderRadius: 10,
-              padding: "14px 15px",
-              fontSize: 16,
-            }}
+            type="checkbox"
+            checked={coverFees}
+            onChange={(event) => setCoverFees(event.target.checked)}
+            disabled={selectedTickets.length === 0}
           />
 
+          <span>
+            <strong>I’d like to cover platform fees</strong>
+            <br />
+            <span style={{ color: "#64748b", fontSize: 13 }}>
+              Adds approximately {formatCurrencyFromCents(feeCents, currency)} so
+              the organiser receives the full ticket value.
+            </span>
+          </span>
+        </label>
+
+        <div>Total today: {formatCurrencyFromCents(totalCents, currency)}</div>
+      </div>
+
+      <h2 style={styles.heading}>Your details</h2>
+
+      <div style={styles.form}>
+        <input
+          value={customerName}
+          onChange={(event) => setCustomerName(event.target.value)}
+          placeholder="Your name"
+          style={styles.input}
+          disabled={saving}
+        />
+
+        <input
+          value={customerEmail}
+          onChange={(event) => setCustomerEmail(event.target.value)}
+          placeholder="Your email"
+          type="email"
+          style={styles.input}
+          disabled={saving}
+        />
+
+        {entryQuestion ? (
+          <div style={styles.questionBox}>
+            <div style={styles.questionTitle}>Entry question</div>
+            <div style={styles.questionText}>{entryQuestion}</div>
+
+            <input
+              value={entryAnswer}
+              onChange={(event) => setEntryAnswer(event.target.value)}
+              placeholder="Your answer"
+              style={styles.input}
+              disabled={saving}
+            />
+          </div>
+        ) : null}
+
+        <label style={styles.termsBox}>
           <input
-            value={buyerEmail}
-            onChange={(event) => setBuyerEmail(event.target.value)}
-            placeholder="Your email"
-            autoComplete="email"
-            type="email"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              border: "1px solid #cbd5e1",
-              borderRadius: 10,
-              padding: "14px 15px",
-              fontSize: 16,
-            }}
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(event) => setTermsAccepted(event.target.checked)}
+            disabled={saving}
           />
 
-          {entryQuestion ? (
-            <div
-              style={{
-                border: "1px solid #bfdbfe",
-                background: "#eff6ff",
-                borderRadius: 12,
-                padding: 14,
-              }}
-            >
-              <label
-                style={{
-                  display: "block",
-                  color: "#1e3a8a",
-                  fontWeight: 950,
-                  marginBottom: 8,
-                }}
-              >
-                Entry question
-              </label>
+          <span>
+            I confirm I have read and accept the{" "}
+            <Link href="/terms" style={styles.inlineLink}>
+              terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" style={styles.inlineLink}>
+              privacy policy
+            </Link>
+            .
+          </span>
+        </label>
 
-              <p
-                style={{
-                  margin: "0 0 10px",
-                  color: "#1e40af",
-                  fontWeight: 800,
-                }}
-              >
-                {entryQuestion}
-              </p>
+        <button
+          type="button"
+          onClick={reserveTickets}
+          disabled={saving || selectedTickets.length === 0}
+          style={{
+            ...styles.primaryButton,
+            opacity: saving || selectedTickets.length === 0 ? 0.6 : 1,
+            cursor:
+              saving || selectedTickets.length === 0
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          {saving ? "Redirecting to checkout..." : "Reserve and pay"}
+        </button>
+      </div>
 
-              <input
-                value={entryAnswer}
-                onChange={(event) => setEntryAnswer(event.target.value)}
-                placeholder="Your answer"
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  border: "1px solid #93c5fd",
-                  borderRadius: 10,
-                  padding: "14px 15px",
-                  fontSize: 16,
-                  background: "#ffffff",
-                }}
-              />
-            </div>
-          ) : null}
+      {reservationMessage ? (
+        <div style={styles.success}>{reservationMessage}</div>
+      ) : null}
 
-          <label
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-start",
-              border: "1px solid #e2e8f0",
-              background: "#f8fafc",
-              borderRadius: 10,
-              padding: 14,
-              color: "#334155",
-              fontSize: 14,
-              lineHeight: 1.45,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={termsAccepted}
-              onChange={(event) => setTermsAccepted(event.target.checked)}
-              style={{ width: 18, height: 18, marginTop: 2 }}
-            />
-
-            <span>
-              I confirm I have read and accept the{" "}
-              <Link href="/terms" style={{ color: "#2563eb", fontWeight: 900 }}>
-                terms
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" style={{ color: "#2563eb", fontWeight: 900 }}>
-                privacy policy
-              </Link>
-              .
-            </span>
-          </label>
-
-          {error ? (
-            <div
-              style={{
-                border: "1px solid #fecaca",
-                background: "#fef2f2",
-                color: "#991b1b",
-                borderRadius: 10,
-                padding: 13,
-                fontWeight: 800,
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={reserveAndPay}
-            disabled={busy}
-            style={{
-              border: 0,
-              borderRadius: 10,
-              padding: "16px 18px",
-              background: busy ? "#94a3b8" : "#22c55e",
-              color: "#ffffff",
-              fontSize: 16,
-              fontWeight: 950,
-              cursor: busy ? "not-allowed" : "pointer",
-            }}
-          >
-            {busy ? "Preparing checkout..." : "Reserve and pay"}
-          </button>
-        </div>
-      </section>
+      {error ? <div style={styles.error}>{error}</div> : null}
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  heading: {
+    marginTop: 0,
+    marginBottom: 12,
+    fontSize: "clamp(20px, 5vw, 28px)",
+    lineHeight: 1.2,
+  },
+  quickSelect: {
+    padding: 16,
+    borderRadius: 14,
+    background: "#f0f9ff",
+    border: "1px solid #bae6fd",
+    display: "grid",
+    gap: 14,
+  },
+  quickControls: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    alignItems: "end",
+  },
+  smallLabel: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#475569",
+  },
+  quantityInput: {
+    width: 130,
+    height: 44,
+    padding: "0 12px",
+    borderRadius: 10,
+    border: "1px solid #93c5fd",
+    fontSize: 16,
+    fontWeight: 700,
+  },
+  autoButton: {
+    height: 44,
+    padding: "0 16px",
+    border: "none",
+    borderRadius: 10,
+    background: "#2563eb",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  clearButton: {
+    height: 44,
+    padding: "0 16px",
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#334155",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  colourHeading: {
+    margin: "0 0 10px",
+    fontSize: 18,
+    color: "#0f172a",
+  },
+  numberGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))",
+    gap: 8,
+  },
+  numberButton: {
+    height: 48,
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    fontWeight: 700,
+  },
+  basket: {
+    display: "grid",
+    gap: 8,
+  },
+  basketRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    borderRadius: 10,
+    flexWrap: "wrap",
+  },
+  removeButton: {
+    border: "none",
+    background: "transparent",
+    color: "#dc2626",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  totalBox: {
+    marginTop: 0,
+    padding: 14,
+    borderRadius: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 8,
+    fontWeight: 700,
+    lineHeight: 1.4,
+    wordBreak: "break-word",
+  },
+  coverFeesBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    cursor: "pointer",
+  },
+  form: {
+    display: "grid",
+    gap: 12,
+  },
+  input: {
+    height: 44,
+    padding: "0 12px",
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    fontSize: 16,
+    minWidth: 0,
+  },
+  questionBox: {
+    padding: 14,
+    borderRadius: 10,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    display: "grid",
+    gap: 10,
+  },
+  questionTitle: {
+    fontWeight: 900,
+    color: "#1e3a8a",
+  },
+  questionText: {
+    color: "#1e40af",
+    fontWeight: 700,
+  },
+  termsBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    cursor: "pointer",
+    color: "#334155",
+    lineHeight: 1.45,
+  },
+  inlineLink: {
+    color: "#2563eb",
+    fontWeight: 800,
+  },
+  primaryButton: {
+    height: 48,
+    border: "none",
+    borderRadius: 10,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 700,
+    fontSize: 16,
+  },
+  notice: {
+    padding: 12,
+    borderRadius: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+  },
+  success: {
+    padding: 12,
+    borderRadius: 10,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+  },
+  error: {
+    padding: 12,
+    borderRadius: 10,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+  },
+};
