@@ -159,11 +159,13 @@ function seatColour({
 }
 
 export default function PublicSeatSelector({
+  eventId,
   eventType,
   seats,
   ticketTypes,
   currency,
 }: {
+  eventId: string;
   eventType: string;
   seats: Seat[];
   ticketTypes: TicketType[];
@@ -187,6 +189,8 @@ export default function PublicSeatSelector({
   );
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
@@ -216,7 +220,9 @@ export default function PublicSeatSelector({
   );
 
   function ticketTypeForSeat(seat: Seat) {
-    return activeTicketTypes.find((ticketType) => ticketType.id === seat.ticket_type_id);
+    return activeTicketTypes.find(
+      (ticketType) => ticketType.id === seat.ticket_type_id,
+    );
   }
 
   function canSelectSeat(seat: Seat) {
@@ -230,6 +236,8 @@ export default function PublicSeatSelector({
   }
 
   function toggleSeat(seat: Seat) {
+    setCheckoutError("");
+
     if (!canSelectSeat(seat)) return;
 
     setCartItems((current) => {
@@ -252,6 +260,44 @@ export default function PublicSeatSelector({
         },
       ];
     });
+  }
+
+  async function startCheckout() {
+    if (cartItems.length === 0 || isCheckingOut) return;
+
+    setCheckoutError("");
+    setIsCheckingOut(true);
+
+    try {
+      const response = await fetch("/api/events/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventId,
+          items: cartItems,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error || "Could not start checkout.");
+      }
+
+      window.location.href = payload.url;
+    } catch (error) {
+      setCheckoutError(
+        error instanceof Error
+          ? error.message
+          : "Could not start checkout. Please try again.",
+      );
+      setIsCheckingOut(false);
+    }
   }
 
   const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
@@ -324,8 +370,7 @@ export default function PublicSeatSelector({
 
           <Legend />
         </div>
-
-        <aside style={styles.cartPanel}>
+                <aside style={styles.cartPanel}>
           <p style={styles.eyebrow}>Checkout summary</p>
           <h3 style={styles.cartTitle}>Your tickets</h3>
 
@@ -354,26 +399,31 @@ export default function PublicSeatSelector({
             </div>
           )}
 
+          {checkoutError ? (
+            <div style={styles.errorBox}>{checkoutError}</div>
+          ) : null}
+
           <button
             type="button"
-            disabled={cartSeats.length === 0}
+            disabled={cartSeats.length === 0 || isCheckingOut}
+            onClick={startCheckout}
             style={{
               ...styles.checkoutButton,
-              opacity: cartSeats.length === 0 ? 0.45 : 1,
+              opacity: cartSeats.length === 0 || isCheckingOut ? 0.45 : 1,
             }}
           >
-            Checkout next
+            {isCheckingOut ? "Opening checkout..." : "Checkout securely"}
           </button>
 
           <p style={styles.checkoutNote}>
-            Seat selection is ready. Stripe checkout will be connected in the
-            next step.
+            Your selected seats are reserved when Stripe checkout opens.
           </p>
         </aside>
       </div>
     </div>
   );
 }
+
 function RowGrid({
   seats,
   ticketTypes,
@@ -395,7 +445,10 @@ function RowGrid({
         {Object.entries(bySection)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([section, sectionSeats]) => {
-            const byRow = groupBy(sectionSeats, (seat) => seat.row_label || "Seats");
+            const byRow = groupBy(
+              sectionSeats,
+              (seat) => seat.row_label || "Seats",
+            );
 
             return (
               <div key={section} style={styles.sectionBlock}>
@@ -406,7 +459,9 @@ function RowGrid({
                   .map(([rowLabel, rowSeats]) => {
                     const sortedSeats = rowSeats
                       .slice()
-                      .sort((a, b) => numericSort(a.seat_number, b.seat_number));
+                      .sort((a, b) =>
+                        numericSort(a.seat_number, b.seat_number),
+                      );
 
                     return (
                       <div key={`${section}-${rowLabel}`} style={styles.rowLine}>
@@ -432,7 +487,9 @@ function RowGrid({
                                   title={
                                     ticketType
                                       ? `${seatLabel(seat)} · ${ticketType.name}`
-                                      : `${seatLabel(seat)} · Normal public seat`
+                                      : `${seatLabel(
+                                          seat,
+                                        )} · Normal public seat`
                                   }
                                   style={seatColour({
                                     seat,
@@ -774,6 +831,17 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 6,
     fontSize: 20,
     fontWeight: 900,
+  },
+  errorBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(239,68,68,0.16)",
+    border: "1px solid rgba(248,113,113,0.45)",
+    color: "#fecaca",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
   },
   checkoutButton: {
     width: "100%",
