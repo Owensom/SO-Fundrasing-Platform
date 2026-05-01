@@ -7,6 +7,10 @@ import { query } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function clean(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
@@ -40,6 +44,20 @@ export async function POST(
         { ok: false, error: "Raffle is closed" },
         { status: 400 },
       );
+    }
+
+    const question = (raffle.config_json as any)?.question;
+
+    if (question?.text && question?.answer) {
+      const submittedAnswer = clean(body.answer);
+      const correctAnswer = clean(question.answer);
+
+      if (!submittedAnswer || submittedAnswer !== correctAnswer) {
+        return NextResponse.json(
+          { ok: false, error: "Incorrect answer to entry question" },
+          { status: 400 },
+        );
+      }
     }
 
     const buyerName = String(body.buyerName ?? body.buyer_name ?? "").trim();
