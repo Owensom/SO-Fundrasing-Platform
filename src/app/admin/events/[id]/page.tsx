@@ -3,16 +3,20 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import ImageUploadField from "@/components/ImageUploadField";
+import AdminSeatManager from "@/components/admin/events/AdminSeatManager";
 import {
   createEventSeat,
   createEventTicketType,
   deleteEvent,
+  deleteEventRowsByKeys,
   deleteEventRowSeats,
+  deleteEventSeatsByIds,
   deleteEventTableSeats,
   deleteEventTicketType,
   deleteEventTicketTypes,
   getEventById,
   updateEvent,
+  updateEventSeatsTicketType,
   updateEventTicketType,
   type EventType,
 } from "../../../../../api/_lib/events-repo";
@@ -66,6 +70,19 @@ function parseAisleAfterList(value: FormDataEntryValue | null) {
         .map((number) => Math.floor(number)),
     ),
   );
+}
+
+function parseJsonStringArray(value: FormDataEntryValue | null): string[] {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 function expandRows(value: string): string[] {
@@ -133,64 +150,6 @@ function statusLabel(status: string) {
   if (status === "published") return "Published";
   if (status === "closed") return "Closed";
   return "Draft";
-}
-
-function numericSort(a: string | null, b: string | null) {
-  const aNumber = Number(a);
-  const bNumber = Number(b);
-
-  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
-    return aNumber - bNumber;
-  }
-
-  return String(a || "").localeCompare(String(b || ""));
-}
-
-function groupBy<T>(items: T[], getKey: (item: T) => string) {
-  return items.reduce<Record<string, T[]>>((groups, item) => {
-    const key = getKey(item);
-    groups[key] = groups[key] || [];
-    groups[key].push(item);
-    return groups;
-  }, {});
-}
-
-function seatBoxStyle(status: string): CSSProperties {
-  const base = styles.seatBox;
-
-  if (status === "sold") {
-    return {
-      ...base,
-      background: "#fee2e2",
-      borderColor: "#fecaca",
-      color: "#991b1b",
-    };
-  }
-
-  if (status === "reserved") {
-    return {
-      ...base,
-      background: "#fef3c7",
-      borderColor: "#fde68a",
-      color: "#92400e",
-    };
-  }
-
-  if (status === "blocked") {
-    return {
-      ...base,
-      background: "#e2e8f0",
-      borderColor: "#cbd5e1",
-      color: "#334155",
-    };
-  }
-
-  return {
-    ...base,
-    background: "#dcfce7",
-    borderColor: "#bbf7d0",
-    color: "#166534",
-  };
 }
 
 async function updateEventAction(formData: FormData) {
@@ -263,7 +222,6 @@ async function addTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=ticket#tickets`);
 }
-
 async function updateTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -355,9 +313,7 @@ async function generateSeatsAction(formData: FormData) {
           aisleAfter: aisleAfterList.includes(seat) ? seat : null,
           status: "available",
         });
-      } catch {
-        // Skip duplicates safely.
-      }
+      } catch {}
     }
   }
 
@@ -398,15 +354,12 @@ async function generateTablesAction(formData: FormData) {
           aisleAfter: null,
           status: "available",
         });
-      } catch {
-        // Skip duplicates safely.
-      }
+      } catch {}
     }
   }
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
-
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -431,6 +384,71 @@ async function clearTableSeatsAction(formData: FormData) {
   if (eventId) await deleteEventTableSeats(eventId);
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
+}
+
+async function applySeatTicketTypeAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+
+  if (!eventId || !ticketTypeId || seatIds.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+  }
+
+  await updateEventSeatsTicketType({
+    eventId,
+    seatIds,
+    ticketTypeId,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seat-pricing#row-seating`);
+}
+
+async function deleteSelectedSeatsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+
+  if (!eventId || seatIds.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+  }
+
+  await deleteEventSeatsByIds({
+    eventId,
+    seatIds,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=selected-seats-deleted#row-seating`);
+}
+
+async function deleteSelectedRowsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const rowKeys = parseJsonStringArray(formData.get("row_keys"));
+
+  if (!eventId || rowKeys.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-row-selection#row-seating`);
+  }
+
+  await deleteEventRowsByKeys({
+    eventId,
+    rowKeys,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=selected-rows-deleted#row-seating`);
 }
 
 async function deleteEventAction(formData: FormData) {
@@ -519,25 +537,11 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>
-          Overview
-        </a>
-        <a href="#tickets" style={styles.tab}>
-          Tickets & Prices
-        </a>
-        {isReservedSeating && (
-          <a href="#row-seating" style={styles.tab}>
-            Row Seating
-          </a>
-        )}
-        {isTables && (
-          <a href="#table-seating" style={styles.tab}>
-            Table Seating
-          </a>
-        )}
-        <a href="#orders" style={styles.tab}>
-          Orders
-        </a>
+        <a href="#overview" style={styles.tab}>Overview</a>
+        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
+        {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
+        {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
+        <a href="#orders" style={styles.tab}>Orders</a>
       </nav>
 
       {searchParams?.saved && (
@@ -556,8 +560,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Choose the event type first. The admin page only shows the sections
-              needed for that type.
+              Choose the event type first. The admin page only shows the sections needed for that type.
             </p>
           </div>
         </div>
@@ -589,21 +592,11 @@ export default async function AdminEventManagePage({
             <input type="hidden" name="id" value={event.id} />
 
             <Field label="Title">
-              <input
-                name="title"
-                required
-                defaultValue={event.title}
-                style={styles.input}
-              />
+              <input name="title" required defaultValue={event.title} style={styles.input} />
             </Field>
 
             <Field label="Slug">
-              <input
-                name="slug"
-                required
-                defaultValue={event.slug}
-                style={styles.input}
-              />
+              <input name="slug" required defaultValue={event.slug} style={styles.input} />
             </Field>
 
             <Field label="Description">
@@ -618,27 +611,19 @@ export default async function AdminEventManagePage({
             <div style={styles.mediaBox}>
               <div>
                 <h3 style={styles.panelTitle}>Event image</h3>
-                <p style={styles.sectionText}>
-                  Upload or replace the public event image.
-                </p>
-
+                <p style={styles.sectionText}>Upload or replace the public event image.</p>
                 <ImageUploadField currentImageUrl={event.image_url ?? ""} />
               </div>
 
               <div style={styles.previewBox}>
                 {event.image_url ? (
-                  <img
-                    src={event.image_url}
-                    alt={event.title}
-                    style={styles.previewImage}
-                  />
+                  <img src={event.image_url} alt={event.title} style={styles.previewImage} />
                 ) : (
                   <div style={styles.emptyPreview}>🎫</div>
                 )}
               </div>
             </div>
-
-            <div style={styles.twoCol}>
+                        <div style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -912,8 +897,8 @@ export default async function AdminEventManagePage({
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Row Seating</h2>
               <p style={styles.sectionText}>
-                Generate row layouts using comma lists or ranges. Examples:
-                1-3, 1-3,8-10, A-C, A,B,C.
+                Generate row layouts first, then use Seat Manager to price or
+                remove individual seats and full rows.
               </p>
             </div>
           </div>
@@ -1010,9 +995,10 @@ export default async function AdminEventManagePage({
           <div style={styles.panel}>
             <div style={styles.panelHeader}>
               <div>
-                <h3 style={styles.panelTitle}>Row seating grid</h3>
+                <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Sections and aisle gaps are previewed below.
+                  Click seats to select them. Click a row label to select the
+                  full row. Then apply a price or delete selected seats/rows.
                 </p>
               </div>
 
@@ -1027,9 +1013,16 @@ export default async function AdminEventManagePage({
             {rowSeats.length === 0 ? (
               <div style={styles.emptyBox}>No row seats generated yet.</div>
             ) : (
-              <div style={styles.visualPanel}>
-                <SeatRowGrid seats={rowSeats} />
-              </div>
+              <AdminSeatManager
+                eventId={event.id}
+                seats={rowSeats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                mode="rows"
+                applyTicketTypeAction={applySeatTicketTypeAction}
+                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                deleteSelectedRowsAction={deleteSelectedRowsAction}
+              />
             )}
           </div>
         </section>
@@ -1042,7 +1035,8 @@ export default async function AdminEventManagePage({
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Table Seating</h2>
               <p style={styles.sectionText}>
-                Generate table layouts separately from row seating.
+                Generate table layouts first, then use Seat Manager to price or
+                remove individual table seats.
               </p>
             </div>
           </div>
@@ -1125,9 +1119,10 @@ export default async function AdminEventManagePage({
           <div style={styles.panel}>
             <div style={styles.panelHeader}>
               <div>
-                <h3 style={styles.panelTitle}>Table seating grid</h3>
+                <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Tables are grouped by table number.
+                  Click table seats to select them. Then apply a price or delete
+                  selected seats.
                 </p>
               </div>
 
@@ -1142,9 +1137,15 @@ export default async function AdminEventManagePage({
             {tableSeats.length === 0 ? (
               <div style={styles.emptyBox}>No table seats generated yet.</div>
             ) : (
-              <div style={styles.visualPanel}>
-                <TableSeatGrid seats={tableSeats} />
-              </div>
+              <AdminSeatManager
+                eventId={event.id}
+                seats={tableSeats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                mode="tables"
+                applyTicketTypeAction={applySeatTicketTypeAction}
+                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+              />
             )}
           </div>
         </section>
@@ -1207,108 +1208,6 @@ function Field({
       <span style={styles.label}>{label}</span>
       {children}
     </label>
-  );
-}
-
-function SeatRowGrid({
-  seats,
-}: {
-  seats: {
-    id: string;
-    section: string | null;
-    row_label: string | null;
-    seat_number: string | null;
-    aisle_after: number | null;
-    status: string;
-  }[];
-}) {
-  const bySection = groupBy(seats, (seat) => seat.section || "Main");
-
-  return (
-    <div style={styles.gridStack}>
-      {Object.entries(bySection)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([section, sectionSeats]) => {
-          const byRow = groupBy(sectionSeats, (seat) => seat.row_label || "No row");
-
-          return (
-            <div key={section} style={styles.sectionBlock}>
-              <div style={styles.gridSectionTitle}>{section}</div>
-
-              {Object.entries(byRow)
-                .sort(([a], [b]) => numericSort(a, b))
-                .map(([row, rowSeats]) => {
-                  const sortedSeats = rowSeats
-                    .slice()
-                    .sort((a, b) => numericSort(a.seat_number, b.seat_number));
-
-                  return (
-                    <div key={`${section}-${row}`} style={styles.rowLineCentered}>
-                      <div style={styles.rowLabel}>Row {row}</div>
-
-                      <div style={styles.rowSeatWrap}>
-                        {sortedSeats.map((seat) => (
-                          <span key={seat.id} style={styles.seatWithGap}>
-                            <span
-                              title={`Row ${row}, Seat ${seat.seat_number} — ${seat.status}`}
-                              style={seatBoxStyle(seat.status)}
-                            >
-                              {seat.seat_number}
-                            </span>
-
-                            {seat.aisle_after ? (
-                              <span style={styles.aisleGap} />
-                            ) : null}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          );
-        })}
-    </div>
-  );
-}
-
-function TableSeatGrid({
-  seats,
-}: {
-  seats: {
-    id: string;
-    table_number: string | null;
-    seat_number: string | null;
-    status: string;
-  }[];
-}) {
-  const byTable = groupBy(seats, (seat) => seat.table_number || "No table");
-
-  return (
-    <div style={styles.tableGrid}>
-      {Object.entries(byTable)
-        .sort(([a], [b]) => numericSort(a, b))
-        .map(([table, tableSeats]) => (
-          <div key={table} style={styles.tableCard}>
-            <div style={styles.tableTitle}>Table {table}</div>
-
-            <div style={styles.tableSeatWrap}>
-              {tableSeats
-                .slice()
-                .sort((a, b) => numericSort(a.seat_number, b.seat_number))
-                .map((seat) => (
-                  <span
-                    key={seat.id}
-                    title={`Table ${table}, Seat ${seat.seat_number} — ${seat.status}`}
-                    style={seatBoxStyle(seat.status)}
-                  >
-                    {seat.seat_number}
-                  </span>
-                ))}
-            </div>
-          </div>
-        ))}
-    </div>
   );
 }
 
@@ -1680,91 +1579,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
-  },
-  visualPanel: {
-    padding: 14,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    overflowX: "auto",
-  },
-  gridStack: {
-    display: "grid",
-    gap: 18,
-    minWidth: "max-content",
-  },
-  sectionBlock: {
-    display: "grid",
-    gap: 8,
-  },
-  gridSectionTitle: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  rowLineCentered: {
-    display: "grid",
-    gridTemplateColumns: "80px 1fr",
-    gap: 10,
-    alignItems: "center",
-  },
-  rowLabel: {
-    color: "#475569",
-    fontSize: 13,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-  },
-  rowSeatWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    flexWrap: "nowrap",
-  },
-  seatWithGap: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  aisleGap: {
-    width: 34,
-    minWidth: 34,
-  },
-  seatBox: {
-    minWidth: 30,
-    height: 30,
-    padding: "0 6px",
-    borderRadius: 8,
-    border: "1px solid #cbd5e1",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 900,
-    boxSizing: "border-box",
-  },
-  tableGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-  },
-  tableCard: {
-    padding: 12,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  tableTitle: {
-    marginBottom: 10,
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 900,
-  },
-  tableSeatWrap: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 5,
   },
   dangerSection: {
     padding: 18,
