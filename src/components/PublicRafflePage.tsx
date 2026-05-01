@@ -215,23 +215,17 @@ function toSafeRaffle(input: any): SafeRaffle {
     title: String(raw.title ?? "Raffle"),
     description: String(raw.description ?? ""),
     imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
-
     imagePosition: normaliseImagePosition(
       raw.imagePosition ?? raw.image_position ?? config.image_position,
     ),
-
     tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
     drawAt: raw.drawAt ?? null,
-
     startNumber: Number.isFinite(startNumber) ? startNumber : 1,
     endNumber: Number.isFinite(endNumber) ? endNumber : 1,
-
     currency: String(raw.currency ?? "GBP"),
-
     ticketPrice: Number.isFinite(Number(raw.ticketPrice))
       ? Number(raw.ticketPrice)
       : 0,
-
     status: normaliseFrontendStatus(raw.status),
 
     colours: colours.map((c: any, index: number) => ({
@@ -311,7 +305,6 @@ function toSafeRaffle(input: any): SafeRaffle {
     legalAnswer: legalAnswer.trim(),
   };
 }
-
 function calculateBestPrice(
   quantity: number,
   ticketPrice: number,
@@ -325,6 +318,7 @@ function calculateBestPrice(
       if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
         return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       }
+
       return a.quantity - b.quantity;
     });
 
@@ -748,8 +742,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
     autoSelectTicketQuantity(autoQuantity);
   }
-
-  async function reserveTickets() {
+    async function reserveTickets() {
     if (!raffle || !canReserve) return;
 
     try {
@@ -964,6 +957,13 @@ export default function PublicRafflePage({ slug }: Props) {
           </div>
           <div>Status: {raffle.status}</div>
           <div>Available now: {availableCount}</div>
+        </div>
+
+        <div style={styles.disclaimerBox}>
+          This campaign is run by the organiser. The platform provides software
+          only and is not responsible for the operation of this draw. The
+          organiser is responsible for ensuring compliance with all applicable
+          laws.
         </div>
 
         {raffle.prizes.length > 0 ? (
@@ -1471,6 +1471,29 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "clamp(20px, 5vw, 28px)",
     lineHeight: 1.2,
   },
+  totalBox: {
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 8,
+    fontWeight: 700,
+    lineHeight: 1.4,
+    wordBreak: "break-word",
+  },
+  disclaimerBox: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    color: "#7c2d12",
+    fontSize: 13,
+    fontWeight: 700,
+    lineHeight: 1.5,
+  },
   prizesBox: {
     marginTop: 20,
     padding: 16,
@@ -1683,18 +1706,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#dc2626",
     fontWeight: 700,
     cursor: "pointer",
-  },
-  totalBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 8,
-    fontWeight: 700,
-    lineHeight: 1.4,
-    wordBreak: "break-word",
   },
   coverFeesBox: {
     display: "flex",
