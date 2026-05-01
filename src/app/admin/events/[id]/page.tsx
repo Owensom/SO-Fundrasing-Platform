@@ -343,16 +343,26 @@ async function generateSeatsAction(formData: FormData) {
 
   for (const row of rows) {
     for (let seat = 1; seat <= seatsPerRow; seat += 1) {
-      await createEventSeat({
-        eventId,
-        ticketTypeId,
-        section: section || null,
-        rowLabel: row,
-        seatNumber: String(seat),
-        tableNumber: null,
-        aisleAfter: aisleAfterList.includes(seat) ? seat : null,
-        status: "available",
-      });
+      try {
+        await createEventSeat({
+          eventId,
+          ticketTypeId,
+          section: section || null,
+          rowLabel: row,
+          seatNumber: String(seat),
+          tableNumber: null,
+          aisleAfter: aisleAfterList.includes(seat) ? seat : null,
+          status: "available",
+        });
+      } catch (error) {
+        console.error("Skipping duplicate event seat", {
+          eventId,
+          section,
+          row,
+          seat,
+          error,
+        });
+      }
     }
   }
 
@@ -423,7 +433,6 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
-
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -446,8 +455,8 @@ export default async function AdminEventManagePage({
   const visibleSeats = isReservedSeating
     ? rowSeats
     : isTables
-      ? tableSeats
-      : seats;
+    ? tableSeats
+    : seats;
 
   const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
   const reservedSeats = visibleSeats.filter(
@@ -468,8 +477,12 @@ export default async function AdminEventManagePage({
           <h1 style={styles.title}>{event.title}</h1>
 
           <div style={styles.badgeRow}>
-            <span style={styles.goldBadge}>{eventTypeLabel(event.event_type)}</span>
-            <span style={styles.darkBadge}>{statusLabel(event.status)}</span>
+            <span style={styles.goldBadge}>
+              {eventTypeLabel(event.event_type)}
+            </span>
+            <span style={styles.darkBadge}>
+              {statusLabel(event.status)}
+            </span>
             <span style={styles.darkBadge}>{event.currency}</span>
           </div>
 
@@ -480,7 +493,11 @@ export default async function AdminEventManagePage({
 
         <div style={styles.heroImageWrap}>
           {event.image_url ? (
-            <img src={event.image_url} alt={event.title} style={styles.heroImage} />
+            <img
+              src={event.image_url}
+              alt={event.title}
+              style={styles.heroImage}
+            />
           ) : (
             <div style={styles.heroImageEmpty}>🎫</div>
           )}
@@ -534,7 +551,8 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Choose the event type first. The admin page only shows the sections needed for that type.
+              Choose the event type first. The admin page only shows the
+              sections needed for that type.
             </p>
           </div>
         </div>
@@ -549,8 +567,8 @@ export default async function AdminEventManagePage({
                   ? `${event.capacity} tickets`
                   : "Unlimited"
                 : isReservedSeating
-                  ? `${rowSeats.length} row seats`
-                  : `${tableSeats.length} table seats`
+                ? `${rowSeats.length} row seats`
+                : `${tableSeats.length} table seats`
             }
           />
           <SummaryCard label="Available" value={availableSeats} />
@@ -599,7 +617,9 @@ export default async function AdminEventManagePage({
                   Upload or replace the public event image.
                 </p>
 
-                <ImageUploadField currentImageUrl={event.image_url ?? ""} />
+                <ImageUploadField
+                  currentImageUrl={event.image_url ?? ""}
+                />
               </div>
 
               <div style={styles.previewBox}>
@@ -614,8 +634,7 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-
-            <div style={styles.twoCol}>
+                        <div style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -1702,22 +1721,6 @@ const styles: Record<string, CSSProperties> = {
   seatWithGap: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 4,
-  },
-  rowCenterWrap: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto 1fr",
-    alignItems: "center",
-    minWidth: 420,
-  },
-  leftSeatBlock: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 4,
-  },
-  rightSeatBlock: {
-    display: "flex",
-    justifyContent: "flex-start",
     gap: 4,
   },
   aisleGap: {
