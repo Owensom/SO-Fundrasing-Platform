@@ -19,13 +19,12 @@ type Seat = {
   status: string;
 };
 
-const ticketColours = [
-  { background: "#facc15", text: "#422006", label: "Gold" },
-  { background: "#34d399", text: "#022c22", label: "Green" },
-  { background: "#a78bfa", text: "#2e1065", label: "Purple" },
-  { background: "#fb7185", text: "#4c0519", label: "Rose" },
-  { background: "#60a5fa", text: "#082f49", label: "Blue" },
-  { background: "#fb923c", text: "#431407", label: "Orange" },
+const specialColours = [
+  { background: "#facc15", text: "#422006" },
+  { background: "#a78bfa", text: "#2e1065" },
+  { background: "#fb7185", text: "#4c0519" },
+  { background: "#60a5fa", text: "#082f49" },
+  { background: "#fb923c", text: "#431407" },
 ];
 
 function moneyFromCents(cents: number | null | undefined) {
@@ -61,7 +60,11 @@ function colourForTicketType(
   ticketTypes: TicketType[],
 ) {
   if (!ticketType) {
-    return { background: "#f8fafc", text: "#0f172a", label: "Unpriced" };
+    return {
+      background: "#dcfce7",
+      text: "#14532d",
+      label: "Normal public seat",
+    };
   }
 
   const index = Math.max(
@@ -69,19 +72,38 @@ function colourForTicketType(
     ticketTypes.findIndex((item) => item.id === ticketType.id),
   );
 
-  return ticketColours[index % ticketColours.length];
+  return {
+    ...specialColours[index % specialColours.length],
+    label: ticketType.name,
+  };
 }
 
 function seatStyle({
   selected,
   ticketType,
   ticketTypes,
+  status,
 }: {
   selected: boolean;
   ticketType: TicketType | undefined;
   ticketTypes: TicketType[];
+  status: string;
 }): CSSProperties {
   const colour = colourForTicketType(ticketType, ticketTypes);
+
+  if (status === "blocked") {
+    return {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "1px solid #64748b",
+      background: selected ? "#bae6fd" : "#334155",
+      color: selected ? "#082f49" : "#e2e8f0",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "pointer",
+    };
+  }
 
   return {
     minWidth: 32,
@@ -120,12 +142,10 @@ export default function AdminSeatManager({
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
 
-  const unpricedSeats = useMemo(
+  const normalSeats = useMemo(
     () => seats.filter((seat) => !seat.ticket_type_id),
     [seats],
   );
-
-  const unpricedCount = unpricedSeats.length;
 
   const selectedRows = useMemo(
     () => Array.from(new Set(selectedRowKeys)),
@@ -163,8 +183,8 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
-  function selectUnpricedSeats() {
-    setSelectedSeatIds(unpricedSeats.map((seat) => seat.id));
+  function selectNormalSeats() {
+    setSelectedSeatIds(normalSeats.map((seat) => seat.id));
     setSelectedRowKeys([]);
   }
 
@@ -179,24 +199,22 @@ export default function AdminSeatManager({
         <div>
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
-            Select seats like a buyer, then apply a ticket type or delete them.
-            {mode === "rows"
-              ? " Click a row label to select the whole row."
-              : ""}
+            Leave normal seats green. Only mark exceptions such as VIP or
+            Complimentary. Buyers can choose Standard/Concession on normal seats.
           </p>
         </div>
 
         <div style={styles.toolbarButtons}>
           <button
             type="button"
-            onClick={selectUnpricedSeats}
-            disabled={unpricedCount === 0}
+            onClick={selectNormalSeats}
+            disabled={normalSeats.length === 0}
             style={{
-              ...styles.warningButton,
-              opacity: unpricedCount === 0 ? 0.45 : 1,
+              ...styles.normalButton,
+              opacity: normalSeats.length === 0 ? 0.45 : 1,
             }}
           >
-            Select unpriced seats ({unpricedCount})
+            Select normal seats ({normalSeats.length})
           </button>
 
           <button
@@ -210,7 +228,13 @@ export default function AdminSeatManager({
       </div>
 
       <div style={styles.legendBox}>
-        <strong>Ticket colours:</strong>
+        <strong>Seat colours:</strong>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#dcfce7" }} />
+          Normal public seat — Standard/Concession
+        </span>
+
         {ticketTypes.map((ticketType) => {
           const colour = colourForTicketType(ticketType, ticketTypes);
 
@@ -226,22 +250,20 @@ export default function AdminSeatManager({
             </span>
           );
         })}
+
         <span style={styles.legendItem}>
-          <span style={{ ...styles.legendDot, background: "#f8fafc" }} />
-          Unpriced
+          <span style={{ ...styles.legendDot, background: "#334155" }} />
+          Blocked
         </span>
       </div>
 
-      <div style={styles.actionPanel}>
-        {unpricedCount > 0 ? (
-          <div style={styles.warningBox}>
-            ⚠ {unpricedCount} seats have no pricing. Select them and apply a
-            ticket type before publishing checkout.
-          </div>
-        ) : (
-          <div style={styles.successBox}>All seats have pricing assigned.</div>
-        )}
+      <div style={styles.infoBox}>
+        <strong>{normalSeats.length}</strong> normal public seats. These do not
+        need a fixed ticket type. Public buyers can buy them as Standard, and as
+        Concession if that ticket type is active.
+      </div>
 
+      <div style={styles.actionPanel}>
         <div style={styles.summaryBox}>
           <strong>{selectedSeatIds.length}</strong> selected seats
           {mode === "rows" && (
@@ -267,7 +289,8 @@ export default function AdminSeatManager({
             style={styles.select}
             required
           >
-            <option value="">Choose ticket type</option>
+            <option value="">Choose seat marking</option>
+            <option value="__normal__">Normal public seat</option>
             {ticketTypes.map((ticketType) => (
               <option key={ticketType.id} value={ticketType.id}>
                 {ticketType.name} — {currency} {moneyFromCents(ticketType.price)}
@@ -283,7 +306,7 @@ export default function AdminSeatManager({
               opacity: selectedSeatIds.length === 0 || !ticketTypeId ? 0.45 : 1,
             }}
           >
-            Apply price to selected seats
+            Apply marking to selected seats
           </button>
         </form>
 
@@ -353,11 +376,12 @@ export default function AdminSeatManager({
                             key={seat.id}
                             type="button"
                             onClick={() => toggleSeat(seat.id)}
-                            title={ticketType?.name || "No price assigned"}
+                            title={ticketType?.name || "Normal public seat"}
                             style={seatStyle({
                               selected: selectedSeatIds.includes(seat.id),
                               ticketType,
                               ticketTypes,
+                              status: seat.status,
                             })}
                           >
                             {seat.seat_number}
@@ -414,11 +438,14 @@ export default function AdminSeatManager({
                                   <button
                                     type="button"
                                     onClick={() => toggleSeat(seat.id)}
-                                    title={ticketType?.name || "No price assigned"}
+                                    title={
+                                      ticketType?.name || "Normal public seat"
+                                    }
                                     style={seatStyle({
                                       selected: selectedSeatIds.includes(seat.id),
                                       ticketType,
                                       ticketTypes,
+                                      status: seat.status,
                                     })}
                                   >
                                     {seat.seat_number}
@@ -467,16 +494,21 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 800,
   },
-  legendItem: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  },
+  legendItem: { display: "inline-flex", alignItems: "center", gap: 6 },
   legendDot: {
     width: 14,
     height: 14,
     borderRadius: 999,
     border: "1px solid #94a3b8",
+  },
+  infoBox: {
+    padding: 10,
+    borderRadius: 12,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    fontSize: 13,
+    fontWeight: 800,
   },
   actionPanel: {
     display: "grid",
@@ -485,24 +517,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-  },
-  warningBox: {
-    padding: 10,
-    borderRadius: 12,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#b91c1c",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  successBox: {
-    padding: 10,
-    borderRadius: 12,
-    background: "#dcfce7",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-    fontSize: 13,
-    fontWeight: 900,
   },
   summaryBox: { color: "#0f172a", fontSize: 14, fontWeight: 800 },
   actionForm: { display: "flex", gap: 8, flexWrap: "wrap" },
@@ -534,12 +548,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  warningButton: {
+  normalButton: {
     minHeight: 40,
     borderRadius: 999,
-    border: "1px solid #f59e0b",
-    background: "#fef3c7",
-    color: "#92400e",
+    border: "1px solid #86efac",
+    background: "#dcfce7",
+    color: "#14532d",
     padding: "0 14px",
     fontWeight: 900,
     cursor: "pointer",
