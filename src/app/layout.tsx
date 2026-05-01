@@ -102,6 +102,26 @@ export default function RootLayout({
               }}
             />
 
+            {/* ✅ LEGAL LINKS (ADDED) */}
+            <div
+              style={{
+                marginTop: "14px",
+                display: "flex",
+                justifyContent: "center",
+                gap: "16px",
+                flexWrap: "wrap",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              <Link href="/terms" style={{ color: "#2563eb" }}>
+                Terms
+              </Link>
+              <Link href="/privacy" style={{ color: "#2563eb" }}>
+                Privacy
+              </Link>
+            </div>
+
             <div style={{ marginTop: "12px" }}>
               © {new Date().getFullYear()} SO Fundraising Platform
             </div>
