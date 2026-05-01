@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type TicketType = {
   id: string;
@@ -53,6 +53,10 @@ function groupBy<T>(items: T[], getKey: (item: T) => string) {
 
 function rowKeyForSeat(seat: Seat) {
   return `${seat.section || ""}|${seat.row_label || ""}`;
+}
+
+function rowVisualUnits(rowSeats: Seat[]) {
+  return rowSeats.length + rowSeats.filter((seat) => seat.aisle_after).length * 2;
 }
 
 function colourForTicketType(
@@ -141,6 +145,26 @@ export default function AdminSeatManager({
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
+  const [manualOffsets, setManualOffsets] = useState<Record<string, number>>({});
+
+  const storageKey = `event-row-offsets-${eventId}`;
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved) setManualOffsets(JSON.parse(saved));
+    } catch {
+      setManualOffsets({});
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(manualOffsets));
+    } catch {
+      // Ignore storage issues.
+    }
+  }, [manualOffsets, storageKey]);
 
   const normalSeats = useMemo(
     () => seats.filter((seat) => !seat.ticket_type_id),
@@ -151,6 +175,17 @@ export default function AdminSeatManager({
     () => Array.from(new Set(selectedRowKeys)),
     [selectedRowKeys],
   );
+
+  function changeRowOffset(rowKey: string, amount: number) {
+    setManualOffsets((current) => ({
+      ...current,
+      [rowKey]: Math.max(-20, Math.min(20, (current[rowKey] || 0) + amount)),
+    }));
+  }
+
+  function resetRowOffsets() {
+    setManualOffsets({});
+  }
 
   function toggleSeat(seatId: string) {
     setSelectedSeatIds((current) =>
@@ -199,12 +234,22 @@ export default function AdminSeatManager({
         <div>
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
-            Leave normal seats green. Only mark exceptions such as VIP or
-            Complimentary. Buyers can choose Standard/Concession on normal seats.
+            Leave normal seats green. Use row nudges to line up aisles when rows
+            have different lengths.
           </p>
         </div>
 
         <div style={styles.toolbarButtons}>
+          {mode === "rows" && (
+            <button
+              type="button"
+              onClick={resetRowOffsets}
+              style={styles.secondaryButton}
+            >
+              Reset row nudges
+            </button>
+          )}
+
           <button
             type="button"
             onClick={selectNormalSeats}
@@ -240,12 +285,7 @@ export default function AdminSeatManager({
 
           return (
             <span key={ticketType.id} style={styles.legendItem}>
-              <span
-                style={{
-                  ...styles.legendDot,
-                  background: colour.background,
-                }}
-              />
+              <span style={{ ...styles.legendDot, background: colour.background }} />
               {ticketType.name} — {currency} {moneyFromCents(ticketType.price)}
             </span>
           );
@@ -258,9 +298,8 @@ export default function AdminSeatManager({
       </div>
 
       <div style={styles.infoBox}>
-        <strong>{normalSeats.length}</strong> normal public seats. These do not
-        need a fixed ticket type. Public buyers can buy them as Standard, and as
-        Concession if that ticket type is active.
+        <strong>{normalSeats.length}</strong> normal public seats. Row nudges are
+        saved in this browser for admin layout editing.
       </div>
 
       <div style={styles.actionPanel}>
@@ -395,72 +434,108 @@ export default function AdminSeatManager({
 
             const rows = groupBy(groupSeats, (seat) => seat.row_label || "No row");
 
+            const rowEntries = Object.entries(rows).sort(([a], [b]) =>
+              numericSort(a, b),
+            );
+
+            const maxUnits = Math.max(
+              1,
+              ...rowEntries.map(([, rowSeats]) => rowVisualUnits(rowSeats)),
+            );
+
             return (
               <div key={group} style={styles.groupBlock}>
                 <h4 style={styles.groupTitle}>{group}</h4>
 
-                {Object.entries(rows)
-                  .sort(([a], [b]) => numericSort(a, b))
-                  .map(([row, rowSeats]) => {
-                    const actualKey =
-                      rowSeats.length > 0
-                        ? rowKeyForSeat(rowSeats[0])
-                        : `${group === "Main" ? "" : group}|${row}`;
+                {rowEntries.map(([row, rowSeats]) => {
+                  const actualKey =
+                    rowSeats.length > 0
+                      ? rowKeyForSeat(rowSeats[0])
+                      : `${group === "Main" ? "" : group}|${row}`;
 
-                    const rowSelected = selectedRowKeys.includes(actualKey);
+                  const rowSelected = selectedRowKeys.includes(actualKey);
+                  const sortedRowSeats = rowSeats
+                    .slice()
+                    .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
-                    return (
-                      <div key={`${group}-${row}`} style={styles.rowLine}>
+                  const autoOffset = Math.max(
+                    0,
+                    Math.floor((maxUnits - rowVisualUnits(rowSeats)) / 2),
+                  );
+
+                  const manualOffset = manualOffsets[actualKey] || 0;
+                  const totalOffset = Math.max(0, autoOffset + manualOffset);
+
+                  return (
+                    <div key={`${group}-${row}`} style={styles.rowLine}>
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(actualKey, rowSeats)}
+                        style={{
+                          ...styles.rowButton,
+                          background: rowSelected ? "#bae6fd" : "#ffffff",
+                        }}
+                      >
+                        Row {row}
+                      </button>
+
+                      <div style={styles.rowNudgeControls}>
                         <button
                           type="button"
-                          onClick={() => toggleRow(actualKey, rowSeats)}
-                          style={{
-                            ...styles.rowButton,
-                            background: rowSelected ? "#bae6fd" : "#ffffff",
-                          }}
+                          onClick={() => changeRowOffset(actualKey, -1)}
+                          style={styles.nudgeButton}
+                          title="Move row left"
                         >
-                          Row {row}
+                          ←
                         </button>
-
-                        <div style={styles.seatLine}>
-                          {rowSeats
-                            .slice()
-                            .sort((a, b) =>
-                              numericSort(a.seat_number, b.seat_number),
-                            )
-                            .map((seat) => {
-                              const ticketType = ticketTypes.find(
-                                (item) => item.id === seat.ticket_type_id,
-                              );
-
-                              return (
-                                <span key={seat.id} style={styles.seatWrap}>
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSeat(seat.id)}
-                                    title={
-                                      ticketType?.name || "Normal public seat"
-                                    }
-                                    style={seatStyle({
-                                      selected: selectedSeatIds.includes(seat.id),
-                                      ticketType,
-                                      ticketTypes,
-                                      status: seat.status,
-                                    })}
-                                  >
-                                    {seat.seat_number}
-                                  </button>
-
-                                  {seat.aisle_after ? (
-                                    <span style={styles.aisle}>Aisle</span>
-                                  ) : null}
-                                </span>
-                              );
-                            })}
-                        </div>
+                        <span style={styles.offsetPill}>+{totalOffset}</span>
+                        <button
+                          type="button"
+                          onClick={() => changeRowOffset(actualKey, 1)}
+                          style={styles.nudgeButton}
+                          title="Move row right"
+                        >
+                          →
+                        </button>
                       </div>
-                    );
-                  })}
+
+                      <div
+                        style={{
+                          ...styles.seatLine,
+                          paddingLeft: totalOffset * 42,
+                        }}
+                      >
+                        {sortedRowSeats.map((seat) => {
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <span key={seat.id} style={styles.seatWrap}>
+                              <button
+                                type="button"
+                                onClick={() => toggleSeat(seat.id)}
+                                title={ticketType?.name || "Normal public seat"}
+                                style={seatStyle({
+                                  selected: selectedSeatIds.includes(seat.id),
+                                  ticketType,
+                                  ticketTypes,
+                                  status: seat.status,
+                                })}
+                              >
+                                {seat.seat_number}
+                              </button>
+
+                              {seat.aisle_after ? (
+                                <span style={styles.aisle}>Aisle</span>
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -592,7 +667,7 @@ const styles: Record<string, CSSProperties> = {
   },
   rowLine: {
     display: "grid",
-    gridTemplateColumns: "80px 1fr",
+    gridTemplateColumns: "80px 104px 1fr",
     gap: 10,
     alignItems: "center",
   },
@@ -605,7 +680,41 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  seatLine: { display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" },
+  rowNudgeControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  nudgeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  offsetPill: {
+    minWidth: 34,
+    height: 26,
+    borderRadius: 999,
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#475569",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+  seatLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "nowrap",
+    transition: "padding-left 160ms ease",
+  },
   seatLineWrap: {
     display: "flex",
     alignItems: "center",
