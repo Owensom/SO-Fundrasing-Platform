@@ -688,3 +688,211 @@ export async function deleteEvent(id: string): Promise<void> {
   await query(`delete from event_ticket_types where event_id = $1`, [id]);
   await query(`delete from events where id = $1`, [id]);
 }
+export async function createPendingEventOrder(input: {
+  tenantSlug: string;
+  eventId: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  amountTotal: number;
+  currency: string;
+}): Promise<EventOrder> {
+  const created = await queryOne<EventOrder>(
+    `
+    insert into event_orders (
+      tenant_slug,
+      event_id,
+      customer_name,
+      customer_email,
+      amount_total,
+      currency,
+      status
+    )
+    values ($1,$2,$3,$4,$5,$6,'pending')
+    returning *
+    `,
+    [
+      input.tenantSlug,
+      input.eventId,
+      input.customerName ?? null,
+      input.customerEmail ?? null,
+      input.amountTotal,
+      input.currency.toLowerCase(),
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event order");
+  }
+
+  return created;
+}
+
+export async function updateEventOrderStripeSession(input: {
+  orderId: string;
+  stripeSessionId: string;
+}): Promise<void> {
+  await query(
+    `
+    update event_orders
+    set stripe_session_id = $2
+    where id = $1
+    `,
+    [input.orderId, input.stripeSessionId],
+  );
+}
+
+export async function updateEventOrderStatus(input: {
+  orderId: string;
+  status: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+}): Promise<void> {
+  await query(
+    `
+    update event_orders
+    set
+      status = $2,
+      customer_name = coalesce($3, customer_name),
+      customer_email = coalesce($4, customer_email)
+    where id = $1
+    `,
+    [
+      input.orderId,
+      input.status,
+      input.customerName ?? null,
+      input.customerEmail ?? null,
+    ],
+  );
+}
+
+export async function createEventOrderItem(input: {
+  orderId: string;
+  eventId: string;
+  ticketTypeId: string | null;
+  seatId: string | null;
+  label: string;
+  quantity: number;
+  unitAmount: number;
+}): Promise<EventOrderItem> {
+  const created = await queryOne<EventOrderItem>(
+    `
+    insert into event_order_items (
+      order_id,
+      event_id,
+      ticket_type_id,
+      seat_id,
+      label,
+      quantity,
+      unit_amount
+    )
+    values ($1,$2,$3,$4,$5,$6,$7)
+    returning *
+    `,
+    [
+      input.orderId,
+      input.eventId,
+      input.ticketTypeId,
+      input.seatId,
+      input.label,
+      input.quantity,
+      input.unitAmount,
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event order item");
+  }
+
+  return created;
+}
+
+export async function reserveEventSeatsForOrder(input: {
+  eventId: string;
+  orderId: string;
+  seatIds: string[];
+}): Promise<number> {
+  if (input.seatIds.length === 0) return 0;
+
+  const rows = await query<{ id: string }>(
+    `
+    update event_seats
+    set
+      status = 'reserved',
+      order_id = $2,
+      updated_at = now()
+    where event_id = $1
+      and id = any($3::uuid[])
+      and status = 'available'
+    returning id
+    `,
+    [input.eventId, input.orderId, input.seatIds],
+  );
+
+  return rows.length;
+}
+
+export async function attachStripeSessionToReservedSeats(input: {
+  orderId: string;
+  stripeSessionId: string;
+}): Promise<void> {
+  await query(
+    `
+    update event_seats
+    set
+      stripe_session_id = $2,
+      updated_at = now()
+    where order_id = $1
+      and status = 'reserved'
+    `,
+    [input.orderId, input.stripeSessionId],
+  );
+}
+
+export async function markEventSeatsSoldForStripeSession(input: {
+  stripeSessionId: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+}): Promise<void> {
+  await query(
+    `
+    update event_seats
+    set
+      status = 'sold',
+      customer_name = $2,
+      customer_email = $3,
+      updated_at = now()
+    where stripe_session_id = $1
+      and status = 'reserved'
+    `,
+    [
+      input.stripeSessionId,
+      input.customerName ?? null,
+      input.customerEmail ?? null,
+    ],
+  );
+}
+
+export async function releaseEventSeatsForStripeSession(input: {
+  stripeSessionId: string;
+}): Promise<void> {
+  await query(
+    `
+    update event_seats
+    set
+      status = 'available',
+      stripe_session_id = null,
+      order_id = null,
+      customer_name = null,
+      customer_email = null,
+      updated_at = now()
+    where stripe_session_id = $1
+      and status = 'reserved'
+    `,
+    [input.stripeSessionId],
+  );
+}
+
+export async function deleteEventOrderAndItems(orderId: string): Promise<void> {
+  await query(`delete from event_order_items where order_id = $1`, [orderId]);
+  await query(`delete from event_orders where id = $1`, [orderId]);
+}
