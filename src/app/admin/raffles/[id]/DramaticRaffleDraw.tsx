@@ -2,14 +2,19 @@
 
 import { useMemo, useRef, useState } from "react";
 
-type SoldTicket = {
-  ticketNumber: number;
-  colour: string | null;
+type SoldTicketOption = {
+  ticketNumber?: number;
+  ticket_number?: number;
+  colour?: string | null;
+  buyerName?: string;
+  buyer_name?: string;
+  buyerEmail?: string;
+  buyer_email?: string;
 };
 
 type Props = {
   raffleId: string;
-  soldTickets: SoldTicket[];
+  soldTickets: SoldTicketOption[];
 };
 
 type ConfettiPiece = {
@@ -23,6 +28,22 @@ type ConfettiPiece = {
   hue: number;
 };
 
+function getTicketNumber(item: SoldTicketOption) {
+  return Number(item.ticketNumber ?? item.ticket_number);
+}
+
+function getTicketColour(item: SoldTicketOption) {
+  return item.colour || "No colour";
+}
+
+function getBuyerName(item: SoldTicketOption | null) {
+  return item?.buyerName ?? item?.buyer_name ?? "Winner";
+}
+
+function getBuyerEmail(item: SoldTicketOption | null) {
+  return item?.buyerEmail ?? item?.buyer_email ?? "";
+}
+
 function createAudioContext() {
   const AudioContextClass =
     window.AudioContext || (window as any).webkitAudioContext;
@@ -32,7 +53,6 @@ function createAudioContext() {
 
 function playTick(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
@@ -59,19 +79,24 @@ function playTick(audioCtx: AudioContext) {
 
 function playRiser(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "sawtooth";
   osc.frequency.setValueAtTime(72, now);
   osc.frequency.linearRampToValueAtTime(145, now + 0.26);
 
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(520, now);
+  filter.frequency.linearRampToValueAtTime(1250, now + 0.26);
+
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(0.045, now + 0.025);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
 
-  osc.connect(gain);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
@@ -102,6 +127,23 @@ function playWinner(audioCtx: AudioContext) {
   hit.connect(master);
   hit.start(now);
   hit.stop(now + 0.45);
+
+  const sparkle = audioCtx.createOscillator();
+  const sparkleGain = audioCtx.createGain();
+
+  sparkle.type = "sine";
+  sparkle.frequency.setValueAtTime(1320, now + 0.18);
+  sparkle.frequency.exponentialRampToValueAtTime(1780, now + 0.55);
+
+  sparkleGain.gain.setValueAtTime(0.0001, now + 0.18);
+  sparkleGain.gain.exponentialRampToValueAtTime(0.09, now + 0.24);
+  sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+
+  sparkle.connect(sparkleGain);
+  sparkleGain.connect(master);
+
+  sparkle.start(now + 0.18);
+  sparkle.stop(now + 0.65);
 }
 
 function makeConfetti(): ConfettiPiece[] {
@@ -117,14 +159,11 @@ function makeConfetti(): ConfettiPiece[] {
   }));
 }
 
-export default function DramaticRaffleDraw({
-  raffleId,
-  soldTickets,
-}: Props) {
+export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [prizePosition, setPrizePosition] = useState("1");
-  const [displayTicket, setDisplayTicket] = useState<SoldTicket | null>(null);
-  const [winner, setWinner] = useState<SoldTicket | null>(null);
+  const [displayTicket, setDisplayTicket] = useState<number | null>(null);
+  const [winner, setWinner] = useState<SoldTicketOption | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -133,13 +172,11 @@ export default function DramaticRaffleDraw({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const validTickets = useMemo(
+  const soldNumbers = useMemo(
     () =>
-      soldTickets.filter(
-        (ticket) =>
-          Number.isFinite(Number(ticket.ticketNumber)) &&
-          Number(ticket.ticketNumber) > 0,
-      ),
+      soldTickets
+        .map(getTicketNumber)
+        .filter((number) => Number.isFinite(number) && number > 0),
     [soldTickets],
   );
 
@@ -185,7 +222,7 @@ export default function DramaticRaffleDraw({
       return;
     }
 
-    if (!validTickets.length || drawing || saving) return;
+    if (!soldNumbers.length || drawing || saving) return;
 
     setError("");
     setWinner(null);
@@ -201,7 +238,7 @@ export default function DramaticRaffleDraw({
 
     timerRef.current = setInterval(() => {
       const randomTicket =
-        validTickets[Math.floor(Math.random() * validTickets.length)];
+        soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
       setDisplayTicket(randomTicket);
 
@@ -216,11 +253,16 @@ export default function DramaticRaffleDraw({
     window.setTimeout(async () => {
       stopTimer();
 
-      const winningTicket =
-        validTickets[Math.floor(Math.random() * validTickets.length)];
+      const winningTicketNumber =
+        soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
-      setDisplayTicket(winningTicket);
-      setWinner(winningTicket);
+      const matchedWinner =
+        soldTickets.find(
+          (item) => getTicketNumber(item) === winningTicketNumber,
+        ) || null;
+
+      setDisplayTicket(winningTicketNumber);
+      setWinner(matchedWinner);
       setDrawing(false);
       setSaving(true);
 
@@ -231,7 +273,11 @@ export default function DramaticRaffleDraw({
       try {
         const formData = new FormData();
         formData.append("prize_position", String(parsedPrizePosition));
-        formData.append("ticket_number", String(winningTicket.ticketNumber));
+        formData.append("ticket_number", String(winningTicketNumber));
+
+        if (matchedWinner?.colour) {
+          formData.append("colour", matchedWinner.colour);
+        }
 
         const response = await fetch(`/api/admin/raffles/${raffleId}/draw`, {
           method: "POST",
@@ -260,20 +306,17 @@ export default function DramaticRaffleDraw({
     <>
       <section
         style={{
-          padding: 16,
-          borderRadius: 18,
-          background: "#f8fafc",
-          border: "1px solid #e2e8f0",
-          display: "grid",
-          gap: 12,
+          border: "1px solid #e5e7eb",
+          borderRadius: 16,
+          padding: 20,
+          background: "white",
         }}
       >
-        <h3 style={{ margin: 0, color: "#0f172a", fontSize: 18 }}>
-          Dramatic live draw
-        </h3>
+        <h2 style={{ margin: "0 0 8px", fontSize: 22 }}>Dramatic draw</h2>
 
-        <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>
-          Open a full-screen raffle draw with sound, suspense and confetti.
+        <p style={{ margin: "0 0 16px", color: "#6b7280" }}>
+          Open a full-screen winner draw with sound, suspense, saving, and
+          confetti.
         </p>
 
         <button
@@ -285,22 +328,22 @@ export default function DramaticRaffleDraw({
             setDisplayTicket(null);
             setConfetti([]);
           }}
-          disabled={!validTickets.length}
+          disabled={!soldNumbers.length}
           style={{
-            padding: "13px 20px",
-            border: "none",
-            borderRadius: 999,
-            background: validTickets.length ? "#0f172a" : "#9ca3af",
-            color: "#ffffff",
+            border: 0,
+            borderRadius: 12,
+            padding: "12px 18px",
             fontWeight: 900,
-            cursor: validTickets.length ? "pointer" : "not-allowed",
+            cursor: soldNumbers.length ? "pointer" : "not-allowed",
+            background: soldNumbers.length ? "#111827" : "#9ca3af",
+            color: "white",
           }}
         >
-          Open dramatic draw
+          Open full-screen draw
         </button>
 
-        {!validTickets.length ? (
-          <p style={{ margin: 0, color: "#b91c1c", fontWeight: 800 }}>
+        {!soldNumbers.length ? (
+          <p style={{ margin: "12px 0 0", color: "#b91c1c" }}>
             No sold tickets available yet.
           </p>
         ) : null}
@@ -484,9 +527,22 @@ export default function DramaticRaffleDraw({
                   animation: drawing ? "winnerPulse 180ms infinite" : "",
                 }}
               >
-                {displayTicket ? `#${displayTicket.ticketNumber}` : "—"}
+                {displayTicket ? `#${displayTicket}` : "—"}
               </div>
             </div>
+
+            {winner ? (
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  color: "#facc15",
+                  fontWeight: 900,
+                  fontSize: 18,
+                }}
+              >
+                {getTicketColour(winner)}
+              </p>
+            ) : null}
 
             <h2 style={{ margin: 0, fontSize: "clamp(26px, 4vw, 38px)" }}>
               {drawing
@@ -494,13 +550,13 @@ export default function DramaticRaffleDraw({
                 : saving
                   ? "Saving winner..."
                   : winner
-                    ? winner.colour || "Winning ticket"
+                    ? getBuyerName(winner)
                     : "Ready"}
             </h2>
 
-            {winner?.colour ? (
+            {winner && getBuyerEmail(winner) ? (
               <p style={{ margin: "8px 0 0", color: "#d1d5db" }}>
-                Colour: {winner.colour}
+                {getBuyerEmail(winner)}
               </p>
             ) : null}
 
@@ -520,7 +576,7 @@ export default function DramaticRaffleDraw({
             <button
               type="button"
               onClick={startDraw}
-              disabled={drawing || saving || !validTickets.length}
+              disabled={drawing || saving || !soldNumbers.length}
               style={{
                 marginTop: 28,
                 border: 0,
@@ -529,16 +585,16 @@ export default function DramaticRaffleDraw({
                 fontSize: 18,
                 fontWeight: 950,
                 cursor:
-                  drawing || saving || !validTickets.length
+                  drawing || saving || !soldNumbers.length
                     ? "not-allowed"
                     : "pointer",
                 background:
-                  drawing || saving || !validTickets.length
+                  drawing || saving || !soldNumbers.length
                     ? "#9ca3af"
                     : "linear-gradient(135deg, #facc15, #f97316)",
                 color: "#111827",
                 boxShadow:
-                  drawing || saving || !validTickets.length
+                  drawing || saving || !soldNumbers.length
                     ? "none"
                     : "0 18px 38px rgba(249,115,22,0.35)",
               }}
