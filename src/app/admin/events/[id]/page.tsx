@@ -395,7 +395,7 @@ async function clearSeatsAction(formData: FormData) {
 
   if (eventId) await deleteEventSeats(eventId);
 
-  redirect(`/admin/events/${eventId}?saved=seats-cleared#row-seating`);
+  redirect(`/admin/events/${eventId}?saved=seats-cleared#overview`);
 }
 
 async function deleteEventAction(formData: FormData) {
@@ -423,13 +423,22 @@ export default async function AdminEventManagePage({
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
 
+  const isGeneralAdmission = event.event_type === "general_admission";
+  const isReservedSeating = event.event_type === "reserved_seating";
+  const isTables = event.event_type === "tables";
+
   const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
   const tableSeats = seats.filter((seat) => seat.table_number);
+  const visibleSeats = isReservedSeating
+    ? rowSeats
+    : isTables
+      ? tableSeats
+      : seats;
 
-  const soldSeats = seats.filter((seat) => seat.status === "sold").length;
-  const reservedSeats = seats.filter((seat) => seat.status === "reserved").length;
-  const blockedSeats = seats.filter((seat) => seat.status === "blocked").length;
-  const availableSeats = seats.filter((seat) => seat.status === "available").length;
+  const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
+  const reservedSeats = visibleSeats.filter((seat) => seat.status === "reserved").length;
+  const blockedSeats = visibleSeats.filter((seat) => seat.status === "blocked").length;
+  const availableSeats = visibleSeats.filter((seat) => seat.status === "available").length;
 
   return (
     <main style={styles.page}>
@@ -470,8 +479,12 @@ export default async function AdminEventManagePage({
       <nav style={styles.tabs}>
         <a href="#overview" style={styles.tab}>Overview</a>
         <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
-        <a href="#row-seating" style={styles.tab}>Row Seating</a>
-        <a href="#table-seating" style={styles.tab}>Table Seating</a>
+        {isReservedSeating && (
+          <a href="#row-seating" style={styles.tab}>Row Seating</a>
+        )}
+        {isTables && (
+          <a href="#table-seating" style={styles.tab}>Table Seating</a>
+        )}
         <a href="#orders" style={styles.tab}>Orders</a>
       </nav>
 
@@ -491,7 +504,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Edit the main event details, image, capacity, status and public page settings.
+              Choose the event type first. The admin page only shows the sections needed for that type.
             </p>
           </div>
         </div>
@@ -501,11 +514,13 @@ export default async function AdminEventManagePage({
           <SummaryCard
             label="Capacity"
             value={
-              event.event_type === "general_admission"
+              isGeneralAdmission
                 ? event.capacity
                   ? `${event.capacity} tickets`
                   : "Unlimited"
-                : `${seats.length} generated seats`
+                : isReservedSeating
+                  ? `${rowSeats.length} row seats`
+                  : `${tableSeats.length} table seats`
             }
           />
           <SummaryCard label="Available" value={availableSeats} />
@@ -569,8 +584,7 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-
-            <div style={styles.twoCol}>
+                        <div style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -590,7 +604,8 @@ export default async function AdminEventManagePage({
                 />
               </Field>
             </div>
-                        <div style={styles.twoCol}>
+
+            <div style={styles.twoCol}>
               <Field label="Starts at">
                 <input
                   name="starts_at"
@@ -661,7 +676,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 2</p>
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
-              Add, edit, hide or delete ticket types.
+              Add, edit, hide or delete ticket types for this event.
             </p>
           </div>
         </div>
@@ -687,6 +702,7 @@ export default async function AdminEventManagePage({
                     name="price"
                     type="number"
                     step="0.01"
+                    min="0"
                     style={styles.input}
                   />
                 </Field>
@@ -766,6 +782,7 @@ export default async function AdminEventManagePage({
                             name="price"
                             type="number"
                             step="0.01"
+                            min="0"
                             defaultValue={moneyFromCents(ticketType.price)}
                             style={styles.input}
                           />
@@ -775,6 +792,7 @@ export default async function AdminEventManagePage({
                           <input
                             name="capacity"
                             type="number"
+                            min="0"
                             defaultValue={ticketType.capacity || ""}
                             style={styles.input}
                           />
@@ -784,6 +802,7 @@ export default async function AdminEventManagePage({
                           <input
                             name="sort_order"
                             type="number"
+                            min="0"
                             defaultValue={ticketType.sort_order}
                             style={styles.input}
                           />
@@ -831,245 +850,258 @@ export default async function AdminEventManagePage({
           </div>
         </div>
       </section>
-            <section id="row-seating" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>Section 3</p>
-            <h2 style={styles.sectionTitle}>Row Seating</h2>
-            <p style={styles.sectionText}>
-              Generate row layouts using comma lists or ranges. Examples: 1-3,
-              1-3,8-10, A-C, A,B,C.
-            </p>
-          </div>
-        </div>
-
-        <div style={styles.twoPanel}>
-          <form action={generateSeatsAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
-
-            <h3 style={styles.panelTitle}>Generate row seating</h3>
-
-            <Field label="Ticket type">
-              <select name="ticket_type_id" style={styles.input}>
-                <option value="">No linked ticket type</option>
-                {ticketTypes.map((ticketType) => (
-                  <option key={ticketType.id} value={ticketType.id}>
-                    {ticketType.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Section">
-              <input
-                name="section"
-                placeholder="Main hall, balcony..."
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Rows">
-              <input
-                name="rows"
-                placeholder="1-3 or A-C or 1-3,8-10"
-                style={styles.input}
-              />
-            </Field>
-
-            <div style={styles.twoCol}>
-              <Field label="Seats per row">
-                <input
-                  name="seats_per_row"
-                  type="number"
-                  min="1"
-                  placeholder="12"
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Aisle after seat">
-                <input
-                  name="aisle_after"
-                  type="number"
-                  min="0"
-                  placeholder="6"
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-
-            <label style={styles.checkboxLabel}>
-              <input type="checkbox" name="clear_existing" value="yes" />
-              Clear existing seats before generating
-            </label>
-
-            <button type="submit" style={styles.primaryButton}>
-              Generate row seating
-            </button>
-          </form>
-
-          <div style={styles.panel}>
-            <h3 style={styles.panelTitle}>Row seating summary</h3>
-
-            <div style={styles.statsGridCompact}>
-              <SummaryCard label="Row seats" value={rowSeats.length} />
-              <SummaryCard
-                label="Available"
-                value={rowSeats.filter((seat) => seat.status === "available").length}
-              />
-              <SummaryCard
-                label="Reserved"
-                value={rowSeats.filter((seat) => seat.status === "reserved").length}
-              />
-              <SummaryCard
-                label="Sold"
-                value={rowSeats.filter((seat) => seat.status === "sold").length}
-              />
-            </div>
-
-            <p style={styles.sectionText}>
-              Use separate batches for different row sizes, for example rows 1-6
-              with 12 seats, then rows 8-10 with 10 seats.
-            </p>
-          </div>
-        </div>
-
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
+            {isReservedSeating && (
+        <section id="row-seating" style={styles.section}>
+          <div style={styles.sectionHeader}>
             <div>
-              <h3 style={styles.panelTitle}>Row seating grid</h3>
+              <p style={styles.sectionEyebrow}>Section 3</p>
+              <h2 style={styles.sectionTitle}>Row Seating</h2>
               <p style={styles.sectionText}>
-                The aisle stays centred across rows with different seat counts.
+                Generate row layouts using comma lists or ranges. Examples:
+                1-3, 1-3,8-10, A-C, A,B,C.
               </p>
             </div>
+          </div>
 
-            <form action={clearSeatsAction}>
+          <div style={styles.twoPanel}>
+            <form action={generateSeatsAction} style={styles.panel}>
               <input type="hidden" name="event_id" value={event.id} />
-              <button type="submit" style={styles.dangerOutlineButton}>
-                Clear all seats/tables
+
+              <h3 style={styles.panelTitle}>Generate row seating</h3>
+
+              <Field label="Ticket type">
+                <select name="ticket_type_id" style={styles.input}>
+                  <option value="">No linked ticket type</option>
+                  {ticketTypes.map((ticketType) => (
+                    <option key={ticketType.id} value={ticketType.id}>
+                      {ticketType.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Section">
+                <input
+                  name="section"
+                  placeholder="Main hall, balcony..."
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Rows">
+                <input
+                  name="rows"
+                  placeholder="1-3 or A-C or 1-3,8-10"
+                  style={styles.input}
+                />
+              </Field>
+
+              <div style={styles.twoCol}>
+                <Field label="Seats per row">
+                  <input
+                    name="seats_per_row"
+                    type="number"
+                    min="1"
+                    placeholder="12"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Aisle after seat">
+                  <input
+                    name="aisle_after"
+                    type="number"
+                    min="0"
+                    placeholder="6"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input type="checkbox" name="clear_existing" value="yes" />
+                Clear existing seats before generating
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Generate row seating
               </button>
             </form>
-          </div>
 
-          {rowSeats.length === 0 ? (
-            <div style={styles.emptyBox}>No row seats generated yet.</div>
-          ) : (
-            <div style={styles.visualPanel}>
-              <SeatRowGrid seats={rowSeats} />
-            </div>
-          )}
-        </div>
-      </section>
+            <div style={styles.panel}>
+              <h3 style={styles.panelTitle}>Row seating summary</h3>
 
-      <section id="table-seating" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>Section 4</p>
-            <h2 style={styles.sectionTitle}>Table Seating</h2>
-            <p style={styles.sectionText}>
-              Generate table layouts separately from row seating.
-            </p>
-          </div>
-        </div>
-
-        <div style={styles.twoPanel}>
-          <form action={generateTablesAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
-
-            <h3 style={styles.panelTitle}>Generate table seating</h3>
-
-            <Field label="Ticket type">
-              <select name="ticket_type_id" style={styles.input}>
-                <option value="">No linked ticket type</option>
-                {ticketTypes.map((ticketType) => (
-                  <option key={ticketType.id} value={ticketType.id}>
-                    {ticketType.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <div style={styles.twoCol}>
-              <Field label="Number of tables">
-                <input
-                  name="table_count"
-                  type="number"
-                  min="1"
-                  placeholder="10"
-                  style={styles.input}
+              <div style={styles.statsGridCompact}>
+                <SummaryCard label="Row seats" value={rowSeats.length} />
+                <SummaryCard
+                  label="Available"
+                  value={rowSeats.filter((seat) => seat.status === "available").length}
                 />
-              </Field>
-
-              <Field label="Seats per table">
-                <input
-                  name="seats_per_table"
-                  type="number"
-                  min="1"
-                  placeholder="8"
-                  style={styles.input}
+                <SummaryCard
+                  label="Reserved"
+                  value={rowSeats.filter((seat) => seat.status === "reserved").length}
                 />
-              </Field>
-            </div>
+                <SummaryCard
+                  label="Sold"
+                  value={rowSeats.filter((seat) => seat.status === "sold").length}
+                />
+              </div>
 
-            <label style={styles.checkboxLabel}>
-              <input type="checkbox" name="clear_existing" value="yes" />
-              Clear existing seats before generating
-            </label>
-
-            <button type="submit" style={styles.primaryButton}>
-              Generate table seating
-            </button>
-          </form>
-
-          <div style={styles.panel}>
-            <h3 style={styles.panelTitle}>Table seating summary</h3>
-
-            <div style={styles.statsGridCompact}>
-              <SummaryCard label="Table seats" value={tableSeats.length} />
-              <SummaryCard
-                label="Available"
-                value={tableSeats.filter((seat) => seat.status === "available").length}
-              />
-              <SummaryCard
-                label="Reserved"
-                value={tableSeats.filter((seat) => seat.status === "reserved").length}
-              />
-              <SummaryCard
-                label="Sold"
-                value={tableSeats.filter((seat) => seat.status === "sold").length}
-              />
-            </div>
-
-            <p style={styles.sectionText}>
-              Tables are shown separately so dinner/table-plan events do not mix
-              with theatre-style rows.
-            </p>
-          </div>
-        </div>
-
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h3 style={styles.panelTitle}>Table seating grid</h3>
               <p style={styles.sectionText}>
-                Tables are grouped by table number.
+                Use separate batches for different row sizes, for example rows
+                1-6 with 12 seats, then rows 8-10 with 10 seats.
               </p>
             </div>
           </div>
 
-          {tableSeats.length === 0 ? (
-            <div style={styles.emptyBox}>No table seats generated yet.</div>
-          ) : (
-            <div style={styles.visualPanel}>
-              <TableSeatGrid seats={tableSeats} />
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Row seating grid</h3>
+                <p style={styles.sectionText}>
+                  The aisle stays centred across rows with different seat counts.
+                </p>
+              </div>
+
+              <form action={clearSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button type="submit" style={styles.dangerOutlineButton}>
+                  Clear row/table seats
+                </button>
+              </form>
             </div>
-          )}
-        </div>
-      </section>
+
+            {rowSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No row seats generated yet.</div>
+            ) : (
+              <div style={styles.visualPanel}>
+                <SeatRowGrid seats={rowSeats} />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {isTables && (
+        <section id="table-seating" style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <p style={styles.sectionEyebrow}>Section 3</p>
+              <h2 style={styles.sectionTitle}>Table Seating</h2>
+              <p style={styles.sectionText}>
+                Generate table layouts separately from row seating.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.twoPanel}>
+            <form action={generateTablesAction} style={styles.panel}>
+              <input type="hidden" name="event_id" value={event.id} />
+
+              <h3 style={styles.panelTitle}>Generate table seating</h3>
+
+              <Field label="Ticket type">
+                <select name="ticket_type_id" style={styles.input}>
+                  <option value="">No linked ticket type</option>
+                  {ticketTypes.map((ticketType) => (
+                    <option key={ticketType.id} value={ticketType.id}>
+                      {ticketType.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div style={styles.twoCol}>
+                <Field label="Number of tables">
+                  <input
+                    name="table_count"
+                    type="number"
+                    min="1"
+                    placeholder="10"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Seats per table">
+                  <input
+                    name="seats_per_table"
+                    type="number"
+                    min="1"
+                    placeholder="8"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input type="checkbox" name="clear_existing" value="yes" />
+                Clear existing seats before generating
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Generate table seating
+              </button>
+            </form>
+
+            <div style={styles.panel}>
+              <h3 style={styles.panelTitle}>Table seating summary</h3>
+
+              <div style={styles.statsGridCompact}>
+                <SummaryCard label="Table seats" value={tableSeats.length} />
+                <SummaryCard
+                  label="Available"
+                  value={tableSeats.filter((seat) => seat.status === "available").length}
+                />
+                <SummaryCard
+                  label="Reserved"
+                  value={tableSeats.filter((seat) => seat.status === "reserved").length}
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={tableSeats.filter((seat) => seat.status === "sold").length}
+                />
+              </div>
+
+              <p style={styles.sectionText}>
+                Tables are shown separately so dinner/table-plan events do not
+                mix with theatre-style rows.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Table seating grid</h3>
+                <p style={styles.sectionText}>
+                  Tables are grouped by table number.
+                </p>
+              </div>
+
+              <form action={clearSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button type="submit" style={styles.dangerOutlineButton}>
+                  Clear row/table seats
+                </button>
+              </form>
+            </div>
+
+            {tableSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No table seats generated yet.</div>
+            ) : (
+              <div style={styles.visualPanel}>
+                <TableSeatGrid seats={tableSeats} />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
             <section id="orders" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
-            <p style={styles.sectionEyebrow}>Section 5</p>
+            <p style={styles.sectionEyebrow}>
+              {isGeneralAdmission ? "Section 3" : "Section 4"}
+            </p>
             <h2 style={styles.sectionTitle}>Orders</h2>
             <p style={styles.sectionText}>
               Event orders will appear here once checkout is connected.
@@ -1162,13 +1194,15 @@ function SeatRowGrid({
 
                   const leftSeats = aisleAfter
                     ? sortedSeats.filter(
-                        (seat) => Number(seat.seat_number || 0) <= Number(aisleAfter),
+                        (seat) =>
+                          Number(seat.seat_number || 0) <= Number(aisleAfter),
                       )
                     : sortedSeats;
 
                   const rightSeats = aisleAfter
                     ? sortedSeats.filter(
-                        (seat) => Number(seat.seat_number || 0) > Number(aisleAfter),
+                        (seat) =>
+                          Number(seat.seat_number || 0) > Number(aisleAfter),
                       )
                     : [];
 
@@ -1719,3 +1753,4 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
 };
+
