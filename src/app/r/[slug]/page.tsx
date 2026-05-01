@@ -1,13 +1,19 @@
-// src/app/r/[slug]/page.tsx
-
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRaffleBySlug } from "@/lib/raffles";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import RaffleClient from "./RaffleClient";
 
 type Props = {
   params: { slug: string };
 };
+
+function colourToText(colour: any) {
+  if (typeof colour === "string") return colour;
+  if (colour?.name) return colour.name;
+  if (colour?.hex) return colour.hex;
+  return "";
+}
 
 export default async function PublicRafflePage({ params }: Props) {
   const tenantSlug = getTenantSlugFromHeaders();
@@ -20,6 +26,45 @@ export default async function PublicRafflePage({ params }: Props) {
   const entryQuestion = config.question?.text
     ? String(config.question.text).trim()
     : "";
+
+  const colours = Array.isArray(config.colours)
+    ? config.colours
+        .map(colourToText)
+        .filter(Boolean)
+        .map((colour: string, index: number) => ({
+          id: `${colour}-${index}`,
+          name: colour,
+          sortOrder: index,
+        }))
+    : [];
+
+  const fallbackColours =
+    colours.length > 0
+      ? colours
+      : [{ id: "default", name: "Default", sortOrder: 0 }];
+
+  const raffleForClient = {
+    id: raffle.id,
+    slug: raffle.slug,
+    title: raffle.title,
+    description: raffle.description ?? "",
+    startNumber: Number(config.startNumber || 1),
+    endNumber: Number(config.endNumber || raffle.total_tickets || 100),
+    colours: fallbackColours,
+    soldTickets: Array.isArray(config.sold)
+      ? config.sold.map((ticket: any) => ({
+          colour: String(ticket.colour || fallbackColours[0].name),
+          number: Number(ticket.number),
+        }))
+      : [],
+    reservedTickets: Array.isArray(config.reserved)
+      ? config.reserved.map((ticket: any) => ({
+          colour: String(ticket.colour || fallbackColours[0].name),
+          number: Number(ticket.number),
+        }))
+      : [],
+    config_json: config,
+  };
 
   return (
     <main
@@ -93,28 +138,11 @@ export default async function PublicRafflePage({ params }: Props) {
           }}
         >
           <p style={{ margin: 0, fontWeight: 800, color: "#1e3a8a" }}>
-            To enter, answer this question:
+            Entry question required
           </p>
 
-          <p style={{ margin: "8px 0", color: "#0f172a", fontWeight: 700 }}>
-            {entryQuestion}
-          </p>
-
-          <input
-            id="raffle-answer"
-            name="answer"
-            placeholder="Enter your answer"
-            style={{
-              width: "100%",
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-              boxSizing: "border-box",
-            }}
-          />
-
-          <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: 12 }}>
-            Your answer must be correct before your entry can be processed.
+          <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: 13 }}>
+            You will need to answer the question correctly before checkout.
           </p>
         </div>
       ) : null}
@@ -150,6 +178,10 @@ export default async function PublicRafflePage({ params }: Props) {
           </div>
         </div>
       ) : null}
+
+      <section style={{ marginTop: 28 }}>
+        <RaffleClient raffle={raffleForClient as any} />
+      </section>
 
       <div
         style={{
