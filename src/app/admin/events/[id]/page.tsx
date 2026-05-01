@@ -55,6 +55,18 @@ function positiveInteger(value: FormDataEntryValue | null, fallback = 0) {
   return Math.max(0, Math.floor(number));
 }
 
+function parseAisleAfterList(value: FormDataEntryValue | null) {
+  return Array.from(
+    new Set(
+      String(value || "")
+        .split(",")
+        .map((item) => Number(item.trim()))
+        .filter((number) => Number.isFinite(number) && number > 0)
+        .map((number) => Math.floor(number)),
+    ),
+  );
+}
+
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Tables";
@@ -179,6 +191,7 @@ function seatBoxStyle(status: string): CSSProperties {
     color: "#166534",
   };
 }
+
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -313,7 +326,7 @@ async function generateSeatsAction(formData: FormData) {
   const section = String(formData.get("section") || "").trim();
   const rowsRaw = String(formData.get("rows") || "").trim();
   const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
-  const aisleAfter = positiveInteger(formData.get("aisle_after"), 0);
+  const aisleAfterList = parseAisleAfterList(formData.get("aisle_after"));
   const ticketTypeId =
     String(formData.get("ticket_type_id") || "").trim() || null;
   const clearExisting = String(formData.get("clear_existing") || "") === "yes";
@@ -337,7 +350,7 @@ async function generateSeatsAction(formData: FormData) {
         rowLabel: row,
         seatNumber: String(seat),
         tableNumber: null,
-        aisleAfter: aisleAfter || null,
+        aisleAfter: aisleAfterList.includes(seat) ? seat : null,
         status: "available",
       });
     }
@@ -410,6 +423,7 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -436,9 +450,15 @@ export default async function AdminEventManagePage({
       : seats;
 
   const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
-  const reservedSeats = visibleSeats.filter((seat) => seat.status === "reserved").length;
-  const blockedSeats = visibleSeats.filter((seat) => seat.status === "blocked").length;
-  const availableSeats = visibleSeats.filter((seat) => seat.status === "available").length;
+  const reservedSeats = visibleSeats.filter(
+    (seat) => seat.status === "reserved",
+  ).length;
+  const blockedSeats = visibleSeats.filter(
+    (seat) => seat.status === "blocked",
+  ).length;
+  const availableSeats = visibleSeats.filter(
+    (seat) => seat.status === "available",
+  ).length;
 
   return (
     <main style={styles.page}>
@@ -477,15 +497,25 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>Overview</a>
-        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
+        <a href="#overview" style={styles.tab}>
+          Overview
+        </a>
+        <a href="#tickets" style={styles.tab}>
+          Tickets & Prices
+        </a>
         {isReservedSeating && (
-          <a href="#row-seating" style={styles.tab}>Row Seating</a>
+          <a href="#row-seating" style={styles.tab}>
+            Row Seating
+          </a>
         )}
         {isTables && (
-          <a href="#table-seating" style={styles.tab}>Table Seating</a>
+          <a href="#table-seating" style={styles.tab}>
+            Table Seating
+          </a>
         )}
-        <a href="#orders" style={styles.tab}>Orders</a>
+        <a href="#orders" style={styles.tab}>
+          Orders
+        </a>
       </nav>
 
       {searchParams?.saved && (
@@ -584,7 +614,8 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-                        <div style={styles.twoCol}>
+
+            <div style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -850,7 +881,8 @@ export default async function AdminEventManagePage({
           </div>
         </div>
       </section>
-            {isReservedSeating && (
+
+      {isReservedSeating && (
         <section id="row-seating" style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
@@ -883,7 +915,7 @@ export default async function AdminEventManagePage({
               <Field label="Section">
                 <input
                   name="section"
-                  placeholder="Main hall, balcony..."
+                  placeholder="Main, VIP, Balcony, Left, Centre..."
                   style={styles.input}
                 />
               </Field>
@@ -891,7 +923,7 @@ export default async function AdminEventManagePage({
               <Field label="Rows">
                 <input
                   name="rows"
-                  placeholder="1-3 or A-C or 1-3,8-10"
+                  placeholder="1-10 or A-C or 1-3,8-10"
                   style={styles.input}
                 />
               </Field>
@@ -902,17 +934,15 @@ export default async function AdminEventManagePage({
                     name="seats_per_row"
                     type="number"
                     min="1"
-                    placeholder="12"
+                    placeholder="40"
                     style={styles.input}
                   />
                 </Field>
 
-                <Field label="Aisle after seat">
+                <Field label="Aisles after seats">
                   <input
                     name="aisle_after"
-                    type="number"
-                    min="0"
-                    placeholder="6"
+                    placeholder="10,20,30"
                     style={styles.input}
                   />
                 </Field>
@@ -948,8 +978,8 @@ export default async function AdminEventManagePage({
               </div>
 
               <p style={styles.sectionText}>
-                Use separate batches for different row sizes, for example rows
-                1-6 with 12 seats, then rows 8-10 with 10 seats.
+                Use sections for VIP, balcony, left/centre/right blocks. Use
+                aisles like 10,20,30 for wide rows.
               </p>
             </div>
           </div>
@@ -959,7 +989,7 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Row seating grid</h3>
                 <p style={styles.sectionText}>
-                  The aisle stays centred across rows with different seat counts.
+                  Sections and aisle gaps are previewed below.
                 </p>
               </div>
 
@@ -1096,7 +1126,8 @@ export default async function AdminEventManagePage({
           </div>
         </section>
       )}
-            <section id="orders" style={styles.section}>
+
+      <section id="orders" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>
@@ -1188,54 +1219,25 @@ function SeatRowGrid({
                     .slice()
                     .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
-                  const aisleAfter =
-                    sortedSeats.find((seat) => Number(seat.aisle_after || 0) > 0)
-                      ?.aisle_after || null;
-
-                  const leftSeats = aisleAfter
-                    ? sortedSeats.filter(
-                        (seat) =>
-                          Number(seat.seat_number || 0) <= Number(aisleAfter),
-                      )
-                    : sortedSeats;
-
-                  const rightSeats = aisleAfter
-                    ? sortedSeats.filter(
-                        (seat) =>
-                          Number(seat.seat_number || 0) > Number(aisleAfter),
-                      )
-                    : [];
-
                   return (
                     <div key={`${section}-${row}`} style={styles.rowLineCentered}>
                       <div style={styles.rowLabel}>Row {row}</div>
 
-                      <div style={styles.rowCenterWrap}>
-                        <div style={styles.leftSeatBlock}>
-                          {leftSeats.map((seat) => (
+                      <div style={styles.rowSeatWrap}>
+                        {sortedSeats.map((seat) => (
+                          <span key={seat.id} style={styles.seatWithGap}>
                             <span
-                              key={seat.id}
                               title={`Row ${row}, Seat ${seat.seat_number} — ${seat.status}`}
                               style={seatBoxStyle(seat.status)}
                             >
                               {seat.seat_number}
                             </span>
-                          ))}
-                        </div>
 
-                        <div style={styles.aisleGap} />
-
-                        <div style={styles.rightSeatBlock}>
-                          {rightSeats.map((seat) => (
-                            <span
-                              key={seat.id}
-                              title={`Row ${row}, Seat ${seat.seat_number} — ${seat.status}`}
-                              style={seatBoxStyle(seat.status)}
-                            >
-                              {seat.seat_number}
-                            </span>
-                          ))}
-                        </div>
+                            {seat.aisle_after ? (
+                              <span style={styles.aisleGap} />
+                            ) : null}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   );
@@ -1286,6 +1288,7 @@ function TableSeatGrid({
     </div>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
@@ -1690,6 +1693,17 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
+  rowSeatWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "nowrap",
+  },
+  seatWithGap: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+  },
   rowCenterWrap: {
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
@@ -1753,4 +1767,3 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
 };
-
