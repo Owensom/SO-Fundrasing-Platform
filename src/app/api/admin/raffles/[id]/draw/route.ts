@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { queryOne } from "@/lib/db";
+import { sendWinnerEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 type RaffleRow = {
   id: string;
   tenant_slug: string;
+  title: string;
   config_json: any;
 };
 
@@ -23,6 +25,14 @@ type TicketRow = {
 function parsePositiveInteger(value: FormDataEntryValue | null) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
+function cleanEmail(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanName(value: string | null | undefined) {
+  return String(value || "").trim() || "Supporter";
 }
 
 function ordinal(value: number) {
@@ -78,7 +88,7 @@ export async function POST(
 
     const raffle = await queryOne<RaffleRow>(
       `
-      select id, tenant_slug, config_json
+      select id, tenant_slug, title, config_json
       from raffles
       where id = $1
       limit 1
@@ -152,6 +162,10 @@ export async function POST(
       );
     }
 
+    const prizeTitle = getPrizeTitle(raffle.config_json, prizePosition);
+    const winnerEmail = cleanEmail(soldTicket.buyer_email);
+    const winnerName = cleanName(soldTicket.buyer_name);
+
     const winner = await queryOne(
       `
       insert into raffle_winners (
@@ -174,16 +188,62 @@ export async function POST(
         raffle.tenant_slug,
         raffle.id,
         prizePosition,
-        getPrizeTitle(raffle.config_json, prizePosition),
+        prizeTitle,
         soldTicket.ticket_number,
         soldTicket.colour,
         soldTicket.sale_id,
-        soldTicket.buyer_name,
-        soldTicket.buyer_email,
+        winnerName,
+        winnerEmail || null,
       ],
     );
 
-    return NextResponse.json({ ok: true, winner });
+    let winnerEmailStatus:
+      | "sent"
+      | "skipped_missing_email"
+      | "failed" = "skipped_missing_email";
+
+    if (winnerEmail) {
+      try {
+        await sendWinnerEmail({
+          to: winnerEmail,
+          name: winnerName,
+          raffleTitle: raffle.title,
+          ticketNumber: soldTicket.ticket_number,
+          colour: soldTicket.colour,
+        });
+
+        winnerEmailStatus = "sent";
+
+        console.log("Dramatic raffle winner email sent", {
+          to: winnerEmail,
+          raffleId: raffle.id,
+          prizePosition,
+          ticketNumber: soldTicket.ticket_number,
+        });
+      } catch (emailError: any) {
+        winnerEmailStatus = "failed";
+
+        console.error("Dramatic raffle winner email failed", {
+          to: winnerEmail,
+          raffleId: raffle.id,
+          prizePosition,
+          ticketNumber: soldTicket.ticket_number,
+          error: emailError?.message || emailError,
+        });
+      }
+    } else {
+      console.warn("Dramatic raffle winner email skipped - missing email", {
+        raffleId: raffle.id,
+        prizePosition,
+        ticketNumber: soldTicket.ticket_number,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      winner,
+      winnerEmailStatus,
+    });
   } catch (error) {
     console.error("Raffle dramatic draw failed", error);
 
