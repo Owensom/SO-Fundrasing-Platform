@@ -417,7 +417,6 @@ export async function deleteEventTicketTypes(eventId: string): Promise<void> {
     [eventId],
   );
 }
-
 /* =========================
    SEATS / TABLE SEATS
 ========================= */
@@ -555,6 +554,26 @@ export async function updateEventSeat(
   );
 }
 
+export async function updateEventSeatsTicketType(input: {
+  eventId: string;
+  seatIds: string[];
+  ticketTypeId: string | null;
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+    update event_seats
+    set
+      ticket_type_id = $3,
+      updated_at = now()
+    where event_id = $1
+      and id = any($2::uuid[])
+    `,
+    [input.eventId, input.seatIds, input.ticketTypeId],
+  );
+}
+
 export async function deleteEventSeat(id: string): Promise<void> {
   await query(
     `
@@ -562,6 +581,40 @@ export async function deleteEventSeat(id: string): Promise<void> {
     where id = $1
     `,
     [id],
+  );
+}
+
+export async function deleteEventSeatsByIds(input: {
+  eventId: string;
+  seatIds: string[];
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+    delete from event_seats
+    where event_id = $1
+      and id = any($2::uuid[])
+    `,
+    [input.eventId, input.seatIds],
+  );
+}
+
+export async function deleteEventRowsByKeys(input: {
+  eventId: string;
+  rowKeys: string[];
+}): Promise<void> {
+  if (input.rowKeys.length === 0) return;
+
+  await query(
+    `
+    delete from event_seats
+    where event_id = $1
+      and row_label is not null
+      and table_number is null
+      and concat(coalesce(section, ''), '|', coalesce(row_label, '')) = any($2::text[])
+    `,
+    [input.eventId, input.rowKeys],
   );
 }
 
