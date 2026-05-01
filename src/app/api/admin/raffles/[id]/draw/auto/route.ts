@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { query, queryOne } from "@/lib/db";
+import { sendWinnerEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 type RaffleRow = {
   id: string;
   tenant_slug: string;
+  title: string;
   config_json: any;
 };
 
@@ -28,6 +30,14 @@ type WinnerRow = {
 function parsePositiveInteger(value: FormDataEntryValue | null) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
+function cleanEmail(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanName(value: string | null | undefined) {
+  return String(value || "").trim() || "Supporter";
 }
 
 function ordinal(value: number) {
@@ -100,7 +110,7 @@ export async function POST(
 
     const raffle = await queryOne<RaffleRow>(
       `
-      select id, tenant_slug, config_json
+      select id, tenant_slug, title, config_json
       from raffles
       where id = $1
       limit 1
@@ -160,6 +170,7 @@ export async function POST(
         buyer_email
       from raffle_ticket_sales
       where raffle_id = $1
+        and ticket_number is not null
       order by created_at asc
       `,
       [raffle.id],
@@ -167,7 +178,9 @@ export async function POST(
 
     const availableTickets = shuffle(
       soldTickets.filter(
-        (ticket) => !usedTicketNumbers.has(Number(ticket.ticket_number)),
+        (ticket) =>
+          Number.isFinite(Number(ticket.ticket_number)) &&
+          !usedTicketNumbers.has(Number(ticket.ticket_number)),
       ),
     );
 
@@ -191,6 +204,8 @@ export async function POST(
     for (let index = 0; index < drawCount; index += 1) {
       const prizePosition = availablePrizePositions[index];
       const ticket = availableTickets[index];
+      const winnerEmail = cleanEmail(ticket.buyer_email);
+      const winnerName = cleanName(ticket.buyer_name);
 
       const winner = await queryOne(
         `
@@ -218,13 +233,49 @@ export async function POST(
           Number(ticket.ticket_number),
           ticket.colour,
           ticket.sale_id,
-          ticket.buyer_name,
-          ticket.buyer_email,
+          winnerName,
+          winnerEmail || null,
         ],
       );
 
       if (winner) {
         createdWinners.push(winner);
+      }
+
+      if (!winnerEmail) {
+        console.warn("Auto draw winner email skipped - missing email", {
+          raffleId: raffle.id,
+          prizePosition,
+          ticketNumber: ticket.ticket_number,
+          saleId: ticket.sale_id,
+        });
+        continue;
+      }
+
+      try {
+        await sendWinnerEmail({
+          to: winnerEmail,
+          name: winnerName,
+          raffleTitle: raffle.title,
+          ticketNumber: Number(ticket.ticket_number),
+          colour: ticket.colour,
+        });
+
+        console.log("Auto draw winner email sent", {
+          to: winnerEmail,
+          raffleId: raffle.id,
+          prizePosition,
+          ticketNumber: ticket.ticket_number,
+        });
+      } catch (emailError: any) {
+        console.error("Auto draw winner email failed", {
+          to: winnerEmail,
+          raffleId: raffle.id,
+          prizePosition,
+          ticketNumber: ticket.ticket_number,
+          saleId: ticket.sale_id,
+          error: emailError?.message || emailError,
+        });
       }
     }
 
