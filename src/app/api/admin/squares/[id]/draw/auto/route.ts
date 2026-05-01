@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sendWinnerEmail } from "@/lib/email";
 import {
   createSquaresWinner,
   getSquaresGameById,
@@ -30,6 +31,14 @@ function shuffle<T>(items: T[]) {
 function parseRangeValue(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function cleanEmail(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanName(value: string | null | undefined) {
+  return String(value || "").trim() || "Supporter";
 }
 
 function getAutoDrawFrom(config: any) {
@@ -147,15 +156,55 @@ export async function POST(request: NextRequest, context: RouteContext) {
         String(prizeItem.prize?.title ?? prizeItem.prize?.name ?? "").trim() ||
         `Prize ${prizeItem.prizeNumber}`;
 
+      const winnerName = cleanName(entry.customerName);
+      const winnerEmail = cleanEmail(entry.customerEmail);
+
       await createSquaresWinner({
         tenant_slug: game.tenant_slug,
         game_id: game.id,
         prize_index: prizeItem.prizeIndex,
         prize_title: prizeTitle,
         square_number: entry.squareNumber,
-        customer_name: entry.customerName,
-        customer_email: entry.customerEmail,
+        customer_name: winnerName,
+        customer_email: winnerEmail || null,
       });
+
+      if (!winnerEmail) {
+        console.warn("Squares auto draw winner email skipped - missing email", {
+          gameId: game.id,
+          prizeNumber: prizeItem.prizeNumber,
+          prizeTitle,
+          squareNumber: entry.squareNumber,
+        });
+        continue;
+      }
+
+      try {
+        await sendWinnerEmail({
+          to: winnerEmail,
+          name: winnerName,
+          raffleTitle: game.title,
+          ticketNumber: entry.squareNumber,
+          colour: `Square ${entry.squareNumber} — ${prizeTitle}`,
+        });
+
+        console.log("Squares auto draw winner email sent", {
+          to: winnerEmail,
+          gameId: game.id,
+          prizeNumber: prizeItem.prizeNumber,
+          prizeTitle,
+          squareNumber: entry.squareNumber,
+        });
+      } catch (emailError: any) {
+        console.error("Squares auto draw winner email failed", {
+          to: winnerEmail,
+          gameId: game.id,
+          prizeNumber: prizeItem.prizeNumber,
+          prizeTitle,
+          squareNumber: entry.squareNumber,
+          error: emailError?.message || emailError,
+        });
+      }
     }
 
     await updateSquaresGame(game.id, {
