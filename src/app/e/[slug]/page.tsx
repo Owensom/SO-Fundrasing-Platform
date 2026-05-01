@@ -1,505 +1,198 @@
-"use client";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import PublicSeatSelector from "@/components/events/PublicSeatSelector";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getEventBySlug } from "../../../../api/_lib/events-repo";
 
-import { useMemo, useState, type CSSProperties } from "react";
-
-type Seat = {
-  id: string;
-  ticket_type_id: string | null;
-  section: string | null;
-  row_label: string | null;
-  seat_number: string | null;
-  table_number: string | null;
-  aisle_after: number | null;
-  status: string;
+type PageProps = {
+  params: {
+    slug: string;
+  };
 };
 
-type TicketType = {
-  id: string;
-  name: string;
-  price: number;
-};
+function formatDate(value: string | null) {
+  if (!value) return "Date to be confirmed";
+
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "full",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return "Date to be confirmed";
+  }
+}
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
-function numericSort(a: string | null, b: string | null) {
-  const an = Number(a);
-  const bn = Number(b);
-  if (Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
-  return String(a || "").localeCompare(String(b || ""));
+function eventTypeLabel(type: string) {
+  if (type === "reserved_seating") return "Reserved seating";
+  if (type === "tables") return "Table seating";
+  return "General admission";
 }
 
-function groupBy<T>(items: T[], getKey: (item: T) => string) {
-  return items.reduce<Record<string, T[]>>((groups, item) => {
-    const key = getKey(item);
-    groups[key] = groups[key] || [];
-    groups[key].push(item);
-    return groups;
-  }, {});
-}
+export default async function PublicEventPage({ params }: PageProps) {
+  const tenantSlug = getTenantSlugFromHeaders();
+  const event = await getEventBySlug(tenantSlug, params.slug);
 
-function seatLabel(seat: Seat) {
-  if (seat.table_number) {
-    return `Table ${seat.table_number}, Seat ${seat.seat_number || "?"}`;
+  if (!event || event.status !== "published") {
+    notFound();
   }
 
-  return `${seat.section ? `${seat.section} · ` : ""}Row ${
-    seat.row_label || "?"
-  }, Seat ${seat.seat_number || "?"}`;
-}
-
-function seatStyle(status: string, selected: boolean): CSSProperties {
-  const base: CSSProperties = {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 8,
-    border: "1px solid rgba(255,255,255,0.25)",
-    fontSize: 12,
-    fontWeight: 900,
-    cursor: status === "available" ? "pointer" : "not-allowed",
-  };
-
-  if (selected) {
-    return { ...base, background: "#7dd3fc", color: "#082f49" };
-  }
-
-  if (status === "sold") {
-    return { ...base, background: "#fda4af", color: "#881337", opacity: 0.7 };
-  }
-
-  if (status === "reserved") {
-    return { ...base, background: "#fcd34d", color: "#78350f", opacity: 0.8 };
-  }
-
-  if (status === "blocked") {
-    return { ...base, background: "#475569", color: "#e2e8f0", opacity: 0.75 };
-  }
-
-  return { ...base, background: "#34d399", color: "#022c22" };
-}
-
-export default function PublicSeatSelector({
-  eventType,
-  seats,
-  ticketTypes,
-  currency,
-}: {
-  eventType: string;
-  seats: Seat[];
-  ticketTypes: TicketType[];
-  currency: string;
-}) {
-  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
-
-  const selectedSeats = useMemo(
-    () => seats.filter((seat) => selectedSeatIds.includes(seat.id)),
-    [seats, selectedSeatIds],
-  );
-
-  const total = selectedSeats.reduce((sum, seat) => {
-    const ticketType = ticketTypes.find((item) => item.id === seat.ticket_type_id);
-    return sum + Number(ticketType?.price || 0);
-  }, 0);
-
-  function toggleSeat(seat: Seat) {
-    if (seat.status !== "available") return;
-
-    setSelectedSeatIds((current) =>
-      current.includes(seat.id)
-        ? current.filter((id) => id !== seat.id)
-        : [...current, seat.id],
-    );
-  }
-
-  const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
-  const tableSeats = seats.filter((seat) => seat.table_number);
-  const renderSeats = eventType === "tables" ? tableSeats : rowSeats;
-
-  if (renderSeats.length === 0) {
-    return <div style={styles.empty}>No seats available.</div>;
-  }
+  const ticketTypes = event.ticket_types || [];
+  const seats = event.seats || [];
+  const availableSeats = seats.filter((seat) => seat.status === "available");
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.mapPanel}>
-        {eventType === "tables" ? (
-          <TableGrid
-            seats={tableSeats}
-            ticketTypes={ticketTypes}
-            currency={currency}
-            selectedSeatIds={selectedSeatIds}
-            onToggleSeat={toggleSeat}
-          />
-        ) : (
-          <RowGrid
-            seats={rowSeats}
-            ticketTypes={ticketTypes}
-            currency={currency}
-            selectedSeatIds={selectedSeatIds}
-            onToggleSeat={toggleSeat}
-          />
-        )}
+    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <Link
+          href={`/c/${tenantSlug}`}
+          className="inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
+        >
+          ← Back to all campaigns
+        </Link>
 
-        <Legend />
-      </div>
+        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-2xl">
+          {event.image_url ? (
+            <img
+              src={event.image_url}
+              alt={event.title}
+              className="h-72 w-full object-cover md:h-96"
+            />
+          ) : (
+            <div className="flex h-72 items-center justify-center bg-gradient-to-br from-amber-300 via-orange-400 to-rose-500 md:h-96">
+              <div className="px-6 text-center">
+                <p className="text-sm font-black uppercase tracking-[0.35em] text-slate-950/70">
+                  Event
+                </p>
+                <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 md:text-6xl">
+                  {event.title}
+                </h1>
+              </div>
+            </div>
+          )}
 
-      <aside style={styles.cart}>
-        <h3 style={styles.cartTitle}>Your seats</h3>
+          <div className="p-6 md:p-8">
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
+                {eventTypeLabel(event.event_type)}
+              </span>
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-200">
+                {event.currency}
+              </span>
+            </div>
 
-        {selectedSeats.length === 0 ? (
-          <p style={styles.muted}>Select available seats from the map.</p>
-        ) : (
-          <div style={styles.selectedList}>
-            {selectedSeats.map((seat) => {
-              const ticketType = ticketTypes.find(
-                (item) => item.id === seat.ticket_type_id,
-              );
+            <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">
+              {event.title}
+            </h1>
 
-              return (
-                <div key={seat.id} style={styles.selectedCard}>
-                  <p style={styles.selectedTitle}>{seatLabel(seat)}</p>
-                  <p style={styles.muted}>{ticketType?.name || "Standard ticket"}</p>
-                  <p style={styles.price}>
-                    {currency} {moneyFromCents(ticketType?.price || 0)}
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl bg-slate-900 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Date & time
+                </p>
+                <p className="mt-1 text-lg font-black">
+                  {formatDate(event.starts_at)}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Location
+                </p>
+                <p className="mt-1 text-lg font-black">
+                  {event.location || "Location to be confirmed"}
+                </p>
+              </div>
+            </div>
+
+            {event.description && (
+              <p className="mt-6 max-w-3xl whitespace-pre-line text-base leading-7 text-slate-300">
+                {event.description}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
+            <h2 className="text-3xl font-black">Tickets</h2>
+            <p className="mt-2 text-sm text-slate-300">
+              Choose your seats. Checkout will be connected in the next step.
+            </p>
+
+            <div className="mt-6 space-y-4">
+              {ticketTypes.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
+                  <p className="text-lg font-black">Tickets coming soon</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Ticket options have not been added yet.
                   </p>
                 </div>
-              );
-            })}
-
-            <div style={styles.total}>
-              <span>Total</span>
-              <strong>
-                {currency} {moneyFromCents(total)}
-              </strong>
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          disabled={selectedSeats.length === 0}
-          style={{
-            ...styles.checkoutButton,
-            opacity: selectedSeats.length === 0 ? 0.45 : 1,
-          }}
-        >
-          Checkout next
-        </button>
-      </aside>
-    </div>
-  );
-}
-
-function RowGrid({
-  seats,
-  ticketTypes,
-  currency,
-  selectedSeatIds,
-  onToggleSeat,
-}: {
-  seats: Seat[];
-  ticketTypes: TicketType[];
-  currency: string;
-  selectedSeatIds: string[];
-  onToggleSeat: (seat: Seat) => void;
-}) {
-  const bySection = groupBy(seats, (seat) => seat.section || "Main");
-
-  return (
-    <div>
-      <div style={styles.stage}>Stage / Front</div>
-
-      <div style={styles.sectionStack}>
-        {Object.entries(bySection)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([section, sectionSeats]) => {
-            const byRow = groupBy(sectionSeats, (seat) => seat.row_label || "Seats");
-
-            return (
-              <div key={section} style={styles.sectionBlock}>
-                <div style={styles.sectionTitle}>{section}</div>
-
-                {Object.entries(byRow)
-                  .sort(([a], [b]) => numericSort(a, b))
-                  .map(([rowLabel, rowSeats]) => {
-                    const sortedSeats = rowSeats
-                      .slice()
-                      .sort((a, b) => numericSort(a.seat_number, b.seat_number));
-
-                    return (
-                      <div key={`${section}-${rowLabel}`} style={styles.rowLine}>
-                        <div style={styles.rowLabel}>Row {rowLabel}</div>
-
-                        <div style={styles.seatLine}>
-                          {sortedSeats.map((seat) => {
-                            const selected = selectedSeatIds.includes(seat.id);
-                            const ticketType = ticketTypes.find(
-                              (item) => item.id === seat.ticket_type_id,
-                            );
-
-                            return (
-                              <span key={seat.id} style={styles.seatWrap}>
-                                <button
-                                  type="button"
-                                  disabled={seat.status !== "available"}
-                                  onClick={() => onToggleSeat(seat)}
-                                  title={`${seatLabel(seat)} · ${
-                                    ticketType?.name || "Standard"
-                                  } · ${currency} ${moneyFromCents(
-                                    ticketType?.price || 0,
-                                  )}`}
-                                  style={seatStyle(seat.status, selected)}
-                                >
-                                  {seat.seat_number}
-                                </button>
-
-                                {seat.aisle_after ? (
-                                  <span style={styles.aisle}>AISLE</span>
-                                ) : null}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            );
-          })}
-      </div>
-    </div>
-  );
-}
-
-function TableGrid({
-  seats,
-  selectedSeatIds,
-  onToggleSeat,
-}: {
-  seats: Seat[];
-  ticketTypes: TicketType[];
-  currency: string;
-  selectedSeatIds: string[];
-  onToggleSeat: (seat: Seat) => void;
-}) {
-  const byTable = groupBy(seats, (seat) => seat.table_number || "Table");
-
-  return (
-    <div style={styles.tableGrid}>
-      {Object.entries(byTable)
-        .sort(([a], [b]) => numericSort(a, b))
-        .map(([tableNumber, tableSeats]) => (
-          <div key={tableNumber} style={styles.tableCard}>
-            <h3 style={styles.tableTitle}>Table {tableNumber}</h3>
-
-            <div style={styles.tableSeats}>
-              {tableSeats
-                .slice()
-                .sort((a, b) => numericSort(a.seat_number, b.seat_number))
-                .map((seat) => (
-                  <button
-                    key={seat.id}
-                    type="button"
-                    disabled={seat.status !== "available"}
-                    onClick={() => onToggleSeat(seat)}
-                    style={seatStyle(seat.status, selectedSeatIds.includes(seat.id))}
+              ) : (
+                ticketTypes.map((ticketType) => (
+                  <div
+                    key={ticketType.id}
+                    className="rounded-3xl border border-white/10 bg-slate-900 p-5"
                   >
-                    {seat.seat_number}
-                  </button>
-                ))}
+                    <h3 className="text-xl font-black">{ticketType.name}</h3>
+
+                    {ticketType.description && (
+                      <p className="mt-2 text-sm text-slate-400">
+                        {ticketType.description}
+                      </p>
+                    )}
+
+                    <p className="mt-3 text-2xl font-black text-amber-300">
+                      {event.currency} {moneyFromCents(ticketType.price)}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
-        ))}
-    </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
+            <h2 className="text-3xl font-black">
+              {event.event_type === "tables" ? "Table seats" : "Choose seats"}
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-300">
+              {event.event_type === "general_admission"
+                ? "This event uses general admission tickets."
+                : "Available seats are shown below."}
+            </p>
+
+            <div className="mt-6">
+              {event.event_type === "general_admission" ? (
+                <div className="rounded-3xl bg-slate-900 p-6">
+                  <p className="text-lg font-black">No seat selection needed</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Guests only need to choose a ticket type and quantity.
+                  </p>
+                </div>
+              ) : availableSeats.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
+                  <p className="text-lg font-black">No seats available</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Seats may not have been released yet.
+                  </p>
+                </div>
+              ) : (
+                <PublicSeatSelector
+                  eventType={event.event_type}
+                  seats={seats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
-
-function Legend() {
-  return (
-    <div style={styles.legend}>
-      <span>🟩 Available</span>
-      <span>🟦 Selected</span>
-      <span>🟨 Reserved</span>
-      <span>🟥 Sold</span>
-      <span>⬛ Blocked</span>
-    </div>
-  );
-}
-
-const styles: Record<string, CSSProperties> = {
-  wrap: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 320px",
-    gap: 24,
-    alignItems: "start",
-  },
-  mapPanel: {
-    maxHeight: 720,
-    overflow: "auto",
-    borderRadius: 24,
-    background: "#0f172a",
-    padding: 20,
-    color: "#fff",
-  },
-  stage: {
-    marginBottom: 24,
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "#020617",
-    padding: 14,
-    textAlign: "center",
-    fontSize: 12,
-    fontWeight: 900,
-    letterSpacing: "0.25em",
-    color: "#94a3b8",
-    textTransform: "uppercase",
-  },
-  sectionStack: {
-    display: "grid",
-    gap: 28,
-    minWidth: "max-content",
-  },
-  sectionBlock: {
-    display: "grid",
-    gap: 12,
-  },
-  sectionTitle: {
-    borderRadius: 14,
-    background: "rgba(255,255,255,0.1)",
-    padding: "8px 12px",
-    fontSize: 13,
-    fontWeight: 900,
-    textTransform: "uppercase",
-  },
-  rowLine: {
-    display: "grid",
-    gridTemplateColumns: "72px 1fr",
-    gap: 12,
-    alignItems: "center",
-  },
-  rowLabel: {
-    fontSize: 13,
-    fontWeight: 900,
-    color: "#cbd5e1",
-    whiteSpace: "nowrap",
-  },
-  seatLine: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "nowrap",
-  },
-  seatWrap: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  },
-  aisle: {
-    width: 92,
-    height: 38,
-    borderRadius: 12,
-    border: "2px dashed #fcd34d",
-    background: "rgba(252, 211, 77, 0.12)",
-    color: "#fde68a",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: "0.12em",
-    marginLeft: 10,
-    marginRight: 10,
-  },
-  cart: {
-    borderRadius: 24,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "#0f172a",
-    padding: 20,
-    color: "#fff",
-  },
-  cartTitle: {
-    margin: 0,
-    fontSize: 24,
-    fontWeight: 900,
-  },
-  muted: {
-    color: "#94a3b8",
-    fontSize: 14,
-  },
-  selectedList: {
-    display: "grid",
-    gap: 12,
-    marginTop: 16,
-  },
-  selectedCard: {
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "#020617",
-    padding: 12,
-  },
-  selectedTitle: {
-    margin: 0,
-    fontWeight: 900,
-  },
-  price: {
-    margin: "4px 0 0",
-    color: "#fcd34d",
-    fontWeight: 900,
-  },
-  total: {
-    display: "flex",
-    justifyContent: "space-between",
-    borderTop: "1px solid rgba(255,255,255,0.12)",
-    paddingTop: 14,
-    marginTop: 8,
-    fontSize: 18,
-  },
-  checkoutButton: {
-    width: "100%",
-    marginTop: 20,
-    border: "none",
-    borderRadius: 16,
-    background: "#fcd34d",
-    color: "#111827",
-    padding: 16,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  empty: {
-    borderRadius: 24,
-    border: "1px dashed rgba(255,255,255,0.2)",
-    padding: 32,
-    textAlign: "center",
-  },
-  legend: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 24,
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  tableGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 16,
-  },
-  tableCard: {
-    borderRadius: 20,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "#020617",
-    padding: 16,
-  },
-  tableTitle: {
-    margin: "0 0 12px",
-    fontSize: 18,
-    fontWeight: 900,
-  },
-  tableSeats: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-};
