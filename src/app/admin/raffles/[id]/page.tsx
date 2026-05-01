@@ -118,6 +118,7 @@ function formatDrawDate(value: string | null | undefined) {
     timeStyle: "short",
   }).format(date);
 }
+
 function formatMoney(cents: number, currency: string) {
   try {
     return new Intl.NumberFormat("en-GB", {
@@ -180,6 +181,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
   const config = (raffle.config_json as any) ?? {};
   const imagePosition = normaliseImagePosition(config.image_position);
 
+  const entryQuestionText = String(config.question?.text ?? "").trim();
+  const entryQuestionAnswer = String(config.question?.answer ?? "").trim();
+
   const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
   const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
 
@@ -238,7 +242,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
   const remainingTickets = Math.max(totalTickets - soldTicketsCount, 0);
   const progress = getProgressPercent(soldTicketsCount, totalTickets);
   const statusStyle = getStatusStyle(raffle.status);
-    return (
+
+  return (
     <main style={styles.page}>
       <section style={styles.topBar}>
         <Link href="/admin/raffles" style={styles.backLink}>
@@ -326,19 +331,20 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <div>
           <h2 style={styles.sectionTitle}>Raffle actions</h2>
           <p style={styles.sectionDescription}>
-            Publish, close, draw or remove this raffle using the existing action controls.
+            Publish, close, draw or remove this raffle using the existing action
+            controls.
           </p>
         </div>
 
         <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
       </section>
-
-      <section style={styles.section}>
+            <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <h2 style={styles.sectionTitle}>Edit raffle</h2>
             <p style={styles.sectionDescription}>
-              Update the public details, pricing, colours and offer bundles.
+              Update the public details, pricing, colours, offer bundles and
+              entry question.
             </p>
           </div>
         </div>
@@ -376,11 +382,49 @@ export default async function AdminRafflePage({ params }: PageProps) {
               style={styles.textarea}
             />
           </Field>
-                    <div style={styles.mediaBox}>
+
+          <section style={styles.legalPanel}>
+            <div>
+              <h3 style={styles.subTitle}>Legal entry question</h3>
+              <p style={styles.sectionDescription}>
+                Add a campaign-specific question and correct answer. This is
+                stored only on this raffle and helps make the entry a prize
+                competition rather than a pure chance draw.
+              </p>
+            </div>
+
+            <div style={styles.twoColumn}>
+              <Field label="Entry question">
+                <input
+                  name="question_text"
+                  defaultValue={entryQuestionText}
+                  placeholder="Example: What colour is a traditional London taxi?"
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Correct answer">
+                <input
+                  name="question_answer"
+                  defaultValue={entryQuestionAnswer}
+                  placeholder="Example: black"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <p style={styles.helpText}>
+              Use a genuine knowledge or skill question relevant to the
+              organiser or campaign. Avoid questions that are too trivial.
+            </p>
+          </section>
+
+          <div style={styles.mediaBox}>
             <div>
               <h3 style={styles.subTitle}>Raffle image</h3>
               <p style={styles.sectionDescription}>
-                Upload or replace the public image, then choose the focus position.
+                Upload or replace the public image, then choose the focus
+                position.
               </p>
 
               <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
@@ -455,7 +499,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </Field>
 
             <Field label="Status">
-              <select name="status" defaultValue={raffle.status} style={styles.input}>
+              <select
+                name="status"
+                defaultValue={raffle.status}
+                style={styles.input}
+              >
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
                 <option value="closed">Closed</option>
@@ -500,7 +548,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   key={colour}
                   style={{
                     ...styles.colourPill,
-                    background: colours.includes(colour) ? "#1683f8" : "#e2e8f0",
+                    background: colours.includes(colour)
+                      ? "#1683f8"
+                      : "#e2e8f0",
                     color: colours.includes(colour) ? "#ffffff" : "#111827",
                   }}
                 >
@@ -527,662 +577,3 @@ export default async function AdminRafflePage({ params }: PageProps) {
               />
             </Field>
           </section>
-
-          <section style={styles.innerPanel}>
-            <div style={styles.innerHeader}>
-              <div>
-                <h3 style={styles.subTitle}>Offers</h3>
-                <p style={styles.sectionDescription}>
-                  Optional bundle pricing. Example: 3 tickets for 12.00.
-                </p>
-              </div>
-            </div>
-
-            <input type="hidden" name="offer_count" value={offerRows.length} />
-
-            <div style={styles.offerList}>
-              {offerRows.map((offer, index) => (
-                <div key={`${offer.id}-${index}`} style={styles.offerRow}>
-                  <Field label="Number of tickets">
-                    <input
-                      name={`offer_quantity_${index}`}
-                      type="number"
-                      min={1}
-                      defaultValue={offer.quantity}
-                      placeholder="3"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Total offer price">
-                    <input
-                      name={`offer_price_${index}`}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={offer.price}
-                      placeholder="12.00"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      name={`offer_active_${index}`}
-                      type="checkbox"
-                      value="true"
-                      defaultChecked={offer.is_active}
-                    />
-                    Use
-                  </label>
-                </div>
-              ))}
-            </div>
-
-            <p style={styles.helpText}>
-              Leave unused rows blank. Save the raffle to apply changes.
-            </p>
-          </section>
-                    <section style={styles.innerPanel}>
-            <div style={styles.innerHeader}>
-              <div>
-                <h3 style={styles.subTitle}>Auto draw range</h3>
-                <p style={styles.sectionDescription}>
-                  Choose which prize numbers the randomizer should draw. Example:
-                  set from 6 to 999 to keep the top prizes for a live draw.
-                </p>
-              </div>
-            </div>
-
-            <div style={styles.twoColumn}>
-              <Field label="Auto draw from prize number">
-                <input
-                  name="auto_draw_from_prize"
-                  type="number"
-                  min={1}
-                  defaultValue={autoDrawFromPrize}
-                  placeholder="6"
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Auto draw to prize number">
-                <input
-                  name="auto_draw_to_prize"
-                  type="number"
-                  min={1}
-                  defaultValue={autoDrawToPrize}
-                  placeholder="999"
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-          </section>
-
-          <section style={styles.submitBar}>
-            <div>
-              <strong style={{ color: "#0f172a" }}>Save changes</strong>
-              <div style={styles.mutedSmall}>
-                This updates the raffle page and admin values.
-              </div>
-            </div>
-
-            <button type="submit" style={styles.submitButton}>
-              Save raffle
-            </button>
-          </section>
-        </form>
-      </section>
-
-      <section style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <h2 style={styles.sectionTitle}>Prize settings</h2>
-            <p style={styles.sectionDescription}>
-              Manage prize names, descriptions and public visibility.
-            </p>
-          </div>
-        </div>
-
-        <PrizeSettings raffleId={raffle.id} initialPrizes={config.prizes ?? []} />
-      </section>
-
-      <section style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <h2 style={styles.sectionTitle}>Winners</h2>
-            <p style={styles.sectionDescription}>
-              View winners, auto draw remaining prizes, or manually add a live draw winner.
-            </p>
-          </div>
-        </div>
-
-        {winners.length ? (
-          <div style={styles.winnerList}>
-            {winners.map((winner) => (
-              <div key={winner.id} style={styles.winnerCard}>
-                <div>
-                  <div style={styles.winnerLabel}>Prize</div>
-                  <div style={styles.winnerValue}>
-                    {winner.prize_title || `Prize ${winner.prize_position}`}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={styles.winnerLabel}>Ticket</div>
-                  <div style={styles.winnerValue}>#{winner.ticket_number}</div>
-                </div>
-
-                <div>
-                  <div style={styles.winnerLabel}>Colour</div>
-                  <div style={styles.winnerValue}>
-                    {winner.colour || "No colour"}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={styles.winnerLabel}>Buyer</div>
-                  <div style={styles.winnerValue}>
-                    {winner.buyer_name || "Supporter"}
-                  </div>
-                  <div style={styles.winnerEmail}>
-                    {winner.buyer_email || "—"}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={styles.emptyBox}>No winners yet.</div>
-        )}
-
-        <div style={styles.drawGrid}>
-          <form
-            action={`/api/admin/raffles/${raffle.id}/draw/auto`}
-            method="post"
-            style={styles.drawPanel}
-          >
-            <input
-              type="hidden"
-              name="from_prize"
-              value={autoDrawFromPrize}
-            />
-            <input
-              type="hidden"
-              name="to_prize"
-              value={autoDrawToPrize}
-            />
-
-            <h3 style={styles.subTitle}>Automatic random draw</h3>
-
-            <p style={styles.sectionDescription}>
-              Randomly draw remaining undrawn prizes using the saved auto draw range.
-            </p>
-
-            <button type="submit" style={styles.drawButton}>
-              Auto draw remaining winners
-            </button>
-          </form>
-
-          <DramaticRaffleDraw raffleId={raffle.id} soldTickets={soldTickets} />
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={styles.summaryCard}>
-      <div style={styles.summaryLabel}>{label}</div>
-      <div style={styles.summaryValue}>{value}</div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label style={styles.field}>
-      <span style={styles.label}>{label}</span>
-      {children}
-    </label>
-  );
-}
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  backLink: {
-    color: "#334155",
-    textDecoration: "none",
-    fontWeight: 800,
-  },
-  publicLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 260px",
-    gap: 18,
-    alignItems: "stretch",
-    padding: 22,
-    borderRadius: 24,
-    background: "#0f172a",
-    color: "#ffffff",
-    marginBottom: 16,
-  },
-  heroContent: {
-    minWidth: 0,
-  },
-  eyebrow: {
-    display: "inline-flex",
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-  heroTitleRow: {
-    display: "flex",
-    gap: 12,
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  heroTitle: {
-    margin: 0,
-    fontSize: 34,
-    lineHeight: 1.08,
-    letterSpacing: "-0.04em",
-    wordBreak: "break-word",
-  },
-  statusPill: {
-    padding: "7px 11px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    textTransform: "capitalize",
-    fontWeight: 900,
-  },
-  heroSlug: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    fontSize: 14,
-    fontWeight: 700,
-    wordBreak: "break-word",
-  },
-  heroDescription: {
-    margin: "12px 0 0",
-    color: "#e2e8f0",
-    lineHeight: 1.55,
-    maxWidth: 720,
-  },
-  heroDescriptionMuted: {
-    margin: "12px 0 0",
-    color: "#94a3b8",
-    lineHeight: 1.55,
-  },
-  heroImageWrap: {
-    borderRadius: 18,
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.12)",
-    overflow: "hidden",
-    minHeight: 180,
-  },
-  heroImageEmpty: {
-    height: "100%",
-    minHeight: 180,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 46,
-    color: "#94a3b8",
-  },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    padding: 15,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 900,
-    marginTop: 5,
-    wordBreak: "break-word",
-  },
-  progressCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  progressHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  progressPercent: {
-    color: "#166534",
-    fontWeight: 900,
-    fontSize: 18,
-  },
-  progressTrack: {
-    height: 10,
-    background: "#e2e8f0",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    background: "#16a34a",
-    borderRadius: 999,
-  },
-  actionsCard: {
-    display: "grid",
-    gap: 14,
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  section: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.02em",
-  },
-  sectionDescription: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  form: {
-    display: "grid",
-    gap: 14,
-  },
-  twoColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 12,
-  },
-  threeColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 12,
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    resize: "vertical",
-    boxSizing: "border-box",
-  },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
-    gap: 16,
-    padding: 14,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  subTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
-  previewBox: {
-    height: 220,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    overflow: "hidden",
-  },
-  emptyPreview: {
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#94a3b8",
-    fontSize: 42,
-  },
-  innerPanel: {
-    display: "grid",
-    gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  innerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  colourGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  colourPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "10px 14px",
-    borderRadius: 999,
-    cursor: "pointer",
-    fontWeight: 900,
-  },
-  offerList: {
-    display: "grid",
-    gap: 10,
-  },
-  offerRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
-    gap: 10,
-    alignItems: "end",
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 14,
-    background: "#ffffff",
-  },
-  checkboxLabel: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 44,
-    fontWeight: 900,
-    color: "#334155",
-    cursor: "pointer",
-  },
-  helpText: {
-    color: "#64748b",
-    fontSize: 13,
-    margin: 0,
-  },
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  submitButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  winnerList: {
-    display: "grid",
-    gap: 10,
-    marginBottom: 14,
-  },
-  winnerCard: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) 110px 150px minmax(0, 1fr)",
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    alignItems: "start",
-  },
-  winnerLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-    marginBottom: 4,
-  },
-  winnerValue: {
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 900,
-    wordBreak: "break-word",
-  },
-  winnerEmail: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-    wordBreak: "break-word",
-  },
-  emptyBox: {
-    padding: 16,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 800,
-    marginBottom: 14,
-  },
-  drawGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 14,
-  },
-  drawPanel: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 12,
-  },
-  drawButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-};
