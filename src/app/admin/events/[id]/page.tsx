@@ -8,6 +8,8 @@ import {
   createEventTicketType,
   deleteEvent,
   deleteEventSeats,
+  deleteEventRowSeats,
+  deleteEventTableSeats,
   deleteEventTicketType,
   deleteEventTicketTypes,
   getEventById,
@@ -25,6 +27,10 @@ type PageProps = {
     error?: string;
   };
 };
+
+/* =========================
+   HELPERS
+========================= */
 
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
@@ -99,99 +105,35 @@ function groupBy<T>(items: T[], getKey: (item: T) => string) {
   }, {});
 }
 
-function expandRows(value: string): string[] {
-  const parts = value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
+/* =========================
+   NEW SAFE CLEAR ACTIONS
+========================= */
 
-  const rows: string[] = [];
+async function clearRowSeatsAction(formData: FormData) {
+  "use server";
 
-  for (const part of parts) {
-    if (part.includes("-")) {
-      const [rawStart, rawEnd] = part.split("-").map((item) => item.trim());
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
 
-      const startNumber = Number(rawStart);
-      const endNumber = Number(rawEnd);
+  const eventId = String(formData.get("event_id") || "").trim();
 
-      if (Number.isFinite(startNumber) && Number.isFinite(endNumber)) {
-        const start = Math.min(startNumber, endNumber);
-        const end = Math.max(startNumber, endNumber);
+  if (eventId) await deleteEventRowSeats(eventId);
 
-        for (let row = start; row <= end; row += 1) {
-          rows.push(String(row));
-        }
-
-        continue;
-      }
-
-      if (
-        rawStart.length === 1 &&
-        rawEnd.length === 1 &&
-        /^[A-Za-z]$/.test(rawStart) &&
-        /^[A-Za-z]$/.test(rawEnd)
-      ) {
-        const start = Math.min(
-          rawStart.toUpperCase().charCodeAt(0),
-          rawEnd.toUpperCase().charCodeAt(0),
-        );
-        const end = Math.max(
-          rawStart.toUpperCase().charCodeAt(0),
-          rawEnd.toUpperCase().charCodeAt(0),
-        );
-
-        for (let code = start; code <= end; code += 1) {
-          rows.push(String.fromCharCode(code));
-        }
-
-        continue;
-      }
-    }
-
-    rows.push(part);
-  }
-
-  return Array.from(new Set(rows));
+  redirect(`/admin/events/${eventId}?saved=row-seats-cleared#row-seating`);
 }
 
-function seatBoxStyle(status: string): CSSProperties {
-  const base = styles.seatBox;
+async function clearTableSeatsAction(formData: FormData) {
+  "use server";
 
-  if (status === "sold") {
-    return {
-      ...base,
-      background: "#fee2e2",
-      borderColor: "#fecaca",
-      color: "#991b1b",
-    };
-  }
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
 
-  if (status === "reserved") {
-    return {
-      ...base,
-      background: "#fef3c7",
-      borderColor: "#fde68a",
-      color: "#92400e",
-    };
-  }
+  const eventId = String(formData.get("event_id") || "").trim();
 
-  if (status === "blocked") {
-    return {
-      ...base,
-      background: "#e2e8f0",
-      borderColor: "#cbd5e1",
-      color: "#334155",
-    };
-  }
+  if (eventId) await deleteEventTableSeats(eventId);
 
-  return {
-    ...base,
-    background: "#dcfce7",
-    borderColor: "#bbf7d0",
-    color: "#166534",
-  };
+  redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
-
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -236,6 +178,10 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
+
+/* =========================
+   TICKETS
+========================= */
 
 async function addTicketTypeAction(formData: FormData) {
   "use server";
@@ -316,6 +262,10 @@ async function clearTicketTypesAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
 
+/* =========================
+   SEAT GENERATION (FIXED)
+========================= */
+
 async function generateSeatsAction(formData: FormData) {
   "use server";
 
@@ -336,13 +286,13 @@ async function generateSeatsAction(formData: FormData) {
   }
 
   if (clearExisting) {
-    await deleteEventSeats(eventId);
+    await deleteEventRowSeats(eventId);
   }
 
   const rows = expandRows(rowsRaw);
 
   for (const row of rows) {
-    for (let seat = 1; seat <= seatsPerRow; seat += 1) {
+    for (let seat = 1; seat <= seatsPerRow; seat++) {
       try {
         await createEventSeat({
           eventId,
@@ -354,14 +304,8 @@ async function generateSeatsAction(formData: FormData) {
           aisleAfter: aisleAfterList.includes(seat) ? seat : null,
           status: "available",
         });
-      } catch (error) {
-        console.error("Skipping duplicate event seat", {
-          eventId,
-          section,
-          row,
-          seat,
-          error,
-        });
+      } catch {
+        // silently skip duplicates
       }
     }
   }
@@ -387,40 +331,30 @@ async function generateTablesAction(formData: FormData) {
   }
 
   if (clearExisting) {
-    await deleteEventSeats(eventId);
+    await deleteEventTableSeats(eventId);
   }
 
-  for (let table = 1; table <= tableCount; table += 1) {
-    for (let seat = 1; seat <= seatsPerTable; seat += 1) {
-      await createEventSeat({
-        eventId,
-        ticketTypeId,
-        section: null,
-        rowLabel: null,
-        seatNumber: String(seat),
-        tableNumber: String(table),
-        aisleAfter: null,
-        status: "available",
-      });
+  for (let table = 1; table <= tableCount; table++) {
+    for (let seat = 1; seat <= seatsPerTable; seat++) {
+      try {
+        await createEventSeat({
+          eventId,
+          ticketTypeId,
+          section: null,
+          rowLabel: null,
+          seatNumber: String(seat),
+          tableNumber: String(table),
+          aisleAfter: null,
+          status: "available",
+        });
+      } catch {
+        // skip duplicates
+      }
     }
   }
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
-
-async function clearSeatsAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (eventId) await deleteEventSeats(eventId);
-
-  redirect(`/admin/events/${eventId}?saved=seats-cleared#overview`);
-}
-
 async function deleteEventAction(formData: FormData) {
   "use server";
 
@@ -433,6 +367,7 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -455,8 +390,8 @@ export default async function AdminEventManagePage({
   const visibleSeats = isReservedSeating
     ? rowSeats
     : isTables
-    ? tableSeats
-    : seats;
+      ? tableSeats
+      : seats;
 
   const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
   const reservedSeats = visibleSeats.filter(
@@ -477,12 +412,8 @@ export default async function AdminEventManagePage({
           <h1 style={styles.title}>{event.title}</h1>
 
           <div style={styles.badgeRow}>
-            <span style={styles.goldBadge}>
-              {eventTypeLabel(event.event_type)}
-            </span>
-            <span style={styles.darkBadge}>
-              {statusLabel(event.status)}
-            </span>
+            <span style={styles.goldBadge}>{eventTypeLabel(event.event_type)}</span>
+            <span style={styles.darkBadge}>{statusLabel(event.status)}</span>
             <span style={styles.darkBadge}>{event.currency}</span>
           </div>
 
@@ -493,11 +424,7 @@ export default async function AdminEventManagePage({
 
         <div style={styles.heroImageWrap}>
           {event.image_url ? (
-            <img
-              src={event.image_url}
-              alt={event.title}
-              style={styles.heroImage}
-            />
+            <img src={event.image_url} alt={event.title} style={styles.heroImage} />
           ) : (
             <div style={styles.heroImageEmpty}>🎫</div>
           )}
@@ -514,25 +441,15 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>
-          Overview
-        </a>
-        <a href="#tickets" style={styles.tab}>
-          Tickets & Prices
-        </a>
+        <a href="#overview" style={styles.tab}>Overview</a>
+        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
         {isReservedSeating && (
-          <a href="#row-seating" style={styles.tab}>
-            Row Seating
-          </a>
+          <a href="#row-seating" style={styles.tab}>Row Seating</a>
         )}
         {isTables && (
-          <a href="#table-seating" style={styles.tab}>
-            Table Seating
-          </a>
+          <a href="#table-seating" style={styles.tab}>Table Seating</a>
         )}
-        <a href="#orders" style={styles.tab}>
-          Orders
-        </a>
+        <a href="#orders" style={styles.tab}>Orders</a>
       </nav>
 
       {searchParams?.saved && (
@@ -551,8 +468,7 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Choose the event type first. The admin page only shows the
-              sections needed for that type.
+              Choose the event type first. The admin page only shows the sections needed for that type.
             </p>
           </div>
         </div>
@@ -567,8 +483,8 @@ export default async function AdminEventManagePage({
                   ? `${event.capacity} tickets`
                   : "Unlimited"
                 : isReservedSeating
-                ? `${rowSeats.length} row seats`
-                : `${tableSeats.length} table seats`
+                  ? `${rowSeats.length} row seats`
+                  : `${tableSeats.length} table seats`
             }
           />
           <SummaryCard label="Available" value={availableSeats} />
@@ -584,21 +500,11 @@ export default async function AdminEventManagePage({
             <input type="hidden" name="id" value={event.id} />
 
             <Field label="Title">
-              <input
-                name="title"
-                required
-                defaultValue={event.title}
-                style={styles.input}
-              />
+              <input name="title" required defaultValue={event.title} style={styles.input} />
             </Field>
 
             <Field label="Slug">
-              <input
-                name="slug"
-                required
-                defaultValue={event.slug}
-                style={styles.input}
-              />
+              <input name="slug" required defaultValue={event.slug} style={styles.input} />
             </Field>
 
             <Field label="Description">
@@ -617,9 +523,7 @@ export default async function AdminEventManagePage({
                   Upload or replace the public event image.
                 </p>
 
-                <ImageUploadField
-                  currentImageUrl={event.image_url ?? ""}
-                />
+                <ImageUploadField currentImageUrl={event.image_url ?? ""} />
               </div>
 
               <div style={styles.previewBox}>
@@ -634,7 +538,8 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-                        <div style={styles.twoCol}>
+
+            <div style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -677,11 +582,7 @@ export default async function AdminEventManagePage({
 
             <div style={styles.threeCol}>
               <Field label="Currency">
-                <select
-                  name="currency"
-                  defaultValue={event.currency}
-                  style={styles.input}
-                >
+                <select name="currency" defaultValue={event.currency} style={styles.input}>
                   <option value="GBP">GBP</option>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -689,11 +590,7 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Type">
-                <select
-                  name="event_type"
-                  defaultValue={event.event_type}
-                  style={styles.input}
-                >
+                <select name="event_type" defaultValue={event.event_type} style={styles.input}>
                   <option value="general_admission">General admission</option>
                   <option value="reserved_seating">Reserved seating</option>
                   <option value="tables">Tables</option>
@@ -701,11 +598,7 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Status">
-                <select
-                  name="status"
-                  defaultValue={event.status}
-                  style={styles.input}
-                >
+                <select name="status" defaultValue={event.status} style={styles.input}>
                   <option value="draft">Draft</option>
                   <option value="published">Published</option>
                   <option value="closed">Closed</option>
@@ -719,8 +612,7 @@ export default async function AdminEventManagePage({
           </form>
         </div>
       </section>
-
-      <section id="tickets" style={styles.section}>
+            <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 2</p>
@@ -969,7 +861,7 @@ export default async function AdminEventManagePage({
 
               <label style={styles.checkboxLabel}>
                 <input type="checkbox" name="clear_existing" value="yes" />
-                Clear existing seats before generating
+                Clear existing row seats before generating
               </label>
 
               <button type="submit" style={styles.primaryButton}>
@@ -1012,10 +904,10 @@ export default async function AdminEventManagePage({
                 </p>
               </div>
 
-              <form action={clearSeatsAction}>
+              <form action={clearRowSeatsAction}>
                 <input type="hidden" name="event_id" value={event.id} />
                 <button type="submit" style={styles.dangerOutlineButton}>
-                  Clear row/table seats
+                  Clear row seats only
                 </button>
               </form>
             </div>
@@ -1084,7 +976,7 @@ export default async function AdminEventManagePage({
 
               <label style={styles.checkboxLabel}>
                 <input type="checkbox" name="clear_existing" value="yes" />
-                Clear existing seats before generating
+                Clear existing table seats before generating
               </label>
 
               <button type="submit" style={styles.primaryButton}>
@@ -1127,10 +1019,10 @@ export default async function AdminEventManagePage({
                 </p>
               </div>
 
-              <form action={clearSeatsAction}>
+              <form action={clearTableSeatsAction}>
                 <input type="hidden" name="event_id" value={event.id} />
                 <button type="submit" style={styles.dangerOutlineButton}>
-                  Clear row/table seats
+                  Clear table seats only
                 </button>
               </form>
             </div>
