@@ -1,64 +1,87 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRaffleById } from "@/lib/raffles";
+import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+/**
+ * Normalize text safely
+ */
+function clean(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const formData = await req.formData();
 
-    const raffleId = String(body.raffleId || "").trim();
-    const reservationToken = String(body.reservationToken || "").trim();
-    const coverFees = Boolean(body.coverFees);
+    const raffleId = String(formData.get("raffle_id") || "").trim();
+    const quantity = Number(formData.get("quantity") || 0);
+    const buyerName = String(formData.get("name") || "").trim();
+    const buyerEmail = String(formData.get("email") || "").trim();
+    const answer = clean(formData.get("answer"));
 
-    if (!raffleId || !reservationToken) {
+    if (!raffleId || !quantity || quantity <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Missing checkout data" },
-        { status: 400 }
+        { ok: false, error: "Invalid request" },
+        { status: 400 },
       );
     }
 
     const raffle = await getRaffleById(raffleId);
 
-    if (!raffle) {
+    if (!raffle || raffle.status !== "published") {
       return NextResponse.json(
-        { ok: false, error: "Raffle not found" },
-        { status: 404 }
+        { ok: false, error: "Raffle not available" },
+        { status: 400 },
       );
     }
 
-    const ticketPriceCents = Number(raffle.ticket_price_cents || 0);
+    // -----------------------------
+    // ✅ LEGAL UPGRADE: QUESTION CHECK
+    // -----------------------------
+    const question = raffle.config_json?.question;
 
-    if (!Number.isFinite(ticketPriceCents) || ticketPriceCents <= 0) {
+    if (question) {
+      const correctAnswer = clean(question.answer);
+
+      if (!answer || answer !== correctAnswer) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Incorrect answer to entry question",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // -----------------------------
+    // PRICE CALCULATION
+    // -----------------------------
+    const ticketPrice = Number(raffle.ticket_price || 0);
+
+    const totalAmount = Math.round(ticketPrice * 100 * quantity);
+
+    if (totalAmount <= 0) {
       return NextResponse.json(
         { ok: false, error: "Invalid ticket price" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Quantity comes from reservation (safe assumption)
-    // You can improve later by counting reserved tickets
-    const quantity = Number(body.quantity || 1);
-
-    const baseAmount = ticketPriceCents * quantity;
-
-    const fee = coverFees ? Math.round(baseAmount * 0.1) : 0;
-    const totalAmount = baseAmount + fee;
-
-    const origin = req.nextUrl.origin;
-
-    const successUrl = `${origin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${origin}/r/${raffle.slug}`;
-
+    // -----------------------------
+    // CREATE STRIPE SESSION
+    // -----------------------------
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
       mode: "payment",
+      payment_method_types: ["card"],
+
+      customer_email: buyerEmail || undefined,
 
       line_items: [
         {
@@ -67,33 +90,33 @@ export async function POST(req: NextRequest) {
             product_data: {
               name: raffle.title,
             },
-            unit_amount: totalAmount,
+            unit_amount: Math.round(ticketPrice * 100),
           },
-          quantity: 1,
+          quantity,
         },
       ],
 
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-
       metadata: {
-        raffle_id: raffle.id,
-        tenant_slug: raffle.tenant_slug,
-        reservation_token: reservationToken,
+        raffleId,
         quantity: String(quantity),
+        buyerName,
+        buyerEmail,
       },
+
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/stripe/success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/r/${raffle.slug}`,
     });
 
     return NextResponse.json({
       ok: true,
       url: session.url,
     });
-  } catch (err: any) {
-    console.error("Stripe checkout error:", err);
+  } catch (error: any) {
+    console.error("checkout error", error);
 
     return NextResponse.json(
-      { ok: false, error: err.message || "Checkout failed" },
-      { status: 500 }
+      { ok: false, error: "Checkout failed" },
+      { status: 500 },
     );
   }
 }
