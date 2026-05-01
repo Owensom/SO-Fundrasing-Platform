@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRaffleById } from "@/lib/raffles";
-import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-/**
- * Normalize text safely
- */
 function clean(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
@@ -41,30 +37,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // -----------------------------
-    // ✅ LEGAL UPGRADE: QUESTION CHECK
-    // -----------------------------
-    const question = raffle.config_json?.question;
+    const question = (raffle.config_json as any)?.question;
 
-    if (question) {
+    if (question?.text && question?.answer) {
       const correctAnswer = clean(question.answer);
 
       if (!answer || answer !== correctAnswer) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "Incorrect answer to entry question",
-          },
+          { ok: false, error: "Incorrect answer to entry question" },
           { status: 400 },
         );
       }
     }
 
-    // -----------------------------
-    // PRICE CALCULATION
-    // -----------------------------
     const ticketPrice = Number(raffle.ticket_price || 0);
-
     const totalAmount = Math.round(ticketPrice * 100 * quantity);
 
     if (totalAmount <= 0) {
@@ -74,15 +60,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // -----------------------------
-    // CREATE STRIPE SESSION
-    // -----------------------------
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      req.nextUrl.origin;
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
-
       customer_email: buyerEmail || undefined,
-
       line_items: [
         {
           price_data: {
@@ -95,16 +81,15 @@ export async function POST(req: NextRequest) {
           quantity,
         },
       ],
-
       metadata: {
         raffleId,
         quantity: String(quantity),
         buyerName,
         buyerEmail,
+        entryQuestionAnswered: question?.text ? "yes" : "not_required",
       },
-
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/stripe/success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/r/${raffle.slug}`,
+      success_url: `${appUrl}/api/stripe/success`,
+      cancel_url: `${appUrl}/r/${raffle.slug}`,
     });
 
     return NextResponse.json({
