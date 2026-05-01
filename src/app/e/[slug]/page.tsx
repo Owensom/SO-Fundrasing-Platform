@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
+import PublicSeatSelector from "@/components/events/PublicSeatSelector";
 
 type PageProps = {
   params: {
@@ -32,30 +33,6 @@ function eventTypeLabel(type: string) {
   return "General admission";
 }
 
-function toNumber(value: string | null | undefined) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 999999;
-}
-
-function seatLabel(seat: {
-  section: string | null;
-  row_label: string | null;
-  table_number: string | null;
-  seat_number: string | null;
-}) {
-  if (seat.table_number) {
-    return `Table ${seat.table_number}, Seat ${seat.seat_number || "?"}`;
-  }
-
-  if (seat.row_label) {
-    return `${seat.section ? `${seat.section} · ` : ""}Row ${
-      seat.row_label
-    }, Seat ${seat.seat_number || "?"}`;
-  }
-
-  return `Seat ${seat.seat_number || "?"}`;
-}
-
 export default async function PublicEventPage({ params }: PageProps) {
   const tenantSlug = getTenantSlugFromHeaders();
   const event = await getEventBySlug(tenantSlug, params.slug);
@@ -67,34 +44,11 @@ export default async function PublicEventPage({ params }: PageProps) {
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
 
-  const sortedSeats = [...seats].sort((a, b) => {
-    const sectionCompare = String(a.section || "").localeCompare(
-      String(b.section || ""),
-    );
-
-    if (sectionCompare !== 0) return sectionCompare;
-
-    const rowCompare = toNumber(a.row_label) - toNumber(b.row_label);
-    if (rowCompare !== 0) return rowCompare;
-
-    return toNumber(a.seat_number) - toNumber(b.seat_number);
-  });
-
-  const availableSeats = sortedSeats.filter((seat) => seat.status === "available");
-
-  const seatsByRow = availableSeats.reduce<Record<string, typeof availableSeats>>(
-    (groups, seat) => {
-      const rowKey = seat.row_label || "Seats";
-      groups[rowKey] = groups[rowKey] || [];
-      groups[rowKey].push(seat);
-      return groups;
-    },
-    {},
-  );
+  const availableSeats = seats.filter((seat) => seat.status === "available");
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
-      <div className="mx-auto max-w-6xl space-y-8">
+      <div className="mx-auto max-w-7xl space-y-8">
         <Link
           href={`/c/${tenantSlug}`}
           className="inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
@@ -164,11 +118,11 @@ export default async function PublicEventPage({ params }: PageProps) {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+        <section className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-3xl font-black">Tickets</h2>
             <p className="mt-2 text-sm text-slate-300">
-              Choose your ticket option. Checkout will be connected in the next step.
+              Choose your seats. Checkout will be connected in the next step.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -229,58 +183,12 @@ export default async function PublicEventPage({ params }: PageProps) {
                   </p>
                 </div>
               ) : (
-                <div className="max-h-[620px] overflow-auto rounded-3xl bg-slate-900 p-5">
-                  <div className="mb-6 rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-center text-sm font-black uppercase tracking-[0.3em] text-slate-400">
-                    Stage / Front
-                  </div>
-
-                  <div className="space-y-4">
-                    {Object.entries(seatsByRow).map(([rowLabel, rowSeats]) => (
-                      <div key={rowLabel} className="flex items-center gap-3">
-                        <div className="w-12 shrink-0 text-sm font-black text-slate-400">
-                          Row {rowLabel}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {rowSeats.map((seat) => {
-                            const ticketType = ticketTypes.find(
-                              (item) => item.id === seat.ticket_type_id,
-                            );
-
-                            return (
-                              <button
-                                key={seat.id}
-                                type="button"
-                                disabled
-                                title={`${seatLabel(seat)}${
-                                  ticketType
-                                    ? ` · ${event.currency} ${moneyFromCents(
-                                        ticketType.price,
-                                      )}`
-                                    : ""
-                                }`}
-                                className="flex h-11 min-w-11 items-center justify-center rounded-xl bg-emerald-500 px-3 text-sm font-black text-slate-950 opacity-90"
-                              >
-                                {seat.seat_number}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap gap-3 text-xs font-bold text-slate-400">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3 w-3 rounded bg-emerald-500" />
-                      Available
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3 w-3 rounded bg-white/20" />
-                      Checkout next
-                    </span>
-                  </div>
-                </div>
+                <PublicSeatSelector
+                  eventType={event.event_type}
+                  seats={seats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                />
               )}
             </div>
           </div>
