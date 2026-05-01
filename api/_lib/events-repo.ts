@@ -136,6 +136,7 @@ export function slugifyEventTitle(value: string): string {
 
   return slug || `event-${Date.now()}`;
 }
+
 /* =========================
    EVENTS
 ========================= */
@@ -301,6 +302,7 @@ export async function updateEvent(
     ],
   );
 }
+
 /* =========================
    TICKET TYPES
 ========================= */
@@ -415,6 +417,7 @@ export async function deleteEventTicketTypes(eventId: string): Promise<void> {
     [eventId],
   );
 }
+
 /* =========================
    SEATS / TABLE SEATS
 ========================= */
@@ -505,6 +508,7 @@ export async function createEventSeat(input: {
 
   return created;
 }
+
 export async function updateEventSeat(
   id: string,
   input: {
@@ -571,13 +575,34 @@ export async function deleteEventSeats(eventId: string): Promise<void> {
   );
 }
 
+export async function deleteEventRowSeats(eventId: string): Promise<void> {
+  await query(
+    `
+    delete from event_seats
+    where event_id = $1
+      and row_label is not null
+      and table_number is null
+    `,
+    [eventId],
+  );
+}
+
+export async function deleteEventTableSeats(eventId: string): Promise<void> {
+  await query(
+    `
+    delete from event_seats
+    where event_id = $1
+      and table_number is not null
+    `,
+    [eventId],
+  );
+}
+
 /* =========================
    ORDERS (READY FOR CHECKOUT)
 ========================= */
 
-export async function listEventOrders(
-  eventId: string,
-): Promise<EventOrder[]> {
+export async function listEventOrders(eventId: string): Promise<EventOrder[]> {
   return query<EventOrder>(
     `
     select *
@@ -602,6 +627,7 @@ export async function listEventOrderItems(
     [orderId],
   );
 }
+
 export async function deleteEvent(id: string): Promise<void> {
   await query(`delete from event_order_items where event_id = $1`, [id]);
   await query(`delete from event_orders where event_id = $1`, [id]);
