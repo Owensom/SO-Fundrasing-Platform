@@ -30,6 +30,14 @@ function shuffle<T>(items: T[]) {
   return copy;
 }
 
+function cleanEmail(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanName(value: string | null | undefined) {
+  return String(value || "").trim() || "Supporter";
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -58,9 +66,6 @@ export async function POST(
     const body = await req.json();
     const action = String(body?.action || "");
 
-    // ----------------------
-    // CLOSE
-    // ----------------------
     if (action === "close") {
       const updated = await query(
         `
@@ -86,9 +91,6 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // ----------------------
-    // DRAW
-    // ----------------------
     if (action === "draw") {
       if (raffle.status !== "closed") {
         return NextResponse.json(
@@ -107,6 +109,7 @@ export async function POST(
           buyer_email
         from raffle_ticket_sales
         where raffle_id = $1
+          and ticket_number is not null
         order by created_at asc
         `,
         [raffle.id],
@@ -115,6 +118,17 @@ export async function POST(
       if (!soldTickets.length) {
         return NextResponse.json(
           { ok: false, error: "No tickets sold" },
+          { status: 400 },
+        );
+      }
+
+      const validSoldTickets = soldTickets.filter((ticket) =>
+        Number.isFinite(Number(ticket.ticket_number)),
+      );
+
+      if (!validSoldTickets.length) {
+        return NextResponse.json(
+          { ok: false, error: "No valid sold tickets found" },
           { status: 400 },
         );
       }
@@ -131,17 +145,15 @@ export async function POST(
 
       const winnerCount = Math.max(prizes.length || 1, 1);
 
-      const winners = shuffle(soldTickets).slice(
+      const winners = shuffle(validSoldTickets).slice(
         0,
-        Math.min(winnerCount, soldTickets.length),
+        Math.min(winnerCount, validSoldTickets.length),
       );
 
-      // Clear existing winners
       await query("delete from raffle_winners where raffle_id = $1", [
         raffle.id,
       ]);
 
-      // Insert winners
       for (let index = 0; index < winners.length; index += 1) {
         const winner = winners[index];
 
@@ -163,17 +175,16 @@ export async function POST(
             crypto.randomUUID(),
             raffle.id,
             index + 1,
-            winner.ticket_number,
+            Number(winner.ticket_number),
             winner.colour,
-            winner.buyer_name,
-            winner.buyer_email,
+            cleanName(winner.buyer_name),
+            cleanEmail(winner.buyer_email) || null,
           ],
         );
       }
 
       const firstWinner = winners[0];
 
-      // Update raffle
       await query(
         `
         update raffles
@@ -191,48 +202,79 @@ export async function POST(
         [
           raffle.id,
           tenantSlug,
-          firstWinner.ticket_number,
+          Number(firstWinner.ticket_number),
           firstWinner.colour,
           firstWinner.sale_id,
           session.user.email ?? null,
         ],
       );
 
-      // ----------------------
-      // SEND WINNER EMAILS (IMPROVED LOGGING)
-      // ----------------------
+      let sentWinnerEmails = 0;
+      let skippedWinnerEmails = 0;
+      let failedWinnerEmails = 0;
+
       for (const winner of winners) {
-        if (!winner.buyer_email) {
-          console.warn("No email for winner:", winner.ticket_number);
+        const winnerEmail = cleanEmail(winner.buyer_email);
+
+        if (!winnerEmail) {
+          skippedWinnerEmails += 1;
+          console.warn("Winner email skipped - missing buyer_email", {
+            raffleId: raffle.id,
+            ticketNumber: winner.ticket_number,
+            colour: winner.colour,
+            saleId: winner.sale_id,
+          });
           continue;
         }
 
         try {
-          console.log("Sending winner email to:", winner.buyer_email);
-
-          await sendWinnerEmail({
-            to: winner.buyer_email,
-            name: winner.buyer_name,
+          console.log("Sending raffle winner email", {
+            to: winnerEmail,
+            raffleId: raffle.id,
             raffleTitle: raffle.title,
             ticketNumber: winner.ticket_number,
             colour: winner.colour,
+            saleId: winner.sale_id,
           });
 
-          console.log("Winner email sent:", winner.buyer_email);
+          await sendWinnerEmail({
+            to: winnerEmail,
+            name: cleanName(winner.buyer_name),
+            raffleTitle: raffle.title,
+            ticketNumber: Number(winner.ticket_number),
+            colour: winner.colour,
+          });
+
+          sentWinnerEmails += 1;
+
+          console.log("Raffle winner email sent", {
+            to: winnerEmail,
+            raffleId: raffle.id,
+            ticketNumber: winner.ticket_number,
+          });
         } catch (emailError: any) {
-          console.error("Winner email FAILED:", {
-            email: winner.buyer_email,
-            error: emailError?.message,
+          failedWinnerEmails += 1;
+
+          console.error("Raffle winner email failed", {
+            to: winnerEmail,
+            raffleId: raffle.id,
+            ticketNumber: winner.ticket_number,
+            saleId: winner.sale_id,
+            error: emailError?.message || emailError,
           });
         }
       }
 
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({
+        ok: true,
+        winnerEmails: {
+          sent: sentWinnerEmails,
+          skipped: skippedWinnerEmails,
+          failed: failedWinnerEmails,
+        },
+      });
     }
 
-    // ----------------------
-    // DELETE
-    // ----------------------
     if (action === "delete") {
       if (raffle.status === "published") {
         return NextResponse.json(
