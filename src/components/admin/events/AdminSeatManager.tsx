@@ -130,6 +130,13 @@ export default function AdminSeatManager({
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
 
+  const unpricedSeats = useMemo(
+    () => seats.filter((seat) => !seat.ticket_type_id),
+    [seats],
+  );
+
+  const unpricedCount = unpricedSeats.length;
+
   const selectedSeats = useMemo(
     () => seats.filter((seat) => selectedSeatIds.includes(seat.id)),
     [seats, selectedSeatIds],
@@ -171,6 +178,11 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
+  function selectUnpricedSeats() {
+    setSelectedSeatIds(unpricedSeats.map((seat) => seat.id));
+    setSelectedRowKeys([]);
+  }
+
   const byPrimaryGroup =
     mode === "tables"
       ? groupBy(seats, (seat) => seat.table_number || "No table")
@@ -183,16 +195,45 @@ export default function AdminSeatManager({
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
             Select seats like a buyer, then apply a ticket type or delete them.
-            {mode === "rows" ? " Click a row label to select the whole row." : ""}
+            {mode === "rows"
+              ? " Click a row label to select the whole row."
+              : ""}
           </p>
         </div>
 
-        <button type="button" onClick={clearSelection} style={styles.secondaryButton}>
-          Clear selection
-        </button>
+        <div style={styles.toolbarButtons}>
+          <button
+            type="button"
+            onClick={selectUnpricedSeats}
+            disabled={unpricedCount === 0}
+            style={{
+              ...styles.warningButton,
+              opacity: unpricedCount === 0 ? 0.45 : 1,
+            }}
+          >
+            Select unpriced seats ({unpricedCount})
+          </button>
+
+          <button
+            type="button"
+            onClick={clearSelection}
+            style={styles.secondaryButton}
+          >
+            Clear selection
+          </button>
+        </div>
       </div>
 
       <div style={styles.actionPanel}>
+        {unpricedCount > 0 ? (
+          <div style={styles.warningBox}>
+            ⚠ {unpricedCount} seats have no pricing. Select them and apply a
+            ticket type before publishing checkout.
+          </div>
+        ) : (
+          <div style={styles.successBox}>All seats have pricing assigned.</div>
+        )}
+
         <div style={styles.summaryBox}>
           <strong>{selectedSeatIds.length}</strong> selected seats
           {mode === "rows" && (
@@ -229,7 +270,10 @@ export default function AdminSeatManager({
           <button
             type="submit"
             disabled={selectedSeatIds.length === 0 || !ticketTypeId}
-            style={styles.primaryButton}
+            style={{
+              ...styles.primaryButton,
+              opacity: selectedSeatIds.length === 0 || !ticketTypeId ? 0.45 : 1,
+            }}
           >
             Apply price to selected seats
           </button>
@@ -246,7 +290,10 @@ export default function AdminSeatManager({
           <button
             type="submit"
             disabled={selectedSeatIds.length === 0}
-            style={styles.dangerButton}
+            style={{
+              ...styles.dangerButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
           >
             Delete selected seats
           </button>
@@ -264,7 +311,10 @@ export default function AdminSeatManager({
             <button
               type="submit"
               disabled={selectedRows.length === 0}
-              style={styles.dangerButton}
+              style={{
+                ...styles.dangerButton,
+                opacity: selectedRows.length === 0 ? 0.45 : 1,
+              }}
             >
               Delete selected rows
             </button>
@@ -295,7 +345,7 @@ export default function AdminSeatManager({
                             key={seat.id}
                             type="button"
                             onClick={() => toggleSeat(seat.id)}
-                            title={`${ticketType?.name || "No price assigned"}`}
+                            title={ticketType?.name || "No price assigned"}
                             style={seatStyle({
                               selected: selectedSeatIds.includes(seat.id),
                               ticketType,
@@ -319,9 +369,11 @@ export default function AdminSeatManager({
                 {Object.entries(rows)
                   .sort(([a], [b]) => numericSort(a, b))
                   .map(([row, rowSeats]) => {
-                    const key = `${group === "Main" ? "" : group}|${row}`;
                     const actualKey =
-                      rowSeats.length > 0 ? rowKeyForSeat(rowSeats[0]) : key;
+                      rowSeats.length > 0
+                        ? rowKeyForSeat(rowSeats[0])
+                        : `${group === "Main" ? "" : group}|${row}`;
+
                     const rowSelected = selectedRowKeys.includes(actualKey);
 
                     return (
@@ -353,7 +405,7 @@ export default function AdminSeatManager({
                                   <button
                                     type="button"
                                     onClick={() => toggleSeat(seat.id)}
-                                    title={`${ticketType?.name || "No price assigned"}`}
+                                    title={ticketType?.name || "No price assigned"}
                                     style={seatStyle({
                                       selected: selectedSeatIds.includes(seat.id),
                                       ticketType,
@@ -400,6 +452,11 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     flexWrap: "wrap",
   },
+  toolbarButtons: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
   title: {
     margin: 0,
     color: "#0f172a",
@@ -419,6 +476,24 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+  },
+  warningBox: {
+    padding: 10,
+    borderRadius: 12,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  successBox: {
+    padding: 10,
+    borderRadius: 12,
+    background: "#dcfce7",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: 900,
   },
   summaryBox: {
     color: "#0f172a",
@@ -454,6 +529,16 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
+    padding: "0 14px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  warningButton: {
+    minHeight: 40,
+    borderRadius: 999,
+    border: "1px solid #f59e0b",
+    background: "#fef3c7",
+    color: "#92400e",
     padding: "0 14px",
     fontWeight: 900,
     cursor: "pointer",
