@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -7,7 +7,6 @@ import {
   createEventSeat,
   createEventTicketType,
   deleteEvent,
-  deleteEventSeats,
   deleteEventRowSeats,
   deleteEventTableSeats,
   deleteEventTicketType,
@@ -27,10 +26,6 @@ type PageProps = {
     error?: string;
   };
 };
-
-/* =========================
-   HELPERS
-========================= */
 
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
@@ -73,6 +68,61 @@ function parseAisleAfterList(value: FormDataEntryValue | null) {
   );
 }
 
+function expandRows(value: string): string[] {
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const rows: string[] = [];
+
+  for (const part of parts) {
+    if (part.includes("-")) {
+      const [rawStart, rawEnd] = part.split("-").map((item) => item.trim());
+
+      const startNumber = Number(rawStart);
+      const endNumber = Number(rawEnd);
+
+      if (Number.isFinite(startNumber) && Number.isFinite(endNumber)) {
+        const start = Math.min(startNumber, endNumber);
+        const end = Math.max(startNumber, endNumber);
+
+        for (let row = start; row <= end; row += 1) {
+          rows.push(String(row));
+        }
+
+        continue;
+      }
+
+      if (
+        rawStart.length === 1 &&
+        rawEnd.length === 1 &&
+        /^[A-Za-z]$/.test(rawStart) &&
+        /^[A-Za-z]$/.test(rawEnd)
+      ) {
+        const start = Math.min(
+          rawStart.toUpperCase().charCodeAt(0),
+          rawEnd.toUpperCase().charCodeAt(0),
+        );
+        const end = Math.max(
+          rawStart.toUpperCase().charCodeAt(0),
+          rawEnd.toUpperCase().charCodeAt(0),
+        );
+
+        for (let code = start; code <= end; code += 1) {
+          rows.push(String.fromCharCode(code));
+        }
+
+        continue;
+      }
+    }
+
+    rows.push(part);
+  }
+
+  return Array.from(new Set(rows));
+}
+
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Tables";
@@ -105,35 +155,44 @@ function groupBy<T>(items: T[], getKey: (item: T) => string) {
   }, {});
 }
 
-/* =========================
-   NEW SAFE CLEAR ACTIONS
-========================= */
+function seatBoxStyle(status: string): CSSProperties {
+  const base = styles.seatBox;
 
-async function clearRowSeatsAction(formData: FormData) {
-  "use server";
+  if (status === "sold") {
+    return {
+      ...base,
+      background: "#fee2e2",
+      borderColor: "#fecaca",
+      color: "#991b1b",
+    };
+  }
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+  if (status === "reserved") {
+    return {
+      ...base,
+      background: "#fef3c7",
+      borderColor: "#fde68a",
+      color: "#92400e",
+    };
+  }
 
-  const eventId = String(formData.get("event_id") || "").trim();
+  if (status === "blocked") {
+    return {
+      ...base,
+      background: "#e2e8f0",
+      borderColor: "#cbd5e1",
+      color: "#334155",
+    };
+  }
 
-  if (eventId) await deleteEventRowSeats(eventId);
-
-  redirect(`/admin/events/${eventId}?saved=row-seats-cleared#row-seating`);
+  return {
+    ...base,
+    background: "#dcfce7",
+    borderColor: "#bbf7d0",
+    color: "#166534",
+  };
 }
 
-async function clearTableSeatsAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (eventId) await deleteEventTableSeats(eventId);
-
-  redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
-}
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -178,10 +237,6 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
-
-/* =========================
-   TICKETS
-========================= */
 
 async function addTicketTypeAction(formData: FormData) {
   "use server";
@@ -262,10 +317,6 @@ async function clearTicketTypesAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
 
-/* =========================
-   SEAT GENERATION (FIXED)
-========================= */
-
 async function generateSeatsAction(formData: FormData) {
   "use server";
 
@@ -292,7 +343,7 @@ async function generateSeatsAction(formData: FormData) {
   const rows = expandRows(rowsRaw);
 
   for (const row of rows) {
-    for (let seat = 1; seat <= seatsPerRow; seat++) {
+    for (let seat = 1; seat <= seatsPerRow; seat += 1) {
       try {
         await createEventSeat({
           eventId,
@@ -305,7 +356,7 @@ async function generateSeatsAction(formData: FormData) {
           status: "available",
         });
       } catch {
-        // silently skip duplicates
+        // Skip duplicates safely.
       }
     }
   }
@@ -334,8 +385,8 @@ async function generateTablesAction(formData: FormData) {
     await deleteEventTableSeats(eventId);
   }
 
-  for (let table = 1; table <= tableCount; table++) {
-    for (let seat = 1; seat <= seatsPerTable; seat++) {
+  for (let table = 1; table <= tableCount; table += 1) {
+    for (let seat = 1; seat <= seatsPerTable; seat += 1) {
       try {
         await createEventSeat({
           eventId,
@@ -348,13 +399,40 @@ async function generateTablesAction(formData: FormData) {
           status: "available",
         });
       } catch {
-        // skip duplicates
+        // Skip duplicates safely.
       }
     }
   }
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
+
+async function clearRowSeatsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (eventId) await deleteEventRowSeats(eventId);
+
+  redirect(`/admin/events/${eventId}?saved=row-seats-cleared#row-seating`);
+}
+
+async function clearTableSeatsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (eventId) await deleteEventTableSeats(eventId);
+
+  redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
+}
+
 async function deleteEventAction(formData: FormData) {
   "use server";
 
@@ -441,15 +519,25 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>Overview</a>
-        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
+        <a href="#overview" style={styles.tab}>
+          Overview
+        </a>
+        <a href="#tickets" style={styles.tab}>
+          Tickets & Prices
+        </a>
         {isReservedSeating && (
-          <a href="#row-seating" style={styles.tab}>Row Seating</a>
+          <a href="#row-seating" style={styles.tab}>
+            Row Seating
+          </a>
         )}
         {isTables && (
-          <a href="#table-seating" style={styles.tab}>Table Seating</a>
+          <a href="#table-seating" style={styles.tab}>
+            Table Seating
+          </a>
         )}
-        <a href="#orders" style={styles.tab}>Orders</a>
+        <a href="#orders" style={styles.tab}>
+          Orders
+        </a>
       </nav>
 
       {searchParams?.saved && (
@@ -468,7 +556,8 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Choose the event type first. The admin page only shows the sections needed for that type.
+              Choose the event type first. The admin page only shows the sections
+              needed for that type.
             </p>
           </div>
         </div>
@@ -500,11 +589,21 @@ export default async function AdminEventManagePage({
             <input type="hidden" name="id" value={event.id} />
 
             <Field label="Title">
-              <input name="title" required defaultValue={event.title} style={styles.input} />
+              <input
+                name="title"
+                required
+                defaultValue={event.title}
+                style={styles.input}
+              />
             </Field>
 
             <Field label="Slug">
-              <input name="slug" required defaultValue={event.slug} style={styles.input} />
+              <input
+                name="slug"
+                required
+                defaultValue={event.slug}
+                style={styles.input}
+              />
             </Field>
 
             <Field label="Description">
@@ -582,7 +681,11 @@ export default async function AdminEventManagePage({
 
             <div style={styles.threeCol}>
               <Field label="Currency">
-                <select name="currency" defaultValue={event.currency} style={styles.input}>
+                <select
+                  name="currency"
+                  defaultValue={event.currency}
+                  style={styles.input}
+                >
                   <option value="GBP">GBP</option>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -590,7 +693,11 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Type">
-                <select name="event_type" defaultValue={event.event_type} style={styles.input}>
+                <select
+                  name="event_type"
+                  defaultValue={event.event_type}
+                  style={styles.input}
+                >
                   <option value="general_admission">General admission</option>
                   <option value="reserved_seating">Reserved seating</option>
                   <option value="tables">Tables</option>
@@ -598,7 +705,11 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Status">
-                <select name="status" defaultValue={event.status} style={styles.input}>
+                <select
+                  name="status"
+                  defaultValue={event.status}
+                  style={styles.input}
+                >
                   <option value="draft">Draft</option>
                   <option value="published">Published</option>
                   <option value="closed">Closed</option>
@@ -612,7 +723,8 @@ export default async function AdminEventManagePage({
           </form>
         </div>
       </section>
-            <section id="tickets" style={styles.section}>
+
+      <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>Section 2</p>
@@ -1073,7 +1185,7 @@ function SummaryCard({
   value,
 }: {
   label: string;
-  value: React.ReactNode;
+  value: ReactNode;
 }) {
   return (
     <div style={styles.statBox}>
@@ -1088,7 +1200,7 @@ function Field({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label style={styles.field}>
