@@ -19,6 +19,15 @@ type Seat = {
   status: string;
 };
 
+const ticketColours = [
+  { background: "#facc15", text: "#422006", label: "Gold" },
+  { background: "#34d399", text: "#022c22", label: "Green" },
+  { background: "#a78bfa", text: "#2e1065", label: "Purple" },
+  { background: "#fb7185", text: "#4c0519", label: "Rose" },
+  { background: "#60a5fa", text: "#082f49", label: "Blue" },
+  { background: "#fb923c", text: "#431407", label: "Orange" },
+];
+
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -47,63 +56,44 @@ function rowKeyForSeat(seat: Seat) {
   return `${seat.section || ""}|${seat.row_label || ""}`;
 }
 
+function colourForTicketType(
+  ticketType: TicketType | undefined,
+  ticketTypes: TicketType[],
+) {
+  if (!ticketType) {
+    return { background: "#f8fafc", text: "#0f172a", label: "Unpriced" };
+  }
+
+  const index = Math.max(
+    0,
+    ticketTypes.findIndex((item) => item.id === ticketType.id),
+  );
+
+  return ticketColours[index % ticketColours.length];
+}
+
 function seatStyle({
   selected,
   ticketType,
+  ticketTypes,
 }: {
   selected: boolean;
   ticketType: TicketType | undefined;
+  ticketTypes: TicketType[];
 }): CSSProperties {
-  const base: CSSProperties = {
+  const colour = colourForTicketType(ticketType, ticketTypes);
+
+  return {
     minWidth: 32,
     height: 32,
     borderRadius: 8,
-    border: selected ? "2px solid #0284c7" : "1px solid #cbd5e1",
+    border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
+    background: selected ? "#bae6fd" : colour.background,
+    color: selected ? "#082f49" : colour.text,
+    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
     fontSize: 12,
     fontWeight: 900,
     cursor: "pointer",
-    color: "#0f172a",
-  };
-
-  if (selected) {
-    return {
-      ...base,
-      background: "#bae6fd",
-      boxShadow: "0 0 0 3px rgba(14,165,233,0.25)",
-    };
-  }
-
-  if (!ticketType) {
-    return {
-      ...base,
-      background: "#f8fafc",
-    };
-  }
-
-  if (ticketType.price >= 2000) {
-    return {
-      ...base,
-      background: "#fde68a",
-    };
-  }
-
-  if (ticketType.price >= 1000) {
-    return {
-      ...base,
-      background: "#bbf7d0",
-    };
-  }
-
-  if (ticketType.price > 0) {
-    return {
-      ...base,
-      background: "#ddd6fe",
-    };
-  }
-
-  return {
-    ...base,
-    background: "#e2e8f0",
   };
 }
 
@@ -136,11 +126,6 @@ export default function AdminSeatManager({
   );
 
   const unpricedCount = unpricedSeats.length;
-
-  const selectedSeats = useMemo(
-    () => seats.filter((seat) => selectedSeatIds.includes(seat.id)),
-    [seats, selectedSeatIds],
-  );
 
   const selectedRows = useMemo(
     () => Array.from(new Set(selectedRowKeys)),
@@ -222,6 +207,29 @@ export default function AdminSeatManager({
             Clear selection
           </button>
         </div>
+      </div>
+
+      <div style={styles.legendBox}>
+        <strong>Ticket colours:</strong>
+        {ticketTypes.map((ticketType) => {
+          const colour = colourForTicketType(ticketType, ticketTypes);
+
+          return (
+            <span key={ticketType.id} style={styles.legendItem}>
+              <span
+                style={{
+                  ...styles.legendDot,
+                  background: colour.background,
+                }}
+              />
+              {ticketType.name} — {currency} {moneyFromCents(ticketType.price)}
+            </span>
+          );
+        })}
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#f8fafc" }} />
+          Unpriced
+        </span>
       </div>
 
       <div style={styles.actionPanel}>
@@ -349,6 +357,7 @@ export default function AdminSeatManager({
                             style={seatStyle({
                               selected: selectedSeatIds.includes(seat.id),
                               ticketType,
+                              ticketTypes,
                             })}
                           >
                             {seat.seat_number}
@@ -409,6 +418,7 @@ export default function AdminSeatManager({
                                     style={seatStyle({
                                       selected: selectedSeatIds.includes(seat.id),
                                       ticketType,
+                                      ticketTypes,
                                     })}
                                   >
                                     {seat.seat_number}
@@ -428,23 +438,12 @@ export default function AdminSeatManager({
             );
           })}
       </div>
-
-      <div style={styles.legend}>
-        <span>Gold = VIP/high price</span>
-        <span>Green = Standard</span>
-        <span>Purple = Concession</span>
-        <span>Grey = Complimentary/no price</span>
-        <span>Blue outline = selected</span>
-      </div>
     </div>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  manager: {
-    display: "grid",
-    gap: 14,
-  },
+  manager: { display: "grid", gap: 14 },
   toolbar: {
     display: "flex",
     justifyContent: "space-between",
@@ -452,22 +451,32 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     flexWrap: "wrap",
   },
-  toolbarButtons: {
+  toolbarButtons: { display: "flex", gap: 8, flexWrap: "wrap" },
+  title: { margin: 0, color: "#0f172a", fontSize: 20, fontWeight: 900 },
+  text: { margin: "4px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.45 },
+  legendBox: {
     display: "flex",
-    gap: 8,
     flexWrap: "wrap",
-  },
-  title: {
-    margin: 0,
+    gap: 10,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
     color: "#0f172a",
-    fontSize: 20,
-    fontWeight: 900,
+    fontSize: 13,
+    fontWeight: 800,
   },
-  text: {
-    margin: "4px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
+  legendItem: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 999,
+    border: "1px solid #94a3b8",
   },
   actionPanel: {
     display: "grid",
@@ -495,16 +504,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 900,
   },
-  summaryBox: {
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 800,
-  },
-  actionForm: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
+  summaryBox: { color: "#0f172a", fontSize: 14, fontWeight: 800 },
+  actionForm: { display: "flex", gap: 8, flexWrap: "wrap" },
   select: {
     minHeight: 42,
     minWidth: 240,
@@ -590,23 +591,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  seatLine: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    flexWrap: "nowrap",
-  },
+  seatLine: { display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" },
   seatLineWrap: {
     display: "flex",
     alignItems: "center",
     gap: 6,
     flexWrap: "wrap",
   },
-  seatWrap: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
+  seatWrap: { display: "inline-flex", alignItems: "center", gap: 4 },
   aisle: {
     width: 48,
     height: 28,
@@ -627,13 +619,5 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     marginBottom: 12,
-  },
-  legend: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 800,
   },
 };
