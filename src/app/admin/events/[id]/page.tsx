@@ -275,6 +275,74 @@ async function clearTicketTypesAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
 
+/* =========================
+   SEAT ACTIONS (UPDATED LOGIC)
+========================= */
+
+async function applySeatTicketTypeAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const rawTicketTypeId = String(formData.get("ticket_type_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+
+  if (!eventId || !rawTicketTypeId || seatIds.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+  }
+
+  await updateEventSeatsTicketType({
+    eventId,
+    seatIds,
+    ticketTypeId: rawTicketTypeId === "__normal__" ? null : rawTicketTypeId,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seat-marking#row-seating`);
+}
+
+async function deleteSelectedSeatsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+
+  if (!eventId || seatIds.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+  }
+
+  await deleteEventSeatsByIds({
+    eventId,
+    seatIds,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seats-deleted#row-seating`);
+}
+
+async function deleteSelectedRowsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user) redirect("/admin/login");
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const rowKeys = parseJsonStringArray(formData.get("row_keys"));
+
+  if (!eventId || rowKeys.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-row-selection#row-seating`);
+  }
+
+  await deleteEventRowsByKeys({
+    eventId,
+    rowKeys,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=rows-deleted#row-seating`);
+}
 async function generateSeatsAction(formData: FormData) {
   "use server";
 
@@ -313,7 +381,9 @@ async function generateSeatsAction(formData: FormData) {
           aisleAfter: aisleAfterList.includes(seat) ? seat : null,
           status: "available",
         });
-      } catch {}
+      } catch {
+        // Skip duplicate seats safely.
+      }
     }
   }
 
@@ -354,12 +424,15 @@ async function generateTablesAction(formData: FormData) {
           aisleAfter: null,
           status: "available",
         });
-      } catch {}
+      } catch {
+        // Skip duplicate seats safely.
+      }
     }
   }
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
+
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -384,71 +457,6 @@ async function clearTableSeatsAction(formData: FormData) {
   if (eventId) await deleteEventTableSeats(eventId);
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
-}
-
-async function applySeatTicketTypeAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
-  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
-
-  if (!eventId || !ticketTypeId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
-  }
-
-  await updateEventSeatsTicketType({
-    eventId,
-    seatIds,
-    ticketTypeId,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=seat-pricing#row-seating`);
-}
-
-async function deleteSelectedSeatsAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
-
-  if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
-  }
-
-  await deleteEventSeatsByIds({
-    eventId,
-    seatIds,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=selected-seats-deleted#row-seating`);
-}
-
-async function deleteSelectedRowsAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const rowKeys = parseJsonStringArray(formData.get("row_keys"));
-
-  if (!eventId || rowKeys.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-row-selection#row-seating`);
-  }
-
-  await deleteEventRowsByKeys({
-    eventId,
-    rowKeys,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=selected-rows-deleted#row-seating`);
 }
 
 async function deleteEventAction(formData: FormData) {
@@ -537,11 +545,25 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>Overview</a>
-        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
-        {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
-        {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
-        <a href="#orders" style={styles.tab}>Orders</a>
+        <a href="#overview" style={styles.tab}>
+          Overview
+        </a>
+        <a href="#tickets" style={styles.tab}>
+          Tickets & Prices
+        </a>
+        {isReservedSeating && (
+          <a href="#row-seating" style={styles.tab}>
+            Row Seating
+          </a>
+        )}
+        {isTables && (
+          <a href="#table-seating" style={styles.tab}>
+            Table Seating
+          </a>
+        )}
+        <a href="#orders" style={styles.tab}>
+          Orders
+        </a>
       </nav>
 
       {searchParams?.saved && (
@@ -560,7 +582,8 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 1</p>
             <h2 style={styles.sectionTitle}>Overview</h2>
             <p style={styles.sectionText}>
-              Choose the event type first. The admin page only shows the sections needed for that type.
+              Choose the event type first. The admin page only shows the sections
+              needed for that type.
             </p>
           </div>
         </div>
@@ -592,11 +615,21 @@ export default async function AdminEventManagePage({
             <input type="hidden" name="id" value={event.id} />
 
             <Field label="Title">
-              <input name="title" required defaultValue={event.title} style={styles.input} />
+              <input
+                name="title"
+                required
+                defaultValue={event.title}
+                style={styles.input}
+              />
             </Field>
 
             <Field label="Slug">
-              <input name="slug" required defaultValue={event.slug} style={styles.input} />
+              <input
+                name="slug"
+                required
+                defaultValue={event.slug}
+                style={styles.input}
+              />
             </Field>
 
             <Field label="Description">
@@ -611,13 +644,20 @@ export default async function AdminEventManagePage({
             <div style={styles.mediaBox}>
               <div>
                 <h3 style={styles.panelTitle}>Event image</h3>
-                <p style={styles.sectionText}>Upload or replace the public event image.</p>
+                <p style={styles.sectionText}>
+                  Upload or replace the public event image.
+                </p>
+
                 <ImageUploadField currentImageUrl={event.image_url ?? ""} />
               </div>
 
               <div style={styles.previewBox}>
                 {event.image_url ? (
-                  <img src={event.image_url} alt={event.title} style={styles.previewImage} />
+                  <img
+                    src={event.image_url}
+                    alt={event.title}
+                    style={styles.previewImage}
+                  />
                 ) : (
                   <div style={styles.emptyPreview}>🎫</div>
                 )}
@@ -715,7 +755,9 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 2</p>
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
-              Add, edit, hide or delete ticket types for this event.
+              Add the public ticket choices. Normal public seats can be bought as
+              Standard, and as Concession if you keep a Concession ticket active.
+              Use Seat Manager only for special seats like VIP or Complimentary.
             </p>
           </div>
         </div>
@@ -751,6 +793,7 @@ export default async function AdminEventManagePage({
                     name="capacity"
                     type="number"
                     min="0"
+                    placeholder="Leave blank for unlimited"
                     style={styles.input}
                   />
                 </Field>
@@ -833,6 +876,7 @@ export default async function AdminEventManagePage({
                             type="number"
                             min="0"
                             defaultValue={ticketType.capacity || ""}
+                            placeholder="Leave blank for unlimited"
                             style={styles.input}
                           />
                         </Field>
@@ -897,8 +941,8 @@ export default async function AdminEventManagePage({
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Row Seating</h2>
               <p style={styles.sectionText}>
-                Generate row layouts first, then use Seat Manager to price or
-                remove individual seats and full rows.
+                Generate seats first. Leave normal seats unmarked. Use Seat Manager
+                to mark VIP, Complimentary, or other special seats.
               </p>
             </div>
           </div>
@@ -909,9 +953,9 @@ export default async function AdminEventManagePage({
 
               <h3 style={styles.panelTitle}>Generate row seating</h3>
 
-              <Field label="Ticket type">
+              <Field label="Initial marking">
                 <select name="ticket_type_id" style={styles.input}>
-                  <option value="">No linked ticket type</option>
+                  <option value="">Normal public seats</option>
                   {ticketTypes.map((ticketType) => (
                     <option key={ticketType.id} value={ticketType.id}>
                       {ticketType.name}
@@ -972,12 +1016,12 @@ export default async function AdminEventManagePage({
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
                 <SummaryCard
-                  label="Available"
-                  value={rowSeats.filter((seat) => seat.status === "available").length}
+                  label="Normal public"
+                  value={rowSeats.filter((seat) => !seat.ticket_type_id).length}
                 />
                 <SummaryCard
-                  label="Reserved"
-                  value={rowSeats.filter((seat) => seat.status === "reserved").length}
+                  label="Special marked"
+                  value={rowSeats.filter((seat) => seat.ticket_type_id).length}
                 />
                 <SummaryCard
                   label="Sold"
@@ -986,8 +1030,8 @@ export default async function AdminEventManagePage({
               </div>
 
               <p style={styles.sectionText}>
-                Use sections for VIP, balcony, left/centre/right blocks. Use
-                aisles like 10,20,30 for wide rows.
+                Normal public seats are buyable as Standard/Concession. Special
+                marked seats use their specific ticket type.
               </p>
             </div>
           </div>
@@ -997,8 +1041,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click seats to select them. Click a row label to select the
-                  full row. Then apply a price or delete selected seats/rows.
+                  Click seats to select them. Click a row label to select the full
+                  row. Apply a special marking or return selected seats to Normal.
                 </p>
               </div>
 
@@ -1035,8 +1079,8 @@ export default async function AdminEventManagePage({
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Table Seating</h2>
               <p style={styles.sectionText}>
-                Generate table layouts first, then use Seat Manager to price or
-                remove individual table seats.
+                Generate table layouts first. Leave normal table seats unmarked
+                unless they are VIP, Complimentary, or otherwise special.
               </p>
             </div>
           </div>
@@ -1047,9 +1091,9 @@ export default async function AdminEventManagePage({
 
               <h3 style={styles.panelTitle}>Generate table seating</h3>
 
-              <Field label="Ticket type">
+              <Field label="Initial marking">
                 <select name="ticket_type_id" style={styles.input}>
-                  <option value="">No linked ticket type</option>
+                  <option value="">Normal public seats</option>
                   {ticketTypes.map((ticketType) => (
                     <option key={ticketType.id} value={ticketType.id}>
                       {ticketType.name}
@@ -1096,12 +1140,12 @@ export default async function AdminEventManagePage({
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
                 <SummaryCard
-                  label="Available"
-                  value={tableSeats.filter((seat) => seat.status === "available").length}
+                  label="Normal public"
+                  value={tableSeats.filter((seat) => !seat.ticket_type_id).length}
                 />
                 <SummaryCard
-                  label="Reserved"
-                  value={tableSeats.filter((seat) => seat.status === "reserved").length}
+                  label="Special marked"
+                  value={tableSeats.filter((seat) => seat.ticket_type_id).length}
                 />
                 <SummaryCard
                   label="Sold"
@@ -1110,8 +1154,8 @@ export default async function AdminEventManagePage({
               </div>
 
               <p style={styles.sectionText}>
-                Tables are shown separately so dinner/table-plan events do not
-                mix with theatre-style rows.
+                Normal public table seats are buyable as Standard/Concession.
+                Special marked seats use their specific ticket type.
               </p>
             </div>
           </div>
@@ -1121,8 +1165,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click table seats to select them. Then apply a price or delete
-                  selected seats.
+                  Click table seats to select them. Apply a special marking or
+                  return selected seats to Normal.
                 </p>
               </div>
 
