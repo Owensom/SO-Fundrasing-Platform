@@ -71,15 +71,25 @@ export default async function TenantCampaignsPage({
         <h1 style={styles.title}>Active Campaigns</h1>
 
         <p style={styles.subtitle}>
-          Choose an active raffle or squares campaign to support.
+          Choose an active raffle, squares campaign, or event to support.
         </p>
+
+        <div style={styles.legalLinks}>
+          <Link href={`/c/${tenantSlug}/terms`} style={styles.legalLink}>
+            Terms of Use
+          </Link>
+
+          <Link href={`/c/${tenantSlug}/privacy`} style={styles.legalLink}>
+            Privacy Policy
+          </Link>
+        </div>
       </section>
 
       {publicCampaigns.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0 }}>No active campaigns found</h2>
           <p style={styles.muted}>
-            This tenant has no published campaigns at the moment.
+            This organiser has no published campaigns at the moment.
           </p>
         </section>
       ) : (
@@ -99,7 +109,11 @@ export default async function TenantCampaignsPage({
                   />
                 ) : (
                   <div style={styles.imageEmpty}>
-                    {campaign.type === "squares" ? "🔲" : "🎟️"}
+                    {campaign.type === "squares"
+                      ? "🔲"
+                      : campaign.type === "event"
+                        ? "🎫"
+                        : "🎟️"}
                   </div>
                 )}
               </div>
@@ -173,6 +187,23 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 16,
     lineHeight: 1.55,
+  },
+  legalLinks: {
+    marginTop: 16,
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  legalLink: {
+    display: "inline-flex",
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#2563eb",
+    border: "1px solid #bfdbfe",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 13,
   },
   muted: {
     color: "#64748b",
