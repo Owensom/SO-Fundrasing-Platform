@@ -10,35 +10,16 @@ import {
   updateEventOrderStripeSession,
 } from "../../../../../api/_lib/events-repo";
 
-type CheckoutItemInput = {
+type CheckoutItem = {
   seatId: string;
   ticketTypeId: string;
 };
 
-type CheckoutBody = {
-  eventId?: string;
-  items?: CheckoutItemInput[];
-};
-
-function getStripe() {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-
-  if (!secretKey) {
-    throw new Error("Missing STRIPE_SECRET_KEY");
-  }
-
-  return new Stripe(secretKey);
-}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 function siteUrl() {
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL;
-  }
-
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    return process.env.VERCEL_PROJECT_PRODUCTION_URL.startsWith("http")
-      ? process.env.VERCEL_PROJECT_PRODUCTION_URL
-      : `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
 
   if (process.env.VERCEL_URL) {
@@ -46,32 +27,6 @@ function siteUrl() {
   }
 
   return "http://localhost:3000";
-}
-
-function normaliseItems(items: unknown): CheckoutItemInput[] {
-  if (!Array.isArray(items)) return [];
-
-  const cleanItems = items
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-
-      const record = item as Record<string, unknown>;
-      const seatId = String(record.seatId || "").trim();
-      const ticketTypeId = String(record.ticketTypeId || "").trim();
-
-      if (!seatId || !ticketTypeId) return null;
-
-      return { seatId, ticketTypeId };
-    })
-    .filter(Boolean) as CheckoutItemInput[];
-
-  const seen = new Set<string>();
-
-  return cleanItems.filter((item) => {
-    if (seen.has(item.seatId)) return false;
-    seen.add(item.seatId);
-    return true;
-  });
 }
 
 function seatLabel(seat: {
@@ -89,29 +44,33 @@ function seatLabel(seat: {
   }, Seat ${seat.seat_number || "?"}`;
 }
 
-function isStandard(ticketTypeName: string) {
-  return ticketTypeName.toLowerCase().includes("standard");
+function isStandard(name: string) {
+  return name.toLowerCase().includes("standard");
 }
 
-function isConcession(ticketTypeName: string) {
-  return ticketTypeName.toLowerCase().includes("concession");
+function isConcession(name: string) {
+  return name.toLowerCase().includes("concession");
 }
 
-function isComplimentary(ticketTypeName: string) {
-  return ticketTypeName.toLowerCase().includes("complimentary");
+function isComplimentary(name: string) {
+  return name.toLowerCase().includes("complimentary");
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   let orderId: string | null = null;
 
   try {
-    const body = (await request.json()) as CheckoutBody;
+    const body = (await req.json()) as {
+      eventId?: string;
+      items?: CheckoutItem[];
+    };
+
     const eventId = String(body.eventId || "").trim();
-    const items = normaliseItems(body.items);
+    const items = Array.isArray(body.items) ? body.items : [];
 
     if (!eventId || items.length === 0) {
       return NextResponse.json(
-        { error: "Missing event or selected seats." },
+        { error: "Missing checkout data." },
         { status: 400 },
       );
     }
@@ -130,7 +89,28 @@ export async function POST(request: Request) {
       (ticketType) => ticketType.is_active,
     );
 
-    const checkoutLines = items.map((item) => {
+    const cleanItems = items
+      .map((item) => ({
+        seatId: String(item.seatId || "").trim(),
+        ticketTypeId: String(item.ticketTypeId || "").trim(),
+      }))
+      .filter((item) => item.seatId && item.ticketTypeId);
+
+    const uniqueSeatIds = new Set<string>();
+    const uniqueItems = cleanItems.filter((item) => {
+      if (uniqueSeatIds.has(item.seatId)) return false;
+      uniqueSeatIds.add(item.seatId);
+      return true;
+    });
+
+    if (uniqueItems.length === 0) {
+      return NextResponse.json(
+        { error: "No valid seats selected." },
+        { status: 400 },
+      );
+    }
+
+    const checkoutLines = uniqueItems.map((item) => {
       const seat = seats.find((seatItem) => seatItem.id === item.seatId);
 
       if (!seat) {
@@ -149,19 +129,21 @@ export async function POST(request: Request) {
         throw new Error(`${seatLabel(seat)} is not available for public sale.`);
       }
 
-      const ticketType = fixedTicketType
-        ? fixedTicketType
-        : ticketTypes.find((ticketType) => ticketType.id === item.ticketTypeId);
+      const selectedTicketType = ticketTypes.find(
+        (ticketType) => ticketType.id === item.ticketTypeId,
+      );
+
+      const ticketType = fixedTicketType || selectedTicketType;
 
       if (!ticketType) {
         throw new Error("Selected ticket type was not found.");
       }
 
       if (!fixedTicketType) {
-        const allowedNormalTicket =
+        const allowed =
           isStandard(ticketType.name) || isConcession(ticketType.name);
 
-        if (!allowedNormalTicket) {
+        if (!allowed) {
           throw new Error("Normal seats can only use Standard or Concession.");
         }
       }
@@ -177,7 +159,6 @@ export async function POST(request: Request) {
       };
     });
 
-    const seatIds = checkoutLines.map((line) => line.seat.id);
     const amountTotal = checkoutLines.reduce(
       (sum, line) => sum + Number(line.ticketType.price || 0),
       0,
@@ -198,6 +179,8 @@ export async function POST(request: Request) {
     });
 
     orderId = order.id;
+
+    const seatIds = checkoutLines.map((line) => line.seat.id);
 
     const reservedCount = await reserveEventSeatsForOrder({
       eventId: event.id,
@@ -231,7 +214,6 @@ export async function POST(request: Request) {
       ),
     );
 
-    const stripe = getStripe();
     const baseUrl = siteUrl();
 
     const session = await stripe.checkout.sessions.create({
@@ -285,9 +267,7 @@ export async function POST(request: Request) {
       stripeSessionId: session.id,
     });
 
-    return NextResponse.json({
-      url: session.url,
-    });
+    return NextResponse.json({ url: session.url });
   } catch (error) {
     if (orderId) {
       try {
@@ -300,7 +280,7 @@ export async function POST(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Could not create checkout session.",
+            : "Checkout failed. Please try again.",
       },
       { status: 500 },
     );
