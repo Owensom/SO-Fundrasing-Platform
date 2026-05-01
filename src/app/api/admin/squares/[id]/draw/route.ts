@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sendWinnerEmail } from "@/lib/email";
 import {
   createSquaresWinner,
   getSquaresGameById,
@@ -17,6 +18,14 @@ type RouteContext = {
 function parsePositiveInteger(value: FormDataEntryValue | null) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
+function cleanEmail(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanName(value: string | null | undefined) {
+  return String(value || "").trim() || "Supporter";
 }
 
 function ordinal(value: number) {
@@ -105,7 +114,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const prize = prizes[prizeNumber - 1];
 
     const prizeTitle =
-      prize?.title?.trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`;
+      String(prize?.title ?? prize?.name ?? "").trim() ||
+      `${prizeNumber}${ordinal(prizeNumber)} Prize`;
+
+    const winnerName = cleanName(matchingSale.customer_name);
+    const winnerEmail = cleanEmail(matchingSale.customer_email);
 
     const winner = await createSquaresWinner({
       tenant_slug: game.tenant_slug,
@@ -113,9 +126,45 @@ export async function POST(request: NextRequest, context: RouteContext) {
       prize_index: prizeNumber,
       prize_title: prizeTitle,
       square_number: squareNumber,
-      customer_name: matchingSale.customer_name,
-      customer_email: matchingSale.customer_email,
+      customer_name: winnerName,
+      customer_email: winnerEmail || null,
     });
+
+    if (!winnerEmail) {
+      console.warn("Squares draw winner email skipped - missing email", {
+        gameId: game.id,
+        prizeNumber,
+        prizeTitle,
+        squareNumber,
+      });
+    } else {
+      try {
+        await sendWinnerEmail({
+          to: winnerEmail,
+          name: winnerName,
+          raffleTitle: game.title,
+          ticketNumber: squareNumber,
+          colour: `Square ${squareNumber} — ${prizeTitle}`,
+        });
+
+        console.log("Squares draw winner email sent", {
+          to: winnerEmail,
+          gameId: game.id,
+          prizeNumber,
+          prizeTitle,
+          squareNumber,
+        });
+      } catch (emailError: any) {
+        console.error("Squares draw winner email failed", {
+          to: winnerEmail,
+          gameId: game.id,
+          prizeNumber,
+          prizeTitle,
+          squareNumber,
+          error: emailError?.message || emailError,
+        });
+      }
+    }
 
     return NextResponse.json({
       ok: true,
