@@ -720,7 +720,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
     const selected = [...basket, ...randomTickets];
 
-    if (randomTickets.length < requested) {
+        if (randomTickets.length < requested) {
       setBasket(
         selected.sort((a, b) => {
           if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
@@ -728,12 +728,19 @@ export default function PublicRafflePage({ slug }: Props) {
         }),
       );
 
-const ticketLabel =
-  selected.length === 1 ? "ticket" : "tickets";
+      const ticketLabel =
+        selected.length === 1 ? "ticket" : "tickets";
 
-setError(
-  `Only ${selected.length} ${ticketLabel} could be selected. Not enough tickets are available.`,
-);
+      setError(
+        "Only " +
+          selected.length +
+          " " +
+          ticketLabel +
+          " could be selected. Not enough tickets are available.",
+      );
+
+      return;
+    }
 
     setBasket(
       selected.sort((a, b) => {
