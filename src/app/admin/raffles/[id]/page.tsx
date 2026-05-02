@@ -306,8 +306,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <SummaryCard label="Sold" value={soldTicketsCount} />
         <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
-
-      <section style={styles.progressCard}>
+            <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
             <strong style={{ color: "#0f172a" }}>Sales progress</strong>
@@ -529,7 +528,53 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </p>
           </section>
 
+          {/* ✅ NEW: FREE POSTAL ENTRY SECTION */}
           <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Free postal entry</h3>
+                <p style={styles.sectionDescription}>
+                  Add the postal entry route shown on the public raffle page.
+                </p>
+              </div>
+            </div>
+
+            <Field label="Postal address">
+              <textarea
+                name="free_entry_address"
+                rows={3}
+                defaultValue={String(config.free_entry?.address ?? "")}
+                placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
+                style={styles.textarea}
+              />
+            </Field>
+
+            <Field label="Postal instructions">
+              <textarea
+                name="free_entry_instructions"
+                rows={4}
+                defaultValue={String(config.free_entry?.instructions ?? "")}
+                placeholder="Include your full name, email address, phone number, raffle name, answer to the entry question and preferred ticket number/colour if applicable."
+                style={styles.textarea}
+              />
+            </Field>
+
+            <Field label="Postal entry closing date">
+              <input
+                name="free_entry_closes_at"
+                type="datetime-local"
+                defaultValue={formatDateTimeLocal(config.free_entry?.closes_at)}
+                style={styles.input}
+              />
+            </Field>
+
+            <p style={styles.helpText}>
+              Postal entries must include an email address so the entrant can be
+              contacted if they win and included in the automatic or dramatic draw.
+              One entry per postcard/envelope.
+            </p>
+          </section>
+                    <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
                 <h3 style={styles.subTitle}>Ticket colours</h3>
