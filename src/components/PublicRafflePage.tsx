@@ -80,7 +80,7 @@ type SafeRaffle = {
 };
 
 function makeTicketKey(colour: string, number: number) {
-  return `${colour}::${number}`;
+  return colour + "::" + number;
 }
 
 function getSafeAdminReturn(value: string | null) {
@@ -101,9 +101,11 @@ function formatCurrency(value: number, currency: string) {
       currency: currency || "GBP",
     }).format(Number.isFinite(value) ? value : 0);
   } catch {
-    return `${currency || "GBP"} ${(Number.isFinite(value) ? value : 0).toFixed(
-      2,
-    )}`;
+    return (
+      (currency || "GBP") +
+      " " +
+      (Number.isFinite(value) ? value : 0).toFixed(2)
+    );
   }
 }
 
@@ -130,7 +132,7 @@ function ordinal(position: number) {
           ? "rd"
           : "th";
 
-  return `${position}${suffix}`;
+  return String(position) + suffix;
 }
 
 function normaliseFrontendStatus(rawStatus: unknown): SafeRaffleStatus {
@@ -238,8 +240,8 @@ function toSafeRaffle(input: any): SafeRaffle {
     status: normaliseFrontendStatus(raw.status),
 
     colours: colours.map((c: any, index: number) => ({
-      id: String(c?.id ?? `colour-${index}`),
-      name: String(c?.name ?? c ?? `Colour ${index + 1}`),
+      id: String(c?.id ?? "colour-" + index),
+      name: String(c?.name ?? c ?? "Colour " + (index + 1)),
       hex: c?.hex ? String(c.hex) : null,
       sortOrder: Number.isFinite(Number(c?.sortOrder))
         ? Number(c.sortOrder)
@@ -247,8 +249,8 @@ function toSafeRaffle(input: any): SafeRaffle {
     })),
 
     offers: offers.map((o: any, index: number) => ({
-      id: String(o?.id ?? `offer-${index}`),
-      label: String(o?.label ?? `Offer ${index + 1}`),
+      id: String(o?.id ?? "offer-" + index),
+      label: String(o?.label ?? "Offer " + (index + 1)),
       quantity: Number.isFinite(Number(o?.quantity)) ? Number(o.quantity) : 0,
       price: Number.isFinite(Number(o?.price)) ? Number(o.price) : 0,
       isActive: Boolean(o?.isActive ?? o?.is_active ?? true),
@@ -333,7 +335,6 @@ function calculateBestPrice(
       if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
         return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       }
-
       return a.quantity - b.quantity;
     });
 
@@ -447,7 +448,6 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
         background,
         border: "1px solid #cbd5e1",
         display: "inline-block",
-        flexShrink: 0,
       }}
     />
   );
@@ -456,12 +456,11 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
 function shuffleTickets(tickets: TicketSelection[]) {
   const shuffled = tickets.slice();
 
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    const current = shuffled[index];
-
-    shuffled[index] = shuffled[swapIndex];
-    shuffled[swapIndex] = current;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
   }
 
   return shuffled;
@@ -483,6 +482,7 @@ export default function PublicRafflePage({ slug }: Props) {
   const [reservationMessage, setReservationMessage] = useState("");
   const [adminReturn, setAdminReturn] = useState("");
   const [showAllPrizes, setShowAllPrizes] = useState(false);
+  const [showPostal, setShowPostal] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -498,37 +498,21 @@ export default function PublicRafflePage({ slug }: Props) {
       try {
         setLoading(true);
         setError("");
-        setReservationMessage("");
 
-        const response = await fetch(`/api/raffles/${encodeURIComponent(slug)}`);
-        const text = await response.text();
+        const res = await fetch("/api/raffles/" + encodeURIComponent(slug));
+        const data = await res.json();
 
-        let parsed: any = null;
-
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw new Error(`API did not return JSON: ${text.slice(0, 120)}`);
-        }
-
-        if (!response.ok) {
-          throw new Error(parsed?.error || "Failed to load raffle");
-        }
-
-        const safe = toSafeRaffle(parsed?.raffle);
+        if (!res.ok) throw new Error(data?.error || "Failed");
 
         if (!cancelled) {
+          const safe = toSafeRaffle(data.raffle);
           setRaffle(safe);
           setSelectedColour(safe.colours[0]?.name ?? "");
         }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load raffle");
-        }
+      } catch (err: any) {
+        if (!cancelled) setError(err.message);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -545,78 +529,41 @@ export default function PublicRafflePage({ slug }: Props) {
 
     if (!raffle) return { sold, reserved };
 
-    for (const ticket of raffle.soldTickets) {
-      sold.add(makeTicketKey(ticket.colour, ticket.number));
+    for (const t of raffle.soldTickets) {
+      sold.add(makeTicketKey(t.colour, t.number));
     }
 
-    for (const ticket of raffle.reservedTickets) {
-      reserved.add(makeTicketKey(ticket.colour, ticket.number));
+    for (const t of raffle.reservedTickets) {
+      reserved.add(makeTicketKey(t.colour, t.number));
     }
 
     return { sold, reserved };
   }, [raffle]);
 
-  const basketKeys = useMemo(
-    () =>
-      new Set(
-        basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number)),
-      ),
-    [basket],
-  );
-
   const visibleNumbers = useMemo(() => {
     if (!raffle) return [];
 
-    if (
-      !Number.isFinite(raffle.startNumber) ||
-      !Number.isFinite(raffle.endNumber)
-    ) {
-      return [];
+    const arr: number[] = [];
+    for (let i = raffle.startNumber; i <= raffle.endNumber; i++) {
+      arr.push(i);
     }
-
-    if (raffle.endNumber < raffle.startNumber) return [];
-
-    const numbers: number[] = [];
-
-    for (
-      let number = raffle.startNumber;
-      number <= raffle.endNumber;
-      number += 1
-    ) {
-      numbers.push(number);
-    }
-
-    return numbers;
+    return arr;
   }, [raffle]);
 
   const isPublished = raffle?.status === "published";
-  const isClosed = raffle?.status === "closed";
-  const isDrawn = raffle?.status === "drawn";
-  const isDraft = raffle?.status === "draft";
   const canReserve = Boolean(raffle && isPublished);
 
   const pricing = useMemo(() => {
-    if (!raffle) {
-      return {
-        quantity: 0,
-        total: 0,
-        standardTotal: 0,
-        savings: 0,
-        appliedOffers: [] as Array<{
-          label: string;
-          quantity: number;
-          price: number;
-          times: number;
-        }>,
-      };
-    }
+    if (!raffle) return { quantity: 0, total: 0, standardTotal: 0, savings: 0, appliedOffers: [] };
+    return calculateBestPrice(basket.length, raffle.ticketPrice, raffle.offers);
+  }, [basket.length, raffle]);
+    const basketKeys = useMemo(() => {
+    return new Set(basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number)));
+  }, [basket]);
 
-    return calculateBestPrice(
-      basket.length,
-      raffle.ticketPrice,
-      isPublished ? raffle.offers : [],
-    );
-  }, [basket.length, raffle, isPublished]);
+  const isClosed = raffle?.status === "closed";
+  const isDrawn = raffle?.status === "drawn";
+  const isDraft = raffle?.status === "draft";
 
   const estimatedFee =
     pricing.total > 0 ? Math.round(pricing.total * 0.1 * 100) / 100 : 0;
@@ -675,7 +622,7 @@ export default function PublicRafflePage({ slug }: Props) {
       ),
     );
   }
-`
+
   function clearBasket() {
     setBasket([]);
     setError("");
@@ -720,7 +667,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
     const selected = [...basket, ...randomTickets];
 
-        if (randomTickets.length < requested) {
+    if (randomTickets.length < requested) {
       setBasket(
         selected.sort((a, b) => {
           if (a.colour !== b.colour) return a.colour.localeCompare(b.colour);
@@ -728,8 +675,7 @@ export default function PublicRafflePage({ slug }: Props) {
         }),
       );
 
-      const ticketLabel =
-        selected.length === 1 ? "ticket" : "tickets";
+      const ticketLabel = selected.length === 1 ? "ticket" : "tickets";
 
       setError(
         "Only " +
@@ -805,30 +751,30 @@ export default function PublicRafflePage({ slug }: Props) {
         colour: ticket.colour,
       }));
 
-      const reserveResponse = await fetch(
-        `/api/raffles/${encodeURIComponent(raffle.slug)}/reserve`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenantSlug: raffle.tenantSlug,
-            raffleId: raffle.id,
-            raffleSlug: raffle.slug,
-            slug: raffle.slug,
-            buyerName: buyerName.trim(),
-            buyerEmail: buyerEmail.trim(),
-            customerName: buyerName.trim(),
-            customerEmail: buyerEmail.trim(),
-            quantity: basket.length,
-            selectedTickets,
-            tickets: selectedTickets,
-            entryAnswer: entryAnswer.trim(),
-            legalAnswer: entryAnswer.trim(),
-            termsAccepted,
-            coverFees,
-          }),
-        },
-      );
+      const reserveUrl =
+        "/api/raffles/" + encodeURIComponent(raffle.slug) + "/reserve";
+
+      const reserveResponse = await fetch(reserveUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantSlug: raffle.tenantSlug,
+          raffleId: raffle.id,
+          raffleSlug: raffle.slug,
+          slug: raffle.slug,
+          buyerName: buyerName.trim(),
+          buyerEmail: buyerEmail.trim(),
+          customerName: buyerName.trim(),
+          customerEmail: buyerEmail.trim(),
+          quantity: basket.length,
+          selectedTickets,
+          tickets: selectedTickets,
+          entryAnswer: entryAnswer.trim(),
+          legalAnswer: entryAnswer.trim(),
+          termsAccepted,
+          coverFees,
+        }),
+      });
 
       const reserveText = await reserveResponse.text();
 
@@ -838,7 +784,7 @@ export default function PublicRafflePage({ slug }: Props) {
         reserveParsed = JSON.parse(reserveText);
       } catch {
         throw new Error(
-          `Reserve API did not return JSON: ${reserveText.slice(0, 120)}`,
+          "Reserve API did not return JSON: " + reserveText.slice(0, 120),
         );
       }
 
@@ -861,7 +807,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
       setReservationMessage(
         reserveParsed?.expiresAt
-          ? `Reserved until ${String(reserveParsed.expiresAt)}`
+          ? "Reserved until " + String(reserveParsed.expiresAt)
           : "Tickets reserved. Redirecting to checkout...",
       );
 
@@ -897,7 +843,7 @@ export default function PublicRafflePage({ slug }: Props) {
         checkoutParsed = JSON.parse(checkoutText);
       } catch {
         throw new Error(
-          `Checkout API did not return JSON: ${checkoutText.slice(0, 120)}`,
+          "Checkout API did not return JSON: " + checkoutText.slice(0, 120),
         );
       }
 
@@ -935,7 +881,7 @@ export default function PublicRafflePage({ slug }: Props) {
     <div style={styles.page}>
       <div style={styles.container}>
         <nav style={styles.navBar}>
-          <Link href={`/c/${raffle.tenantSlug}`} style={styles.navLink}>
+          <Link href={"/c/" + raffle.tenantSlug} style={styles.navLink}>
             ← Back to campaigns
           </Link>
 
@@ -1029,8 +975,7 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
           </details>
         ) : null}
-
-        {raffle.prizes.length > 0 ? (
+                {raffle.prizes.length > 0 ? (
           <section style={styles.prizesBox}>
             <div style={styles.prizesTitle}>Prizes</div>
 
@@ -1038,7 +983,7 @@ export default function PublicRafflePage({ slug }: Props) {
               {(showAllPrizes ? raffle.prizes : raffle.prizes.slice(0, 3)).map(
                 (prize) => (
                   <div
-                    key={`${prize.position}-${prize.title}`}
+                    key={String(prize.position) + "-" + prize.title}
                     style={styles.prizeCard}
                   >
                     <div style={styles.prizePosition}>
@@ -1070,7 +1015,8 @@ export default function PublicRafflePage({ slug }: Props) {
             ) : null}
           </section>
         ) : null}
-                {isDrawn ? (
+
+        {isDrawn ? (
           <section style={styles.winnersBox}>
             <div style={styles.winnersTitle}>Winning tickets</div>
 
@@ -1078,9 +1024,13 @@ export default function PublicRafflePage({ slug }: Props) {
               <div style={{ display: "grid", gap: 10 }}>
                 {raffle.winners.map((winner) => (
                   <div
-                    key={`${winner.prizePosition}-${winner.ticketNumber}-${
-                      winner.colour ?? ""
-                    }`}
+                    key={
+                      String(winner.prizePosition) +
+                      "-" +
+                      String(winner.ticketNumber) +
+                      "-" +
+                      String(winner.colour || "")
+                    }
                     style={styles.winnerCard}
                   >
                     <div style={styles.winnerBlock}>
@@ -1093,7 +1043,7 @@ export default function PublicRafflePage({ slug }: Props) {
                     <div style={styles.winnerBlock}>
                       <div style={styles.winnerLabel}>Ticket</div>
                       <div style={styles.winnerTicket}>
-                        #{winner.ticketNumber}
+                        {"#" + winner.ticketNumber}
                       </div>
                     </div>
 
@@ -1118,7 +1068,7 @@ export default function PublicRafflePage({ slug }: Props) {
                   <div style={styles.winnerLabel}>Ticket</div>
                   <div style={styles.winnerTicket}>
                     {raffle.winnerTicketNumber != null
-                      ? `#${raffle.winnerTicketNumber}`
+                      ? "#" + raffle.winnerTicketNumber
                       : "—"}
                   </div>
                 </div>
@@ -1344,10 +1294,9 @@ export default function PublicRafflePage({ slug }: Props) {
             <div style={{ color: "#166534" }}>
               Best value applied:{" "}
               {pricing.appliedOffers
-                .map(
-                  (offer) =>
-                    `${offer.label}${offer.times > 1 ? ` × ${offer.times}` : ""}`,
-                )
+                .map((offer) => {
+                  return offer.label + (offer.times > 1 ? " × " + offer.times : "");
+                })
                 .join(", ")}
             </div>
           ) : null}
