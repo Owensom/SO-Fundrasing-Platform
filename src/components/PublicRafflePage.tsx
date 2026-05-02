@@ -728,14 +728,12 @@ export default function PublicRafflePage({ slug }: Props) {
         }),
       );
 
-      setError(
-        `Only ${selected.length} ticket${
-          selected.length === 1 ? "" : "s"
-        } could be selected. Not enough tickets are available.`,
-      );
+const ticketLabel =
+  selected.length === 1 ? "ticket" : "tickets";
 
-      return;
-    }
+setError(
+  `Only ${selected.length} ${ticketLabel} could be selected. Not enough tickets are available.`,
+);
 
     setBasket(
       selected.sort((a, b) => {
