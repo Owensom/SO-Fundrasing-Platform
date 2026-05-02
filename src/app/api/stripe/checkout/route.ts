@@ -100,6 +100,12 @@ export async function POST(req: NextRequest) {
 
     const baseUrl = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
 
+    const tenantSlug = String((raffle as any).tenant_slug ?? "").trim();
+
+    const publicRafflePath = tenantSlug
+      ? `/c/${tenantSlug}/r/${raffle.slug}`
+      : `/r/${raffle.slug}`;
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -119,15 +125,29 @@ export async function POST(req: NextRequest) {
       ],
 
       metadata: {
+        type: "raffle",
+
         raffleId,
+        raffle_id: raffleId,
+
+        raffleSlug: raffle.slug,
+        raffle_slug: raffle.slug,
+
+        tenantSlug,
+        tenant_slug: tenantSlug,
+
         quantity: String(quantity),
         buyerName,
         buyerEmail,
+
         reservationToken,
+        reservation_token: reservationToken,
+
+        raffle_title: raffle.title,
       },
 
-      success_url: `${baseUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/r/${raffle.slug}`,
+      success_url: `${baseUrl}${publicRafflePath}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}${publicRafflePath}`,
     });
 
     return NextResponse.json({
