@@ -266,9 +266,7 @@ function toSafeRaffle(input: any): SafeRaffle {
         description: String(p?.description ?? ""),
         isPublic: p?.isPublic !== false,
       }))
-      .filter(
-        (p: RafflePrize) => p.title.trim().length > 0 && p.isPublic,
-      )
+      .filter((p: RafflePrize) => p.title.trim().length > 0 && p.isPublic)
       .sort((a: RafflePrize, b: RafflePrize) => a.position - b.position),
 
     reservedTickets: reservedTickets.map((t: any) => ({
@@ -677,7 +675,8 @@ export default function PublicRafflePage({ slug }: Props) {
       ),
     );
   }
-    function clearBasket() {
+`
+  function clearBasket() {
     setBasket([]);
     setError("");
     setReservationMessage("");
@@ -984,38 +983,46 @@ export default function PublicRafflePage({ slug }: Props) {
         </div>
 
         {raffle.freeEntry.address ? (
-          <section style={styles.freeEntryBox}>
-            <div style={styles.freeEntryTitle}>Free postal entry</div>
+          <details style={styles.freeEntryBox}>
+            <summary style={styles.freeEntrySummary}>
+              No purchase necessary — free postal entry available
+            </summary>
 
-            <p style={styles.freeEntryText}>
-              To enter for free by post, send your full name, email address,
-              phone number, raffle/campaign name, answer to the entry question,
-              and preferred ticket number and colour if applicable to:
-            </p>
-
-            <pre style={styles.freeEntryAddress}>{raffle.freeEntry.address}</pre>
-
-            {raffle.freeEntry.instructions ? (
+            <div style={styles.freeEntryContent}>
               <p style={styles.freeEntryText}>
-                {raffle.freeEntry.instructions}
+                To enter for free by post, send your full name, email address,
+                phone number, raffle/campaign name, answer to the entry
+                question, and preferred ticket number and colour if applicable
+                to:
               </p>
-            ) : null}
 
-            {raffle.freeEntry.closesAt ? (
+              <pre style={styles.freeEntryAddress}>
+                {raffle.freeEntry.address}
+              </pre>
+
+              {raffle.freeEntry.instructions ? (
+                <p style={styles.freeEntryText}>
+                  {raffle.freeEntry.instructions}
+                </p>
+              ) : null}
+
+              {raffle.freeEntry.closesAt ? (
+                <p style={styles.freeEntryText}>
+                  Postal entries must be received before{" "}
+                  <strong>{formatDateTime(raffle.freeEntry.closesAt)}</strong>.
+                </p>
+              ) : null}
+
               <p style={styles.freeEntryText}>
-                Postal entries must be received before{" "}
-                <strong>{formatDateTime(raffle.freeEntry.closesAt)}</strong>.
+                Your email address is required so the organiser can contact you
+                if you win and include your entry in the automatic or live draw.
+                One entry per postcard/envelope. Multiple postal entries are
+                permitted by sending multiple postcards/envelopes. No purchase
+                is necessary. Paid and postal entries have equal chance of
+                winning.
               </p>
-            ) : null}
-
-            <p style={styles.freeEntryText}>
-              Your email address is required so the organiser can contact you if
-              you win and include your entry in the automatic or live draw. One
-              entry per postcard/envelope. Multiple postal entries are permitted
-              by sending multiple postcards/envelopes. No purchase is necessary.
-              Paid and postal entries have equal chance of winning.
-            </p>
-          </section>
+            </div>
+          </details>
         ) : null}
 
         {raffle.prizes.length > 0 ? (
@@ -1553,11 +1560,15 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #bfdbfe",
     color: "#1e3a8a",
   },
-  freeEntryTitle: {
-    fontSize: 20,
+  freeEntrySummary: {
+    cursor: "pointer",
+    fontSize: 15,
     fontWeight: 900,
-    marginBottom: 10,
     color: "#1e3a8a",
+    listStyle: "none",
+  },
+  freeEntryContent: {
+    marginTop: 10,
   },
   freeEntryText: {
     margin: "8px 0",
