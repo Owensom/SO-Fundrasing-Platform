@@ -7,26 +7,76 @@ export const dynamic = "force-dynamic";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-/**
- * Normalize text safely (for answers)
- */
 function clean(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[.,!?;:]+$/g, "");
+}
+
+async function readBody(req: NextRequest) {
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return await req.json();
+  }
+
+  const formData = await req.formData();
+
+  return {
+    raffle_id: formData.get("raffle_id"),
+    raffleId: formData.get("raffleId"),
+    quantity: formData.get("quantity"),
+    name: formData.get("name"),
+    buyerName: formData.get("buyerName"),
+    buyer_name: formData.get("buyer_name"),
+    email: formData.get("email"),
+    buyerEmail: formData.get("buyerEmail"),
+    buyer_email: formData.get("buyer_email"),
+    answer: formData.get("answer"),
+    entryAnswer: formData.get("entryAnswer"),
+    entry_answer: formData.get("entry_answer"),
+    questionAnswer: formData.get("questionAnswer"),
+    question_answer: formData.get("question_answer"),
+    legalAnswer: formData.get("legalAnswer"),
+    legal_answer: formData.get("legal_answer"),
+    reservationToken: formData.get("reservationToken"),
+    reservation_token: formData.get("reservation_token"),
+  };
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
+    const body = await readBody(req);
 
-    const raffleId = String(formData.get("raffle_id") || "").trim();
-    const quantity = Number(formData.get("quantity") || 0);
-    const buyerName = String(formData.get("name") || "").trim();
-    const buyerEmail = String(formData.get("email") || "").trim();
-    const answer = clean(formData.get("answer"));
+    const raffleId = String(body.raffleId ?? body.raffle_id ?? "").trim();
+    const quantity = Number(body.quantity ?? 0);
 
-    // -----------------------------
-    // BASIC VALIDATION
-    // -----------------------------
+    const buyerName = String(
+      body.buyerName ?? body.buyer_name ?? body.name ?? "",
+    ).trim();
+
+    const buyerEmail = String(
+      body.buyerEmail ?? body.buyer_email ?? body.email ?? "",
+    ).trim();
+
+    const reservationToken = String(
+      body.reservationToken ?? body.reservation_token ?? "",
+    ).trim();
+
+    const submittedAnswer = clean(
+      body.answer ??
+        body.entryAnswer ??
+        body.entry_answer ??
+        body.questionAnswer ??
+        body.question_answer ??
+        body.legalAnswer ??
+        body.legal_answer,
+    );
+
     if (!raffleId || !quantity || quantity <= 0) {
       return NextResponse.json(
         { ok: false, error: "Invalid request" },
@@ -43,28 +93,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // -----------------------------
-    // ✅ LEGAL QUESTION CHECK
-    // -----------------------------
     const question = (raffle.config_json as any)?.question;
 
     if (question?.text && question?.answer) {
       const correctAnswer = clean(question.answer);
 
-      if (!answer || answer !== correctAnswer) {
+      if (!submittedAnswer || submittedAnswer !== correctAnswer) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "Incorrect answer to entry question",
-          },
+          { ok: false, error: "Incorrect answer to entry question" },
           { status: 400 },
         );
       }
     }
 
-    // -----------------------------
-    // PRICE (FIXED)
-    // -----------------------------
     const ticketPriceCents = Number(raffle.ticket_price_cents || 0);
 
     if (!ticketPriceCents || ticketPriceCents <= 0) {
@@ -74,15 +115,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const totalAmount = ticketPriceCents * quantity;
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+      req.nextUrl.origin;
 
-    // -----------------------------
-    // STRIPE SESSION
-    // -----------------------------
+    const baseUrl = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
-
       customer_email: buyerEmail || undefined,
 
       line_items: [
@@ -103,10 +145,11 @@ export async function POST(req: NextRequest) {
         quantity: String(quantity),
         buyerName,
         buyerEmail,
+        reservationToken,
       },
 
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/stripe/success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/r/${raffle.slug}`,
+      success_url: `${baseUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/r/${raffle.slug}`,
     });
 
     return NextResponse.json({
@@ -117,7 +160,7 @@ export async function POST(req: NextRequest) {
     console.error("checkout error", error);
 
     return NextResponse.json(
-      { ok: false, error: "Checkout failed" },
+      { ok: false, error: error?.message || "Checkout failed" },
       { status: 500 },
     );
   }
