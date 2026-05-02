@@ -56,14 +56,26 @@ export async function POST(request: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
 
     const type = String(session.metadata?.type || "raffle");
-    const reservationToken = String(session.metadata?.reservation_token || "");
-    const tenantSlug = String(session.metadata?.tenant_slug || "");
+
+    const reservationToken = String(
+      session.metadata?.reservation_token ||
+        session.metadata?.reservationToken ||
+        "",
+    );
+
+    const tenantSlug = String(
+      session.metadata?.tenant_slug || session.metadata?.tenantSlug || "",
+    );
 
     const raffleId =
-      type === "raffle" ? String(session.metadata?.raffle_id || "") : null;
+      type === "raffle"
+        ? String(session.metadata?.raffle_id || session.metadata?.raffleId || "")
+        : null;
 
     const squaresGameId =
-      type === "squares" ? String(session.metadata?.game_id || "") : null;
+      type === "squares"
+        ? String(session.metadata?.game_id || session.metadata?.gameId || "")
+        : null;
 
     const paymentIntentId =
       typeof session.payment_intent === "string"
