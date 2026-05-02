@@ -43,6 +43,12 @@ type RaffleWinner = {
   drawnAt: string | null;
 };
 
+type FreeEntry = {
+  address: string;
+  instructions: string;
+  closesAt: string;
+};
+
 type SafeRaffleStatus = "draft" | "published" | "closed" | "drawn";
 
 type SafeRaffle = {
@@ -70,6 +76,7 @@ type SafeRaffle = {
   winners: RaffleWinner[];
   legalQuestion: string;
   legalAnswer: string;
+  freeEntry: FreeEntry;
 };
 
 function makeTicketKey(colour: string, number: number) {
@@ -209,6 +216,8 @@ function toSafeRaffle(input: any): SafeRaffle {
         )
       : String(raw.legal_answer ?? raw.entry_answer ?? "");
 
+  const rawFreeEntry = raw.freeEntry ?? raw.free_entry ?? config.free_entry ?? {};
+
   return {
     id: String(raw.id ?? ""),
     slug: String(raw.slug ?? ""),
@@ -303,6 +312,14 @@ function toSafeRaffle(input: any): SafeRaffle {
 
     legalQuestion: legalQuestion.trim(),
     legalAnswer: legalAnswer.trim(),
+
+    freeEntry: {
+      address: String(rawFreeEntry?.address ?? "").trim(),
+      instructions: String(rawFreeEntry?.instructions ?? "").trim(),
+      closesAt: String(
+        rawFreeEntry?.closesAt ?? rawFreeEntry?.closes_at ?? "",
+      ).trim(),
+    },
   };
 }
 function calculateBestPrice(
@@ -660,8 +677,7 @@ export default function PublicRafflePage({ slug }: Props) {
       ),
     );
   }
-
-  function clearBasket() {
+    function clearBasket() {
     setBasket([]);
     setError("");
     setReservationMessage("");
@@ -742,7 +758,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
     autoSelectTicketQuantity(autoQuantity);
   }
-    async function reserveTickets() {
+
+  async function reserveTickets() {
     if (!raffle || !canReserve) return;
 
     try {
@@ -966,6 +983,41 @@ export default function PublicRafflePage({ slug }: Props) {
           laws.
         </div>
 
+        {raffle.freeEntry.address ? (
+          <section style={styles.freeEntryBox}>
+            <div style={styles.freeEntryTitle}>Free postal entry</div>
+
+            <p style={styles.freeEntryText}>
+              To enter for free by post, send your full name, email address,
+              phone number, raffle/campaign name, answer to the entry question,
+              and preferred ticket number and colour if applicable to:
+            </p>
+
+            <pre style={styles.freeEntryAddress}>{raffle.freeEntry.address}</pre>
+
+            {raffle.freeEntry.instructions ? (
+              <p style={styles.freeEntryText}>
+                {raffle.freeEntry.instructions}
+              </p>
+            ) : null}
+
+            {raffle.freeEntry.closesAt ? (
+              <p style={styles.freeEntryText}>
+                Postal entries must be received before{" "}
+                <strong>{formatDateTime(raffle.freeEntry.closesAt)}</strong>.
+              </p>
+            ) : null}
+
+            <p style={styles.freeEntryText}>
+              Your email address is required so the organiser can contact you if
+              you win and include your entry in the automatic or live draw. One
+              entry per postcard/envelope. Multiple postal entries are permitted
+              by sending multiple postcards/envelopes. No purchase is necessary.
+              Paid and postal entries have equal chance of winning.
+            </p>
+          </section>
+        ) : null}
+
         {raffle.prizes.length > 0 ? (
           <section style={styles.prizesBox}>
             <div style={styles.prizesTitle}>Prizes</div>
@@ -1006,8 +1058,7 @@ export default function PublicRafflePage({ slug }: Props) {
             ) : null}
           </section>
         ) : null}
-
-        {isDrawn ? (
+                {isDrawn ? (
           <section style={styles.winnersBox}>
             <div style={styles.winnersTitle}>Winning tickets</div>
 
@@ -1493,6 +1544,41 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
     lineHeight: 1.5,
+  },
+  freeEntryBox: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+  },
+  freeEntryTitle: {
+    fontSize: 20,
+    fontWeight: 900,
+    marginBottom: 10,
+    color: "#1e3a8a",
+  },
+  freeEntryText: {
+    margin: "8px 0",
+    color: "#1e40af",
+    fontSize: 14,
+    fontWeight: 700,
+    lineHeight: 1.55,
+  },
+  freeEntryAddress: {
+    margin: "10px 0",
+    padding: 12,
+    borderRadius: 10,
+    background: "#ffffff",
+    border: "1px solid #bfdbfe",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 800,
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    fontFamily: "inherit",
   },
   prizesBox: {
     marginTop: 20,
