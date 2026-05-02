@@ -8,7 +8,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function clean(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[.,!?;:]+$/g, "");
 }
 
 export async function POST(
