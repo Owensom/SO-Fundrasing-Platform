@@ -30,6 +30,25 @@ function parseJsonArray(value: string) {
   }
 }
 
+function parseLegalQuestion(value: string) {
+  if (!value.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const text = String(parsed.text ?? "").trim();
+    const answer = String(parsed.answer ?? "").trim();
+
+    if (!text || !answer) return null;
+
+    return { text, answer };
+  } catch {
+    return null;
+  }
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -123,6 +142,7 @@ export async function POST(request: NextRequest) {
     const colours = parseColours(String(formData.get("colours") ?? ""));
     const offers = parseJsonArray(String(formData.get("offers") ?? "[]"));
     const prizes = parseJsonArray(String(formData.get("prizes") ?? "[]"));
+    const question = parseLegalQuestion(String(formData.get("question") ?? ""));
 
     if (!title) {
       return NextResponse.json(
@@ -167,7 +187,8 @@ export async function POST(request: NextRequest) {
       prizes,
       sold: [],
       reserved: [],
-    });
+      ...(question ? { question } : {}),
+    } as any);
 
     return NextResponse.redirect(
       new URL(`/admin/raffles/${raffle.id}`, request.url),
