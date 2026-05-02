@@ -54,27 +54,30 @@ export async function POST(request: NextRequest) {
     }
 
     const session = event.data.object as Stripe.Checkout.Session;
+    const metadata = session.metadata || {};
 
-    const type = String(session.metadata?.type || "raffle");
+    const type = String(metadata.type || "raffle");
 
     const reservationToken = String(
-      session.metadata?.reservation_token ||
-        session.metadata?.reservationToken ||
+      metadata.reservation_token ||
+        metadata.reservationToken ||
+        metadata.reservation_id ||
+        metadata.reservationId ||
         "",
-    );
+    ).trim();
 
     const tenantSlug = String(
-      session.metadata?.tenant_slug || session.metadata?.tenantSlug || "",
-    );
+      metadata.tenant_slug || metadata.tenantSlug || "",
+    ).trim();
 
     const raffleId =
       type === "raffle"
-        ? String(session.metadata?.raffle_id || session.metadata?.raffleId || "")
+        ? String(metadata.raffle_id || metadata.raffleId || "").trim()
         : null;
 
     const squaresGameId =
       type === "squares"
-        ? String(session.metadata?.game_id || session.metadata?.gameId || "")
+        ? String(metadata.game_id || metadata.gameId || "").trim()
         : null;
 
     const paymentIntentId =
@@ -83,9 +86,9 @@ export async function POST(request: NextRequest) {
         : session.payment_intent?.id || null;
 
     const grossAmountCents = Number(session.amount_total || 0);
-    const platformFeeCents = Number(session.metadata?.platform_fee_cents || 0);
+    const platformFeeCents = Number(metadata.platform_fee_cents || 0);
     const netAmountCents = Number(
-      session.metadata?.net_amount_cents ||
+      metadata.net_amount_cents ||
         Math.max(grossAmountCents - platformFeeCents, 0),
     );
 
@@ -95,18 +98,31 @@ export async function POST(request: NextRequest) {
     const name = session.customer_details?.name || null;
 
     if (!reservationToken) {
-      return NextResponse.json(
-        { ok: false, error: "Missing reservation token" },
-        { status: 400 },
-      );
+      console.error("Stripe webhook missing reservation token", {
+        checkoutSessionId: session.id,
+        type,
+        metadata,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "Missing reservation token",
+      });
     }
 
     if (type === "raffle") {
       if (!raffleId) {
-        return NextResponse.json(
-          { ok: false, error: "Missing raffle_id metadata" },
-          { status: 400 },
-        );
+        console.error("Stripe webhook missing raffle id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing raffle id",
+        });
       }
 
       await query(
@@ -224,7 +240,7 @@ export async function POST(request: NextRequest) {
           await sendReceiptEmail({
             to: email,
             name,
-            raffleTitle: session.metadata?.raffle_title || "Raffle",
+            raffleTitle: metadata.raffle_title || "Raffle",
             tickets,
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
@@ -238,15 +254,19 @@ export async function POST(request: NextRequest) {
 
     if (type === "squares") {
       if (!squaresGameId) {
-        return NextResponse.json(
-          { ok: false, error: "Missing squares game metadata" },
-          { status: 400 },
-        );
+        console.error("Stripe webhook missing squares game id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing squares game id",
+        });
       }
 
-      const squares = JSON.parse(
-        session.metadata?.squares_json || "[]",
-      ) as number[];
+      const squares = JSON.parse(metadata.squares_json || "[]") as number[];
 
       await query(
         `
@@ -298,7 +318,7 @@ export async function POST(request: NextRequest) {
           email,
           name,
           JSON.stringify(squares),
-          JSON.stringify(session.metadata || {}),
+          JSON.stringify(metadata),
         ],
       );
 
@@ -339,7 +359,7 @@ export async function POST(request: NextRequest) {
           await sendSquaresReceiptEmail({
             to: email,
             name,
-            gameTitle: session.metadata?.game_title || "Squares Game",
+            gameTitle: metadata.game_title || "Squares Game",
             squares,
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
