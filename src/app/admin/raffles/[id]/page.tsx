@@ -306,7 +306,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <SummaryCard label="Sold" value={soldTicketsCount} />
         <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
-            <section style={styles.progressCard}>
+
+      <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
             <strong style={{ color: "#0f172a" }}>Sales progress</strong>
@@ -528,7 +529,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </p>
           </section>
 
-          {/* ✅ NEW: FREE POSTAL ENTRY SECTION */}
           <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
@@ -570,11 +570,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
             <p style={styles.helpText}>
               Postal entries must include an email address so the entrant can be
-              contacted if they win and included in the automatic or dramatic draw.
-              One entry per postcard/envelope.
+              contacted if they win and included in the automatic or dramatic
+              draw. One entry per postcard/envelope.
             </p>
           </section>
-                    <section style={styles.innerPanel}>
+
+          <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
                 <h3 style={styles.subTitle}>Ticket colours</h3>
@@ -681,8 +682,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <div>
                 <h3 style={styles.subTitle}>Auto draw range</h3>
                 <p style={styles.sectionDescription}>
-                  Choose which prize numbers the randomizer should draw. Example:
-                  set from 6 to 999 to keep the top prizes for a live draw.
+                  Choose which prize numbers the randomizer should draw.
+                  Example: set from 6 to 999 to keep the top prizes for a live
+                  draw.
                 </p>
               </div>
             </div>
@@ -745,8 +747,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <div>
             <h2 style={styles.sectionTitle}>Winners</h2>
             <p style={styles.sectionDescription}>
-              View winners, auto draw remaining prizes, or manually add a live
-              draw winner.
+              View winners, auto draw remaining prizes, manually add a postal
+              ticket, or manually add a live draw winner.
             </p>
           </div>
         </div>
@@ -789,6 +791,60 @@ export default async function AdminRafflePage({ params }: PageProps) {
         ) : (
           <div style={styles.emptyBox}>No winners yet.</div>
         )}
+
+        <form
+          action={`/api/admin/raffles/${raffle.id}/manual-ticket`}
+          method="post"
+          style={{ ...styles.drawPanel, marginBottom: 14 }}
+        >
+          <h3 style={styles.subTitle}>Add manual postal ticket</h3>
+
+          <p style={styles.sectionDescription}>
+            Add a received postal entry as a normal ticket in the draw. This
+            ticket will be included in the automatic draw and dramatic live draw.
+          </p>
+
+          <div style={styles.twoColumn}>
+            <Field label="Ticket number">
+              <input
+                name="ticket_number"
+                type="number"
+                min={1}
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Ticket colour">
+              <input name="colour" placeholder="Optional" style={styles.input} />
+            </Field>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Buyer name">
+              <input
+                name="buyer_name"
+                required
+                placeholder="Full name"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Buyer email">
+              <input
+                name="buyer_email"
+                type="email"
+                required
+                placeholder="name@example.com"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+
+          <button type="submit" style={styles.drawButton}>
+            Add ticket to draw
+          </button>
+        </form>
 
         <div style={styles.drawGrid}>
           <form
