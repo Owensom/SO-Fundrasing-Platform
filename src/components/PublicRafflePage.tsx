@@ -335,6 +335,7 @@ function calculateBestPrice(
       if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
         return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       }
+
       return a.quantity - b.quantity;
     });
 
@@ -448,6 +449,7 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
         background,
         border: "1px solid #cbd5e1",
         display: "inline-block",
+        flexShrink: 0,
       }}
     />
   );
@@ -456,11 +458,12 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
 function shuffleTickets(tickets: TicketSelection[]) {
   const shuffled = tickets.slice();
 
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const temp = shuffled[i];
-    shuffled[i] = shuffled[j];
-    shuffled[j] = temp;
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const current = shuffled[index];
+
+    shuffled[index] = shuffled[swapIndex];
+    shuffled[swapIndex] = current;
   }
 
   return shuffled;
@@ -482,7 +485,6 @@ export default function PublicRafflePage({ slug }: Props) {
   const [reservationMessage, setReservationMessage] = useState("");
   const [adminReturn, setAdminReturn] = useState("");
   const [showAllPrizes, setShowAllPrizes] = useState(false);
-  const [showPostal, setShowPostal] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -498,21 +500,32 @@ export default function PublicRafflePage({ slug }: Props) {
       try {
         setLoading(true);
         setError("");
+        setReservationMessage("");
 
-        const res = await fetch("/api/raffles/" + encodeURIComponent(slug));
-        const data = await res.json();
+        const response = await fetch(
+          "/api/raffles/" + encodeURIComponent(slug),
+        );
 
-        if (!res.ok) throw new Error(data?.error || "Failed");
+        const parsed = await response.json();
+
+        if (!response.ok) {
+          throw new Error(parsed?.error || "Failed to load raffle");
+        }
+
+        const safe = toSafeRaffle(parsed?.raffle);
 
         if (!cancelled) {
-          const safe = toSafeRaffle(data.raffle);
           setRaffle(safe);
           setSelectedColour(safe.colours[0]?.name ?? "");
         }
-      } catch (err: any) {
-        if (!cancelled) setError(err.message);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load raffle");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -522,48 +535,84 @@ export default function PublicRafflePage({ slug }: Props) {
       cancelled = true;
     };
   }, [slug]);
-
-  const availability = useMemo(() => {
+    const availability = useMemo(() => {
     const sold = new Set<string>();
     const reserved = new Set<string>();
 
     if (!raffle) return { sold, reserved };
 
-    for (const t of raffle.soldTickets) {
-      sold.add(makeTicketKey(t.colour, t.number));
+    for (const ticket of raffle.soldTickets) {
+      sold.add(makeTicketKey(ticket.colour, ticket.number));
     }
 
-    for (const t of raffle.reservedTickets) {
-      reserved.add(makeTicketKey(t.colour, t.number));
+    for (const ticket of raffle.reservedTickets) {
+      reserved.add(makeTicketKey(ticket.colour, ticket.number));
     }
 
     return { sold, reserved };
   }, [raffle]);
 
+  const basketKeys = useMemo(
+    () =>
+      new Set(
+        basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number)),
+      ),
+    [basket],
+  );
+
   const visibleNumbers = useMemo(() => {
     if (!raffle) return [];
 
-    const arr: number[] = [];
-    for (let i = raffle.startNumber; i <= raffle.endNumber; i++) {
-      arr.push(i);
+    if (
+      !Number.isFinite(raffle.startNumber) ||
+      !Number.isFinite(raffle.endNumber)
+    ) {
+      return [];
     }
-    return arr;
+
+    if (raffle.endNumber < raffle.startNumber) return [];
+
+    const numbers: number[] = [];
+
+    for (
+      let number = raffle.startNumber;
+      number <= raffle.endNumber;
+      number += 1
+    ) {
+      numbers.push(number);
+    }
+
+    return numbers;
   }, [raffle]);
 
   const isPublished = raffle?.status === "published";
-  const canReserve = Boolean(raffle && isPublished);
-
-  const pricing = useMemo(() => {
-    if (!raffle) return { quantity: 0, total: 0, standardTotal: 0, savings: 0, appliedOffers: [] };
-    return calculateBestPrice(basket.length, raffle.ticketPrice, raffle.offers);
-  }, [basket.length, raffle]);
-    const basketKeys = useMemo(() => {
-    return new Set(basket.map((ticket) => makeTicketKey(ticket.colour, ticket.number)));
-  }, [basket]);
-
   const isClosed = raffle?.status === "closed";
   const isDrawn = raffle?.status === "drawn";
   const isDraft = raffle?.status === "draft";
+  const canReserve = Boolean(raffle && isPublished);
+
+  const pricing = useMemo(() => {
+    if (!raffle) {
+      return {
+        quantity: 0,
+        total: 0,
+        standardTotal: 0,
+        savings: 0,
+        appliedOffers: [] as Array<{
+          label: string;
+          quantity: number;
+          price: number;
+          times: number;
+        }>,
+      };
+    }
+
+    return calculateBestPrice(
+      basket.length,
+      raffle.ticketPrice,
+      isPublished ? raffle.offers : [],
+    );
+  }, [basket.length, raffle, isPublished]);
 
   const estimatedFee =
     pricing.total > 0 ? Math.round(pricing.total * 0.1 * 100) / 100 : 0;
@@ -751,30 +800,30 @@ export default function PublicRafflePage({ slug }: Props) {
         colour: ticket.colour,
       }));
 
-      const reserveUrl =
-        "/api/raffles/" + encodeURIComponent(raffle.slug) + "/reserve";
-
-      const reserveResponse = await fetch(reserveUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantSlug: raffle.tenantSlug,
-          raffleId: raffle.id,
-          raffleSlug: raffle.slug,
-          slug: raffle.slug,
-          buyerName: buyerName.trim(),
-          buyerEmail: buyerEmail.trim(),
-          customerName: buyerName.trim(),
-          customerEmail: buyerEmail.trim(),
-          quantity: basket.length,
-          selectedTickets,
-          tickets: selectedTickets,
-          entryAnswer: entryAnswer.trim(),
-          legalAnswer: entryAnswer.trim(),
-          termsAccepted,
-          coverFees,
-        }),
-      });
+      const reserveResponse = await fetch(
+        "/api/raffles/" + encodeURIComponent(raffle.slug) + "/reserve",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantSlug: raffle.tenantSlug,
+            raffleId: raffle.id,
+            raffleSlug: raffle.slug,
+            slug: raffle.slug,
+            buyerName: buyerName.trim(),
+            buyerEmail: buyerEmail.trim(),
+            customerName: buyerName.trim(),
+            customerEmail: buyerEmail.trim(),
+            quantity: basket.length,
+            selectedTickets,
+            tickets: selectedTickets,
+            entryAnswer: entryAnswer.trim(),
+            legalAnswer: entryAnswer.trim(),
+            termsAccepted,
+            coverFees,
+          }),
+        },
+      );
 
       const reserveText = await reserveResponse.text();
 
@@ -871,8 +920,7 @@ export default function PublicRafflePage({ slug }: Props) {
       setSaving(false);
     }
   }
-
-  if (!slug) return <div style={styles.wrap}>Loading…</div>;
+    if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
   if (!raffle) return <div style={styles.wrap}>Raffle not found.</div>;
@@ -933,49 +981,7 @@ export default function PublicRafflePage({ slug }: Props) {
           laws.
         </div>
 
-        {raffle.freeEntry.address ? (
-          <details style={styles.freeEntryBox}>
-            <summary style={styles.freeEntrySummary}>
-              No purchase necessary — free postal entry available
-            </summary>
-
-            <div style={styles.freeEntryContent}>
-              <p style={styles.freeEntryText}>
-                To enter for free by post, send your full name, email address,
-                phone number, raffle/campaign name, answer to the entry
-                question, and preferred ticket number and colour if applicable
-                to:
-              </p>
-
-              <pre style={styles.freeEntryAddress}>
-                {raffle.freeEntry.address}
-              </pre>
-
-              {raffle.freeEntry.instructions ? (
-                <p style={styles.freeEntryText}>
-                  {raffle.freeEntry.instructions}
-                </p>
-              ) : null}
-
-              {raffle.freeEntry.closesAt ? (
-                <p style={styles.freeEntryText}>
-                  Postal entries must be received before{" "}
-                  <strong>{formatDateTime(raffle.freeEntry.closesAt)}</strong>.
-                </p>
-              ) : null}
-
-              <p style={styles.freeEntryText}>
-                Your email address is required so the organiser can contact you
-                if you win and include your entry in the automatic or live draw.
-                One entry per postcard/envelope. Multiple postal entries are
-                permitted by sending multiple postcards/envelopes. No purchase
-                is necessary. Paid and postal entries have equal chance of
-                winning.
-              </p>
-            </div>
-          </details>
-        ) : null}
-                {raffle.prizes.length > 0 ? (
+        {raffle.prizes.length > 0 ? (
           <section style={styles.prizesBox}>
             <div style={styles.prizesTitle}>Prizes</div>
 
@@ -1363,6 +1369,49 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
           ) : null}
 
+          {raffle.freeEntry.address ? (
+            <details style={styles.freeEntryBox}>
+              <summary style={styles.freeEntrySummary}>
+                No purchase necessary — free postal entry available
+              </summary>
+
+              <div style={styles.freeEntryContent}>
+                <p style={styles.freeEntryText}>
+                  To enter for free by post, send your full name, email address,
+                  phone number, raffle/campaign name, answer to the entry
+                  question, and preferred ticket number and colour if applicable
+                  to:
+                </p>
+
+                <pre style={styles.freeEntryAddress}>
+                  {raffle.freeEntry.address}
+                </pre>
+
+                {raffle.freeEntry.instructions ? (
+                  <p style={styles.freeEntryText}>
+                    {raffle.freeEntry.instructions}
+                  </p>
+                ) : null}
+
+                {raffle.freeEntry.closesAt ? (
+                  <p style={styles.freeEntryText}>
+                    Postal entries must be received before{" "}
+                    <strong>{formatDateTime(raffle.freeEntry.closesAt)}</strong>.
+                  </p>
+                ) : null}
+
+                <p style={styles.freeEntryText}>
+                  Your email address is required so the organiser can contact you
+                  if you win and include your entry in the automatic or live draw.
+                  One entry per postcard/envelope. Multiple postal entries are
+                  permitted by sending multiple postcards/envelopes. No purchase
+                  is necessary. Paid and postal entries have equal chance of
+                  winning.
+                </p>
+              </div>
+            </details>
+          ) : null}
+
           <label style={styles.termsBox}>
             <input
               type="checkbox"
@@ -1507,16 +1556,16 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
   },
   freeEntryBox: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
+    marginTop: 4,
+    padding: 12,
+    borderRadius: 10,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
     color: "#1e3a8a",
   },
   freeEntrySummary: {
     cursor: "pointer",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 900,
     color: "#1e3a8a",
     listStyle: "none",
