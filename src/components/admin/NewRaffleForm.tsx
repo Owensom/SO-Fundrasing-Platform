@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type Props = {
   tenantSlug: string;
@@ -44,6 +45,14 @@ const IMAGE_POSITIONS = [
   { value: "left", label: "Left" },
   { value: "right", label: "Right" },
 ];
+
+function safeId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function slugify(value: string) {
   return value
@@ -105,6 +114,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   ]);
   const [customColour, setCustomColour] = useState("");
 
+  const [questionText, setQuestionText] = useState("");
+  const [questionAnswer, setQuestionAnswer] = useState("");
+
   const [offers, setOffers] = useState<OfferRow[]>([
     makeOffer("offer-1", "3 for 12", "12", "3"),
     makeOffer("offer-2", "5 for 18", "18", "5"),
@@ -120,6 +132,17 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     }
   }, [title, slugEdited]);
 
+  const numbersPerColour = useMemo(() => {
+    const start = toInt(startNumber, 1);
+    const end = toInt(endNumber, 1);
+
+    return end >= start ? end - start + 1 : 0;
+  }, [startNumber, endNumber]);
+
+  const totalTickets = useMemo(() => {
+    return numbersPerColour * selectedColours.length;
+  }, [numbersPerColour, selectedColours.length]);
+
   const coloursValue = useMemo(
     () => selectedColours.join(","),
     [selectedColours],
@@ -132,6 +155,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         label: offer.label.trim(),
         price: Number(offer.price),
         quantity: Number(offer.quantity),
+        tickets: Number(offer.quantity),
         is_active: Boolean(offer.is_active),
         sort_order: index,
       }))
@@ -151,6 +175,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     const clean = prizes
       .map((prize, index) => {
         const position = Number(prize.position);
+        const title = prize.title.trim();
 
         return {
           id: prize.id,
@@ -158,8 +183,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             Number.isFinite(position) && position > 0
               ? Math.floor(position)
               : index + 1,
-          title: prize.title.trim(),
-          name: prize.title.trim(),
+          title,
+          name: title,
           description: prize.description.trim(),
           isPublic: Boolean(prize.is_public),
           is_public: Boolean(prize.is_public),
@@ -172,15 +197,14 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     return JSON.stringify(clean);
   }, [prizes]);
 
-  const numbersPerColour = useMemo(() => {
-    const start = toInt(startNumber, 1);
-    const end = toInt(endNumber, 1);
-    return end >= start ? end - start + 1 : 0;
-  }, [startNumber, endNumber]);
+  const questionValue = useMemo(() => {
+    const text = questionText.trim();
+    const answer = questionAnswer.trim();
 
-  const totalTickets = useMemo(() => {
-    return numbersPerColour * selectedColours.length;
-  }, [numbersPerColour, selectedColours.length]);
+    if (!text || !answer) return "";
+
+    return JSON.stringify({ text, answer });
+  }, [questionText, questionAnswer]);
 
   const validOffersCount = useMemo(() => {
     try {
@@ -221,10 +245,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   }
 
   function addOffer() {
-    setOffers((current) => [
-      ...current,
-      makeOffer(`offer-${crypto.randomUUID()}`),
-    ]);
+    setOffers((current) => [...current, makeOffer(safeId("offer"))]);
   }
 
   function removeOffer(id: string) {
@@ -242,7 +263,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   function addPrize() {
     setPrizes((current) => [
       ...current,
-      makePrize(`prize-${crypto.randomUUID()}`, String(current.length + 1)),
+      makePrize(safeId("prize"), String(current.length + 1)),
     ]);
   }
 
@@ -268,7 +289,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
       const text = await response.text();
 
-      let parsed: any = null;
+      let parsed: { ok?: boolean; url?: string; error?: string } | null = null;
+
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -296,19 +318,48 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
       <input type="hidden" name="prizes" value={prizesValue} />
+      <input type="hidden" name="question" value={questionValue} />
       <input type="hidden" name="total_tickets" value={String(totalTickets)} />
 
       <section style={styles.hero}>
-        <div>
+        <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Create raffle</div>
-          <h2 style={styles.heroTitle}>Build a new raffle</h2>
-          <p style={styles.heroText}>
-            Set the public details, ticket range, colours, offers and prizes.
-            You can save as draft and publish when ready.
+
+          <div style={styles.heroTitleRow}>
+            <h1 style={styles.heroTitle}>
+              {title.trim() ? title : "Build a new raffle"}
+            </h1>
+
+            <div style={styles.statusPill}>Draft</div>
+          </div>
+
+          <p style={styles.heroSlug}>
+            /r/{slug.trim() ? slug : "raffle-slug"}
+          </p>
+
+          <p style={styles.heroDescription}>
+            Set up the public details, raffle image, pricing, ticket colours,
+            offers, prizes and optional legal entry question.
           </p>
         </div>
 
-        <div style={styles.tenantPill}>Tenant: {tenantSlug}</div>
+        <div style={styles.heroImageWrap}>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt="Raffle preview"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: imagePosition,
+                display: "block",
+              }}
+            />
+          ) : (
+            <div style={styles.heroImageEmpty}>🎟️</div>
+          )}
+        </div>
       </section>
 
       <section style={styles.summaryGrid}>
@@ -319,112 +370,119 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         <SummaryCard label="Public prizes" value={publicPrizesCount} />
       </section>
 
-      <FormSection
-        title="Public details"
-        description="These details appear on the raffle page buyers see."
-      >
-        <div style={styles.twoColumn}>
-          <Field label="Title">
-            <input
-              name="title"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              style={styles.input}
-              placeholder="Spring Cash Raffle"
-            />
-          </Field>
-
-          <Field label="Slug">
-            <input
-              name="slug"
-              required
-              value={slug}
-              onChange={(e) => {
-                setSlugEdited(true);
-                setSlug(slugify(e.target.value));
-              }}
-              style={styles.input}
-              placeholder="spring-cash-raffle"
-            />
-          </Field>
+      <section style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>Create raffle</h2>
+            <p style={styles.sectionDescription}>
+              Add the same details you can later edit from the raffle editor.
+            </p>
+          </div>
         </div>
 
-        <Field label="Description">
-          <textarea
-            name="description"
-            rows={4}
-            style={styles.textarea}
-            placeholder="Describe the raffle..."
-          />
-        </Field>
+        <div style={styles.formInner}>
+          <div style={styles.twoColumn}>
+            <Field label="Title">
+              <input
+                name="title"
+                required
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                style={styles.input}
+                placeholder="Spring Cash Raffle"
+              />
+            </Field>
 
-        <div style={styles.twoColumn}>
-          <Field label="Draw date">
-            <input
-              name="draw_at"
-              type="datetime-local"
-              value={drawAt}
-              onChange={(e) => setDrawAt(e.target.value)}
-              style={styles.input}
-            />
-            <div style={styles.helpText}>
-              Optional. This will be shown to buyers and in admin.
-            </div>
-          </Field>
-
-          <Field label="Status">
-            <select name="status" defaultValue="draft" style={styles.input}>
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="closed">Closed</option>
-            </select>
-          </Field>
-        </div>
-      </FormSection>
-
-      <FormSection
-        title="Image"
-        description="Upload a raffle image or paste an image URL."
-      >
-        <div style={styles.imageLayout}>
-          <div style={styles.imageControls}>
-            <div style={styles.uploadRow}>
-              <label
-                style={{
-                  ...styles.uploadButton,
-                  cursor: uploading ? "not-allowed" : "pointer",
-                  opacity: uploading ? 0.7 : 1,
+            <Field label="Slug">
+              <input
+                name="slug"
+                required
+                value={slug}
+                onChange={(event) => {
+                  setSlugEdited(true);
+                  setSlug(slugify(event.target.value));
                 }}
-              >
-                {uploading ? "Uploading..." : "Upload image"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={uploading}
-                  style={{ display: "none" }}
-                />
-              </label>
+                style={styles.input}
+                placeholder="spring-cash-raffle"
+              />
+            </Field>
+          </div>
 
+          <Field label="Description">
+            <textarea
+              name="description"
+              rows={4}
+              style={styles.textarea}
+              placeholder="Describe the raffle..."
+            />
+          </Field>
+
+          <div style={styles.mediaBox}>
+            <div>
+              <h3 style={styles.subTitle}>Raffle image</h3>
+              <p style={styles.sectionDescription}>
+                Upload or paste the public image, then choose the focus position.
+              </p>
+
+              <div style={styles.uploadRow}>
+                <label
+                  style={{
+                    ...styles.uploadButton,
+                    cursor: uploading ? "not-allowed" : "pointer",
+                    opacity: uploading ? 0.7 : 1,
+                  }}
+                >
+                  {uploading ? "Uploading..." : "Upload image"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                    style={{ display: "none" }}
+                  />
+                </label>
+
+                {imageUrl ? (
+                  <span style={styles.successText}>Image uploaded</span>
+                ) : (
+                  <span style={styles.mutedSmall}>No image uploaded yet</span>
+                )}
+              </div>
+
+              <input
+                value={imageUrl}
+                onChange={(event) => setImageUrl(event.target.value)}
+                style={styles.input}
+                placeholder="Or paste image URL"
+              />
+
+              {uploadError ? <div style={styles.errorBox}>{uploadError}</div> : null}
+            </div>
+
+            <div style={styles.previewBox}>
               {imageUrl ? (
-                <span style={styles.successText}>Image uploaded</span>
+                <img
+                  src={imageUrl}
+                  alt="Raffle preview"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: imagePosition,
+                    display: "block",
+                  }}
+                />
               ) : (
-                <span style={styles.mutedText}>No image uploaded yet</span>
+                <div style={styles.emptyPreview}>🎟️</div>
               )}
             </div>
+          </div>
 
-            <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              style={styles.input}
-              placeholder="Or paste image URL"
-            />
-
+          <div style={styles.twoColumn}>
             <Field label="Image focus">
               <select
                 value={imagePosition}
-                onChange={(e) => setImagePosition(e.target.value)}
+                onChange={(event) => setImagePosition(event.target.value)}
                 style={styles.input}
               >
                 {IMAGE_POSITIONS.map((position) => (
@@ -435,350 +493,371 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               </select>
             </Field>
 
-            {uploadError ? <div style={styles.errorBox}>{uploadError}</div> : null}
-          </div>
-
-          <div style={styles.previewBox}>
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt="Raffle preview"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  objectPosition: imagePosition,
-                  display: "block",
-                }}
+            <Field label="Draw date">
+              <input
+                name="draw_at"
+                type="datetime-local"
+                value={drawAt}
+                onChange={(event) => setDrawAt(event.target.value)}
+                style={styles.input}
               />
-            ) : (
-              <div style={styles.emptyPreview}>🎟️</div>
-            )}
+            </Field>
           </div>
-        </div>
-      </FormSection>
 
-      <FormSection
-        title="Tickets and pricing"
-        description="Choose ticket price, number range and currency."
-      >
-        <div style={styles.threeColumn}>
-          <Field label="Currency">
-            <select name="currency" defaultValue="EUR" style={styles.input}>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="USD">USD</option>
-            </select>
-          </Field>
+          <div style={styles.threeColumn}>
+            <Field label="Ticket price">
+              <input
+                name="ticket_price"
+                type="number"
+                step="0.01"
+                min={0}
+                defaultValue="5"
+                style={styles.input}
+              />
+            </Field>
 
-          <Field label="Single ticket price">
-            <input
-              name="ticket_price"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue="5"
-              style={styles.input}
-            />
-          </Field>
+            <Field label="Currency">
+              <select name="currency" defaultValue="EUR" style={styles.input}>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
 
-          <Field label="Total tickets">
-            <input value={String(totalTickets)} readOnly style={styles.inputMuted} />
-          </Field>
-        </div>
+            <Field label="Status">
+              <select name="status" defaultValue="draft" style={styles.input}>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed</option>
+              </select>
+            </Field>
+          </div>
 
-        <div style={styles.twoColumn}>
-          <Field label="Start number">
-            <input
-              name="startNumber"
-              type="number"
-              min="0"
-              step="1"
-              value={startNumber}
-              onChange={(e) => setStartNumber(e.target.value)}
-              style={styles.input}
-            />
-          </Field>
+          <div style={styles.twoColumn}>
+            <Field label="Start number">
+              <input
+                name="startNumber"
+                type="number"
+                min="0"
+                step="1"
+                value={startNumber}
+                onChange={(event) => setStartNumber(event.target.value)}
+                style={styles.input}
+              />
+            </Field>
 
-          <Field label="End number">
-            <input
-              name="endNumber"
-              type="number"
-              min="0"
-              step="1"
-              value={endNumber}
-              onChange={(e) => setEndNumber(e.target.value)}
-              style={styles.input}
-            />
-          </Field>
-        </div>
-      </FormSection>
+            <Field label="End number">
+              <input
+                name="endNumber"
+                type="number"
+                min="0"
+                step="1"
+                value={endNumber}
+                onChange={(event) => setEndNumber(event.target.value)}
+                style={styles.input}
+              />
+            </Field>
+          </div>
 
-      <FormSection
-        title="Ticket colours"
-        description="Buyers can choose from these colours. You can add custom colour names too."
-      >
-        <div style={styles.colourGrid}>
-          {PRESET_COLOURS.map((colour) => {
-            const active = selectedColours.includes(colour);
-            return (
-              <button
-                key={colour}
-                type="button"
-                onClick={() => toggleColour(colour)}
-                style={{
-                  ...styles.colourButton,
-                  background: active ? "#1683f8" : "#e2e8f0",
-                  color: active ? "#fff" : "#111827",
-                }}
-              >
-                {active ? "✓ " : ""}
-                {colour}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={styles.inlineControls}>
-          <input
-            value={customColour}
-            onChange={(e) => setCustomColour(e.target.value)}
-            style={{ ...styles.input, flex: 1 }}
-            placeholder="Add custom colour"
-          />
-          <button type="button" onClick={addCustomColour} style={styles.lightButton}>
-            Add colour
-          </button>
-        </div>
-
-        <div style={styles.selectedBox}>
-          <strong>Selected:</strong>{" "}
-          {selectedColours.length ? selectedColours.join(", ") : "None"}
-        </div>
-      </FormSection>
-
-      <FormSection
-        title="Offers"
-        description="Optional bundle pricing. Example: 3 tickets for 12."
-        action={
-          <button type="button" onClick={addOffer} style={styles.lightButton}>
-            + Add offer
-          </button>
-        }
-      >
-        <div style={styles.cardList}>
-          {offers.map((offer, index) => (
-            <div key={offer.id} style={styles.offerCard}>
-              <div style={styles.rowHeader}>
-                <strong>Offer {index + 1}</strong>
-                <label style={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={offer.is_active}
-                    onChange={(e) =>
-                      updateOffer(offer.id, { is_active: e.target.checked })
-                    }
-                  />
-                  Active
-                </label>
+          <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Entry question (legal)</h3>
+                <p style={styles.sectionDescription}>
+                  Add a skill-based question for the public checkout flow.
+                </p>
               </div>
-
-              <div style={styles.threeColumn}>
-                <Field label="Label">
-                  <input
-                    value={offer.label}
-                    onChange={(e) =>
-                      updateOffer(offer.id, { label: e.target.value })
-                    }
-                    placeholder="3 for 12"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Price">
-                  <input
-                    value={offer.price}
-                    onChange={(e) =>
-                      updateOffer(offer.id, { price: e.target.value })
-                    }
-                    placeholder="12"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Tickets">
-                  <input
-                    value={offer.quantity}
-                    onChange={(e) =>
-                      updateOffer(offer.id, { quantity: e.target.value })
-                    }
-                    placeholder="3"
-                    type="number"
-                    min="1"
-                    step="1"
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => removeOffer(offer.id)}
-                disabled={offers.length <= 1}
-                style={{
-                  ...styles.dangerButton,
-                  cursor: offers.length <= 1 ? "not-allowed" : "pointer",
-                  opacity: offers.length <= 1 ? 0.55 : 1,
-                }}
-              >
-                Remove offer
-              </button>
             </div>
-          ))}
-        </div>
-      </FormSection>
 
-      <FormSection
-        title="Prize settings"
-        description="Choose which prizes are visible on the public raffle page."
-        action={
-          <button type="button" onClick={addPrize} style={styles.lightButton}>
-            + Add prize
-          </button>
-        }
-      >
-        <div style={styles.cardList}>
-          {prizes.map((prize, index) => (
-            <div key={prize.id} style={styles.prizeCard}>
-              <div style={styles.rowHeader}>
-                <strong>Prize {index + 1}</strong>
-                <label style={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={prize.is_public}
-                    onChange={(e) =>
-                      updatePrize(prize.id, { is_public: e.target.checked })
-                    }
-                  />
-                  Show publicly
-                </label>
-              </div>
-
-              <div style={styles.prizeGrid}>
-                <Field label="Position">
-                  <input
-                    value={prize.position}
-                    onChange={(e) =>
-                      updatePrize(prize.id, { position: e.target.value })
-                    }
-                    type="number"
-                    min="1"
-                    step="1"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Prize title">
-                  <input
-                    value={prize.title}
-                    onChange={(e) =>
-                      updatePrize(prize.id, { title: e.target.value })
-                    }
-                    placeholder="Prize title"
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
-
-              <Field label="Description optional">
-                <textarea
-                  value={prize.description}
-                  onChange={(e) =>
-                    updatePrize(prize.id, { description: e.target.value })
-                  }
-                  rows={2}
-                  style={styles.textarea}
+            <div style={styles.twoColumn}>
+              <Field label="Question">
+                <input
+                  value={questionText}
+                  onChange={(event) => setQuestionText(event.target.value)}
+                  placeholder="e.g. What colour is a London taxi?"
+                  style={styles.input}
                 />
               </Field>
 
-              <button
-                type="button"
-                onClick={() => removePrize(prize.id)}
-                disabled={prizes.length <= 1}
-                style={{
-                  ...styles.dangerButton,
-                  cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
-                  opacity: prizes.length <= 1 ? 0.55 : 1,
+              <Field label="Correct answer">
+                <input
+                  value={questionAnswer}
+                  onChange={(event) => setQuestionAnswer(event.target.value)}
+                  placeholder="e.g. black"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <p style={styles.helpText}>
+              The public raffle page requires this answer before checkout when a
+              question is set.
+            </p>
+          </section>
+
+          <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Ticket colours</h3>
+                <p style={styles.sectionDescription}>
+                  Preset colour buttons plus optional custom colours.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.colourGrid}>
+              {PRESET_COLOURS.map((colour) => {
+                const active = selectedColours.includes(colour);
+
+                return (
+                  <button
+                    key={colour}
+                    type="button"
+                    onClick={() => toggleColour(colour)}
+                    style={{
+                      ...styles.colourPill,
+                      background: active ? "#1683f8" : "#e2e8f0",
+                      color: active ? "#ffffff" : "#111827",
+                    }}
+                  >
+                    {active ? "✓ " : ""}
+                    {colour}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={styles.inlineControls}>
+              <input
+                value={customColour}
+                onChange={(event) => setCustomColour(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCustomColour();
+                  }
                 }}
-              >
-                Remove prize
+                style={{ ...styles.input, flex: 1 }}
+                placeholder="Gold, Silver, #00ff00"
+              />
+
+              <button type="button" onClick={addCustomColour} style={styles.lightButton}>
+                Add colour
               </button>
             </div>
-          ))}
-        </div>
-      </FormSection>
 
-      <section style={styles.submitBar}>
-        <div>
-          <strong style={{ color: "#0f172a" }}>Ready to create?</strong>
-          <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>
-            Save as draft first if you want to review before publishing.
-          </div>
-        </div>
+            <p style={styles.helpText}>
+              Selected: {selectedColours.length ? selectedColours.join(", ") : "None"}
+            </p>
+          </section>
 
-        <button type="submit" style={styles.submitButton}>
-          Create raffle
-        </button>
+          <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Offers</h3>
+                <p style={styles.sectionDescription}>
+                  Optional bundle pricing. Example: 3 tickets for 12.00.
+                </p>
+              </div>
+
+              <button type="button" onClick={addOffer} style={styles.lightButton}>
+                + Add offer
+              </button>
+            </div>
+
+            <div style={styles.offerList}>
+              {offers.map((offer, index) => (
+                <div key={offer.id} style={styles.offerRow}>
+                  <Field label="Label">
+                    <input
+                      value={offer.label}
+                      onChange={(event) =>
+                        updateOffer(offer.id, { label: event.target.value })
+                      }
+                      placeholder="3 for 12"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Number of tickets">
+                    <input
+                      value={offer.quantity}
+                      onChange={(event) =>
+                        updateOffer(offer.id, { quantity: event.target.value })
+                      }
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="3"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Total offer price">
+                    <input
+                      value={offer.price}
+                      onChange={(event) =>
+                        updateOffer(offer.id, { price: event.target.value })
+                      }
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="12.00"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <label style={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={offer.is_active}
+                      onChange={(event) =>
+                        updateOffer(offer.id, {
+                          is_active: event.target.checked,
+                        })
+                      }
+                    />
+                    Use
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => removeOffer(offer.id)}
+                    disabled={offers.length <= 1}
+                    style={{
+                      ...styles.dangerButton,
+                      cursor: offers.length <= 1 ? "not-allowed" : "pointer",
+                      opacity: offers.length <= 1 ? 0.55 : 1,
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p style={styles.helpText}>
+              Leave unused rows blank. Save the raffle to apply changes.
+            </p>
+          </section>
+
+          <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Prize settings</h3>
+                <p style={styles.sectionDescription}>
+                  Choose which prizes are visible on the public raffle page.
+                </p>
+              </div>
+
+              <button type="button" onClick={addPrize} style={styles.lightButton}>
+                + Add prize
+              </button>
+            </div>
+
+            <div style={styles.prizeList}>
+              {prizes.map((prize, index) => (
+                <div key={prize.id} style={styles.prizeRow}>
+                  <div style={styles.rowHeader}>
+                    <strong>Prize {index + 1}</strong>
+
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={prize.is_public}
+                        onChange={(event) =>
+                          updatePrize(prize.id, {
+                            is_public: event.target.checked,
+                          })
+                        }
+                      />
+                      Show publicly
+                    </label>
+                  </div>
+
+                  <div style={styles.prizeGrid}>
+                    <Field label="Position">
+                      <input
+                        value={prize.position}
+                        onChange={(event) =>
+                          updatePrize(prize.id, {
+                            position: event.target.value,
+                          })
+                        }
+                        type="number"
+                        min="1"
+                        step="1"
+                        style={styles.input}
+                      />
+                    </Field>
+
+                    <Field label="Prize title">
+                      <input
+                        value={prize.title}
+                        onChange={(event) =>
+                          updatePrize(prize.id, { title: event.target.value })
+                        }
+                        placeholder="Prize title"
+                        style={styles.input}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Description optional">
+                    <textarea
+                      value={prize.description}
+                      onChange={(event) =>
+                        updatePrize(prize.id, {
+                          description: event.target.value,
+                        })
+                      }
+                      rows={2}
+                      style={styles.textarea}
+                    />
+                  </Field>
+
+                  <button
+                    type="button"
+                    onClick={() => removePrize(prize.id)}
+                    disabled={prizes.length <= 1}
+                    style={{
+                      ...styles.dangerButton,
+                      cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                      opacity: prizes.length <= 1 ? 0.55 : 1,
+                    }}
+                  >
+                    Remove prize
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={styles.submitBar}>
+            <div>
+              <strong style={{ color: "#0f172a" }}>Create raffle</strong>
+              <div style={styles.mutedSmall}>
+                Save as draft first if you want to review before publishing.
+              </div>
+            </div>
+
+            <button type="submit" style={styles.submitButton}>
+              Create raffle
+            </button>
+          </section>
+        </div>
       </section>
     </form>
   );
 }
 
-function FormSection({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section style={styles.section}>
-      <div style={styles.sectionHeader}>
-        <div>
-          <h3 style={styles.sectionTitle}>{title}</h3>
-          {description ? <p style={styles.sectionDescription}>{description}</p> : null}
-        </div>
-        {action}
-      </div>
-
-      <div style={styles.sectionBody}>{children}</div>
-    </section>
-  );
-}
-
-function Field({
+function SummaryCard({
   label,
-  children,
+  value,
 }: {
   label: string;
-  children: React.ReactNode;
+  value: ReactNode;
 }) {
-  return (
-    <label style={styles.field}>
-      <span style={styles.label}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
     <div style={styles.summaryCard}>
       <div style={styles.summaryLabel}>{label}</div>
@@ -787,23 +866,34 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
-    gap: 18,
-    marginTop: 24,
-    maxWidth: 1040,
+    gap: 16,
+    marginTop: 0,
   },
   hero: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 14,
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 260px",
+    gap: 18,
+    alignItems: "stretch",
     padding: 22,
     borderRadius: 24,
     background: "#0f172a",
     color: "#ffffff",
+    marginBottom: 0,
+  },
+  heroContent: {
+    minWidth: 0,
   },
   eyebrow: {
     display: "inline-flex",
@@ -816,29 +906,62 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 10,
   },
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
   heroTitle: {
     margin: 0,
-    fontSize: 30,
-    letterSpacing: "-0.04em",
+    fontSize: 34,
     lineHeight: 1.08,
+    letterSpacing: "-0.04em",
+    wordBreak: "break-word",
   },
-  heroText: {
-    margin: "10px 0 0",
-    color: "#cbd5e1",
-    maxWidth: 640,
-    lineHeight: 1.55,
-  },
-  tenantPill: {
-    padding: "8px 11px",
+  statusPill: {
+    padding: "7px 11px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#e2e8f0",
+    border: "1px solid #e2e8f0",
     fontSize: 13,
-    fontWeight: 800,
+    textTransform: "capitalize",
+    fontWeight: 900,
+    background: "#f8fafc",
+    color: "#475569",
+  },
+  heroSlug: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: 700,
+    wordBreak: "break-word",
+  },
+  heroDescription: {
+    margin: "12px 0 0",
+    color: "#e2e8f0",
+    lineHeight: 1.55,
+    maxWidth: 720,
+  },
+  heroImageWrap: {
+    borderRadius: 18,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    minHeight: 180,
+  },
+  heroImageEmpty: {
+    height: "100%",
+    minHeight: 180,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 46,
+    color: "#94a3b8",
   },
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 12,
   },
   summaryCard: {
@@ -855,9 +978,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   summaryValue: {
     color: "#0f172a",
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: 900,
-    marginTop: 4,
+    marginTop: 5,
+    wordBreak: "break-word",
   },
   section: {
     padding: 18,
@@ -869,15 +993,15 @@ const styles: Record<string, React.CSSProperties> = {
   sectionHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
     gap: 12,
+    alignItems: "flex-start",
     flexWrap: "wrap",
     marginBottom: 16,
   },
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 21,
+    fontSize: 22,
     letterSpacing: "-0.02em",
   },
   sectionDescription: {
@@ -886,9 +1010,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
   },
-  sectionBody: {
+  formInner: {
     display: "grid",
     gap: 14,
+  },
+  twoColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+  },
+  threeColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 12,
   },
   field: {
     display: "grid",
@@ -911,18 +1045,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15,
     boxSizing: "border-box",
   },
-  inputMuted: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-    color: "#0f172a",
-    fontSize: 15,
-    fontWeight: 900,
-    boxSizing: "border-box",
-  },
   textarea: {
     width: "100%",
     padding: "10px 12px",
@@ -934,36 +1056,27 @@ const styles: Record<string, React.CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
   },
-  helpText: {
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.4,
-  },
-  twoColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 12,
-  },
-  threeColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-  },
-  imageLayout: {
+  mediaBox: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
     gap: 16,
-    alignItems: "start",
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
   },
-  imageControls: {
-    display: "grid",
-    gap: 12,
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
   },
   uploadRow: {
     display: "flex",
     gap: 12,
     alignItems: "center",
     flexWrap: "wrap",
+    margin: "12px 0",
   },
   uploadButton: {
     display: "inline-flex",
@@ -978,15 +1091,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     fontSize: 14,
   },
-  mutedText: {
-    color: "#64748b",
-    fontSize: 14,
-  },
   previewBox: {
     height: 220,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
-    background: "#f8fafc",
+    background: "#ffffff",
     overflow: "hidden",
   },
   emptyPreview: {
@@ -995,27 +1104,36 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     color: "#94a3b8",
-    fontSize: 44,
+    fontSize: 42,
   },
-  errorBox: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-    fontWeight: 700,
+  innerPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  innerHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
   colourGrid: {
     display: "flex",
     flexWrap: "wrap",
     gap: 10,
   },
-  colourButton: {
-    border: "none",
-    borderRadius: 999,
+  colourPill: {
+    display: "inline-flex",
+    alignItems: "center",
     padding: "10px 14px",
+    borderRadius: 999,
     cursor: "pointer",
-    fontWeight: 800,
+    fontWeight: 900,
+    border: "none",
   },
   inlineControls: {
     display: "flex",
@@ -1030,34 +1148,52 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#0f172a",
     cursor: "pointer",
     fontWeight: 900,
+    whiteSpace: "nowrap",
   },
-  selectedBox: {
-    color: "#475569",
+  offerList: {
+    display: "grid",
+    gap: 10,
+  },
+  offerRow: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(160px, 1.1fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) auto auto",
+    gap: 10,
+    alignItems: "end",
     padding: 12,
-    borderRadius: 12,
-    background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    fontSize: 14,
+    borderRadius: 14,
+    background: "#ffffff",
   },
-  cardList: {
+  checkboxLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    fontWeight: 900,
+    color: "#334155",
+    cursor: "pointer",
+  },
+  dangerButton: {
+    width: "fit-content",
+    padding: "10px 12px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#ffffff",
+    color: "#b91c1c",
+    fontWeight: 900,
+  },
+  prizeList: {
     display: "grid",
     gap: 12,
   },
-  offerCard: {
+  prizeRow: {
     display: "grid",
     gap: 12,
     padding: 14,
     border: "1px solid #e2e8f0",
     borderRadius: 16,
-    background: "#f8fafc",
-  },
-  prizeCard: {
-    display: "grid",
-    gap: 12,
-    padding: 14,
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
-    background: "#f8fafc",
+    background: "#ffffff",
   },
   rowHeader: {
     display: "flex",
@@ -1067,27 +1203,29 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     color: "#0f172a",
   },
-  checkboxLabel: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    fontWeight: 800,
-    color: "#334155",
-    fontSize: 14,
-  },
   prizeGrid: {
     display: "grid",
     gridTemplateColumns: "110px minmax(0, 1fr)",
     gap: 12,
   },
-  dangerButton: {
-    width: "fit-content",
-    padding: "9px 12px",
-    borderRadius: 999,
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    margin: 0,
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  errorBox: {
+    padding: 12,
+    borderRadius: 12,
+    background: "#fef2f2",
     border: "1px solid #fecaca",
-    background: "#ffffff",
-    color: "#b91c1c",
-    fontWeight: 900,
+    color: "#991b1b",
+    fontWeight: 700,
+    marginTop: 12,
   },
   submitBar: {
     display: "flex",
@@ -1095,11 +1233,10 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 14,
     flexWrap: "wrap",
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   submitButton: {
     padding: "13px 20px",
