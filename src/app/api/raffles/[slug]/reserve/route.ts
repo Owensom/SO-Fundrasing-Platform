@@ -55,7 +55,16 @@ export async function POST(
     const question = (raffle.config_json as any)?.question;
 
     if (question?.text && question?.answer) {
-      const submittedAnswer = clean(body.answer);
+      const submittedAnswer = clean(
+        body.answer ??
+          body.entryAnswer ??
+          body.entry_answer ??
+          body.questionAnswer ??
+          body.question_answer ??
+          body.legalAnswer ??
+          body.legal_answer,
+      );
+
       const correctAnswer = clean(question.answer);
 
       if (!submittedAnswer || submittedAnswer !== correctAnswer) {
