@@ -102,9 +102,7 @@ export async function POST(req: NextRequest) {
 
     const tenantSlug = String((raffle as any).tenant_slug ?? "").trim();
 
-    const publicRafflePath = tenantSlug
-      ? `/c/${tenantSlug}/r/${raffle.slug}`
-      : `/r/${raffle.slug}`;
+    const publicRafflePath = tenantSlug ? `/c/${tenantSlug}` : "/";
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
