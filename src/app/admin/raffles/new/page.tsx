@@ -11,6 +11,7 @@ export default async function NewRafflePage() {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
@@ -20,12 +21,13 @@ export default async function NewRafflePage() {
   }
 
   return (
-    <main style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
-      <h1>Create raffle</h1>
-      <p>
-        Tenant: <strong>{tenantSlug}</strong>
-      </p>
-
+    <main
+      style={{
+        maxWidth: 1040,
+        margin: "40px auto",
+        padding: "0 16px 48px",
+      }}
+    >
       <NewRaffleForm tenantSlug={tenantSlug} />
     </main>
   );
