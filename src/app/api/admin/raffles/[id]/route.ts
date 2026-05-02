@@ -91,6 +91,14 @@ export async function POST(
     const status = String(formData.get("status") || "draft");
     const currency = String(formData.get("currency") || "GBP");
 
+    const freeEntry = {
+      address: String(formData.get("free_entry_address") || "").trim(),
+      instructions: String(
+        formData.get("free_entry_instructions") || "",
+      ).trim(),
+      closes_at: String(formData.get("free_entry_closes_at") || "").trim(),
+    };
+
     const preset = formData.getAll("colour_preset").map(String);
 
     const custom = String(formData.get("custom_colours") || "")
@@ -148,13 +156,18 @@ export async function POST(
       set
         config_json = jsonb_set(
           jsonb_set(
-            coalesce(config_json, '{}'::jsonb),
-            '{auto_draw_from_prize}',
-            to_jsonb($3::int),
+            jsonb_set(
+              coalesce(config_json, '{}'::jsonb),
+              '{auto_draw_from_prize}',
+              to_jsonb($3::int),
+              true
+            ),
+            '{auto_draw_to_prize}',
+            to_jsonb($4::int),
             true
           ),
-          '{auto_draw_to_prize}',
-          to_jsonb($4::int),
+          '{free_entry}',
+          $5::jsonb,
           true
         ),
         updated_at = now()
@@ -162,7 +175,13 @@ export async function POST(
         and tenant_slug = $2
       returning id
       `,
-      [params.id, tenantSlug, autoDrawFromPrize, autoDrawToPrize],
+      [
+        params.id,
+        tenantSlug,
+        autoDrawFromPrize,
+        autoDrawToPrize,
+        JSON.stringify(freeEntry),
+      ],
     );
 
     return NextResponse.redirect(
