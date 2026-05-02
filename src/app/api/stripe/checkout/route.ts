@@ -17,43 +17,21 @@ function clean(value: unknown) {
     .replace(/[.,!?;:]+$/g, "");
 }
 
-async function readBody(req: NextRequest) {
-  const contentType = req.headers.get("content-type") || "";
-
-  if (contentType.includes("application/json")) {
-    return await req.json();
-  }
-
-  const formData = await req.formData();
-
-  return {
-    raffle_id: formData.get("raffle_id"),
-    raffleId: formData.get("raffleId"),
-    quantity: formData.get("quantity"),
-    name: formData.get("name"),
-    buyerName: formData.get("buyerName"),
-    buyer_name: formData.get("buyer_name"),
-    email: formData.get("email"),
-    buyerEmail: formData.get("buyerEmail"),
-    buyer_email: formData.get("buyer_email"),
-    answer: formData.get("answer"),
-    entryAnswer: formData.get("entryAnswer"),
-    entry_answer: formData.get("entry_answer"),
-    questionAnswer: formData.get("questionAnswer"),
-    question_answer: formData.get("question_answer"),
-    legalAnswer: formData.get("legalAnswer"),
-    legal_answer: formData.get("legal_answer"),
-    reservationToken: formData.get("reservationToken"),
-    reservation_token: formData.get("reservation_token"),
-  };
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const body = await readBody(req);
+    const body = await req.json();
 
     const raffleId = String(body.raffleId ?? body.raffle_id ?? "").trim();
-    const quantity = Number(body.quantity ?? 0);
+
+    const selectedTickets = Array.isArray(body.selectedTickets)
+      ? body.selectedTickets
+      : Array.isArray(body.tickets)
+        ? body.tickets
+        : Array.isArray(body.ticketNumbers)
+          ? body.ticketNumbers
+          : [];
+
+    const quantity = selectedTickets.length;
 
     const buyerName = String(
       body.buyerName ?? body.buyer_name ?? body.name ?? "",
