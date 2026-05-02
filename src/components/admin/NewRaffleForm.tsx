@@ -45,6 +45,14 @@ const IMAGE_POSITIONS = [
   { value: "right", label: "Right" },
 ];
 
+function safeId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -105,6 +113,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   ]);
   const [customColour, setCustomColour] = useState("");
 
+  const [questionText, setQuestionText] = useState("");
+  const [questionAnswer, setQuestionAnswer] = useState("");
+
   const [offers, setOffers] = useState<OfferRow[]>([
     makeOffer("offer-1", "3 for 12", "12", "3"),
     makeOffer("offer-2", "5 for 18", "18", "5"),
@@ -132,6 +143,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         label: offer.label.trim(),
         price: Number(offer.price),
         quantity: Number(offer.quantity),
+        tickets: Number(offer.quantity),
         is_active: Boolean(offer.is_active),
         sort_order: index,
       }))
@@ -171,6 +183,18 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
     return JSON.stringify(clean);
   }, [prizes]);
+
+  const questionValue = useMemo(() => {
+    const text = questionText.trim();
+    const answer = questionAnswer.trim();
+
+    if (!text || !answer) return "";
+
+    return JSON.stringify({
+      text,
+      answer,
+    });
+  }, [questionText, questionAnswer]);
 
   const numbersPerColour = useMemo(() => {
     const start = toInt(startNumber, 1);
@@ -221,10 +245,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   }
 
   function addOffer() {
-    setOffers((current) => [
-      ...current,
-      makeOffer(`offer-${crypto.randomUUID()}`),
-    ]);
+    setOffers((current) => [...current, makeOffer(safeId("offer"))]);
   }
 
   function removeOffer(id: string) {
@@ -242,7 +263,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   function addPrize() {
     setPrizes((current) => [
       ...current,
-      makePrize(`prize-${crypto.randomUUID()}`, String(current.length + 1)),
+      makePrize(safeId("prize"), String(current.length + 1)),
     ]);
   }
 
@@ -268,7 +289,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
       const text = await response.text();
 
-      let parsed: any = null;
+      let parsed: { ok?: boolean; url?: string; error?: string } | null = null;
+
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -296,6 +318,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
       <input type="hidden" name="prizes" value={prizesValue} />
+      <input type="hidden" name="question" value={questionValue} />
       <input type="hidden" name="total_tickets" value={String(totalTickets)} />
 
       <section style={styles.hero}>
@@ -303,8 +326,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           <div style={styles.eyebrow}>Create raffle</div>
           <h2 style={styles.heroTitle}>Build a new raffle</h2>
           <p style={styles.heroText}>
-            Set the public details, ticket range, colours, offers and prizes.
-            You can save as draft and publish when ready.
+            Set the public details, ticket range, colours, offers, prizes and
+            optional legal entry question.
           </p>
         </div>
 
@@ -521,6 +544,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         <div style={styles.colourGrid}>
           {PRESET_COLOURS.map((colour) => {
             const active = selectedColours.includes(colour);
+
             return (
               <button
                 key={colour}
@@ -543,6 +567,12 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           <input
             value={customColour}
             onChange={(e) => setCustomColour(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCustomColour();
+              }
+            }}
             style={{ ...styles.input, flex: 1 }}
             placeholder="Add custom colour"
           />
@@ -718,6 +748,37 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               </button>
             </div>
           ))}
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="Legal entry question"
+        description="Optional. Add a simple question buyers must answer correctly before reserving tickets."
+      >
+        <div style={styles.twoColumn}>
+          <Field label="Question">
+            <input
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
+              style={styles.input}
+              placeholder="e.g. What colour is the sky?"
+            />
+          </Field>
+
+          <Field label="Correct answer">
+            <input
+              value={questionAnswer}
+              onChange={(e) => setQuestionAnswer(e.target.value)}
+              style={styles.input}
+              placeholder="e.g. blue"
+            />
+          </Field>
+        </div>
+
+        <div style={styles.legalNote}>
+          Leave both fields blank if this raffle does not need an entry question.
+          If one is used, buyers must answer it correctly before tickets can be
+          reserved.
         </div>
       </FormSection>
 
@@ -1038,6 +1099,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     fontSize: 14,
+  },
+  legalNote: {
+    color: "#475569",
+    padding: 12,
+    borderRadius: 12,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    fontSize: 14,
+    lineHeight: 1.45,
   },
   cardList: {
     display: "grid",
