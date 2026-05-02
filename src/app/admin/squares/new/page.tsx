@@ -4,76 +4,68 @@ import ImageUploadField from "@/components/ImageUploadField";
 
 export default function NewSquaresGamePage() {
   return (
-    <main style={pageStyle}>
-      <div style={topBarStyle}>
+    <main style={styles.page}>
+      {/* HEADER */}
+      <div style={styles.topBar}>
         <div>
-          <p style={navStyle}>
-            <Link href="/admin" style={linkStyle}>
+          <p style={styles.nav}>
+            <Link href="/admin" style={styles.link}>
               ← Dashboard
             </Link>{" "}
-            <span style={mutedStyle}>/</span>{" "}
-            <Link href="/admin/squares" style={linkStyle}>
+            <span style={styles.muted}>/</span>{" "}
+            <Link href="/admin/squares" style={styles.link}>
               Squares games
             </Link>
           </p>
 
-          <h1 style={titleStyle}>Create squares game</h1>
+          <h1 style={styles.title}>Create squares game</h1>
 
-          <p style={subtitleStyle}>
-            Set up a new squares game with image, pricing, draw date, board size
-            and prizes.
+          <p style={styles.subtitle}>
+            Set up a new squares game with image, pricing, draw date, board size and prizes.
           </p>
         </div>
       </div>
 
-      <form action="/api/admin/squares" method="post">
-        <section style={cardStyle}>
-          <div style={sectionHeaderStyle}>
+      <form action="/api/admin/squares" method="post" style={styles.form}>
+        {/* GAME DETAILS */}
+        <section style={styles.card}>
+          <div style={styles.sectionHeader}>
             <div>
-              <h2 style={sectionTitleStyle}>Game details</h2>
-              <p style={sectionTextStyle}>
+              <h2 style={styles.sectionTitle}>Game details</h2>
+              <p style={styles.sectionText}>
                 These settings control the public squares page.
               </p>
             </div>
 
-            <button type="submit" style={saveButtonStyle}>
+            <button type="submit" style={styles.primaryButton}>
               Create game
             </button>
           </div>
 
-          <div style={gridStyle}>
-            <label style={labelStyle}>
+          <div style={styles.grid}>
+            <label style={styles.label}>
               Title
-              <input
-                name="title"
-                required
-                placeholder="Summer squares"
-                style={inputStyle}
-              />
+              <input name="title" required placeholder="Summer squares" style={styles.input} />
             </label>
 
-            <label style={labelStyle}>
+            <label style={styles.label}>
               Slug
-              <input
-                name="slug"
-                placeholder="summer-squares"
-                style={inputStyle}
-              />
+              <input name="slug" placeholder="summer-squares" style={styles.input} />
             </label>
 
-            <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+            <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
               Description
               <textarea
                 name="description"
                 rows={4}
                 placeholder="Describe the game, prize and draw details."
-                style={textareaStyle}
+                style={styles.textarea}
               />
             </label>
 
-            <label style={labelStyle}>
+            <label style={styles.label}>
               Draw date
-              <input name="draw_at" type="datetime-local" style={inputStyle} />
+              <input name="draw_at" type="datetime-local" style={styles.input} />
             </label>
           </div>
 
@@ -82,14 +74,15 @@ export default function NewSquaresGamePage() {
           </div>
         </section>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Squares setup</h2>
-          <p style={sectionTextStyle}>
+        {/* SETUP */}
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>Squares setup</h2>
+          <p style={styles.sectionText}>
             Configure board size and pricing. Maximum board size is 500 squares.
           </p>
 
-          <div style={gridStyle}>
-            <label style={labelStyle}>
+          <div style={styles.grid}>
+            <label style={styles.label}>
               Number of squares
               <input
                 name="total_squares"
@@ -98,11 +91,11 @@ export default function NewSquaresGamePage() {
                 max={500}
                 defaultValue={100}
                 required
-                style={inputStyle}
+                style={styles.input}
               />
             </label>
 
-            <label style={labelStyle}>
+            <label style={styles.label}>
               Price per square
               <input
                 name="price_per_square"
@@ -111,22 +104,22 @@ export default function NewSquaresGamePage() {
                 step="0.01"
                 defaultValue="2.00"
                 required
-                style={inputStyle}
+                style={styles.input}
               />
             </label>
 
-            <label style={labelStyle}>
+            <label style={styles.label}>
               Currency
-              <select name="currency" defaultValue="GBP" style={inputStyle}>
+              <select name="currency" defaultValue="GBP" style={styles.input}>
                 <option value="GBP">GBP</option>
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>
               </select>
             </label>
 
-            <label style={labelStyle}>
+            <label style={styles.label}>
               Status
-              <select name="status" defaultValue="draft" style={inputStyle}>
+              <select name="status" defaultValue="draft" style={styles.input}>
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
                 <option value="closed">Closed</option>
@@ -135,49 +128,40 @@ export default function NewSquaresGamePage() {
           </div>
         </section>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Prizes</h2>
-          <p style={sectionTextStyle}>
-            Add one prize per row. Blank rows are ignored when saved.
-          </p>
+        {/* PRIZES */}
+        <section style={styles.card}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Prizes</h2>
+              <p style={styles.sectionText}>
+                Add prizes in order. Leave blank rows unused.
+              </p>
+            </div>
+          </div>
 
-          <div style={tableWrapStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr style={tableHeadRowStyle}>
-                  <th style={thStyle}>Prize</th>
-                  <th style={thStyle}>Description</th>
-                </tr>
-              </thead>
+          <div style={styles.prizeList}>
+            {Array.from({ length: 12 }).map((_, index) => (
+              <div key={index} style={styles.prizeRow}>
+                <input
+                  name="prize_title"
+                  placeholder={index === 0 ? "1st Prize" : `Prize ${index + 1}`}
+                  defaultValue={index === 0 ? "1st Prize" : ""}
+                  style={styles.input}
+                />
 
-              <tbody>
-                {Array.from({ length: 20 }).map((_, index) => (
-                  <tr key={index} style={trStyle}>
-                    <td style={tdStyle}>
-                      <input
-                        name="prize_title"
-                        defaultValue={index === 0 ? "1st Prize" : ""}
-                        placeholder={`Prize ${index + 1}`}
-                        style={inputStyle}
-                      />
-                    </td>
-
-                    <td style={tdStyle}>
-                      <input
-                        name="prize_description"
-                        placeholder="Optional prize description"
-                        style={inputStyle}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <input
+                  name="prize_description"
+                  placeholder="Optional description"
+                  style={styles.input}
+                />
+              </div>
+            ))}
           </div>
         </section>
 
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button type="submit" style={saveButtonStyle}>
+        {/* FOOTER */}
+        <div style={styles.footer}>
+          <button type="submit" style={styles.primaryButton}>
             Create squares game
           </button>
         </div>
@@ -186,146 +170,97 @@ export default function NewSquaresGamePage() {
   );
 }
 
-const pageStyle: CSSProperties = {
-  maxWidth: 1120,
-  margin: "40px auto",
-  padding: 24,
-  fontFamily:
-    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-};
-
-const topBarStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 20,
-  alignItems: "flex-start",
-  marginBottom: 24,
-};
-
-const navStyle: CSSProperties = {
-  margin: "0 0 10px",
-  fontWeight: 700,
-};
-
-const linkStyle: CSSProperties = {
-  color: "#2563eb",
-  textDecoration: "none",
-};
-
-const titleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 36,
-  lineHeight: 1.1,
-  color: "#0f172a",
-};
-
-const subtitleStyle: CSSProperties = {
-  marginTop: 10,
-  color: "#64748b",
-  maxWidth: 680,
-};
-
-const cardStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 18,
-  padding: 22,
-  background: "#ffffff",
-  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
-  marginBottom: 18,
-};
-
-const sectionHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
-  marginBottom: 18,
-};
-
-const sectionTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 22,
-  color: "#0f172a",
-};
-
-const sectionTextStyle: CSSProperties = {
-  marginTop: 6,
-  color: "#64748b",
-};
-
-const gridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 16,
-};
-
-const labelStyle: CSSProperties = {
-  display: "grid",
-  gap: 7,
-  fontWeight: 900,
-  color: "#0f172a",
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid #cbd5e1",
-  borderRadius: 12,
-  padding: "11px 12px",
-  fontSize: 15,
-};
-
-const textareaStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid #cbd5e1",
-  borderRadius: 12,
-  padding: "11px 12px",
-  fontSize: 15,
-};
-
-const saveButtonStyle: CSSProperties = {
-  border: "1px solid #111827",
-  borderRadius: 12,
-  padding: "12px 18px",
-  background: "#111827",
-  color: "#ffffff",
-  fontWeight: 950,
-  cursor: "pointer",
-};
-
-const tableWrapStyle: CSSProperties = {
-  overflowX: "auto",
-  border: "1px solid #e5e7eb",
-  borderRadius: 14,
-};
-
-const tableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const tableHeadRowStyle: CSSProperties = {
-  background: "#f8fafc",
-};
-
-const thStyle: CSSProperties = {
-  textAlign: "left",
-  padding: 12,
-  color: "#475569",
-  fontSize: 13,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const trStyle: CSSProperties = {
-  borderTop: "1px solid #e5e7eb",
-};
-
-const tdStyle: CSSProperties = {
-  padding: 12,
-  verticalAlign: "top",
-};
-
-const mutedStyle: CSSProperties = {
-  color: "#64748b",
+const styles: Record<string, CSSProperties> = {
+  page: {
+    maxWidth: 1040,
+    margin: "40px auto",
+    padding: 20,
+  },
+  form: {
+    display: "grid",
+    gap: 18,
+  },
+  topBar: {
+    marginBottom: 24,
+  },
+  nav: {
+    fontWeight: 700,
+    marginBottom: 8,
+  },
+  link: {
+    color: "#2563eb",
+    textDecoration: "none",
+  },
+  muted: {
+    color: "#64748b",
+  },
+  title: {
+    fontSize: 32,
+    margin: 0,
+  },
+  subtitle: {
+    marginTop: 8,
+    color: "#64748b",
+  },
+  card: {
+    padding: 20,
+    borderRadius: 20,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: 20,
+  },
+  sectionText: {
+    color: "#64748b",
+    fontSize: 14,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
+  },
+  label: {
+    display: "grid",
+    gap: 6,
+    fontWeight: 800,
+  },
+  input: {
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+  },
+  textarea: {
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+  },
+  primaryButton: {
+    background: "#1683f8",
+    color: "#fff",
+    border: "none",
+    borderRadius: 999,
+    padding: "12px 18px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  prizeList: {
+    display: "grid",
+    gap: 10,
+  },
+  prizeRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+  footer: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
 };
