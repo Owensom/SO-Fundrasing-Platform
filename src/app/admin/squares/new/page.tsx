@@ -6,13 +6,9 @@ export default function NewSquaresGamePage() {
   return (
     <main style={styles.page}>
       <p style={styles.nav}>
-        <Link href="/admin" style={styles.link}>
-          ← Dashboard
-        </Link>{" "}
+        <Link href="/admin" style={styles.link}>← Dashboard</Link>{" "}
         <span style={styles.muted}>/</span>{" "}
-        <Link href="/admin/squares" style={styles.link}>
-          Squares games
-        </Link>
+        <Link href="/admin/squares" style={styles.link}>Squares games</Link>
       </p>
 
       <section style={styles.hero}>
@@ -23,7 +19,6 @@ export default function NewSquaresGamePage() {
             Set the public details, board size, pricing, draw date, image and prizes.
           </p>
         </div>
-
         <div style={styles.tenantPill}>Squares</div>
       </section>
 
@@ -38,28 +33,15 @@ export default function NewSquaresGamePage() {
         <FormSection
           title="Game details"
           description="These details appear on the public squares page."
-          action={
-            <button type="submit" style={styles.submitButton}>
-              Create game
-            </button>
-          }
+          action={<button type="submit" style={styles.submitButton}>Create game</button>}
         >
           <div style={styles.twoColumn}>
             <Field label="Title">
-              <input
-                name="title"
-                required
-                placeholder="Summer squares"
-                style={styles.input}
-              />
+              <input name="title" required placeholder="Summer squares" style={styles.input} />
             </Field>
 
             <Field label="Slug">
-              <input
-                name="slug"
-                placeholder="summer-squares"
-                style={styles.input}
-              />
+              <input name="slug" placeholder="summer-squares" style={styles.input} />
             </Field>
           </div>
 
@@ -74,11 +56,11 @@ export default function NewSquaresGamePage() {
 
           <div style={styles.twoColumn}>
             <Field label="Draw date">
-              <input name="draw_at" type="datetime-local" style={styles.input} />
+              <input name="draw_at" type="datetime-local" style={styles.dateInput} />
             </Field>
 
             <Field label="Status">
-              <select name="status" defaultValue="draft" style={styles.input}>
+              <select name="status" defaultValue="draft" style={styles.select}>
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
                 <option value="closed">Closed</option>
@@ -122,7 +104,7 @@ export default function NewSquaresGamePage() {
           </div>
 
           <Field label="Currency">
-            <select name="currency" defaultValue="GBP" style={styles.input}>
+            <select name="currency" defaultValue="GBP" style={styles.select}>
               <option value="GBP">GBP</option>
               <option value="EUR">EUR</option>
               <option value="USD">USD</option>
@@ -143,7 +125,6 @@ export default function NewSquaresGamePage() {
                   placeholder={`Prize ${index + 1}`}
                   style={styles.input}
                 />
-
                 <input
                   name="prize_description"
                   placeholder="Optional prize description"
@@ -191,19 +172,12 @@ function FormSection({
         </div>
         {action}
       </div>
-
       <div style={styles.sectionBody}>{children}</div>
     </section>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
@@ -221,28 +195,26 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+const controlBase: CSSProperties = {
+  width: "100%",
+  height: 48,
+  minHeight: 48,
+  padding: "0 12px",
+  borderRadius: 12,
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontSize: 15,
+  lineHeight: "48px",
+  boxSizing: "border-box",
+};
+
 const styles: Record<string, CSSProperties> = {
-  page: {
-    maxWidth: 1040,
-    margin: "40px auto",
-    padding: "0 16px 48px",
-  },
-  nav: {
-    margin: "0 0 18px",
-    fontWeight: 800,
-  },
-  link: {
-    color: "#2563eb",
-    textDecoration: "none",
-  },
-  muted: {
-    color: "#64748b",
-  },
-  form: {
-    display: "grid",
-    gap: 18,
-    marginTop: 18,
-  },
+  page: { maxWidth: 1040, margin: "40px auto", padding: "0 16px 48px" },
+  nav: { margin: "0 0 18px", fontWeight: 800 },
+  link: { color: "#2563eb", textDecoration: "none" },
+  muted: { color: "#64748b" },
+  form: { display: "grid", gap: 18, marginTop: 18 },
   hero: {
     display: "flex",
     justifyContent: "space-between",
@@ -265,18 +237,8 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 10,
   },
-  heroTitle: {
-    margin: 0,
-    fontSize: 30,
-    letterSpacing: "-0.04em",
-    lineHeight: 1.08,
-  },
-  heroText: {
-    margin: "10px 0 0",
-    color: "#cbd5e1",
-    maxWidth: 640,
-    lineHeight: 1.55,
-  },
+  heroTitle: { margin: 0, fontSize: 30, letterSpacing: "-0.04em", lineHeight: 1.08 },
+  heroText: { margin: "10px 0 0", color: "#cbd5e1", maxWidth: 640, lineHeight: 1.55 },
   tenantPill: {
     padding: "8px 11px",
     borderRadius: 999,
@@ -298,17 +260,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 26,
-    fontWeight: 900,
-    marginTop: 4,
-  },
+  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: 900 },
+  summaryValue: { color: "#0f172a", fontSize: 26, fontWeight: 900, marginTop: 4 },
   section: {
     padding: 18,
     borderRadius: 22,
@@ -324,50 +277,30 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 16,
   },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 21,
-    letterSpacing: "-0.02em",
-  },
-  sectionDescription: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  sectionBody: {
-    display: "grid",
-    gap: 14,
-  },
+  sectionTitle: { margin: 0, color: "#0f172a", fontSize: 21, letterSpacing: "-0.02em" },
+  sectionDescription: { margin: "5px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.45 },
+  sectionBody: { display: "grid", gap: 14 },
   twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: 12,
     alignItems: "start",
   },
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-    alignContent: "start",
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
+  field: { display: "grid", gap: 6, minWidth: 0, alignContent: "start" },
+  label: { color: "#334155", fontSize: 13, fontWeight: 900 },
+  input: controlBase,
+  dateInput: {
+    ...controlBase,
+    textAlign: "left",
+    WebkitAppearance: "none",
+    appearance: "none",
+  } as CSSProperties,
+  select: {
+    ...controlBase,
+    lineHeight: "normal",
+    WebkitAppearance: "menulist",
+    appearance: "auto",
+  } as CSSProperties,
   textarea: {
     width: "100%",
     padding: "10px 12px",
@@ -379,13 +312,8 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
   },
-  imageBlock: {
-    marginTop: 4,
-  },
-  prizeList: {
-    display: "grid",
-    gap: 10,
-  },
+  imageBlock: { marginTop: 4 },
+  prizeList: { display: "grid", gap: 10 },
   prizeRow: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
@@ -403,11 +331,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  submitHelp: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-  },
+  submitHelp: { color: "#64748b", fontSize: 13, marginTop: 3 },
   submitButton: {
     padding: "13px 20px",
     border: "none",
