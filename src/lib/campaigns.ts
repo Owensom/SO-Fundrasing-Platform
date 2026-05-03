@@ -13,8 +13,23 @@ export type Campaign = {
   created_at?: string;
 };
 
+type CampaignRow = Omit<Campaign, "type" | "imageUrl"> & {
+  image_url?: string | null;
+};
+
+function mapCampaign(
+  row: CampaignRow,
+  type: Campaign["type"],
+): Campaign {
+  return {
+    ...row,
+    type,
+    imageUrl: row.image_url ?? null,
+  };
+}
+
 export async function getCampaignBySlug(slug: string): Promise<Campaign | null> {
-  return queryOne<Campaign>(
+  const raffle = await queryOne<CampaignRow>(
     `
       select
         id,
@@ -22,105 +37,125 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
         slug,
         description,
         tenant_slug,
-        'raffle'::text as type,
         image_url,
-        image_url as "imageUrl",
-        status::text as status,
+        status,
         created_at
       from raffles
       where slug = $1
-
-      union all
-
-      select
-        id,
-        title,
-        slug,
-        description,
-        tenant_slug,
-        'squares'::text as type,
-        image_url,
-        image_url as "imageUrl",
-        status::text as status,
-        created_at
-      from squares_games
-      where slug = $1
-
-      union all
-
-      select
-        id,
-        title,
-        slug,
-        description,
-        tenant_slug,
-        'event'::text as type,
-        image_url,
-        image_url as "imageUrl",
-        status::text as status,
-        created_at
-      from events
-      where slug = $1
-
       limit 1
     `,
     [slug],
   );
+
+  if (raffle) return mapCampaign(raffle, "raffle");
+
+  const squares = await queryOne<CampaignRow>(
+    `
+      select
+        id,
+        title,
+        slug,
+        description,
+        tenant_slug,
+        image_url,
+        status,
+        created_at
+      from squares_games
+      where slug = $1
+      limit 1
+    `,
+    [slug],
+  );
+
+  if (squares) return mapCampaign(squares, "squares");
+
+  const event = await queryOne<CampaignRow>(
+    `
+      select
+        id,
+        title,
+        slug,
+        description,
+        tenant_slug,
+        image_url,
+        status,
+        created_at
+      from events
+      where slug = $1
+      limit 1
+    `,
+    [slug],
+  );
+
+  if (event) return mapCampaign(event, "event");
+
+  return null;
 }
 
 export async function getAllCampaignsForTenant(
   tenantSlug: string,
 ): Promise<Campaign[]> {
-  return query<Campaign>(
-    `
-      select
-        id,
-        title,
-        slug,
-        description,
-        tenant_slug,
-        'raffle'::text as type,
-        image_url,
-        image_url as "imageUrl",
-        status::text as status,
-        created_at
-      from raffles
-      where tenant_slug = $1
+  const [raffles, squares, events] = await Promise.all([
+    query<CampaignRow>(
+      `
+        select
+          id,
+          title,
+          slug,
+          description,
+          tenant_slug,
+          image_url,
+          status,
+          created_at
+        from raffles
+        where tenant_slug = $1
+      `,
+      [tenantSlug],
+    ),
 
-      union all
+    query<CampaignRow>(
+      `
+        select
+          id,
+          title,
+          slug,
+          description,
+          tenant_slug,
+          image_url,
+          status,
+          created_at
+        from squares_games
+        where tenant_slug = $1
+      `,
+      [tenantSlug],
+    ),
 
-      select
-        id,
-        title,
-        slug,
-        description,
-        tenant_slug,
-        'squares'::text as type,
-        image_url,
-        image_url as "imageUrl",
-        status::text as status,
-        created_at
-      from squares_games
-      where tenant_slug = $1
+    query<CampaignRow>(
+      `
+        select
+          id,
+          title,
+          slug,
+          description,
+          tenant_slug,
+          image_url,
+          status,
+          created_at
+        from events
+        where tenant_slug = $1
+      `,
+      [tenantSlug],
+    ),
+  ]);
 
-      union all
+  return [
+    ...raffles.map((row) => mapCampaign(row, "raffle")),
+    ...squares.map((row) => mapCampaign(row, "squares")),
+    ...events.map((row) => mapCampaign(row, "event")),
+  ].sort((a, b) => {
+    const aTime = new Date(a.created_at ?? 0).getTime();
+    const bTime = new Date(b.created_at ?? 0).getTime();
 
-      select
-        id,
-        title,
-        slug,
-        description,
-        tenant_slug,
-        'event'::text as type,
-        image_url,
-        image_url as "imageUrl",
-        status::text as status,
-        created_at
-      from events
-      where tenant_slug = $1
-
-      order by created_at desc
-    `,
-    [tenantSlug],
-  );
+    return bTime - aTime;
+  });
 }
