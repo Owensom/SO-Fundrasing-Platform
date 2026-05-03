@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { getSquaresGameByTenantAndSlug } from "../../../../../api/_lib/squares-repo";
+import { getSquaresGameByTenantAndSlug } from "../../../../../../api/_lib/squares-repo";
 
 export async function GET(
   request: NextRequest,
