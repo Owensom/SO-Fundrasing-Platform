@@ -16,6 +16,17 @@ type Winner = {
   customer_name?: string | null;
 };
 
+type EntryQuestion = {
+  text?: string | null;
+  answer?: string | null;
+};
+
+type FreeEntry = {
+  address?: string | null;
+  instructions?: string | null;
+  closes_at?: string | null;
+};
+
 type SquaresGame = {
   id: string;
   tenantSlug: string;
@@ -32,6 +43,8 @@ type SquaresGame = {
   soldSquares: number[];
   reservedSquares: number[];
   winners: Winner[];
+  question?: EntryQuestion | null;
+  freeEntry?: FreeEntry | null;
 };
 
 type Props = {
@@ -81,6 +94,20 @@ function ordinal(position: number) {
   return `${position}${suffix}`;
 }
 
+function hasEntryQuestion(question: EntryQuestion | null | undefined) {
+  return Boolean(
+    String(question?.text ?? "").trim() && String(question?.answer ?? "").trim(),
+  );
+}
+
+function hasFreeEntry(freeEntry: FreeEntry | null | undefined) {
+  return Boolean(
+    String(freeEntry?.address ?? "").trim() ||
+      String(freeEntry?.instructions ?? "").trim() ||
+      String(freeEntry?.closes_at ?? "").trim(),
+  );
+}
+
 export default function PublicSquaresPage({ params }: Props) {
   const { slug } = params;
 
@@ -89,6 +116,7 @@ export default function PublicSquaresPage({ params }: Props) {
   const [autoQuantity, setAutoQuantity] = useState(1);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [entryAnswer, setEntryAnswer] = useState("");
   const [coverFees, setCoverFees] = useState(false);
   const [showAllPrizes, setShowAllPrizes] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -135,8 +163,29 @@ export default function PublicSquaresPage({ params }: Props) {
     if (!slug) return;
     loadGame();
   }, [slug]);
+  {/* =========================
+   LEGAL: QUESTION
+========================= */}
 
-  const unavailableSquares = useMemo(() => {
+{legalQuestion?.text ? (
+  <section style={styles.legalBox}>
+    <h2 style={styles.legalTitle}>Entry question</h2>
+
+    <p style={styles.legalText}>{legalQuestion.text}</p>
+
+    <input
+      type="text"
+      placeholder="Enter your answer"
+      style={styles.input}
+      disabled={!canReserve}
+    />
+
+    <p style={styles.legalNote}>
+      You must answer this question correctly to enter.
+    </p>
+  </section>
+) : null}
+    const unavailableSquares = useMemo(() => {
     const set = new Set<number>();
 
     for (const square of game?.soldSquares ?? []) {
@@ -167,6 +216,8 @@ export default function PublicSquaresPage({ params }: Props) {
   const isDrawn = game?.status === "drawn";
   const isDraft = game?.status === "draft";
   const canReserve = Boolean(game && isPublished);
+  const requiresQuestion = hasEntryQuestion(game?.question);
+  const showFreeEntry = hasFreeEntry(game?.freeEntry);
 
   const subtotalCents =
     selectedSquares.length * Number(game?.pricePerSquareCents || 0);
@@ -258,6 +309,10 @@ export default function PublicSquaresPage({ params }: Props) {
         throw new Error("Please select at least one square.");
       }
 
+      if (requiresQuestion && !entryAnswer.trim()) {
+        throw new Error("Please answer the entry question.");
+      }
+
       const reserveResponse = await fetch(
         `/api/public/squares/${encodeURIComponent(slug)}/reserve`,
         {
@@ -267,6 +322,7 @@ export default function PublicSquaresPage({ params }: Props) {
             squares: selectedSquares,
             customerName: customerName.trim(),
             customerEmail: customerEmail.trim(),
+            entryAnswer: entryAnswer.trim(),
           }),
         },
       );
@@ -346,8 +402,7 @@ export default function PublicSquaresPage({ params }: Props) {
       setSaving(false);
     }
   }
-
-  if (!slug) return <div style={styles.wrap}>Loading…</div>;
+    if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading squares game…</div>;
   if (error && !game) return <div style={styles.wrap}>{error}</div>;
   if (!game) return <div style={styles.wrap}>Squares game not found.</div>;
@@ -460,6 +515,45 @@ export default function PublicSquaresPage({ params }: Props) {
           </section>
         ) : null}
 
+        {showFreeEntry ? (
+          <section style={styles.freeEntryBox}>
+            <div style={styles.freeEntryTitle}>Free postal entry</div>
+
+            {game.freeEntry?.address ? (
+              <div style={styles.freeEntryBlock}>
+                <div style={styles.freeEntryLabel}>Postal address</div>
+                <div style={styles.freeEntryText}>{game.freeEntry.address}</div>
+              </div>
+            ) : null}
+
+            {game.freeEntry?.instructions ? (
+              <div style={styles.freeEntryBlock}>
+                <div style={styles.freeEntryLabel}>Instructions</div>
+                <div style={styles.freeEntryText}>
+                  {game.freeEntry.instructions}
+                </div>
+              </div>
+            ) : null}
+
+            {game.freeEntry?.closes_at ? (
+              <div style={styles.freeEntryBlock}>
+                <div style={styles.freeEntryLabel}>Postal entry closes</div>
+                <div style={styles.freeEntryText}>
+                  {formatDateTime(game.freeEntry.closes_at)}
+                </div>
+              </div>
+            ) : null}
+
+            <div style={styles.freeEntryNotice}>
+              Postal entries are included in the same draw as paid entries.
+              Please include your full name, email address, this squares game
+              name, your answer to the entry question if one is shown, and your
+              preferred square number where applicable. One entry per
+              postcard/envelope.
+            </div>
+          </section>
+        ) : null}
+
         {isClosed ? (
           <div style={styles.noticeDark}>
             This squares game is now closed. Reservations and payments are no
@@ -491,7 +585,6 @@ export default function PublicSquaresPage({ params }: Props) {
                   value={autoQuantity === 0 ? "" : autoQuantity}
                   onChange={(event) => {
                     const raw = event.target.value;
-
                     if (raw === "") {
                       setAutoQuantity(0);
                       return;
@@ -499,7 +592,6 @@ export default function PublicSquaresPage({ params }: Props) {
 
                     const parsed = Number(raw);
                     if (!Number.isFinite(parsed)) return;
-
                     setAutoQuantity(parsed);
                   }}
                   style={styles.quantityInput}
@@ -586,7 +678,6 @@ export default function PublicSquaresPage({ params }: Props) {
 
         <div style={styles.totalBox}>
           <div>Squares: {selectedSquares.length}</div>
-
           <div>
             Square total:{" "}
             {formatCurrencyFromCents(subtotalCents, game.currency)}
@@ -616,6 +707,28 @@ export default function PublicSquaresPage({ params }: Props) {
           </div>
         </div>
 
+        {requiresQuestion ? (
+          <>
+            <h2 style={styles.heading}>Entry question</h2>
+
+            <section style={styles.questionBox}>
+              <div style={styles.questionText}>{game.question?.text}</div>
+
+              <input
+                value={entryAnswer}
+                onChange={(event) => setEntryAnswer(event.target.value)}
+                placeholder="Your answer"
+                style={styles.input}
+                disabled={!canReserve}
+              />
+
+              <div style={styles.questionHint}>
+                You must answer this correctly before checkout.
+              </div>
+            </section>
+          </>
+        ) : null}
+
         <h2 style={styles.heading}>Your details</h2>
 
         <div style={styles.form}>
@@ -639,13 +752,26 @@ export default function PublicSquaresPage({ params }: Props) {
           <button
             type="button"
             onClick={reserveSquares}
-            disabled={saving || selectedSquares.length === 0 || !canReserve}
+            disabled={
+              saving ||
+              selectedSquares.length === 0 ||
+              !canReserve ||
+              (requiresQuestion && !entryAnswer.trim())
+            }
             style={{
               ...styles.primaryButton,
               opacity:
-                saving || selectedSquares.length === 0 || !canReserve ? 0.6 : 1,
+                saving ||
+                selectedSquares.length === 0 ||
+                !canReserve ||
+                (requiresQuestion && !entryAnswer.trim())
+                  ? 0.6
+                  : 1,
               cursor:
-                saving || selectedSquares.length === 0 || !canReserve
+                saving ||
+                selectedSquares.length === 0 ||
+                !canReserve ||
+                (requiresQuestion && !entryAnswer.trim())
                   ? "not-allowed"
                   : "pointer",
             }}
@@ -663,340 +789,3 @@ export default function PublicSquaresPage({ params }: Props) {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: 16,
-  },
-  container: {
-    maxWidth: 1100,
-    margin: "0 auto",
-    background: "#ffffff",
-    borderRadius: 16,
-    padding: 18,
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
-  },
-  wrap: {
-    padding: 24,
-  },
-  navBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 16,
-  },
-  navLink: {
-    display: "inline-flex",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-  imageWrap: {
-    width: "100%",
-    height: 360,
-    overflow: "hidden",
-    borderRadius: 16,
-    marginBottom: 20,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    objectPosition: "center",
-    display: "block",
-  },
-  title: {
-    margin: "0 0 8px",
-    fontSize: "clamp(28px, 7vw, 42px)",
-    lineHeight: 1.1,
-    color: "#0f172a",
-  },
-  description: {
-    margin: "0 0 16px",
-    color: "#475569",
-    lineHeight: 1.6,
-    wordBreak: "break-word",
-  },
-  heading: {
-    marginTop: 24,
-    marginBottom: 12,
-    fontSize: "clamp(20px, 5vw, 28px)",
-    lineHeight: 1.2,
-  },
-  prizesBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-  },
-  prizesTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#9a3412",
-    marginBottom: 12,
-  },
-  prizeCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #fed7aa",
-    alignItems: "flex-start",
-  },
-  prizePosition: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#c2410c",
-    minWidth: 70,
-    flexShrink: 0,
-  },
-  prizeContent: {
-    flex: "1 1 200px",
-    minWidth: 0,
-  },
-  prizeTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  prizeDescription: {
-    marginTop: 4,
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 1.45,
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  showMoreButton: {
-    marginTop: 12,
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: "1px solid #fdba74",
-    background: "#fff7ed",
-    color: "#9a3412",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  winnersBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-  },
-  winnersTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#065f46",
-    marginBottom: 12,
-  },
-  winnerCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 14,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #bbf7d0",
-    alignItems: "flex-start",
-  },
-  winnerBlock: {
-    flex: "1 1 140px",
-    minWidth: 0,
-  },
-  winnerLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-    fontWeight: 700,
-  },
-  winnerPrize: {
-    fontSize: 20,
-    fontWeight: 900,
-    color: "#065f46",
-    wordBreak: "break-word",
-  },
-  winnerTicket: {
-    fontSize: 24,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  winnerName: {
-    fontSize: 18,
-    fontWeight: 800,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  quickSelect: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 14,
-    background: "#f0f9ff",
-    border: "1px solid #bae6fd",
-    display: "grid",
-    gap: 14,
-  },
-  quickControls: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    alignItems: "end",
-  },
-  smallLabel: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#475569",
-  },
-  quantityInput: {
-    width: 130,
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #93c5fd",
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  autoButton: {
-    height: 44,
-    padding: "0 16px",
-    border: "none",
-    borderRadius: 10,
-    background: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  clearButton: {
-    height: 44,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#334155",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  numberGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))",
-    gap: 8,
-  },
-  numberButton: {
-    height: 48,
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontWeight: 700,
-  },
-  basket: {
-    display: "grid",
-    gap: 8,
-  },
-  basketRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-    flexWrap: "wrap",
-  },
-  removeButton: {
-    border: "none",
-    background: "transparent",
-    color: "#dc2626",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  totalBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 8,
-    fontWeight: 700,
-    lineHeight: 1.4,
-    wordBreak: "break-word",
-  },
-  coverFeesBox: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    cursor: "pointer",
-  },
-  form: {
-    display: "grid",
-    gap: 12,
-    marginTop: 24,
-  },
-  input: {
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontSize: 16,
-    minWidth: 0,
-  },
-  primaryButton: {
-    height: 48,
-    border: "none",
-    borderRadius: 10,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 700,
-    fontSize: 16,
-  },
-  notice: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    color: "#475569",
-  },
-  noticeDark: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    color: "#e2e8f0",
-    marginTop: 16,
-  },
-  success: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-  },
-  error: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-  },
-};
