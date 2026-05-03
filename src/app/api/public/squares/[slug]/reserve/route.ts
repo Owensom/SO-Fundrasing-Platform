@@ -76,7 +76,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const question = game.config_json?.question ?? null;
+    const config = (game.config_json ?? {}) as any;
+    const question = config.question ?? null;
     const questionText = String(question?.text ?? "").trim();
     const correctAnswer = cleanAnswer(question?.answer);
 
@@ -106,7 +107,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const unavailable = new Set<number>();
 
     for (const sale of sales) {
-      for (const square of sale.squares ?? []) unavailable.add(Number(square));
+      for (const square of sale.squares ?? []) {
+        unavailable.add(Number(square));
+      }
     }
 
     for (const reservation of reservations) {
