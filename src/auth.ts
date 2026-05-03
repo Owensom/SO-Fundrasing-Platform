@@ -1,10 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
-const FORCE_ADMIN_EMAIL = "force@test.com";
-const FORCE_ADMIN_PASSWORD = "forcepass123";
-const FORCE_ADMIN_TENANT_SLUGS = ["demo-a"];
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: "jwt",
@@ -30,12 +26,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
-        if (email === FORCE_ADMIN_EMAIL && password === FORCE_ADMIN_PASSWORD) {
+        if (email === "force@test.com" && password === "forcepass123") {
           return {
             id: "force-user",
-            email: FORCE_ADMIN_EMAIL,
+            email: "force@test.com",
             name: "Force User",
-            tenantSlugs: FORCE_ADMIN_TENANT_SLUGS,
+            tenantSlugs: ["demo-a"],
             emailVerified: null,
           };
         }
@@ -48,20 +44,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.userId = user.id;
-        token.email = user.email ?? "";
-        token.name = user.name ?? null;
         token.tenantSlugs = Array.isArray(user.tenantSlugs)
           ? user.tenantSlugs.map((value) => String(value))
           : [];
-      }
-
-      const tokenEmail = String(token.email ?? "").trim().toLowerCase();
-
-      if (tokenEmail === FORCE_ADMIN_EMAIL) {
-        token.userId = String(token.userId ?? "force-user");
-        token.email = FORCE_ADMIN_EMAIL;
-        token.name = token.name ? String(token.name) : "Force User";
-        token.tenantSlugs = FORCE_ADMIN_TENANT_SLUGS;
+        token.email = user.email ?? "";
+        token.name = user.name ?? null;
       }
 
       return token;
