@@ -200,7 +200,11 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
         <div style={styles.heroImageWrap}>
           {game.image_url ? (
-            <img src={game.image_url} alt={game.title} style={styles.heroImage} />
+            <img
+              src={game.image_url}
+              alt={game.title}
+              style={styles.heroImage}
+            />
           ) : (
             <div style={styles.heroImageEmpty}>🔲</div>
           )}
@@ -235,7 +239,11 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </div>
       </section>
 
-      <form action={`/api/admin/squares/${game.id}`} method="post" style={styles.form}>
+      <form
+        action={`/api/admin/squares/${game.id}`}
+        method="post"
+        style={styles.form}
+      >
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
@@ -290,15 +298,18 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
             <div style={styles.previewBox}>
               {game.image_url ? (
-                <img src={game.image_url} alt={game.title} style={styles.previewImage} />
+                <img
+                  src={game.image_url}
+                  alt={game.title}
+                  style={styles.previewImage}
+                />
               ) : (
                 <div style={styles.emptyPreview}>🔲</div>
               )}
             </div>
           </div>
         </section>
-
-        <section style={styles.section}>
+                <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
               <h2 style={styles.sectionTitle}>Squares setup</h2>
@@ -392,10 +403,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           </div>
 
           <p style={styles.sectionDescription}>
-            The public squares page can require this answer before checkout when a question is set.
+            The public squares page can require this answer before checkout when
+            a question is set.
           </p>
         </section>
-                <section style={styles.section}>
+
+        <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
               <h2 style={styles.sectionTitle}>Free postal entry</h2>
@@ -494,7 +507,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <div>
             <h2 style={styles.sectionTitle}>Winners</h2>
             <p style={styles.sectionDescription}>
-              View winners, auto draw remaining prizes, or manually add a live draw winner.
+              View winners, auto draw remaining prizes, or manually add a live
+              draw winner.
             </p>
           </div>
         </div>
@@ -534,7 +548,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           >
             <h3 style={styles.subTitle}>Automatic random draw</h3>
             <p style={styles.sectionDescription}>
-              Randomly draw remaining undrawn prizes using the saved auto draw range.
+              Randomly draw remaining undrawn prizes using the saved auto draw
+              range.
             </p>
 
             <button type="submit" style={styles.drawButton}>
@@ -575,9 +590,8 @@ function Field({
     </label>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
-    page: {
+  page: {
     maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
@@ -614,7 +628,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) 260px",
     gap: 18,
-    alignItems: "stretch",
+    alignItems: "center",
     padding: 22,
     borderRadius: 24,
     background: "#0f172a",
@@ -676,21 +690,25 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
   },
   heroImageWrap: {
+    width: "100%",
+    height: 220,
+    maxHeight: 220,
     borderRadius: 18,
     background: "#1e293b",
     border: "1px solid rgba(255,255,255,0.12)",
     overflow: "hidden",
-    minHeight: 180,
   },
   heroImage: {
     width: "100%",
     height: "100%",
+    maxHeight: 220,
     objectFit: "cover",
     display: "block",
   },
   heroImageEmpty: {
+    width: "100%",
     height: "100%",
-    minHeight: 180,
+    minHeight: 220,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
