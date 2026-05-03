@@ -5,7 +5,10 @@ import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listSquaresGames } from "../../../../api/_lib/squares-repo";
 
-function formatMoney(cents: number | null | undefined, currency: string | null | undefined) {
+function formatMoney(
+  cents: number | null | undefined,
+  currency: string | null | undefined,
+) {
   return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
 }
 
@@ -121,6 +124,10 @@ export default async function AdminSquaresListPage() {
             Squares
           </Link>
 
+          <Link href="/admin/events" style={styles.navButton}>
+            Events
+          </Link>
+
           <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
             Public campaigns page
           </Link>
@@ -202,7 +209,10 @@ export default async function AdminSquaresListPage() {
                         )}
                       />
 
-                      <Detail label="Draw date" value={formatDrawDate(game.draw_at)} />
+                      <Detail
+                        label="Draw date"
+                        value={formatDrawDate(game.draw_at)}
+                      />
                       <Detail label="Total" value={total} />
                       <Detail label="Sold" value={sold} />
                       <Detail label="Remaining" value={remaining} />
