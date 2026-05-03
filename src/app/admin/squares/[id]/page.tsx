@@ -1,7 +1,21 @@
-"use client";
-
+import type { CSSProperties } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { notFound } from "next/navigation";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import {
+  getSquaresGameById,
+  listSquaresSales,
+  listSquaresWinners,
+} from "../../../../../api/_lib/squares-repo";
+import ImageUploadField from "@/components/ImageUploadField";
+import SquaresPrizeSettings from "./SquaresPrizeSettings";
+import DramaticSquaresDraw from "./DramaticSquaresDraw";
+
+type PageProps = {
+  params: {
+    id: string;
+  };
+};
 
 type Prize = {
   title?: string;
@@ -9,793 +23,507 @@ type Prize = {
   description?: string;
 };
 
-type Winner = {
-  id: string;
-  prize_title: string;
-  square_number: number;
-  customer_name?: string | null;
+type SoldSquareOption = {
+  squareNumber: number;
+  customerName: string;
+  customerEmail: string;
 };
 
-type EntryQuestion = {
-  text?: string | null;
-  answer?: string | null;
-};
+function firstNameOnly(name?: string | null) {
+  return name?.trim().split(/\s+/)[0] || "Winner";
+}
 
-type FreeEntry = {
-  address?: string | null;
-  instructions?: string | null;
-  closes_at?: string | null;
-};
+function moneyFromCents(cents: number | null | undefined) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
 
-type SquaresGame = {
-  id: string;
-  tenantSlug: string;
-  slug: string;
-  title: string;
-  description?: string;
-  imageUrl?: string;
-  drawAt?: string | null;
-  status: string;
-  currency: string;
-  pricePerSquareCents: number;
-  totalSquares: number;
-  prizes: Prize[];
-  soldSquares: number[];
-  reservedSquares: number[];
-  winners: Winner[];
-  question?: EntryQuestion | null;
-  freeEntry?: FreeEntry | null;
-};
-
-type Props = {
-  params: {
-    slug: string;
-  };
-};
-
-function formatCurrencyFromCents(cents: number, currency: string) {
-  const major = Number(cents || 0) / 100;
-
+function formatMoney(cents: number | null | undefined, currency: string) {
   try {
     return new Intl.NumberFormat("en-GB", {
       style: "currency",
       currency: currency || "GBP",
-    }).format(Number.isFinite(major) ? major : 0);
+    }).format(Number(cents || 0) / 100);
   } catch {
-    return `${currency || "GBP"} ${(Number.isFinite(major) ? major : 0).toFixed(
-      2,
-    )}`;
+    return `${moneyFromCents(cents)} ${currency || "GBP"}`;
   }
 }
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
-
+function formatDateTimeLocal(value: string | null | undefined) {
+  if (!value) return "";
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 16);
+}
 
-  if (Number.isNaN(date.getTime())) return value;
+function formatDrawDate(value: string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
 
   return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "full",
+    dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
 }
 
-function ordinal(position: number) {
-  const suffix =
-    position % 10 === 1 && position % 100 !== 11
-      ? "st"
-      : position % 10 === 2 && position % 100 !== 12
-        ? "nd"
-        : position % 10 === 3 && position % 100 !== 13
-          ? "rd"
-          : "th";
-
-  return `${position}${suffix}`;
+function getProgressPercent(sold: number, total: number) {
+  if (!total || total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
 }
 
-function hasEntryQuestion(question: EntryQuestion | null | undefined) {
-  return Boolean(
-    String(question?.text ?? "").trim() && String(question?.answer ?? "").trim(),
-  );
+function statusStyle(status: string): CSSProperties {
+  if (status === "published") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (status === "drawn") {
+    return {
+      background: "#dbeafe",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
+  }
+
+  if (status === "closed") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
 }
 
-function hasFreeEntry(freeEntry: FreeEntry | null | undefined) {
-  return Boolean(
-    String(freeEntry?.address ?? "").trim() ||
-      String(freeEntry?.instructions ?? "").trim() ||
-      String(freeEntry?.closes_at ?? "").trim(),
-  );
+async function safeListSquaresWinners(gameId: string) {
+  try {
+    return await listSquaresWinners(gameId);
+  } catch (error) {
+    console.error("Admin squares winners failed:", error);
+    return [];
+  }
 }
 
-export default function PublicSquaresPage({ params }: Props) {
-  const { slug } = params;
+async function safeListSquaresSales(gameId: string) {
+  try {
+    return await listSquaresSales(gameId);
+  } catch (error) {
+    console.error("Admin squares sales failed:", error);
+    return [];
+  }
+}
 
-  const [game, setGame] = useState<SquaresGame | null>(null);
-  const [selectedSquares, setSelectedSquares] = useState<number[]>([]);
-  const [autoQuantity, setAutoQuantity] = useState(1);
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [entryAnswer, setEntryAnswer] = useState("");
-  const [coverFees, setCoverFees] = useState(false);
-  const [showAllPrizes, setShowAllPrizes] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [reservationMessage, setReservationMessage] = useState("");
+export default async function AdminSquaresEditPage({ params }: PageProps) {
+  const tenantSlug = await getTenantSlugFromHeaders();
+  const game = await getSquaresGameById(params.id);
 
-  async function loadGame() {
-    try {
-      setLoading(true);
-      setError("");
-      setReservationMessage("");
-
-      const response = await fetch(
-        `/api/public/squares/${encodeURIComponent(slug)}`,
-        { cache: "no-store" },
-      );
-
-      const text = await response.text();
-
-      let parsed: any = null;
-
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new Error(`API did not return JSON: ${text.slice(0, 120)}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(parsed?.error || "Failed to load squares game");
-      }
-
-      setGame(parsed.game ?? null);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load squares game",
-      );
-    } finally {
-      setLoading(false);
-    }
+  if (!tenantSlug || !game || game.tenant_slug !== tenantSlug) {
+    notFound();
   }
 
-  useEffect(() => {
-    if (!slug) return;
-    loadGame();
-  }, [slug]);
+  const [winners, sales] = await Promise.all([
+    safeListSquaresWinners(game.id),
+    safeListSquaresSales(game.id),
+  ]);
 
-  const unavailableSquares = useMemo(() => {
-    const set = new Set<number>();
+  const currency = game.currency || "GBP";
+  const config = (game.config_json ?? {}) as any;
 
-    for (const square of game?.soldSquares ?? []) {
-      set.add(Number(square));
-    }
+  const savedPrizes = Array.isArray(config.prizes)
+    ? (config.prizes as Prize[])
+    : [];
 
-    for (const square of game?.reservedSquares ?? []) {
-      set.add(Number(square));
-    }
+  const soldSquareOptions: SoldSquareOption[] = sales
+    .flatMap((sale: any) =>
+      Array.isArray(sale.squares)
+        ? sale.squares.map((squareNumber: number | string) => ({
+            squareNumber: Number(squareNumber),
+            customerName: String(sale.customer_name || "Supporter"),
+            customerEmail: String(sale.customer_email || ""),
+          }))
+        : [],
+    )
+    .filter(
+      (entry) =>
+        Number.isInteger(entry.squareNumber) &&
+        entry.squareNumber >= 1 &&
+        entry.squareNumber <= Number(game.total_squares || 0),
+    )
+    .sort((a, b) => a.squareNumber - b.squareNumber);
 
-    return set;
-  }, [game]);
+  const soldSquares = soldSquareOptions.length;
+  const totalSquares = Number(game.total_squares || 0);
+  const remainingSquares = Math.max(totalSquares - soldSquares, 0);
+  const progress = getProgressPercent(soldSquares, totalSquares);
+    return (
+    <main style={styles.page}>
+      <section style={styles.topBar}>
+        <Link href="/admin/squares" style={styles.backLink}>
+          ← Back to squares
+        </Link>
 
-  const availableCount = useMemo(() => {
-    if (!game) return 0;
+        <Link href={`/s/${game.slug}`} target="_blank" style={styles.publicLink}>
+          View campaign page
+        </Link>
+      </section>
 
-    let count = 0;
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.eyebrow}>Squares editor</div>
 
-    for (let number = 1; number <= game.totalSquares; number += 1) {
-      if (!unavailableSquares.has(number)) count += 1;
-    }
+          <div style={styles.heroTitleRow}>
+            <h1 style={styles.heroTitle}>{game.title}</h1>
 
-    return count;
-  }, [game, unavailableSquares]);
-
-  const isPublished = game?.status === "published";
-  const isClosed = game?.status === "closed";
-  const isDrawn = game?.status === "drawn";
-  const isDraft = game?.status === "draft";
-  const canReserve = Boolean(game && isPublished);
-  const requiresQuestion = hasEntryQuestion(game?.question);
-  const showFreeEntry = hasFreeEntry(game?.freeEntry);
-
-  const subtotalCents =
-    selectedSquares.length * Number(game?.pricePerSquareCents || 0);
-  const feeCents = coverFees ? Math.round(subtotalCents * 0.1) : 0;
-  const totalCents = subtotalCents + feeCents;
-
-  function toggleSquare(square: number) {
-    if (!game || !canReserve) return;
-    if (unavailableSquares.has(square)) return;
-
-    setSelectedSquares((current) =>
-      current.includes(square)
-        ? current.filter((item) => item !== square)
-        : [...current, square].sort((a, b) => a - b),
-    );
-
-    setError("");
-    setReservationMessage("");
-  }
-
-  function clearBasket() {
-    setSelectedSquares([]);
-    setError("");
-    setReservationMessage("");
-  }
-    async function autoSelectSquares(quantity: number) {
-    if (!game || !canReserve) return;
-
-    const requested = Math.max(1, Math.floor(Number(quantity) || 0));
-
-    try {
-      setSaving(true);
-      setError("");
-      setReservationMessage("");
-
-      const response = await fetch(
-        `/api/public/squares/${encodeURIComponent(slug)}/reserve`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            randomCount: requested,
-            previewOnly: true,
-          }),
-        },
-      );
-
-      const text = await response.text();
-
-      let parsed: any = null;
-
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new Error(`Random API did not return JSON: ${text.slice(0, 120)}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(parsed?.error || "Random selection failed");
-      }
-
-      setSelectedSquares(Array.isArray(parsed.squares) ? parsed.squares : []);
-      setAutoQuantity(requested);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Random selection failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function reserveSquares() {
-    if (!game || !canReserve) return;
-
-    try {
-      setSaving(true);
-      setError("");
-      setReservationMessage("");
-
-      if (!customerName.trim()) {
-        throw new Error("Please enter your name.");
-      }
-
-      if (!customerEmail.trim()) {
-        throw new Error("Please enter your email.");
-      }
-
-      if (selectedSquares.length === 0) {
-        throw new Error("Please select at least one square.");
-      }
-
-      if (requiresQuestion && !entryAnswer.trim()) {
-        throw new Error("Please answer the entry question.");
-      }
-
-      const reserveResponse = await fetch(
-        `/api/public/squares/${encodeURIComponent(slug)}/reserve`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            squares: selectedSquares,
-            customerName: customerName.trim(),
-            customerEmail: customerEmail.trim(),
-            entryAnswer: entryAnswer.trim(),
-          }),
-        },
-      );
-
-      const reserveText = await reserveResponse.text();
-
-      let reserveParsed: any = null;
-
-      try {
-        reserveParsed = JSON.parse(reserveText);
-      } catch {
-        throw new Error(
-          `Reserve API did not return JSON: ${reserveText.slice(0, 120)}`,
-        );
-      }
-
-      if (!reserveResponse.ok) {
-        throw new Error(reserveParsed?.error || "Reserve failed");
-      }
-
-      const reservationToken = String(
-        reserveParsed?.reservationToken ?? "",
-      ).trim();
-
-      if (!reservationToken) {
-        throw new Error(
-          "Reservation succeeded but no reservation token was returned.",
-        );
-      }
-
-      setReservationMessage("Squares reserved. Redirecting to checkout...");
-
-      const checkoutResponse = await fetch("/api/stripe/checkout/squares", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          gameId: game.id,
-          reservationToken,
-          coverFees,
-        }),
-      });
-
-      const checkoutText = await checkoutResponse.text();
-
-      let checkoutParsed: any = null;
-
-      try {
-        checkoutParsed = JSON.parse(checkoutText);
-      } catch {
-        throw new Error(
-          `Checkout API did not return JSON: ${checkoutText.slice(0, 120)}`,
-        );
-      }
-
-      if (!checkoutResponse.ok) {
-        throw new Error(checkoutParsed?.error || "Checkout failed");
-      }
-
-      const checkoutUrl = String(
-        checkoutParsed?.url ??
-          checkoutParsed?.checkoutUrl ??
-          checkoutParsed?.sessionUrl ??
-          "",
-      ).trim();
-
-      if (!checkoutUrl) {
-        throw new Error(
-          "Checkout session created but no checkout URL was returned.",
-        );
-      }
-
-      window.location.href = checkoutUrl;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Reserve failed");
-      await loadGame();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!slug) return <div style={styles.wrap}>Loading…</div>;
-  if (loading) return <div style={styles.wrap}>Loading squares game…</div>;
-  if (error && !game) return <div style={styles.wrap}>{error}</div>;
-  if (!game) return <div style={styles.wrap}>Squares game not found.</div>;
-
-  const visiblePrizes = showAllPrizes ? game.prizes : game.prizes.slice(0, 3);
-
-  return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <nav style={styles.navBar}>
-          <Link href={`/c/${game.tenantSlug}`} style={styles.navLink}>
-            ← Back to campaigns
-          </Link>
-        </nav>
-
-        {game.imageUrl ? (
-          <div style={styles.imageWrap}>
-            <img src={game.imageUrl} alt={game.title} style={styles.image} />
+            <span style={{ ...styles.statusPill, ...statusStyle(game.status) }}>
+              {game.status}
+            </span>
           </div>
-        ) : null}
 
-        <h1 style={styles.title}>{game.title}</h1>
+          <p style={styles.heroSlug}>/s/{game.slug}</p>
 
-        {game.description ? (
-          <p style={styles.description}>{game.description}</p>
-        ) : null}
-
-        <div style={styles.totalBox}>
-          <div>
-            Square price:{" "}
-            {formatCurrencyFromCents(game.pricePerSquareCents, game.currency)}
-          </div>
-          <div>Draw date: {formatDateTime(game.drawAt)}</div>
-          <div>Total squares: {game.totalSquares}</div>
-          <div>Status: {game.status}</div>
-          <div>Available now: {availableCount}</div>
+          {game.description ? (
+            <p style={styles.heroDescription}>{game.description}</p>
+          ) : (
+            <p style={styles.heroDescriptionMuted}>No description added yet.</p>
+          )}
         </div>
 
-        {game.prizes.length > 0 ? (
-          <section style={styles.prizesBox}>
-            <div style={styles.prizesTitle}>Prizes</div>
+        <div style={styles.heroImageWrap}>
+          {game.image_url ? (
+            <img src={game.image_url} alt={game.title} style={styles.heroImage} />
+          ) : (
+            <div style={styles.heroImageEmpty}>🔲</div>
+          )}
+        </div>
+      </section>
 
-            <div style={{ display: "grid", gap: 10 }}>
-              {visiblePrizes.map((prize, index) => (
-                <div
-                  key={`${index}-${prize.title ?? prize.name}`}
-                  style={styles.prizeCard}
-                >
-                  <div style={styles.prizePosition}>{ordinal(index + 1)}</div>
+      <section style={styles.summaryGrid}>
+        <SummaryCard
+          label="Price"
+          value={formatMoney(game.price_per_square_cents, currency)}
+        />
+        <SummaryCard label="Draw date" value={formatDrawDate(game.draw_at)} />
+        <SummaryCard label="Total squares" value={totalSquares} />
+        <SummaryCard label="Sold" value={soldSquares} />
+        <SummaryCard label="Remaining" value={remainingSquares} />
+      </section>
 
-                  <div style={styles.prizeContent}>
-                    <div style={styles.prizeTitle}>
-                      {prize.title || prize.name || `Prize ${index + 1}`}
-                    </div>
-
-                    {prize.description ? (
-                      <div style={styles.prizeDescription}>
-                        {prize.description}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+      <section style={styles.progressCard}>
+        <div style={styles.progressHeader}>
+          <div>
+            <strong style={{ color: "#0f172a" }}>Sales progress</strong>
+            <div style={styles.mutedSmall}>
+              {soldSquares} sold from {totalSquares} squares
             </div>
-                        {game.prizes.length > 3 ? (
-              <button
-                type="button"
-                onClick={() => setShowAllPrizes((value) => !value)}
-                style={styles.showMoreButton}
-              >
-                {showAllPrizes ? "Hide prizes" : "Show all prizes"}
-              </button>
-            ) : null}
-          </section>
-        ) : null}
-
-        {isDrawn ? (
-          <section style={styles.winnersBox}>
-            <div style={styles.winnersTitle}>Winning squares</div>
-
-            {game.winners.length > 0 ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                {game.winners.map((winner) => (
-                  <div key={winner.id} style={styles.winnerCard}>
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Prize</div>
-                      <div style={styles.winnerPrize}>{winner.prize_title}</div>
-                    </div>
-
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Square</div>
-                      <div style={styles.winnerTicket}>
-                        #{winner.square_number}
-                      </div>
-                    </div>
-
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Winner</div>
-                      <div style={styles.winnerName}>
-                        {winner.customer_name || "Winner"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={styles.notice}>No winners have been published yet.</div>
-            )}
-          </section>
-        ) : null}
-
-        {showFreeEntry ? (
-          <section style={styles.freeEntryBox}>
-            <div style={styles.freeEntryTitle}>Free postal entry</div>
-
-            {game.freeEntry?.address ? (
-              <div style={styles.freeEntryBlock}>
-                <div style={styles.freeEntryLabel}>Postal address</div>
-                <div style={styles.freeEntryText}>{game.freeEntry.address}</div>
-              </div>
-            ) : null}
-
-            {game.freeEntry?.instructions ? (
-              <div style={styles.freeEntryBlock}>
-                <div style={styles.freeEntryLabel}>Instructions</div>
-                <div style={styles.freeEntryText}>
-                  {game.freeEntry.instructions}
-                </div>
-              </div>
-            ) : null}
-
-            {game.freeEntry?.closes_at ? (
-              <div style={styles.freeEntryBlock}>
-                <div style={styles.freeEntryLabel}>Postal entry closes</div>
-                <div style={styles.freeEntryText}>
-                  {formatDateTime(game.freeEntry.closes_at)}
-                </div>
-              </div>
-            ) : null}
-
-            <div style={styles.freeEntryNotice}>
-              Postal entries are included in the same draw as paid entries.
-              Please include your full name, email address, this squares game
-              name, your answer to the entry question if one is shown, and your
-              preferred square number where applicable. One entry per
-              postcard/envelope.
-            </div>
-          </section>
-        ) : null}
-
-        {isClosed ? (
-          <div style={styles.noticeDark}>
-            This squares game is now closed. Reservations and payments are no
-            longer available.
           </div>
-        ) : null}
 
-        {isDraft ? (
-          <div style={styles.notice}>This squares game is not published yet.</div>
-        ) : null}
+          <div style={styles.progressPercent}>{progress}%</div>
+        </div>
 
-        {canReserve ? (
-          <section style={styles.quickSelect}>
+        <div style={styles.progressTrack}>
+          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+        </div>
+      </section>
+
+      <form action={`/api/admin/squares/${game.id}`} method="post" style={styles.form}>
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
             <div>
-              <h2 style={{ margin: 0 }}>Quick buy</h2>
-              <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Choose how many squares you would like and we’ll randomly
-                auto-select available numbers.
+              <h2 style={styles.sectionTitle}>Edit squares game</h2>
+              <p style={styles.sectionDescription}>
+                Update the public details, image, pricing and draw settings.
               </p>
             </div>
 
-            <div style={styles.quickControls}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={styles.smallLabel}>Number of squares</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={availableCount || 1}
-                  value={autoQuantity === 0 ? "" : autoQuantity}
-                  onChange={(event) => {
-                    const raw = event.target.value;
+            <button type="submit" style={styles.submitButton}>
+              Save squares
+            </button>
+          </div>
 
-                    if (raw === "") {
-                      setAutoQuantity(0);
-                      return;
-                    }
+          <div style={styles.twoColumn}>
+            <Field label="Title">
+              <input
+                name="title"
+                defaultValue={game.title}
+                required
+                style={styles.input}
+              />
+            </Field>
 
-                    const parsed = Number(raw);
-                    if (!Number.isFinite(parsed)) return;
+            <Field label="Slug">
+              <input
+                name="slug"
+                defaultValue={game.slug}
+                required
+                style={styles.input}
+              />
+            </Field>
+          </div>
 
-                    setAutoQuantity(parsed);
-                  }}
-                  style={styles.quantityInput}
-                />
-              </label>
+          <Field label="Description">
+            <textarea
+              name="description"
+              rows={4}
+              defaultValue={game.description ?? ""}
+              style={styles.textarea}
+            />
+          </Field>
 
-              <button
-                type="button"
-                onClick={() => autoSelectSquares(autoQuantity)}
-                style={styles.autoButton}
-              >
-                Auto select
-              </button>
-
-              <button
-                type="button"
-                onClick={clearBasket}
-                style={styles.clearButton}
-              >
-                Clear basket
-              </button>
+          <div style={styles.mediaBox}>
+            <div>
+              <h3 style={styles.subTitle}>Squares image</h3>
+              <p style={styles.sectionDescription}>
+                Upload or replace the public image for this squares game.
+              </p>
+              <ImageUploadField currentImageUrl={game.image_url || ""} />
             </div>
-          </section>
-        ) : null}
 
-        <h2 style={styles.heading}>Choose squares</h2>
+            <div style={styles.previewBox}>
+              {game.image_url ? (
+                <img src={game.image_url} alt={game.title} style={styles.previewImage} />
+              ) : (
+                <div style={styles.emptyPreview}>🔲</div>
+              )}
+            </div>
+          </div>
+        </section>
 
-        <div style={styles.numberGrid}>
-          {Array.from({ length: game.totalSquares }, (_, index) => {
-            const square = index + 1;
-            const isUnavailable = unavailableSquares.has(square);
-            const isSelected = selectedSquares.includes(square);
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Squares setup</h2>
+              <p style={styles.sectionDescription}>
+                Configure board size, pricing, draw date and status.
+              </p>
+            </div>
+          </div>
 
-            return (
-              <button
-                key={square}
-                type="button"
-                onClick={() => toggleSquare(square)}
-                disabled={isUnavailable || !canReserve}
-                style={{
-                  ...styles.numberButton,
-                  background: isSelected
-                    ? "#2563eb"
-                    : isUnavailable
-                      ? "#111827"
-                      : "#ffffff",
-                  color: isSelected || isUnavailable ? "#ffffff" : "#111827",
-                  opacity: canReserve ? 1 : 0.7,
-                  cursor:
-                    isUnavailable || !canReserve ? "not-allowed" : "pointer",
-                }}
-              >
-                {square}
-              </button>
-            );
-          })}
+          <div style={styles.threeColumn}>
+            <Field label="Draw date">
+              <input
+                name="draw_at"
+                type="datetime-local"
+                defaultValue={formatDateTimeLocal(game.draw_at)}
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Total squares">
+              <input
+                name="total_squares"
+                type="number"
+                min={1}
+                max={500}
+                defaultValue={game.total_squares}
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Price per square">
+              <input
+                name="price_per_square"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={moneyFromCents(game.price_per_square_cents)}
+                required
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Currency">
+              <select name="currency" defaultValue={currency} style={styles.input}>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
+
+            <Field label="Status">
+              <select name="status" defaultValue={game.status} style={styles.input}>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed</option>
+                <option value="drawn">Drawn</option>
+              </select>
+            </Field>
+          </div>
+        </section>
+                <section style={styles.section}>
+          <SquaresPrizeSettings initialPrizes={savedPrizes} />
+        </section>
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Auto draw range</h2>
+              <p style={styles.sectionDescription}>
+                Choose which prize numbers the randomizer should draw. Example:
+                set from 6 to 999 to keep the top 5 prizes for a live draw.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Auto draw from prize number">
+              <input
+                name="auto_draw_from_prize"
+                type="number"
+                min={1}
+                defaultValue={Number(config.auto_draw_from_prize || 1)}
+                placeholder="6"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Auto draw to prize number">
+              <input
+                name="auto_draw_to_prize"
+                type="number"
+                min={1}
+                defaultValue={Number(config.auto_draw_to_prize || 999)}
+                placeholder="999"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section style={styles.submitBar}>
+          <div>
+            <strong style={{ color: "#0f172a" }}>Save changes</strong>
+            <div style={styles.mutedSmall}>
+              This updates the public squares page and admin values.
+            </div>
+          </div>
+
+          <button type="submit" style={styles.submitButton}>
+            Save squares
+          </button>
+        </section>
+      </form>
+
+      <section style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>Winners</h2>
+            <p style={styles.sectionDescription}>
+              View winners, auto draw remaining prizes, or manually add a live draw winner.
+            </p>
+          </div>
         </div>
 
-        <h2 style={styles.heading}>Basket</h2>
+        {winners.length ? (
+          <div style={styles.winnerList}>
+            {winners.map((winner) => (
+              <div key={winner.id} style={styles.winnerCard}>
+                <div>
+                  <div style={styles.winnerLabel}>Prize</div>
+                  <div style={styles.winnerValue}>{winner.prize_title}</div>
+                </div>
 
-        {selectedSquares.length === 0 ? (
-          <div style={styles.notice}>No squares selected yet.</div>
-        ) : (
-          <div style={styles.basket}>
-            {selectedSquares.map((square) => (
-              <div key={square} style={styles.basketRow}>
-                <span>Square #{square}</span>
+                <div>
+                  <div style={styles.winnerLabel}>Square</div>
+                  <div style={styles.winnerValue}>#{winner.square_number}</div>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedSquares((current) =>
-                      current.filter((item) => item !== square),
-                    )
-                  }
-                  style={styles.removeButton}
-                >
-                  Remove
-                </button>
+                <div>
+                  <div style={styles.winnerLabel}>Winner</div>
+                  <div style={styles.winnerValue}>
+                    {firstNameOnly(winner.customer_name)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
+        ) : (
+          <div style={styles.noWinnersBox}>No winners have been drawn yet.</div>
         )}
 
-        <div style={styles.totalBox}>
-          <div>Squares: {selectedSquares.length}</div>
-
-          <div>
-            Square total:{" "}
-            {formatCurrencyFromCents(subtotalCents, game.currency)}
-          </div>
-
-          <label style={styles.coverFeesBox}>
-            <input
-              type="checkbox"
-              checked={coverFees}
-              onChange={(event) => setCoverFees(event.target.checked)}
-              disabled={!canReserve || selectedSquares.length === 0}
-            />
-                        <span>
-              <strong>I’d like to cover platform fees</strong>
-              <br />
-              <span style={{ color: "#64748b", fontSize: 13 }}>
-                Adds approximately{" "}
-                {formatCurrencyFromCents(feeCents, game.currency)} so the
-                organiser receives the full square value.
-              </span>
-            </span>
-          </label>
-
-          <div>
-            Total today: {formatCurrencyFromCents(totalCents, game.currency)}
-          </div>
-        </div>
-
-        {requiresQuestion ? (
-          <>
-            <h2 style={styles.heading}>Entry question</h2>
-
-            <section style={styles.questionBox}>
-              <div style={styles.questionText}>{game.question?.text}</div>
-
-              <input
-                value={entryAnswer}
-                onChange={(event) => setEntryAnswer(event.target.value)}
-                placeholder="Your answer"
-                style={styles.input}
-                disabled={!canReserve}
-              />
-
-              <div style={styles.questionHint}>
-                You must answer this correctly before checkout.
-              </div>
-            </section>
-          </>
-        ) : null}
-
-        <h2 style={styles.heading}>Your details</h2>
-
-        <div style={styles.form}>
-          <input
-            value={customerName}
-            onChange={(event) => setCustomerName(event.target.value)}
-            placeholder="Your name"
-            style={styles.input}
-            disabled={!canReserve}
-          />
-
-          <input
-            value={customerEmail}
-            onChange={(event) => setCustomerEmail(event.target.value)}
-            placeholder="Your email"
-            type="email"
-            style={styles.input}
-            disabled={!canReserve}
-          />
-
-          <button
-            type="button"
-            onClick={reserveSquares}
-            disabled={
-              saving ||
-              selectedSquares.length === 0 ||
-              !canReserve ||
-              (requiresQuestion && !entryAnswer.trim())
-            }
-            style={{
-              ...styles.primaryButton,
-              opacity:
-                saving ||
-                selectedSquares.length === 0 ||
-                !canReserve ||
-                (requiresQuestion && !entryAnswer.trim())
-                  ? 0.6
-                  : 1,
-              cursor:
-                saving ||
-                selectedSquares.length === 0 ||
-                !canReserve ||
-                (requiresQuestion && !entryAnswer.trim())
-                  ? "not-allowed"
-                  : "pointer",
-            }}
+        <div style={styles.drawGrid}>
+          <form
+            action={`/api/admin/squares/${game.id}/draw/auto`}
+            method="post"
+            style={styles.drawPanel}
           >
-            {saving ? "Redirecting to checkout..." : "Reserve and pay"}
-          </button>
+            <h3 style={styles.subTitle}>Automatic random draw</h3>
+            <p style={styles.sectionDescription}>
+              Randomly draw remaining undrawn prizes using the saved auto draw range.
+            </p>
+
+            <button type="submit" style={styles.drawButton}>
+              Auto draw remaining winners
+            </button>
+          </form>
+
+          <DramaticSquaresDraw
+            gameId={game.id}
+            soldSquareOptions={soldSquareOptions}
+          />
         </div>
+      </section>
+    </main>
+  );
+}
 
-        {reservationMessage ? (
-          <div style={styles.success}>{reservationMessage}</div>
-        ) : null}
-
-        {error ? <div style={styles.error}>{error}</div> : null}
-      </div>
+function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={styles.summaryCard}>
+      <div style={styles.summaryLabel}>{label}</div>
+      <div style={styles.summaryValue}>{value}</div>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: 16,
-  },
-  container: {
-    maxWidth: 1100,
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const styles: Record<string, CSSProperties> = {
+    page: {
+    maxWidth: 1180,
     margin: "0 auto",
-    background: "#ffffff",
-    borderRadius: 16,
-    padding: 18,
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
+    padding: "28px 16px 56px",
+    background: "#f8fafc",
+    minHeight: "100vh",
   },
-  wrap: {
-    padding: 24,
-  },
-  navBar: {
+  topBar: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "center",
     marginBottom: 16,
+    flexWrap: "wrap",
   },
-  navLink: {
+  backLink: {
+    color: "#334155",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+  publicLink: {
     display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
@@ -805,367 +533,344 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
   },
-  imageWrap: {
-    width: "100%",
-    height: 360,
-    overflow: "hidden",
-    borderRadius: 16,
-    marginBottom: 20,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 260px",
+    gap: 18,
+    alignItems: "stretch",
+    padding: 22,
+    borderRadius: 24,
+    background: "#0f172a",
+    color: "#ffffff",
+    marginBottom: 16,
   },
-  image: {
+  heroContent: {
+    minWidth: 0,
+  },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: 34,
+    lineHeight: 1.08,
+    letterSpacing: "-0.04em",
+    wordBreak: "break-word",
+  },
+  statusPill: {
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 900,
+  },
+  heroSlug: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: 700,
+    wordBreak: "break-word",
+  },
+  heroDescription: {
+    margin: "12px 0 0",
+    color: "#e2e8f0",
+    lineHeight: 1.55,
+    maxWidth: 720,
+  },
+  heroDescriptionMuted: {
+    margin: "12px 0 0",
+    color: "#94a3b8",
+    lineHeight: 1.55,
+  },
+  heroImageWrap: {
+    borderRadius: 18,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    minHeight: 180,
+  },
+  heroImage: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    objectPosition: "center",
     display: "block",
   },
-  title: {
-    margin: "0 0 8px",
-    fontSize: "clamp(28px, 7vw, 42px)",
-    lineHeight: 1.1,
-    color: "#0f172a",
-  },
-  description: {
-    margin: "0 0 16px",
-    color: "#475569",
-    lineHeight: 1.6,
-    wordBreak: "break-word",
-  },
-  heading: {
-    marginTop: 24,
-    marginBottom: 12,
-    fontSize: "clamp(20px, 5vw, 28px)",
-    lineHeight: 1.2,
-  },
-  prizesBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-  },
-  prizesTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#9a3412",
-    marginBottom: 12,
-  },
-  prizeCard: {
+  heroImageEmpty: {
+    height: "100%",
+    minHeight: 180,
     display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #fed7aa",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 46,
+    color: "#94a3b8",
   },
-  prizePosition: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#c2410c",
-    minWidth: 70,
-    flexShrink: 0,
-  },
-  prizeContent: {
-    flex: "1 1 200px",
-    minWidth: 0,
-  },
-  prizeTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  prizeDescription: {
-    marginTop: 4,
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 1.45,
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  showMoreButton: {
-    marginTop: 12,
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: "1px solid #fdba74",
-    background: "#fff7ed",
-    color: "#9a3412",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  winnersBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-  },
-  winnersTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#065f46",
-    marginBottom: 12,
-  },
-  winnerCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 14,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #bbf7d0",
-    alignItems: "flex-start",
-  },
-  winnerBlock: {
-    flex: "1 1 140px",
-    minWidth: 0,
-  },
-  winnerLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-    fontWeight: 700,
-  },
-  winnerPrize: {
-    fontSize: 20,
-    fontWeight: 900,
-    color: "#065f46",
-    wordBreak: "break-word",
-  },
-  winnerTicket: {
-    fontSize: 24,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  winnerName: {
-    fontSize: 18,
-    fontWeight: 800,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  freeEntryBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#f0f9ff",
-    border: "1px solid #bae6fd",
+  summaryGrid: {
     display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 12,
+    marginBottom: 16,
   },
-  freeEntryTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#075985",
-  },
-  freeEntryBlock: {
-    padding: 12,
-    borderRadius: 12,
+  summaryCard: {
+    padding: 15,
+    borderRadius: 18,
     background: "#ffffff",
-    border: "1px solid #e0f2fe",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  freeEntryLabel: {
+  summaryLabel: {
+    color: "#64748b",
     fontSize: 12,
     fontWeight: 900,
-    color: "#0369a1",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
   },
-  freeEntryText: {
+  summaryValue: {
     color: "#0f172a",
-    lineHeight: 1.5,
-    whiteSpace: "pre-wrap",
+    fontSize: 22,
+    fontWeight: 900,
+    marginTop: 5,
     wordBreak: "break-word",
   },
-  freeEntryNotice: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px dashed #7dd3fc",
-    color: "#475569",
-    lineHeight: 1.5,
-    fontSize: 14,
-  },
-  quickSelect: {
-    marginTop: 20,
+  progressCard: {
     padding: 16,
-    borderRadius: 14,
-    background: "#f0f9ff",
-    border: "1px solid #bae6fd",
-    display: "grid",
-    gap: 14,
-  },
-  quickControls: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    alignItems: "end",
-  },
-  smallLabel: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#475569",
-  },
-  quantityInput: {
-    width: 130,
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #93c5fd",
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  autoButton: {
-    height: 44,
-    padding: "0 16px",
-    border: "none",
-    borderRadius: 10,
-    background: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  clearButton: {
-    height: 44,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
+    borderRadius: 20,
     background: "#ffffff",
-    color: "#334155",
-    fontWeight: 700,
-    cursor: "pointer",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
   },
-  numberGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))",
-    gap: 8,
-  },
-  numberButton: {
-    height: 48,
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontWeight: 700,
-  },
-  basket: {
-    display: "grid",
-    gap: 8,
-  },
-  basketRow: {
+  progressHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-    flexWrap: "wrap",
-  },
-  removeButton: {
-    border: "none",
-    background: "transparent",
-    color: "#dc2626",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  totalBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 8,
-    fontWeight: 700,
-    lineHeight: 1.4,
-    wordBreak: "break-word",
-  },
-  coverFeesBox: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    cursor: "pointer",
-  },
-  questionBox: {
-    padding: 16,
-    borderRadius: 14,
-    background: "#fefce8",
-    border: "1px solid #fde68a",
-    display: "grid",
     gap: 12,
+    alignItems: "center",
+    marginBottom: 10,
   },
-  questionText: {
-    color: "#713f12",
-    fontSize: 18,
+  progressPercent: {
+    color: "#166534",
     fontWeight: 900,
-    lineHeight: 1.4,
-    wordBreak: "break-word",
+    fontSize: 18,
   },
-  questionHint: {
-    color: "#854d0e",
-    fontSize: 13,
-    fontWeight: 700,
+  progressTrack: {
+    height: 10,
+    background: "#e2e8f0",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    background: "#16a34a",
+    borderRadius: 999,
   },
   form: {
     display: "grid",
-    gap: 12,
-    marginTop: 24,
+    gap: 0,
   },
-  input: {
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontSize: 16,
+  section: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.02em",
+  },
+  sectionDescription: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  twoColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+    marginBottom: 12,
+  },
+  threeColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 12,
+  },
+  field: {
+    display: "grid",
+    gap: 6,
     minWidth: 0,
   },
-  primaryButton: {
-    height: 48,
-    border: "none",
-    borderRadius: 10,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 700,
-    fontSize: 16,
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
+    marginBottom: 6,
   },
-  notice: {
-    padding: 12,
-    borderRadius: 10,
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gap: 16,
+    padding: 14,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    color: "#475569",
   },
-  noticeDark: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    color: "#e2e8f0",
-    marginTop: 16,
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
   },
-  success: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
   },
-  error: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  emptyPreview: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    fontSize: 42,
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    marginBottom: 16,
+  },
+  submitButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  winnerList: {
+    display: "grid",
+    gap: 10,
+    marginBottom: 14,
+  },
+  winnerCard: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) 120px minmax(0, 1fr)",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    alignItems: "start",
+  },
+  winnerLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+    marginBottom: 4,
+  },
+  winnerValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 900,
+    wordBreak: "break-word",
+  },
+  noWinnersBox: {
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+    marginBottom: 14,
+  },
+  drawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 14,
+  },
+  drawPanel: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
   },
 };
