@@ -40,6 +40,38 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
+function getStatusStyle(status: string): CSSProperties {
+  const clean = status.toLowerCase();
+
+  if (clean === "published") {
+    return {
+      background: "#ecfdf5",
+      borderColor: "#bbf7d0",
+      color: "#166534",
+    };
+  }
+
+  if (clean === "closed") {
+    return {
+      background: "#fff7ed",
+      borderColor: "#fed7aa",
+      color: "#9a3412",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    borderColor: "#e2e8f0",
+    color: "#475569",
+  };
+}
+
+function getTypeIcon(type: string) {
+  if (type === "reserved_seating") return "🎭";
+  if (type === "tables") return "🍽️";
+  return "🎫";
+}
+
 async function createEventAction(formData: FormData) {
   "use server";
 
@@ -97,33 +129,77 @@ export default async function AdminEventsPage({
   if (!session?.user) redirect("/admin/login");
 
   const tenantSlug = await getTenantSlugFromHeaders();
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
   const events = await listEvents(tenantSlug);
+
+  const totalEvents = events.length;
+  const publishedCount = events.filter((event) => event.status === "published")
+    .length;
+  const draftCount = events.filter((event) => event.status === "draft").length;
+  const closedCount = events.filter((event) => event.status === "closed").length;
 
   return (
     <main style={styles.page}>
-      <section style={styles.hero}>
+      <section style={styles.header}>
         <div>
-          <p style={styles.eyebrow}>Admin</p>
-          <h1 style={styles.title}>Events & Tickets</h1>
-          <p style={styles.heroText}>
-            Create admission tickets, reserved seating events, lectures,
-            cinema-style rows, theatre seating, or table-based fundraisers.
+          <div style={styles.badge}>Admin dashboard</div>
+
+          <h1 style={styles.title}>Manage events</h1>
+
+          <p style={styles.subtitle}>
+            Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
           </p>
         </div>
 
-        <Link href="/admin" style={styles.backButton}>
-          Back to admin
-        </Link>
+        <div style={styles.navRow}>
+          <Link href="/admin" style={styles.topSecondaryLink}>
+            ← Dashboard
+          </Link>
+
+          <Link href="/admin/raffles" style={styles.topSecondaryLink}>
+            Raffles
+          </Link>
+
+          <Link href="/admin/squares" style={styles.topSecondaryLink}>
+            Squares
+          </Link>
+
+          <div style={styles.activeNav}>Events</div>
+
+          <Link
+            href={`/c/${tenantSlug}?adminReturn=/admin/events`}
+            style={styles.secondaryLink}
+          >
+            Public campaigns page
+          </Link>
+
+          <a href="#create-event" style={styles.createLink}>
+            + Create event
+          </a>
+        </div>
+      </section>
+            <section style={styles.statsRow}>
+        <StatCard label="Total events" value={totalEvents} />
+        <StatCard label="Published" value={publishedCount} />
+        <StatCard label="Draft" value={draftCount} />
+        <StatCard label="Closed" value={closedCount} />
       </section>
 
       <section style={styles.layout}>
-        <div style={styles.panel}>
+        {/* CREATE EVENT (same functionality, restyled) */}
+        <div id="create-event" style={styles.panel}>
           <div style={styles.sectionHeader}>
-            <p style={styles.sectionEyebrow}>Step 1</p>
-            <h2 style={styles.sectionTitle}>Create event</h2>
+            <p style={styles.sectionEyebrow}>Create</p>
+            <h2 style={styles.sectionTitle}>New event</h2>
             <p style={styles.sectionText}>
-              Start with the event shell. Ticket prices, seat rows and tables
-              are managed after creation.
+              Create your event first, then manage tickets, seats or tables.
             </p>
           </div>
 
@@ -146,7 +222,7 @@ export default async function AdminEventsPage({
               Description
               <textarea
                 name="description"
-                rows={5}
+                rows={4}
                 placeholder="Describe the event..."
                 style={styles.textarea}
               />
@@ -156,7 +232,7 @@ export default async function AdminEventsPage({
               Location
               <input
                 name="location"
-                placeholder="Venue, hall, cinema, school..."
+                placeholder="Venue, hall, cinema..."
                 style={styles.input}
               />
             </label>
@@ -164,12 +240,20 @@ export default async function AdminEventsPage({
             <div style={styles.twoCol}>
               <label style={styles.label}>
                 Start date/time
-                <input name="starts_at" type="datetime-local" style={styles.input} />
+                <input
+                  name="starts_at"
+                  type="datetime-local"
+                  style={styles.input}
+                />
               </label>
 
               <label style={styles.label}>
                 Currency
-                <select name="currency" defaultValue="GBP" style={styles.input}>
+                <select
+                  name="currency"
+                  defaultValue="GBP"
+                  style={styles.input}
+                >
                   <option value="GBP">GBP</option>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -184,9 +268,15 @@ export default async function AdminEventsPage({
                 defaultValue="general_admission"
                 style={styles.input}
               >
-                <option value="general_admission">General admission tickets</option>
-                <option value="reserved_seating">Seat numbers and rows</option>
-                <option value="tables">Tables with seat numbers</option>
+                <option value="general_admission">
+                  General admission tickets
+                </option>
+                <option value="reserved_seating">
+                  Seat numbers and rows
+                </option>
+                <option value="tables">
+                  Tables with seat numbers
+                </option>
               </select>
             </label>
 
@@ -196,87 +286,129 @@ export default async function AdminEventsPage({
           </form>
         </div>
 
-        <div style={styles.panel}>
-          <div style={styles.sectionHeaderRow}>
-            <div>
-              <p style={styles.sectionEyebrow}>Step 2</p>
-              <h2 style={styles.sectionTitle}>Your events</h2>
-              <p style={styles.sectionText}>
-                Manage event setup, ticket prices, seats and public status.
+        {/* EVENTS LIST (converted to raffle-style cards) */}
+        <div style={styles.listPanel}>
+          {events.length === 0 ? (
+            <section style={styles.emptyCard}>
+              <h2 style={{ margin: 0 }}>No events yet</h2>
+              <p style={styles.muted}>
+                Create your first event to get started.
               </p>
-            </div>
-            <span style={styles.countBadge}>{events.length}</span>
-          </div>
+            </section>
+          ) : (
+            <section style={{ display: "grid", gap: 16 }}>
+              {events.map((event) => {
+                const statusStyle = getStatusStyle(event.status);
 
-          <div style={styles.eventList}>
-            {events.length === 0 ? (
-              <div style={styles.emptyState}>
-                <h3 style={styles.emptyTitle}>No events yet</h3>
-                <p style={styles.emptyText}>
-                  Create your first admission, seating or table event.
-                </p>
-              </div>
-            ) : (
-              events.map((event) => (
-                <article key={event.id} style={styles.eventCard}>
-                  <div style={styles.eventTop}>
-                    <div>
-                      <div style={styles.badgeRow}>
-                        <span style={styles.goldBadge}>
-                          {eventTypeLabel(event.event_type)}
-                        </span>
-                        <span style={styles.darkBadge}>
-                          {statusLabel(event.status)}
-                        </span>
+                return (
+                  <article key={event.id} style={styles.card}>
+                    <div style={styles.cardGrid}>
+                      {/* IMAGE / ICON */}
+                      <div style={styles.imageWrap}>
+                        {event.image_url ? (
+                          <img
+                            src={event.image_url}
+                            alt={event.title}
+                            style={styles.image}
+                          />
+                        ) : (
+                          <div style={styles.imageEmpty}>
+                            {getTypeIcon(event.event_type)}
+                          </div>
+                        )}
                       </div>
 
-                      <h3 style={styles.eventTitle}>{event.title}</h3>
-                      <p style={styles.eventMeta}>{formatDate(event.starts_at)}</p>
+                      {/* CONTENT */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={styles.cardTop}>
+                          <div>
+                            <h2 style={styles.cardTitle}>{event.title}</h2>
 
-                      {event.location && (
-                        <p style={styles.eventMeta}>{event.location}</p>
-                      )}
+                            <p style={styles.slug}>
+                              /e/{event.slug}
+                            </p>
+                          </div>
 
-                      <p style={styles.slugText}>Public slug: /e/{event.slug}</p>
+                          <div style={{ ...styles.statusPill, ...statusStyle }}>
+                            {statusLabel(event.status)}
+                          </div>
+                        </div>
+
+                        <div style={styles.infoGrid}>
+                          <InfoBlock
+                            label="Type"
+                            value={eventTypeLabel(event.event_type)}
+                          />
+                          <InfoBlock
+                            label="Date"
+                            value={formatDate(event.starts_at)}
+                          />
+                          <InfoBlock
+                            label="Location"
+                            value={event.location || "Not set"}
+                          />
+                          <InfoBlock
+                            label="Currency"
+                            value={event.currency}
+                          />
+                        </div>
+
+                        <div style={styles.actionsRow}>
+                          <Link
+                            href={`/admin/events/${event.id}`}
+                            style={styles.primaryLink}
+                          >
+                            Manage
+                          </Link>
+
+                          <Link
+                            href={`/e/${event.slug}?adminReturn=/admin/events/${event.id}`}
+                            target="_blank"
+                            style={styles.secondaryLink}
+                          >
+                            View campaign page
+                          </Link>
+
+                          <form action={deleteEventAction}>
+                            <input type="hidden" name="id" value={event.id} />
+                            <button type="submit" style={styles.deleteButton}>
+                              Delete
+                            </button>
+                          </form>
+                        </div>
+                      </div>
                     </div>
-
-                    <div style={styles.actions}>
-                      <Link href={`/admin/events/${event.id}`} style={styles.manageButton}>
-                        Manage
-                      </Link>
-
-                      <form action={deleteEventAction}>
-                        <input type="hidden" name="id" value={event.id} />
-                        <button type="submit" style={styles.deleteButton}>
-                          Delete
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-
-                  <div style={styles.statsGrid}>
-                    <div style={styles.statBox}>
-                      <p style={styles.statLabel}>Currency</p>
-                      <p style={styles.statValue}>{event.currency}</p>
-                    </div>
-
-                    <div style={styles.statBox}>
-                      <p style={styles.statLabel}>Created</p>
-                      <p style={styles.statValueSmall}>{formatDate(event.created_at)}</p>
-                    </div>
-
-                    <div style={styles.statBox}>
-                      <p style={styles.statLabel}>Starting from</p>
-                      <p style={styles.statValue}>£{moneyFromCents(0)}</p>
-                    </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+                  </article>
+                );
+              })}
+            </section>
+          )}
         </div>
       </section>
     </main>
+  );
+}
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
+    </div>
+  );
+}
+
+function InfoBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div style={styles.infoBlock}>
+      <div style={styles.infoLabel}>{label}</div>
+      <div style={styles.infoValue}>{value}</div>
+    </div>
   );
 }
 
@@ -284,98 +416,190 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f8fafc",
-    padding: 16,
-    color: "#0f172a",
+    padding: "32px 16px 56px",
   },
-  hero: {
-    maxWidth: 1100,
-    margin: "24px auto 16px",
-    padding: 24,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
+
+  header: {
+    maxWidth: 1180,
+    margin: "0 auto 24px",
   },
-  eyebrow: {
-    margin: "0 0 8px",
-    color: "#2563eb",
-    fontWeight: 900,
+
+  badge: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#e0f2fe",
+    color: "#0369a1",
     fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    fontWeight: 800,
+    marginBottom: 10,
   },
+
   title: {
     margin: 0,
-    fontSize: "clamp(30px, 6vw, 44px)",
-    fontWeight: 950,
-    lineHeight: 1.05,
+    fontSize: 34,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
     color: "#0f172a",
   },
-  heroText: {
-    margin: "12px 0 0",
-    color: "#475569",
+
+  subtitle: {
+    margin: "10px 0 0",
+    color: "#64748b",
     fontSize: 15,
-    lineHeight: 1.5,
-    maxWidth: 740,
   },
-  backButton: {
+
+  navRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 16,
+  },
+
+  createLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#1683f8",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+
+  topSecondaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+
+  activeNav: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#0f172a",
+    color: "#ffffff",
+    fontWeight: 900,
+  },
+
+  secondaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    border: "1px solid #111827",
-    background: "#111827",
-    color: "#fff",
-    fontWeight: 800,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
-    whiteSpace: "nowrap",
+    fontWeight: 800,
+    fontSize: 14,
   },
+
+  primaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+
+  deleteButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#fff",
+    color: "#b91c1c",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  statsRow: {
+    maxWidth: 1180,
+    margin: "0 auto 22px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+  },
+
+  statCard: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  statLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+
+  statValue: {
+    fontSize: 28,
+    fontWeight: 900,
+    marginTop: 4,
+  },
+
   layout: {
-    maxWidth: 1100,
-    margin: "0 auto 16px",
+    maxWidth: 1180,
+    margin: "0 auto",
     display: "grid",
     gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
     gap: 16,
   },
+
   panel: {
     padding: 20,
     borderRadius: 18,
     background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
+    border: "1px solid #e2e8f0",
   },
+
+  listPanel: {
+    display: "grid",
+    gap: 16,
+  },
+
   sectionHeader: {
     marginBottom: 16,
   },
-  sectionHeaderRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
+
   sectionEyebrow: {
     margin: "0 0 6px",
     color: "#2563eb",
     fontWeight: 900,
     fontSize: 12,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
   },
+
   sectionTitle: {
     margin: 0,
     fontSize: 24,
     fontWeight: 950,
-    color: "#0f172a",
   },
+
   sectionText: {
     margin: "8px 0 0",
     color: "#64748b",
     fontSize: 14,
-    lineHeight: 1.5,
   },
+
   errorBox: {
     marginBottom: 16,
     padding: 12,
@@ -384,202 +608,149 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fecaca",
     color: "#991b1b",
     fontWeight: 800,
-    fontSize: 14,
   },
+
   form: {
     display: "grid",
     gap: 14,
   },
+
   label: {
     display: "grid",
     gap: 6,
     fontSize: 14,
     fontWeight: 850,
-    color: "#334155",
   },
+
   input: {
-    width: "100%",
     minHeight: 44,
     padding: "10px 12px",
     borderRadius: 14,
     border: "1px solid #cbd5e1",
-    background: "#f8fafc",
-    color: "#0f172a",
-    fontSize: 14,
-    outline: "none",
-    boxSizing: "border-box",
   },
+
   textarea: {
-    width: "100%",
     padding: "10px 12px",
     borderRadius: 14,
     border: "1px solid #cbd5e1",
-    background: "#f8fafc",
-    color: "#0f172a",
-    fontSize: 14,
-    outline: "none",
-    resize: "vertical",
-    boxSizing: "border-box",
   },
+
   twoCol: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 12,
   },
+
   primaryButton: {
-    width: "100%",
     padding: "13px 16px",
     borderRadius: 16,
-    border: "1px solid #111827",
     background: "#111827",
-    color: "#ffffff",
-    fontWeight: 950,
-    fontSize: 14,
+    color: "#fff",
+    fontWeight: 900,
     cursor: "pointer",
   },
-  countBadge: {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 999,
-    background: "#eef2ff",
-    color: "#1d4ed8",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 950,
-  },
-  eventList: {
-    display: "grid",
-    gap: 14,
-  },
-  emptyState: {
-    padding: 28,
-    borderRadius: 18,
-    border: "1px dashed #cbd5e1",
-    background: "#f8fafc",
-    textAlign: "center",
-  },
-  emptyTitle: {
-    margin: 0,
-    fontSize: 18,
-    fontWeight: 950,
-  },
-  emptyText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-  },
-  eventCard: {
-    padding: 18,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-  },
-  eventTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-  },
-  badgeRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  goldBadge: {
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#111827",
-    padding: "5px 9px",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-  darkBadge: {
-    borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#334155",
-    padding: "5px 9px",
-    fontSize: 11,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-  eventTitle: {
-    margin: "12px 0 0",
-    fontSize: 22,
-    fontWeight: 950,
-    color: "#0f172a",
-  },
-  eventMeta: {
-    margin: "6px 0 0",
-    color: "#475569",
-    fontSize: 14,
-  },
-  slugText: {
-    margin: "8px 0 0",
-    color: "#94a3b8",
-    fontSize: 12,
-  },
-  actions: {
-    display: "grid",
-    gap: 8,
-    minWidth: 110,
-  },
-  manageButton: {
-    padding: "10px 12px",
-    borderRadius: 14,
-    background: "#111827",
-    color: "#ffffff",
-    fontWeight: 900,
-    textDecoration: "none",
-    textAlign: "center",
-    fontSize: 14,
-  },
-  deleteButton: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 14,
-    background: "#fff",
-    border: "1px solid #fecaca",
-    color: "#b91c1c",
-    fontWeight: 900,
-    cursor: "pointer",
-    fontSize: 14,
-  },
-  statsGrid: {
-    marginTop: 14,
-    paddingTop: 14,
-    borderTop: "1px solid #e2e8f0",
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 10,
-  },
-  statBox: {
-    padding: 12,
-    borderRadius: 14,
+
+  emptyCard: {
+    padding: 24,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
-  statLabel: {
-    margin: 0,
+
+  muted: {
     color: "#64748b",
-    fontSize: 11,
+  },
+
+  card: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    padding: 18,
+    background: "#fff",
+  },
+
+  cardGrid: {
+    display: "grid",
+    gridTemplateColumns: "96px 1fr",
+    gap: 16,
+  },
+
+  imageWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#f1f5f9",
+  },
+
+  image: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  imageEmpty: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+    fontSize: 28,
+  },
+
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  cardTitle: {
+    margin: 0,
+    fontSize: 22,
     fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
   },
-  statValue: {
+
+  slug: {
     margin: "6px 0 0",
-    fontSize: 18,
-    fontWeight: 950,
-    color: "#0f172a",
+    color: "#64748b",
+    fontSize: 14,
   },
-  statValueSmall: {
-    margin: "6px 0 0",
+
+  statusPill: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontWeight: 800,
     fontSize: 13,
+  },
+
+  infoGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+
+  infoBlock: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  infoLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+
+  infoValue: {
+    marginTop: 4,
     fontWeight: 900,
-    color: "#0f172a",
+  },
+
+  actionsRow: {
+    display: "flex",
+    gap: 10,
+    marginTop: 18,
+    flexWrap: "wrap",
   },
 };
