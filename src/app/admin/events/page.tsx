@@ -3,29 +3,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import {
-  createEvent,
-  deleteEvent,
-  listEvents,
-  slugifyEventTitle,
-  type EventType,
-} from "../../../../api/_lib/events-repo";
+import { deleteEvent, listEvents } from "../../../../api/_lib/events-repo";
 
 function moneyFromCents(cents: number | null | undefined) {
-  return (Number(cents || 0) / 100).toFixed(2);
+  return `£${(Number(cents || 0) / 100).toFixed(2)}`;
 }
 
-function formatDate(value: string | null) {
-  if (!value) return "No date set";
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Not set";
 
-  try {
-    return new Intl.DateTimeFormat("en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  } catch {
-    return "Invalid date";
-  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function eventTypeLabel(type: string) {
@@ -34,78 +27,36 @@ function eventTypeLabel(type: string) {
   return "General admission";
 }
 
-function statusLabel(status: string) {
-  if (status === "published") return "Published";
-  if (status === "closed") return "Closed";
-  return "Draft";
-}
-
-function getStatusStyle(status: string): CSSProperties {
-  const clean = status.toLowerCase();
+function getStatusStyle(status: string | null | undefined): CSSProperties {
+  const clean = String(status || "draft").toLowerCase();
 
   if (clean === "published") {
     return {
-      background: "#ecfdf5",
-      borderColor: "#bbf7d0",
+      background: "#dcfce7",
       color: "#166534",
+      border: "1px solid #bbf7d0",
     };
   }
 
   if (clean === "closed") {
     return {
       background: "#fff7ed",
-      borderColor: "#fed7aa",
       color: "#9a3412",
+      border: "1px solid #fed7aa",
     };
   }
 
   return {
-    background: "#f8fafc",
-    borderColor: "#e2e8f0",
+    background: "#f1f5f9",
     color: "#475569",
+    border: "1px solid #e2e8f0",
   };
 }
 
-function getTypeIcon(type: string) {
+function getEventIcon(type: string) {
   if (type === "reserved_seating") return "🎭";
   if (type === "tables") return "🍽️";
   return "🎫";
-}
-
-async function createEventAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const tenantSlug = await getTenantSlugFromHeaders();
-
-  const title = String(formData.get("title") || "").trim();
-  const description = String(formData.get("description") || "").trim();
-  const location = String(formData.get("location") || "").trim();
-  const startsAt = String(formData.get("starts_at") || "").trim();
-  const currency = String(formData.get("currency") || "GBP").trim() || "GBP";
-  const eventType = String(
-    formData.get("event_type") || "general_admission",
-  ) as EventType;
-
-  if (!title) redirect("/admin/events?error=missing-title");
-
-  const slug = `${slugifyEventTitle(title)}-${Date.now().toString().slice(-5)}`;
-
-  const event = await createEvent({
-    tenantSlug,
-    slug,
-    title,
-    description: description || null,
-    location: location || null,
-    startsAt: startsAt ? new Date(startsAt).toISOString() : null,
-    currency,
-    eventType,
-    status: "draft",
-  });
-
-  redirect(`/admin/events/${event.id}`);
 }
 
 async function deleteEventAction(formData: FormData) {
@@ -120,17 +71,16 @@ async function deleteEventAction(formData: FormData) {
   redirect("/admin/events");
 }
 
-export default async function AdminEventsPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string };
-}) {
+export default async function AdminEventsPage() {
   const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
 
   const tenantSlug = await getTenantSlugFromHeaders();
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
+    ? session.user.tenantSlugs.map((v) => String(v))
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
@@ -139,11 +89,9 @@ export default async function AdminEventsPage({
 
   const events = await listEvents(tenantSlug);
 
-  const totalEvents = events.length;
-  const publishedCount = events.filter((event) => event.status === "published")
-    .length;
-  const draftCount = events.filter((event) => event.status === "draft").length;
-  const closedCount = events.filter((event) => event.status === "closed").length;
+  const published = events.filter((event) => event.status === "published").length;
+  const draft = events.filter((event) => event.status === "draft").length;
+  const closed = events.filter((event) => event.status === "closed").length;
 
   return (
     <main style={styles.page}>
@@ -154,241 +102,135 @@ export default async function AdminEventsPage({
           <h1 style={styles.title}>Manage events</h1>
 
           <p style={styles.subtitle}>
-            Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
+            Tenant: <strong>{tenantSlug}</strong>
           </p>
         </div>
 
-        <div style={styles.navRow}>
-          <Link href="/admin" style={styles.topSecondaryLink}>
+        <div style={styles.nav}>
+          <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
 
-          <Link href="/admin/raffles" style={styles.topSecondaryLink}>
+          <Link href="/admin/raffles" style={styles.navButton}>
             Raffles
           </Link>
 
-          <Link href="/admin/squares" style={styles.topSecondaryLink}>
+          <Link href="/admin/squares" style={styles.navButton}>
             Squares
           </Link>
 
-          <div style={styles.activeNav}>Events</div>
+          <Link href="/admin/events" style={styles.navButtonActive}>
+            Events
+          </Link>
 
-          <Link
-            href={`/c/${tenantSlug}?adminReturn=/admin/events`}
-            style={styles.secondaryLink}
-          >
+          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
             Public campaigns page
           </Link>
 
-          <a href="#create-event" style={styles.createLink}>
+          <Link href="/admin/events/new" style={styles.createButton}>
             + Create event
-          </a>
+          </Link>
         </div>
       </section>
-            <section style={styles.statsRow}>
-        <StatCard label="Total events" value={totalEvents} />
-        <StatCard label="Published" value={publishedCount} />
-        <StatCard label="Draft" value={draftCount} />
-        <StatCard label="Closed" value={closedCount} />
+
+      <section style={styles.statsGrid}>
+        <StatCard label="Total events" value={events.length} />
+        <StatCard label="Published" value={published} />
+        <StatCard label="Draft" value={draft} />
+        <StatCard label="Closed" value={closed} />
       </section>
 
-      <section style={styles.layout}>
-        {/* CREATE EVENT (same functionality, restyled) */}
-        <div id="create-event" style={styles.panel}>
-          <div style={styles.sectionHeader}>
-            <p style={styles.sectionEyebrow}>Create</p>
-            <h2 style={styles.sectionTitle}>New event</h2>
-            <p style={styles.sectionText}>
-              Create your event first, then manage tickets, seats or tables.
-            </p>
-          </div>
+      {events.length === 0 ? (
+        <section style={styles.emptyCard}>
+          <h2 style={{ margin: 0 }}>No events yet</h2>
+          <p style={styles.muted}>Create your first event.</p>
 
-          {searchParams?.error === "missing-title" && (
-            <div style={styles.errorBox}>Please enter an event title.</div>
-          )}
-
-          <form action={createEventAction} style={styles.form}>
-            <label style={styles.label}>
-              Event title
-              <input
-                name="title"
-                required
-                placeholder="Charity dinner, theatre night, lecture..."
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Description
-              <textarea
-                name="description"
-                rows={4}
-                placeholder="Describe the event..."
-                style={styles.textarea}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Location
-              <input
-                name="location"
-                placeholder="Venue, hall, cinema..."
-                style={styles.input}
-              />
-            </label>
-
-            <div style={styles.twoCol}>
-              <label style={styles.label}>
-                Start date/time
-                <input
-                  name="starts_at"
-                  type="datetime-local"
-                  style={styles.input}
-                />
-              </label>
-
-              <label style={styles.label}>
-                Currency
-                <select
-                  name="currency"
-                  defaultValue="GBP"
-                  style={styles.input}
-                >
-                  <option value="GBP">GBP</option>
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                </select>
-              </label>
-            </div>
-
-            <label style={styles.label}>
-              Event type
-              <select
-                name="event_type"
-                defaultValue="general_admission"
-                style={styles.input}
-              >
-                <option value="general_admission">
-                  General admission tickets
-                </option>
-                <option value="reserved_seating">
-                  Seat numbers and rows
-                </option>
-                <option value="tables">
-                  Tables with seat numbers
-                </option>
-              </select>
-            </label>
-
-            <button type="submit" style={styles.primaryButton}>
-              Create event
-            </button>
-          </form>
-        </div>
-
-        {/* EVENTS LIST (converted to raffle-style cards) */}
-        <div style={styles.listPanel}>
-          {events.length === 0 ? (
-            <section style={styles.emptyCard}>
-              <h2 style={{ margin: 0 }}>No events yet</h2>
-              <p style={styles.muted}>
-                Create your first event to get started.
-              </p>
-            </section>
-          ) : (
-            <section style={{ display: "grid", gap: 16 }}>
-              {events.map((event) => {
-                const statusStyle = getStatusStyle(event.status);
-
-                return (
-                  <article key={event.id} style={styles.card}>
-                    <div style={styles.cardGrid}>
-                      {/* IMAGE / ICON */}
-                      <div style={styles.imageWrap}>
-                        {event.image_url ? (
-                          <img
-                            src={event.image_url}
-                            alt={event.title}
-                            style={styles.image}
-                          />
-                        ) : (
-                          <div style={styles.imageEmpty}>
-                            {getTypeIcon(event.event_type)}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* CONTENT */}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={styles.cardTop}>
-                          <div>
-                            <h2 style={styles.cardTitle}>{event.title}</h2>
-
-                            <p style={styles.slug}>
-                              /e/{event.slug}
-                            </p>
-                          </div>
-
-                          <div style={{ ...styles.statusPill, ...statusStyle }}>
-                            {statusLabel(event.status)}
-                          </div>
-                        </div>
-
-                        <div style={styles.infoGrid}>
-                          <InfoBlock
-                            label="Type"
-                            value={eventTypeLabel(event.event_type)}
-                          />
-                          <InfoBlock
-                            label="Date"
-                            value={formatDate(event.starts_at)}
-                          />
-                          <InfoBlock
-                            label="Location"
-                            value={event.location || "Not set"}
-                          />
-                          <InfoBlock
-                            label="Currency"
-                            value={event.currency}
-                          />
-                        </div>
-
-                        <div style={styles.actionsRow}>
-                          <Link
-                            href={`/admin/events/${event.id}`}
-                            style={styles.primaryLink}
-                          >
-                            Manage
-                          </Link>
-
-                          <Link
-                            href={`/e/${event.slug}?adminReturn=/admin/events/${event.id}`}
-                            target="_blank"
-                            style={styles.secondaryLink}
-                          >
-                            View campaign page
-                          </Link>
-
-                          <form action={deleteEventAction}>
-                            <input type="hidden" name="id" value={event.id} />
-                            <button type="submit" style={styles.deleteButton}>
-                              Delete
-                            </button>
-                          </form>
-                        </div>
-                      </div>
+          <Link href="/admin/events/new" style={styles.createButton}>
+            + Create event
+          </Link>
+        </section>
+      ) : (
+        <section style={styles.list}>
+          {events.map((event) => (
+            <article key={event.id} style={styles.card}>
+              <div style={styles.cardTop}>
+                <div style={styles.imageWrap}>
+                  {event.image_url ? (
+                    <img
+                      src={event.image_url}
+                      alt={event.title}
+                      style={styles.image}
+                    />
+                  ) : (
+                    <div style={styles.imageEmpty}>
+                      {getEventIcon(event.event_type)}
                     </div>
-                  </article>
-                );
-              })}
-            </section>
-          )}
-        </div>
-      </section>
+                  )}
+                </div>
+
+                <div style={styles.cardMain}>
+                  <div style={styles.cardHeader}>
+                    <div>
+                      <h2 style={styles.cardTitle}>
+                        {event.title || "Untitled event"}
+                      </h2>
+
+                      <p style={styles.slug}>/e/{event.slug}</p>
+                    </div>
+
+                    <span
+                      style={{
+                        ...styles.status,
+                        ...getStatusStyle(event.status),
+                      }}
+                    >
+                      {event.status}
+                    </span>
+                  </div>
+
+                  <div style={styles.detailGrid}>
+                    <Detail label="Type" value={eventTypeLabel(event.event_type)} />
+                    <Detail label="Date" value={formatDate(event.starts_at)} />
+                    <Detail label="Location" value={event.location || "Not set"} />
+                    <Detail label="Currency" value={event.currency || "GBP"} />
+                    <Detail label="Starting from" value={moneyFromCents(0)} />
+                  </div>
+
+                  <div style={styles.actions}>
+                    <Link
+                      href={`/admin/events/${event.id}`}
+                      style={styles.openButton}
+                    >
+                      Manage
+                    </Link>
+
+                    <a
+                      href={`/e/${event.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.viewButton}
+                    >
+                      View campaign page
+                    </a>
+
+                    <form action={deleteEventAction} style={styles.deleteForm}>
+                      <input type="hidden" name="id" value={event.id} />
+                      <button type="submit" style={styles.deleteButton}>
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
     </main>
   );
 }
-function StatCard({ label, value }: { label: string; value: number }) {
+
+function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statLabel}>{label}</div>
@@ -397,33 +239,31 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function InfoBlock({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={styles.infoBlock}>
-      <div style={styles.infoLabel}>{label}</div>
-      <div style={styles.infoValue}>{value}</div>
+    <div style={styles.detail}>
+      <div style={styles.detailLabel}>{label}</div>
+      <div style={styles.detailValue}>{value}</div>
     </div>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: "32px 16px 56px",
-  },
-
-  header: {
     maxWidth: 1180,
-    margin: "0 auto 24px",
+    margin: "0 auto",
+    padding: "28px 16px 56px",
+    background: "#f8fafc",
+    minHeight: "100vh",
   },
-
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 24,
+  },
   badge: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -431,326 +271,208 @@ const styles: Record<string, CSSProperties> = {
     background: "#e0f2fe",
     color: "#0369a1",
     fontSize: 13,
-    fontWeight: 800,
+    fontWeight: 900,
     marginBottom: 10,
   },
-
   title: {
     margin: 0,
-    fontSize: 34,
+    fontSize: 38,
     lineHeight: 1.1,
-    letterSpacing: "-0.04em",
     color: "#0f172a",
   },
-
   subtitle: {
     margin: "10px 0 0",
     color: "#64748b",
-    fontSize: 15,
   },
-
-  navRow: {
+  nav: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  navButton: {
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  navButtonActive: {
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  createButton: {
+    display: "inline-flex",
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 900,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gap: 14,
+    marginBottom: 22,
+  },
+  statCard: {
+    padding: 18,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  statLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  statValue: {
+    marginTop: 6,
+    fontSize: 28,
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+  list: {
+    display: "grid",
+    gap: 16,
+  },
+  card: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  cardTop: {
+    display: "grid",
+    gridTemplateColumns: "110px 1fr",
+    gap: 18,
+  },
+  imageWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  imageEmpty: {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 32,
+    color: "#94a3b8",
+  },
+  cardMain: {
+    minWidth: 0,
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.15,
+    color: "#0f172a",
+  },
+  slug: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontWeight: 700,
+  },
+  status: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 900,
+    textTransform: "capitalize",
+  },
+  detailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  detailLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+  },
+  actions: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     marginTop: 16,
   },
-
-  createLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
-    background: "#1683f8",
-    color: "#fff",
-    textDecoration: "none",
-    fontWeight: 800,
-  },
-
-  topSecondaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 800,
-  },
-
-  activeNav: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
+  openButton: {
+    padding: "12px 16px",
+    borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
+    textDecoration: "none",
     fontWeight: 900,
   },
-
-  secondaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
+  viewButton: {
+    padding: "12px 16px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-
-  primaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-
-  deleteButton: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    border: "1px solid #fecaca",
-    background: "#fff",
-    color: "#b91c1c",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-
-  statsRow: {
-    maxWidth: 1180,
-    margin: "0 auto 22px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-  },
-
-  statCard: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-
-  statLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-
-  statValue: {
-    fontSize: 28,
     fontWeight: 900,
-    marginTop: 4,
   },
-
-  layout: {
-    maxWidth: 1180,
-    margin: "0 auto",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
-    gap: 16,
-  },
-
-  panel: {
-    padding: 20,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-
-  listPanel: {
-    display: "grid",
-    gap: 16,
-  },
-
-  sectionHeader: {
-    marginBottom: 16,
-  },
-
-  sectionEyebrow: {
-    margin: "0 0 6px",
-    color: "#2563eb",
-    fontWeight: 900,
-    fontSize: 12,
-    textTransform: "uppercase",
-  },
-
-  sectionTitle: {
+  deleteForm: {
     margin: 0,
-    fontSize: 24,
-    fontWeight: 950,
   },
-
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-  },
-
-  errorBox: {
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 14,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-    fontWeight: 800,
-  },
-
-  form: {
-    display: "grid",
-    gap: 14,
-  },
-
-  label: {
-    display: "grid",
-    gap: 6,
-    fontSize: 14,
-    fontWeight: 850,
-  },
-
-  input: {
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-  },
-
-  textarea: {
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-  },
-
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-  },
-
-  primaryButton: {
-    padding: "13px 16px",
-    borderRadius: 16,
-    background: "#111827",
-    color: "#fff",
+  deleteButton: {
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
     fontWeight: 900,
     cursor: "pointer",
   },
-
   emptyCard: {
     padding: 24,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
-
   muted: {
     color: "#64748b",
-  },
-
-  card: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 22,
-    padding: 18,
-    background: "#fff",
-  },
-
-  cardGrid: {
-    display: "grid",
-    gridTemplateColumns: "96px 1fr",
-    gap: 16,
-  },
-
-  imageWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 18,
-    overflow: "hidden",
-    background: "#f1f5f9",
-  },
-
-  image: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-  },
-
-  imageEmpty: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-    fontSize: 28,
-  },
-
-  cardTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  cardTitle: {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 900,
-  },
-
-  slug: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-  },
-
-  statusPill: {
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontWeight: 800,
-    fontSize: 13,
-  },
-
-  infoGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-    gap: 10,
-    marginTop: 16,
-  },
-
-  infoBlock: {
-    padding: 12,
-    borderRadius: 14,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-
-  infoLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    fontWeight: 800,
-  },
-
-  infoValue: {
-    marginTop: 4,
-    fontWeight: 900,
-  },
-
-  actionsRow: {
-    display: "flex",
-    gap: 10,
-    marginTop: 18,
-    flexWrap: "wrap",
   },
 };
