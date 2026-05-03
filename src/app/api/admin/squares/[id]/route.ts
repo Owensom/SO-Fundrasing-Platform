@@ -43,6 +43,16 @@ function parseDrawAt(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+function parseFreeEntryClosesAt(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toISOString();
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   const tenantSlug = getTenantSlugFromRequest(request);
   const id = context.params.id;
@@ -155,6 +165,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       Math.floor(parseNumber(formData.get("auto_draw_to_prize"), 999)),
     );
 
+    const questionText = String(formData.get("question_text") ?? "").trim();
+    const questionAnswer = String(formData.get("question_answer") ?? "").trim();
+
+    const freeEntryAddress = String(
+      formData.get("free_entry_address") ?? "",
+    ).trim();
+
+    const freeEntryInstructions = String(
+      formData.get("free_entry_instructions") ?? "",
+    ).trim();
+
+    const freeEntryClosesAt = parseFreeEntryClosesAt(
+      formData.get("free_entry_closes_at"),
+    );
+
     const config = {
       ...currentConfig,
       prizes,
@@ -164,6 +189,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
         : [],
       auto_draw_from_prize: autoDrawFromPrize,
       auto_draw_to_prize: autoDrawToPrize,
+      question:
+        questionText || questionAnswer
+          ? {
+              text: questionText,
+              answer: questionAnswer,
+            }
+          : null,
+      free_entry:
+        freeEntryAddress || freeEntryInstructions || freeEntryClosesAt
+          ? {
+              address: freeEntryAddress,
+              instructions: freeEntryInstructions,
+              closes_at: freeEntryClosesAt,
+            }
+          : null,
     };
 
     await query(
