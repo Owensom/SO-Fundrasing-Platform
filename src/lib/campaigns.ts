@@ -46,6 +46,22 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
       from squares_games
       where slug = $1
 
+      union all
+
+      select
+        id,
+        title,
+        slug,
+        description,
+        tenant_slug,
+        'event' as type,
+        null::text as image_url,
+        null::text as "imageUrl",
+        status,
+        created_at
+      from events
+      where slug = $1
+
       limit 1
     `,
     [slug],
@@ -85,6 +101,22 @@ export async function getAllCampaignsForTenant(
         status,
         created_at
       from squares_games
+      where tenant_slug = $1
+
+      union all
+
+      select
+        id,
+        title,
+        slug,
+        description,
+        tenant_slug,
+        'event' as type,
+        null::text as image_url,
+        null::text as "imageUrl",
+        status,
+        created_at
+      from events
       where tenant_slug = $1
 
       order by created_at desc
