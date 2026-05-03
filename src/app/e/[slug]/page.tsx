@@ -56,12 +56,30 @@ export default async function PublicEventPage({
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
       <div className="mx-auto max-w-7xl space-y-8">
-        <Link
-          href={`/c/${tenantSlug}`}
-          className="inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
-        >
-          ← Back to all campaigns
-        </Link>
+        <nav className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href={`/c/${tenantSlug}`}
+            className="inline-flex rounded-full border border-white/15 bg-white px-4 py-3 text-sm font-black text-slate-950 shadow-sm hover:bg-slate-100"
+          >
+            ← Back to campaigns
+          </Link>
+
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/c/${tenantSlug}/terms`}
+              className="inline-flex rounded-full border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
+            >
+              Terms
+            </Link>
+
+            <Link
+              href={`/c/${tenantSlug}/privacy`}
+              className="inline-flex rounded-full border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
+            >
+              Privacy
+            </Link>
+          </div>
+        </nav>
 
         {searchParams?.checkout === "success" && (
           <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-100">
@@ -106,6 +124,7 @@ export default async function PublicEventPage({
               <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
                 {eventTypeLabel(event.event_type)}
               </span>
+
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-200">
                 {event.currency}
               </span>
@@ -184,7 +203,9 @@ export default async function PublicEventPage({
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-3xl font-black">
-              {event.event_type === "tables" ? "Choose table seats" : "Choose seats"}
+              {event.event_type === "tables"
+                ? "Choose table seats"
+                : "Choose seats"}
             </h2>
 
             <p className="mt-2 text-sm text-slate-300">
