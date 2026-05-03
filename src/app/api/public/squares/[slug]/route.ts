@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       Array.isArray(reservation.squares) ? reservation.squares : [],
     );
 
-    const config = game.config_json ?? {};
+    const config = (game.config_json ?? {}) as any;
 
     return NextResponse.json({
       ok: true,
