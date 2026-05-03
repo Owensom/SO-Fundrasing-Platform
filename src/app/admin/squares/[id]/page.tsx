@@ -116,6 +116,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   const currency = game.currency || "GBP";
   const config = (game.config_json ?? {}) as any;
+  const question = config.question ?? {};
+  const freeEntry = config.free_entry ?? {};
 
   const savedPrizes = Array.isArray(config.prizes)
     ? (config.prizes as Prize[])
@@ -328,6 +330,88 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </section>
 
         <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Entry question (legal)</h2>
+              <p style={styles.sectionDescription}>
+                Add a skill-based question for the public squares checkout flow.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Question">
+              <input
+                name="question_text"
+                defaultValue={String(question.text ?? "")}
+                placeholder="e.g. What colour is a London taxi?"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Correct answer">
+              <input
+                name="question_answer"
+                defaultValue={String(question.answer ?? "")}
+                placeholder="e.g. black"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+
+          <p style={styles.sectionDescription}>
+            The public squares page requires this answer before checkout when a
+            question is set.
+          </p>
+        </section>
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Free postal entry</h2>
+              <p style={styles.sectionDescription}>
+                Add the postal entry route shown on the public squares page.
+              </p>
+            </div>
+          </div>
+
+          <Field label="Postal address">
+            <textarea
+              name="free_entry_address"
+              rows={3}
+              defaultValue={String(freeEntry.address ?? "")}
+              placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Postal instructions">
+            <textarea
+              name="free_entry_instructions"
+              rows={4}
+              defaultValue={String(freeEntry.instructions ?? "")}
+              placeholder="Include your full name, email address, phone number, squares game name, answer to the entry question and preferred square number if applicable."
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Postal entry closing date">
+            <input
+              name="free_entry_closes_at"
+              type="datetime-local"
+              defaultValue={formatDateTimeLocal(freeEntry.closes_at)}
+              style={styles.input}
+            />
+          </Field>
+
+          <p style={styles.sectionDescription}>
+            Postal entries must include an email address so the entrant can be
+            contacted if they win and included in the automatic or dramatic draw.
+            One entry per postcard/envelope.
+          </p>
+        </section>
+
+        <section style={styles.section}>
           <SquaresPrizeSettings initialPrizes={savedPrizes} />
         </section>
 
@@ -467,424 +551,3 @@ function Field({
     </label>
   );
 }
-const styles: Record<string, CSSProperties> = {
-  page: {
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  backLink: {
-    color: "#334155",
-    textDecoration: "none",
-    fontWeight: 800,
-  },
-  publicLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: 14,
-  },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 260px",
-    gap: 18,
-    alignItems: "stretch",
-    padding: 22,
-    borderRadius: 24,
-    background: "#0f172a",
-    color: "#ffffff",
-    marginBottom: 16,
-  },
-  heroContent: {
-    minWidth: 0,
-  },
-  eyebrow: {
-    display: "inline-flex",
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-  heroTitleRow: {
-    display: "flex",
-    gap: 12,
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  heroTitle: {
-    margin: 0,
-    fontSize: 34,
-    lineHeight: 1.08,
-    letterSpacing: "-0.04em",
-    wordBreak: "break-word",
-  },
-  statusPill: {
-    padding: "7px 11px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    textTransform: "capitalize",
-    fontWeight: 900,
-  },
-  heroSlug: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    fontSize: 14,
-    fontWeight: 700,
-    wordBreak: "break-word",
-  },
-  heroDescription: {
-    margin: "12px 0 0",
-    color: "#e2e8f0",
-    lineHeight: 1.55,
-    maxWidth: 720,
-  },
-  heroDescriptionMuted: {
-    margin: "12px 0 0",
-    color: "#94a3b8",
-    lineHeight: 1.55,
-  },
-  heroImageWrap: {
-    borderRadius: 18,
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.12)",
-    overflow: "hidden",
-    minHeight: 180,
-  },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-  },
-  heroImageEmpty: {
-    height: "100%",
-    minHeight: 180,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 46,
-    color: "#94a3b8",
-  },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    padding: 15,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 900,
-    marginTop: 5,
-    wordBreak: "break-word",
-  },
-  progressCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  progressHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  progressPercent: {
-    color: "#166534",
-    fontWeight: 900,
-    fontSize: 18,
-  },
-  progressTrack: {
-    height: 10,
-    background: "#e2e8f0",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    background: "#16a34a",
-    borderRadius: 999,
-  },
-  form: {
-    display: "grid",
-    gap: 0,
-  },
-  section: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.02em",
-  },
-  sectionDescription: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  twoColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 12,
-    marginBottom: 12,
-  },
-  threeColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 12,
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-    marginBottom: 6,
-  },
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    resize: "vertical",
-    boxSizing: "border-box",
-  },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
-    gap: 16,
-    padding: 14,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  subTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
-  previewBox: {
-    height: 220,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    overflow: "hidden",
-  },
-  previewImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-  },
-  emptyPreview: {
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#94a3b8",
-    fontSize: 42,
-  },
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    marginBottom: 16,
-  },
-  submitButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  winnerList: {
-    display: "grid",
-    gap: 10,
-    marginBottom: 14,
-  },
-  winnerCard: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.4fr) 120px minmax(0, 1fr)",
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    alignItems: "start",
-  },
-  winnerLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-    marginBottom: 4,
-  },
-  winnerValue: {
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 900,
-    wordBreak: "break-word",
-  },
-  noWinnersBox: {
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 800,
-    marginBottom: 14,
-  },
-  drawButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  drawGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 14,
-  },
-  drawPanel: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 12,
-  },
-  manualDrawButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  soldSquareGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(86px, 1fr))",
-    gap: 8,
-    maxHeight: 280,
-    overflowY: "auto",
-    padding: 10,
-    borderRadius: 14,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  soldSquareOption: {
-    display: "grid",
-    gap: 4,
-    padding: "9px 8px",
-    borderRadius: 12,
-    background: "#f8fafc",
-    border: "1px solid #cbd5e1",
-    cursor: "pointer",
-    textAlign: "center",
-  },
-  soldSquareRadio: {
-    margin: "0 auto",
-  },
-  soldSquareNumber: {
-    color: "#0f172a",
-    fontWeight: 950,
-    fontSize: 14,
-  },
-  soldSquareName: {
-    color: "#64748b",
-    fontWeight: 800,
-    fontSize: 12,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-};
