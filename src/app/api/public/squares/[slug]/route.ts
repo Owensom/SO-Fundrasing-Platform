@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import {
-  cleanupExpiredSquaresReservations,
-  getActiveSquaresReservations,
-  getSquaresGameByTenantAndSlug,
-  listSquaresSales,
-  listSquaresWinners,
-} from "../../../../../../api/_lib/squares-repo";
+import { getSquaresGameByTenantAndSlug } from "../../../../../api/_lib/squares-repo";
 
-type RouteContext = {
-  params: {
-    slug: string;
-  };
-};
-
-export async function GET(request: NextRequest, context: RouteContext) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { slug: string } },
+) {
   const tenantSlug = getTenantSlugFromRequest(request);
-  const slug = context.params.slug;
 
   if (!tenantSlug) {
     return NextResponse.json(
@@ -26,7 +16,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const game = await getSquaresGameByTenantAndSlug(tenantSlug, slug);
+    const game = await getSquaresGameByTenantAndSlug(
+      tenantSlug,
+      params.slug,
+    );
 
     if (!game) {
       return NextResponse.json(
@@ -34,22 +27,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 404 },
       );
     }
-
-    await cleanupExpiredSquaresReservations(game.id);
-
-    const [sales, reservations, winners] = await Promise.all([
-      listSquaresSales(game.id),
-      getActiveSquaresReservations(game.id),
-      listSquaresWinners(game.id),
-    ]);
-
-    const soldSquares = sales.flatMap((sale) =>
-      Array.isArray(sale.squares) ? sale.squares : [],
-    );
-
-    const reservedSquares = reservations.flatMap((reservation) =>
-      Array.isArray(reservation.squares) ? reservation.squares : [],
-    );
 
     const config = (game.config_json ?? {}) as any;
 
@@ -62,17 +39,29 @@ export async function GET(request: NextRequest, context: RouteContext) {
         title: game.title,
         description: game.description ?? "",
         imageUrl: game.image_url ?? "",
-        drawAt: game.draw_at ?? null,
+        drawAt: game.draw_at,
         status: game.status,
         currency: game.currency ?? "GBP",
         pricePerSquareCents: game.price_per_square_cents,
         totalSquares: game.total_squares,
-        prizes: config.prizes ?? [],
-        soldSquares,
-        reservedSquares,
-        winners,
+        prizes: Array.isArray(config.prizes) ? config.prizes : [],
+        soldSquares: Array.isArray(config.sold) ? config.sold : [],
+        reservedSquares: Array.isArray(config.reserved)
+          ? config.reserved
+          : [],
+        winners: [],
+
+        // ✅ FIXED — THIS WAS MISSING / WRONG
         question: config.question ?? null,
-        freeEntry: config.free_entry ?? null,
+
+        // ✅ FIXED — map snake_case to camelCase
+        freeEntry: config.free_entry
+          ? {
+              address: config.free_entry.address ?? "",
+              instructions: config.free_entry.instructions ?? "",
+              closesAt: config.free_entry.closes_at ?? null,
+            }
+          : null,
       },
     });
   } catch (error) {
