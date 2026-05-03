@@ -136,6 +136,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   const currency = game.currency || "GBP";
   const config = (game.config_json ?? {}) as any;
+  const question = config.question ?? {};
+  const freeEntry = config.free_entry ?? {};
 
   const savedPrizes = Array.isArray(config.prizes)
     ? (config.prizes as Prize[])
@@ -358,7 +360,82 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             </Field>
           </div>
         </section>
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Entry question (legal)</h2>
+              <p style={styles.sectionDescription}>
+                Add a skill-based question for the public squares checkout flow.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.twoColumn}>
+            <Field label="Question">
+              <input
+                name="question_text"
+                defaultValue={String(question.text ?? "")}
+                placeholder="e.g. What colour is a London taxi?"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Correct answer">
+              <input
+                name="question_answer"
+                defaultValue={String(question.answer ?? "")}
+                placeholder="e.g. black"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+
+          <p style={styles.sectionDescription}>
+            The public squares page can require this answer before checkout when a question is set.
+          </p>
+        </section>
                 <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Free postal entry</h2>
+              <p style={styles.sectionDescription}>
+                Add the postal entry route shown on the public squares page.
+              </p>
+            </div>
+          </div>
+
+          <Field label="Postal address">
+            <textarea
+              name="free_entry_address"
+              rows={3}
+              defaultValue={String(freeEntry.address ?? "")}
+              placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Postal instructions">
+            <textarea
+              name="free_entry_instructions"
+              rows={4}
+              defaultValue={String(freeEntry.instructions ?? "")}
+              placeholder="Include your full name, email address, phone number, squares game name, answer to the entry question and preferred square number if applicable."
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Postal entry closing date">
+            <input
+              name="free_entry_closes_at"
+              type="datetime-local"
+              defaultValue={formatDateTimeLocal(freeEntry.closes_at)}
+              style={styles.input}
+            />
+          </Field>
+        </section>
+
+        <section style={styles.section}>
           <SquaresPrizeSettings initialPrizes={savedPrizes} />
         </section>
 
