@@ -106,6 +106,7 @@ function hasFreeEntry(freeEntry: FreeEntry | null | undefined) {
       String(freeEntry?.closes_at ?? "").trim(),
   );
 }
+
 export default function PublicSquaresPage({ params }: Props) {
   const { slug } = params;
 
@@ -116,7 +117,9 @@ export default function PublicSquaresPage({ params }: Props) {
   const [customerEmail, setCustomerEmail] = useState("");
   const [entryAnswer, setEntryAnswer] = useState("");
   const [coverFees, setCoverFees] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showAllPrizes, setShowAllPrizes] = useState(false);
+  const [showPostalDetails, setShowPostalDetails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -220,7 +223,8 @@ export default function PublicSquaresPage({ params }: Props) {
     setError("");
     setReservationMessage("");
   }
-    async function autoSelectSquares(quantity: number) {
+
+  async function autoSelectSquares(quantity: number) {
     if (!game || !canReserve) return;
 
     const requested = Math.max(1, Math.floor(Number(quantity) || 0));
@@ -287,6 +291,10 @@ export default function PublicSquaresPage({ params }: Props) {
 
       if (requiresQuestion && !entryAnswer.trim()) {
         throw new Error("Please answer the entry question.");
+      }
+
+      if (!acceptedTerms) {
+        throw new Error("Please confirm you have accepted the terms and privacy policy.");
       }
 
       const reserveResponse = await fetch(
@@ -385,7 +393,15 @@ export default function PublicSquaresPage({ params }: Props) {
   if (!game) return <div style={styles.wrap}>Squares game not found.</div>;
 
   const visiblePrizes = showAllPrizes ? game.prizes : game.prizes.slice(0, 3);
-    return (
+
+  const reserveDisabled =
+    saving ||
+    selectedSquares.length === 0 ||
+    !canReserve ||
+    !acceptedTerms ||
+    (requiresQuestion && !entryAnswer.trim());
+
+  return (
     <div style={styles.page}>
       <div style={styles.container}>
         <nav style={styles.navBar}>
@@ -405,6 +421,13 @@ export default function PublicSquaresPage({ params }: Props) {
         {game.description ? (
           <p style={styles.description}>{game.description}</p>
         ) : null}
+
+        <div style={styles.legalNotice}>
+          This campaign is run by the organiser. The platform provides software
+          only and is not responsible for the operation of this draw. The
+          organiser is responsible for ensuring compliance with all applicable
+          laws.
+        </div>
 
         <div style={styles.totalBox}>
           <div>
@@ -488,45 +511,6 @@ export default function PublicSquaresPage({ params }: Props) {
             ) : (
               <div style={styles.notice}>No winners have been published yet.</div>
             )}
-          </section>
-        ) : null}
-
-        {showFreeEntry ? (
-          <section style={styles.freeEntryBox}>
-            <div style={styles.freeEntryTitle}>Free postal entry</div>
-
-            {game.freeEntry?.address ? (
-              <div style={styles.freeEntryBlock}>
-                <div style={styles.freeEntryLabel}>Postal address</div>
-                <div style={styles.freeEntryText}>{game.freeEntry.address}</div>
-              </div>
-            ) : null}
-
-            {game.freeEntry?.instructions ? (
-              <div style={styles.freeEntryBlock}>
-                <div style={styles.freeEntryLabel}>Instructions</div>
-                <div style={styles.freeEntryText}>
-                  {game.freeEntry.instructions}
-                </div>
-              </div>
-            ) : null}
-
-            {game.freeEntry?.closes_at ? (
-              <div style={styles.freeEntryBlock}>
-                <div style={styles.freeEntryLabel}>Postal entry closes</div>
-                <div style={styles.freeEntryText}>
-                  {formatDateTime(game.freeEntry.closes_at)}
-                </div>
-              </div>
-            ) : null}
-
-            <div style={styles.freeEntryNotice}>
-              Postal entries are included in the same draw as paid entries.
-              Please include your full name, email address, this squares game
-              name, your answer to the entry question if one is shown, and your
-              preferred square number where applicable. One entry per
-              postcard/envelope.
-            </div>
           </section>
         ) : null}
 
@@ -681,32 +665,8 @@ export default function PublicSquaresPage({ params }: Props) {
             </span>
           </label>
 
-          <div>
-            Total today: {formatCurrencyFromCents(totalCents, game.currency)}
-          </div>
+          <div>Total today: {formatCurrencyFromCents(totalCents, game.currency)}</div>
         </div>
-
-        {requiresQuestion ? (
-          <>
-            <h2 style={styles.heading}>Entry question</h2>
-
-            <section style={styles.questionBox}>
-              <div style={styles.questionText}>{game.question?.text}</div>
-
-              <input
-                value={entryAnswer}
-                onChange={(event) => setEntryAnswer(event.target.value)}
-                placeholder="Your answer"
-                style={styles.input}
-                disabled={!canReserve}
-              />
-
-              <div style={styles.questionHint}>
-                You must answer this correctly before checkout.
-              </div>
-            </section>
-          </>
-        ) : null}
 
         <h2 style={styles.heading}>Your details</h2>
 
@@ -728,31 +688,101 @@ export default function PublicSquaresPage({ params }: Props) {
             disabled={!canReserve}
           />
 
+          {requiresQuestion ? (
+            <section style={styles.questionBox}>
+              <div style={styles.questionLabel}>Entry question</div>
+              <div style={styles.questionText}>{game.question?.text}</div>
+
+              <input
+                value={entryAnswer}
+                onChange={(event) => setEntryAnswer(event.target.value)}
+                placeholder="Your answer"
+                style={styles.input}
+                disabled={!canReserve}
+              />
+            </section>
+          ) : null}
+
+          {showFreeEntry ? (
+            <section style={styles.postalMiniBox}>
+              <button
+                type="button"
+                onClick={() => setShowPostalDetails((value) => !value)}
+                style={styles.postalMiniButton}
+              >
+                No purchase necessary — free postal entry available
+              </button>
+
+              {showPostalDetails ? (
+                <div style={styles.postalDetails}>
+                  {game.freeEntry?.address ? (
+                    <div style={styles.freeEntryBlock}>
+                      <div style={styles.freeEntryLabel}>Postal address</div>
+                      <div style={styles.freeEntryText}>
+                        {game.freeEntry.address}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {game.freeEntry?.instructions ? (
+                    <div style={styles.freeEntryBlock}>
+                      <div style={styles.freeEntryLabel}>Instructions</div>
+                      <div style={styles.freeEntryText}>
+                        {game.freeEntry.instructions}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {game.freeEntry?.closes_at ? (
+                    <div style={styles.freeEntryBlock}>
+                      <div style={styles.freeEntryLabel}>Postal entry closes</div>
+                      <div style={styles.freeEntryText}>
+                        {formatDateTime(game.freeEntry.closes_at)}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div style={styles.freeEntryNotice}>
+                    Postal entries are included in the same draw as paid entries.
+                    Please include your full name, email address, this squares
+                    game name, your answer to the entry question if one is shown,
+                    and your preferred square number where applicable. One entry
+                    per postcard/envelope.
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          <label style={styles.termsBox}>
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(event) => setAcceptedTerms(event.target.checked)}
+              disabled={!canReserve}
+            />
+
+            <span>
+              I confirm I have read and accept the{" "}
+              <Link href="/terms" style={styles.inlineLink}>
+                terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" style={styles.inlineLink}>
+                privacy policy
+              </Link>
+              .
+            </span>
+          </label>
+
           <button
             type="button"
             onClick={reserveSquares}
-            disabled={
-              saving ||
-              selectedSquares.length === 0 ||
-              !canReserve ||
-              (requiresQuestion && !entryAnswer.trim())
-            }
+            disabled={reserveDisabled}
             style={{
               ...styles.primaryButton,
-              opacity:
-                saving ||
-                selectedSquares.length === 0 ||
-                !canReserve ||
-                (requiresQuestion && !entryAnswer.trim())
-                  ? 0.6
-                  : 1,
-              cursor:
-                saving ||
-                selectedSquares.length === 0 ||
-                !canReserve ||
-                (requiresQuestion && !entryAnswer.trim())
-                  ? "not-allowed"
-                  : "pointer",
+              opacity: reserveDisabled ? 0.6 : 1,
+              cursor: reserveDisabled ? "not-allowed" : "pointer",
             }}
           >
             {saving ? "Redirecting to checkout..." : "Reserve and pay"}
@@ -768,6 +798,7 @@ export default function PublicSquaresPage({ params }: Props) {
     </div>
   );
 }
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -830,6 +861,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#475569",
     lineHeight: 1.6,
     wordBreak: "break-word",
+  },
+  legalNotice: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 10,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    color: "#9a3412",
+    fontWeight: 800,
+    lineHeight: 1.45,
   },
   heading: {
     marginTop: 24,
@@ -947,49 +988,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#111827",
     wordBreak: "break-word",
   },
-  freeEntryBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#f0f9ff",
-    border: "1px solid #bae6fd",
-    display: "grid",
-    gap: 12,
-  },
-  freeEntryTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#075985",
-  },
-  freeEntryBlock: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #e0f2fe",
-  },
-  freeEntryLabel: {
-    fontSize: 12,
-    fontWeight: 900,
-    color: "#0369a1",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  freeEntryText: {
-    color: "#0f172a",
-    lineHeight: 1.5,
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-  },
-  freeEntryNotice: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px dashed #7dd3fc",
-    color: "#475569",
-    lineHeight: 1.5,
-    fontSize: 14,
-  },
   quickSelect: {
     marginTop: 20,
     padding: 16,
@@ -1095,23 +1093,23 @@ const styles: Record<string, React.CSSProperties> = {
   },
   questionBox: {
     padding: 16,
-    borderRadius: 14,
-    background: "#fefce8",
-    border: "1px solid #fde68a",
+    borderRadius: 10,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
     display: "grid",
     gap: 12,
   },
+  questionLabel: {
+    color: "#1e3a8a",
+    fontSize: 16,
+    fontWeight: 900,
+  },
   questionText: {
-    color: "#713f12",
-    fontSize: 18,
+    color: "#1d4ed8",
+    fontSize: 16,
     fontWeight: 900,
     lineHeight: 1.4,
     wordBreak: "break-word",
-  },
-  questionHint: {
-    color: "#854d0e",
-    fontSize: 13,
-    fontWeight: 700,
   },
   form: {
     display: "grid",
@@ -1125,6 +1123,73 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #cbd5e1",
     fontSize: 16,
     minWidth: 0,
+  },
+  postalMiniBox: {
+    display: "grid",
+    gap: 10,
+  },
+  postalMiniButton: {
+    width: "100%",
+    textAlign: "left",
+    padding: 12,
+    borderRadius: 10,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  postalDetails: {
+    padding: 12,
+    borderRadius: 12,
+    background: "#f0f9ff",
+    border: "1px solid #bae6fd",
+    display: "grid",
+    gap: 10,
+  },
+  freeEntryBlock: {
+    padding: 12,
+    borderRadius: 12,
+    background: "#ffffff",
+    border: "1px solid #e0f2fe",
+  },
+  freeEntryLabel: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "#0369a1",
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+  freeEntryText: {
+    color: "#0f172a",
+    lineHeight: 1.5,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  },
+  freeEntryNotice: {
+    padding: 12,
+    borderRadius: 12,
+    background: "#ffffff",
+    border: "1px dashed #7dd3fc",
+    color: "#475569",
+    lineHeight: 1.5,
+    fontSize: 14,
+  },
+  termsBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    color: "#334155",
+    fontWeight: 700,
+  },
+  inlineLink: {
+    color: "#2563eb",
+    fontWeight: 900,
   },
   primaryButton: {
     height: 48,
