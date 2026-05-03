@@ -4,7 +4,7 @@ export type Campaign = {
   id: string;
   title: string;
   slug: string;
-  description: string;
+  description: string | null;
   tenant_slug: string;
   type: "raffle" | "squares" | "event";
   image_url?: string | null;
@@ -22,10 +22,10 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
         slug,
         description,
         tenant_slug,
-        'raffle' as type,
+        'raffle'::text as type,
         image_url,
         image_url as "imageUrl",
-        status,
+        status::text as status,
         created_at
       from raffles
       where slug = $1
@@ -38,10 +38,10 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
         slug,
         description,
         tenant_slug,
-        'squares' as type,
+        'squares'::text as type,
         image_url,
         image_url as "imageUrl",
-        status,
+        status::text as status,
         created_at
       from squares_games
       where slug = $1
@@ -54,10 +54,10 @@ export async function getCampaignBySlug(slug: string): Promise<Campaign | null> 
         slug,
         description,
         tenant_slug,
-        'event' as type,
-        null::text as image_url,
-        null::text as "imageUrl",
-        status,
+        'event'::text as type,
+        image_url,
+        image_url as "imageUrl",
+        status::text as status,
         created_at
       from events
       where slug = $1
@@ -79,10 +79,10 @@ export async function getAllCampaignsForTenant(
         slug,
         description,
         tenant_slug,
-        'raffle' as type,
+        'raffle'::text as type,
         image_url,
         image_url as "imageUrl",
-        status,
+        status::text as status,
         created_at
       from raffles
       where tenant_slug = $1
@@ -95,10 +95,10 @@ export async function getAllCampaignsForTenant(
         slug,
         description,
         tenant_slug,
-        'squares' as type,
+        'squares'::text as type,
         image_url,
         image_url as "imageUrl",
-        status,
+        status::text as status,
         created_at
       from squares_games
       where tenant_slug = $1
@@ -111,10 +111,10 @@ export async function getAllCampaignsForTenant(
         slug,
         description,
         tenant_slug,
-        'event' as type,
-        null::text as image_url,
-        null::text as "imageUrl",
-        status,
+        'event'::text as type,
+        image_url,
+        image_url as "imageUrl",
+        status::text as status,
         created_at
       from events
       where tenant_slug = $1
