@@ -34,6 +34,10 @@ function getRandomAvailableSquares(
   return available.slice(0, count).sort((a, b) => a - b);
 }
 
+function cleanAnswer(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const tenantSlug = getTenantSlugFromRequest(request);
   const slug = context.params.slug;
@@ -54,6 +58,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const customerName = String(body?.customerName ?? "").trim();
     const customerEmail = String(body?.customerEmail ?? "").trim();
+    const entryAnswer = cleanAnswer(body?.entryAnswer);
 
     const game = await getSquaresGameByTenantAndSlug(tenantSlug, slug);
 
@@ -69,6 +74,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { ok: false, error: "This squares game is not open" },
         { status: 400 },
       );
+    }
+
+    const question = game.config_json?.question ?? null;
+    const questionText = String(question?.text ?? "").trim();
+    const correctAnswer = cleanAnswer(question?.answer);
+
+    if (!previewOnly && questionText && correctAnswer) {
+      if (!entryAnswer) {
+        return NextResponse.json(
+          { ok: false, error: "Please answer the entry question." },
+          { status: 400 },
+        );
+      }
+
+      if (entryAnswer !== correctAnswer) {
+        return NextResponse.json(
+          { ok: false, error: "The entry question answer is incorrect." },
+          { status: 400 },
+        );
+      }
     }
 
     await cleanupExpiredSquaresReservations(game.id);
