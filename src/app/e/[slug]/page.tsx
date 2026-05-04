@@ -135,12 +135,6 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
             )}
           </div>
 
-          <div style={styles.noticeBox}>
-            This event is run by the organiser. The platform provides software only
-            and is not responsible for the operation of this event. The organiser is
-            responsible for ensuring compliance with all applicable laws.
-          </div>
-
           {resolvedSearchParams.checkout === "success" && (
             <div style={styles.successBox}>
               <strong>Payment successful.</strong>
@@ -387,17 +381,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     lineHeight: 1.6,
     fontWeight: 600,
-  },
-  noticeBox: {
-    padding: 14,
-    borderRadius: 14,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-    color: "#9a3412",
-    fontSize: 14,
-    lineHeight: 1.55,
-    fontWeight: 800,
-    marginBottom: 16,
   },
   successBox: {
     padding: 14,
