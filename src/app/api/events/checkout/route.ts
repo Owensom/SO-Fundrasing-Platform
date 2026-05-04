@@ -14,7 +14,6 @@ type CheckoutItem = {
   seatId: string;
   ticketTypeId: string;
 
-  // NEW
   guestName?: string;
   dietary?: string;
   menuChoice?: string;
@@ -23,15 +22,6 @@ type CheckoutItem = {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 function siteUrl(req: Request) {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "";
-
-  if (appUrl) {
-    return appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
-  }
-
   return new URL(req.url).origin;
 }
 
@@ -77,10 +67,7 @@ export async function POST(req: Request) {
 
     if (reservedCount !== seatIds.length) {
       await deleteEventOrderAndItems(order.id);
-      return NextResponse.json(
-        { error: "Some seats no longer available." },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: "Seats unavailable." }, { status: 409 });
     }
 
     let total = 0;
@@ -89,9 +76,7 @@ export async function POST(req: Request) {
       const seat = seats.find((s) => s.id === item.seatId);
       const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
 
-      if (!seat || !ticketType) {
-        throw new Error("Invalid seat or ticket.");
-      }
+      if (!seat || !ticketType) throw new Error("Invalid seat");
 
       total += ticketType.price;
 
@@ -104,19 +89,16 @@ export async function POST(req: Request) {
         quantity: 1,
         unitAmount: ticketType.price,
 
-        // NEW DATA (IMPORTANT)
         guest_name: item.guestName || null,
         dietary_requirements: item.dietary || null,
         menu_choice: item.menuChoice || null,
-      } as any);
+      });
     }
-
-    const baseUrl = siteUrl(req);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      success_url: `${baseUrl}/e/${event.slug}?success=1`,
-      cancel_url: `${baseUrl}/e/${event.slug}?cancel=1`,
+      success_url: `${siteUrl(req)}/e/${event.slug}?success=1`,
+      cancel_url: `${siteUrl(req)}/e/${event.slug}?cancel=1`,
       line_items: [
         {
           quantity: 1,
@@ -141,9 +123,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    if (orderId) {
-      await deleteEventOrderAndItems(orderId);
-    }
+    if (orderId) await deleteEventOrderAndItems(orderId);
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Checkout failed" },
