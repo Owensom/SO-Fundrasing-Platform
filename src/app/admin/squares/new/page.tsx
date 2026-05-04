@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 type PrizeRow = {
   id: string;
@@ -77,11 +77,18 @@ export default function NewSquaresGamePage() {
   const [currency, setCurrency] = useState("GBP");
   const [status, setStatus] = useState("draft");
 
+  const [questionText, setQuestionText] = useState("");
+  const [questionAnswer, setQuestionAnswer] = useState("");
+
+  const [freeEntryAddress, setFreeEntryAddress] = useState("");
+  const [freeEntryInstructions, setFreeEntryInstructions] = useState("");
+  const [freeEntryClosesAt, setFreeEntryClosesAt] = useState("");
+
   const [prizes, setPrizes] = useState<PrizeRow[]>([
     makePrize("prize-1", "1", "1st Prize", ""),
   ]);
 
-  useMemo(() => {
+  useEffect(() => {
     if (!slugEdited) {
       setSlug(slugify(title));
     }
@@ -116,6 +123,29 @@ export default function NewSquaresGamePage() {
 
     return JSON.stringify(clean);
   }, [prizes]);
+
+  const questionValue = useMemo(() => {
+    const text = questionText.trim();
+    const answer = questionAnswer.trim();
+
+    if (!text || !answer) return "";
+
+    return JSON.stringify({ text, answer });
+  }, [questionText, questionAnswer]);
+
+  const freeEntryValue = useMemo(() => {
+    const address = freeEntryAddress.trim();
+    const instructions = freeEntryInstructions.trim();
+    const closes_at = freeEntryClosesAt.trim();
+
+    if (!address && !instructions && !closes_at) return "";
+
+    return JSON.stringify({
+      address,
+      instructions,
+      closes_at: closes_at ? new Date(closes_at).toISOString() : null,
+    });
+  }, [freeEntryAddress, freeEntryInstructions, freeEntryClosesAt]);
 
   const boardSize = Math.max(1, Math.min(500, toInt(totalSquares, 100)));
   const price = Math.max(0, toMoney(pricePerSquare, 0));
@@ -184,6 +214,8 @@ export default function NewSquaresGamePage() {
       <input type="hidden" name="image_url" value={imageUrl} />
       <input type="hidden" name="image_position" value={imagePosition} />
       <input type="hidden" name="prizes" value={prizesValue} />
+      <input type="hidden" name="question" value={questionValue} />
+      <input type="hidden" name="free_entry" value={freeEntryValue} />
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
@@ -200,8 +232,8 @@ export default function NewSquaresGamePage() {
           <p style={styles.heroSlug}>/s/{slug.trim() ? slug : "squares-slug"}</p>
 
           <p style={styles.heroDescription}>
-            Set up the public details, image, pricing, board size, draw date and
-            prize settings for your squares game.
+            Set up the public details, image, pricing, board size, draw date,
+            legal entry question, free postal entry and prize settings.
           </p>
         </div>
 
@@ -430,6 +462,83 @@ export default function NewSquaresGamePage() {
                 </select>
               </Field>
             </div>
+          </section>
+
+          <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Entry question (legal)</h3>
+                <p style={styles.sectionDescription}>
+                  Add a skill-based question for the public checkout flow.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.twoColumn}>
+              <Field label="Question">
+                <input
+                  value={questionText}
+                  onChange={(event) => setQuestionText(event.target.value)}
+                  placeholder="e.g. What colour is a London taxi?"
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Correct answer">
+                <input
+                  value={questionAnswer}
+                  onChange={(event) => setQuestionAnswer(event.target.value)}
+                  placeholder="e.g. black"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <p style={styles.helpText}>
+              The public squares page requires this answer before checkout when
+              a question is set.
+            </p>
+          </section>
+
+          <section style={styles.innerPanel}>
+            <div style={styles.innerHeader}>
+              <div>
+                <h3 style={styles.subTitle}>Free postal entry</h3>
+                <p style={styles.sectionDescription}>
+                  Add no-purchase entry instructions shown on the public squares
+                  page.
+                </p>
+              </div>
+            </div>
+
+            <Field label="Postal address">
+              <textarea
+                value={freeEntryAddress}
+                onChange={(event) => setFreeEntryAddress(event.target.value)}
+                rows={3}
+                placeholder="Postal entry address"
+                style={styles.textarea}
+              />
+            </Field>
+
+            <Field label="Instructions">
+              <textarea
+                value={freeEntryInstructions}
+                onChange={(event) => setFreeEntryInstructions(event.target.value)}
+                rows={3}
+                placeholder="Include name, email, game name, answer and preferred square number..."
+                style={styles.textarea}
+              />
+            </Field>
+
+            <Field label="Postal entry closes">
+              <input
+                type="datetime-local"
+                value={freeEntryClosesAt}
+                onChange={(event) => setFreeEntryClosesAt(event.target.value)}
+                style={styles.input}
+              />
+            </Field>
           </section>
 
           <section style={styles.innerPanel}>
@@ -870,6 +979,11 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#b91c1c",
     fontWeight: 900,
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    margin: 0,
   },
   mutedSmall: {
     color: "#64748b",
