@@ -2,6 +2,8 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 
+/* ================= TYPES ================= */
+
 type Seat = {
   id: string;
   ticket_type_id: string | null;
@@ -31,6 +33,8 @@ type GuestData = {
   tableName: string;
 };
 
+/* ================= HELPERS ================= */
+
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -39,7 +43,6 @@ function seatLabel(seat: Seat) {
   if (seat.table_number) {
     return `Table ${seat.table_number}, Seat ${seat.seat_number}`;
   }
-
   return `Row ${seat.row_label}, Seat ${seat.seat_number}`;
 }
 
@@ -51,6 +54,8 @@ function getDefaultGuestData(): GuestData {
     tableName: "",
   };
 }
+
+/* ================= COMPONENT ================= */
 
 export default function PublicSeatSelector({
   eventId,
@@ -72,23 +77,17 @@ export default function PublicSeatSelector({
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
-  const selectedSeatIds = cartItems.map((item) => item.seatId);
   const isTables = eventType === "tables";
+
+  const selectedSeatIds = cartItems.map((i) => i.seatId);
 
   const cartSeats = useMemo(() => {
     return cartItems
       .map((item) => {
-        const seat = seats.find((currentSeat) => currentSeat.id === item.seatId);
-        const ticketType = ticketTypes.find(
-          (currentTicketType) => currentTicketType.id === item.ticketTypeId,
-        );
-
+        const seat = seats.find((s) => s.id === item.seatId);
+        const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
         if (!seat || !ticketType) return null;
-
-        return {
-          seat,
-          ticketType,
-        };
+        return { seat, ticketType };
       })
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
@@ -98,28 +97,20 @@ export default function PublicSeatSelector({
     0,
   );
 
-  function updateGuestData(seatId: string, patch: Partial<GuestData>) {
-    setGuestData((current) => ({
-      ...current,
-      [seatId]: {
-        ...getDefaultGuestData(),
-        ...(current[seatId] || {}),
-        ...patch,
-      },
-    }));
-  }
+  /* ================= ACTIONS ================= */
 
   function toggleSeat(seat: Seat) {
     if (seat.status !== "available") return;
 
     setCartItems((current) => {
-      const exists = current.find((item) => item.seatId === seat.id);
+      const exists = current.find((c) => c.seatId === seat.id);
 
       if (exists) {
-        return current.filter((item) => item.seatId !== seat.id);
+        return current.filter((c) => c.seatId !== seat.id);
       }
 
-      const ticketTypeId = seat.ticket_type_id || ticketTypes[0]?.id || "";
+      const ticketTypeId =
+        seat.ticket_type_id || ticketTypes[0]?.id || "";
 
       if (!ticketTypeId) return current;
 
@@ -135,6 +126,17 @@ export default function PublicSeatSelector({
     );
   }
 
+  function updateGuestData(seatId: string, patch: Partial<GuestData>) {
+    setGuestData((current) => ({
+      ...current,
+      [seatId]: {
+        ...getDefaultGuestData(),
+        ...(current[seatId] || {}),
+        ...patch,
+      },
+    }));
+  }
+
   async function startCheckout() {
     if (cartItems.length === 0 || isCheckingOut) return;
 
@@ -142,11 +144,9 @@ export default function PublicSeatSelector({
     setIsCheckingOut(true);
 
     try {
-      const response = await fetch("/api/events/checkout", {
+      const res = await fetch("/api/events/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventId,
           items: cartItems.map((item) => {
@@ -156,7 +156,7 @@ export default function PublicSeatSelector({
               seatId: item.seatId,
               ticketTypeId: item.ticketTypeId,
               guestName: data.guestName,
-              dietaryRequirements: data.dietaryRequirements,
+              dietary: data.dietaryRequirements,
               menuChoice: data.menuChoice,
               tableName: data.tableName,
             };
@@ -164,365 +164,266 @@ export default function PublicSeatSelector({
         }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok || !data.url) {
-        throw new Error(data.error || "Checkout failed.");
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Checkout failed");
       }
 
       window.location.href = data.url;
-    } catch (error) {
+    } catch (err) {
       setCheckoutError(
-        error instanceof Error ? error.message : "Checkout failed.",
+        err instanceof Error ? err.message : "Checkout failed",
       );
       setIsCheckingOut(false);
     }
   }
 
+  /* ================= UI ================= */
+
   return (
-    <div style={styles.shell}>
-      <div style={styles.grid}>
-        <div style={styles.mapPanel}>
-          <div style={styles.legend}>
-            <span style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: "#34d399" }} />
-              Available
-            </span>
-            <span style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: "#7dd3fc" }} />
-              Selected
-            </span>
-            <span style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: "#64748b" }} />
-              Unavailable
-            </span>
-          </div>
-
-          <div style={styles.map}>
-            {seats.map((seat) => {
-              const selected = selectedSeatIds.includes(seat.id);
-              const unavailable = seat.status !== "available";
-
-              return (
-                <button
-                  key={seat.id}
-                  type="button"
-                  onClick={() => toggleSeat(seat)}
-                  disabled={unavailable}
-                  title={seatLabel(seat)}
-                  style={{
-                    ...styles.seat,
-                    background: selected
-                      ? "#7dd3fc"
-                      : unavailable
-                        ? "#64748b"
-                        : "#34d399",
-                    color: selected ? "#0f172a" : "#ffffff",
-                    opacity: unavailable ? 0.45 : 1,
-                    cursor: unavailable ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {seat.seat_number}
-                </button>
-              );
-            })}
-          </div>
+    <div style={styles.wrapper}>
+      {/* MAP */}
+      <div style={styles.mapPanel}>
+        <div style={styles.legend}>
+          <Legend color="#34d399" label="Available" />
+          <Legend color="#7dd3fc" label="Selected" />
+          <Legend color="#64748b" label="Unavailable" />
         </div>
 
-        <aside style={styles.cart}>
-          <h3 style={styles.cartTitle}>Your tickets</h3>
+        <div style={styles.map}>
+          {seats.map((seat) => {
+            const selected = selectedSeatIds.includes(seat.id);
+            const unavailable = seat.status !== "available";
 
-          {cartSeats.length === 0 ? (
-            <div style={styles.emptyBox}>No seats selected.</div>
-          ) : (
+            return (
+              <button
+                key={seat.id}
+                onClick={() => toggleSeat(seat)}
+                disabled={unavailable}
+                style={{
+                  ...styles.seat,
+                  background: selected
+                    ? "#7dd3fc"
+                    : unavailable
+                      ? "#64748b"
+                      : "#34d399",
+                  color: selected ? "#0f172a" : "#fff",
+                  opacity: unavailable ? 0.4 : 1,
+                }}
+              >
+                {seat.seat_number}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* CART */}
+      <aside style={styles.cart}>
+        <h3 style={styles.cartTitle}>Your booking</h3>
+
+        {cartSeats.length === 0 ? (
+          <div style={styles.empty}>Select seats to begin</div>
+        ) : (
+          <>
             <div style={styles.cartList}>
               {cartSeats.map(({ seat, ticketType }) => {
                 const data = guestData[seat.id] || getDefaultGuestData();
+
                 const availableTicketTypes = seat.ticket_type_id
-                  ? ticketTypes.filter(
-                      (currentTicketType) =>
-                        currentTicketType.id === seat.ticket_type_id,
-                    )
+                  ? ticketTypes.filter((t) => t.id === seat.ticket_type_id)
                   : ticketTypes;
 
                 return (
-                  <div key={seat.id} style={styles.cartItem}>
-                    <strong style={styles.seatTitle}>{seatLabel(seat)}</strong>
+                  <div key={seat.id} style={styles.card}>
+                    <strong>{seatLabel(seat)}</strong>
 
                     {isTables && (
-                      <label style={styles.field}>
-                        <span style={styles.label}>Table name / host</span>
-                        <input
-                          value={data.tableName}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              tableName: event.target.value,
-                            })
-                          }
-                          placeholder="e.g. Smith family, Sponsor table"
-                          style={styles.input}
-                        />
-                      </label>
+                      <input
+                        placeholder="Table name"
+                        value={data.tableName}
+                        onChange={(e) =>
+                          updateGuestData(seat.id, {
+                            tableName: e.target.value,
+                          })
+                        }
+                        style={styles.input}
+                      />
                     )}
 
-                    <label style={styles.field}>
-                      <span style={styles.label}>Ticket type</span>
+                    <select
+                      value={ticketType.id}
+                      onChange={(e) =>
+                        updateTicketType(seat.id, e.target.value)
+                      }
+                      style={styles.input}
+                    >
+                      {availableTicketTypes.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} — {currency} {moneyFromCents(t.price)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      placeholder="Guest name"
+                      value={data.guestName}
+                      onChange={(e) =>
+                        updateGuestData(seat.id, {
+                          guestName: e.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+
+                    <textarea
+                      placeholder="Dietary requirements"
+                      value={data.dietaryRequirements}
+                      onChange={(e) =>
+                        updateGuestData(seat.id, {
+                          dietaryRequirements: e.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+
+                    {menuOptions.length > 0 && (
                       <select
-                        value={ticketType.id}
-                        onChange={(event) =>
-                          updateTicketType(seat.id, event.target.value)
+                        value={data.menuChoice}
+                        onChange={(e) =>
+                          updateGuestData(seat.id, {
+                            menuChoice: e.target.value,
+                          })
                         }
-                        disabled={Boolean(seat.ticket_type_id)}
                         style={styles.input}
                       >
-                        {availableTicketTypes.map((currentTicketType) => (
-                          <option
-                            key={currentTicketType.id}
-                            value={currentTicketType.id}
-                          >
-                            {currentTicketType.name} — {currency}{" "}
-                            {moneyFromCents(currentTicketType.price)}
-                          </option>
+                        <option value="">Select menu</option>
+                        {menuOptions.map((opt) => (
+                          <option key={opt}>{opt}</option>
                         ))}
                       </select>
-                    </label>
-
-                    <label style={styles.field}>
-                      <span style={styles.label}>Guest name</span>
-                      <input
-                        value={data.guestName}
-                        onChange={(event) =>
-                          updateGuestData(seat.id, {
-                            guestName: event.target.value,
-                          })
-                        }
-                        placeholder="Guest name"
-                        style={styles.input}
-                      />
-                    </label>
-
-                    <label style={styles.field}>
-                      <span style={styles.label}>Dietary requirements</span>
-                      <textarea
-                        value={data.dietaryRequirements}
-                        onChange={(event) =>
-                          updateGuestData(seat.id, {
-                            dietaryRequirements: event.target.value,
-                          })
-                        }
-                        placeholder="None, vegetarian, gluten free, allergies..."
-                        rows={2}
-                        style={styles.textarea}
-                      />
-                    </label>
-
-                    <label style={styles.field}>
-                      <span style={styles.label}>Menu choice</span>
-                      {menuOptions.length > 0 ? (
-                        <select
-                          value={data.menuChoice}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              menuChoice: event.target.value,
-                            })
-                          }
-                          style={styles.input}
-                        >
-                          <option value="">Select menu option</option>
-                          {menuOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          value={data.menuChoice}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              menuChoice: event.target.value,
-                            })
-                          }
-                          placeholder="Optional menu choice"
-                          style={styles.input}
-                        />
-                      )}
-                    </label>
+                    )}
                   </div>
                 );
               })}
             </div>
-          )}
 
-          <div style={styles.totalBox}>
-            <span>Total</span>
-            <strong>
-              {currency} {moneyFromCents(total)}
-            </strong>
-          </div>
+            <div style={styles.total}>
+              <span>Total</span>
+              <strong>
+                {currency} {moneyFromCents(total)}
+              </strong>
+            </div>
 
-          {checkoutError ? <div style={styles.errorBox}>{checkoutError}</div> : null}
+            {checkoutError && <div style={styles.error}>{checkoutError}</div>}
 
-          <button
-            type="button"
-            onClick={startCheckout}
-            disabled={cartSeats.length === 0 || isCheckingOut}
-            style={{
-              ...styles.checkout,
-              opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
-              cursor:
-                cartSeats.length === 0 || isCheckingOut
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {isCheckingOut ? "Processing..." : "Checkout"}
-          </button>
-        </aside>
-      </div>
+            <button onClick={startCheckout} style={styles.checkout}>
+              {isCheckingOut ? "Processing..." : "Checkout"}
+            </button>
+          </>
+        )}
+      </aside>
     </div>
   );
 }
 
+/* ================= UI HELPERS ================= */
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: 999,
+          background: color,
+        }}
+      />
+      {label}
+    </span>
+  );
+}
+
+/* ================= STYLES ================= */
+
 const styles: Record<string, CSSProperties> = {
-  shell: {
-    width: "100%",
-  },
-  grid: {
+  wrapper: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 380px)",
+    gridTemplateColumns: "1fr 360px",
     gap: 20,
-    alignItems: "start",
   },
   mapPanel: {
     padding: 16,
     borderRadius: 18,
     background: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.12)",
   },
   legend: {
     display: "flex",
     gap: 12,
-    flexWrap: "wrap",
-    marginBottom: 14,
-    color: "#cbd5e1",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  legendItem: {
-    display: "inline-flex",
-    gap: 6,
-    alignItems: "center",
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
+    marginBottom: 10,
+    fontSize: 12,
   },
   map: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
-    gap: 7,
+    gridTemplateColumns: "repeat(auto-fill, minmax(40px,1fr))",
+    gap: 6,
   },
   seat: {
-    minHeight: 40,
-    borderRadius: 10,
+    height: 40,
+    borderRadius: 8,
     border: "none",
     fontWeight: 900,
   },
   cart: {
     padding: 16,
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.12)",
     background: "#0f172a",
   },
   cartTitle: {
-    margin: "0 0 12px",
-    color: "#ffffff",
     fontSize: 22,
     fontWeight: 900,
+    marginBottom: 10,
   },
-  emptyBox: {
-    padding: 14,
-    borderRadius: 14,
-    border: "1px dashed rgba(255,255,255,0.18)",
+  empty: {
     color: "#94a3b8",
-    fontWeight: 800,
   },
   cartList: {
     display: "grid",
-    gap: 12,
-  },
-  cartItem: {
-    display: "grid",
     gap: 10,
-    padding: 12,
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 14,
-    background: "rgba(255,255,255,0.04)",
   },
-  seatTitle: {
-    color: "#ffffff",
-    fontSize: 15,
-  },
-  field: {
+  card: {
+    padding: 10,
+    borderRadius: 12,
+    background: "#020617",
     display: "grid",
-    gap: 5,
-  },
-  label: {
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: 900,
+    gap: 6,
   },
   input: {
-    width: "100%",
-    minHeight: 40,
-    padding: "9px 10px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 14,
-    boxSizing: "border-box",
+    padding: 8,
+    borderRadius: 6,
+    border: "1px solid #334155",
+    background: "#fff",
   },
-  textarea: {
-    width: "100%",
-    padding: "9px 10px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 14,
-    resize: "vertical",
-    boxSizing: "border-box",
-  },
-  totalBox: {
+  total: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 14,
-    background: "rgba(250,204,21,0.12)",
-    color: "#fde68a",
+    marginTop: 10,
     fontWeight: 900,
   },
   checkout: {
-    marginTop: 14,
+    marginTop: 10,
+    padding: 12,
     width: "100%",
-    padding: 13,
     borderRadius: 999,
     background: "#1683f8",
-    color: "#ffffff",
+    color: "#fff",
     border: "none",
     fontWeight: 900,
   },
-  errorBox: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    background: "#fee2e2",
-    color: "#991b1b",
-    fontWeight: 900,
+  error: {
+    color: "red",
+    marginTop: 6,
   },
 };
