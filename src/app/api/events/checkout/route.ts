@@ -12,8 +12,9 @@ import {
 } from "../../../../../api/_lib/events-repo";
 
 type CheckoutItem = {
-  seatId: string;
+  seatId?: string;
   ticketTypeId: string;
+  quantity?: number;
   guestName?: string;
   dietary?: string;
   dietaryRequirements?: string;
@@ -29,6 +30,12 @@ function siteUrl(req: Request) {
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
+}
+
+function positiveQuantity(value: unknown) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.floor(number));
 }
 
 function seatLabel(input: {
@@ -81,10 +88,108 @@ export async function POST(req: Request) {
       );
     }
 
-    const seats = event.seats || [];
     const ticketTypes = (event.ticket_types || []).filter(
       (ticketType) => ticketType.is_active,
     );
+
+    const isGeneralAdmission = event.event_type === "general_admission";
+
+    if (isGeneralAdmission) {
+      const checkoutRows = items
+        .map((item) => {
+          const ticketTypeId = cleanText(item.ticketTypeId);
+          const quantity = positiveQuantity(item.quantity);
+
+          const ticketType = ticketTypes.find(
+            (currentTicketType) => currentTicketType.id === ticketTypeId,
+          );
+
+          if (!ticketType || quantity <= 0) return null;
+
+          return {
+            ticketType,
+            quantity,
+          };
+        })
+        .filter(Boolean) as {
+        ticketType: (typeof ticketTypes)[number];
+        quantity: number;
+      }[];
+
+      if (checkoutRows.length === 0) {
+        return NextResponse.json(
+          { error: "Please choose at least one ticket." },
+          { status: 400 },
+        );
+      }
+
+      const total = checkoutRows.reduce(
+        (sum, row) => sum + Number(row.ticketType.price || 0) * row.quantity,
+        0,
+      );
+
+      if (total <= 0) {
+        return NextResponse.json(
+          { error: "Invalid checkout total." },
+          { status: 400 },
+        );
+      }
+
+      const order = await createPendingEventOrder({
+        tenantSlug: event.tenant_slug,
+        eventId: event.id,
+        amountTotal: total,
+        currency: event.currency,
+      });
+
+      orderId = order.id;
+
+      for (const row of checkoutRows) {
+        await createEventOrderItem({
+          orderId: order.id,
+          eventId: event.id,
+          ticketTypeId: row.ticketType.id,
+          seatId: null,
+          label: row.ticketType.name,
+          quantity: row.quantity,
+          unitAmount: row.ticketType.price,
+          guest_name: null,
+          dietary_requirements: null,
+          menu_choice: null,
+        });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+        line_items: checkoutRows.map((row) => ({
+          quantity: row.quantity,
+          price_data: {
+            currency: event.currency.toLowerCase(),
+            unit_amount: Number(row.ticketType.price || 0),
+            product_data: {
+              name: `${event.title} — ${row.ticketType.name}`,
+            },
+          },
+        })),
+        metadata: {
+          tenant_slug: event.tenant_slug,
+          event_id: event.id,
+          order_id: order.id,
+          event_type: event.event_type,
+        },
+      });
+
+      await updateEventOrderStripeSession({
+        orderId: order.id,
+        stripeSessionId: session.id,
+      });
+
+      return NextResponse.json({ url: session.url });
+    }
+
+    const seats = event.seats || [];
 
     const seatIds = Array.from(
       new Set(items.map((item) => cleanText(item.seatId)).filter(Boolean)),
@@ -98,14 +203,17 @@ export async function POST(req: Request) {
     }
 
     const checkoutRows = items.map((item) => {
-      const seat = seats.find((currentSeat) => currentSeat.id === item.seatId);
+      const seatId = cleanText(item.seatId);
+      const ticketTypeId = cleanText(item.ticketTypeId);
+
+      const seat = seats.find((currentSeat) => currentSeat.id === seatId);
 
       if (!seat || seat.status !== "available") {
         throw new Error("One or more seats are unavailable.");
       }
 
       const ticketType = ticketTypes.find(
-        (currentTicketType) => currentTicketType.id === item.ticketTypeId,
+        (currentTicketType) => currentTicketType.id === ticketTypeId,
       );
 
       if (!ticketType) {
@@ -208,6 +316,7 @@ export async function POST(req: Request) {
         tenant_slug: event.tenant_slug,
         event_id: event.id,
         order_id: order.id,
+        event_type: event.event_type,
       },
     });
 
