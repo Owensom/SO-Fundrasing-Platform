@@ -263,7 +263,6 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
               ) : (
                 <PublicTableSelector
                   eventId={event.id}
-                  eventType={event.event_type}
                   seats={seats}
                   ticketTypes={ticketTypes}
                   currency={event.currency}
