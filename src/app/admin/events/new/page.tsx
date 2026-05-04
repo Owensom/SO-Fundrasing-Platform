@@ -23,9 +23,11 @@ export default async function NewEventPage() {
   return (
     <main
       style={{
-        maxWidth: 1040,
-        margin: "40px auto",
-        padding: "0 16px 48px",
+        maxWidth: 1180,
+        margin: "0 auto",
+        padding: "28px 16px 56px",
+        background: "#f8fafc",
+        minHeight: "100vh",
       }}
     >
       <NewEventForm tenantSlug={tenantSlug} />
