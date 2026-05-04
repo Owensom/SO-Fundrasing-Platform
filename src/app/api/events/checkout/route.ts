@@ -63,11 +63,20 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const eventId = cleanText(body.eventId);
+    const buyerName = cleanText(body.buyerName);
+    const buyerEmail = cleanText(body.buyerEmail);
     const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
 
     if (!eventId || items.length === 0) {
       return NextResponse.json(
         { error: "Missing checkout data." },
+        { status: 400 },
+      );
+    }
+
+    if (!buyerName || !buyerEmail) {
+      return NextResponse.json(
+        { error: "Name and email address are required." },
         { status: 400 },
       );
     }
@@ -140,7 +149,11 @@ export async function POST(req: Request) {
         eventId: event.id,
         amountTotal: total,
         currency: event.currency,
-      });
+        buyerName,
+        buyerEmail,
+        buyer_name: buyerName,
+        buyer_email: buyerEmail,
+      } as never);
 
       orderId = order.id;
 
@@ -153,7 +166,7 @@ export async function POST(req: Request) {
           label: row.ticketType.name,
           quantity: row.quantity,
           unitAmount: row.ticketType.price,
-          guest_name: null,
+          guest_name: buyerName,
           dietary_requirements: null,
           menu_choice: null,
         });
@@ -161,6 +174,7 @@ export async function POST(req: Request) {
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
+        customer_email: buyerEmail,
         success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
         line_items: checkoutRows.map((row) => ({
@@ -178,6 +192,8 @@ export async function POST(req: Request) {
           event_id: event.id,
           order_id: order.id,
           event_type: event.event_type,
+          buyer_name: buyerName,
+          buyer_email: buyerEmail,
         },
       });
 
@@ -257,7 +273,11 @@ export async function POST(req: Request) {
       eventId: event.id,
       amountTotal: total,
       currency: event.currency,
-    });
+      buyerName,
+      buyerEmail,
+      buyer_name: buyerName,
+      buyer_email: buyerEmail,
+    } as never);
 
     orderId = order.id;
 
@@ -290,7 +310,7 @@ export async function POST(req: Request) {
         }),
         quantity: 1,
         unitAmount: row.ticketType.price,
-        guest_name: row.guestName || null,
+        guest_name: row.guestName || buyerName,
         dietary_requirements: row.dietaryRequirements || null,
         menu_choice: row.menuChoice || null,
       });
@@ -298,6 +318,7 @@ export async function POST(req: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      customer_email: buyerEmail,
       success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
       line_items: [
@@ -317,6 +338,8 @@ export async function POST(req: Request) {
         event_id: event.id,
         order_id: order.id,
         event_type: event.event_type,
+        buyer_name: buyerName,
+        buyer_email: buyerEmail,
       },
     });
 
