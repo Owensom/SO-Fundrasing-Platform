@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
 import PublicSeatSelector from "@/components/events/PublicSeatSelector";
+import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
 
 export const dynamic = "force-dynamic";
 
@@ -188,7 +189,10 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
                   </div>
                 ) : (
                   publicPrizes.map((prize, index) => (
-                    <div key={`${prize.id || "prize"}-${index}`} style={styles.listItem}>
+                    <div
+                      key={`${prize.id || "prize"}-${index}`}
+                      style={styles.listItem}
+                    >
                       <div>
                         <p style={styles.eyebrow}>
                           Prize {prize.position || index + 1}
@@ -235,7 +239,7 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
                 </h2>
                 <p style={styles.bookText}>
                   {event.event_type === "general_admission"
-                    ? "This event uses general admission tickets."
+                    ? "Choose how many of each ticket type you would like."
                     : "Select your seats, add guest details, then continue securely to checkout."}
                 </p>
               </div>
@@ -244,13 +248,11 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
             </div>
 
             {event.event_type === "general_admission" ? (
-              <div style={styles.emptyLarge}>
-                <strong>General admission checkout coming soon</strong>
-                <p style={styles.muted}>
-                  Ticket selection is currently enabled for reserved seating and
-                  table seating.
-                </p>
-              </div>
+              <PublicGeneralAdmissionSelector
+                eventId={event.id}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+              />
             ) : seats.length === 0 ? (
               <div style={styles.emptyLarge}>
                 <strong>No seats available yet</strong>
