@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import ImageUploadField from "@/components/ImageUploadField";
 import AdminSeatManager from "@/components/admin/events/AdminSeatManager";
+import EventPrizeMenuSettings from "./EventPrizeMenuSettings";
 import {
   createEventSeat,
   createEventTicketType,
@@ -33,22 +34,6 @@ type PageProps = {
     error?: string;
   };
 };
-
-type PrizeFormRow = {
-  position: number;
-  title: string;
-  description: string;
-  isPublic: boolean;
-};
-
-type MenuOptionFormRow = {
-  name: string;
-  description: string;
-  isActive: boolean;
-};
-
-const MIN_PRIZE_ROWS = 6;
-const MIN_MENU_ROWS = 6;
 
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
@@ -135,40 +120,6 @@ function parsePrizeRowsFromForm(formData: FormData): EventPrize[] {
     .sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
 }
 
-function normalisePrizeRows(prizes: EventPrize[]): PrizeFormRow[] {
-  const rows = prizes
-    .map((prize, index) => {
-      const title = String(prize.title || prize.name || "").trim();
-
-      return {
-        position:
-          Number.isFinite(Number(prize.position)) && Number(prize.position) > 0
-            ? Math.floor(Number(prize.position))
-            : index + 1,
-        title,
-        description: String(prize.description || "").trim(),
-        isPublic: prize.isPublic !== false && prize.is_public !== false,
-      };
-    })
-    .filter((prize) => prize.title)
-    .sort((a, b) => a.position - b.position);
-
-  const targetLength = Math.max(MIN_PRIZE_ROWS, rows.length + 3);
-
-  return [
-    ...rows,
-    ...Array.from(
-      { length: Math.max(0, targetLength - rows.length) },
-      (_, index) => ({
-        position: rows.length + index + 1,
-        title: "",
-        description: "",
-        isPublic: true,
-      }),
-    ),
-  ];
-}
-
 function parseMenuOptionsFromForm(formData: FormData): EventMenuOption[] {
   const count = positiveInteger(formData.get("menu_count"), 0);
 
@@ -191,27 +142,6 @@ function parseMenuOptionsFromForm(formData: FormData): EventMenuOption[] {
       sort_order: index,
     };
   }).filter((option) => option.name);
-}
-
-function normaliseMenuRows(options: EventMenuOption[]): MenuOptionFormRow[] {
-  const rows = options
-    .map((option) => ({
-      name: String(option.name || option.title || "").trim(),
-      description: String(option.description || "").trim(),
-      isActive: option.isActive !== false && option.is_active !== false,
-    }))
-    .filter((option) => option.name);
-
-  const targetLength = Math.max(MIN_MENU_ROWS, rows.length + 3);
-
-  return [
-    ...rows,
-    ...Array.from({ length: Math.max(0, targetLength - rows.length) }, () => ({
-      name: "",
-      description: "",
-      isActive: true,
-    })),
-  ];
 }
 
 function expandRows(value: string): string[] {
@@ -679,8 +609,6 @@ export default async function AdminEventManagePage({
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
-  const prizeRows = normalisePrizeRows(event.prizes_json || []);
-  const menuRows = normaliseMenuRows(event.menu_options || []);
 
   const isGeneralAdmission = event.event_type === "general_admission";
   const isReservedSeating = event.event_type === "reserved_seating";
@@ -1143,143 +1071,13 @@ export default async function AdminEventManagePage({
         </div>
       </section>
 
-      <section id="prizes" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>Prize settings</p>
-            <h2 style={styles.sectionTitle}>Prizes</h2>
-            <p style={styles.sectionText}>
-              Optional prizes shown on the public event page. Leave unused rows
-              blank.
-            </p>
-          </div>
-        </div>
-
-        <form action={updatePrizesAction} style={styles.panel}>
-          <input type="hidden" name="event_id" value={event.id} />
-          <input type="hidden" name="prize_count" value={prizeRows.length} />
-
-          <div style={styles.prizeList}>
-            {prizeRows.map((prize, index) => (
-              <div key={`prize-${index}`} style={styles.prizeRow}>
-                <div style={styles.prizeGrid}>
-                  <Field label="Position">
-                    <input
-                      name={`prize_position_${index}`}
-                      type="number"
-                      min="1"
-                      defaultValue={prize.position}
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Prize title">
-                    <input
-                      name={`prize_title_${index}`}
-                      defaultValue={prize.title}
-                      placeholder="e.g. £500 cash, Luxury hamper, Weekend break"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      name={`prize_public_${index}`}
-                      type="checkbox"
-                      value="true"
-                      defaultChecked={prize.isPublic}
-                    />
-                    Show publicly
-                  </label>
-                </div>
-
-                <Field label="Description optional">
-                  <textarea
-                    name={`prize_description_${index}`}
-                    rows={2}
-                    defaultValue={prize.description}
-                    placeholder="Optional extra detail shown publicly"
-                    style={styles.textarea}
-                  />
-                </Field>
-              </div>
-            ))}
-          </div>
-
-          <p style={styles.helpText}>
-            To add more prizes, save the filled rows first. Extra blank rows will
-            appear automatically.
-          </p>
-
-          <button type="submit" style={styles.primaryButton}>
-            Save prizes
-          </button>
-        </form>
-      </section>
-
-      <section id="menu" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>Menu settings</p>
-            <h2 style={styles.sectionTitle}>Menu options</h2>
-            <p style={styles.sectionText}>
-              Optional menu choices shown during public checkout. Leave unused
-              rows blank.
-            </p>
-          </div>
-        </div>
-
-        <form action={updateMenuOptionsAction} style={styles.panel}>
-          <input type="hidden" name="event_id" value={event.id} />
-          <input type="hidden" name="menu_count" value={menuRows.length} />
-
-          <div style={styles.prizeList}>
-            {menuRows.map((option, index) => (
-              <div key={`menu-${index}`} style={styles.prizeRow}>
-                <div style={styles.menuGrid}>
-                  <Field label="Menu option">
-                    <input
-                      name={`menu_name_${index}`}
-                      defaultValue={option.name}
-                      placeholder="e.g. Chicken, Vegetarian, Vegan"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      name={`menu_active_${index}`}
-                      type="checkbox"
-                      value="true"
-                      defaultChecked={option.isActive}
-                    />
-                    Active
-                  </label>
-                </div>
-
-                <Field label="Description optional">
-                  <textarea
-                    name={`menu_description_${index}`}
-                    rows={2}
-                    defaultValue={option.description}
-                    placeholder="Optional menu description"
-                    style={styles.textarea}
-                  />
-                </Field>
-              </div>
-            ))}
-          </div>
-
-          <p style={styles.helpText}>
-            To add more menu options, save the filled rows first. Extra blank
-            rows will appear automatically.
-          </p>
-
-          <button type="submit" style={styles.primaryButton}>
-            Save menu options
-          </button>
-        </form>
-      </section>
+      <EventPrizeMenuSettings
+        eventId={event.id}
+        initialPrizes={event.prizes_json || []}
+        initialMenuOptions={event.menu_options || []}
+        updatePrizesAction={updatePrizesAction}
+        updateMenuOptionsAction={updateMenuOptionsAction}
+      />
 
       {isReservedSeating && (
         <section id="row-seating" style={styles.section}>
@@ -1959,42 +1757,12 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
   },
-  prizeList: {
-    display: "grid",
-    gap: 12,
-  },
-  prizeRow: {
-    display: "grid",
-    gap: 12,
-    padding: 14,
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
-    background: "#ffffff",
-  },
-  prizeGrid: {
-    display: "grid",
-    gridTemplateColumns: "110px minmax(0, 1fr) auto",
-    gap: 12,
-    alignItems: "end",
-  },
-  menuGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 12,
-    alignItems: "end",
-  },
   checkboxLabel: {
     display: "flex",
     gap: 8,
     alignItems: "center",
     fontWeight: 900,
     color: "#334155",
-  },
-  helpText: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
   },
   emptyBox: {
     padding: 16,
