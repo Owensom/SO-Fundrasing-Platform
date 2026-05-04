@@ -19,6 +19,7 @@ import {
   updateEvent,
   updateEventSeatsTicketType,
   updateEventTicketType,
+  type EventMenuOption,
   type EventPrize,
   type EventType,
 } from "../../../../../api/_lib/events-repo";
@@ -40,7 +41,14 @@ type PrizeFormRow = {
   isPublic: boolean;
 };
 
+type MenuOptionFormRow = {
+  name: string;
+  description: string;
+  isActive: boolean;
+};
+
 const MIN_PRIZE_ROWS = 6;
+const MIN_MENU_ROWS = 6;
 
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
@@ -108,7 +116,8 @@ function parsePrizeRowsFromForm(formData: FormData): EventPrize[] {
     const description = String(
       formData.get(`prize_description_${index}`) || "",
     ).trim();
-    const isPublic = String(formData.get(`prize_public_${index}`) || "") === "true";
+    const isPublic =
+      String(formData.get(`prize_public_${index}`) || "") === "true";
 
     return {
       id: `prize-${index + 1}`,
@@ -148,11 +157,59 @@ function normalisePrizeRows(prizes: EventPrize[]): PrizeFormRow[] {
 
   return [
     ...rows,
-    ...Array.from({ length: Math.max(0, targetLength - rows.length) }, (_, index) => ({
-      position: rows.length + index + 1,
-      title: "",
+    ...Array.from(
+      { length: Math.max(0, targetLength - rows.length) },
+      (_, index) => ({
+        position: rows.length + index + 1,
+        title: "",
+        description: "",
+        isPublic: true,
+      }),
+    ),
+  ];
+}
+
+function parseMenuOptionsFromForm(formData: FormData): EventMenuOption[] {
+  const count = positiveInteger(formData.get("menu_count"), 0);
+
+  return Array.from({ length: count }, (_, index) => {
+    const name = String(formData.get(`menu_name_${index}`) || "").trim();
+    const description = String(
+      formData.get(`menu_description_${index}`) || "",
+    ).trim();
+    const isActive =
+      String(formData.get(`menu_active_${index}`) || "") === "true";
+
+    return {
+      id: `menu-${index + 1}`,
+      name,
+      title: name,
+      description,
+      isActive,
+      is_active: isActive,
+      sortOrder: index,
+      sort_order: index,
+    };
+  }).filter((option) => option.name);
+}
+
+function normaliseMenuRows(options: EventMenuOption[]): MenuOptionFormRow[] {
+  const rows = options
+    .map((option) => ({
+      name: String(option.name || option.title || "").trim(),
+      description: String(option.description || "").trim(),
+      isActive: option.isActive !== false && option.is_active !== false,
+    }))
+    .filter((option) => option.name);
+
+  const targetLength = Math.max(MIN_MENU_ROWS, rows.length + 3);
+
+  return [
+    ...rows,
+    ...Array.from({ length: Math.max(0, targetLength - rows.length) }, () => ({
+      name: "",
       description: "",
-      isPublic: true,
+      isActive: true,
     })),
   ];
 }
@@ -288,6 +345,7 @@ async function updateEventAction(formData: FormData) {
     eventType,
     status,
     prizesJson: event.prizes_json || [],
+    menuOptions: event.menu_options || [],
   });
 
   redirect(`/admin/events/${id}?saved=event#overview`);
@@ -302,13 +360,33 @@ async function updatePrizesAction(formData: FormData) {
     redirect("/admin/events?error=missing-event");
   }
 
-  await requireEventAccess(eventId);
+  const event = await requireEventAccess(eventId);
 
   await updateEvent(eventId, {
     prizesJson: parsePrizeRowsFromForm(formData),
+    menuOptions: event.menu_options || [],
   });
 
   redirect(`/admin/events/${eventId}?saved=prizes#prizes`);
+}
+
+async function updateMenuOptionsAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (!eventId) {
+    redirect("/admin/events?error=missing-event");
+  }
+
+  const event = await requireEventAccess(eventId);
+
+  await updateEvent(eventId, {
+    prizesJson: event.prizes_json || [],
+    menuOptions: parseMenuOptionsFromForm(formData),
+  });
+
+  redirect(`/admin/events/${eventId}?saved=menu#menu`);
 }
 
 async function addTicketTypeAction(formData: FormData) {
@@ -602,6 +680,7 @@ export default async function AdminEventManagePage({
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
   const prizeRows = normalisePrizeRows(event.prizes_json || []);
+  const menuRows = normaliseMenuRows(event.menu_options || []);
 
   const isGeneralAdmission = event.event_type === "general_admission";
   const isReservedSeating = event.event_type === "reserved_seating";
@@ -672,6 +751,9 @@ export default async function AdminEventManagePage({
         <a href="#prizes" style={styles.tab}>
           Prizes
         </a>
+        <a href="#menu" style={styles.tab}>
+          Menu
+        </a>
         {isReservedSeating && (
           <a href="#row-seating" style={styles.tab}>
             Row Seating
@@ -711,9 +793,10 @@ export default async function AdminEventManagePage({
 
         <div style={styles.statsGrid}>
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
+          <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
           <SummaryCard
-            label="Prizes"
-            value={(event.prizes_json || []).length}
+            label="Menu options"
+            value={(event.menu_options || []).length}
           />
           <SummaryCard
             label="Capacity"
@@ -1130,6 +1213,70 @@ export default async function AdminEventManagePage({
 
           <button type="submit" style={styles.primaryButton}>
             Save prizes
+          </button>
+        </form>
+      </section>
+
+      <section id="menu" style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <p style={styles.sectionEyebrow}>Menu settings</p>
+            <h2 style={styles.sectionTitle}>Menu options</h2>
+            <p style={styles.sectionText}>
+              Optional menu choices shown during public checkout. Leave unused
+              rows blank.
+            </p>
+          </div>
+        </div>
+
+        <form action={updateMenuOptionsAction} style={styles.panel}>
+          <input type="hidden" name="event_id" value={event.id} />
+          <input type="hidden" name="menu_count" value={menuRows.length} />
+
+          <div style={styles.prizeList}>
+            {menuRows.map((option, index) => (
+              <div key={`menu-${index}`} style={styles.prizeRow}>
+                <div style={styles.menuGrid}>
+                  <Field label="Menu option">
+                    <input
+                      name={`menu_name_${index}`}
+                      defaultValue={option.name}
+                      placeholder="e.g. Chicken, Vegetarian, Vegan"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <label style={styles.checkboxLabel}>
+                    <input
+                      name={`menu_active_${index}`}
+                      type="checkbox"
+                      value="true"
+                      defaultChecked={option.isActive}
+                    />
+                    Active
+                  </label>
+                </div>
+
+                <Field label="Description optional">
+                  <textarea
+                    name={`menu_description_${index}`}
+                    rows={2}
+                    defaultValue={option.description}
+                    placeholder="Optional menu description"
+                    style={styles.textarea}
+                  />
+                </Field>
+              </div>
+            ))}
+          </div>
+
+          <p style={styles.helpText}>
+            To add more menu options, save the filled rows first. Extra blank
+            rows will appear automatically.
+          </p>
+
+          <button type="submit" style={styles.primaryButton}>
+            Save menu options
           </button>
         </form>
       </section>
@@ -1827,6 +1974,12 @@ const styles: Record<string, CSSProperties> = {
   prizeGrid: {
     display: "grid",
     gridTemplateColumns: "110px minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "end",
+  },
+  menuGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "end",
   },
