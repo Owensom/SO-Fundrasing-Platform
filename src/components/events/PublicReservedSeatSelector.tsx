@@ -40,9 +40,13 @@ function seatLabel(seat: Seat) {
   return `Row ${seat.row_label}, Seat ${seat.seat_number}`;
 }
 
-function groupLabel(seat: Seat) {
-  const section = seat.section ? `${seat.section} · ` : "";
-  return `${section}Row ${seat.row_label || "Unlabelled"}`;
+function rowSortValue(value: string | null) {
+  const text = String(value || "");
+  const number = Number(text);
+
+  if (Number.isFinite(number)) return number;
+
+  return text.toUpperCase().charCodeAt(0);
 }
 
 function sortSeatNumber(a: Seat, b: Seat) {
@@ -67,14 +71,13 @@ function getDefaultGuestData(): GuestData {
 
 export default function PublicReservedSeatSelector({
   eventId,
-  eventType,
   seats,
   ticketTypes,
   currency,
   menuOptions = [],
 }: {
   eventId: string;
-  eventType: string;
+  eventType?: string;
   seats: Seat[];
   ticketTypes: TicketType[];
   currency: string;
@@ -89,21 +92,35 @@ export default function PublicReservedSeatSelector({
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
-  const groupedSeats = useMemo(() => {
-    const rowSeats = seats.filter((seat) => !seat.table_number);
+  const groupedRows = useMemo(() => {
+    const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
     const groups = new Map<string, Seat[]>();
 
     for (const seat of rowSeats) {
-      const label = groupLabel(seat);
-      const existing = groups.get(label) || [];
+      const section = seat.section || "Main";
+      const row = seat.row_label || "Unlabelled";
+      const key = `${section}|||${row}`;
+      const existing = groups.get(key) || [];
       existing.push(seat);
-      groups.set(label, existing);
+      groups.set(key, existing);
     }
 
-    return Array.from(groups.entries()).map(([label, groupSeats]) => ({
-      label,
-      seats: groupSeats.sort(sortSeatNumber),
-    }));
+    return Array.from(groups.entries())
+      .map(([key, groupSeats]) => {
+        const [section, row] = key.split("|||");
+
+        return {
+          key,
+          section,
+          row,
+          seats: groupSeats.sort(sortSeatNumber),
+        };
+      })
+      .sort((a, b) => {
+        const sectionCompare = a.section.localeCompare(b.section);
+        if (sectionCompare !== 0) return sectionCompare;
+        return rowSortValue(a.row) - rowSortValue(b.row);
+      });
   }, [seats]);
 
   const cartSeats = useMemo(() => {
@@ -239,64 +256,75 @@ export default function PublicReservedSeatSelector({
           </div>
 
           <div style={styles.legend}>
-            <Legend color="#22c55e" label="Available" />
-            <Legend color="#38bdf8" label="Selected" />
-            <Legend color="#64748b" label="Unavailable" />
+            <Legend color="#bbf7d0" label="Available" />
+            <Legend color="#60a5fa" label="Selected" />
+            <Legend color="#cbd5e1" label="Unavailable" />
           </div>
         </div>
 
-        <div style={styles.groups}>
-          {groupedSeats.map((group) => {
-            const availableCount = group.seats.filter(
-              (seat) => seat.status === "available",
-            ).length;
+        <div style={styles.seatMapScroll}>
+          <div style={styles.stage}>STAGE</div>
 
-            return (
-              <div key={group.label} style={styles.groupCard}>
-                <div style={styles.groupHeader}>
-                  <div>
-                    <h4 style={styles.groupTitle}>{group.label}</h4>
-                    <p style={styles.groupSub}>
-                      {availableCount} available from {group.seats.length}
-                    </p>
+          <div style={styles.rows}>
+            {groupedRows.map((group, index) => {
+              const showSection =
+                index === 0 || groupedRows[index - 1]?.section !== group.section;
+
+              return (
+                <div key={group.key}>
+                  {showSection && <div style={styles.sectionLabel}>{group.section}</div>}
+
+                  <div style={styles.rowLine}>
+                    <div style={styles.rowLabel}>Row {group.row}</div>
+
+                    <div style={styles.rowSeats}>
+                      {group.seats.map((seat) => {
+                        const selected = selectedSeatIds.includes(seat.id);
+                        const unavailable = seat.status !== "available";
+
+                        return (
+                          <span key={seat.id} style={styles.seatWithAisle}>
+                            <button
+                              type="button"
+                              onClick={() => toggleSeat(seat)}
+                              disabled={unavailable}
+                              title={seatLabel(seat)}
+                              style={{
+                                ...styles.seatButton,
+                                background: selected
+                                  ? "#60a5fa"
+                                  : unavailable
+                                    ? "#e2e8f0"
+                                    : "#dcfce7",
+                                borderColor: selected
+                                  ? "#3b82f6"
+                                  : unavailable
+                                    ? "#cbd5e1"
+                                    : "#bbf7d0",
+                                color: selected
+                                  ? "#ffffff"
+                                  : unavailable
+                                    ? "#64748b"
+                                    : "#14532d",
+                                cursor: unavailable ? "not-allowed" : "pointer",
+                                opacity: unavailable ? 0.7 : 1,
+                              }}
+                            >
+                              {seat.seat_number}
+                            </button>
+
+                            {seat.aisle_after ? (
+                              <span style={styles.aisle}>Aisle</span>
+                            ) : null}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-
-                <div style={styles.seatGrid}>
-                  {group.seats.map((seat) => {
-                    const selected = selectedSeatIds.includes(seat.id);
-                    const unavailable = seat.status !== "available";
-
-                    return (
-                      <button
-                        key={seat.id}
-                        type="button"
-                        onClick={() => toggleSeat(seat)}
-                        disabled={unavailable}
-                        title={seatLabel(seat)}
-                        style={{
-                          ...styles.seatButton,
-                          background: selected
-                            ? "#38bdf8"
-                            : unavailable
-                              ? "#475569"
-                              : "#22c55e",
-                          color: selected ? "#082f49" : "#ffffff",
-                          opacity: unavailable ? 0.45 : 1,
-                          cursor: unavailable ? "not-allowed" : "pointer",
-                          boxShadow: selected
-                            ? "0 0 0 3px rgba(56,189,248,0.24)"
-                            : "none",
-                        }}
-                      >
-                        <span style={styles.seatNumber}>{seat.seat_number}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -494,11 +522,10 @@ const styles: Record<string, CSSProperties> = {
   },
   mapPanel: {
     padding: 18,
-    borderRadius: 28,
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
-    border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
   },
   mapHeader: {
     display: "flex",
@@ -506,26 +533,27 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   mapTitle: {
     margin: 0,
-    color: "#ffffff",
+    color: "#111827",
     fontSize: 26,
     fontWeight: 950,
     letterSpacing: "-0.03em",
   },
   mapText: {
     margin: "6px 0 0",
-    color: "#94a3b8",
+    color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    fontWeight: 700,
   },
   legend: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    color: "#cbd5e1",
+    color: "#334155",
     fontSize: 12,
     fontWeight: 900,
   },
@@ -538,51 +566,93 @@ const styles: Record<string, CSSProperties> = {
     width: 10,
     height: 10,
     borderRadius: 999,
+    border: "1px solid rgba(15,23,42,0.12)",
   },
-  groups: {
-    display: "grid",
-    gap: 16,
+  seatMapScroll: {
+    overflowX: "auto",
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
   },
-  groupCard: {
-    padding: 16,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.055)",
-    border: "1px solid rgba(255,255,255,0.1)",
-  },
-  groupHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  groupTitle: {
-    margin: 0,
+  stage: {
+    width: "100%",
+    minWidth: 820,
+    padding: "10px 14px",
+    marginBottom: 16,
+    borderRadius: 14,
+    background: "#111827",
     color: "#ffffff",
-    fontSize: 19,
+    textAlign: "center",
     fontWeight: 950,
+    letterSpacing: "0.14em",
+    fontSize: 12,
   },
-  groupSub: {
-    margin: "4px 0 0",
-    color: "#94a3b8",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  seatGrid: {
+  rows: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(54px, 1fr))",
+    gap: 8,
+    minWidth: 820,
+  },
+  sectionLabel: {
+    margin: "12px 0 8px",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  rowLine: {
+    display: "grid",
+    gridTemplateColumns: "96px minmax(0, 1fr)",
     gap: 10,
+    alignItems: "center",
+  },
+  rowLabel: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    padding: "0 10px",
+    borderRadius: 12,
+    background: "#ffffff",
+    border: "1px solid #cbd5e1",
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  rowSeats: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    minHeight: 40,
+  },
+  seatWithAisle: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
   },
   seatButton: {
-    minHeight: 54,
-    borderRadius: 16,
-    border: "none",
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    border: "1px solid",
+    fontSize: 13,
     fontWeight: 950,
-    transition: "transform 140ms ease, box-shadow 140ms ease",
+    boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
   },
-  seatNumber: {
-    display: "block",
-    fontSize: 15,
+  aisle: {
+    width: 54,
+    height: 34,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    border: "1px dashed #f59e0b",
+    background: "#fffbeb",
+    color: "#92400e",
+    fontSize: 10,
+    fontWeight: 950,
   },
   cart: {
     position: "sticky",
