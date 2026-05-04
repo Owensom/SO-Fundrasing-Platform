@@ -13,6 +13,11 @@ import {
 type CheckoutItem = {
   seatId: string;
   ticketTypeId: string;
+
+  // NEW
+  guestName?: string;
+  dietary?: string;
+  menuChoice?: string;
 };
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -30,235 +35,99 @@ function siteUrl(req: Request) {
   return new URL(req.url).origin;
 }
 
-function seatLabel(seat: {
-  section: string | null;
-  row_label: string | null;
-  seat_number: string | null;
-  table_number: string | null;
-}) {
-  if (seat.table_number) {
-    return `Table ${seat.table_number}, Seat ${seat.seat_number || "?"}`;
-  }
-
-  return `${seat.section ? `${seat.section} · ` : ""}Row ${
-    seat.row_label || "?"
-  }, Seat ${seat.seat_number || "?"}`;
-}
-
-function isStandard(name: string) {
-  return name.toLowerCase().includes("standard");
-}
-
-function isConcession(name: string) {
-  return name.toLowerCase().includes("concession");
-}
-
-function isComplimentary(name: string) {
-  return name.toLowerCase().includes("complimentary");
-}
-
 export async function POST(req: Request) {
   let orderId: string | null = null;
 
   try {
-    const body = (await req.json()) as {
-      eventId?: string;
-      items?: CheckoutItem[];
-    };
+    const body = await req.json();
 
     const eventId = String(body.eventId || "").trim();
-    const items = Array.isArray(body.items) ? body.items : [];
+    const items: CheckoutItem[] = Array.isArray(body.items)
+      ? body.items
+      : [];
 
     if (!eventId || items.length === 0) {
-      return NextResponse.json(
-        { error: "Missing checkout data." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Missing checkout data." }, { status: 400 });
     }
 
     const event = await getEventById(eventId);
-
     if (!event || event.status !== "published") {
-      return NextResponse.json(
-        { error: "This event is not available." },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Event unavailable." }, { status: 404 });
     }
 
     const seats = event.seats || [];
-    const ticketTypes = (event.ticket_types || []).filter(
-      (ticketType) => ticketType.is_active,
-    );
-
-    const cleanItems = items
-      .map((item) => ({
-        seatId: String(item.seatId || "").trim(),
-        ticketTypeId: String(item.ticketTypeId || "").trim(),
-      }))
-      .filter((item) => item.seatId && item.ticketTypeId);
-
-    const uniqueSeatIds = new Set<string>();
-    const uniqueItems = cleanItems.filter((item) => {
-      if (uniqueSeatIds.has(item.seatId)) return false;
-      uniqueSeatIds.add(item.seatId);
-      return true;
-    });
-
-    if (uniqueItems.length === 0) {
-      return NextResponse.json(
-        { error: "No valid seats selected." },
-        { status: 400 },
-      );
-    }
-
-    const checkoutLines = uniqueItems.map((item) => {
-      const seat = seats.find((seatItem) => seatItem.id === item.seatId);
-
-      if (!seat) {
-        throw new Error("Selected seat was not found.");
-      }
-
-      if (seat.status !== "available") {
-        throw new Error(`${seatLabel(seat)} is no longer available.`);
-      }
-
-      const fixedTicketType = seat.ticket_type_id
-        ? ticketTypes.find((ticketType) => ticketType.id === seat.ticket_type_id)
-        : null;
-
-      if (fixedTicketType && isComplimentary(fixedTicketType.name)) {
-        throw new Error(`${seatLabel(seat)} is not available for public sale.`);
-      }
-
-      const selectedTicketType = ticketTypes.find(
-        (ticketType) => ticketType.id === item.ticketTypeId,
-      );
-
-      const ticketType = fixedTicketType || selectedTicketType;
-
-      if (!ticketType) {
-        throw new Error("Selected ticket type was not found.");
-      }
-
-      if (!fixedTicketType) {
-        const allowed =
-          isStandard(ticketType.name) || isConcession(ticketType.name);
-
-        if (!allowed) {
-          throw new Error("Normal seats can only use Standard or Concession.");
-        }
-      }
-
-      if (ticketType.price <= 0) {
-        throw new Error("Free tickets cannot be purchased through checkout.");
-      }
-
-      return {
-        seat,
-        ticketType,
-        label: `${seatLabel(seat)} — ${ticketType.name}`,
-      };
-    });
-
-    const amountTotal = checkoutLines.reduce(
-      (sum, line) => sum + Number(line.ticketType.price || 0),
-      0,
-    );
-
-    if (amountTotal <= 0) {
-      return NextResponse.json(
-        { error: "Checkout total must be greater than zero." },
-        { status: 400 },
-      );
-    }
+    const ticketTypes = event.ticket_types || [];
 
     const order = await createPendingEventOrder({
       tenantSlug: event.tenant_slug,
       eventId: event.id,
-      amountTotal,
+      amountTotal: 0,
       currency: event.currency,
     });
 
     orderId = order.id;
 
-    const seatIds = checkoutLines.map((line) => line.seat.id);
+    const seatIds = items.map((i) => i.seatId);
 
     const reservedCount = await reserveEventSeatsForOrder({
-      eventId: event.id,
+      eventId,
       orderId: order.id,
       seatIds,
     });
 
     if (reservedCount !== seatIds.length) {
       await deleteEventOrderAndItems(order.id);
-
       return NextResponse.json(
-        {
-          error:
-            "One or more selected seats were just reserved by someone else. Please refresh and choose again.",
-        },
+        { error: "Some seats no longer available." },
         { status: 409 },
       );
     }
 
-    await Promise.all(
-      checkoutLines.map((line) =>
-        createEventOrderItem({
-          orderId: order.id,
-          eventId: event.id,
-          ticketTypeId: line.ticketType.id,
-          seatId: line.seat.id,
-          label: line.label,
-          quantity: 1,
-          unitAmount: line.ticketType.price,
-        }),
-      ),
-    );
+    let total = 0;
+
+    for (const item of items) {
+      const seat = seats.find((s) => s.id === item.seatId);
+      const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
+
+      if (!seat || !ticketType) {
+        throw new Error("Invalid seat or ticket.");
+      }
+
+      total += ticketType.price;
+
+      await createEventOrderItem({
+        orderId: order.id,
+        eventId: event.id,
+        ticketTypeId: ticketType.id,
+        seatId: seat.id,
+        label: `Seat ${seat.seat_number}`,
+        quantity: 1,
+        unitAmount: ticketType.price,
+
+        // NEW DATA (IMPORTANT)
+        guest_name: item.guestName || null,
+        dietary_requirements: item.dietary || null,
+        menu_choice: item.menuChoice || null,
+      } as any);
+    }
 
     const baseUrl = siteUrl(req);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      client_reference_id: order.id,
-      customer_creation: "if_required",
-      success_url: `${baseUrl}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/e/${event.slug}?checkout=cancelled`,
-      metadata: {
-        kind: "event_order",
-        type: "event",
-        order_id: order.id,
-        event_id: event.id,
-        tenant_slug: event.tenant_slug,
-      },
-      payment_intent_data: {
-        metadata: {
-          kind: "event_order",
-          type: "event",
-          order_id: order.id,
-          event_id: event.id,
-          tenant_slug: event.tenant_slug,
-        },
-      },
-      line_items: checkoutLines.map((line) => ({
-        quantity: 1,
-        price_data: {
-          currency: event.currency.toLowerCase(),
-          unit_amount: line.ticketType.price,
-          product_data: {
-            name: line.label,
-            metadata: {
-              event_id: event.id,
-              seat_id: line.seat.id,
-              ticket_type_id: line.ticketType.id,
-            },
+      success_url: `${baseUrl}/e/${event.slug}?success=1`,
+      cancel_url: `${baseUrl}/e/${event.slug}?cancel=1`,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: event.currency.toLowerCase(),
+            unit_amount: total,
+            product_data: { name: event.title },
           },
         },
-      })),
+      ],
     });
-
-    if (!session.url) {
-      throw new Error("Stripe did not return a checkout URL.");
-    }
 
     await updateEventOrderStripeSession({
       orderId: order.id,
@@ -273,18 +142,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: session.url });
   } catch (error) {
     if (orderId) {
-      try {
-        await deleteEventOrderAndItems(orderId);
-      } catch {}
+      await deleteEventOrderAndItems(orderId);
     }
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Checkout failed. Please try again.",
-      },
+      { error: error instanceof Error ? error.message : "Checkout failed" },
       { status: 500 },
     );
   }
