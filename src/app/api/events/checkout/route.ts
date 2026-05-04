@@ -8,7 +8,7 @@ import {
   getEventById,
   reserveEventSeatsForOrder,
   updateEventOrderStripeSession,
-} from "../../../../../api/_lib/events-repo";
+} from "../../_lib/events-repo";
 
 type CheckoutItem = {
   seatId: string;
