@@ -89,6 +89,9 @@ export type EventOrderItem = {
   label: string;
   quantity: number;
   unit_amount: number;
+  guest_name: string | null;
+  dietary_requirements: string | null;
+  menu_choice: string | null;
   created_at: string;
 };
 
@@ -832,6 +835,9 @@ export async function createEventOrderItem(input: {
   label: string;
   quantity: number;
   unitAmount: number;
+  guest_name?: string | null;
+  dietary_requirements?: string | null;
+  menu_choice?: string | null;
 }): Promise<EventOrderItem> {
   const created = await queryOne<EventOrderItem>(
     `
@@ -842,9 +848,12 @@ export async function createEventOrderItem(input: {
       seat_id,
       label,
       quantity,
-      unit_amount
+      unit_amount,
+      guest_name,
+      dietary_requirements,
+      menu_choice
     )
-    values ($1,$2,$3,$4,$5,$6,$7)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     returning *
     `,
     [
@@ -855,6 +864,9 @@ export async function createEventOrderItem(input: {
       input.label,
       input.quantity,
       input.unitAmount,
+      input.guest_name ?? null,
+      input.dietary_requirements ?? null,
+      input.menu_choice ?? null,
     ],
   );
 
