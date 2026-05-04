@@ -64,13 +64,28 @@ export default async function PublicEventPage({
     .map((option) => String(option.name || option.title || "").trim())
     .filter((option) => option.length > 0);
 
+  const publicPrizes = (event.prizes_json || [])
+    .filter((prize) => prize.isPublic !== false && prize.is_public !== false)
+    .sort(
+      (a, b) =>
+        Number(a.position || a.sortOrder || a.sort_order || 0) -
+        Number(b.position || b.sortOrder || b.sort_order || 0),
+    );
+
+  const lowestTicketPrice =
+    ticketTypes.length > 0
+      ? Math.min(...ticketTypes.map((ticketType) => Number(ticketType.price || 0)))
+      : 0;
+
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <nav className="flex flex-wrap items-center justify-between gap-3">
+    <main className="min-h-screen bg-[#07111f] text-white">
+      <div className="absolute inset-x-0 top-0 -z-0 h-[520px] bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.22),transparent_32%),radial-gradient(circle_at_top_right,rgba(22,131,248,0.22),transparent_34%)]" />
+
+      <div className="relative z-10 mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        <nav className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
             href={`/c/${tenantSlug}`}
-            className="inline-flex rounded-full border border-white/15 bg-white px-4 py-3 text-sm font-black text-slate-950 shadow-sm hover:bg-slate-100"
+            className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-black/20 transition hover:bg-slate-100"
           >
             ← Back to campaigns
           </Link>
@@ -78,14 +93,14 @@ export default async function PublicEventPage({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/c/${tenantSlug}/terms`}
-              className="inline-flex rounded-full border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
+              className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
             >
               Terms
             </Link>
 
             <Link
               href={`/c/${tenantSlug}/privacy`}
-              className="inline-flex rounded-full border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/10"
+              className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
             >
               Privacy
             </Link>
@@ -93,165 +108,246 @@ export default async function PublicEventPage({
         </nav>
 
         {searchParams?.checkout === "success" && (
-          <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-100">
+          <div className="mb-6 rounded-3xl border border-emerald-300/30 bg-emerald-400/10 p-5 text-emerald-50 shadow-2xl">
             <p className="text-lg font-black">Payment successful</p>
             <p className="mt-1 text-sm text-emerald-100/80">
-              Thank you. Your seats have been confirmed.
+              Thank you. Your booking has been received.
             </p>
           </div>
         )}
 
         {searchParams?.checkout === "cancelled" && (
-          <div className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-amber-100">
+          <div className="mb-6 rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-amber-50 shadow-2xl">
             <p className="text-lg font-black">Checkout cancelled</p>
             <p className="mt-1 text-sm text-amber-100/80">
-              Your order was not completed. You can choose seats again below.
+              Your order was not completed. You can choose again below.
             </p>
           </div>
         )}
 
-        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-2xl">
-          {event.image_url ? (
-            <img
-              src={event.image_url}
-              alt={event.title}
-              className="h-72 w-full object-cover md:h-96"
-            />
-          ) : (
-            <div className="flex h-72 items-center justify-center bg-gradient-to-br from-amber-300 via-orange-400 to-rose-500 md:h-96">
-              <div className="px-6 text-center">
-                <p className="text-sm font-black uppercase tracking-[0.35em] text-slate-950/70">
-                  Event
-                </p>
-                <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 md:text-6xl">
+        <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-black/30 backdrop-blur">
+          <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="flex min-h-[420px] flex-col justify-between p-6 md:p-10">
+              <div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
+                    {eventTypeLabel(event.event_type)}
+                  </span>
+
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-100">
+                    {event.currency}
+                  </span>
+
+                  {lowestTicketPrice > 0 && (
+                    <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
+                      From {event.currency} {moneyFromCents(lowestTicketPrice)}
+                    </span>
+                  )}
+                </div>
+
+                <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight text-white md:text-7xl">
                   {event.title}
                 </h1>
-              </div>
-            </div>
-          )}
 
-          <div className="p-6 md:p-8">
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
-                {eventTypeLabel(event.event_type)}
-              </span>
-
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-200">
-                {event.currency}
-              </span>
-            </div>
-
-            <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">
-              {event.title}
-            </h1>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-900 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  Date & time
-                </p>
-                <p className="mt-1 text-lg font-black">
-                  {formatDate(event.starts_at)}
-                </p>
+                {event.description && (
+                  <p className="mt-6 max-w-3xl whitespace-pre-line text-lg leading-8 text-slate-200">
+                    {event.description}
+                  </p>
+                )}
               </div>
 
-              <div className="rounded-2xl bg-slate-900 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  Location
-                </p>
-                <p className="mt-1 text-lg font-black">
-                  {event.location || "Location to be confirmed"}
-                </p>
+              <div className="mt-8 grid gap-3 md:grid-cols-2">
+                <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    Date & time
+                  </p>
+                  <p className="mt-2 text-lg font-black text-white">
+                    {formatDate(event.starts_at)}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    Location
+                  </p>
+                  <p className="mt-2 text-lg font-black text-white">
+                    {event.location || "Location to be confirmed"}
+                  </p>
+                </div>
               </div>
             </div>
 
-            {event.description && (
-              <p className="mt-6 max-w-3xl whitespace-pre-line text-base leading-7 text-slate-300">
-                {event.description}
-              </p>
-            )}
+            <div className="relative min-h-[320px] bg-slate-900 lg:min-h-full">
+              {event.image_url ? (
+                <img
+                  src={event.image_url}
+                  alt={event.title}
+                  className="h-full min-h-[320px] w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full min-h-[320px] items-center justify-center bg-gradient-to-br from-amber-300 via-orange-400 to-rose-500">
+                  <div className="px-6 text-center">
+                    <p className="text-sm font-black uppercase tracking-[0.35em] text-slate-950/70">
+                      Event
+                    </p>
+                    <div className="mt-4 text-7xl">🎟️</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent" />
+            </div>
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
-            <h2 className="text-3xl font-black">Tickets</h2>
-            <p className="mt-2 text-sm text-slate-300">
-              Choose seats on the map. Normal seats can be bought using the
-              available public ticket choices.
-            </p>
+        {(ticketTypes.length > 0 || publicPrizes.length > 0 || menuOptions.length > 0) && (
+          <section className="mt-8 grid gap-5 lg:grid-cols-3">
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/20">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-300">
+                Tickets
+              </p>
+              <h2 className="mt-2 text-2xl font-black">Choose your ticket</h2>
 
-            <div className="mt-6 space-y-4">
-              {ticketTypes.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
-                  <p className="text-lg font-black">Tickets coming soon</p>
-                  <p className="mt-2 text-sm text-slate-400">
+              <div className="mt-5 space-y-3">
+                {ticketTypes.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/15 p-5 text-sm font-bold text-slate-300">
                     Ticket options have not been added yet.
-                  </p>
-                </div>
-              ) : (
-                ticketTypes.map((ticketType) => (
-                  <div
-                    key={ticketType.id}
-                    className="rounded-3xl border border-white/10 bg-slate-900 p-5"
-                  >
-                    <h3 className="text-xl font-black">{ticketType.name}</h3>
-
-                    {ticketType.description && (
-                      <p className="mt-2 text-sm text-slate-400">
-                        {ticketType.description}
-                      </p>
-                    )}
-
-                    <p className="mt-3 text-2xl font-black text-amber-300">
-                      {event.currency} {moneyFromCents(ticketType.price)}
-                    </p>
                   </div>
-                ))
-              )}
+                ) : (
+                  ticketTypes.map((ticketType) => (
+                    <div
+                      key={ticketType.id}
+                      className="rounded-2xl border border-white/10 bg-slate-950/55 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-black text-white">{ticketType.name}</h3>
+                          {ticketType.description && (
+                            <p className="mt-1 text-sm leading-6 text-slate-400">
+                              {ticketType.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="shrink-0 rounded-full bg-amber-300 px-3 py-1 text-sm font-black text-slate-950">
+                          {event.currency} {moneyFromCents(ticketType.price)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/20">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-300">
+                Prizes
+              </p>
+              <h2 className="mt-2 text-2xl font-black">Event prizes</h2>
+
+              <div className="mt-5 space-y-3">
+                {publicPrizes.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/15 p-5 text-sm font-bold text-slate-300">
+                    Prize details will be announced soon.
+                  </div>
+                ) : (
+                  publicPrizes.map((prize, index) => (
+                    <div
+                      key={`${prize.id || "prize"}-${index}`}
+                      className="rounded-2xl border border-white/10 bg-slate-950/55 p-4"
+                    >
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                        Prize {prize.position || index + 1}
+                      </p>
+                      <h3 className="mt-1 font-black text-white">
+                        {prize.title || prize.name}
+                      </h3>
+                      {prize.description && (
+                        <p className="mt-1 text-sm leading-6 text-slate-400">
+                          {prize.description}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/20">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-300">
+                Menu
+              </p>
+              <h2 className="mt-2 text-2xl font-black">Dining choices</h2>
+
+              <div className="mt-5 space-y-3">
+                {menuOptions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/15 p-5 text-sm font-bold text-slate-300">
+                    Menu choices can be added during checkout if required.
+                  </div>
+                ) : (
+                  menuOptions.map((option) => (
+                    <div
+                      key={option}
+                      className="rounded-2xl border border-white/10 bg-slate-950/55 p-4 font-bold text-slate-100"
+                    >
+                      {option}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 backdrop-blur md:p-6">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-300">
+                Book now
+              </p>
+              <h2 className="mt-2 text-3xl font-black md:text-4xl">
+                {event.event_type === "tables"
+                  ? "Choose your table seats"
+                  : event.event_type === "reserved_seating"
+                    ? "Choose your seats"
+                    : "Book tickets"}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                {event.event_type === "general_admission"
+                  ? "This event uses general admission tickets."
+                  : "Select your seats, add guest details, then continue securely to checkout."}
+              </p>
+            </div>
+
+            <div className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-950">
+              Secure Stripe checkout
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
-            <h2 className="text-3xl font-black">
-              {event.event_type === "tables"
-                ? "Choose table seats"
-                : "Choose seats"}
-            </h2>
-
-            <p className="mt-2 text-sm text-slate-300">
-              {event.event_type === "general_admission"
-                ? "This event uses general admission tickets."
-                : "Select your seats, then continue securely to Stripe checkout."}
-            </p>
-
-            <div className="mt-6">
-              {event.event_type === "general_admission" ? (
-                <div className="rounded-3xl bg-slate-900 p-6">
-                  <p className="text-lg font-black">No seat selection needed</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    General admission checkout will be connected separately.
-                  </p>
-                </div>
-              ) : seats.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
-                  <p className="text-lg font-black">No seats available</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Seats may not have been released yet.
-                  </p>
-                </div>
-              ) : (
-                <PublicSeatSelector
-                  eventId={event.id}
-                  eventType={event.event_type}
-                  seats={seats}
-                  ticketTypes={ticketTypes}
-                  currency={event.currency}
-                  menuOptions={menuOptions}
-                />
-              )}
+          {event.event_type === "general_admission" ? (
+            <div className="rounded-3xl border border-dashed border-white/15 bg-slate-950/55 p-8 text-center">
+              <p className="text-xl font-black">General admission checkout coming soon</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Ticket selection is currently enabled for reserved seating and table seating.
+              </p>
             </div>
-          </div>
+          ) : seats.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-white/15 bg-slate-950/55 p-8 text-center">
+              <p className="text-xl font-black">No seats available yet</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Seats may not have been released yet.
+              </p>
+            </div>
+          ) : (
+            <PublicSeatSelector
+              eventId={event.id}
+              eventType={event.event_type}
+              seats={seats}
+              ticketTypes={ticketTypes}
+              currency={event.currency}
+              menuOptions={menuOptions}
+            />
+          )}
         </section>
       </div>
     </main>
