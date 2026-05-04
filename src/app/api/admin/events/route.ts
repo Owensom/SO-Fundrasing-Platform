@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createEvent } from "../../../../../api/_lib/events-repo";
+import {
+  createEvent,
+  type EventPrize,
+  type EventStatus,
+  type EventType,
+} from "../../../../../api/_lib/events-repo";
 
 function positiveInteger(value: FormDataEntryValue | null, fallback = 0) {
   const number = Number(value);
@@ -8,7 +13,7 @@ function positiveInteger(value: FormDataEntryValue | null, fallback = 0) {
   return Math.max(0, Math.floor(number));
 }
 
-function cleanEventType(value: FormDataEntryValue | null) {
+function cleanEventType(value: FormDataEntryValue | null): EventType {
   const eventType = String(value || "general_admission").trim();
 
   if (
@@ -22,7 +27,7 @@ function cleanEventType(value: FormDataEntryValue | null) {
   return "general_admission";
 }
 
-function cleanStatus(value: FormDataEntryValue | null) {
+function cleanStatus(value: FormDataEntryValue | null): EventStatus {
   const status = String(value || "draft").trim();
 
   if (status === "draft" || status === "published" || status === "closed") {
@@ -32,13 +37,24 @@ function cleanStatus(value: FormDataEntryValue | null) {
   return "draft";
 }
 
-function parsePrizes(value: FormDataEntryValue | null) {
+function parsePrizes(value: FormDataEntryValue | null): EventPrize[] {
   try {
     const parsed = JSON.parse(String(value || "[]"));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
+}
+
+function optionalDate(value: FormDataEntryValue | null) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return null;
+
+  const date = new Date(clean);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
 }
 
 export async function POST(request: Request) {
@@ -60,8 +76,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const prizes = parsePrizes(formData.get("prizes"));
-
   const event = await createEvent({
     tenantSlug,
     title,
@@ -69,20 +83,13 @@ export async function POST(request: Request) {
     description: String(formData.get("description") || "").trim() || null,
     imageUrl: String(formData.get("image_url") || "").trim() || null,
     location: String(formData.get("location") || "").trim() || null,
-    startsAt: String(formData.get("starts_at") || "").trim()
-      ? new Date(String(formData.get("starts_at"))).toISOString()
-      : null,
-    endsAt: String(formData.get("ends_at") || "").trim()
-      ? new Date(String(formData.get("ends_at"))).toISOString()
-      : null,
+    startsAt: optionalDate(formData.get("starts_at")),
+    endsAt: optionalDate(formData.get("ends_at")),
     capacity: positiveInteger(formData.get("capacity"), 0) || null,
     currency: String(formData.get("currency") || "GBP").trim() || "GBP",
     eventType: cleanEventType(formData.get("event_type")),
     status: cleanStatus(formData.get("status")),
-
-    // Safe to pass through. If your repo does not yet save prizes,
-    // this keeps the API from crashing while preserving the submitted data shape.
-    prizes,
+    prizesJson: parsePrizes(formData.get("prizes")),
   });
 
   return NextResponse.redirect(
