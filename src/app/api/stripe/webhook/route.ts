@@ -35,11 +35,7 @@ export async function POST(request: NextRequest) {
     let event: Stripe.Event;
 
     try {
-      event = stripe.webhooks.constructEvent(
-        rawBody,
-        signature,
-        webhookSecret,
-      );
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
     } catch (error: any) {
       console.error("Stripe webhook signature error", error);
 
@@ -56,29 +52,12 @@ export async function POST(request: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
 
-    const type = String(metadata.type || "raffle");
-
-    const reservationToken = String(
-      metadata.reservation_token ||
-        metadata.reservationToken ||
-        metadata.reservation_id ||
-        metadata.reservationId ||
-        "",
-    ).trim();
+    const rawType = String(metadata.type || metadata.kind || "raffle");
+    const type = rawType === "event_order" ? "event" : rawType;
 
     const tenantSlug = String(
       metadata.tenant_slug || metadata.tenantSlug || "",
     ).trim();
-
-    const raffleId =
-      type === "raffle"
-        ? String(metadata.raffle_id || metadata.raffleId || "").trim()
-        : null;
-
-    const squaresGameId =
-      type === "squares"
-        ? String(metadata.game_id || metadata.gameId || "").trim()
-        : null;
 
     const paymentIntentId =
       typeof session.payment_intent === "string"
@@ -96,6 +75,136 @@ export async function POST(request: NextRequest) {
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
+
+    /*
+      EVENTS
+      Event checkout does not use raffle/squares reservation tokens.
+      It uses event_orders.id as the order reference.
+    */
+    if (type === "event") {
+      const orderId = String(
+        metadata.order_id || metadata.orderId || session.client_reference_id || "",
+      ).trim();
+
+      const eventId = String(
+        metadata.event_id || metadata.eventId || "",
+      ).trim();
+
+      if (!orderId || !eventId) {
+        console.error("Stripe event webhook missing order/event id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing event order data",
+        });
+      }
+
+      await query(
+        `
+        update event_orders
+        set
+          status = 'paid',
+          stripe_session_id = $1,
+          customer_name = coalesce($2, customer_name),
+          customer_email = coalesce($3, customer_email)
+        where id = $4
+          and event_id = $5
+        `,
+        [session.id, name, email, orderId, eventId],
+      );
+
+      await query(
+        `
+        update event_seats
+        set
+          status = 'sold',
+          customer_name = $2,
+          customer_email = $3,
+          updated_at = now()
+        where event_id = $1
+          and order_id = $4
+          and stripe_session_id = $5
+          and status = 'reserved'
+        `,
+        [eventId, name, email, orderId, session.id],
+      );
+
+      await query(
+        `
+        insert into platform_payments (
+          stripe_checkout_session_id,
+          stripe_payment_intent_id,
+          raffle_id,
+          tenant_slug,
+          reservation_token,
+          currency,
+          gross_amount_cents,
+          platform_fee_cents,
+          net_amount_cents,
+          payment_status,
+          customer_email,
+          payment_type,
+          squares_game_id
+        )
+        values ($1,$2,null,$3,$4,$5,$6,$7,$8,$9,$10,'event',null)
+        on conflict (stripe_checkout_session_id)
+        do update set
+          stripe_payment_intent_id = excluded.stripe_payment_intent_id,
+          tenant_slug = excluded.tenant_slug,
+          reservation_token = excluded.reservation_token,
+          currency = excluded.currency,
+          gross_amount_cents = excluded.gross_amount_cents,
+          platform_fee_cents = excluded.platform_fee_cents,
+          net_amount_cents = excluded.net_amount_cents,
+          payment_status = excluded.payment_status,
+          customer_email = excluded.customer_email,
+          payment_type = excluded.payment_type
+        `,
+        [
+          session.id,
+          paymentIntentId,
+          tenantSlug,
+          orderId,
+          session.currency || null,
+          grossAmountCents,
+          platformFeeCents,
+          netAmountCents,
+          session.payment_status || null,
+          email,
+        ],
+      );
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        orderId,
+        eventId,
+      });
+    }
+
+    const reservationToken = String(
+      metadata.reservation_token ||
+        metadata.reservationToken ||
+        metadata.reservation_id ||
+        metadata.reservationId ||
+        "",
+    ).trim();
+
+    const raffleId =
+      type === "raffle"
+        ? String(metadata.raffle_id || metadata.raffleId || "").trim()
+        : null;
+
+    const squaresGameId =
+      type === "squares"
+        ? String(metadata.game_id || metadata.gameId || "").trim()
+        : null;
 
     if (!reservationToken) {
       console.error("Stripe webhook missing reservation token", {
