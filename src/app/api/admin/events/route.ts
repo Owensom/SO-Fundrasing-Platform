@@ -7,7 +7,7 @@ import {
   type EventPrize,
   type EventStatus,
   type EventType,
-} from "../../../../../api/_lib/events-repo";
+} from "../../_lib/events-repo";
 
 type TicketTypeInput = {
   id?: string;
