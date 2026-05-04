@@ -34,6 +34,18 @@ export type EventSeat = {
   updated_at: string;
 };
 
+export type EventPrize = {
+  id?: string;
+  position?: number;
+  title?: string;
+  name?: string;
+  description?: string;
+  isPublic?: boolean;
+  is_public?: boolean;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
 export type EventItem = {
   id: string;
   tenant_slug: string;
@@ -48,6 +60,7 @@ export type EventItem = {
   event_type: EventType;
   status: EventStatus;
   capacity: number | null;
+  prizes_json: EventPrize[];
   created_at: string;
   updated_at: string;
   ticket_types?: EventTicketType[];
@@ -92,6 +105,7 @@ export type CreateEventInput = {
   eventType?: EventType;
   status?: EventStatus;
   capacity?: number | null;
+  prizesJson?: EventPrize[];
 };
 
 export type UpdateEventInput = {
@@ -106,6 +120,7 @@ export type UpdateEventInput = {
   eventType?: EventType;
   status?: EventStatus;
   capacity?: number | null;
+  prizesJson?: EventPrize[];
 };
 
 function normaliseEventType(value: string | null | undefined): EventType {
@@ -124,6 +139,37 @@ function normaliseSeatStatus(value: string | null | undefined): EventSeatStatus 
   }
 
   return "available";
+}
+
+function normalisePrizesJson(value: unknown): EventPrize[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      const prize = item as EventPrize;
+      const title = String(prize.title || prize.name || "").trim();
+
+      if (!title) return null;
+
+      const rawPosition = Number(prize.position);
+      const position =
+        Number.isFinite(rawPosition) && rawPosition > 0
+          ? Math.floor(rawPosition)
+          : index + 1;
+
+      return {
+        id: String(prize.id || `prize-${index + 1}`),
+        position,
+        title,
+        name: title,
+        description: String(prize.description || "").trim(),
+        isPublic: prize.isPublic ?? prize.is_public ?? true,
+        is_public: prize.is_public ?? prize.isPublic ?? true,
+        sortOrder: prize.sortOrder ?? prize.sort_order ?? index,
+        sort_order: prize.sort_order ?? prize.sortOrder ?? index,
+      };
+    })
+    .filter(Boolean) as EventPrize[];
 }
 
 export function slugifyEventTitle(value: string): string {
@@ -176,6 +222,7 @@ export async function hydrateEvent(event: EventItem): Promise<EventItem> {
 
   return {
     ...event,
+    prizes_json: normalisePrizesJson(event.prizes_json),
     ticket_types: ticketTypes,
     seats,
   };
@@ -232,9 +279,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       currency,
       event_type,
       status,
-      capacity
+      capacity,
+      prizes_json
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
     returning *
     `,
     [
@@ -250,6 +298,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       normaliseEventType(input.eventType),
       normaliseStatus(input.status),
       input.capacity ?? null,
+      JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
     ],
   );
 
@@ -257,7 +306,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
     throw new Error("Failed to create event");
   }
 
-  return created;
+  return hydrateEvent(created);
 }
 
 export async function updateEvent(
@@ -267,7 +316,7 @@ export async function updateEvent(
   const existing = await getEventById(id);
   if (!existing) return null;
 
-  return queryOne<EventItem>(
+  const updated = await queryOne<EventItem>(
     `
     update events
     set
@@ -282,6 +331,7 @@ export async function updateEvent(
       event_type = $10,
       status = $11,
       capacity = $12,
+      prizes_json = $13::jsonb,
       updated_at = now()
     where id = $1
     returning *
@@ -299,8 +349,15 @@ export async function updateEvent(
       normaliseEventType(input.eventType ?? existing.event_type),
       normaliseStatus(input.status ?? existing.status),
       input.capacity ?? existing.capacity,
+      JSON.stringify(
+        normalisePrizesJson(input.prizesJson ?? existing.prizes_json ?? []),
+      ),
     ],
   );
+
+  if (!updated) return null;
+
+  return hydrateEvent(updated);
 }
 
 /* =========================
@@ -417,6 +474,7 @@ export async function deleteEventTicketTypes(eventId: string): Promise<void> {
     [eventId],
   );
 }
+
 /* =========================
    SEATS / TABLE SEATS
 ========================= */
@@ -652,7 +710,7 @@ export async function deleteEventTableSeats(eventId: string): Promise<void> {
 }
 
 /* =========================
-   ORDERS (READY FOR CHECKOUT)
+   ORDERS
 ========================= */
 
 export async function listEventOrders(eventId: string): Promise<EventOrder[]> {
@@ -688,6 +746,7 @@ export async function deleteEvent(id: string): Promise<void> {
   await query(`delete from event_ticket_types where event_id = $1`, [id]);
   await query(`delete from events where id = $1`, [id]);
 }
+
 export async function createPendingEventOrder(input: {
   tenantSlug: string;
   eventId: string;
