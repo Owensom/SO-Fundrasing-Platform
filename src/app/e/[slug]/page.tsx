@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getEventBySlug } from "../../../../api/_lib/events-repo";
+import { getEventBySlug } from "../../api/_lib/events-repo";
 import PublicSeatSelector from "@/components/events/PublicSeatSelector";
 
 type PageProps = {
