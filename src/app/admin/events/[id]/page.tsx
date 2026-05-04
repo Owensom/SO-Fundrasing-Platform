@@ -19,7 +19,7 @@ import {
   updateEventSeatsTicketType,
   updateEventTicketType,
   type EventType,
-} from "../../../../../api/_lib/events-repo";
+} from "../../../api/_lib/events-repo";
 
 type PageProps = {
   params: {
