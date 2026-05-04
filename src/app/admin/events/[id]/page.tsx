@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import ImageUploadField from "@/components/ImageUploadField";
 import AdminSeatManager from "@/components/admin/events/AdminSeatManager";
 import {
@@ -18,6 +19,7 @@ import {
   updateEvent,
   updateEventSeatsTicketType,
   updateEventTicketType,
+  type EventPrize,
   type EventType,
 } from "../../../../../api/_lib/events-repo";
 
@@ -30,6 +32,15 @@ type PageProps = {
     error?: string;
   };
 };
+
+type PrizeFormRow = {
+  position: number;
+  title: string;
+  description: string;
+  isPublic: boolean;
+};
+
+const MIN_PRIZE_ROWS = 6;
 
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
@@ -83,6 +94,67 @@ function parseJsonStringArray(value: FormDataEntryValue | null): string[] {
   } catch {
     return [];
   }
+}
+
+function parsePrizeRowsFromForm(formData: FormData): EventPrize[] {
+  const count = positiveInteger(formData.get("prize_count"), 0);
+
+  return Array.from({ length: count }, (_, index) => {
+    const position = positiveInteger(
+      formData.get(`prize_position_${index}`),
+      index + 1,
+    );
+    const title = String(formData.get(`prize_title_${index}`) || "").trim();
+    const description = String(
+      formData.get(`prize_description_${index}`) || "",
+    ).trim();
+    const isPublic = String(formData.get(`prize_public_${index}`) || "") === "true";
+
+    return {
+      id: `prize-${index + 1}`,
+      position,
+      title,
+      name: title,
+      description,
+      isPublic,
+      is_public: isPublic,
+      sortOrder: index,
+      sort_order: index,
+    };
+  })
+    .filter((prize) => prize.title)
+    .sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+}
+
+function normalisePrizeRows(prizes: EventPrize[]): PrizeFormRow[] {
+  const rows = prizes
+    .map((prize, index) => {
+      const title = String(prize.title || prize.name || "").trim();
+
+      return {
+        position:
+          Number.isFinite(Number(prize.position)) && Number(prize.position) > 0
+            ? Math.floor(Number(prize.position))
+            : index + 1,
+        title,
+        description: String(prize.description || "").trim(),
+        isPublic: prize.isPublic !== false && prize.is_public !== false,
+      };
+    })
+    .filter((prize) => prize.title)
+    .sort((a, b) => a.position - b.position);
+
+  const targetLength = Math.max(MIN_PRIZE_ROWS, rows.length + 3);
+
+  return [
+    ...rows,
+    ...Array.from({ length: Math.max(0, targetLength - rows.length) }, (_, index) => ({
+      position: rows.length + index + 1,
+      title: "",
+      description: "",
+      isPublic: true,
+    })),
+  ];
 }
 
 function expandRows(value: string): string[] {
@@ -152,11 +224,32 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
-async function updateEventAction(formData: FormData) {
-  "use server";
-
+async function requireEventAccess(eventId: string) {
   const session = await auth();
   if (!session?.user) redirect("/admin/login");
+
+  const event = await getEventById(eventId);
+  if (!event) notFound();
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (
+    !tenantSlug ||
+    event.tenant_slug !== tenantSlug ||
+    !sessionTenantSlugs.includes(tenantSlug)
+  ) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  return event;
+}
+
+async function updateEventAction(formData: FormData) {
+  "use server";
 
   const id = String(formData.get("id") || "").trim();
   const title = String(formData.get("title") || "").trim();
@@ -180,6 +273,8 @@ async function updateEventAction(formData: FormData) {
     redirect(`/admin/events/${id}?error=missing-required#overview`);
   }
 
+  const event = await requireEventAccess(id);
+
   await updateEvent(id, {
     title,
     slug,
@@ -192,16 +287,32 @@ async function updateEventAction(formData: FormData) {
     currency,
     eventType,
     status,
+    prizesJson: event.prizes_json || [],
   });
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
 
-async function addTicketTypeAction(formData: FormData) {
+async function updatePrizesAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (!eventId) {
+    redirect("/admin/events?error=missing-event");
+  }
+
+  await requireEventAccess(eventId);
+
+  await updateEvent(eventId, {
+    prizesJson: parsePrizeRowsFromForm(formData),
+  });
+
+  redirect(`/admin/events/${eventId}?saved=prizes#prizes`);
+}
+
+async function addTicketTypeAction(formData: FormData) {
+  "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
   const name = String(formData.get("name") || "").trim();
@@ -209,6 +320,8 @@ async function addTicketTypeAction(formData: FormData) {
   if (!eventId || !name) {
     redirect(`/admin/events/${eventId}?error=missing-ticket#tickets`);
   }
+
+  await requireEventAccess(eventId);
 
   await createEventTicketType({
     eventId,
@@ -222,11 +335,9 @@ async function addTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=ticket#tickets`);
 }
+
 async function updateTicketTypeAction(formData: FormData) {
   "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
 
   const eventId = String(formData.get("event_id") || "").trim();
   const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
@@ -235,6 +346,8 @@ async function updateTicketTypeAction(formData: FormData) {
   if (!eventId || !ticketTypeId || !name) {
     redirect(`/admin/events/${eventId}?error=missing-ticket#tickets`);
   }
+
+  await requireEventAccess(eventId);
 
   await updateEventTicketType(ticketTypeId, {
     name,
@@ -251,12 +364,10 @@ async function updateTicketTypeAction(formData: FormData) {
 async function deleteTicketTypeAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
   const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
 
+  if (eventId) await requireEventAccess(eventId);
   if (ticketTypeId) await deleteEventTicketType(ticketTypeId);
 
   redirect(`/admin/events/${eventId}?saved=ticket-deleted#tickets`);
@@ -265,25 +376,18 @@ async function deleteTicketTypeAction(formData: FormData) {
 async function clearTicketTypesAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) await deleteEventTicketTypes(eventId);
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEventTicketTypes(eventId);
+  }
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
 
-/* =========================
-   SEAT ACTIONS (UPDATED LOGIC)
-========================= */
-
 async function applySeatTicketTypeAction(formData: FormData) {
   "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
 
   const eventId = String(formData.get("event_id") || "").trim();
   const rawTicketTypeId = String(formData.get("ticket_type_id") || "").trim();
@@ -292,6 +396,8 @@ async function applySeatTicketTypeAction(formData: FormData) {
   if (!eventId || !rawTicketTypeId || seatIds.length === 0) {
     redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
   }
+
+  await requireEventAccess(eventId);
 
   await updateEventSeatsTicketType({
     eventId,
@@ -305,15 +411,14 @@ async function applySeatTicketTypeAction(formData: FormData) {
 async function deleteSelectedSeatsAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
   const seatIds = parseJsonStringArray(formData.get("seat_ids"));
 
   if (!eventId || seatIds.length === 0) {
     redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
   }
+
+  await requireEventAccess(eventId);
 
   await deleteEventSeatsByIds({
     eventId,
@@ -326,15 +431,14 @@ async function deleteSelectedSeatsAction(formData: FormData) {
 async function deleteSelectedRowsAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
   const rowKeys = parseJsonStringArray(formData.get("row_keys"));
 
   if (!eventId || rowKeys.length === 0) {
     redirect(`/admin/events/${eventId}?error=missing-row-selection#row-seating`);
   }
+
+  await requireEventAccess(eventId);
 
   await deleteEventRowsByKeys({
     eventId,
@@ -343,11 +447,9 @@ async function deleteSelectedRowsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=rows-deleted#row-seating`);
 }
+
 async function generateSeatsAction(formData: FormData) {
   "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
 
   const eventId = String(formData.get("event_id") || "").trim();
   const section = String(formData.get("section") || "").trim();
@@ -361,6 +463,8 @@ async function generateSeatsAction(formData: FormData) {
   if (!eventId || !rowsRaw || seatsPerRow <= 0) {
     redirect(`/admin/events/${eventId}?error=missing-seats#row-seating`);
   }
+
+  await requireEventAccess(eventId);
 
   if (clearExisting) {
     await deleteEventRowSeats(eventId);
@@ -393,9 +497,6 @@ async function generateSeatsAction(formData: FormData) {
 async function generateTablesAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
   const tableCount = positiveInteger(formData.get("table_count"), 0);
   const seatsPerTable = positiveInteger(formData.get("seats_per_table"), 0);
@@ -406,6 +507,8 @@ async function generateTablesAction(formData: FormData) {
   if (!eventId || tableCount <= 0 || seatsPerTable <= 0) {
     redirect(`/admin/events/${eventId}?error=missing-tables#table-seating`);
   }
+
+  await requireEventAccess(eventId);
 
   if (clearExisting) {
     await deleteEventTableSeats(eventId);
@@ -436,12 +539,12 @@ async function generateTablesAction(formData: FormData) {
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) await deleteEventRowSeats(eventId);
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEventRowSeats(eventId);
+  }
 
   redirect(`/admin/events/${eventId}?saved=row-seats-cleared#row-seating`);
 }
@@ -449,12 +552,12 @@ async function clearRowSeatsAction(formData: FormData) {
 async function clearTableSeatsAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) await deleteEventTableSeats(eventId);
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEventTableSeats(eventId);
+  }
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
@@ -462,12 +565,12 @@ async function clearTableSeatsAction(formData: FormData) {
 async function deleteEventAction(formData: FormData) {
   "use server";
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
   const eventId = String(formData.get("event_id") || "").trim();
 
-  if (eventId) await deleteEvent(eventId);
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEvent(eventId);
+  }
 
   redirect("/admin/events");
 }
@@ -482,8 +585,23 @@ export default async function AdminEventManagePage({
   const event = await getEventById(params.id);
   if (!event) notFound();
 
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (
+    !tenantSlug ||
+    event.tenant_slug !== tenantSlug ||
+    !sessionTenantSlugs.includes(tenantSlug)
+  ) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
+  const prizeRows = normalisePrizeRows(event.prizes_json || []);
 
   const isGeneralAdmission = event.event_type === "general_admission";
   const isReservedSeating = event.event_type === "reserved_seating";
@@ -551,6 +669,9 @@ export default async function AdminEventManagePage({
         <a href="#tickets" style={styles.tab}>
           Tickets & Prices
         </a>
+        <a href="#prizes" style={styles.tab}>
+          Prizes
+        </a>
         {isReservedSeating && (
           <a href="#row-seating" style={styles.tab}>
             Row Seating
@@ -590,6 +711,10 @@ export default async function AdminEventManagePage({
 
         <div style={styles.statsGrid}>
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
+          <SummaryCard
+            label="Prizes"
+            value={(event.prizes_json || []).length}
+          />
           <SummaryCard
             label="Capacity"
             value={
@@ -663,7 +788,8 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-                        <div style={styles.twoCol}>
+
+            <div style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -934,6 +1060,80 @@ export default async function AdminEventManagePage({
         </div>
       </section>
 
+      <section id="prizes" style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <p style={styles.sectionEyebrow}>Prize settings</p>
+            <h2 style={styles.sectionTitle}>Prizes</h2>
+            <p style={styles.sectionText}>
+              Optional prizes shown on the public event page. Leave unused rows
+              blank.
+            </p>
+          </div>
+        </div>
+
+        <form action={updatePrizesAction} style={styles.panel}>
+          <input type="hidden" name="event_id" value={event.id} />
+          <input type="hidden" name="prize_count" value={prizeRows.length} />
+
+          <div style={styles.prizeList}>
+            {prizeRows.map((prize, index) => (
+              <div key={`prize-${index}`} style={styles.prizeRow}>
+                <div style={styles.prizeGrid}>
+                  <Field label="Position">
+                    <input
+                      name={`prize_position_${index}`}
+                      type="number"
+                      min="1"
+                      defaultValue={prize.position}
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Prize title">
+                    <input
+                      name={`prize_title_${index}`}
+                      defaultValue={prize.title}
+                      placeholder="e.g. £500 cash, Luxury hamper, Weekend break"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <label style={styles.checkboxLabel}>
+                    <input
+                      name={`prize_public_${index}`}
+                      type="checkbox"
+                      value="true"
+                      defaultChecked={prize.isPublic}
+                    />
+                    Show publicly
+                  </label>
+                </div>
+
+                <Field label="Description optional">
+                  <textarea
+                    name={`prize_description_${index}`}
+                    rows={2}
+                    defaultValue={prize.description}
+                    placeholder="Optional extra detail shown publicly"
+                    style={styles.textarea}
+                  />
+                </Field>
+              </div>
+            ))}
+          </div>
+
+          <p style={styles.helpText}>
+            To add more prizes, save the filled rows first. Extra blank rows will
+            appear automatically.
+          </p>
+
+          <button type="submit" style={styles.primaryButton}>
+            Save prizes
+          </button>
+        </form>
+      </section>
+
       {isReservedSeating && (
         <section id="row-seating" style={styles.section}>
           <div style={styles.sectionHeader}>
@@ -1199,7 +1399,7 @@ export default async function AdminEventManagePage({
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.sectionEyebrow}>
-              {isGeneralAdmission ? "Section 3" : "Section 4"}
+              {isGeneralAdmission ? "Section 4" : "Section 5"}
             </p>
             <h2 style={styles.sectionTitle}>Orders</h2>
             <p style={styles.sectionText}>
@@ -1464,6 +1664,8 @@ const styles: Record<string, CSSProperties> = {
     wordBreak: "break-word",
   },
   panel: {
+    display: "grid",
+    gap: 14,
     padding: 16,
     borderRadius: 18,
     background: "#f8fafc",
@@ -1571,6 +1773,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
   },
   primaryButton: {
+    width: "fit-content",
     padding: "13px 18px",
     border: "none",
     borderRadius: 999,
@@ -1609,12 +1812,36 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
   },
+  prizeList: {
+    display: "grid",
+    gap: 12,
+  },
+  prizeRow: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    background: "#ffffff",
+  },
+  prizeGrid: {
+    display: "grid",
+    gridTemplateColumns: "110px minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "end",
+  },
   checkboxLabel: {
     display: "flex",
     gap: 8,
     alignItems: "center",
     fontWeight: 900,
     color: "#334155",
+  },
+  helpText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
   },
   emptyBox: {
     padding: 16,
