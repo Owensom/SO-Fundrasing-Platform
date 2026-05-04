@@ -17,16 +17,17 @@ type CheckoutItem = {
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-function siteUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL;
+function siteUrl(req: Request) {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "";
+
+  if (appUrl) {
+    return appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
   }
 
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-
-  return "http://localhost:3000";
+  return new URL(req.url).origin;
 }
 
 function seatLabel(seat: {
@@ -214,7 +215,7 @@ export async function POST(req: Request) {
       ),
     );
 
-    const baseUrl = siteUrl();
+    const baseUrl = siteUrl(req);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -224,6 +225,7 @@ export async function POST(req: Request) {
       cancel_url: `${baseUrl}/e/${event.slug}?checkout=cancelled`,
       metadata: {
         kind: "event_order",
+        type: "event",
         order_id: order.id,
         event_id: event.id,
         tenant_slug: event.tenant_slug,
@@ -231,6 +233,7 @@ export async function POST(req: Request) {
       payment_intent_data: {
         metadata: {
           kind: "event_order",
+          type: "event",
           order_id: order.id,
           event_id: event.id,
           tenant_slug: event.tenant_slug,
