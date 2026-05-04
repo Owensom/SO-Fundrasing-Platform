@@ -3,8 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
-import PublicSeatSelector from "@/components/events/PublicSeatSelector";
 import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
+import PublicReservedSeatSelector from "@/components/events/PublicReservedSeatSelector";
+import PublicTableSelector from "@/components/events/PublicTableSelector";
 
 export const dynamic = "force-dynamic";
 
@@ -240,7 +241,7 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
                 <p style={styles.bookText}>
                   {event.event_type === "general_admission"
                     ? "Choose how many of each ticket type you would like."
-                    : "Select your seats, add guest details, then continue securely to checkout."}
+                    : "Add your details, select tickets, then continue securely to checkout."}
                 </p>
               </div>
 
@@ -253,13 +254,29 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
                 ticketTypes={ticketTypes}
                 currency={event.currency}
               />
+            ) : event.event_type === "tables" ? (
+              seats.length === 0 ? (
+                <div style={styles.emptyLarge}>
+                  <strong>No table seats available yet</strong>
+                  <p style={styles.muted}>Tables may not have been released yet.</p>
+                </div>
+              ) : (
+                <PublicTableSelector
+                  eventId={event.id}
+                  eventType={event.event_type}
+                  seats={seats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                  menuOptions={menuOptions}
+                />
+              )
             ) : seats.length === 0 ? (
               <div style={styles.emptyLarge}>
                 <strong>No seats available yet</strong>
                 <p style={styles.muted}>Seats may not have been released yet.</p>
               </div>
             ) : (
-              <PublicSeatSelector
+              <PublicReservedSeatSelector
                 eventId={event.id}
                 eventType={event.event_type}
                 seats={seats}
