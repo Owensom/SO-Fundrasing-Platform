@@ -41,7 +41,7 @@ export default async function PublicEventPage({
   params,
   searchParams,
 }: PageProps) {
-  const tenantSlug = getTenantSlugFromHeaders();
+  const tenantSlug = await getTenantSlugFromHeaders();
   const event = await getEventBySlug(tenantSlug, params.slug);
 
   if (!event || event.status !== "published") {
@@ -54,22 +54,19 @@ export default async function PublicEventPage({
 
   const seats = event.seats || [];
 
-  /* ✅ MENU OPTIONS FIX */
-  const menuOptions =
-    (event.menu_options || [])
-      .filter((m) => m.isActive !== false && m.is_active !== false)
-      .sort(
-        (a, b) =>
-          (a.sortOrder ?? a.sort_order ?? 0) -
-          (b.sortOrder ?? b.sort_order ?? 0),
-      )
-      .map((m) => m.name || m.title || "")
-      .filter(Boolean);
+  const menuOptions = (event.menu_options || [])
+    .filter((option) => option.isActive !== false && option.is_active !== false)
+    .sort(
+      (a, b) =>
+        Number(a.sortOrder ?? a.sort_order ?? 0) -
+        Number(b.sortOrder ?? b.sort_order ?? 0),
+    )
+    .map((option) => String(option.name || option.title || "").trim())
+    .filter((option) => option.length > 0);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
       <div className="mx-auto max-w-7xl space-y-8">
-        {/* NAV */}
         <nav className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href={`/c/${tenantSlug}`}
@@ -95,7 +92,6 @@ export default async function PublicEventPage({
           </div>
         </nav>
 
-        {/* SUCCESS */}
         {searchParams?.checkout === "success" && (
           <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-100">
             <p className="text-lg font-black">Payment successful</p>
@@ -105,7 +101,6 @@ export default async function PublicEventPage({
           </div>
         )}
 
-        {/* CANCEL */}
         {searchParams?.checkout === "cancelled" && (
           <div className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-amber-100">
             <p className="text-lg font-black">Checkout cancelled</p>
@@ -115,7 +110,6 @@ export default async function PublicEventPage({
           </div>
         )}
 
-        {/* HERO */}
         <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-2xl">
           {event.image_url ? (
             <img
@@ -179,16 +173,21 @@ export default async function PublicEventPage({
           </div>
         </section>
 
-        {/* MAIN GRID */}
         <section className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
-          {/* TICKETS */}
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-3xl font-black">Tickets</h2>
+            <p className="mt-2 text-sm text-slate-300">
+              Choose seats on the map. Normal seats can be bought using the
+              available public ticket choices.
+            </p>
 
             <div className="mt-6 space-y-4">
               {ticketTypes.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
                   <p className="text-lg font-black">Tickets coming soon</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Ticket options have not been added yet.
+                  </p>
                 </div>
               ) : (
                 ticketTypes.map((ticketType) => (
@@ -197,6 +196,12 @@ export default async function PublicEventPage({
                     className="rounded-3xl border border-white/10 bg-slate-900 p-5"
                   >
                     <h3 className="text-xl font-black">{ticketType.name}</h3>
+
+                    {ticketType.description && (
+                      <p className="mt-2 text-sm text-slate-400">
+                        {ticketType.description}
+                      </p>
+                    )}
 
                     <p className="mt-3 text-2xl font-black text-amber-300">
                       {event.currency} {moneyFromCents(ticketType.price)}
@@ -207,7 +212,6 @@ export default async function PublicEventPage({
             </div>
           </div>
 
-          {/* SEATS */}
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
             <h2 className="text-3xl font-black">
               {event.event_type === "tables"
@@ -215,14 +219,26 @@ export default async function PublicEventPage({
                 : "Choose seats"}
             </h2>
 
+            <p className="mt-2 text-sm text-slate-300">
+              {event.event_type === "general_admission"
+                ? "This event uses general admission tickets."
+                : "Select your seats, then continue securely to Stripe checkout."}
+            </p>
+
             <div className="mt-6">
               {event.event_type === "general_admission" ? (
                 <div className="rounded-3xl bg-slate-900 p-6">
-                  No seat selection needed
+                  <p className="text-lg font-black">No seat selection needed</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    General admission checkout will be connected separately.
+                  </p>
                 </div>
               ) : seats.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-white/15 p-8 text-center">
-                  No seats available
+                  <p className="text-lg font-black">No seats available</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Seats may not have been released yet.
+                  </p>
                 </div>
               ) : (
                 <PublicSeatSelector
@@ -231,7 +247,7 @@ export default async function PublicEventPage({
                   seats={seats}
                   ticketTypes={ticketTypes}
                   currency={event.currency}
-                  menuOptions={menuOptions}   {/* ✅ CONNECTED */}
+                  menuOptions={menuOptions}
                 />
               )}
             </div>
