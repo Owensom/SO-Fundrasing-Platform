@@ -46,6 +46,17 @@ export type EventPrize = {
   sort_order?: number;
 };
 
+export type EventMenuOption = {
+  id?: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  isActive?: boolean;
+  is_active?: boolean;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
 export type EventItem = {
   id: string;
   tenant_slug: string;
@@ -61,6 +72,7 @@ export type EventItem = {
   status: EventStatus;
   capacity: number | null;
   prizes_json: EventPrize[];
+  menu_options: EventMenuOption[];
   created_at: string;
   updated_at: string;
   ticket_types?: EventTicketType[];
@@ -109,6 +121,7 @@ export type CreateEventInput = {
   status?: EventStatus;
   capacity?: number | null;
   prizesJson?: EventPrize[];
+  menuOptions?: EventMenuOption[];
 };
 
 export type UpdateEventInput = {
@@ -124,6 +137,7 @@ export type UpdateEventInput = {
   status?: EventStatus;
   capacity?: number | null;
   prizesJson?: EventPrize[];
+  menuOptions?: EventMenuOption[];
 };
 
 function normaliseEventType(value: string | null | undefined): EventType {
@@ -175,6 +189,30 @@ function normalisePrizesJson(value: unknown): EventPrize[] {
     .filter(Boolean) as EventPrize[];
 }
 
+function normaliseMenuOptions(value: unknown): EventMenuOption[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      const option = item as EventMenuOption;
+      const name = String(option.name || option.title || "").trim();
+
+      if (!name) return null;
+
+      return {
+        id: String(option.id || `menu-${index + 1}`),
+        name,
+        title: name,
+        description: String(option.description || "").trim(),
+        isActive: option.isActive ?? option.is_active ?? true,
+        is_active: option.is_active ?? option.isActive ?? true,
+        sortOrder: option.sortOrder ?? option.sort_order ?? index,
+        sort_order: option.sort_order ?? option.sortOrder ?? index,
+      };
+    })
+    .filter(Boolean) as EventMenuOption[];
+}
+
 export function slugifyEventTitle(value: string): string {
   const slug = value
     .toLowerCase()
@@ -191,7 +229,7 @@ export function slugifyEventTitle(value: string): string {
 ========================= */
 
 export async function listEvents(tenantSlug: string): Promise<EventItem[]> {
-  return query<EventItem>(
+  const events = await query<EventItem>(
     `
     select *
     from events
@@ -200,12 +238,18 @@ export async function listEvents(tenantSlug: string): Promise<EventItem[]> {
     `,
     [tenantSlug],
   );
+
+  return events.map((event) => ({
+    ...event,
+    prizes_json: normalisePrizesJson(event.prizes_json),
+    menu_options: normaliseMenuOptions(event.menu_options),
+  }));
 }
 
 export async function listPublishedEvents(
   tenantSlug: string,
 ): Promise<EventItem[]> {
-  return query<EventItem>(
+  const events = await query<EventItem>(
     `
     select *
     from events
@@ -215,6 +259,12 @@ export async function listPublishedEvents(
     `,
     [tenantSlug],
   );
+
+  return events.map((event) => ({
+    ...event,
+    prizes_json: normalisePrizesJson(event.prizes_json),
+    menu_options: normaliseMenuOptions(event.menu_options),
+  }));
 }
 
 export async function hydrateEvent(event: EventItem): Promise<EventItem> {
@@ -226,6 +276,7 @@ export async function hydrateEvent(event: EventItem): Promise<EventItem> {
   return {
     ...event,
     prizes_json: normalisePrizesJson(event.prizes_json),
+    menu_options: normaliseMenuOptions(event.menu_options),
     ticket_types: ticketTypes,
     seats,
   };
@@ -283,9 +334,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       event_type,
       status,
       capacity,
-      prizes_json
+      prizes_json,
+      menu_options
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb)
     returning *
     `,
     [
@@ -302,6 +354,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       normaliseStatus(input.status),
       input.capacity ?? null,
       JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
+      JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
     ],
   );
 
@@ -335,6 +388,7 @@ export async function updateEvent(
       status = $11,
       capacity = $12,
       prizes_json = $13::jsonb,
+      menu_options = $14::jsonb,
       updated_at = now()
     where id = $1
     returning *
@@ -354,6 +408,9 @@ export async function updateEvent(
       input.capacity ?? existing.capacity,
       JSON.stringify(
         normalisePrizesJson(input.prizesJson ?? existing.prizes_json ?? []),
+      ),
+      JSON.stringify(
+        normaliseMenuOptions(input.menuOptions ?? existing.menu_options ?? []),
       ),
     ],
   );
