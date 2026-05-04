@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 type PrizeRow = {
   id: string;
@@ -95,7 +101,8 @@ export default function NewSquaresGamePage() {
   }, [title, slugEdited]);
 
   const publicPrizesCount = useMemo(() => {
-    return prizes.filter((prize) => prize.title.trim() && prize.is_public).length;
+    return prizes.filter((prize) => prize.title.trim() && prize.is_public)
+      .length;
   }, [prizes]);
 
   const prizesValue = useMemo(() => {
@@ -217,6 +224,18 @@ export default function NewSquaresGamePage() {
       <input type="hidden" name="question" value={questionValue} />
       <input type="hidden" name="free_entry" value={freeEntryValue} />
 
+      <section style={styles.topNav}>
+        <p style={styles.breadcrumb}>
+          <a href="/admin" style={styles.breadcrumbLink}>
+            ← Dashboard
+          </a>{" "}
+          <span style={styles.breadcrumbMuted}>/</span>{" "}
+          <a href="/admin/squares" style={styles.breadcrumbLink}>
+            Squares games
+          </a>
+        </p>
+      </section>
+
       <section style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Create squares</div>
@@ -258,8 +277,14 @@ export default function NewSquaresGamePage() {
 
       <section style={styles.summaryGrid}>
         <SummaryCard label="Total squares" value={boardSize} />
-        <SummaryCard label="Price / square" value={`${price.toFixed(2)} ${currency}`} />
-        <SummaryCard label="Max sales" value={`${estimatedTotal.toFixed(2)} ${currency}`} />
+        <SummaryCard
+          label="Price / square"
+          value={`${price.toFixed(2)} ${currency}`}
+        />
+        <SummaryCard
+          label="Max sales"
+          value={`${estimatedTotal.toFixed(2)} ${currency}`}
+        />
         <SummaryCard label="Public prizes" value={publicPrizesCount} />
       </section>
 
@@ -558,8 +583,16 @@ export default function NewSquaresGamePage() {
             <div style={styles.prizeList}>
               {prizes.map((prize, index) => (
                 <div key={prize.id} style={styles.prizeRow}>
-                  <input type="hidden" name="prize_position" value={prize.position} />
-                  <input type="hidden" name="prize_is_public" value={String(prize.is_public)} />
+                  <input
+                    type="hidden"
+                    name="prize_position"
+                    value={prize.position}
+                  />
+                  <input
+                    type="hidden"
+                    name="prize_is_public"
+                    value={String(prize.is_public)}
+                  />
 
                   <div style={styles.rowHeader}>
                     <strong>Prize {index + 1}</strong>
@@ -687,6 +720,20 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 1040,
     margin: "40px auto",
     padding: "0 16px 48px",
+  },
+  topNav: {
+    marginBottom: -4,
+  },
+  breadcrumb: {
+    margin: 0,
+    fontWeight: 800,
+  },
+  breadcrumbLink: {
+    color: "#2563eb",
+    textDecoration: "none",
+  },
+  breadcrumbMuted: {
+    color: "#64748b",
   },
   hero: {
     display: "grid",
