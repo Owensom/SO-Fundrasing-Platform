@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
+import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
 
 type TicketType = {
   id: string;
@@ -22,6 +23,8 @@ export default function PublicGeneralAdmissionSelector({
   ticketTypes: TicketType[];
   currency: string;
 }) {
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -53,7 +56,17 @@ export default function PublicGeneralAdmissionSelector({
   }
 
   async function startCheckout() {
-    if (selectedItems.length === 0 || isCheckingOut) return;
+    if (isCheckingOut) return;
+
+    if (!buyerName.trim() || !buyerEmail.trim()) {
+      setCheckoutError("Please enter your name and email address.");
+      return;
+    }
+
+    if (selectedItems.length === 0) {
+      setCheckoutError("Please choose at least one ticket.");
+      return;
+    }
 
     setCheckoutError("");
     setIsCheckingOut(true);
@@ -66,6 +79,8 @@ export default function PublicGeneralAdmissionSelector({
         },
         body: JSON.stringify({
           eventId,
+          buyerName,
+          buyerEmail,
           items: selectedItems.map((item) => ({
             ticketTypeId: item.ticketType.id,
             quantity: item.quantity,
@@ -160,6 +175,16 @@ export default function PublicGeneralAdmissionSelector({
       </section>
 
       <aside style={styles.summaryPanel}>
+        <BuyerDetailsFields
+          buyerName={buyerName}
+          buyerEmail={buyerEmail}
+          onBuyerNameChange={setBuyerName}
+          onBuyerEmailChange={setBuyerEmail}
+          dark
+        />
+
+        <div style={styles.summarySpacer} />
+
         <p style={styles.eyebrow}>Booking summary</p>
         <h3 style={styles.summaryTitle}>Your tickets</h3>
 
@@ -298,6 +323,9 @@ const styles: Record<string, CSSProperties> = {
     background: "#111827",
     color: "#ffffff",
     boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
+  },
+  summarySpacer: {
+    height: 16,
   },
   eyebrow: {
     margin: 0,
