@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { deleteEvent, listEvents } from "../../api/_lib/events-repo";
+import { deleteEvent, listEvents } from '../../../../api/_lib/events-repo'
 
 function moneyFromCents(cents: number | null | undefined) {
   return `£${(Number(cents || 0) / 100).toFixed(2)}`;
