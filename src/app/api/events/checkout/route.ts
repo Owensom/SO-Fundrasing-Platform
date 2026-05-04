@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   attachStripeSessionToReservedSeats,
   createEventOrderItem,
@@ -8,15 +9,16 @@ import {
   getEventById,
   reserveEventSeatsForOrder,
   updateEventOrderStripeSession,
-} from '../../../../../api/_lib/events-repo'
+} from "../../../../../api/_lib/events-repo";
 
 type CheckoutItem = {
   seatId: string;
   ticketTypeId: string;
-
   guestName?: string;
   dietary?: string;
+  dietaryRequirements?: string;
   menuChoice?: string;
+  tableName?: string;
 };
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -25,90 +27,188 @@ function siteUrl(req: Request) {
   return new URL(req.url).origin;
 }
 
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function seatLabel(input: {
+  tableNumber?: string | null;
+  rowLabel?: string | null;
+  seatNumber?: string | null;
+  tableName?: string | null;
+}) {
+  const tableName = cleanText(input.tableName);
+
+  if (input.tableNumber) {
+    return tableName
+      ? `Table ${input.tableNumber} (${tableName}), Seat ${input.seatNumber || ""}`
+      : `Table ${input.tableNumber}, Seat ${input.seatNumber || ""}`;
+  }
+
+  return `Row ${input.rowLabel || ""}, Seat ${input.seatNumber || ""}`;
+}
+
 export async function POST(req: Request) {
   let orderId: string | null = null;
 
   try {
+    const tenantSlug = await getTenantSlugFromHeaders();
     const body = await req.json();
 
-    const eventId = String(body.eventId || "").trim();
-    const items: CheckoutItem[] = Array.isArray(body.items)
-      ? body.items
-      : [];
+    const eventId = cleanText(body.eventId);
+    const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
 
     if (!eventId || items.length === 0) {
-      return NextResponse.json({ error: "Missing checkout data." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing checkout data." },
+        { status: 400 },
+      );
     }
 
     const event = await getEventById(eventId);
+
     if (!event || event.status !== "published") {
-      return NextResponse.json({ error: "Event unavailable." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Event unavailable." },
+        { status: 404 },
+      );
+    }
+
+    if (!tenantSlug || event.tenant_slug !== tenantSlug) {
+      return NextResponse.json(
+        { error: "Event unavailable for this tenant." },
+        { status: 404 },
+      );
     }
 
     const seats = event.seats || [];
-    const ticketTypes = event.ticket_types || [];
+    const ticketTypes = (event.ticket_types || []).filter(
+      (ticketType) => ticketType.is_active,
+    );
+
+    const seatIds = Array.from(
+      new Set(items.map((item) => cleanText(item.seatId)).filter(Boolean)),
+    );
+
+    if (seatIds.length !== items.length) {
+      return NextResponse.json(
+        { error: "Duplicate or invalid seat selection." },
+        { status: 400 },
+      );
+    }
+
+    const checkoutRows = items.map((item) => {
+      const seat = seats.find((currentSeat) => currentSeat.id === item.seatId);
+
+      if (!seat || seat.status !== "available") {
+        throw new Error("One or more seats are unavailable.");
+      }
+
+      const ticketType = ticketTypes.find(
+        (currentTicketType) => currentTicketType.id === item.ticketTypeId,
+      );
+
+      if (!ticketType) {
+        throw new Error("Invalid ticket type.");
+      }
+
+      if (seat.ticket_type_id && seat.ticket_type_id !== ticketType.id) {
+        throw new Error("Invalid ticket type for selected seat.");
+      }
+
+      const tableName = cleanText(item.tableName);
+      const guestName = cleanText(item.guestName);
+      const dietaryRequirements =
+        cleanText(item.dietaryRequirements) || cleanText(item.dietary);
+      const menuChoice = cleanText(item.menuChoice);
+
+      return {
+        seat,
+        ticketType,
+        tableName,
+        guestName,
+        dietaryRequirements,
+        menuChoice,
+      };
+    });
+
+    const total = checkoutRows.reduce(
+      (sum, row) => sum + Number(row.ticketType.price || 0),
+      0,
+    );
+
+    if (total <= 0) {
+      return NextResponse.json(
+        { error: "Invalid checkout total." },
+        { status: 400 },
+      );
+    }
 
     const order = await createPendingEventOrder({
       tenantSlug: event.tenant_slug,
       eventId: event.id,
-      amountTotal: 0,
+      amountTotal: total,
       currency: event.currency,
     });
 
     orderId = order.id;
 
-    const seatIds = items.map((i) => i.seatId);
-
     const reservedCount = await reserveEventSeatsForOrder({
-      eventId,
+      eventId: event.id,
       orderId: order.id,
       seatIds,
     });
 
     if (reservedCount !== seatIds.length) {
       await deleteEventOrderAndItems(order.id);
-      return NextResponse.json({ error: "Seats unavailable." }, { status: 409 });
+
+      return NextResponse.json(
+        { error: "Seats unavailable." },
+        { status: 409 },
+      );
     }
 
-    let total = 0;
-
-    for (const item of items) {
-      const seat = seats.find((s) => s.id === item.seatId);
-      const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
-
-      if (!seat || !ticketType) throw new Error("Invalid seat");
-
-      total += ticketType.price;
-
+    for (const row of checkoutRows) {
       await createEventOrderItem({
         orderId: order.id,
         eventId: event.id,
-        ticketTypeId: ticketType.id,
-        seatId: seat.id,
-        label: `Seat ${seat.seat_number}`,
+        ticketTypeId: row.ticketType.id,
+        seatId: row.seat.id,
+        label: seatLabel({
+          tableNumber: row.seat.table_number,
+          rowLabel: row.seat.row_label,
+          seatNumber: row.seat.seat_number,
+          tableName: row.tableName,
+        }),
         quantity: 1,
-        unitAmount: ticketType.price,
-
-        guest_name: item.guestName || null,
-        dietary_requirements: item.dietary || null,
-        menu_choice: item.menuChoice || null,
+        unitAmount: row.ticketType.price,
+        guest_name: row.guestName || null,
+        dietary_requirements: row.dietaryRequirements || null,
+        menu_choice: row.menuChoice || null,
       });
     }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      success_url: `${siteUrl(req)}/e/${event.slug}?success=1`,
-      cancel_url: `${siteUrl(req)}/e/${event.slug}?cancel=1`,
+      success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: event.currency.toLowerCase(),
             unit_amount: total,
-            product_data: { name: event.title },
+            product_data: {
+              name: event.title,
+            },
           },
         },
       ],
+      metadata: {
+        tenant_slug: event.tenant_slug,
+        event_id: event.id,
+        order_id: order.id,
+      },
     });
 
     await updateEventOrderStripeSession({
@@ -123,10 +223,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    if (orderId) await deleteEventOrderAndItems(orderId);
+    if (orderId) {
+      await deleteEventOrderAndItems(orderId);
+    }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Checkout failed" },
+      { error: error instanceof Error ? error.message : "Checkout failed." },
       { status: 500 },
     );
   }
