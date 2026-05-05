@@ -90,6 +90,25 @@ function parseJsonStringArray(value: FormDataEntryValue | null): string[] {
   }
 }
 
+function parseSeatingLayout(value: FormDataEntryValue | null): Record<string, number> {
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .map(([key, rawValue]) => {
+          const number = Number(rawValue);
+          if (!Number.isFinite(number)) return null;
+          return [String(key), Math.max(-20, Math.min(20, Math.floor(number)))];
+        })
+        .filter(Boolean) as [string, number][],
+    );
+  } catch {
+    return {};
+  }
+}
+
 function parsePrizeRowsFromForm(formData: FormData): EventPrize[] {
   const count = positiveInteger(formData.get("prize_count"), 0);
 
@@ -256,6 +275,10 @@ async function updateEventAction(formData: FormData) {
     | "draft"
     | "published"
     | "closed";
+  const askDietaryRequirements =
+    String(formData.get("ask_dietary_requirements") || "true") === "true";
+  const askMenuChoice =
+    String(formData.get("ask_menu_choice") || "true") === "true";
 
   if (!id || !title || !slug) {
     redirect(`/admin/events/${id}?error=missing-required#overview`);
@@ -277,6 +300,9 @@ async function updateEventAction(formData: FormData) {
     status,
     prizesJson: event.prizes_json || [],
     menuOptions: event.menu_options || [],
+    seatingLayoutJson: event.seating_layout_json || {},
+    askDietaryRequirements,
+    askMenuChoice,
   });
 
   redirect(`/admin/events/${id}?saved=event#overview`);
@@ -296,6 +322,9 @@ async function updatePrizesAction(formData: FormData) {
   await updateEvent(eventId, {
     prizesJson: parsePrizeRowsFromForm(formData),
     menuOptions: event.menu_options || [],
+    seatingLayoutJson: event.seating_layout_json || {},
+    askDietaryRequirements: event.ask_dietary_requirements,
+    askMenuChoice: event.ask_menu_choice,
   });
 
   redirect(`/admin/events/${eventId}?saved=prizes#prizes`);
@@ -315,9 +344,34 @@ async function updateMenuOptionsAction(formData: FormData) {
   await updateEvent(eventId, {
     prizesJson: event.prizes_json || [],
     menuOptions: parseMenuOptionsFromForm(formData),
+    seatingLayoutJson: event.seating_layout_json || {},
+    askDietaryRequirements: event.ask_dietary_requirements,
+    askMenuChoice: event.ask_menu_choice,
   });
 
   redirect(`/admin/events/${eventId}?saved=menu#menu`);
+}
+
+async function updateSeatingLayoutAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (!eventId) {
+    redirect("/admin/events?error=missing-event");
+  }
+
+  const event = await requireEventAccess(eventId);
+
+  await updateEvent(eventId, {
+    prizesJson: event.prizes_json || [],
+    menuOptions: event.menu_options || [],
+    seatingLayoutJson: parseSeatingLayout(formData.get("seating_layout_json")),
+    askDietaryRequirements: event.ask_dietary_requirements,
+    askMenuChoice: event.ask_menu_choice,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=layout#row-seating`);
 }
 
 async function addTicketTypeAction(formData: FormData) {
@@ -709,8 +763,11 @@ export default async function AdminEventManagePage({
       </nav>
 
       {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
+
       {searchParams?.error && (
-        <div style={styles.errorBox}>Please check the missing fields and try again.</div>
+        <div style={styles.errorBox}>
+          Please check the missing fields and try again.
+        </div>
       )}
 
       <section id="overview" style={styles.section}>
@@ -773,7 +830,10 @@ export default async function AdminEventManagePage({
             <div style={styles.mediaBox}>
               <div>
                 <h3 style={styles.panelTitle}>Event image</h3>
-                <p style={styles.sectionText}>Upload or replace the public event image.</p>
+                <p style={styles.sectionText}>
+                  Upload or replace the public event image.
+                </p>
+
                 <ImageUploadField currentImageUrl={event.image_url ?? ""} />
               </div>
 
@@ -849,6 +909,30 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
+            <div style={styles.twoCol}>
+              <Field label="Ask for dietary requirements">
+                <select
+                  name="ask_dietary_requirements"
+                  defaultValue={event.ask_dietary_requirements ? "true" : "false"}
+                  style={styles.input}
+                >
+                  <option value="true">Yes, ask buyers/guests</option>
+                  <option value="false">No, hide this field</option>
+                </select>
+              </Field>
+
+              <Field label="Ask for menu choice">
+                <select
+                  name="ask_menu_choice"
+                  defaultValue={event.ask_menu_choice ? "true" : "false"}
+                  style={styles.input}
+                >
+                  <option value="true">Yes, ask buyers/guests</option>
+                  <option value="false">No, hide this field</option>
+                </select>
+              </Field>
+            </div>
+
             <button type="submit" style={styles.primaryButton}>
               Save event details
             </button>
@@ -862,8 +946,8 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 2</p>
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
-              Add the public ticket choices. Use Seat Manager only for special
-              seats like VIP, Complimentary, or blocked seats.
+              Add the public ticket choices. Use Seat Manager only for special,
+              complimentary, VIP, or blocked seats.
             </p>
           </div>
         </div>
@@ -916,7 +1000,9 @@ export default async function AdminEventManagePage({
                 </select>
               </Field>
 
-              <button type="submit" style={styles.primaryButton}>Add ticket type</button>
+              <button type="submit" style={styles.primaryButton}>
+                Add ticket type
+              </button>
             </form>
           </div>
 
@@ -1039,8 +1125,8 @@ export default async function AdminEventManagePage({
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Row Seating</h2>
               <p style={styles.sectionText}>
-                Generate seats first. Leave normal seats unmarked. Use Seat
-                Manager to mark special or blocked seats.
+                Generate seats first. Use Seat Manager to mark special seats,
+                block seats, and save row layout nudges.
               </p>
             </div>
           </div>
@@ -1106,7 +1192,8 @@ export default async function AdminEventManagePage({
               </div>
 
               <p style={styles.sectionText}>
-                Blocked seats remain in the layout but cannot be selected on the public page.
+                Row nudges are saved to this event, so the public page can match
+                the admin layout.
               </p>
             </div>
           </div>
@@ -1116,7 +1203,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click seats to select them. Block/unblock selected seats or apply a special marking.
+                  Click seats to select them. Block/unblock selected seats or
+                  apply a special marking.
                 </p>
               </div>
 
@@ -1139,8 +1227,10 @@ export default async function AdminEventManagePage({
                 mode="rows"
                 applyTicketTypeAction={applySeatTicketTypeAction}
                 updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
+                updateSeatingLayoutAction={updateSeatingLayoutAction}
                 deleteSelectedSeatsAction={deleteSelectedSeatsAction}
                 deleteSelectedRowsAction={deleteSelectedRowsAction}
+                initialSeatingLayout={event.seating_layout_json || {}}
               />
             )}
           </div>
@@ -1209,7 +1299,8 @@ export default async function AdminEventManagePage({
               </div>
 
               <p style={styles.sectionText}>
-                Blocked table seats remain in the layout but cannot be selected on the public page.
+                Blocked table seats remain in the layout but cannot be selected
+                on the public page.
               </p>
             </div>
           </div>
@@ -1219,7 +1310,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click table seats to select them. Block/unblock selected seats or apply a special marking.
+                  Click table seats to select them. Block/unblock selected seats
+                  or apply a special marking.
                 </p>
               </div>
 
