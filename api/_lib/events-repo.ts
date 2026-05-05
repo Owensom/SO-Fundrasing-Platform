@@ -5,6 +5,7 @@ export type EventStatus = "draft" | "published" | "closed";
 export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 
 export type SeatingLayoutJson = Record<string, number>;
+export type TableNamesJson = Record<string, string>;
 
 export type EventTicketType = {
   id: string;
@@ -76,6 +77,7 @@ export type EventItem = {
   prizes_json: EventPrize[];
   menu_options: EventMenuOption[];
   seating_layout_json: SeatingLayoutJson;
+  table_names_json: TableNamesJson;
   ask_dietary_requirements: boolean;
   ask_menu_choice: boolean;
   created_at: string;
@@ -128,6 +130,7 @@ export type CreateEventInput = {
   prizesJson?: EventPrize[];
   menuOptions?: EventMenuOption[];
   seatingLayoutJson?: SeatingLayoutJson;
+  tableNamesJson?: TableNamesJson;
   askDietaryRequirements?: boolean;
   askMenuChoice?: boolean;
 };
@@ -147,6 +150,7 @@ export type UpdateEventInput = {
   prizesJson?: EventPrize[];
   menuOptions?: EventMenuOption[];
   seatingLayoutJson?: SeatingLayoutJson;
+  tableNamesJson?: TableNamesJson;
   askDietaryRequirements?: boolean;
   askMenuChoice?: boolean;
 };
@@ -180,6 +184,16 @@ function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
         return [String(key), Math.max(-20, Math.min(20, Math.floor(number)))];
       })
       .filter(Boolean) as [string, number][],
+  );
+}
+
+function normaliseTableNamesJson(value: unknown): TableNamesJson {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
+      .filter(([, name]) => name),
   );
 }
 
@@ -244,6 +258,7 @@ function normaliseEvent(event: EventItem): EventItem {
     prizes_json: normalisePrizesJson(event.prizes_json),
     menu_options: normaliseMenuOptions(event.menu_options),
     seating_layout_json: normaliseSeatingLayoutJson(event.seating_layout_json),
+    table_names_json: normaliseTableNamesJson(event.table_names_json),
     ask_dietary_requirements: event.ask_dietary_requirements ?? true,
     ask_menu_choice: event.ask_menu_choice ?? true,
   };
@@ -363,10 +378,11 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       prizes_json,
       menu_options,
       seating_layout_json,
+      table_names_json,
       ask_dietary_requirements,
       ask_menu_choice
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15::jsonb,$16,$17)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15::jsonb,$16::jsonb,$17,$18)
     returning *
     `,
     [
@@ -385,6 +401,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
       JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
       JSON.stringify(normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {})),
+      JSON.stringify(normaliseTableNamesJson(input.tableNamesJson ?? {})),
       input.askDietaryRequirements ?? true,
       input.askMenuChoice ?? true,
     ],
@@ -422,8 +439,9 @@ export async function updateEvent(
       prizes_json = $13::jsonb,
       menu_options = $14::jsonb,
       seating_layout_json = $15::jsonb,
-      ask_dietary_requirements = $16,
-      ask_menu_choice = $17,
+      table_names_json = $16::jsonb,
+      ask_dietary_requirements = $17,
+      ask_menu_choice = $18,
       updated_at = now()
     where id = $1
     returning *
@@ -450,6 +468,11 @@ export async function updateEvent(
       JSON.stringify(
         normaliseSeatingLayoutJson(
           input.seatingLayoutJson ?? existing.seating_layout_json ?? {},
+        ),
+      ),
+      JSON.stringify(
+        normaliseTableNamesJson(
+          input.tableNamesJson ?? existing.table_names_json ?? {},
         ),
       ),
       input.askDietaryRequirements ?? existing.ask_dietary_requirements ?? true,
