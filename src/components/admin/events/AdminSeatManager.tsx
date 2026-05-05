@@ -743,4 +743,3 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     marginBottom: 12,
   },
-};
