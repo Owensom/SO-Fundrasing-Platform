@@ -124,59 +124,74 @@ function publicSeatStyle({
   if (status === "blocked") {
     return {
       minWidth: 32,
+      width: 32,
       height: 32,
       borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "1px solid #64748b",
+      border: selected ? "1px solid #0284c7" : "1px solid #64748b",
       background: selected ? "#bae6fd" : "#334155",
       color: selected ? "#082f49" : "#e2e8f0",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
       fontSize: 12,
       fontWeight: 900,
       cursor: "not-allowed",
       opacity: 0.9,
+      padding: 0,
+      boxSizing: "border-box",
     };
   }
 
   if (status === "sold") {
     return {
       minWidth: 32,
+      width: 32,
       height: 32,
       borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "1px solid #991b1b",
+      border: selected ? "1px solid #0284c7" : "1px solid #991b1b",
       background: selected ? "#bae6fd" : "#fecaca",
       color: selected ? "#082f49" : "#7f1d1d",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
       fontSize: 12,
       fontWeight: 900,
       cursor: "not-allowed",
       opacity: 0.9,
+      padding: 0,
+      boxSizing: "border-box",
     };
   }
 
   if (status === "reserved") {
     return {
       minWidth: 32,
+      width: 32,
       height: 32,
       borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "1px solid #f59e0b",
+      border: selected ? "1px solid #0284c7" : "1px solid #f59e0b",
       background: selected ? "#bae6fd" : "#fef3c7",
       color: selected ? "#082f49" : "#92400e",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
       fontSize: 12,
       fontWeight: 900,
       cursor: "not-allowed",
       opacity: 0.9,
+      padding: 0,
+      boxSizing: "border-box",
     };
   }
 
   return {
     minWidth: 32,
+    width: 32,
     height: 32,
     borderRadius: 8,
-    border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
+    border: selected ? "1px solid #0284c7" : "1px solid #cbd5e1",
     background: selected ? "#bae6fd" : colour.background,
     color: selected ? "#082f49" : colour.text,
-    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
     fontSize: 12,
     fontWeight: 900,
     cursor: "pointer",
+    padding: 0,
+    boxSizing: "border-box",
   };
 }
 
