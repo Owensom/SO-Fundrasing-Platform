@@ -18,6 +18,7 @@ import {
   deleteEventTicketTypes,
   getEventById,
   updateEvent,
+  updateEventSeatsStatus,
   updateEventSeatsTicketType,
   updateEventTicketType,
   type EventMenuOption,
@@ -416,6 +417,34 @@ async function applySeatTicketTypeAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=seat-marking#row-seating`);
 }
 
+async function updateSelectedSeatsStatusAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const status = String(formData.get("status") || "").trim() as
+    | "available"
+    | "blocked";
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+
+  if (!eventId || seatIds.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+  }
+
+  if (status !== "available" && status !== "blocked") {
+    redirect(`/admin/events/${eventId}?error=invalid-seat-status#row-seating`);
+  }
+
+  await requireEventAccess(eventId);
+
+  await updateEventSeatsStatus({
+    eventId,
+    seatIds,
+    status,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seat-status#row-seating`);
+}
+
 async function deleteSelectedSeatsAction(formData: FormData) {
   "use server";
 
@@ -670,41 +699,18 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>
-          Overview
-        </a>
-        <a href="#tickets" style={styles.tab}>
-          Tickets & Prices
-        </a>
-        <a href="#prizes" style={styles.tab}>
-          Prizes
-        </a>
-        <a href="#menu" style={styles.tab}>
-          Menu
-        </a>
-        {isReservedSeating && (
-          <a href="#row-seating" style={styles.tab}>
-            Row Seating
-          </a>
-        )}
-        {isTables && (
-          <a href="#table-seating" style={styles.tab}>
-            Table Seating
-          </a>
-        )}
-        <a href="#orders" style={styles.tab}>
-          Orders
-        </a>
+        <a href="#overview" style={styles.tab}>Overview</a>
+        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
+        <a href="#prizes" style={styles.tab}>Prizes</a>
+        <a href="#menu" style={styles.tab}>Menu</a>
+        {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
+        {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
+        <a href="#orders" style={styles.tab}>Orders</a>
       </nav>
 
-      {searchParams?.saved && (
-        <div style={styles.successBox}>Saved successfully.</div>
-      )}
-
+      {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
       {searchParams?.error && (
-        <div style={styles.errorBox}>
-          Please check the missing fields and try again.
-        </div>
+        <div style={styles.errorBox}>Please check the missing fields and try again.</div>
       )}
 
       <section id="overview" style={styles.section}>
@@ -722,10 +728,7 @@ export default async function AdminEventManagePage({
         <div style={styles.statsGrid}>
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
           <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
-          <SummaryCard
-            label="Menu options"
-            value={(event.menu_options || []).length}
-          />
+          <SummaryCard label="Menu options" value={(event.menu_options || []).length} />
           <SummaryCard
             label="Capacity"
             value={
@@ -751,21 +754,11 @@ export default async function AdminEventManagePage({
             <input type="hidden" name="id" value={event.id} />
 
             <Field label="Title">
-              <input
-                name="title"
-                required
-                defaultValue={event.title}
-                style={styles.input}
-              />
+              <input name="title" required defaultValue={event.title} style={styles.input} />
             </Field>
 
             <Field label="Slug">
-              <input
-                name="slug"
-                required
-                defaultValue={event.slug}
-                style={styles.input}
-              />
+              <input name="slug" required defaultValue={event.slug} style={styles.input} />
             </Field>
 
             <Field label="Description">
@@ -780,20 +773,13 @@ export default async function AdminEventManagePage({
             <div style={styles.mediaBox}>
               <div>
                 <h3 style={styles.panelTitle}>Event image</h3>
-                <p style={styles.sectionText}>
-                  Upload or replace the public event image.
-                </p>
-
+                <p style={styles.sectionText}>Upload or replace the public event image.</p>
                 <ImageUploadField currentImageUrl={event.image_url ?? ""} />
               </div>
 
               <div style={styles.previewBox}>
                 {event.image_url ? (
-                  <img
-                    src={event.image_url}
-                    alt={event.title}
-                    style={styles.previewImage}
-                  />
+                  <img src={event.image_url} alt={event.title} style={styles.previewImage} />
                 ) : (
                   <div style={styles.emptyPreview}>🎫</div>
                 )}
@@ -802,11 +788,7 @@ export default async function AdminEventManagePage({
 
             <div style={styles.twoCol}>
               <Field label="Location">
-                <input
-                  name="location"
-                  defaultValue={event.location || ""}
-                  style={styles.input}
-                />
+                <input name="location" defaultValue={event.location || ""} style={styles.input} />
               </Field>
 
               <Field label="General admission capacity">
@@ -843,11 +825,7 @@ export default async function AdminEventManagePage({
 
             <div style={styles.threeCol}>
               <Field label="Currency">
-                <select
-                  name="currency"
-                  defaultValue={event.currency}
-                  style={styles.input}
-                >
+                <select name="currency" defaultValue={event.currency} style={styles.input}>
                   <option value="GBP">GBP</option>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -855,11 +833,7 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Type">
-                <select
-                  name="event_type"
-                  defaultValue={event.event_type}
-                  style={styles.input}
-                >
+                <select name="event_type" defaultValue={event.event_type} style={styles.input}>
                   <option value="general_admission">General admission</option>
                   <option value="reserved_seating">Reserved seating</option>
                   <option value="tables">Tables</option>
@@ -867,11 +841,7 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Status">
-                <select
-                  name="status"
-                  defaultValue={event.status}
-                  style={styles.input}
-                >
+                <select name="status" defaultValue={event.status} style={styles.input}>
                   <option value="draft">Draft</option>
                   <option value="published">Published</option>
                   <option value="closed">Closed</option>
@@ -892,9 +862,8 @@ export default async function AdminEventManagePage({
             <p style={styles.sectionEyebrow}>Section 2</p>
             <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
             <p style={styles.sectionText}>
-              Add the public ticket choices. Normal public seats can be bought as
-              Standard, and as Concession if you keep a Concession ticket active.
-              Use Seat Manager only for special seats like VIP or Complimentary.
+              Add the public ticket choices. Use Seat Manager only for special
+              seats like VIP, Complimentary, or blocked seats.
             </p>
           </div>
         </div>
@@ -916,13 +885,7 @@ export default async function AdminEventManagePage({
 
               <div style={styles.threeCol}>
                 <Field label="Price">
-                  <input
-                    name="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    style={styles.input}
-                  />
+                  <input name="price" type="number" step="0.01" min="0" style={styles.input} />
                 </Field>
 
                 <Field label="Ticket limit">
@@ -953,9 +916,7 @@ export default async function AdminEventManagePage({
                 </select>
               </Field>
 
-              <button type="submit" style={styles.primaryButton}>
-                Add ticket type
-              </button>
+              <button type="submit" style={styles.primaryButton}>Add ticket type</button>
             </form>
           </div>
 
@@ -970,11 +931,7 @@ export default async function AdminEventManagePage({
                   <div key={ticketType.id} style={styles.editTicketCard}>
                     <form action={updateTicketTypeAction} style={styles.form}>
                       <input type="hidden" name="event_id" value={event.id} />
-                      <input
-                        type="hidden"
-                        name="ticket_type_id"
-                        value={ticketType.id}
-                      />
+                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
 
                       <div style={styles.twoCol}>
                         <Field label="Name">
@@ -1047,11 +1004,7 @@ export default async function AdminEventManagePage({
 
                     <form action={deleteTicketTypeAction}>
                       <input type="hidden" name="event_id" value={event.id} />
-                      <input
-                        type="hidden"
-                        name="ticket_type_id"
-                        value={ticketType.id}
-                      />
+                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
                       <button type="submit" style={styles.dangerOutlineButton}>
                         Delete this ticket type
                       </button>
@@ -1086,8 +1039,8 @@ export default async function AdminEventManagePage({
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Row Seating</h2>
               <p style={styles.sectionText}>
-                Generate seats first. Leave normal seats unmarked. Use Seat Manager
-                to mark VIP, Complimentary, or other special seats.
+                Generate seats first. Leave normal seats unmarked. Use Seat
+                Manager to mark special or blocked seats.
               </p>
             </div>
           </div>
@@ -1118,30 +1071,16 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Rows">
-                <input
-                  name="rows"
-                  placeholder="1-10 or A-C or 1-3,8-10"
-                  style={styles.input}
-                />
+                <input name="rows" placeholder="1-10 or A-C or 1-3,8-10" style={styles.input} />
               </Field>
 
               <div style={styles.twoCol}>
                 <Field label="Seats per row">
-                  <input
-                    name="seats_per_row"
-                    type="number"
-                    min="1"
-                    placeholder="40"
-                    style={styles.input}
-                  />
+                  <input name="seats_per_row" type="number" min="1" placeholder="40" style={styles.input} />
                 </Field>
 
                 <Field label="Aisles after seats">
-                  <input
-                    name="aisle_after"
-                    placeholder="10,20,30"
-                    style={styles.input}
-                  />
+                  <input name="aisle_after" placeholder="10,20,30" style={styles.input} />
                 </Field>
               </div>
 
@@ -1160,23 +1099,14 @@ export default async function AdminEventManagePage({
 
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
-                <SummaryCard
-                  label="Normal public"
-                  value={rowSeats.filter((seat) => !seat.ticket_type_id).length}
-                />
-                <SummaryCard
-                  label="Special marked"
-                  value={rowSeats.filter((seat) => seat.ticket_type_id).length}
-                />
-                <SummaryCard
-                  label="Sold"
-                  value={rowSeats.filter((seat) => seat.status === "sold").length}
-                />
+                <SummaryCard label="Normal public" value={rowSeats.filter((seat) => !seat.ticket_type_id && seat.status === "available").length} />
+                <SummaryCard label="Special marked" value={rowSeats.filter((seat) => seat.ticket_type_id).length} />
+                <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
               </div>
 
               <p style={styles.sectionText}>
-                Normal public seats are buyable as Standard/Concession. Special
-                marked seats use their specific ticket type.
+                Blocked seats remain in the layout but cannot be selected on the public page.
               </p>
             </div>
           </div>
@@ -1186,8 +1116,7 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click seats to select them. Click a row label to select the full
-                  row. Apply a special marking or return selected seats to Normal.
+                  Click seats to select them. Block/unblock selected seats or apply a special marking.
                 </p>
               </div>
 
@@ -1209,6 +1138,7 @@ export default async function AdminEventManagePage({
                 currency={event.currency}
                 mode="rows"
                 applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
                 deleteSelectedSeatsAction={deleteSelectedSeatsAction}
                 deleteSelectedRowsAction={deleteSelectedRowsAction}
               />
@@ -1225,7 +1155,7 @@ export default async function AdminEventManagePage({
               <h2 style={styles.sectionTitle}>Table Seating</h2>
               <p style={styles.sectionText}>
                 Generate table layouts first. Leave normal table seats unmarked
-                unless they are VIP, Complimentary, or otherwise special.
+                unless they are special or blocked.
               </p>
             </div>
           </div>
@@ -1249,23 +1179,11 @@ export default async function AdminEventManagePage({
 
               <div style={styles.twoCol}>
                 <Field label="Number of tables">
-                  <input
-                    name="table_count"
-                    type="number"
-                    min="1"
-                    placeholder="10"
-                    style={styles.input}
-                  />
+                  <input name="table_count" type="number" min="1" placeholder="10" style={styles.input} />
                 </Field>
 
                 <Field label="Seats per table">
-                  <input
-                    name="seats_per_table"
-                    type="number"
-                    min="1"
-                    placeholder="8"
-                    style={styles.input}
-                  />
+                  <input name="seats_per_table" type="number" min="1" placeholder="8" style={styles.input} />
                 </Field>
               </div>
 
@@ -1284,23 +1202,14 @@ export default async function AdminEventManagePage({
 
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
-                <SummaryCard
-                  label="Normal public"
-                  value={tableSeats.filter((seat) => !seat.ticket_type_id).length}
-                />
-                <SummaryCard
-                  label="Special marked"
-                  value={tableSeats.filter((seat) => seat.ticket_type_id).length}
-                />
-                <SummaryCard
-                  label="Sold"
-                  value={tableSeats.filter((seat) => seat.status === "sold").length}
-                />
+                <SummaryCard label="Normal public" value={tableSeats.filter((seat) => !seat.ticket_type_id && seat.status === "available").length} />
+                <SummaryCard label="Special marked" value={tableSeats.filter((seat) => seat.ticket_type_id).length} />
+                <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
               </div>
 
               <p style={styles.sectionText}>
-                Normal public table seats are buyable as Standard/Concession.
-                Special marked seats use their specific ticket type.
+                Blocked table seats remain in the layout but cannot be selected on the public page.
               </p>
             </div>
           </div>
@@ -1310,8 +1219,7 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click table seats to select them. Apply a special marking or
-                  return selected seats to Normal.
+                  Click table seats to select them. Block/unblock selected seats or apply a special marking.
                 </p>
               </div>
 
@@ -1333,6 +1241,7 @@ export default async function AdminEventManagePage({
                 currency={event.currency}
                 mode="tables"
                 applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
                 deleteSelectedSeatsAction={deleteSelectedSeatsAction}
               />
             )}
