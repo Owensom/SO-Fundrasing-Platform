@@ -4,6 +4,8 @@ export type EventType = "general_admission" | "reserved_seating" | "tables";
 export type EventStatus = "draft" | "published" | "closed";
 export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 
+export type SeatingLayoutJson = Record<string, number>;
+
 export type EventTicketType = {
   id: string;
   event_id: string;
@@ -73,6 +75,9 @@ export type EventItem = {
   capacity: number | null;
   prizes_json: EventPrize[];
   menu_options: EventMenuOption[];
+  seating_layout_json: SeatingLayoutJson;
+  ask_dietary_requirements: boolean;
+  ask_menu_choice: boolean;
   created_at: string;
   updated_at: string;
   ticket_types?: EventTicketType[];
@@ -122,6 +127,9 @@ export type CreateEventInput = {
   capacity?: number | null;
   prizesJson?: EventPrize[];
   menuOptions?: EventMenuOption[];
+  seatingLayoutJson?: SeatingLayoutJson;
+  askDietaryRequirements?: boolean;
+  askMenuChoice?: boolean;
 };
 
 export type UpdateEventInput = {
@@ -138,6 +146,9 @@ export type UpdateEventInput = {
   capacity?: number | null;
   prizesJson?: EventPrize[];
   menuOptions?: EventMenuOption[];
+  seatingLayoutJson?: SeatingLayoutJson;
+  askDietaryRequirements?: boolean;
+  askMenuChoice?: boolean;
 };
 
 function normaliseEventType(value: string | null | undefined): EventType {
@@ -156,6 +167,20 @@ function normaliseSeatStatus(value: string | null | undefined): EventSeatStatus 
   }
 
   return "available";
+}
+
+function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, rawValue]) => {
+        const number = Number(rawValue);
+        if (!Number.isFinite(number)) return null;
+        return [String(key), Math.max(-20, Math.min(20, Math.floor(number)))];
+      })
+      .filter(Boolean) as [string, number][],
+  );
 }
 
 function normalisePrizesJson(value: unknown): EventPrize[] {
@@ -213,6 +238,17 @@ function normaliseMenuOptions(value: unknown): EventMenuOption[] {
     .filter(Boolean) as EventMenuOption[];
 }
 
+function normaliseEvent(event: EventItem): EventItem {
+  return {
+    ...event,
+    prizes_json: normalisePrizesJson(event.prizes_json),
+    menu_options: normaliseMenuOptions(event.menu_options),
+    seating_layout_json: normaliseSeatingLayoutJson(event.seating_layout_json),
+    ask_dietary_requirements: event.ask_dietary_requirements ?? true,
+    ask_menu_choice: event.ask_menu_choice ?? true,
+  };
+}
+
 export function slugifyEventTitle(value: string): string {
   const slug = value
     .toLowerCase()
@@ -239,11 +275,7 @@ export async function listEvents(tenantSlug: string): Promise<EventItem[]> {
     [tenantSlug],
   );
 
-  return events.map((event) => ({
-    ...event,
-    prizes_json: normalisePrizesJson(event.prizes_json),
-    menu_options: normaliseMenuOptions(event.menu_options),
-  }));
+  return events.map(normaliseEvent);
 }
 
 export async function listPublishedEvents(
@@ -260,11 +292,7 @@ export async function listPublishedEvents(
     [tenantSlug],
   );
 
-  return events.map((event) => ({
-    ...event,
-    prizes_json: normalisePrizesJson(event.prizes_json),
-    menu_options: normaliseMenuOptions(event.menu_options),
-  }));
+  return events.map(normaliseEvent);
 }
 
 export async function hydrateEvent(event: EventItem): Promise<EventItem> {
@@ -274,9 +302,7 @@ export async function hydrateEvent(event: EventItem): Promise<EventItem> {
   ]);
 
   return {
-    ...event,
-    prizes_json: normalisePrizesJson(event.prizes_json),
-    menu_options: normaliseMenuOptions(event.menu_options),
+    ...normaliseEvent(event),
     ticket_types: ticketTypes,
     seats,
   };
@@ -335,9 +361,12 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       status,
       capacity,
       prizes_json,
-      menu_options
+      menu_options,
+      seating_layout_json,
+      ask_dietary_requirements,
+      ask_menu_choice
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15::jsonb,$16,$17)
     returning *
     `,
     [
@@ -355,6 +384,9 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       input.capacity ?? null,
       JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
       JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
+      JSON.stringify(normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {})),
+      input.askDietaryRequirements ?? true,
+      input.askMenuChoice ?? true,
     ],
   );
 
@@ -389,6 +421,9 @@ export async function updateEvent(
       capacity = $12,
       prizes_json = $13::jsonb,
       menu_options = $14::jsonb,
+      seating_layout_json = $15::jsonb,
+      ask_dietary_requirements = $16,
+      ask_menu_choice = $17,
       updated_at = now()
     where id = $1
     returning *
@@ -412,6 +447,13 @@ export async function updateEvent(
       JSON.stringify(
         normaliseMenuOptions(input.menuOptions ?? existing.menu_options ?? []),
       ),
+      JSON.stringify(
+        normaliseSeatingLayoutJson(
+          input.seatingLayoutJson ?? existing.seating_layout_json ?? {},
+        ),
+      ),
+      input.askDietaryRequirements ?? existing.ask_dietary_requirements ?? true,
+      input.askMenuChoice ?? existing.ask_menu_choice ?? true,
     ],
   );
 
