@@ -109,6 +109,34 @@ function seatStyle({
     };
   }
 
+  if (status === "sold") {
+    return {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "1px solid #991b1b",
+      background: selected ? "#bae6fd" : "#fecaca",
+      color: selected ? "#082f49" : "#7f1d1d",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "pointer",
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "1px solid #f59e0b",
+      background: selected ? "#bae6fd" : "#fef3c7",
+      color: selected ? "#082f49" : "#92400e",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "pointer",
+    };
+  }
+
   return {
     minWidth: 32,
     height: 32,
@@ -130,6 +158,7 @@ export default function AdminSeatManager({
   currency,
   mode,
   applyTicketTypeAction,
+  updateSelectedSeatsStatusAction,
   deleteSelectedSeatsAction,
   deleteSelectedRowsAction,
 }: {
@@ -139,6 +168,7 @@ export default function AdminSeatManager({
   currency: string;
   mode: "rows" | "tables";
   applyTicketTypeAction: (formData: FormData) => void | Promise<void>;
+  updateSelectedSeatsStatusAction: (formData: FormData) => void | Promise<void>;
   deleteSelectedSeatsAction: (formData: FormData) => void | Promise<void>;
   deleteSelectedRowsAction?: (formData: FormData) => void | Promise<void>;
 }) {
@@ -167,7 +197,12 @@ export default function AdminSeatManager({
   }, [manualOffsets, storageKey]);
 
   const normalSeats = useMemo(
-    () => seats.filter((seat) => !seat.ticket_type_id),
+    () => seats.filter((seat) => !seat.ticket_type_id && seat.status === "available"),
+    [seats],
+  );
+
+  const blockedSeats = useMemo(
+    () => seats.filter((seat) => seat.status === "blocked"),
     [seats],
   );
 
@@ -223,6 +258,11 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
+  function selectBlockedSeats() {
+    setSelectedSeatIds(blockedSeats.map((seat) => seat.id));
+    setSelectedRowKeys([]);
+  }
+
   const byPrimaryGroup =
     mode === "tables"
       ? groupBy(seats, (seat) => seat.table_number || "No table")
@@ -234,8 +274,8 @@ export default function AdminSeatManager({
         <div>
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
-            Leave normal seats green. Use row nudges to line up aisles when rows
-            have different lengths.
+            Leave normal seats green. Use block to stop seats being sold without
+            deleting them.
           </p>
         </div>
 
@@ -260,6 +300,18 @@ export default function AdminSeatManager({
             }}
           >
             Select normal seats ({normalSeats.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={selectBlockedSeats}
+            disabled={blockedSeats.length === 0}
+            style={{
+              ...styles.blockOutlineButton,
+              opacity: blockedSeats.length === 0 ? 0.45 : 1,
+            }}
+          >
+            Select blocked seats ({blockedSeats.length})
           </button>
 
           <button
@@ -295,11 +347,22 @@ export default function AdminSeatManager({
           <span style={{ ...styles.legendDot, background: "#334155" }} />
           Blocked
         </span>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#fef3c7" }} />
+          Reserved
+        </span>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#fecaca" }} />
+          Sold
+        </span>
       </div>
 
       <div style={styles.infoBox}>
-        <strong>{normalSeats.length}</strong> normal public seats. Row nudges are
-        saved in this browser for admin layout editing.
+        <strong>{normalSeats.length}</strong> normal public seats ·{" "}
+        <strong>{blockedSeats.length}</strong> blocked seats. Blocked seats are
+        visible in admin but cannot be selected on the public page.
       </div>
 
       <div style={styles.actionPanel}>
@@ -345,7 +408,49 @@ export default function AdminSeatManager({
               opacity: selectedSeatIds.length === 0 || !ticketTypeId ? 0.45 : 1,
             }}
           >
-            Apply marking to selected seats
+            Apply marking
+          </button>
+        </form>
+
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
+          <input type="hidden" name="event_id" value={eventId} />
+          <input
+            type="hidden"
+            name="seat_ids"
+            value={JSON.stringify(selectedSeatIds)}
+          />
+          <input type="hidden" name="status" value="blocked" />
+
+          <button
+            type="submit"
+            disabled={selectedSeatIds.length === 0}
+            style={{
+              ...styles.blockButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
+          >
+            Block selected seats
+          </button>
+        </form>
+
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
+          <input type="hidden" name="event_id" value={eventId} />
+          <input
+            type="hidden"
+            name="seat_ids"
+            value={JSON.stringify(selectedSeatIds)}
+          />
+          <input type="hidden" name="status" value="available" />
+
+          <button
+            type="submit"
+            disabled={selectedSeatIds.length === 0}
+            style={{
+              ...styles.normalButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
+          >
+            Unblock selected seats
           </button>
         </form>
 
@@ -415,7 +520,11 @@ export default function AdminSeatManager({
                             key={seat.id}
                             type="button"
                             onClick={() => toggleSeat(seat.id)}
-                            title={ticketType?.name || "Normal public seat"}
+                            title={
+                              seat.status === "blocked"
+                                ? "Blocked"
+                                : ticketType?.name || "Normal public seat"
+                            }
                             style={seatStyle({
                               selected: selectedSeatIds.includes(seat.id),
                               ticketType,
@@ -515,7 +624,11 @@ export default function AdminSeatManager({
                               <button
                                 type="button"
                                 onClick={() => toggleSeat(seat.id)}
-                                title={ticketType?.name || "Normal public seat"}
+                                title={
+                                  seat.status === "blocked"
+                                    ? "Blocked"
+                                    : ticketType?.name || "Normal public seat"
+                                }
                                 style={seatStyle({
                                   selected: selectedSeatIds.includes(seat.id),
                                   ticketType,
@@ -586,8 +699,10 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
   },
   actionPanel: {
-    display: "grid",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 10,
+    alignItems: "center",
     padding: 12,
     borderRadius: 16,
     background: "#ffffff",
@@ -597,7 +712,7 @@ const styles: Record<string, CSSProperties> = {
   actionForm: { display: "flex", gap: 8, flexWrap: "wrap" },
   select: {
     minHeight: 42,
-    minWidth: 240,
+    minWidth: 220,
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     padding: "8px 10px",
@@ -629,6 +744,26 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #86efac",
     background: "#dcfce7",
     color: "#14532d",
+    padding: "0 14px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  blockButton: {
+    minHeight: 42,
+    border: "none",
+    borderRadius: 999,
+    background: "#334155",
+    color: "#ffffff",
+    padding: "0 14px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  blockOutlineButton: {
+    minHeight: 40,
+    borderRadius: 999,
+    border: "1px solid #64748b",
+    background: "#334155",
+    color: "#ffffff",
     padding: "0 14px",
     fontWeight: 900,
     cursor: "pointer",
