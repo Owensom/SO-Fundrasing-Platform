@@ -159,8 +159,10 @@ export default function AdminSeatManager({
   mode,
   applyTicketTypeAction,
   updateSelectedSeatsStatusAction,
+  updateSeatingLayoutAction,
   deleteSelectedSeatsAction,
   deleteSelectedRowsAction,
+  initialSeatingLayout = {},
 }: {
   eventId: string;
   seats: Seat[];
@@ -169,35 +171,26 @@ export default function AdminSeatManager({
   mode: "rows" | "tables";
   applyTicketTypeAction: (formData: FormData) => void | Promise<void>;
   updateSelectedSeatsStatusAction: (formData: FormData) => void | Promise<void>;
+  updateSeatingLayoutAction?: (formData: FormData) => void | Promise<void>;
   deleteSelectedSeatsAction: (formData: FormData) => void | Promise<void>;
   deleteSelectedRowsAction?: (formData: FormData) => void | Promise<void>;
+  initialSeatingLayout?: Record<string, number>;
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
-  const [manualOffsets, setManualOffsets] = useState<Record<string, number>>({});
-
-  const storageKey = `event-row-offsets-${eventId}`;
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      if (saved) setManualOffsets(JSON.parse(saved));
-    } catch {
-      setManualOffsets({});
-    }
-  }, [storageKey]);
+  const [manualOffsets, setManualOffsets] =
+    useState<Record<string, number>>(initialSeatingLayout || {});
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(manualOffsets));
-    } catch {
-      // Ignore storage issues.
-    }
-  }, [manualOffsets, storageKey]);
+    setManualOffsets(initialSeatingLayout || {});
+  }, [initialSeatingLayout]);
 
   const normalSeats = useMemo(
-    () => seats.filter((seat) => !seat.ticket_type_id && seat.status === "available"),
+    () =>
+      seats.filter(
+        (seat) => !seat.ticket_type_id && seat.status === "available",
+      ),
     [seats],
   );
 
@@ -274,20 +267,36 @@ export default function AdminSeatManager({
         <div>
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
-            Leave normal seats green. Use block to stop seats being sold without
+            Leave normal seats green. Block seats to stop them being sold without
             deleting them.
           </p>
         </div>
 
         <div style={styles.toolbarButtons}>
           {mode === "rows" && (
-            <button
-              type="button"
-              onClick={resetRowOffsets}
-              style={styles.secondaryButton}
-            >
-              Reset row nudges
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={resetRowOffsets}
+                style={styles.secondaryButton}
+              >
+                Reset row nudges
+              </button>
+
+              {updateSeatingLayoutAction && (
+                <form action={updateSeatingLayoutAction}>
+                  <input type="hidden" name="event_id" value={eventId} />
+                  <input
+                    type="hidden"
+                    name="seating_layout_json"
+                    value={JSON.stringify(manualOffsets)}
+                  />
+                  <button type="submit" style={styles.primaryButton}>
+                    Save row layout
+                  </button>
+                </form>
+              )}
+            </>
           )}
 
           <button
