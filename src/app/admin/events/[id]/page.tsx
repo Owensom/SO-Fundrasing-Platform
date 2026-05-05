@@ -109,6 +109,21 @@ function parseSeatingLayout(value: FormDataEntryValue | null): Record<string, nu
   }
 }
 
+function parseTableNames(value: FormDataEntryValue | null): Record<string, string> {
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
+        .filter(([, name]) => name),
+    );
+  } catch {
+    return {};
+  }
+}
+
 function parsePrizeRowsFromForm(formData: FormData): EventPrize[] {
   const count = positiveInteger(formData.get("prize_count"), 0);
 
@@ -183,10 +198,7 @@ function expandRows(value: string): string[] {
         const start = Math.min(startNumber, endNumber);
         const end = Math.max(startNumber, endNumber);
 
-        for (let row = start; row <= end; row += 1) {
-          rows.push(String(row));
-        }
-
+        for (let row = start; row <= end; row += 1) rows.push(String(row));
         continue;
       }
 
@@ -275,6 +287,7 @@ async function updateEventAction(formData: FormData) {
     | "draft"
     | "published"
     | "closed";
+
   const askDietaryRequirements =
     String(formData.get("ask_dietary_requirements") || "true") === "true";
   const askMenuChoice =
@@ -301,6 +314,7 @@ async function updateEventAction(formData: FormData) {
     prizesJson: event.prizes_json || [],
     menuOptions: event.menu_options || [],
     seatingLayoutJson: event.seating_layout_json || {},
+    tableNamesJson: event.table_names_json || {},
     askDietaryRequirements,
     askMenuChoice,
   });
@@ -312,10 +326,7 @@ async function updatePrizesAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
-
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
-  }
+  if (!eventId) redirect("/admin/events?error=missing-event");
 
   const event = await requireEventAccess(eventId);
 
@@ -323,6 +334,7 @@ async function updatePrizesAction(formData: FormData) {
     prizesJson: parsePrizeRowsFromForm(formData),
     menuOptions: event.menu_options || [],
     seatingLayoutJson: event.seating_layout_json || {},
+    tableNamesJson: event.table_names_json || {},
     askDietaryRequirements: event.ask_dietary_requirements,
     askMenuChoice: event.ask_menu_choice,
   });
@@ -334,10 +346,7 @@ async function updateMenuOptionsAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
-
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
-  }
+  if (!eventId) redirect("/admin/events?error=missing-event");
 
   const event = await requireEventAccess(eventId);
 
@@ -345,6 +354,7 @@ async function updateMenuOptionsAction(formData: FormData) {
     prizesJson: event.prizes_json || [],
     menuOptions: parseMenuOptionsFromForm(formData),
     seatingLayoutJson: event.seating_layout_json || {},
+    tableNamesJson: event.table_names_json || {},
     askDietaryRequirements: event.ask_dietary_requirements,
     askMenuChoice: event.ask_menu_choice,
   });
@@ -356,10 +366,7 @@ async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
-
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
-  }
+  if (!eventId) redirect("/admin/events?error=missing-event");
 
   const event = await requireEventAccess(eventId);
 
@@ -367,11 +374,32 @@ async function updateSeatingLayoutAction(formData: FormData) {
     prizesJson: event.prizes_json || [],
     menuOptions: event.menu_options || [],
     seatingLayoutJson: parseSeatingLayout(formData.get("seating_layout_json")),
+    tableNamesJson: event.table_names_json || {},
     askDietaryRequirements: event.ask_dietary_requirements,
     askMenuChoice: event.ask_menu_choice,
   });
 
   redirect(`/admin/events/${eventId}?saved=layout#row-seating`);
+}
+
+async function updateTableNamesAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  if (!eventId) redirect("/admin/events?error=missing-event");
+
+  const event = await requireEventAccess(eventId);
+
+  await updateEvent(eventId, {
+    prizesJson: event.prizes_json || [],
+    menuOptions: event.menu_options || [],
+    seatingLayoutJson: event.seating_layout_json || {},
+    tableNamesJson: parseTableNames(formData.get("table_names_json")),
+    askDietaryRequirements: event.ask_dietary_requirements,
+    askMenuChoice: event.ask_menu_choice,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
 
 async function addTicketTypeAction(formData: FormData) {
@@ -557,9 +585,7 @@ async function generateSeatsAction(formData: FormData) {
 
   await requireEventAccess(eventId);
 
-  if (clearExisting) {
-    await deleteEventRowSeats(eventId);
-  }
+  if (clearExisting) await deleteEventRowSeats(eventId);
 
   const rows = expandRows(rowsRaw);
 
@@ -601,9 +627,7 @@ async function generateTablesAction(formData: FormData) {
 
   await requireEventAccess(eventId);
 
-  if (clearExisting) {
-    await deleteEventTableSeats(eventId);
-  }
+  if (clearExisting) await deleteEventTableSeats(eventId);
 
   for (let table = 1; table <= tableCount; table += 1) {
     for (let seat = 1; seat <= seatsPerTable; seat += 1) {
@@ -699,22 +723,28 @@ export default async function AdminEventManagePage({
 
   const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
   const tableSeats = seats.filter((seat) => seat.table_number);
-  const visibleSeats = isReservedSeating
-    ? rowSeats
-    : isTables
-      ? tableSeats
-      : seats;
+  const visibleSeats = isReservedSeating ? rowSeats : isTables ? tableSeats : seats;
 
   const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
-  const reservedSeats = visibleSeats.filter(
-    (seat) => seat.status === "reserved",
-  ).length;
-  const blockedSeats = visibleSeats.filter(
-    (seat) => seat.status === "blocked",
-  ).length;
-  const availableSeats = visibleSeats.filter(
-    (seat) => seat.status === "available",
-  ).length;
+  const reservedSeats = visibleSeats.filter((seat) => seat.status === "reserved").length;
+  const blockedSeats = visibleSeats.filter((seat) => seat.status === "blocked").length;
+  const availableSeats = visibleSeats.filter((seat) => seat.status === "available").length;
+
+  const uniqueTableNumbers = Array.from(
+    new Set(tableSeats.map((seat) => String(seat.table_number || "").trim()).filter(Boolean)),
+  ).sort((a, b) => {
+    const aNumber = Number(a);
+    const bNumber = Number(b);
+    if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+    return a.localeCompare(b);
+  });
+
+  const tableNamesFromExistingTables = Object.fromEntries(
+    uniqueTableNumbers.map((tableNumber) => [
+      tableNumber,
+      event.table_names_json?.[tableNumber] || "",
+    ]),
+  );
 
   return (
     <main style={styles.page}>
@@ -772,14 +802,12 @@ export default async function AdminEventManagePage({
 
       <section id="overview" style={styles.section}>
         <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>Section 1</p>
-            <h2 style={styles.sectionTitle}>Overview</h2>
-            <p style={styles.sectionText}>
-              Choose the event type first. The admin page only shows the sections
-              needed for that type.
-            </p>
-          </div>
+          <p style={styles.sectionEyebrow}>Section 1</p>
+          <h2 style={styles.sectionTitle}>Overview</h2>
+          <p style={styles.sectionText}>
+            Choose the event type first. The admin page only shows the sections
+            needed for that type.
+          </p>
         </div>
 
         <div style={styles.statsGrid}>
@@ -830,10 +858,7 @@ export default async function AdminEventManagePage({
             <div style={styles.mediaBox}>
               <div>
                 <h3 style={styles.panelTitle}>Event image</h3>
-                <p style={styles.sectionText}>
-                  Upload or replace the public event image.
-                </p>
-
+                <p style={styles.sectionText}>Upload or replace the public event image.</p>
                 <ImageUploadField currentImageUrl={event.image_url ?? ""} />
               </div>
 
@@ -942,17 +967,15 @@ export default async function AdminEventManagePage({
 
       <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>Section 2</p>
-            <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
-            <p style={styles.sectionText}>
-              Add the public ticket choices. Use Seat Manager only for special,
-              complimentary, VIP, or blocked seats.
-            </p>
-          </div>
+          <p style={styles.sectionEyebrow}>Section 2</p>
+          <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
+          <p style={styles.sectionText}>
+            Add public ticket choices. Seat Manager is for special, complimentary,
+            VIP, or blocked seats.
+          </p>
         </div>
 
-        <div style={styles.twoPanel}>
+        <div style={styles.ticketLayout}>
           <div style={styles.panel}>
             <h3 style={styles.panelTitle}>Add ticket type</h3>
 
@@ -977,7 +1000,7 @@ export default async function AdminEventManagePage({
                     name="capacity"
                     type="number"
                     min="0"
-                    placeholder="Leave blank for unlimited"
+                    placeholder="Leave blank"
                     style={styles.input}
                   />
                 </Field>
@@ -1007,9 +1030,16 @@ export default async function AdminEventManagePage({
           </div>
 
           <div style={styles.panel}>
-            <h3 style={styles.panelTitle}>Current ticket types</h3>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Current ticket types</h3>
+                <p style={styles.sectionText}>
+                  Compact list so the page does not keep stretching as you add tickets.
+                </p>
+              </div>
+            </div>
 
-            <div style={styles.list}>
+            <div style={styles.ticketListScroll}>
               {ticketTypes.length === 0 ? (
                 <div style={styles.emptyBox}>No ticket types yet.</div>
               ) : (
@@ -1050,13 +1080,13 @@ export default async function AdminEventManagePage({
                           />
                         </Field>
 
-                        <Field label="Ticket limit">
+                        <Field label="Limit">
                           <input
                             name="capacity"
                             type="number"
                             min="0"
                             defaultValue={ticketType.capacity || ""}
-                            placeholder="Leave blank for unlimited"
+                            placeholder="Unlimited"
                             style={styles.input}
                           />
                         </Field>
@@ -1083,16 +1113,18 @@ export default async function AdminEventManagePage({
                         </Field>
                       </div>
 
-                      <button type="submit" style={styles.primaryButton}>
-                        Save ticket type
-                      </button>
+                      <div style={styles.inlineActions}>
+                        <button type="submit" style={styles.primaryButton}>
+                          Save
+                        </button>
+                      </div>
                     </form>
 
                     <form action={deleteTicketTypeAction}>
                       <input type="hidden" name="event_id" value={event.id} />
                       <input type="hidden" name="ticket_type_id" value={ticketType.id} />
                       <button type="submit" style={styles.dangerOutlineButton}>
-                        Delete this ticket type
+                        Delete
                       </button>
                     </form>
                   </div>
@@ -1100,7 +1132,7 @@ export default async function AdminEventManagePage({
               )}
             </div>
 
-            <form action={clearTicketTypesAction} style={{ marginTop: 14 }}>
+            <form action={clearTicketTypesAction}>
               <input type="hidden" name="event_id" value={event.id} />
               <button type="submit" style={styles.dangerOutlineButton}>
                 Clear all ticket types
@@ -1121,14 +1153,12 @@ export default async function AdminEventManagePage({
       {isReservedSeating && (
         <section id="row-seating" style={styles.section}>
           <div style={styles.sectionHeader}>
-            <div>
-              <p style={styles.sectionEyebrow}>Section 3</p>
-              <h2 style={styles.sectionTitle}>Row Seating</h2>
-              <p style={styles.sectionText}>
-                Generate seats first. Use Seat Manager to mark special seats,
-                block seats, and save row layout nudges.
-              </p>
-            </div>
+            <p style={styles.sectionEyebrow}>Section 3</p>
+            <h2 style={styles.sectionTitle}>Row Seating</h2>
+            <p style={styles.sectionText}>
+              Generate seats first. Use Seat Manager to mark special seats, block
+              seats, and save row layout nudges.
+            </p>
           </div>
 
           <div style={styles.twoPanel}>
@@ -1240,14 +1270,11 @@ export default async function AdminEventManagePage({
       {isTables && (
         <section id="table-seating" style={styles.section}>
           <div style={styles.sectionHeader}>
-            <div>
-              <p style={styles.sectionEyebrow}>Section 3</p>
-              <h2 style={styles.sectionTitle}>Table Seating</h2>
-              <p style={styles.sectionText}>
-                Generate table layouts first. Leave normal table seats unmarked
-                unless they are special or blocked.
-              </p>
-            </div>
+            <p style={styles.sectionEyebrow}>Section 3</p>
+            <h2 style={styles.sectionTitle}>Table Seating</h2>
+            <p style={styles.sectionText}>
+              Generate table layouts first, then name tables before publishing.
+            </p>
           </div>
 
           <div style={styles.twoPanel}>
@@ -1292,18 +1319,55 @@ export default async function AdminEventManagePage({
 
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
-                <SummaryCard label="Normal public" value={tableSeats.filter((seat) => !seat.ticket_type_id && seat.status === "available").length} />
-                <SummaryCard label="Special marked" value={tableSeats.filter((seat) => seat.ticket_type_id).length} />
+                <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
+                <SummaryCard label="Named tables" value={Object.keys(event.table_names_json || {}).length} />
                 <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
                 <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
               </div>
 
               <p style={styles.sectionText}>
-                Blocked table seats remain in the layout but cannot be selected
-                on the public page.
+                Named tables show on the public page. Buyers no longer type table names.
               </p>
             </div>
           </div>
+
+          <form action={updateTableNamesAction} style={styles.panel}>
+            <input type="hidden" name="event_id" value={event.id} />
+
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Table names</h3>
+                <p style={styles.sectionText}>
+                  Add friendly names such as Sponsors, VIP, Smith Family, or Staff.
+                </p>
+              </div>
+
+              <button type="submit" style={styles.primaryButton}>
+                Save table names
+              </button>
+            </div>
+
+            <textarea
+              name="table_names_json"
+              defaultValue={JSON.stringify(
+                uniqueTableNumbers.length > 0
+                  ? tableNamesFromExistingTables
+                  : event.table_names_json || {},
+                null,
+                2,
+              )}
+              style={{
+                ...styles.textarea,
+                minHeight: 180,
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              }}
+            />
+
+            <p style={styles.sectionText}>
+              Example: {"{ \"1\": \"VIP\", \"2\": \"Sponsors\", \"3\": \"Smith Family\" }"}
+            </p>
+          </form>
 
           <div style={styles.panel}>
             <div style={styles.panelHeader}>
@@ -1343,15 +1407,13 @@ export default async function AdminEventManagePage({
 
       <section id="orders" style={styles.section}>
         <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.sectionEyebrow}>
-              {isGeneralAdmission ? "Section 4" : "Section 5"}
-            </p>
-            <h2 style={styles.sectionTitle}>Orders</h2>
-            <p style={styles.sectionText}>
-              Event orders will appear here once checkout is connected.
-            </p>
-          </div>
+          <p style={styles.sectionEyebrow}>
+            {isGeneralAdmission ? "Section 4" : "Section 5"}
+          </p>
+          <h2 style={styles.sectionTitle}>Orders</h2>
+          <p style={styles.sectionText}>
+            Event orders will appear here once checkout is connected.
+          </p>
         </div>
 
         <div style={styles.emptyBox}>Checkout not connected yet.</div>
@@ -1710,13 +1772,26 @@ const styles: Record<string, CSSProperties> = {
   },
   fourCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
     gap: 12,
   },
   twoPanel: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: 16,
+  },
+  ticketLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 0.9fr) minmax(320px, 1.4fr)",
+    gap: 16,
+    alignItems: "start",
+  },
+  ticketListScroll: {
+    display: "grid",
+    gap: 10,
+    maxHeight: 520,
+    overflow: "auto",
+    paddingRight: 4,
   },
   primaryButton: {
     width: "fit-content",
@@ -1746,17 +1821,18 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  list: {
-    display: "grid",
-    gap: 10,
-  },
   editTicketCard: {
     display: "grid",
-    gap: 12,
-    padding: 14,
+    gap: 10,
+    padding: 12,
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#ffffff",
+  },
+  inlineActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
   },
   checkboxLabel: {
     display: "flex",
