@@ -692,6 +692,27 @@ export async function updateEventSeatsTicketType(input: {
   );
 }
 
+export async function updateEventSeatsStatus(input: {
+  eventId: string;
+  seatIds: string[];
+  status: EventSeatStatus;
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+    update event_seats
+    set
+      status = $3,
+      updated_at = now()
+    where event_id = $1
+      and id = any($2::uuid[])
+      and status in ('available', 'blocked')
+    `,
+    [input.eventId, input.seatIds, normaliseSeatStatus(input.status)],
+  );
+}
+
 export async function deleteEventSeat(id: string): Promise<void> {
   await query(
     `
@@ -812,9 +833,18 @@ export async function createPendingEventOrder(input: {
   eventId: string;
   customerName?: string | null;
   customerEmail?: string | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+  buyer_name?: string | null;
+  buyer_email?: string | null;
   amountTotal: number;
   currency: string;
 }): Promise<EventOrder> {
+  const customerName =
+    input.customerName ?? input.buyerName ?? input.buyer_name ?? null;
+  const customerEmail =
+    input.customerEmail ?? input.buyerEmail ?? input.buyer_email ?? null;
+
   const created = await queryOne<EventOrder>(
     `
     insert into event_orders (
@@ -832,8 +862,8 @@ export async function createPendingEventOrder(input: {
     [
       input.tenantSlug,
       input.eventId,
-      input.customerName ?? null,
-      input.customerEmail ?? null,
+      customerName,
+      customerEmail,
       input.amountTotal,
       input.currency.toLowerCase(),
     ],
