@@ -73,14 +73,6 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
     .map((option) => String(option.name || option.title || "").trim())
     .filter(Boolean);
 
-  const publicPrizes = (event.prizes_json || [])
-    .filter((prize) => prize.isPublic !== false && prize.is_public !== false)
-    .sort(
-      (a, b) =>
-        Number(a.position || a.sortOrder || a.sort_order || 0) -
-        Number(b.position || b.sortOrder || b.sort_order || 0),
-    );
-
   const lowestTicketPrice =
     ticketTypes.length > 0
       ? Math.min(...ticketTypes.map((ticketType) => Number(ticketType.price || 0)))
@@ -117,17 +109,21 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
 
           <div style={styles.infoBox}>
             <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
+
             {lowestTicketPrice > 0 && (
               <InfoRow
                 label="Tickets from"
                 value={`${event.currency} ${moneyFromCents(lowestTicketPrice)}`}
               />
             )}
+
             <InfoRow label="Date" value={formatDate(event.starts_at)} />
+
             <InfoRow
               label="Location"
               value={event.location || "Location to be confirmed"}
             />
+
             {event.event_type !== "general_admission" && (
               <InfoRow label="Available now" value={availableSeats} />
             )}
@@ -153,80 +149,32 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
             </div>
           )}
 
-          <div style={styles.threeGrid}>
-            <section style={styles.orangePanel}>
-              <h2 style={styles.panelTitle}>Tickets</h2>
+          <section style={styles.orangePanel}>
+            <h2 style={styles.panelTitle}>Tickets</h2>
 
-              <div style={styles.stack}>
-                {ticketTypes.length === 0 ? (
-                  <div style={styles.emptyBox}>
-                    Ticket options have not been added yet.
-                  </div>
-                ) : (
-                  ticketTypes.map((ticketType) => (
-                    <div key={ticketType.id} style={styles.listItem}>
-                      <div>
-                        <strong>{ticketType.name}</strong>
-                        {ticketType.description && (
-                          <p style={styles.muted}>{ticketType.description}</p>
-                        )}
-                      </div>
-                      <strong style={styles.pricePill}>
-                        {event.currency} {moneyFromCents(ticketType.price)}
-                      </strong>
+            <div style={styles.stack}>
+              {ticketTypes.length === 0 ? (
+                <div style={styles.emptyBox}>
+                  Ticket options have not been added yet.
+                </div>
+              ) : (
+                ticketTypes.map((ticketType) => (
+                  <div key={ticketType.id} style={styles.listItem}>
+                    <div>
+                      <strong>{ticketType.name}</strong>
+                      {ticketType.description && (
+                        <p style={styles.muted}>{ticketType.description}</p>
+                      )}
                     </div>
-                  ))
-                )}
-              </div>
-            </section>
 
-            <section style={styles.orangePanel}>
-              <h2 style={styles.panelTitle}>Prizes</h2>
-
-              <div style={styles.stack}>
-                {publicPrizes.length === 0 ? (
-                  <div style={styles.emptyBox}>
-                    Prize details will be announced soon.
+                    <strong style={styles.pricePill}>
+                      {event.currency} {moneyFromCents(ticketType.price)}
+                    </strong>
                   </div>
-                ) : (
-                  publicPrizes.map((prize, index) => (
-                    <div
-                      key={`${prize.id || "prize"}-${index}`}
-                      style={styles.listItem}
-                    >
-                      <div>
-                        <p style={styles.eyebrow}>
-                          Prize {prize.position || index + 1}
-                        </p>
-                        <strong>{prize.title || prize.name}</strong>
-                        {prize.description && (
-                          <p style={styles.muted}>{prize.description}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section style={styles.orangePanel}>
-              <h2 style={styles.panelTitle}>Menu</h2>
-
-              <div style={styles.stack}>
-                {menuOptions.length === 0 ? (
-                  <div style={styles.emptyBox}>
-                    Menu choices can be added during checkout if required.
-                  </div>
-                ) : (
-                  menuOptions.map((option) => (
-                    <div key={option} style={styles.listItem}>
-                      <strong>{option}</strong>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
+                ))
+              )}
+            </div>
+          </section>
 
           <section id="book" style={styles.bookSection}>
             <div style={styles.bookHeader}>
@@ -238,6 +186,7 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
                       ? "Choose your seats"
                       : "Book tickets"}
                 </h2>
+
                 <p style={styles.bookText}>
                   {event.event_type === "general_admission"
                     ? "Choose how many of each ticket type you would like."
@@ -418,17 +367,12 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     lineHeight: 1.5,
   },
-  threeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 14,
-    marginBottom: 18,
-  },
   orangePanel: {
     padding: 16,
     borderRadius: 16,
     background: "#fff7ed",
     border: "1px solid #fed7aa",
+    marginBottom: 18,
   },
   panelTitle: {
     margin: "0 0 12px",
@@ -464,14 +408,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
-  },
-  eyebrow: {
-    margin: "0 0 4px",
-    color: "#c2410c",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    fontSize: 11,
-    fontWeight: 950,
   },
   emptyBox: {
     padding: 14,
