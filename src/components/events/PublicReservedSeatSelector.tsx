@@ -32,16 +32,13 @@ type GuestData = {
   tableName: string;
 };
 
-type SeatCell =
-  | {
-      type: "seat";
-      seat: Seat;
-      key: string;
-    }
-  | {
-      type: "aisle";
-      key: string;
-    };
+const specialColours = [
+  { background: "#facc15", text: "#422006" },
+  { background: "#a78bfa", text: "#2e1065" },
+  { background: "#fb7185", text: "#4c0519" },
+  { background: "#60a5fa", text: "#082f49" },
+  { background: "#fb923c", text: "#431407" },
+];
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
@@ -51,24 +48,32 @@ function seatLabel(seat: Seat) {
   return `Row ${seat.row_label}, Seat ${seat.seat_number}`;
 }
 
-function rowSortValue(value: string | null) {
-  const text = String(value || "");
-  const number = Number(text);
-
-  if (Number.isFinite(number)) return number;
-
-  return text.toUpperCase().charCodeAt(0);
-}
-
-function sortSeatNumber(a: Seat, b: Seat) {
-  const aNumber = Number(a.seat_number);
-  const bNumber = Number(b.seat_number);
+function numericSort(a: string | null, b: string | null) {
+  const aNumber = Number(a);
+  const bNumber = Number(b);
 
   if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
     return aNumber - bNumber;
   }
 
-  return String(a.seat_number || "").localeCompare(String(b.seat_number || ""));
+  return String(a || "").localeCompare(String(b || ""));
+}
+
+function groupBy<T>(items: T[], getKey: (item: T) => string) {
+  return items.reduce<Record<string, T[]>>((groups, item) => {
+    const key = getKey(item);
+    groups[key] = groups[key] || [];
+    groups[key].push(item);
+    return groups;
+  }, {});
+}
+
+function rowKeyForSeat(seat: Seat) {
+  return `${seat.section || ""}|${seat.row_label || ""}`;
+}
+
+function rowVisualUnits(rowSeats: Seat[]) {
+  return rowSeats.length + rowSeats.filter((seat) => seat.aisle_after).length * 2;
 }
 
 function getDefaultGuestData(): GuestData {
@@ -80,31 +85,99 @@ function getDefaultGuestData(): GuestData {
   };
 }
 
-function buildRowCells(rowSeats: Seat[]): SeatCell[] {
-  const cells: SeatCell[] = [];
-
-  for (const seat of rowSeats) {
-    cells.push({
-      type: "seat",
-      seat,
-      key: seat.id,
-    });
-
-    const seatNumber = Number(seat.seat_number);
-
-    if (
-      seat.aisle_after &&
-      Number.isFinite(seatNumber) &&
-      seatNumber === Number(seat.aisle_after)
-    ) {
-      cells.push({
-        type: "aisle",
-        key: `${seat.id}-aisle`,
-      });
-    }
+function colourForTicketType(
+  ticketType: TicketType | undefined,
+  ticketTypes: TicketType[],
+) {
+  if (!ticketType) {
+    return {
+      background: "#dcfce7",
+      text: "#14532d",
+      label: "Normal public seat",
+    };
   }
 
-  return cells;
+  const index = Math.max(
+    0,
+    ticketTypes.findIndex((item) => item.id === ticketType.id),
+  );
+
+  return {
+    ...specialColours[index % specialColours.length],
+    label: ticketType.name,
+  };
+}
+
+function publicSeatStyle({
+  selected,
+  ticketType,
+  ticketTypes,
+  status,
+}: {
+  selected: boolean;
+  ticketType: TicketType | undefined;
+  ticketTypes: TicketType[];
+  status: string;
+}): CSSProperties {
+  const colour = colourForTicketType(ticketType, ticketTypes);
+
+  if (status === "blocked") {
+    return {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "1px solid #64748b",
+      background: selected ? "#bae6fd" : "#334155",
+      color: selected ? "#082f49" : "#e2e8f0",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "not-allowed",
+      opacity: 0.9,
+    };
+  }
+
+  if (status === "sold") {
+    return {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "1px solid #991b1b",
+      background: selected ? "#bae6fd" : "#fecaca",
+      color: selected ? "#082f49" : "#7f1d1d",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "not-allowed",
+      opacity: 0.9,
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "1px solid #f59e0b",
+      background: selected ? "#bae6fd" : "#fef3c7",
+      color: selected ? "#082f49" : "#92400e",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "not-allowed",
+      opacity: 0.9,
+    };
+  }
+
+  return {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 8,
+    border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
+    background: selected ? "#bae6fd" : colour.background,
+    color: selected ? "#082f49" : colour.text,
+    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+  };
 }
 
 export default function PublicReservedSeatSelector({
@@ -113,6 +186,7 @@ export default function PublicReservedSeatSelector({
   ticketTypes,
   currency,
   menuOptions = [],
+  initialSeatingLayout = {},
 }: {
   eventId: string;
   eventType?: string;
@@ -120,6 +194,7 @@ export default function PublicReservedSeatSelector({
   ticketTypes: TicketType[];
   currency: string;
   menuOptions?: string[];
+  initialSeatingLayout?: Record<string, number>;
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -130,44 +205,14 @@ export default function PublicReservedSeatSelector({
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
-  const groupedRows = useMemo(() => {
-    const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
-    const groups = new Map<string, Seat[]>();
-
-    for (const seat of rowSeats) {
-      const section = seat.section || "Main";
-      const row = seat.row_label || "Unlabelled";
-      const key = `${section}|||${row}`;
-      const existing = groups.get(key) || [];
-      existing.push(seat);
-      groups.set(key, existing);
-    }
-
-    return Array.from(groups.entries())
-      .map(([key, groupSeats]) => {
-        const [section, row] = key.split("|||");
-        const sortedSeats = groupSeats.sort(sortSeatNumber);
-        const cells = buildRowCells(sortedSeats);
-
-        return {
-          key,
-          section,
-          row,
-          seats: sortedSeats,
-          cells,
-        };
-      })
-      .sort((a, b) => {
-        const sectionCompare = a.section.localeCompare(b.section);
-        if (sectionCompare !== 0) return sectionCompare;
-        return rowSortValue(a.row) - rowSortValue(b.row);
-      });
-  }, [seats]);
-
-  const maxCellCount = Math.max(
-    1,
-    ...groupedRows.map((group) => group.cells.length),
+  const rowSeats = useMemo(
+    () => seats.filter((seat) => seat.row_label && !seat.table_number),
+    [seats],
   );
+
+  const groupedSections = useMemo(() => {
+    return groupBy(rowSeats, (seat) => seat.section || "Main");
+  }, [rowSeats]);
 
   const cartSeats = useMemo(() => {
     return cartItems
@@ -302,88 +347,113 @@ export default function PublicReservedSeatSelector({
           </div>
 
           <div style={styles.legend}>
-            <Legend color="#bbf7d0" label="Available" />
-            <Legend color="#60a5fa" label="Selected" />
-            <Legend color="#cbd5e1" label="Unavailable" />
+            <Legend color="#dcfce7" label="Available" />
+            <Legend color="#bae6fd" label="Selected" />
+            <Legend color="#334155" label="Blocked" />
+            <Legend color="#fef3c7" label="Reserved" />
+            <Legend color="#fecaca" label="Sold" />
           </div>
         </div>
 
-        <div style={styles.seatMapScroll}>
-          <div style={styles.stage}>STAGE</div>
+        <div style={styles.stage}>STAGE</div>
 
-          <div style={styles.rows}>
-            {groupedRows.map((group, index) => {
-              const showSection =
-                index === 0 || groupedRows[index - 1]?.section !== group.section;
+        <div style={styles.seatMapScroll}>
+          {Object.entries(groupedSections)
+            .sort(([a], [b]) => numericSort(a, b))
+            .map(([section, sectionSeats]) => {
+              const rows = groupBy(sectionSeats, (seat) => seat.row_label || "No row");
+
+              const rowEntries = Object.entries(rows).sort(([a], [b]) =>
+                numericSort(a, b),
+              );
+
+              const maxUnits = Math.max(
+                1,
+                ...rowEntries.map(([, currentRowSeats]) =>
+                  rowVisualUnits(currentRowSeats),
+                ),
+              );
 
               return (
-                <div key={group.key}>
-                  {showSection && (
-                    <div style={styles.sectionLabel}>
-                      {group.section.toUpperCase()}
-                    </div>
-                  )}
+                <div key={section} style={styles.groupBlock}>
+                  <h4 style={styles.groupTitle}>{section}</h4>
 
-                  <div style={styles.rowLine}>
-                    <div style={styles.rowLabel}>Row {group.row}</div>
+                  {rowEntries.map(([row, currentRowSeats]) => {
+                    const actualKey =
+                      currentRowSeats.length > 0
+                        ? rowKeyForSeat(currentRowSeats[0])
+                        : `${section === "Main" ? "" : section}|${row}`;
 
-                    <div
-                      style={{
-                        ...styles.rowSeatsGrid,
-                        gridTemplateColumns: `repeat(${maxCellCount}, 42px)`,
-                      }}
-                    >
-                      {group.cells.map((cell) => {
-                        if (cell.type === "aisle") {
-                          return (
-                            <span key={cell.key} style={styles.aisle}>
-                              Aisle
-                            </span>
-                          );
-                        }
+                    const sortedRowSeats = currentRowSeats
+                      .slice()
+                      .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
-                        const seat = cell.seat;
-                        const selected = selectedSeatIds.includes(seat.id);
-                        const unavailable = seat.status !== "available";
+                    const autoOffset = Math.max(
+                      0,
+                      Math.floor((maxUnits - rowVisualUnits(currentRowSeats)) / 2),
+                    );
 
-                        return (
-                          <button
-                            key={cell.key}
-                            type="button"
-                            onClick={() => toggleSeat(seat)}
-                            disabled={unavailable}
-                            title={seatLabel(seat)}
-                            style={{
-                              ...styles.seatButton,
-                              background: selected
-                                ? "#60a5fa"
-                                : unavailable
-                                  ? "#e2e8f0"
-                                  : "#dcfce7",
-                              borderColor: selected
-                                ? "#3b82f6"
-                                : unavailable
-                                  ? "#cbd5e1"
-                                  : "#bbf7d0",
-                              color: selected
-                                ? "#ffffff"
-                                : unavailable
-                                  ? "#64748b"
-                                  : "#14532d",
-                              cursor: unavailable ? "not-allowed" : "pointer",
-                              opacity: unavailable ? 0.7 : 1,
-                            }}
-                          >
-                            {seat.seat_number}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    const manualOffset = initialSeatingLayout[actualKey] || 0;
+                    const totalOffset = Math.max(0, autoOffset + manualOffset);
+
+                    return (
+                      <div key={`${section}-${row}`} style={styles.rowLine}>
+                        <div style={styles.rowButton}>Row {row}</div>
+
+                        <div
+                          style={{
+                            ...styles.seatLine,
+                            paddingLeft: totalOffset * 42,
+                          }}
+                        >
+                          {sortedRowSeats.map((seat) => {
+                            const ticketType = ticketTypes.find(
+                              (item) => item.id === seat.ticket_type_id,
+                            );
+
+                            const selected = selectedSeatIds.includes(seat.id);
+                            const unavailable = seat.status !== "available";
+
+                            return (
+                              <span key={seat.id} style={styles.seatWrap}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSeat(seat)}
+                                  disabled={unavailable}
+                                  title={
+                                    seat.status === "blocked"
+                                      ? `${seatLabel(seat)} — Blocked`
+                                      : seat.status === "reserved"
+                                        ? `${seatLabel(seat)} — Reserved`
+                                        : seat.status === "sold"
+                                          ? `${seatLabel(seat)} — Sold`
+                                          : ticketType?.name
+                                            ? `${seatLabel(seat)} — ${ticketType.name}`
+                                            : seatLabel(seat)
+                                  }
+                                  style={publicSeatStyle({
+                                    selected,
+                                    ticketType,
+                                    ticketTypes,
+                                    status: seat.status,
+                                  })}
+                                >
+                                  {seat.seat_number}
+                                </button>
+
+                                {seat.aisle_after ? (
+                                  <span style={styles.aisle}>Aisle</span>
+                                ) : null}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
-          </div>
         </div>
       </div>
 
@@ -588,14 +658,12 @@ const styles: Record<string, CSSProperties> = {
   },
   mapPanel: {
     padding: 20,
-    borderRadius: 28,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 44px rgba(15,23,42,0.12)",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
     width: "100%",
-    maxWidth: "100%",
     boxSizing: "border-box",
-    overflow: "hidden",
   },
   mapHeader: {
     display: "flex",
@@ -603,7 +671,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   mapTitle: {
     margin: 0,
@@ -640,95 +708,85 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     border: "1px solid rgba(15,23,42,0.12)",
   },
-  seatMapScroll: {
-    overflowX: "auto",
-    overflowY: "hidden",
-    padding: 16,
-    borderRadius: 22,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-    width: "100%",
-    maxWidth: "100%",
-    boxSizing: "border-box",
-  },
   stage: {
     width: "100%",
     minWidth: 1080,
-    padding: "11px 14px",
-    marginBottom: 18,
-    borderRadius: 16,
+    padding: "10px 14px",
+    marginBottom: 16,
+    borderRadius: 14,
     background: "#111827",
     color: "#ffffff",
     textAlign: "center",
     fontWeight: 950,
-    letterSpacing: "0.16em",
+    letterSpacing: "0.14em",
     fontSize: 12,
     boxSizing: "border-box",
   },
-  rows: {
-    display: "grid",
-    gap: 9,
-    minWidth: 1080,
+  seatMapScroll: {
+    maxHeight: 620,
+    overflow: "auto",
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
   },
-  sectionLabel: {
-    margin: "14px 0 8px",
+  groupBlock: {
+    display: "grid",
+    gap: 10,
+    minWidth: "max-content",
+    marginBottom: 22,
+  },
+  groupTitle: {
+    margin: 0,
     color: "#334155",
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 900,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    letterSpacing: "0.06em",
   },
   rowLine: {
     display: "grid",
-    gridTemplateColumns: "96px minmax(max-content, 1fr)",
+    gridTemplateColumns: "80px 1fr",
     gap: 10,
     alignItems: "center",
   },
-  rowLabel: {
+  rowButton: {
+    minHeight: 32,
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 12,
+    fontWeight: 900,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 38,
-    padding: "0 10px",
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #cbd5e1",
-    color: "#111827",
-    fontSize: 13,
-    fontWeight: 950,
     whiteSpace: "nowrap",
-    boxShadow: "0 1px 2px rgba(15,23,42,0.05)",
   },
-  rowSeatsGrid: {
-    display: "grid",
-    gap: 7,
+  seatLine: {
+    display: "flex",
     alignItems: "center",
-    justifyContent: "start",
-    minHeight: 40,
+    gap: 4,
+    flexWrap: "nowrap",
   },
-  seatButton: {
-    width: 42,
-    height: 38,
-    borderRadius: 10,
-    border: "1px solid",
-    fontSize: 13,
-    fontWeight: 950,
-    boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-    padding: 0,
+  seatWrap: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
   },
   aisle: {
-    width: 42,
-    height: 34,
+    width: 48,
+    height: 28,
+    borderRadius: 8,
+    border: "1px dashed #f59e0b",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
-    border: "1px dashed #f59e0b",
-    background: "#fffbeb",
-    color: "#92400e",
     fontSize: 9,
-    fontWeight: 950,
-    boxSizing: "border-box",
+    fontWeight: 900,
+    color: "#92400e",
+    background: "#fef3c7",
+    margin: "0 6px",
   },
   cart: {
     padding: 18,
@@ -738,12 +796,11 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
     boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
     width: "100%",
-    maxWidth: "100%",
     boxSizing: "border-box",
   },
   cartGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(260px, 360px) minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)",
     gap: 18,
     alignItems: "start",
   },
