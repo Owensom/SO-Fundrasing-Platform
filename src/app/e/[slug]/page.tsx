@@ -241,7 +241,6 @@ export default async function PublicEventPage({
               eventId={event.id}
               ticketTypes={ticketTypes}
               currency={event.currency}
-              menuOptions={menuOptions}
             />
           ) : event.event_type === "tables" ? (
             seats.length === 0 ? (
