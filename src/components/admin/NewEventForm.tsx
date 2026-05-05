@@ -93,6 +93,26 @@ function makeTicketType(id: string, sortOrder: number): TicketTypeRow {
   };
 }
 
+function buildTableNamesJson(value: string) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return "{}";
+    }
+
+    const clean = Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
+        .filter(([, name]) => name),
+    );
+
+    return JSON.stringify(clean);
+  } catch {
+    return "{}";
+  }
+}
+
 export default function NewEventForm({ tenantSlug }: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -115,6 +135,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
   const [tableCount, setTableCount] = useState("");
   const [tableSeatsPerTable, setTableSeatsPerTable] = useState("");
   const [tableInitialTicketTypeId, setTableInitialTicketTypeId] = useState("");
+  const [tableNamesRaw, setTableNamesRaw] = useState("{}");
 
   const prizesValue = useMemo(() => {
     const clean = prizes
@@ -182,6 +203,10 @@ export default function NewEventForm({ tenantSlug }: Props) {
     });
   }, [tableCount, tableSeatsPerTable, tableInitialTicketTypeId]);
 
+  const tableNamesValue = useMemo(() => {
+    return buildTableNamesJson(tableNamesRaw);
+  }, [tableNamesRaw]);
+
   function updateTitle(value: string) {
     setTitle(value);
 
@@ -242,6 +267,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
       <input type="hidden" name="ticket_types" value={ticketTypesValue} />
       <input type="hidden" name="row_seating" value={rowSeatingValue} />
       <input type="hidden" name="table_seating" value={tableSeatingValue} />
+      <input type="hidden" name="table_names_json" value={tableNamesValue} />
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
@@ -622,8 +648,8 @@ export default function NewEventForm({ tenantSlug }: Props) {
               <p style={styles.sectionEyebrow}>Section 3</p>
               <h2 style={styles.sectionTitle}>Table Seating</h2>
               <p style={styles.sectionText}>
-                Generate initial table seats during creation. You can fine-tune
-                them in Seat Manager after creation.
+                Generate initial table seats during creation. You can name tables
+                now or fine-tune them later in Seat Manager after creation.
               </p>
             </div>
           </div>
@@ -687,6 +713,31 @@ export default function NewEventForm({ tenantSlug }: Props) {
                 generate table seats later.
               </p>
             </div>
+          </div>
+
+          <div style={{ ...styles.panel, marginTop: 16 }}>
+            <h3 style={styles.panelTitle}>Table names optional</h3>
+            <p style={styles.sectionText}>
+              Add names for tables before they go public. Use table numbers as
+              keys. You can also edit these later on the event manage page.
+            </p>
+
+            <textarea
+              value={tableNamesRaw}
+              onChange={(event) => setTableNamesRaw(event.target.value)}
+              placeholder='{"1": "VIP", "2": "Sponsors", "3": "Smith Family"}'
+              rows={6}
+              style={{
+                ...styles.textarea,
+                marginTop: 12,
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              }}
+            />
+
+            <p style={styles.sectionText}>
+              Example: {"{ \"1\": \"VIP\", \"2\": \"Sponsors\", \"3\": \"Smith Family\" }"}
+            </p>
           </div>
         </section>
       )}
@@ -1102,4 +1153,5 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
+};
 };
