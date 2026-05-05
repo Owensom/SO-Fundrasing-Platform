@@ -225,13 +225,14 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
               </div>
             ) : (
               <PublicReservedSeatSelector
-                eventId={event.id}
-                eventType={event.event_type}
-                seats={seats}
-                ticketTypes={ticketTypes}
-                currency={event.currency}
-                menuOptions={menuOptions}
-              />
+  eventId={event.id}
+  eventType={event.event_type}
+  seats={seats}
+  ticketTypes={ticketTypes}
+  currency={event.currency}
+  menuOptions={menuOptions}
+  initialSeatingLayout={event.seating_layout_json || {}}
+/>
             )}
           </section>
         </Card>
