@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
 import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
-import PublicSeatSelector from "@/components/events/PublicSeatSelector";
+import PublicReservedSeatSelector from "@/components/events/PublicReservedSeatSelector";
 import PublicTableSelector from "@/components/events/PublicTableSelector";
 
 type PageProps = {
@@ -267,9 +267,8 @@ export default async function PublicEventPage({
               </p>
             </div>
           ) : (
-            <PublicSeatSelector
+            <PublicReservedSeatSelector
               eventId={event.id}
-              eventType={event.event_type}
               seats={seats}
               ticketTypes={ticketTypes}
               currency={event.currency}
