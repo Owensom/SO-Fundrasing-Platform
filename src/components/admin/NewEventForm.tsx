@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
 import ImageUploadField from "@/components/ImageUploadField";
 
 type Props = {
@@ -268,6 +269,16 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
   return (
     <form action="/api/admin/events" method="post" style={styles.form}>
+      <div style={styles.topBar}>
+        <Link href="/admin/events" style={styles.backLink}>
+          ← Back to events
+        </Link>
+
+        <Link href="/admin" style={styles.dashboardLink}>
+          Dashboard
+        </Link>
+      </div>
+
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="ticket_types" value={ticketTypesValue} />
@@ -878,6 +889,36 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 16,
   },
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "11px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #cbd5e1",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  dashboardLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "11px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
   hero: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) 240px",
@@ -1190,4 +1231,3 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
 };
-
