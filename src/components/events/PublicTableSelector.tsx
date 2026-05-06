@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
+import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
 
 type Seat = {
   id: string;
@@ -9,7 +10,7 @@ type Seat = {
   row_label: string | null;
   seat_number: string | null;
   table_number: string | null;
-  table_name?: string | null; // ✅ admin-defined
+  table_name?: string | null;
   status: string;
 };
 
@@ -34,31 +35,34 @@ function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function tableSortValue(value: string | null | undefined) {
+  const number = Number(value);
+  if (Number.isFinite(number)) return number;
+  return Number.MAX_SAFE_INTEGER;
+}
+
 function seatLabel(seat: Seat) {
-  if (seat.table_name) {
-    return `${seat.table_name} · Seat ${seat.seat_number}`;
-  }
-  return `Table ${seat.table_number}, Seat ${seat.seat_number}`;
+  const tableLabel = seat.table_name
+    ? seat.table_name
+    : `Table ${seat.table_number || "Unassigned"}`;
+
+  return `${tableLabel}, Seat ${seat.seat_number || "?"}`;
 }
 
 function groupLabel(seat: Seat) {
-  return (
-    seat.table_name ||
-    `Table ${seat.table_number || "Unassigned"}`
-  );
+  if (seat.table_name) return seat.table_name;
+  return `Table ${seat.table_number || "Unassigned"}`;
 }
 
 function sortSeatNumber(a: Seat, b: Seat) {
-  const aNum = Number(a.seat_number);
-  const bNum = Number(b.seat_number);
+  const aNumber = Number(a.seat_number);
+  const bNumber = Number(b.seat_number);
 
-  if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
-    return aNum - bNum;
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    return aNumber - bNumber;
   }
 
-  return String(a.seat_number || "").localeCompare(
-    String(b.seat_number || ""),
-  );
+  return String(a.seat_number || "").localeCompare(String(b.seat_number || ""));
 }
 
 function getDefaultGuest(): GuestData {
@@ -82,6 +86,8 @@ export default function PublicTableSelector({
   currency: string;
   menuOptions?: string[];
 }) {
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
   const [checkoutError, setCheckoutError] = useState("");
@@ -92,30 +98,42 @@ export default function PublicTableSelector({
   const groupedSeats = useMemo(() => {
     const groups = new Map<string, Seat[]>();
 
-    for (const seat of seats) {
+    for (const seat of seats.filter((seat) => seat.table_number)) {
       const label = groupLabel(seat);
       const existing = groups.get(label) || [];
       existing.push(seat);
       groups.set(label, existing);
     }
 
-    return Array.from(groups.entries()).map(([label, groupSeats]) => ({
-      label,
-      seats: groupSeats.sort(sortSeatNumber),
-    }));
+    return Array.from(groups.entries())
+      .map(([label, groupSeats]) => ({
+        label,
+        tableNumber: groupSeats[0]?.table_number || "",
+        seats: groupSeats.slice().sort(sortSeatNumber),
+      }))
+      .sort((a, b) => {
+        const aNumber = tableSortValue(a.tableNumber);
+        const bNumber = tableSortValue(b.tableNumber);
+
+        if (aNumber !== bNumber) return aNumber - bNumber;
+        return a.label.localeCompare(b.label);
+      });
   }, [seats]);
 
   const cartSeats = useMemo(() => {
     return cartItems
       .map((item) => {
-        const seat = seats.find((s) => s.id === item.seatId);
+        const seat = seats.find((currentSeat) => currentSeat.id === item.seatId);
         const ticketType = ticketTypes.find(
-          (t) => t.id === item.ticketTypeId,
+          (currentTicketType) => currentTicketType.id === item.ticketTypeId,
         );
 
         if (!seat || !ticketType) return null;
 
-        return { seat, ticketType };
+        return {
+          seat,
+          ticketType,
+        };
       })
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
@@ -146,49 +164,35 @@ export default function PublicTableSelector({
         return current.filter((item) => item.seatId !== seat.id);
       }
 
-      const ticketTypeId =
-        seat.ticket_type_id || ticketTypes[0]?.id || "";
-
+      const ticketTypeId = seat.ticket_type_id || ticketTypes[0]?.id || "";
       if (!ticketTypeId) return current;
 
-      return [
-        ...current,
-        { seatId: seat.id, ticketTypeId },
-      ];
+      return [...current, { seatId: seat.id, ticketTypeId }];
     });
   }
 
   function updateTicketType(seatId: string, ticketTypeId: string) {
     setCartItems((current) =>
       current.map((item) =>
-        item.seatId === seatId
-          ? { ...item, ticketTypeId }
-          : item,
+        item.seatId === seatId ? { ...item, ticketTypeId } : item,
       ),
     );
   }
 
   function removeSeat(seatId: string) {
-    setCartItems((current) =>
-      current.filter((item) => item.seatId !== seatId),
-    );
+    setCartItems((current) => current.filter((item) => item.seatId !== seatId));
   }
 
   function selectAvailableTable(groupSeats: Seat[]) {
     setCartItems((current) => {
-      const existingIds = new Set(
-        current.map((item) => item.seatId),
-      );
+      const existingIds = new Set(current.map((item) => item.seatId));
 
       const additions = groupSeats
         .filter((seat) => seat.status === "available")
         .filter((seat) => !existingIds.has(seat.id))
         .map((seat) => ({
           seatId: seat.id,
-          ticketTypeId:
-            seat.ticket_type_id ||
-            ticketTypes[0]?.id ||
-            "",
+          ticketTypeId: seat.ticket_type_id || ticketTypes[0]?.id || "",
         }))
         .filter((item) => item.ticketTypeId);
 
@@ -197,7 +201,17 @@ export default function PublicTableSelector({
   }
 
   async function startCheckout() {
-    if (cartItems.length === 0 || isCheckingOut) return;
+    if (isCheckingOut) return;
+
+    if (!buyerName.trim() || !buyerEmail.trim()) {
+      setCheckoutError("Please enter your name and email address.");
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      setCheckoutError("Please select at least one seat.");
+      return;
+    }
 
     setCheckoutError("");
     setIsCheckingOut(true);
@@ -210,17 +224,17 @@ export default function PublicTableSelector({
         },
         body: JSON.stringify({
           eventId,
+          buyerName,
+          buyerEmail,
           items: cartItems.map((item) => {
-            const data =
-              guestData[item.seatId] || getDefaultGuest();
+            const data = guestData[item.seatId] || getDefaultGuest();
 
             return {
               seatId: item.seatId,
               ticketTypeId: item.ticketTypeId,
               guestName: data.guestName,
               dietary: data.dietaryRequirements,
-              dietaryRequirements:
-                data.dietaryRequirements,
+              dietaryRequirements: data.dietaryRequirements,
               menuChoice: data.menuChoice,
             };
           }),
@@ -230,17 +244,13 @@ export default function PublicTableSelector({
       const data = await response.json();
 
       if (!response.ok || !data.url) {
-        throw new Error(
-          data.error || "Checkout failed.",
-        );
+        throw new Error(data.error || "Checkout failed.");
       }
 
       window.location.href = data.url;
     } catch (error) {
       setCheckoutError(
-        error instanceof Error
-          ? error.message
-          : "Checkout failed.",
+        error instanceof Error ? error.message : "Checkout failed.",
       );
       setIsCheckingOut(false);
     }
@@ -249,194 +259,635 @@ export default function PublicTableSelector({
   return (
     <div style={styles.shell}>
       <div style={styles.mapPanel}>
-        {groupedSeats.map((group) => {
-          const availableCount = group.seats.filter(
-            (seat) => seat.status === "available",
-          ).length;
+        <div style={styles.mapHeader}>
+          <div>
+            <h3 style={styles.mapTitle}>Table layout</h3>
+            <p style={styles.mapText}>
+              Choose individual table seats or select every available seat at a
+              table.
+            </p>
+          </div>
 
-          return (
-            <div key={group.label} style={styles.groupCard}>
-              <div style={styles.groupHeader}>
-                <div>
-                  <h4>{group.label}</h4>
-                  <p>
-                    {availableCount} available from{" "}
-                    {group.seats.length}
-                  </p>
+          <div style={styles.legend}>
+            <Legend color="#22c55e" label="Available" />
+            <Legend color="#38bdf8" label="Selected" />
+            <Legend color="#64748b" label="Unavailable" />
+          </div>
+        </div>
+
+        {groupedSeats.length === 0 ? (
+          <div style={styles.emptyMap}>
+            No table seats are available for this event yet.
+          </div>
+        ) : (
+          <div style={styles.tableGrid}>
+            {groupedSeats.map((group) => {
+              const availableCount = group.seats.filter(
+                (seat) => seat.status === "available",
+              ).length;
+
+              const selectedCount = group.seats.filter((seat) =>
+                selectedSeatIds.includes(seat.id),
+              ).length;
+
+              return (
+                <div key={`${group.tableNumber}-${group.label}`} style={styles.groupCard}>
+                  <div style={styles.groupHeader}>
+                    <div>
+                      <p style={styles.tableNumber}>
+                        Table {group.tableNumber || "Unassigned"}
+                      </p>
+                      <h4 style={styles.groupTitle}>{group.label}</h4>
+                      <p style={styles.groupSub}>
+                        {availableCount} available from {group.seats.length}
+                        {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
+                      </p>
+                    </div>
+
+                    {availableCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => selectAvailableTable(group.seats)}
+                        style={styles.selectTableButton}
+                      >
+                        Select table
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={styles.tableCircle}>
+                    <div style={styles.tableCentre}>
+                      <span style={styles.tableCentreTop}>Table</span>
+                      <strong>{group.tableNumber || "—"}</strong>
+                    </div>
+
+                    <div style={styles.seatGrid}>
+                      {group.seats.map((seat) => {
+                        const selected = selectedSeatIds.includes(seat.id);
+                        const unavailable = seat.status !== "available";
+
+                        return (
+                          <button
+                            key={seat.id}
+                            type="button"
+                            disabled={unavailable}
+                            onClick={() => toggleSeat(seat)}
+                            title={seatLabel(seat)}
+                            style={{
+                              ...styles.seatButton,
+                              background: selected
+                                ? "#38bdf8"
+                                : unavailable
+                                  ? "#475569"
+                                  : "#22c55e",
+                              color: selected ? "#082f49" : "#ffffff",
+                              opacity: unavailable ? 0.45 : 1,
+                              cursor: unavailable ? "not-allowed" : "pointer",
+                              boxShadow: selected
+                                ? "0 0 0 3px rgba(56,189,248,0.25)"
+                                : "none",
+                            }}
+                          >
+                            {seat.seat_number}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-
-                {availableCount > 0 && (
-                  <button
-                    onClick={() =>
-                      selectAvailableTable(group.seats)
-                    }
-                  >
-                    Select table
-                  </button>
-                )}
-              </div>
-
-              <div style={styles.seatGrid}>
-                {group.seats.map((seat) => {
-                  const selected =
-                    selectedSeatIds.includes(seat.id);
-                  const unavailable =
-                    seat.status !== "available";
-
-                  return (
-                    <button
-                      key={seat.id}
-                      disabled={unavailable}
-                      onClick={() => toggleSeat(seat)}
-                      style={{
-                        ...styles.seatButton,
-                        background: selected
-                          ? "#38bdf8"
-                          : unavailable
-                          ? "#64748b"
-                          : "#22c55e",
-                        opacity: unavailable ? 0.4 : 1,
-                      }}
-                    >
-                      {seat.seat_number}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <aside style={styles.cart}>
-        <h3>Your tickets ({cartSeats.length})</h3>
+        <div style={styles.cartGrid}>
+          <div>
+            <BuyerDetailsFields
+              buyerName={buyerName}
+              buyerEmail={buyerEmail}
+              onBuyerNameChange={setBuyerName}
+              onBuyerEmailChange={setBuyerEmail}
+              dark
+            />
+          </div>
 
-        {cartSeats.map(({ seat, ticketType }) => {
-          const data =
-            guestData[seat.id] || getDefaultGuest();
-
-          return (
-            <div key={seat.id} style={styles.cartItem}>
-              <strong>{seatLabel(seat)}</strong>
-
+          <div>
+            <div style={styles.cartTop}>
               <div>
-                {currency}{" "}
-                {moneyFromCents(ticketType.price)}
+                <p style={styles.cartEyebrow}>Booking summary</p>
+                <h3 style={styles.cartTitle}>Your tickets</h3>
               </div>
 
-              <input
-                placeholder="Guest name"
-                value={data.guestName}
-                onChange={(e) =>
-                  updateGuestData(seat.id, {
-                    guestName: e.target.value,
-                  })
-                }
-              />
-
-              <textarea
-                placeholder="Dietary requirements"
-                value={data.dietaryRequirements}
-                onChange={(e) =>
-                  updateGuestData(seat.id, {
-                    dietaryRequirements:
-                      e.target.value,
-                  })
-                }
-              />
-
-              {menuOptions.length > 0 && (
-                <select
-                  value={data.menuChoice}
-                  onChange={(e) =>
-                    updateGuestData(seat.id, {
-                      menuChoice: e.target.value,
-                    })
-                  }
-                >
-                  <option value="">
-                    Select menu option
-                  </option>
-                  {menuOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <button
-                onClick={() => removeSeat(seat.id)}
-              >
-                Remove
-              </button>
+              <div style={styles.countBadge}>{cartSeats.length}</div>
             </div>
-          );
-        })}
 
-        <div>
-          Total: {currency} {moneyFromCents(total)}
+            {cartSeats.length === 0 ? (
+              <div style={styles.emptyBox}>
+                <div style={styles.emptyIcon}>🎟️</div>
+                <p style={styles.emptyTitle}>Select table seats to begin</p>
+                <p style={styles.emptyText}>
+                  Your selected seats and guest details will appear here.
+                </p>
+              </div>
+            ) : (
+              <div style={styles.cartList}>
+                {cartSeats.map(({ seat, ticketType }) => {
+                  const data = guestData[seat.id] || getDefaultGuest();
+                  const availableTicketTypes = seat.ticket_type_id
+                    ? ticketTypes.filter(
+                        (currentTicketType) =>
+                          currentTicketType.id === seat.ticket_type_id,
+                      )
+                    : ticketTypes;
+
+                  return (
+                    <div key={seat.id} style={styles.cartItem}>
+                      <div style={styles.cartItemHeader}>
+                        <div>
+                          <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
+                          <p style={styles.cartPrice}>
+                            {currency} {moneyFromCents(ticketType.price)}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeSeat(seat.id)}
+                          style={styles.removeButton}
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      <label style={styles.field}>
+                        <span style={styles.label}>Ticket type</span>
+                        <select
+                          value={ticketType.id}
+                          onChange={(event) =>
+                            updateTicketType(seat.id, event.target.value)
+                          }
+                          disabled={Boolean(seat.ticket_type_id)}
+                          style={styles.input}
+                        >
+                          {availableTicketTypes.map((currentTicketType) => (
+                            <option
+                              key={currentTicketType.id}
+                              value={currentTicketType.id}
+                            >
+                              {currentTicketType.name} — {currency}{" "}
+                              {moneyFromCents(currentTicketType.price)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.label}>Guest name</span>
+                        <input
+                          value={data.guestName}
+                          onChange={(event) =>
+                            updateGuestData(seat.id, {
+                              guestName: event.target.value,
+                            })
+                          }
+                          placeholder="Guest name"
+                          style={styles.input}
+                        />
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.label}>Dietary requirements</span>
+                        <textarea
+                          value={data.dietaryRequirements}
+                          onChange={(event) =>
+                            updateGuestData(seat.id, {
+                              dietaryRequirements: event.target.value,
+                            })
+                          }
+                          placeholder="None, vegetarian, gluten free, allergies..."
+                          rows={2}
+                          style={styles.textarea}
+                        />
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.label}>Menu choice</span>
+                        {menuOptions.length > 0 ? (
+                          <select
+                            value={data.menuChoice}
+                            onChange={(event) =>
+                              updateGuestData(seat.id, {
+                                menuChoice: event.target.value,
+                              })
+                            }
+                            style={styles.input}
+                          >
+                            <option value="">Select menu option</option>
+                            {menuOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            value={data.menuChoice}
+                            onChange={(event) =>
+                              updateGuestData(seat.id, {
+                                menuChoice: event.target.value,
+                              })
+                            }
+                            placeholder="Optional menu choice"
+                            style={styles.input}
+                          />
+                        )}
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={styles.totalBox}>
+              <span>Total</span>
+              <strong>
+                {currency} {moneyFromCents(total)}
+              </strong>
+            </div>
+
+            {checkoutError ? (
+              <div style={styles.errorBox}>{checkoutError}</div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={startCheckout}
+              disabled={cartSeats.length === 0 || isCheckingOut}
+              style={{
+                ...styles.checkout,
+                opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
+                cursor:
+                  cartSeats.length === 0 || isCheckingOut
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {isCheckingOut ? "Processing..." : "Continue to checkout"}
+            </button>
+          </div>
         </div>
-
-        {checkoutError && (
-          <div>{checkoutError}</div>
-        )}
-
-        <button
-          onClick={startCheckout}
-          disabled={
-            cartSeats.length === 0 || isCheckingOut
-          }
-        >
-          {isCheckingOut
-            ? "Processing..."
-            : "Checkout"}
-        </button>
       </aside>
     </div>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={styles.legendItem}>
+      <span style={{ ...styles.legendDot, background: color }} />
+      {label}
+    </span>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
-    gridTemplateColumns: "1fr 350px",
-    gap: 20,
+    gridTemplateColumns: "1fr",
+    gap: 22,
+    alignItems: "start",
   },
   mapPanel: {
+    padding: 18,
+    borderRadius: 28,
+    background:
+      "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+  },
+  mapHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 18,
+  },
+  mapTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 26,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+  },
+  mapText: {
+    margin: "6px 0 0",
+    color: "#94a3b8",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 700,
+  },
+  legend: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  legendItem: {
+    display: "inline-flex",
+    gap: 6,
+    alignItems: "center",
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  emptyMap: {
+    padding: 22,
+    borderRadius: 20,
+    border: "1px dashed rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#cbd5e1",
+    fontWeight: 900,
+    textAlign: "center",
+  },
+  tableGrid: {
     display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
     gap: 16,
   },
   groupCard: {
+    display: "grid",
+    gap: 16,
     padding: 16,
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.055)",
+    border: "1px solid rgba(255,255,255,0.1)",
   },
   groupHeader: {
     display: "flex",
     justifyContent: "space-between",
-    marginBottom: 10,
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  tableNumber: {
+    margin: "0 0 4px",
+    color: "#facc15",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+  },
+  groupTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 19,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  groupSub: {
+    margin: "5px 0 0",
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  selectTableButton: {
+    border: "none",
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#111827",
+    padding: "10px 13px",
+    fontWeight: 950,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  tableCircle: {
+    position: "relative",
+    minHeight: 170,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 24,
+    background: "rgba(2,6,23,0.34)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  tableCentre: {
+    position: "absolute",
+    width: 86,
+    height: 86,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    color: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    pointerEvents: "none",
+  },
+  tableCentreTop: {
+    color: "#94a3b8",
+    fontSize: 10,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
   },
   seatGrid: {
+    width: "100%",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fill, minmax(40px, 1fr))",
-    gap: 6,
+    gridTemplateColumns: "repeat(auto-fit, minmax(42px, 1fr))",
+    gap: 9,
+    alignItems: "center",
+    justifyItems: "center",
+    zIndex: 1,
   },
   seatButton: {
-    height: 40,
-    borderRadius: 6,
+    width: 42,
+    height: 42,
+    borderRadius: 999,
     border: "none",
-    color: "#fff",
+    fontSize: 13,
+    fontWeight: 950,
+    transition: "box-shadow 140ms ease, transform 140ms ease",
   },
   cart: {
-    padding: 16,
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
+    padding: 18,
+    borderRadius: 28,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background:
+      "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
+    boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+  },
+  cartGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)",
+    gap: 18,
+    alignItems: "start",
+  },
+  cartTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  cartEyebrow: {
+    margin: 0,
+    color: "#facc15",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+  },
+  cartTitle: {
+    margin: "4px 0 0",
+    color: "#ffffff",
+    fontSize: 26,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+  },
+  countBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#111827",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    fontSize: 18,
+  },
+  emptyBox: {
+    padding: 22,
+    borderRadius: 22,
+    border: "1px dashed rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.04)",
+    textAlign: "center",
+  },
+  emptyIcon: {
+    fontSize: 32,
+  },
+  emptyTitle: {
+    margin: "8px 0 0",
+    color: "#ffffff",
+    fontWeight: 950,
+  },
+  emptyText: {
+    margin: "4px 0 0",
+    color: "#94a3b8",
+    fontSize: 13,
+    lineHeight: 1.4,
+  },
+  cartList: {
+    display: "grid",
+    gap: 13,
+    maxHeight: "58vh",
+    overflow: "auto",
+    paddingRight: 4,
   },
   cartItem: {
     display: "grid",
-    gap: 6,
-    marginBottom: 10,
+    gap: 10,
+    padding: 14,
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.055)",
+  },
+  cartItemHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  cartSeatLabel: {
+    margin: 0,
+    color: "#ffffff",
+    fontWeight: 950,
+    fontSize: 15,
+  },
+  cartPrice: {
+    margin: "3px 0 0",
+    color: "#facc15",
+    fontWeight: 950,
+    fontSize: 13,
+  },
+  removeButton: {
+    border: "1px solid rgba(248,113,113,0.35)",
+    background: "rgba(127,29,29,0.25)",
+    color: "#fecaca",
+    borderRadius: 999,
+    padding: "7px 10px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  field: {
+    display: "grid",
+    gap: 5,
+  },
+  label: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  input: {
+    width: "100%",
+    minHeight: 42,
+    padding: "10px 11px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 11px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  totalBox: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 14,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.14)",
+    color: "#fde68a",
+    fontWeight: 950,
+    fontSize: 18,
+  },
+  checkout: {
+    marginTop: 14,
+    width: "100%",
+    padding: 15,
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    fontSize: 15,
+    boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
+  },
+  errorBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontWeight: 900,
   },
 };
