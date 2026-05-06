@@ -267,6 +267,7 @@ async function requireEventAccess(eventId: string) {
 
   return event;
 }
+
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -610,6 +611,7 @@ async function generateSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
+
 async function generateTablesAction(formData: FormData) {
   "use server";
 
@@ -788,7 +790,6 @@ export default async function AdminEventManagePage({
         <a href="#menu" style={styles.tab}>Menu</a>
         {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
         {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
-        <a href="#orders" style={styles.tab}>Orders</a>
       </nav>
 
       {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
@@ -869,7 +870,8 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-                        <div style={styles.twoCol}>
+
+            <div style={styles.twoCol}>
               <Field label="Location">
                 <input name="location" defaultValue={event.location || ""} style={styles.input} />
               </Field>
@@ -1147,7 +1149,8 @@ export default async function AdminEventManagePage({
         updatePrizesAction={updatePrizesAction}
         updateMenuOptionsAction={updateMenuOptionsAction}
       />
-            {isReservedSeating && (
+
+      {isReservedSeating && (
         <section id="row-seating" style={styles.section}>
           <div style={styles.sectionHeader}>
             <p style={styles.sectionEyebrow}>Section 3</p>
@@ -1390,20 +1393,6 @@ export default async function AdminEventManagePage({
         </section>
       )}
 
-      <section id="orders" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <p style={styles.sectionEyebrow}>
-            {isGeneralAdmission ? "Section 4" : "Section 5"}
-          </p>
-          <h2 style={styles.sectionTitle}>Orders</h2>
-          <p style={styles.sectionText}>
-            Event orders will appear here once checkout is connected.
-          </p>
-        </div>
-
-        <div style={styles.emptyBox}>Checkout not connected yet.</div>
-      </section>
-
       <section style={styles.dangerSection}>
         <h2 style={styles.sectionTitle}>Danger zone</h2>
 
@@ -1447,6 +1436,7 @@ function Field({
     </label>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
