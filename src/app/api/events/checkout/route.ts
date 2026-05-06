@@ -34,7 +34,11 @@ function cleanText(value: unknown) {
 
 function positiveQuantity(value: unknown) {
   const number = Number(value || 0);
-  if (!Number.isFinite(number)) return 0;
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
   return Math.max(0, Math.floor(number));
 }
 
@@ -60,24 +64,36 @@ export async function POST(req: Request) {
 
   try {
     const tenantSlug = await getTenantSlugFromHeaders();
+
     const body = await req.json();
 
     const eventId = cleanText(body.eventId);
     const buyerName = cleanText(body.buyerName);
     const buyerEmail = cleanText(body.buyerEmail);
-    const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
+
+    const items: CheckoutItem[] = Array.isArray(body.items)
+      ? body.items
+      : [];
 
     if (!eventId || items.length === 0) {
       return NextResponse.json(
-        { error: "Missing checkout data." },
-        { status: 400 },
+        {
+          error: "Missing checkout data.",
+        },
+        {
+          status: 400,
+        },
       );
     }
 
     if (!buyerName || !buyerEmail) {
       return NextResponse.json(
-        { error: "Name and email address are required." },
-        { status: 400 },
+        {
+          error: "Name and email address are required.",
+        },
+        {
+          status: 400,
+        },
       );
     }
 
@@ -85,15 +101,23 @@ export async function POST(req: Request) {
 
     if (!event || event.status !== "published") {
       return NextResponse.json(
-        { error: "Event unavailable." },
-        { status: 404 },
+        {
+          error: "Event unavailable.",
+        },
+        {
+          status: 404,
+        },
       );
     }
 
     if (!tenantSlug || event.tenant_slug !== tenantSlug) {
       return NextResponse.json(
-        { error: "Event unavailable for this tenant." },
-        { status: 404 },
+        {
+          error: "Event unavailable for this tenant.",
+        },
+        {
+          status: 404,
+        },
       );
     }
 
@@ -101,19 +125,28 @@ export async function POST(req: Request) {
       (ticketType) => ticketType.is_active,
     );
 
-    const isGeneralAdmission = event.event_type === "general_admission";
+    const isGeneralAdmission =
+      event.event_type === "general_admission";
+
+    /*
+      GENERAL ADMISSION
+    */
 
     if (isGeneralAdmission) {
       const checkoutRows = items
         .map((item) => {
           const ticketTypeId = cleanText(item.ticketTypeId);
+
           const quantity = positiveQuantity(item.quantity);
 
           const ticketType = ticketTypes.find(
-            (currentTicketType) => currentTicketType.id === ticketTypeId,
+            (currentTicketType) =>
+              currentTicketType.id === ticketTypeId,
           );
 
-          if (!ticketType || quantity <= 0) return null;
+          if (!ticketType || quantity <= 0) {
+            return null;
+          }
 
           return {
             ticketType,
@@ -127,20 +160,30 @@ export async function POST(req: Request) {
 
       if (checkoutRows.length === 0) {
         return NextResponse.json(
-          { error: "Please choose at least one ticket." },
-          { status: 400 },
+          {
+            error: "Please choose at least one ticket.",
+          },
+          {
+            status: 400,
+          },
         );
       }
 
       const total = checkoutRows.reduce(
-        (sum, row) => sum + Number(row.ticketType.price || 0) * row.quantity,
+        (sum, row) =>
+          sum +
+          Number(row.ticketType.price || 0) * row.quantity,
         0,
       );
 
       if (total <= 0) {
         return NextResponse.json(
-          { error: "Invalid checkout total." },
-          { status: 400 },
+          {
+            error: "Invalid checkout total.",
+          },
+          {
+            status: 400,
+          },
         );
       }
 
@@ -174,24 +217,41 @@ export async function POST(req: Request) {
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
+
         customer_email: buyerEmail,
+
         success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+
         cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+
         line_items: checkoutRows.map((row) => ({
           quantity: row.quantity,
+
           price_data: {
             currency: event.currency.toLowerCase(),
+
             unit_amount: Number(row.ticketType.price || 0),
+
             product_data: {
               name: `${event.title} — ${row.ticketType.name}`,
             },
           },
         })),
+
         metadata: {
+          type: "event",
+
           tenant_slug: event.tenant_slug,
+
           event_id: event.id,
+          eventId: event.id,
+
           order_id: order.id,
+          orderId: order.id,
+
           event_type: event.event_type,
+          event_title: event.title,
+
           buyer_name: buyerName,
           buyer_email: buyerEmail,
         },
@@ -202,48 +262,77 @@ export async function POST(req: Request) {
         stripeSessionId: session.id,
       });
 
-      return NextResponse.json({ url: session.url });
+      return NextResponse.json({
+        url: session.url,
+      });
     }
+
+    /*
+      RESERVED / TABLE SEATING
+    */
 
     const seats = event.seats || [];
 
     const seatIds = Array.from(
-      new Set(items.map((item) => cleanText(item.seatId)).filter(Boolean)),
+      new Set(
+        items
+          .map((item) => cleanText(item.seatId))
+          .filter(Boolean),
+      ),
     );
 
     if (seatIds.length !== items.length) {
       return NextResponse.json(
-        { error: "Duplicate or invalid seat selection." },
-        { status: 400 },
+        {
+          error: "Duplicate or invalid seat selection.",
+        },
+        {
+          status: 400,
+        },
       );
     }
 
     const checkoutRows = items.map((item) => {
       const seatId = cleanText(item.seatId);
+
       const ticketTypeId = cleanText(item.ticketTypeId);
 
-      const seat = seats.find((currentSeat) => currentSeat.id === seatId);
+      const seat = seats.find(
+        (currentSeat) => currentSeat.id === seatId,
+      );
 
       if (!seat || seat.status !== "available") {
-        throw new Error("One or more seats are unavailable.");
+        throw new Error(
+          "One or more seats are unavailable.",
+        );
       }
 
       const ticketType = ticketTypes.find(
-        (currentTicketType) => currentTicketType.id === ticketTypeId,
+        (currentTicketType) =>
+          currentTicketType.id === ticketTypeId,
       );
 
       if (!ticketType) {
         throw new Error("Invalid ticket type.");
       }
 
-      if (seat.ticket_type_id && seat.ticket_type_id !== ticketType.id) {
-        throw new Error("Invalid ticket type for selected seat.");
+      if (
+        seat.ticket_type_id &&
+        seat.ticket_type_id !== ticketType.id
+      ) {
+        throw new Error(
+          "Invalid ticket type for selected seat.",
+        );
       }
 
       const tableName = cleanText(item.tableName);
+
       const guestName = cleanText(item.guestName);
+
       const dietaryRequirements =
-        cleanText(item.dietaryRequirements) || cleanText(item.dietary);
+        cleanText(item.dietaryRequirements) ||
+        cleanText(item.dietary);
+
       const menuChoice = cleanText(item.menuChoice);
 
       return {
@@ -257,14 +346,19 @@ export async function POST(req: Request) {
     });
 
     const total = checkoutRows.reduce(
-      (sum, row) => sum + Number(row.ticketType.price || 0),
+      (sum, row) =>
+        sum + Number(row.ticketType.price || 0),
       0,
     );
 
     if (total <= 0) {
       return NextResponse.json(
-        { error: "Invalid checkout total." },
-        { status: 400 },
+        {
+          error: "Invalid checkout total.",
+        },
+        {
+          status: 400,
+        },
       );
     }
 
@@ -281,63 +375,95 @@ export async function POST(req: Request) {
 
     orderId = order.id;
 
-    const reservedCount = await reserveEventSeatsForOrder({
-      eventId: event.id,
-      orderId: order.id,
-      seatIds,
-    });
+    const reservedCount =
+      await reserveEventSeatsForOrder({
+        eventId: event.id,
+        orderId: order.id,
+        seatIds,
+      });
 
     if (reservedCount !== seatIds.length) {
       await deleteEventOrderAndItems(order.id);
 
       return NextResponse.json(
-        { error: "Seats unavailable." },
-        { status: 409 },
+        {
+          error: "Seats unavailable.",
+        },
+        {
+          status: 409,
+        },
       );
     }
 
     for (const row of checkoutRows) {
       await createEventOrderItem({
         orderId: order.id,
+
         eventId: event.id,
+
         ticketTypeId: row.ticketType.id,
+
         seatId: row.seat.id,
+
         label: seatLabel({
           tableNumber: row.seat.table_number,
           rowLabel: row.seat.row_label,
           seatNumber: row.seat.seat_number,
           tableName: row.tableName,
         }),
+
         quantity: 1,
+
         unitAmount: row.ticketType.price,
+
         guest_name: row.guestName || buyerName,
-        dietary_requirements: row.dietaryRequirements || null,
+
+        dietary_requirements:
+          row.dietaryRequirements || null,
+
         menu_choice: row.menuChoice || null,
       });
     }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+
       customer_email: buyerEmail,
+
       success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+
       cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+
       line_items: [
         {
           quantity: 1,
+
           price_data: {
             currency: event.currency.toLowerCase(),
+
             unit_amount: total,
+
             product_data: {
               name: event.title,
             },
           },
         },
       ],
+
       metadata: {
+        type: "event",
+
         tenant_slug: event.tenant_slug,
+
         event_id: event.id,
+        eventId: event.id,
+
         order_id: order.id,
+        orderId: order.id,
+
         event_type: event.event_type,
+        event_title: event.title,
+
         buyer_name: buyerName,
         buyer_email: buyerEmail,
       },
@@ -353,15 +479,24 @@ export async function POST(req: Request) {
       stripeSessionId: session.id,
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({
+      url: session.url,
+    });
   } catch (error) {
     if (orderId) {
       await deleteEventOrderAndItems(orderId);
     }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Checkout failed." },
-      { status: 500 },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Checkout failed.",
+      },
+      {
+        status: 500,
+      },
     );
   }
 }
