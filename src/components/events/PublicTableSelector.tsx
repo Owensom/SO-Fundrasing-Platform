@@ -97,11 +97,11 @@ function getDefaultGuest(): GuestData {
 function seatColours(status: string, selected: boolean) {
   if (selected) {
     return {
-      background: "#38bdf8",
-      color: "#082f49",
-      border: "1px solid #7dd3fc",
+      background: "#2563eb",
+      color: "#ffffff",
+      border: "2px solid #93c5fd",
       opacity: 1,
-      boxShadow: "0 0 0 3px rgba(56,189,248,0.25)",
+      boxShadow: "0 12px 26px rgba(37,99,235,0.32)",
     };
   }
 
@@ -109,9 +109,9 @@ function seatColours(status: string, selected: boolean) {
     return {
       background: "#f59e0b",
       color: "#451a03",
-      border: "1px solid #fbbf24",
-      opacity: 0.78,
-      boxShadow: "none",
+      border: "2px solid #fbbf24",
+      opacity: 0.92,
+      boxShadow: "0 10px 18px rgba(245,158,11,0.18)",
     };
   }
 
@@ -119,28 +119,39 @@ function seatColours(status: string, selected: boolean) {
     return {
       background: "#ef4444",
       color: "#ffffff",
-      border: "1px solid #f87171",
-      opacity: 0.78,
-      boxShadow: "none",
+      border: "2px solid #f87171",
+      opacity: 0.92,
+      boxShadow: "0 10px 18px rgba(239,68,68,0.18)",
     };
   }
 
   if (status === "blocked") {
     return {
-      background: "#475569",
+      background: "#64748b",
       color: "#ffffff",
-      border: "1px solid #64748b",
-      opacity: 0.58,
+      border: "2px solid #94a3b8",
+      opacity: 0.72,
       boxShadow: "none",
     };
   }
 
   return {
-    background: "#22c55e",
+    background: "#16a34a",
     color: "#ffffff",
-    border: "1px solid #86efac",
+    border: "2px solid #86efac",
     opacity: 1,
-    boxShadow: "none",
+    boxShadow: "0 10px 18px rgba(22,163,74,0.18)",
+  };
+}
+
+function seatPosition(index: number, total: number) {
+  const angle = -90 + (360 / Math.max(total, 1)) * index;
+  const radians = (angle * Math.PI) / 180;
+  const radius = 104;
+
+  return {
+    left: `calc(50% + ${Math.cos(radians) * radius}px)`,
+    top: `calc(50% + ${Math.sin(radians) * radius}px)`,
   };
 }
 
@@ -219,7 +230,8 @@ export default function PublicTableSelector({
       (item) => item.seatId === seat.id,
     )?.ticketTypeId;
 
-    const ticketTypeId = cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
+    const ticketTypeId =
+      cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
 
     return ticketTypes.find((ticketType) => ticketType.id === ticketTypeId);
   }
@@ -353,6 +365,10 @@ export default function PublicTableSelector({
             .public-table-selector-cart-grid {
               grid-template-columns: 1fr !important;
             }
+
+            .public-table-selector-table-grid {
+              grid-template-columns: 1fr !important;
+            }
           }
         `}
       </style>
@@ -369,11 +385,11 @@ export default function PublicTableSelector({
             </div>
 
             <div style={styles.legend}>
-              <Legend color="#22c55e" label="Available" />
-              <Legend color="#38bdf8" label="Selected" />
+              <Legend color="#16a34a" label="Available" />
+              <Legend color="#2563eb" label="Selected" />
               <Legend color="#f59e0b" label="Reserved" />
               <Legend color="#ef4444" label="Sold" />
-              <Legend color="#475569" label="Blocked" />
+              <Legend color="#64748b" label="Blocked" />
             </div>
           </div>
 
@@ -382,7 +398,10 @@ export default function PublicTableSelector({
               No table seats are available for this event yet.
             </div>
           ) : (
-            <div style={styles.tableGrid}>
+            <div
+              className="public-table-selector-table-grid"
+              style={styles.tableGrid}
+            >
               {groupedSeats.map((group) => {
                 const availableCount = group.seats.filter(
                   (seat) => seat.status === "available",
@@ -420,45 +439,46 @@ export default function PublicTableSelector({
                       )}
                     </div>
 
-                    <div style={styles.tableSeatArea}>
-                      <div style={styles.tableBanner}>
-                        <span style={styles.tableBannerText}>
+                    <div style={styles.roundTableArea}>
+                      <div style={styles.tablePlate}>
+                        <span style={styles.tablePlateTop}>
                           Table {group.tableNumber || "—"}
                         </span>
+                        <strong style={styles.tablePlateName}>{group.label}</strong>
                       </div>
 
-                      <div style={styles.seatGrid}>
-                        {group.seats.map((seat) => {
-                          const selected = selectedSeatIds.includes(seat.id);
-                          const unavailable = seat.status !== "available";
-                          const colours = seatColours(seat.status, selected);
+                      {group.seats.map((seat, index) => {
+                        const selected = selectedSeatIds.includes(seat.id);
+                        const unavailable = seat.status !== "available";
+                        const colours = seatColours(seat.status, selected);
+                        const position = seatPosition(index, group.seats.length);
 
-                          return (
-                            <button
-                              key={seat.id}
-                              type="button"
-                              disabled={unavailable}
-                              onClick={() => toggleSeat(seat)}
-                              title={seatHoverLabel(
-                                seat,
-                                getSeatTicketType(seat),
-                                currency,
-                              )}
-                              style={{
-                                ...styles.seatButton,
-                                background: colours.background,
-                                color: colours.color,
-                                border: colours.border,
-                                opacity: colours.opacity,
-                                cursor: unavailable ? "not-allowed" : "pointer",
-                                boxShadow: colours.boxShadow,
-                              }}
-                            >
-                              {seat.seat_number}
-                            </button>
-                          );
-                        })}
-                      </div>
+                        return (
+                          <button
+                            key={seat.id}
+                            type="button"
+                            disabled={unavailable}
+                            onClick={() => toggleSeat(seat)}
+                            title={seatHoverLabel(
+                              seat,
+                              getSeatTicketType(seat),
+                              currency,
+                            )}
+                            style={{
+                              ...styles.roundSeatButton,
+                              ...position,
+                              background: colours.background,
+                              color: colours.color,
+                              border: colours.border,
+                              opacity: colours.opacity,
+                              cursor: unavailable ? "not-allowed" : "pointer",
+                              boxShadow: colours.boxShadow,
+                            }}
+                          >
+                            {seat.seat_number}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -725,8 +745,8 @@ const styles: Record<string, CSSProperties> = {
   },
   tableGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 18,
   },
   groupCard: {
     display: "grid",
@@ -773,45 +793,60 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
-  tableSeatArea: {
-    display: "grid",
-    gap: 14,
-    padding: 16,
-    borderRadius: 24,
-    background: "rgba(2,6,23,0.34)",
+  roundTableArea: {
+    position: "relative",
+    width: 292,
+    height: 292,
+    margin: "0 auto",
+    borderRadius: 999,
+    background:
+      "radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.055) 42%, rgba(15,23,42,0.16) 43%, rgba(15,23,42,0.16) 100%)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-  tableBanner: {
-    height: 44,
+  tablePlate: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: 142,
+    height: 142,
+    transform: "translate(-50%, -50%)",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(226,232,240,0.92))",
+    border: "1px solid rgba(255,255,255,0.8)",
+    boxShadow: "0 18px 45px rgba(0,0,0,0.26)",
+    color: "#0f172a",
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+    textAlign: "center",
+    padding: 14,
   },
-  tableBannerText: {
-    color: "#ffffff",
-    fontSize: 12,
+  tablePlateTop: {
+    color: "#64748b",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.12em",
   },
-  seatGrid: {
-    width: "100%",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(42px, 1fr))",
-    gap: 9,
-    alignItems: "center",
-    justifyItems: "center",
+  tablePlateName: {
+    marginTop: 6,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    lineHeight: 1.15,
   },
-  seatButton: {
+  roundSeatButton: {
+    position: "absolute",
     width: 42,
     height: 42,
+    transform: "translate(-50%, -50%)",
     borderRadius: 999,
     fontSize: 13,
     fontWeight: 950,
     transition: "box-shadow 140ms ease, transform 140ms ease",
+    zIndex: 2,
   },
   cart: {
     position: "sticky",
