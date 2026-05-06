@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { query } from "@/lib/db";
-import { sendReceiptEmail, sendSquaresReceiptEmail } from "@/lib/email";
+import {
+  sendEventReceiptEmail,
+  sendReceiptEmail,
+  sendSquaresReceiptEmail,
+} from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,9 +90,7 @@ export async function POST(request: NextRequest) {
         metadata.order_id || metadata.orderId || session.client_reference_id || "",
       ).trim();
 
-      const eventId = String(
-        metadata.event_id || metadata.eventId || "",
-      ).trim();
+      const eventId = String(metadata.event_id || metadata.eventId || "").trim();
 
       if (!orderId || !eventId) {
         console.error("Stripe event webhook missing order/event id", {
@@ -177,6 +179,53 @@ export async function POST(request: NextRequest) {
           email,
         ],
       );
+
+      if (email) {
+        try {
+          const eventDetails = await query<{
+            title: string;
+            starts_at: string | null;
+            location: string | null;
+          }>(
+            `
+            select title, starts_at, location
+            from events
+            where id = $1
+            limit 1
+            `,
+            [eventId],
+          );
+
+          const orderItems = await query<{
+            label: string;
+            quantity: number;
+            unit_amount: number;
+          }>(
+            `
+            select label, quantity, unit_amount
+            from event_order_items
+            where order_id = $1
+            order by created_at asc
+            `,
+            [orderId],
+          );
+
+          await sendEventReceiptEmail({
+            to: email,
+            name,
+            eventTitle:
+              eventDetails[0]?.title || metadata.event_title || "Event",
+            amountCents: grossAmountCents,
+            currency: session.currency || "GBP",
+            orderReference: orderId,
+            tickets: orderItems,
+            eventDate: eventDetails[0]?.starts_at || null,
+            location: eventDetails[0]?.location || null,
+          });
+        } catch (emailError) {
+          console.error("Event receipt email failed:", emailError);
+        }
+      }
 
       return NextResponse.json({
         ok: true,
