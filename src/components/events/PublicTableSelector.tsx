@@ -73,6 +73,56 @@ function getDefaultGuest(): GuestData {
   };
 }
 
+function seatColours(status: string, selected: boolean) {
+  if (selected) {
+    return {
+      background: "#38bdf8",
+      color: "#082f49",
+      border: "1px solid #7dd3fc",
+      opacity: 1,
+      boxShadow: "0 0 0 3px rgba(56,189,248,0.25)",
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      background: "#f59e0b",
+      color: "#451a03",
+      border: "1px solid #fbbf24",
+      opacity: 0.78,
+      boxShadow: "none",
+    };
+  }
+
+  if (status === "sold") {
+    return {
+      background: "#ef4444",
+      color: "#ffffff",
+      border: "1px solid #f87171",
+      opacity: 0.78,
+      boxShadow: "none",
+    };
+  }
+
+  if (status === "blocked") {
+    return {
+      background: "#475569",
+      color: "#ffffff",
+      border: "1px solid #64748b",
+      opacity: 0.58,
+      boxShadow: "none",
+    };
+  }
+
+  return {
+    background: "#22c55e",
+    color: "#ffffff",
+    border: "1px solid #86efac",
+    opacity: 1,
+    boxShadow: "none",
+  };
+}
+
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -257,289 +307,310 @@ export default function PublicTableSelector({
   }
 
   return (
-    <div style={styles.shell}>
-      <div style={styles.mapPanel}>
-        <div style={styles.mapHeader}>
-          <div>
-            <h3 style={styles.mapTitle}>Table layout</h3>
-            <p style={styles.mapText}>
-              Choose individual table seats or select every available seat at a
-              table.
-            </p>
-          </div>
+    <>
+      <style>
+        {`
+          @media (max-width: 900px) {
+            .public-table-selector-shell {
+              grid-template-columns: 1fr !important;
+            }
 
-          <div style={styles.legend}>
-            <Legend color="#22c55e" label="Available" />
-            <Legend color="#38bdf8" label="Selected" />
-            <Legend color="#64748b" label="Unavailable" />
-          </div>
-        </div>
+            .public-table-selector-cart {
+              position: static !important;
+            }
 
-        {groupedSeats.length === 0 ? (
-          <div style={styles.emptyMap}>
-            No table seats are available for this event yet.
-          </div>
-        ) : (
-          <div style={styles.tableGrid}>
-            {groupedSeats.map((group) => {
-              const availableCount = group.seats.filter(
-                (seat) => seat.status === "available",
-              ).length;
+            .public-table-selector-cart-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}
+      </style>
 
-              const selectedCount = group.seats.filter((seat) =>
-                selectedSeatIds.includes(seat.id),
-              ).length;
-
-              return (
-                <div key={`${group.tableNumber}-${group.label}`} style={styles.groupCard}>
-                  <div style={styles.groupHeader}>
-                    <div>
-                      <p style={styles.tableNumber}>
-                        Table {group.tableNumber || "Unassigned"}
-                      </p>
-                      <h4 style={styles.groupTitle}>{group.label}</h4>
-                      <p style={styles.groupSub}>
-                        {availableCount} available from {group.seats.length}
-                        {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
-                      </p>
-                    </div>
-
-                    {availableCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => selectAvailableTable(group.seats)}
-                        style={styles.selectTableButton}
-                      >
-                        Select table
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={styles.tableCircle}>
-                    <div style={styles.tableCentre}>
-                      <span style={styles.tableCentreTop}>Table</span>
-                      <strong>{group.tableNumber || "—"}</strong>
-                    </div>
-
-                    <div style={styles.seatGrid}>
-                      {group.seats.map((seat) => {
-                        const selected = selectedSeatIds.includes(seat.id);
-                        const unavailable = seat.status !== "available";
-
-                        return (
-                          <button
-                            key={seat.id}
-                            type="button"
-                            disabled={unavailable}
-                            onClick={() => toggleSeat(seat)}
-                            title={seatLabel(seat)}
-                            style={{
-                              ...styles.seatButton,
-                              background: selected
-                                ? "#38bdf8"
-                                : unavailable
-                                  ? "#475569"
-                                  : "#22c55e",
-                              color: selected ? "#082f49" : "#ffffff",
-                              opacity: unavailable ? 0.45 : 1,
-                              cursor: unavailable ? "not-allowed" : "pointer",
-                              boxShadow: selected
-                                ? "0 0 0 3px rgba(56,189,248,0.25)"
-                                : "none",
-                            }}
-                          >
-                            {seat.seat_number}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <aside style={styles.cart}>
-        <div style={styles.cartGrid}>
-          <div>
-            <BuyerDetailsFields
-              buyerName={buyerName}
-              buyerEmail={buyerEmail}
-              onBuyerNameChange={setBuyerName}
-              onBuyerEmailChange={setBuyerEmail}
-              dark
-            />
-          </div>
-
-          <div>
-            <div style={styles.cartTop}>
-              <div>
-                <p style={styles.cartEyebrow}>Booking summary</p>
-                <h3 style={styles.cartTitle}>Your tickets</h3>
-              </div>
-
-              <div style={styles.countBadge}>{cartSeats.length}</div>
+      <div className="public-table-selector-shell" style={styles.shell}>
+        <div style={styles.mapPanel}>
+          <div style={styles.mapHeader}>
+            <div>
+              <h3 style={styles.mapTitle}>Table layout</h3>
+              <p style={styles.mapText}>
+                Choose individual table seats or select every available seat at a
+                table.
+              </p>
             </div>
 
-            {cartSeats.length === 0 ? (
-              <div style={styles.emptyBox}>
-                <div style={styles.emptyIcon}>🎟️</div>
-                <p style={styles.emptyTitle}>Select table seats to begin</p>
-                <p style={styles.emptyText}>
-                  Your selected seats and guest details will appear here.
-                </p>
-              </div>
-            ) : (
-              <div style={styles.cartList}>
-                {cartSeats.map(({ seat, ticketType }) => {
-                  const data = guestData[seat.id] || getDefaultGuest();
-                  const availableTicketTypes = seat.ticket_type_id
-                    ? ticketTypes.filter(
-                        (currentTicketType) =>
-                          currentTicketType.id === seat.ticket_type_id,
-                      )
-                    : ticketTypes;
+            <div style={styles.legend}>
+              <Legend color="#22c55e" label="Available" />
+              <Legend color="#38bdf8" label="Selected" />
+              <Legend color="#f59e0b" label="Reserved" />
+              <Legend color="#ef4444" label="Sold" />
+              <Legend color="#475569" label="Blocked" />
+            </div>
+          </div>
 
-                  return (
-                    <div key={seat.id} style={styles.cartItem}>
-                      <div style={styles.cartItemHeader}>
-                        <div>
-                          <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
-                          <p style={styles.cartPrice}>
-                            {currency} {moneyFromCents(ticketType.price)}
-                          </p>
-                        </div>
+          {groupedSeats.length === 0 ? (
+            <div style={styles.emptyMap}>
+              No table seats are available for this event yet.
+            </div>
+          ) : (
+            <div style={styles.tableGrid}>
+              {groupedSeats.map((group) => {
+                const availableCount = group.seats.filter(
+                  (seat) => seat.status === "available",
+                ).length;
 
-                        <button
-                          type="button"
-                          onClick={() => removeSeat(seat.id)}
-                          style={styles.removeButton}
-                        >
-                          Remove
-                        </button>
+                const selectedCount = group.seats.filter((seat) =>
+                  selectedSeatIds.includes(seat.id),
+                ).length;
+
+                return (
+                  <div
+                    key={`${group.tableNumber}-${group.label}`}
+                    style={styles.groupCard}
+                  >
+                    <div style={styles.groupHeader}>
+                      <div>
+                        <p style={styles.tableNumber}>
+                          Table {group.tableNumber || "Unassigned"}
+                        </p>
+                        <h4 style={styles.groupTitle}>{group.label}</h4>
+                        <p style={styles.groupSub}>
+                          {availableCount} available from {group.seats.length}
+                          {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
+                        </p>
                       </div>
 
-                      <label style={styles.field}>
-                        <span style={styles.label}>Ticket type</span>
-                        <select
-                          value={ticketType.id}
-                          onChange={(event) =>
-                            updateTicketType(seat.id, event.target.value)
-                          }
-                          disabled={Boolean(seat.ticket_type_id)}
-                          style={styles.input}
+                      {availableCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => selectAvailableTable(group.seats)}
+                          style={styles.selectTableButton}
                         >
-                          {availableTicketTypes.map((currentTicketType) => (
-                            <option
-                              key={currentTicketType.id}
-                              value={currentTicketType.id}
+                          Select table
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={styles.tableCircle}>
+                      <div style={styles.tableCentre}>
+                        <span style={styles.tableCentreTop}>Table</span>
+                        <strong>{group.tableNumber || "—"}</strong>
+                      </div>
+
+                      <div style={styles.seatGrid}>
+                        {group.seats.map((seat) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const unavailable = seat.status !== "available";
+                          const colours = seatColours(seat.status, selected);
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              disabled={unavailable}
+                              onClick={() => toggleSeat(seat)}
+                              title={seatLabel(seat)}
+                              style={{
+                                ...styles.seatButton,
+                                background: colours.background,
+                                color: colours.color,
+                                border: colours.border,
+                                opacity: colours.opacity,
+                                cursor: unavailable ? "not-allowed" : "pointer",
+                                boxShadow: colours.boxShadow,
+                              }}
                             >
-                              {currentTicketType.name} — {currency}{" "}
-                              {moneyFromCents(currentTicketType.price)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                              {seat.seat_number}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-                      <label style={styles.field}>
-                        <span style={styles.label}>Guest name</span>
-                        <input
-                          value={data.guestName}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              guestName: event.target.value,
-                            })
-                          }
-                          placeholder="Guest name"
-                          style={styles.input}
-                        />
-                      </label>
+        <aside className="public-table-selector-cart" style={styles.cart}>
+          <div className="public-table-selector-cart-grid" style={styles.cartGrid}>
+            <div>
+              <BuyerDetailsFields
+                buyerName={buyerName}
+                buyerEmail={buyerEmail}
+                onBuyerNameChange={setBuyerName}
+                onBuyerEmailChange={setBuyerEmail}
+                dark
+              />
+            </div>
 
-                      <label style={styles.field}>
-                        <span style={styles.label}>Dietary requirements</span>
-                        <textarea
-                          value={data.dietaryRequirements}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              dietaryRequirements: event.target.value,
-                            })
-                          }
-                          placeholder="None, vegetarian, gluten free, allergies..."
-                          rows={2}
-                          style={styles.textarea}
-                        />
-                      </label>
+            <div>
+              <div style={styles.cartTop}>
+                <div>
+                  <p style={styles.cartEyebrow}>Booking summary</p>
+                  <h3 style={styles.cartTitle}>Your tickets</h3>
+                </div>
 
-                      <label style={styles.field}>
-                        <span style={styles.label}>Menu choice</span>
-                        {menuOptions.length > 0 ? (
+                <div style={styles.countBadge}>{cartSeats.length}</div>
+              </div>
+
+              {cartSeats.length === 0 ? (
+                <div style={styles.emptyBox}>
+                  <div style={styles.emptyIcon}>🎟️</div>
+                  <p style={styles.emptyTitle}>Select table seats to begin</p>
+                  <p style={styles.emptyText}>
+                    Your selected seats and guest details will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div style={styles.cartList}>
+                  {cartSeats.map(({ seat, ticketType }) => {
+                    const data = guestData[seat.id] || getDefaultGuest();
+                    const availableTicketTypes = seat.ticket_type_id
+                      ? ticketTypes.filter(
+                          (currentTicketType) =>
+                            currentTicketType.id === seat.ticket_type_id,
+                        )
+                      : ticketTypes;
+
+                    return (
+                      <div key={seat.id} style={styles.cartItem}>
+                        <div style={styles.cartItemHeader}>
+                          <div>
+                            <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
+                            <p style={styles.cartPrice}>
+                              {currency} {moneyFromCents(ticketType.price)}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeSeat(seat.id)}
+                            style={styles.removeButton}
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Ticket type</span>
                           <select
-                            value={data.menuChoice}
+                            value={ticketType.id}
                             onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                menuChoice: event.target.value,
-                              })
+                              updateTicketType(seat.id, event.target.value)
                             }
+                            disabled={Boolean(seat.ticket_type_id)}
                             style={styles.input}
                           >
-                            <option value="">Select menu option</option>
-                            {menuOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
+                            {availableTicketTypes.map((currentTicketType) => (
+                              <option
+                                key={currentTicketType.id}
+                                value={currentTicketType.id}
+                              >
+                                {currentTicketType.name} — {currency}{" "}
+                                {moneyFromCents(currentTicketType.price)}
                               </option>
                             ))}
                           </select>
-                        ) : (
+                        </label>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Guest name</span>
                           <input
-                            value={data.menuChoice}
+                            value={data.guestName}
                             onChange={(event) =>
                               updateGuestData(seat.id, {
-                                menuChoice: event.target.value,
+                                guestName: event.target.value,
                               })
                             }
-                            placeholder="Optional menu choice"
+                            placeholder="Guest name"
                             style={styles.input}
                           />
-                        )}
-                      </label>
-                    </div>
-                  );
-                })}
+                        </label>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Dietary requirements</span>
+                          <textarea
+                            value={data.dietaryRequirements}
+                            onChange={(event) =>
+                              updateGuestData(seat.id, {
+                                dietaryRequirements: event.target.value,
+                              })
+                            }
+                            placeholder="None, vegetarian, gluten free, allergies..."
+                            rows={2}
+                            style={styles.textarea}
+                          />
+                        </label>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Menu choice</span>
+                          {menuOptions.length > 0 ? (
+                            <select
+                              value={data.menuChoice}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  menuChoice: event.target.value,
+                                })
+                              }
+                              style={styles.input}
+                            >
+                              <option value="">Select menu option</option>
+                              {menuOptions.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              value={data.menuChoice}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  menuChoice: event.target.value,
+                                })
+                              }
+                              placeholder="Optional menu choice"
+                              style={styles.input}
+                            />
+                          )}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={styles.totalBox}>
+                <span>Total</span>
+                <strong>
+                  {currency} {moneyFromCents(total)}
+                </strong>
               </div>
-            )}
 
-            <div style={styles.totalBox}>
-              <span>Total</span>
-              <strong>
-                {currency} {moneyFromCents(total)}
-              </strong>
+              {checkoutError ? (
+                <div style={styles.errorBox}>{checkoutError}</div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={startCheckout}
+                disabled={cartSeats.length === 0 || isCheckingOut}
+                style={{
+                  ...styles.checkout,
+                  opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
+                  cursor:
+                    cartSeats.length === 0 || isCheckingOut
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {isCheckingOut ? "Processing..." : "Continue to checkout"}
+              </button>
             </div>
-
-            {checkoutError ? (
-              <div style={styles.errorBox}>{checkoutError}</div>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={startCheckout}
-              disabled={cartSeats.length === 0 || isCheckingOut}
-              style={{
-                ...styles.checkout,
-                opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
-                cursor:
-                  cartSeats.length === 0 || isCheckingOut
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              {isCheckingOut ? "Processing..." : "Continue to checkout"}
-            </button>
           </div>
-        </div>
-      </aside>
-    </div>
+        </aside>
+      </div>
+    </>
   );
 }
 
@@ -555,7 +626,7 @@ function Legend({ color, label }: { color: string; label: string }) {
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
-    gridTemplateColumns: "1fr",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(330px, 420px)",
     gap: 22,
     alignItems: "start",
   },
@@ -711,12 +782,13 @@ const styles: Record<string, CSSProperties> = {
     width: 42,
     height: 42,
     borderRadius: 999,
-    border: "none",
     fontSize: 13,
     fontWeight: 950,
     transition: "box-shadow 140ms ease, transform 140ms ease",
   },
   cart: {
+    position: "sticky",
+    top: 18,
     padding: 18,
     borderRadius: 28,
     border: "1px solid rgba(255,255,255,0.12)",
@@ -726,7 +798,7 @@ const styles: Record<string, CSSProperties> = {
   },
   cartGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)",
+    gridTemplateColumns: "1fr",
     gap: 18,
     alignItems: "start",
   },
@@ -788,7 +860,7 @@ const styles: Record<string, CSSProperties> = {
   cartList: {
     display: "grid",
     gap: 13,
-    maxHeight: "58vh",
+    maxHeight: "48vh",
     overflow: "auto",
     paddingRight: 4,
   },
