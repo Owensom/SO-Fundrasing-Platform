@@ -23,6 +23,9 @@ export type EventSeat = {
   id: string;
   event_id: string;
   ticket_type_id: string | null;
+  seat_purpose: string | null;
+  admin_label: string | null;
+  admin_note: string | null;
   section: string | null;
   row_label: string | null;
   seat_number: string | null;
@@ -171,6 +174,28 @@ function normaliseSeatStatus(value: string | null | undefined): EventSeatStatus 
   }
 
   return "available";
+}
+
+function normaliseSeatPurpose(value: string | null | undefined): string | null {
+  const clean = String(value || "").trim();
+
+  if (
+    clean === "vip" ||
+    clean === "complimentary" ||
+    clean === "staff" ||
+    clean === "sponsor" ||
+    clean === "guest" ||
+    clean === "other"
+  ) {
+    return clean;
+  }
+
+  return null;
+}
+
+function normaliseNullableText(value: string | null | undefined): string | null {
+  const clean = String(value || "").trim();
+  return clean || null;
 }
 
 function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
@@ -650,6 +675,9 @@ export async function listAvailableEventSeats(
 export async function createEventSeat(input: {
   eventId: string;
   ticketTypeId?: string | null;
+  seatPurpose?: string | null;
+  adminLabel?: string | null;
+  adminNote?: string | null;
   section?: string | null;
   rowLabel?: string | null;
   seatNumber?: string | null;
@@ -662,6 +690,9 @@ export async function createEventSeat(input: {
     insert into event_seats (
       event_id,
       ticket_type_id,
+      seat_purpose,
+      admin_label,
+      admin_note,
       section,
       row_label,
       seat_number,
@@ -669,12 +700,15 @@ export async function createEventSeat(input: {
       aisle_after,
       status
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     returning *
     `,
     [
       input.eventId,
       input.ticketTypeId ?? null,
+      normaliseSeatPurpose(input.seatPurpose),
+      normaliseNullableText(input.adminLabel),
+      normaliseNullableText(input.adminNote),
       input.section ?? null,
       input.rowLabel ?? null,
       input.seatNumber ?? null,
@@ -695,6 +729,9 @@ export async function updateEventSeat(
   id: string,
   input: {
     ticketTypeId?: string | null;
+    seatPurpose?: string | null;
+    adminLabel?: string | null;
+    adminNote?: string | null;
     section?: string | null;
     rowLabel?: string | null;
     seatNumber?: string | null;
@@ -710,14 +747,17 @@ export async function updateEventSeat(
     update event_seats
     set
       ticket_type_id = $2,
-      section = $3,
-      row_label = $4,
-      seat_number = $5,
-      table_number = $6,
-      aisle_after = $7,
-      status = $8,
-      customer_name = $9,
-      customer_email = $10,
+      seat_purpose = $3,
+      admin_label = $4,
+      admin_note = $5,
+      section = $6,
+      row_label = $7,
+      seat_number = $8,
+      table_number = $9,
+      aisle_after = $10,
+      status = $11,
+      customer_name = $12,
+      customer_email = $13,
       updated_at = now()
     where id = $1
     returning *
@@ -725,6 +765,9 @@ export async function updateEventSeat(
     [
       id,
       input.ticketTypeId ?? null,
+      normaliseSeatPurpose(input.seatPurpose),
+      normaliseNullableText(input.adminLabel),
+      normaliseNullableText(input.adminNote),
       input.section ?? null,
       input.rowLabel ?? null,
       input.seatNumber ?? null,
@@ -754,6 +797,36 @@ export async function updateEventSeatsTicketType(input: {
       and id = any($2::uuid[])
     `,
     [input.eventId, input.seatIds, input.ticketTypeId],
+  );
+}
+
+export async function updateEventSeatsMetadata(input: {
+  eventId: string;
+  seatIds: string[];
+  seatPurpose?: string | null;
+  adminLabel?: string | null;
+  adminNote?: string | null;
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+    update event_seats
+    set
+      seat_purpose = $3,
+      admin_label = $4,
+      admin_note = $5,
+      updated_at = now()
+    where event_id = $1
+      and id = any($2::uuid[])
+    `,
+    [
+      input.eventId,
+      input.seatIds,
+      normaliseSeatPurpose(input.seatPurpose),
+      normaliseNullableText(input.adminLabel),
+      normaliseNullableText(input.adminNote),
+    ],
   );
 }
 
