@@ -1,3 +1,5 @@
+// app/admin/events/[id]/page.tsx
+
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -19,6 +21,7 @@ import {
   deleteEventTicketTypes,
   getEventById,
   updateEvent,
+  updateEventSeatsMetadata,
   updateEventSeatsStatus,
   updateEventSeatsTicketType,
   updateEventTicketType,
@@ -484,9 +487,13 @@ async function applySeatTicketTypeAction(formData: FormData) {
   const eventId = String(formData.get("event_id") || "").trim();
   const rawTicketTypeId = String(formData.get("ticket_type_id") || "").trim();
   const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
 
   if (!eventId || !rawTicketTypeId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`);
   }
 
   await requireEventAccess(eventId);
@@ -497,7 +504,34 @@ async function applySeatTicketTypeAction(formData: FormData) {
     ticketTypeId: rawTicketTypeId === "__normal__" ? null : rawTicketTypeId,
   });
 
-  redirect(`/admin/events/${eventId}?saved=seat-marking#row-seating`);
+  redirect(`/admin/events/${eventId}?saved=seat-marking#${returnAnchor}`);
+}
+
+async function updateSelectedSeatsMetadataAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
+
+  if (!eventId || seatIds.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`);
+  }
+
+  await requireEventAccess(eventId);
+
+  await updateEventSeatsMetadata({
+    eventId,
+    seatIds,
+    seatPurpose: String(formData.get("seat_purpose") || "").trim() || null,
+    adminLabel: String(formData.get("admin_label") || "").trim() || null,
+    adminNote: String(formData.get("admin_note") || "").trim() || null,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seat-metadata#${returnAnchor}`);
 }
 
 async function updateSelectedSeatsStatusAction(formData: FormData) {
@@ -508,13 +542,17 @@ async function updateSelectedSeatsStatusAction(formData: FormData) {
     | "available"
     | "blocked";
   const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
 
   if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`);
   }
 
   if (status !== "available" && status !== "blocked") {
-    redirect(`/admin/events/${eventId}?error=invalid-seat-status#row-seating`);
+    redirect(`/admin/events/${eventId}?error=invalid-seat-status#${returnAnchor}`);
   }
 
   await requireEventAccess(eventId);
@@ -525,7 +563,7 @@ async function updateSelectedSeatsStatusAction(formData: FormData) {
     status,
   });
 
-  redirect(`/admin/events/${eventId}?saved=seat-status#row-seating`);
+  redirect(`/admin/events/${eventId}?saved=seat-status#${returnAnchor}`);
 }
 
 async function deleteSelectedSeatsAction(formData: FormData) {
@@ -533,9 +571,13 @@ async function deleteSelectedSeatsAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
   const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
 
   if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-seat-selection#row-seating`);
+    redirect(`/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`);
   }
 
   await requireEventAccess(eventId);
@@ -545,7 +587,7 @@ async function deleteSelectedSeatsAction(formData: FormData) {
     seatIds,
   });
 
-  redirect(`/admin/events/${eventId}?saved=seats-deleted#row-seating`);
+  redirect(`/admin/events/${eventId}?saved=seats-deleted#${returnAnchor}`);
 }
 
 async function deleteSelectedRowsAction(formData: FormData) {
@@ -730,6 +772,8 @@ export default async function AdminEventManagePage({
   const reservedSeats = visibleSeats.filter((seat) => seat.status === "reserved").length;
   const blockedSeats = visibleSeats.filter((seat) => seat.status === "blocked").length;
   const availableSeats = visibleSeats.filter((seat) => seat.status === "available").length;
+  const vipSeats = visibleSeats.filter((seat) => seat.seat_purpose === "vip").length;
+  const complimentarySeats = visibleSeats.filter((seat) => seat.seat_purpose === "complimentary").length;
 
   const uniqueTableNumbers = Array.from(
     new Set(tableSeats.map((seat) => String(seat.table_number || "").trim()).filter(Boolean)),
@@ -831,6 +875,8 @@ export default async function AdminEventManagePage({
           <SummaryCard label="Reserved" value={reservedSeats} />
           <SummaryCard label="Sold" value={soldSeats} />
           <SummaryCard label="Blocked" value={blockedSeats} />
+          <SummaryCard label="VIP" value={vipSeats} />
+          <SummaryCard label="Complimentary" value={complimentarySeats} />
         </div>
 
         <div style={styles.panel}>
@@ -1218,6 +1264,8 @@ export default async function AdminEventManagePage({
                 <SummaryCard label="Row seats" value={rowSeats.length} />
                 <SummaryCard label="Normal public" value={rowSeats.filter((seat) => !seat.ticket_type_id && seat.status === "available").length} />
                 <SummaryCard label="Special marked" value={rowSeats.filter((seat) => seat.ticket_type_id).length} />
+                <SummaryCard label="VIP" value={rowSeats.filter((seat) => seat.seat_purpose === "vip").length} />
+                <SummaryCard label="Complimentary" value={rowSeats.filter((seat) => seat.seat_purpose === "complimentary").length} />
                 <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
                 <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
               </div>
@@ -1234,8 +1282,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click seats to select them. Block/unblock selected seats or
-                  apply a special marking.
+                  Click seats to select them. Block/unblock selected seats,
+                  apply special markings, or save admin-only seat metadata.
                 </p>
               </div>
 
@@ -1257,6 +1305,7 @@ export default async function AdminEventManagePage({
                 currency={event.currency}
                 mode="rows"
                 applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
                 updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
                 updateSeatingLayoutAction={updateSeatingLayoutAction}
                 deleteSelectedSeatsAction={deleteSelectedSeatsAction}
@@ -1322,6 +1371,8 @@ export default async function AdminEventManagePage({
                 <SummaryCard label="Table seats" value={tableSeats.length} />
                 <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
                 <SummaryCard label="Named tables" value={Object.keys(event.table_names_json || {}).length} />
+                <SummaryCard label="VIP" value={tableSeats.filter((seat) => seat.seat_purpose === "vip").length} />
+                <SummaryCard label="Complimentary" value={tableSeats.filter((seat) => seat.seat_purpose === "complimentary").length} />
                 <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
                 <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
               </div>
@@ -1363,8 +1414,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click table seats to select them. Block/unblock selected seats
-                  or apply a special marking.
+                  Click table seats to select them. Block/unblock selected seats,
+                  apply special markings, or save admin-only seat metadata.
                 </p>
               </div>
 
@@ -1386,6 +1437,7 @@ export default async function AdminEventManagePage({
                 currency={event.currency}
                 mode="tables"
                 applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
                 updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
                 deleteSelectedSeatsAction={deleteSelectedSeatsAction}
               />
