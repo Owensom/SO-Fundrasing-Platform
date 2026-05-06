@@ -566,6 +566,7 @@ async function deleteSelectedRowsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=rows-deleted#row-seating`);
 }
+
 async function generateSeatsAction(formData: FormData) {
   "use server";
 
@@ -609,7 +610,6 @@ async function generateSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
-
 async function generateTablesAction(formData: FormData) {
   "use server";
 
@@ -798,7 +798,8 @@ export default async function AdminEventManagePage({
           Please check the missing fields and try again.
         </div>
       )}
-            <section id="overview" style={styles.section}>
+
+      <section id="overview" style={styles.section}>
         <div style={styles.sectionHeader}>
           <p style={styles.sectionEyebrow}>Section 1</p>
           <h2 style={styles.sectionTitle}>Overview</h2>
@@ -868,8 +869,7 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-
-            <div style={styles.twoCol}>
+                        <div style={styles.twoCol}>
               <Field label="Location">
                 <input name="location" defaultValue={event.location || ""} style={styles.input} />
               </Field>
@@ -1026,3 +1026,818 @@ export default async function AdminEventManagePage({
               </button>
             </form>
           </div>
+
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Current ticket types</h3>
+                <p style={styles.sectionText}>
+                  Compact list so the page does not keep stretching as you add tickets.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.ticketListScroll}>
+              {ticketTypes.length === 0 ? (
+                <div style={styles.emptyBox}>No ticket types yet.</div>
+              ) : (
+                ticketTypes.map((ticketType) => (
+                  <div key={ticketType.id} style={styles.editTicketCard}>
+                    <form action={updateTicketTypeAction} style={styles.form}>
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
+
+                      <div style={styles.twoCol}>
+                        <Field label="Name">
+                          <input
+                            name="name"
+                            required
+                            defaultValue={ticketType.name}
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Description">
+                          <input
+                            name="description"
+                            defaultValue={ticketType.description || ""}
+                            style={styles.input}
+                          />
+                        </Field>
+                      </div>
+
+                      <div style={styles.fourCol}>
+                        <Field label="Price">
+                          <input
+                            name="price"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={moneyFromCents(ticketType.price)}
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Limit">
+                          <input
+                            name="capacity"
+                            type="number"
+                            min="0"
+                            defaultValue={ticketType.capacity || ""}
+                            placeholder="Unlimited"
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Order">
+                          <input
+                            name="sort_order"
+                            type="number"
+                            min="0"
+                            defaultValue={ticketType.sort_order}
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Visibility">
+                          <select
+                            name="is_active"
+                            defaultValue={ticketType.is_active ? "true" : "false"}
+                            style={styles.input}
+                          >
+                            <option value="true">Active</option>
+                            <option value="false">Hidden</option>
+                          </select>
+                        </Field>
+                      </div>
+
+                      <div style={styles.inlineActions}>
+                        <button type="submit" style={styles.primaryButton}>
+                          Save
+                        </button>
+                      </div>
+                    </form>
+
+                    <form action={deleteTicketTypeAction}>
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
+                      <button type="submit" style={styles.dangerOutlineButton}>
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <form action={clearTicketTypesAction}>
+              <input type="hidden" name="event_id" value={event.id} />
+              <button type="submit" style={styles.dangerOutlineButton}>
+                Clear all ticket types
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <EventPrizeMenuSettings
+        eventId={event.id}
+        initialPrizes={event.prizes_json || []}
+        initialMenuOptions={event.menu_options || []}
+        updatePrizesAction={updatePrizesAction}
+        updateMenuOptionsAction={updateMenuOptionsAction}
+      />
+            {isReservedSeating && (
+        <section id="row-seating" style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <p style={styles.sectionEyebrow}>Section 3</p>
+            <h2 style={styles.sectionTitle}>Row Seating</h2>
+            <p style={styles.sectionText}>
+              Generate seats first. Use Seat Manager to mark special seats, block
+              seats, and save row layout nudges.
+            </p>
+          </div>
+
+          <div style={styles.twoPanel}>
+            <form action={generateSeatsAction} style={styles.panel}>
+              <input type="hidden" name="event_id" value={event.id} />
+
+              <h3 style={styles.panelTitle}>Generate row seating</h3>
+
+              <Field label="Initial marking">
+                <select name="ticket_type_id" style={styles.input}>
+                  <option value="">Normal public seats</option>
+                  {ticketTypes.map((ticketType) => (
+                    <option key={ticketType.id} value={ticketType.id}>
+                      {ticketType.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Section">
+                <input
+                  name="section"
+                  placeholder="Main, VIP, Balcony, Left, Centre..."
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Rows">
+                <input name="rows" placeholder="1-10 or A-C or 1-3,8-10" style={styles.input} />
+              </Field>
+
+              <div style={styles.twoCol}>
+                <Field label="Seats per row">
+                  <input name="seats_per_row" type="number" min="1" placeholder="40" style={styles.input} />
+                </Field>
+
+                <Field label="Aisles after seats">
+                  <input name="aisle_after" placeholder="10,20,30" style={styles.input} />
+                </Field>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input type="checkbox" name="clear_existing" value="yes" />
+                Clear existing row seats before generating
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Generate row seating
+              </button>
+            </form>
+
+            <div style={styles.panel}>
+              <h3 style={styles.panelTitle}>Row seating summary</h3>
+
+              <div style={styles.statsGridCompact}>
+                <SummaryCard label="Row seats" value={rowSeats.length} />
+                <SummaryCard label="Normal public" value={rowSeats.filter((seat) => !seat.ticket_type_id && seat.status === "available").length} />
+                <SummaryCard label="Special marked" value={rowSeats.filter((seat) => seat.ticket_type_id).length} />
+                <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
+              </div>
+
+              <p style={styles.sectionText}>
+                Row nudges are saved to this event, so the public page can match
+                the admin layout.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Seat Manager</h3>
+                <p style={styles.sectionText}>
+                  Click seats to select them. Block/unblock selected seats or
+                  apply a special marking.
+                </p>
+              </div>
+
+              <form action={clearRowSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button type="submit" style={styles.dangerOutlineButton}>
+                  Clear row seats only
+                </button>
+              </form>
+            </div>
+
+            {rowSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No row seats generated yet.</div>
+            ) : (
+              <AdminSeatManager
+                eventId={event.id}
+                seats={rowSeats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                mode="rows"
+                applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
+                updateSeatingLayoutAction={updateSeatingLayoutAction}
+                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                deleteSelectedRowsAction={deleteSelectedRowsAction}
+                initialSeatingLayout={event.seating_layout_json || {}}
+              />
+            )}
+          </div>
+        </section>
+      )}
+
+      {isTables && (
+        <section id="table-seating" style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <p style={styles.sectionEyebrow}>Section 3</p>
+            <h2 style={styles.sectionTitle}>Table Seating</h2>
+            <p style={styles.sectionText}>
+              Generate table layouts first, then name tables before publishing.
+            </p>
+          </div>
+
+          <div style={styles.twoPanel}>
+            <form action={generateTablesAction} style={styles.panel}>
+              <input type="hidden" name="event_id" value={event.id} />
+
+              <h3 style={styles.panelTitle}>Generate table seating</h3>
+
+              <Field label="Initial marking">
+                <select name="ticket_type_id" style={styles.input}>
+                  <option value="">Normal public seats</option>
+                  {ticketTypes.map((ticketType) => (
+                    <option key={ticketType.id} value={ticketType.id}>
+                      {ticketType.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div style={styles.twoCol}>
+                <Field label="Number of tables">
+                  <input name="table_count" type="number" min="1" placeholder="10" style={styles.input} />
+                </Field>
+
+                <Field label="Seats per table">
+                  <input name="seats_per_table" type="number" min="1" placeholder="8" style={styles.input} />
+                </Field>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input type="checkbox" name="clear_existing" value="yes" />
+                Clear existing table seats before generating
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Generate table seating
+              </button>
+            </form>
+
+            <div style={styles.panel}>
+              <h3 style={styles.panelTitle}>Table seating summary</h3>
+
+              <div style={styles.statsGridCompact}>
+                <SummaryCard label="Table seats" value={tableSeats.length} />
+                <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
+                <SummaryCard label="Named tables" value={Object.keys(event.table_names_json || {}).length} />
+                <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
+              </div>
+
+              <p style={styles.sectionText}>
+                Named tables show on the public page. Buyers no longer type table names.
+              </p>
+            </div>
+          </div>
+
+          <form action={updateTableNamesAction} style={styles.panel}>
+            <input type="hidden" name="event_id" value={event.id} />
+
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Table names</h3>
+                <p style={styles.sectionText}>
+                  Add friendly names such as Sponsors, VIP, Smith Family, or Staff.
+                </p>
+              </div>
+
+              <button type="submit" style={styles.primaryButton}>
+                Save table names
+              </button>
+            </div>
+
+            <TableNamesEditor
+              tableNumbers={uniqueTableNumbers}
+              initialTableNames={
+                uniqueTableNumbers.length > 0
+                  ? tableNamesFromExistingTables
+                  : event.table_names_json || {}
+              }
+            />
+          </form>
+
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Seat Manager</h3>
+                <p style={styles.sectionText}>
+                  Click table seats to select them. Block/unblock selected seats
+                  or apply a special marking.
+                </p>
+              </div>
+
+              <form action={clearTableSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button type="submit" style={styles.dangerOutlineButton}>
+                  Clear table seats only
+                </button>
+              </form>
+            </div>
+
+            {tableSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No table seats generated yet.</div>
+            ) : (
+              <AdminSeatManager
+                eventId={event.id}
+                seats={tableSeats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                mode="tables"
+                applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
+                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+              />
+            )}
+          </div>
+        </section>
+      )}
+
+      <section id="orders" style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <p style={styles.sectionEyebrow}>
+            {isGeneralAdmission ? "Section 4" : "Section 5"}
+          </p>
+          <h2 style={styles.sectionTitle}>Orders</h2>
+          <p style={styles.sectionText}>
+            Event orders will appear here once checkout is connected.
+          </p>
+        </div>
+
+        <div style={styles.emptyBox}>Checkout not connected yet.</div>
+      </section>
+
+      <section style={styles.dangerSection}>
+        <h2 style={styles.sectionTitle}>Danger zone</h2>
+
+        <form action={deleteEventAction}>
+          <input type="hidden" name="event_id" value={event.id} />
+          <button type="submit" style={styles.dangerButton}>
+            Delete event
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div style={styles.statBox}>
+      <p style={styles.statLabel}>{label}</p>
+      <p style={styles.statValue}>{value}</p>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
+const styles: Record<string, CSSProperties> = {
+  page: {
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "28px 16px 56px",
+    background: "#f8fafc",
+    minHeight: "100vh",
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 240px auto",
+    gap: 18,
+    alignItems: "stretch",
+    padding: 22,
+    borderRadius: 24,
+    background: "#0f172a",
+    color: "#ffffff",
+    marginBottom: 16,
+  },
+  heroContent: { minWidth: 0 },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  title: {
+    margin: 0,
+    fontSize: 34,
+    lineHeight: 1.08,
+    letterSpacing: "-0.04em",
+    wordBreak: "break-word",
+  },
+  subtle: {
+    margin: "12px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+  },
+  badgeRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 12,
+  },
+  goldBadge: {
+    background: "#facc15",
+    color: "#111827",
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  darkBadge: {
+    background: "rgba(255,255,255,0.12)",
+    color: "#ffffff",
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  heroImageWrap: {
+    borderRadius: 18,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    minHeight: 150,
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  heroImageEmpty: {
+    height: "100%",
+    minHeight: 150,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 42,
+    color: "#94a3b8",
+  },
+  heroActions: {
+    display: "grid",
+    gap: 10,
+    alignContent: "start",
+    minWidth: 140,
+  },
+  primaryLink: {
+    padding: "11px 14px",
+    background: "#ffffff",
+    color: "#0f172a",
+    borderRadius: 999,
+    textDecoration: "none",
+    fontWeight: 900,
+    textAlign: "center",
+  },
+  secondaryButton: {
+    padding: "11px 14px",
+    border: "1px solid rgba(255,255,255,0.24)",
+    color: "#ffffff",
+    borderRadius: 999,
+    textDecoration: "none",
+    fontWeight: 900,
+    textAlign: "center",
+  },
+  tabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  tab: {
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: 999,
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+  successBox: {
+    padding: 12,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  errorBox: {
+    padding: 12,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  section: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  sectionHeader: { marginBottom: 16 },
+  sectionEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontWeight: 900,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.02em",
+  },
+  sectionText: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  statsGridCompact: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: 10,
+    marginBottom: 12,
+  },
+  statBox: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  statLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  statValue: {
+    margin: "6px 0 0",
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 900,
+    wordBreak: "break-word",
+  },
+  panel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    marginBottom: 16,
+  },
+  panelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+  panelTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 900,
+  },
+  form: {
+    display: "grid",
+    gap: 14,
+  },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gap: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  emptyPreview: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    fontSize: 42,
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+  },
+  threeCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 12,
+  },
+  fourCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: 12,
+  },
+  twoPanel: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 16,
+  },
+  ticketLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 0.9fr) minmax(320px, 1.4fr)",
+    gap: 16,
+    alignItems: "start",
+  },
+  ticketListScroll: {
+    display: "grid",
+    gap: 10,
+    maxHeight: 520,
+    overflow: "auto",
+    paddingRight: 4,
+  },
+  primaryButton: {
+    width: "fit-content",
+    padding: "13px 18px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  dangerButton: {
+    padding: "13px 18px",
+    border: "none",
+    borderRadius: 999,
+    background: "#ef4444",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  dangerOutlineButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#ffffff",
+    color: "#b91c1c",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  editTicketCard: {
+    display: "grid",
+    gap: 10,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    background: "#ffffff",
+  },
+  inlineActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  checkboxLabel: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    fontWeight: 900,
+    color: "#334155",
+  },
+  emptyBox: {
+    padding: 16,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  dangerSection: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+};
