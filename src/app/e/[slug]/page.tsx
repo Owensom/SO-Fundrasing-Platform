@@ -46,7 +46,10 @@ function Card({ children }: { children: ReactNode }) {
   return <section style={styles.card}>{children}</section>;
 }
 
-export default async function EventSlugPage({ params, searchParams }: PageProps) {
+export default async function EventSlugPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
 
@@ -62,6 +65,13 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
   );
 
   const seats = event.seats || [];
+
+  const tableSeatsWithNames = seats.map((seat) => ({
+    ...seat,
+    table_name: seat.table_number
+      ? event.table_names_json?.[String(seat.table_number)] || null
+      : null,
+  }));
 
   const menuOptions = (event.menu_options || [])
     .filter((option) => option.isActive !== false && option.is_active !== false)
@@ -212,7 +222,7 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
               ) : (
                 <PublicTableSelector
                   eventId={event.id}
-                  seats={seats}
+                  seats={tableSeatsWithNames}
                   ticketTypes={ticketTypes}
                   currency={event.currency}
                   menuOptions={menuOptions}
@@ -225,14 +235,14 @@ export default async function EventSlugPage({ params, searchParams }: PageProps)
               </div>
             ) : (
               <PublicReservedSeatSelector
-  eventId={event.id}
-  eventType={event.event_type}
-  seats={seats}
-  ticketTypes={ticketTypes}
-  currency={event.currency}
-  menuOptions={menuOptions}
-  initialSeatingLayout={event.seating_layout_json || {}}
-/>
+                eventId={event.id}
+                eventType={event.event_type}
+                seats={seats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                menuOptions={menuOptions}
+                initialSeatingLayout={event.seating_layout_json || {}}
+              />
             )}
           </section>
         </Card>
