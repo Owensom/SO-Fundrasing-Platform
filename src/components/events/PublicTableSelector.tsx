@@ -389,10 +389,11 @@ export default function PublicTableSelector({
                       )}
                     </div>
 
-                    <div style={styles.tableCircle}>
-                      <div style={styles.tableCentre}>
-                        <span style={styles.tableCentreTop}>Table</span>
-                        <strong>{group.tableNumber || "—"}</strong>
+                    <div style={styles.tableSeatArea}>
+                      <div style={styles.tableBanner}>
+                        <span style={styles.tableBannerText}>
+                          Table {group.tableNumber || "—"}
+                        </span>
                       </div>
 
                       <div style={styles.seatGrid}>
@@ -737,35 +738,27 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
-  tableCircle: {
-    position: "relative",
-    minHeight: 170,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+  tableSeatArea: {
+    display: "grid",
+    gap: 14,
     padding: 16,
     borderRadius: 24,
     background: "rgba(2,6,23,0.34)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-  tableCentre: {
-    position: "absolute",
-    width: 86,
-    height: 86,
+  tableBanner: {
+    height: 44,
     borderRadius: 999,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(255,255,255,0.16)",
-    color: "#ffffff",
     display: "flex",
-    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    fontWeight: 950,
-    pointerEvents: "none",
   },
-  tableCentreTop: {
-    color: "#94a3b8",
-    fontSize: 10,
+  tableBannerText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.12em",
   },
@@ -776,7 +769,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 9,
     alignItems: "center",
     justifyItems: "center",
-    zIndex: 1,
   },
   seatButton: {
     width: 42,
