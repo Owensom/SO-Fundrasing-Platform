@@ -788,6 +788,7 @@ export default async function AdminEventManagePage({
         <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
         <a href="#prizes" style={styles.tab}>Prizes</a>
         <a href="#menu" style={styles.tab}>Menu</a>
+        <a href="#admin-tools" style={styles.tab}>Admin Tools</a>
         {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
         {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
       </nav>
@@ -1393,6 +1394,74 @@ export default async function AdminEventManagePage({
         </section>
       )}
 
+      <section id="admin-tools" style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <p style={styles.sectionEyebrow}>Admin tools</p>
+          <h2 style={styles.sectionTitle}>Event Admin Tools</h2>
+          <p style={styles.sectionText}>
+            Premium event controls will live here as we add them safely.
+          </p>
+        </div>
+
+        <div style={styles.adminToolsGrid}>
+          <EventAdminToolCard
+            icon="🎫"
+            title="Tickets & pricing"
+            badge="Active"
+            description="Manage public ticket types, pricing, limits, and visibility."
+            href="#tickets"
+            actionLabel="Manage tickets"
+          />
+
+          <EventAdminToolCard
+            icon="🏆"
+            title="Prizes & menu"
+            badge="Active"
+            description="Manage event prizes, public prize visibility, menu choices, and guest questions."
+            href="#prizes"
+            actionLabel="Manage prizes"
+          />
+
+          {(isReservedSeating || isTables) && (
+            <EventAdminToolCard
+              icon="🪑"
+              title="Seat tools"
+              badge="Active"
+              description="Generate seats, block seats, apply special markings, and manage layouts."
+              href={isReservedSeating ? "#row-seating" : "#table-seating"}
+              actionLabel="Manage seats"
+            />
+          )}
+
+          <EventAdminToolCard
+            icon="🎯"
+            title="Winner draw"
+            badge="Coming next"
+            description="Draw event winners from eligible tickets and keep a winner history."
+            actionLabel="Planned"
+            muted
+          />
+
+          <EventAdminToolCard
+            icon="✉️"
+            title="Winner emails"
+            badge="Coming next"
+            description="Send winner notification emails and store event winner email history."
+            actionLabel="Planned"
+            muted
+          />
+
+          <EventAdminToolCard
+            icon="📦"
+            title="Orders dashboard"
+            badge="Later"
+            description="A proper event orders dashboard will be added after draw tools are stable."
+            actionLabel="Planned"
+            muted
+          />
+        </div>
+      </section>
+
       <section style={styles.dangerSection}>
         <h2 style={styles.sectionTitle}>Danger zone</h2>
 
@@ -1404,6 +1473,44 @@ export default async function AdminEventManagePage({
         </form>
       </section>
     </main>
+  );
+}
+
+function EventAdminToolCard({
+  icon,
+  title,
+  badge,
+  description,
+  href,
+  actionLabel,
+  muted = false,
+}: {
+  icon: string;
+  title: string;
+  badge: string;
+  description: string;
+  href?: string;
+  actionLabel: string;
+  muted?: boolean;
+}) {
+  return (
+    <div style={styles.adminToolCard}>
+      <div style={styles.adminToolTitleRow}>
+        <span style={styles.adminToolIcon}>{icon}</span>
+        <span style={styles.adminToolBadge}>{badge}</span>
+      </div>
+
+      <h3 style={styles.panelTitle}>{title}</h3>
+      <p style={styles.sectionText}>{description}</p>
+
+      {href && !muted ? (
+        <a href={href} style={styles.adminToolButton}>
+          {actionLabel}
+        </a>
+      ) : (
+        <span style={styles.mutedToolButton}>{actionLabel}</span>
+      )}
+    </div>
   );
 }
 
@@ -1822,6 +1929,65 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
+  },
+  adminToolsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 14,
+  },
+  adminToolCard: {
+    display: "grid",
+    gap: 10,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  adminToolTitleRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  adminToolIcon: {
+    width: 42,
+    height: 42,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    fontSize: 22,
+  },
+  adminToolBadge: {
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#e0f2fe",
+    color: "#075985",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  adminToolButton: {
+    width: "fit-content",
+    marginTop: 4,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+  mutedToolButton: {
+    width: "fit-content",
+    marginTop: 4,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#e2e8f0",
+    color: "#64748b",
+    fontWeight: 900,
+    fontSize: 14,
   },
   dangerSection: {
     padding: 18,
