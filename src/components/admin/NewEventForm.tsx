@@ -93,26 +93,6 @@ function makeTicketType(id: string, sortOrder: number): TicketTypeRow {
   };
 }
 
-function buildTableNamesJson(value: string) {
-  try {
-    const parsed = JSON.parse(value || "{}");
-
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return "{}";
-    }
-
-    const clean = Object.fromEntries(
-      Object.entries(parsed as Record<string, unknown>)
-        .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
-        .filter(([, name]) => name),
-    );
-
-    return JSON.stringify(clean);
-  } catch {
-    return "{}";
-  }
-}
-
 export default function NewEventForm({ tenantSlug }: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -135,7 +115,17 @@ export default function NewEventForm({ tenantSlug }: Props) {
   const [tableCount, setTableCount] = useState("");
   const [tableSeatsPerTable, setTableSeatsPerTable] = useState("");
   const [tableInitialTicketTypeId, setTableInitialTicketTypeId] = useState("");
-  const [tableNamesRaw, setTableNamesRaw] = useState("{}");
+  const [tableNames, setTableNames] = useState<Record<string, string>>({});
+
+  const tableNumbers = useMemo(() => {
+    const count = Number(tableCount);
+
+    if (!Number.isFinite(count) || count <= 0) return [];
+
+    return Array.from({ length: Math.floor(count) }, (_, index) =>
+      String(index + 1),
+    );
+  }, [tableCount]);
 
   const prizesValue = useMemo(() => {
     const clean = prizes
@@ -204,8 +194,17 @@ export default function NewEventForm({ tenantSlug }: Props) {
   }, [tableCount, tableSeatsPerTable, tableInitialTicketTypeId]);
 
   const tableNamesValue = useMemo(() => {
-    return buildTableNamesJson(tableNamesRaw);
-  }, [tableNamesRaw]);
+    return JSON.stringify(
+      Object.fromEntries(
+        tableNumbers
+          .map((tableNumber) => [
+            tableNumber,
+            String(tableNames[tableNumber] || "").trim(),
+          ])
+          .filter(([, name]) => name),
+      ),
+    );
+  }, [tableNames, tableNumbers]);
 
   function updateTitle(value: string) {
     setTitle(value);
@@ -258,6 +257,13 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
     if (rowInitialTicketTypeId === id) setRowInitialTicketTypeId("");
     if (tableInitialTicketTypeId === id) setTableInitialTicketTypeId("");
+  }
+
+  function updateTableName(tableNumber: string, value: string) {
+    setTableNames((current) => ({
+      ...current,
+      [tableNumber]: value,
+    }));
   }
 
   return (
@@ -718,26 +724,31 @@ export default function NewEventForm({ tenantSlug }: Props) {
           <div style={{ ...styles.panel, marginTop: 16 }}>
             <h3 style={styles.panelTitle}>Table names optional</h3>
             <p style={styles.sectionText}>
-              Add names for tables before they go public. Use table numbers as
-              keys. You can also edit these later on the event manage page.
+              Add friendly names for tables before they go public. These save as
+              table names automatically.
             </p>
 
-            <textarea
-              value={tableNamesRaw}
-              onChange={(event) => setTableNamesRaw(event.target.value)}
-              placeholder='{"1": "VIP", "2": "Sponsors", "3": "Smith Family"}'
-              rows={6}
-              style={{
-                ...styles.textarea,
-                marginTop: 12,
-                fontFamily:
-                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              }}
-            />
-
-            <p style={styles.sectionText}>
-              Example: {"{ \"1\": \"VIP\", \"2\": \"Sponsors\", \"3\": \"Smith Family\" }"}
-            </p>
+            {tableNumbers.length === 0 ? (
+              <div style={styles.emptyBox}>
+                Enter the number of tables above to show table name fields.
+              </div>
+            ) : (
+              <div style={styles.tableNamesGrid}>
+                {tableNumbers.map((tableNumber) => (
+                  <label key={tableNumber} style={styles.tableNameRow}>
+                    <span style={styles.tableNameLabel}>Table {tableNumber}</span>
+                    <input
+                      value={tableNames[tableNumber] || ""}
+                      onChange={(event) =>
+                        updateTableName(tableNumber, event.target.value)
+                      }
+                      placeholder="e.g. VIP, Sponsors, Smith Family"
+                      style={styles.input}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1152,6 +1163,31 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  emptyBox: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  tableNamesGrid: {
+    display: "grid",
+    gap: 10,
+    marginTop: 14,
+  },
+  tableNameRow: {
+    display: "grid",
+    gridTemplateColumns: "110px minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "center",
+  },
+  tableNameLabel: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
   },
 };
 
