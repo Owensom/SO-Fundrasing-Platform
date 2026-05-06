@@ -49,6 +49,27 @@ function seatLabel(seat: Seat) {
   return `${tableLabel}, Seat ${seat.seat_number || "?"}`;
 }
 
+function statusLabel(status: string) {
+  if (status === "reserved") return "Reserved";
+  if (status === "sold") return "Sold";
+  if (status === "blocked") return "Blocked";
+  return "Available";
+}
+
+function seatHoverLabel(
+  seat: Seat,
+  ticketType: TicketType | undefined,
+  currency: string,
+) {
+  const priceLine = ticketType
+    ? `${ticketType.name} — ${currency} ${moneyFromCents(ticketType.price)}`
+    : "Ticket price unavailable";
+
+  return `${seatLabel(seat)}
+${priceLine}
+Status: ${statusLabel(seat.status)}`;
+}
+
 function groupLabel(seat: Seat) {
   if (seat.table_name) return seat.table_name;
   return `Table ${seat.table_number || "Unassigned"}`;
@@ -192,6 +213,16 @@ export default function PublicTableSelector({
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
+
+  function getSeatTicketType(seat: Seat) {
+    const cartTicketTypeId = cartItems.find(
+      (item) => item.seatId === seat.id,
+    )?.ticketTypeId;
+
+    const ticketTypeId = cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
+
+    return ticketTypes.find((ticketType) => ticketType.id === ticketTypeId);
+  }
 
   function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
@@ -408,7 +439,11 @@ export default function PublicTableSelector({
                               type="button"
                               disabled={unavailable}
                               onClick={() => toggleSeat(seat)}
-                              title={seatLabel(seat)}
+                              title={seatHoverLabel(
+                                seat,
+                                getSeatTicketType(seat),
+                                currency,
+                              )}
                               style={{
                                 ...styles.seatButton,
                                 background: colours.background,
