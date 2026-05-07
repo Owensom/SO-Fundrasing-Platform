@@ -234,6 +234,7 @@ export default function EventWinnerDrawPanel({
   clearWinnersAction: (formData: FormData) => void | Promise<void>;
 }) {
   const formRef = useRef<HTMLFormElement | null>(null);
+  const realSubmitButtonRef = useRef<HTMLButtonElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -430,8 +431,6 @@ export default function EventWinnerDrawPanel({
     }, 72);
 
     timeoutRef.current = setTimeout(() => {
-      if (!timerRef.current && !drawOverlayOpen) return;
-
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -447,7 +446,7 @@ export default function EventWinnerDrawPanel({
 
       submitTimeoutRef.current = setTimeout(() => {
         allowRealSubmitRef.current = true;
-        formRef.current?.requestSubmit();
+        realSubmitButtonRef.current?.click();
       }, 950);
     }, 3200);
   }
@@ -460,7 +459,110 @@ export default function EventWinnerDrawPanel({
   }, []);
 
   return (
-    <section id="winner-draw" style={styles.section}>
+    <section style={styles.section}>
+      <div style={styles.sectionHeader}>
+        <p style={styles.sectionEyebrow}>Winner draw</p>
+        <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
+        <p style={styles.sectionText}>
+          Draw winners from eligible paid event entries only. Already drawn
+          prizes are excluded before the draw starts.
+        </p>
+      </div>
+
+      <div style={styles.statsGrid}>
+        <div style={styles.statBox}>
+          <p style={styles.statLabel}>Prizes</p>
+          <p style={styles.statValue}>{validPrizes.length}</p>
+        </div>
+
+        <div style={styles.statBox}>
+          <p style={styles.statLabel}>Remaining</p>
+          <p style={styles.statValue}>{remainingPrizes.length}</p>
+        </div>
+
+        <div style={styles.statBox}>
+          <p style={styles.statLabel
+              async function runDramaticDraw(event: FormEvent<HTMLFormElement>) {
+    if (allowRealSubmitRef.current) {
+      allowRealSubmitRef.current = false;
+      return;
+    }
+
+    event.preventDefault();
+
+    if (drawing || saving) return;
+
+    if (!hasPrizes) {
+      setError("Add prizes before running a draw.");
+      return;
+    }
+
+    if (!hasRemainingPrizes) {
+      setError("There are no remaining prizes to draw.");
+      return;
+    }
+
+    if (drawMode === "single" && !activePrizeKey) {
+      setError("Choose a prize before running the draw.");
+      return;
+    }
+
+    setError("");
+    setDrawOverlayOpen(true);
+    setDrawing(true);
+    setSaving(false);
+    setConfetti([]);
+    setDisplayText("—");
+    setDisplayPrize(selectedPrizeLabel);
+
+    const audioCtx = await unlockAudio();
+
+    let ticks = 0;
+
+    clearDrawTimers();
+
+    timerRef.current = setInterval(() => {
+      setDisplayText(randomDisplayValue());
+      setDisplayPrize(randomPrizeText());
+
+      if (audioCtx) {
+        playTick(audioCtx);
+        if (ticks % 4 === 0) playRiser(audioCtx);
+      }
+
+      ticks += 1;
+    }, 72);
+
+    timeoutRef.current = setTimeout(() => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      setDisplayText("WINNER");
+      setDisplayPrize(selectedPrizeLabel);
+      setDrawing(false);
+      setSaving(true);
+      setConfetti(makeConfetti());
+
+      if (audioCtx) playWinner(audioCtx);
+
+      submitTimeoutRef.current = setTimeout(() => {
+        allowRealSubmitRef.current = true;
+        realSubmitButtonRef.current?.click();
+      }, 950);
+    }, 3200);
+  }
+
+  useEffect(() => {
+    return () => {
+      clearDrawTimers();
+      allowRealSubmitRef.current = false;
+    };
+  }, []);
+
+  return (
+    <section style={styles.section}>
       <div style={styles.sectionHeader}>
         <p style={styles.sectionEyebrow}>Winner draw</p>
         <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
@@ -514,6 +616,15 @@ export default function EventWinnerDrawPanel({
         >
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="draw_mode" value={drawMode} />
+
+          <button
+            ref={realSubmitButtonRef}
+            type="submit"
+            style={{ display: "none" }}
+            aria-hidden="true"
+          >
+            Save draw
+          </button>
 
           <div>
             <h3 style={styles.panelTitle}>Dramatic draw controls</h3>
@@ -630,7 +741,8 @@ export default function EventWinnerDrawPanel({
 
               <div style={styles.buttonRow}>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => formRef.current?.requestSubmit()}
                   disabled={
                     !hasRemainingPrizes ||
                     drawing ||
@@ -707,444 +819,3 @@ export default function EventWinnerDrawPanel({
           )}
         </div>
       </div>
-            {drawOverlayOpen ? (
-        <div style={styles.overlay}>
-          <style>{`
-            @keyframes confettiFall {
-              0% {
-                transform: translate3d(0, -20vh, 0) rotate(0deg);
-                opacity: 1;
-              }
-              100% {
-                transform: translate3d(var(--drift), 115vh, 0) rotate(900deg);
-                opacity: 0;
-              }
-            }
-
-            @keyframes winnerPulse {
-              0%, 100% {
-                transform: scale(1);
-              }
-              50% {
-                transform: scale(1.06);
-              }
-            }
-
-            @keyframes glowPulse {
-              0%, 100% {
-                box-shadow: 0 0 38px rgba(250,204,21,0.25);
-              }
-              50% {
-                box-shadow: 0 0 85px rgba(250,204,21,0.85);
-              }
-            }
-          `}</style>
-
-          {confetti.length ? (
-            <div style={styles.confettiLayer}>
-              {confetti.map((piece) => (
-                <span
-                  key={piece.id}
-                  style={
-                    {
-                      position: "absolute",
-                      top: "-12vh",
-                      left: `${piece.left}%`,
-                      width: piece.width,
-                      height: piece.height,
-                      borderRadius: 3,
-                      background: `hsl(${piece.hue}, 92%, 58%)`,
-                      transform: `rotate(${piece.rotate}deg)`,
-                      animation: `confettiFall ${piece.duration}s linear ${piece.delay}s forwards`,
-                      "--drift": `${piece.drift}px`,
-                    } as CSSProperties
-                  }
-                />
-              ))}
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={closeDraw}
-            style={styles.closeOverlayButton}
-          >
-            Close
-          </button>
-
-          <div style={styles.overlayContent}>
-            <p style={styles.overlayEyebrow}>Event prize draw</p>
-
-            <h1 style={styles.overlayTitle}>
-              {drawing ? "Drawing..." : saving ? "Saving winner..." : "Winner!"}
-            </h1>
-
-            <p style={styles.overlayPrize}>{displayPrize}</p>
-
-            <div
-              style={{
-                ...styles.drawOrb,
-                animation: drawing || saving ? "glowPulse 900ms infinite" : "",
-              }}
-            >
-              <div
-                style={{
-                  ...styles.drawNumber,
-                  animation: drawing ? "winnerPulse 180ms infinite" : "",
-                }}
-              >
-                {displayText}
-              </div>
-            </div>
-
-            <p style={styles.overlaySubtext}>
-              {drawing
-                ? "Selecting from eligible event entries..."
-                : saving
-                  ? "Winner chosen — saving to event history..."
-                  : "Draw complete."}
-            </p>
-
-            <button
-              type="button"
-              onClick={closeDraw}
-              disabled={saving}
-              style={{
-                ...styles.overlaySecondaryButton,
-                opacity: saving ? 0.45 : 1,
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
-            >
-              {saving ? "Saving..." : "Close"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-const styles: Record<string, CSSProperties> = {
-  section: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  sectionHeader: { marginBottom: 16 },
-  sectionEyebrow: {
-    margin: "0 0 6px",
-    color: "#2563eb",
-    fontWeight: 900,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.02em",
-  },
-  sectionText: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  statBox: {
-    padding: 15,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  statLabel: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  statValue: {
-    margin: "6px 0 0",
-    color: "#0f172a",
-    fontSize: 24,
-    fontWeight: 900,
-  },
-  statValueSmall: {
-    margin: "6px 0 0",
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 900,
-  },
-  latestWinnerBox: {
-    padding: 16,
-    borderRadius: 18,
-    background: "linear-gradient(135deg, #fffbeb, #ffffff)",
-    border: "1px solid #fde68a",
-    marginBottom: 16,
-  },
-  latestWinnerLabel: {
-    margin: 0,
-    color: "#92400e",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  latestWinnerName: {
-    margin: "6px 0 0",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-  },
-  latestWinnerMeta: {
-    margin: "4px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    fontWeight: 800,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.95fr) minmax(320px, 1.2fr)",
-    gap: 16,
-    alignItems: "start",
-  },
-  panel: {
-    display: "grid",
-    gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  panelHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  panelTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 900,
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-  checkGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 8,
-  },
-  checkboxLabel: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    fontWeight: 900,
-    color: "#334155",
-    fontSize: 13,
-  },
-  buttonRow: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  primaryButton: {
-    width: "fit-content",
-    padding: "13px 18px",
-    border: "none",
-    borderRadius: 999,
-    background: "#111827",
-    color: "#ffffff",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  dangerOutlineButton: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    border: "1px solid #fecaca",
-    background: "#ffffff",
-    color: "#b91c1c",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  dangerMiniButton: {
-    padding: "8px 11px",
-    borderRadius: 999,
-    border: "1px solid #fecaca",
-    background: "#ffffff",
-    color: "#b91c1c",
-    fontWeight: 900,
-    cursor: "pointer",
-    fontSize: 12,
-  },
-  emptyBox: {
-    padding: 16,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 800,
-  },
-  errorBox: {
-    padding: 12,
-    borderRadius: 14,
-    background: "#fee2e2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-    fontWeight: 900,
-  },
-  winnerList: {
-    display: "grid",
-    gap: 10,
-    maxHeight: 520,
-    overflow: "auto",
-    paddingRight: 4,
-  },
-  winnerCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  winnerPrize: {
-    margin: 0,
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  winnerName: {
-    margin: "5px 0 0",
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 900,
-  },
-  winnerMeta: {
-    margin: "4px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 9999,
-    background:
-      "radial-gradient(circle at top, #374151, #111827 55%, #030712)",
-    color: "#ffffff",
-    display: "grid",
-    placeItems: "center",
-    padding: 24,
-    overflow: "hidden",
-  },
-  confettiLayer: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-    overflow: "hidden",
-  },
-  closeOverlayButton: {
-    position: "absolute",
-    top: 18,
-    right: 18,
-    border: "1px solid rgba(255,255,255,0.3)",
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    borderRadius: 999,
-    padding: "10px 14px",
-    cursor: "pointer",
-    fontWeight: 800,
-    zIndex: 2,
-  },
-  overlayContent: {
-    width: "min(780px, 100%)",
-    textAlign: "center",
-    position: "relative",
-    zIndex: 1,
-  },
-  overlayEyebrow: {
-    margin: 0,
-    color: "#facc15",
-    fontSize: 14,
-    fontWeight: 900,
-    letterSpacing: "0.18em",
-    textTransform: "uppercase",
-  },
-  overlayTitle: {
-    margin: "12px 0 10px",
-    fontSize: "clamp(34px, 6vw, 60px)",
-    lineHeight: 1,
-  },
-  overlayPrize: {
-    margin: "0 auto 24px",
-    color: "#d1d5db",
-    fontSize: "clamp(17px, 3vw, 24px)",
-    fontWeight: 900,
-  },
-  drawOrb: {
-    margin: "0 auto 22px",
-    display: "grid",
-    placeItems: "center",
-    width: "min(360px, 74vw)",
-    height: "min(360px, 74vw)",
-    borderRadius: "50%",
-    background:
-      "radial-gradient(circle, rgba(250,204,21,0.38), rgba(249,115,22,0.2), rgba(255,255,255,0.06))",
-    border: "2px solid rgba(250,204,21,0.6)",
-  },
-  drawNumber: {
-    fontSize: "clamp(48px, 12vw, 96px)",
-    lineHeight: 1,
-    fontWeight: 950,
-    letterSpacing: "-0.06em",
-    textShadow: "0 0 28px rgba(250,204,21,0.85)",
-  },
-  overlaySubtext: {
-    margin: "0 auto",
-    color: "#d1d5db",
-    fontSize: 16,
-    fontWeight: 800,
-  },
-  overlaySecondaryButton: {
-    marginTop: 28,
-    border: "1px solid rgba(255,255,255,0.3)",
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    borderRadius: 999,
-    padding: "12px 18px",
-    fontWeight: 900,
-  },
-};
