@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
   type CSSProperties,
   type FormEvent,
 } from "react";
@@ -234,12 +235,10 @@ export default function EventWinnerDrawPanel({
   clearWinnersAction: (formData: FormData) => void | Promise<void>;
 }) {
   const formRef = useRef<HTMLFormElement | null>(null);
-  const realSubmitButtonRef = useRef<HTMLButtonElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const allowRealSubmitRef = useRef(false);
 
   const [selectedPrizeKey, setSelectedPrizeKey] = useState("");
   const [drawMode, setDrawMode] = useState<"single" | "all_remaining">("single");
@@ -250,6 +249,7 @@ export default function EventWinnerDrawPanel({
   const [displayPrize, setDisplayPrize] = useState("Ready");
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
+  const [isPending, startTransition] = useTransition();
 
   const validPrizes = useMemo(
     () => prizes.filter((prize) => prizeTitle(prize)),
@@ -344,14 +344,12 @@ export default function EventWinnerDrawPanel({
 
   function closeDraw() {
     clearDrawTimers();
-    allowRealSubmitRef.current = false;
     setDrawOverlayOpen(false);
     setDrawing(false);
     setSaving(false);
     setConfetti([]);
   }
-
-  function randomDisplayValue() {
+    function randomDisplayValue() {
     if (eventType === "tables") {
       return `T${Math.floor(Math.random() * 24) + 1} · S${
         Math.floor(Math.random() * 12) + 1
@@ -379,15 +377,11 @@ export default function EventWinnerDrawPanel({
 
     return selectedPrizeLabel;
   }
-    async function runDramaticDraw(event: FormEvent<HTMLFormElement>) {
-    if (allowRealSubmitRef.current) {
-      allowRealSubmitRef.current = false;
-      return;
-    }
 
+  async function runDramaticDraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (drawing || saving) return;
+    if (drawing || saving || isPending) return;
 
     if (!hasPrizes) {
       setError("Add prizes before running a draw.");
@@ -445,8 +439,21 @@ export default function EventWinnerDrawPanel({
       if (audioCtx) playWinner(audioCtx);
 
       submitTimeoutRef.current = setTimeout(() => {
-        allowRealSubmitRef.current = true;
-        realSubmitButtonRef.current?.click();
+        const form = formRef.current;
+
+        if (!form) {
+          setSaving(false);
+          setError("Draw form was not found.");
+          return;
+        }
+
+        const formData = new FormData(form);
+        formData.set("event_id", eventId);
+        formData.set("draw_mode", drawMode);
+
+        startTransition(() => {
+          void drawWinnerAction(formData);
+        });
       }, 950);
     }, 3200);
   }
@@ -454,7 +461,6 @@ export default function EventWinnerDrawPanel({
   useEffect(() => {
     return () => {
       clearDrawTimers();
-      allowRealSubmitRef.current = false;
     };
   }, []);
 
@@ -514,15 +520,6 @@ export default function EventWinnerDrawPanel({
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="draw_mode" value={drawMode} />
 
-          <button
-            ref={realSubmitButtonRef}
-            type="submit"
-            style={{ display: "none" }}
-            aria-hidden="true"
-          >
-            Save draw
-          </button>
-
           <div>
             <h3 style={styles.panelTitle}>Dramatic draw controls</h3>
             <p style={styles.sectionText}>
@@ -579,8 +576,7 @@ export default function EventWinnerDrawPanel({
                   <option value="all_remaining">Draw all remaining prizes</option>
                 </select>
               </label>
-
-              <label style={styles.field}>
+                            <label style={styles.field}>
                 <span style={styles.label}>Draw scope</span>
                 <select
                   name="draw_scope"
@@ -638,12 +634,12 @@ export default function EventWinnerDrawPanel({
 
               <div style={styles.buttonRow}>
                 <button
-                  type="button"
-                  onClick={() => formRef.current?.requestSubmit()}
+                  type="submit"
                   disabled={
                     !hasRemainingPrizes ||
                     drawing ||
                     saving ||
+                    isPending ||
                     (drawMode === "single" && !activePrizeKey)
                   }
                   style={{
@@ -652,12 +648,13 @@ export default function EventWinnerDrawPanel({
                       !hasRemainingPrizes ||
                       drawing ||
                       saving ||
+                      isPending ||
                       (drawMode === "single" && !activePrizeKey)
                         ? 0.45
                         : 1,
                   }}
                 >
-                  Open dramatic draw
+                  {saving || isPending ? "Saving..." : "Open dramatic draw"}
                 </button>
               </div>
             </>
@@ -716,7 +713,8 @@ export default function EventWinnerDrawPanel({
           )}
         </div>
       </div>
-            {drawOverlayOpen ? (
+
+      {drawOverlayOpen ? (
         <div style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
@@ -776,7 +774,12 @@ export default function EventWinnerDrawPanel({
           <button
             type="button"
             onClick={closeDraw}
-            style={styles.closeOverlayButton}
+            disabled={saving || isPending}
+            style={{
+              ...styles.closeOverlayButton,
+              opacity: saving || isPending ? 0.45 : 1,
+              cursor: saving || isPending ? "not-allowed" : "pointer",
+            }}
           >
             Close
           </button>
@@ -785,7 +788,7 @@ export default function EventWinnerDrawPanel({
             <p style={styles.overlayEyebrow}>Event prize draw</p>
 
             <h1 style={styles.overlayTitle}>
-              {drawing ? "Drawing..." : saving ? "Saving winner..." : "Winner!"}
+              {drawing ? "Drawing..." : saving || isPending ? "Saving winner..." : "Winner!"}
             </h1>
 
             <p style={styles.overlayPrize}>{displayPrize}</p>
@@ -793,7 +796,7 @@ export default function EventWinnerDrawPanel({
             <div
               style={{
                 ...styles.drawOrb,
-                animation: drawing || saving ? "glowPulse 900ms infinite" : "",
+                animation: drawing || saving || isPending ? "glowPulse 900ms infinite" : "",
               }}
             >
               <div
@@ -809,7 +812,7 @@ export default function EventWinnerDrawPanel({
             <p style={styles.overlaySubtext}>
               {drawing
                 ? "Selecting from eligible event entries..."
-                : saving
+                : saving || isPending
                   ? "Winner chosen — saving to event history..."
                   : "Draw complete."}
             </p>
@@ -817,14 +820,14 @@ export default function EventWinnerDrawPanel({
             <button
               type="button"
               onClick={closeDraw}
-              disabled={saving}
+              disabled={saving || isPending}
               style={{
                 ...styles.overlaySecondaryButton,
-                opacity: saving ? 0.45 : 1,
-                cursor: saving ? "not-allowed" : "pointer",
+                opacity: saving || isPending ? 0.45 : 1,
+                cursor: saving || isPending ? "not-allowed" : "pointer",
               }}
             >
-              {saving ? "Saving..." : "Close"}
+              {saving || isPending ? "Saving..." : "Close"}
             </button>
           </div>
         </div>
@@ -1094,7 +1097,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     borderRadius: 999,
     padding: "10px 14px",
-    cursor: "pointer",
     fontWeight: 800,
     zIndex: 2,
   },
