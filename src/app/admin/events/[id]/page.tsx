@@ -376,6 +376,7 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
+
 async function updatePrizesAction(formData: FormData) {
   "use server";
 
@@ -455,7 +456,6 @@ async function updateTableNamesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
-
 async function addTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -787,6 +787,7 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
+
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -918,7 +919,6 @@ async function runWinnerDrawAction(formData: FormData) {
     }#winner-draw`,
   );
 }
-
 async function deleteWinnerAction(formData: FormData) {
   "use server";
 
@@ -997,12 +997,22 @@ export default async function AdminEventManagePage({
 
   const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
   const tableSeats = seats.filter((seat) => seat.table_number);
-  const visibleSeats = isReservedSeating ? rowSeats : isTables ? tableSeats : seats;
+  const visibleSeats = isReservedSeating
+    ? rowSeats
+    : isTables
+      ? tableSeats
+      : seats;
 
   const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
-  const reservedSeats = visibleSeats.filter((seat) => seat.status === "reserved").length;
-  const blockedSeats = visibleSeats.filter((seat) => seat.status === "blocked").length;
-  const availableSeats = visibleSeats.filter((seat) => seat.status === "available").length;
+  const reservedSeats = visibleSeats.filter(
+    (seat) => seat.status === "reserved",
+  ).length;
+  const blockedSeats = visibleSeats.filter(
+    (seat) => seat.status === "blocked",
+  ).length;
+  const availableSeats = visibleSeats.filter(
+    (seat) => seat.status === "available",
+  ).length;
   const vipSeats = visibleSeats.filter((seat) => seat.seat_purpose === "vip").length;
   const complimentarySeats = visibleSeats.filter(
     (seat) => seat.seat_purpose === "complimentary",
@@ -1017,7 +1027,9 @@ export default async function AdminEventManagePage({
   ).sort((a, b) => {
     const aNumber = Number(a);
     const bNumber = Number(b);
-    if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+    if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+      return aNumber - bNumber;
+    }
     return a.localeCompare(b);
   });
 
@@ -1065,14 +1077,34 @@ export default async function AdminEventManagePage({
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>Overview</a>
-        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
-        <a href="#prizes" style={styles.tab}>Prizes</a>
-        <a href="#menu" style={styles.tab}>Menu</a>
-        <a href="#winner-draw" style={styles.tab}>Winner Draw</a>
-        <a href="#admin-tools" style={styles.tab}>Admin Tools</a>
-        {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
-        {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
+        <a href="#overview" style={styles.tab}>
+          Overview
+        </a>
+        <a href="#tickets" style={styles.tab}>
+          Tickets & Prices
+        </a>
+        <a href="#prizes-menu" style={styles.tab}>
+          Prizes & Menu
+        </a>
+        <a href="#winner-draw" style={styles.tab}>
+          Winner Draw
+        </a>
+        <a href="#admin-tools" style={styles.tab}>
+          Admin Tools
+        </a>
+        {isReservedSeating && (
+          <a href="#row-seating" style={styles.tab}>
+            Row Seating
+          </a>
+        )}
+        {isTables && (
+          <a href="#table-seating" style={styles.tab}>
+            Table Seating
+          </a>
+        )}
+        <a href="#danger-zone" style={styles.tabDanger}>
+          Danger Zone
+        </a>
       </nav>
 
       {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
@@ -1083,16 +1115,13 @@ export default async function AdminEventManagePage({
         </div>
       )}
 
-      <section id="overview" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <p style={styles.sectionEyebrow}>Section 1</p>
-          <h2 style={styles.sectionTitle}>Overview</h2>
-          <p style={styles.sectionText}>
-            Choose the event type first. The admin page only shows the sections
-            needed for that type.
-          </p>
-        </div>
-
+      <CollapsibleSection
+        id="overview"
+        eyebrow="Section 1"
+        title="Overview"
+        description="Core event details and headline status. This is open by default because it contains the main event save form."
+        defaultOpen
+      >
         <div style={styles.statsGrid}>
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
           <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
@@ -1156,7 +1185,8 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-                        <div style={styles.twoCol}>
+
+            <div style={styles.twoCol}>
               <Field label="Location">
                 <input name="location" defaultValue={event.location || ""} style={styles.input} />
               </Field>
@@ -1248,18 +1278,14 @@ export default async function AdminEventManagePage({
             </button>
           </form>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="tickets" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <p style={styles.sectionEyebrow}>Section 2</p>
-          <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
-          <p style={styles.sectionText}>
-            Add public ticket choices. Seat Manager is for special, complimentary,
-            VIP, or blocked seats.
-          </p>
-        </div>
-
+      <CollapsibleSection
+        id="tickets"
+        eyebrow="Section 2"
+        title="Tickets & Prices"
+        description="Add public ticket choices, pricing, limits, and visibility."
+      >
         <div style={styles.ticketLayout}>
           <div style={styles.panel}>
             <h3 style={styles.panelTitle}>Add ticket type</h3>
@@ -1425,37 +1451,46 @@ export default async function AdminEventManagePage({
             </form>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <EventPrizeMenuSettings
-        eventId={event.id}
-        initialPrizes={event.prizes_json || []}
-        initialMenuOptions={event.menu_options || []}
-        updatePrizesAction={updatePrizesAction}
-        updateMenuOptionsAction={updateMenuOptionsAction}
-      />
+      <CollapsibleSection
+        id="prizes-menu"
+        eyebrow="Section 3"
+        title="Prizes & Menu"
+        description="Manage optional golden-ticket prizes and event menu choices."
+      >
+        <EventPrizeMenuSettings
+          eventId={event.id}
+          initialPrizes={event.prizes_json || []}
+          initialMenuOptions={event.menu_options || []}
+          updatePrizesAction={updatePrizesAction}
+          updateMenuOptionsAction={updateMenuOptionsAction}
+        />
+      </CollapsibleSection>
 
-      <EventWinnerDrawPanel
-        eventId={event.id}
-        eventType={event.event_type}
-        prizes={event.prizes_json || []}
-        winners={winners}
-        drawWinnerAction={runWinnerDrawAction}
-        deleteWinnerAction={deleteWinnerAction}
-        clearWinnersAction={clearWinnersAction}
-      />
-
-      {isReservedSeating && (
-        <section id="row-seating" style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <p style={styles.sectionEyebrow}>Section 3</p>
-            <h2 style={styles.sectionTitle}>Row Seating</h2>
-            <p style={styles.sectionText}>
-              Generate seats first. Use Seat Manager to mark special seats, block
-              seats, and save row layout nudges.
-            </p>
-          </div>
-
+      <CollapsibleSection
+        id="winner-draw"
+        eyebrow="Section 4"
+        title="Winner Draw"
+        description="Draw event winners from eligible paid event entries and keep winner history."
+      >
+        <EventWinnerDrawPanel
+          eventId={event.id}
+          eventType={event.event_type}
+          prizes={event.prizes_json || []}
+          winners={winners}
+          drawWinnerAction={runWinnerDrawAction}
+          deleteWinnerAction={deleteWinnerAction}
+          clearWinnersAction={clearWinnersAction}
+        />
+      </CollapsibleSection>
+            {isReservedSeating && (
+        <CollapsibleSection
+          id="row-seating"
+          eyebrow="Section 5"
+          title="Row Seating"
+          description="Generate seats first, then use Seat Manager to block seats, mark VIP/complimentary seats, and save row layout nudges."
+        >
           <div style={styles.twoPanel}>
             <form action={generateSeatsAction} style={styles.panel}>
               <input type="hidden" name="event_id" value={event.id} />
@@ -1482,12 +1517,22 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Rows">
-                <input name="rows" placeholder="1-10 or A-C or 1-3,8-10" style={styles.input} />
+                <input
+                  name="rows"
+                  placeholder="1-10 or A-C or 1-3,8-10"
+                  style={styles.input}
+                />
               </Field>
 
               <div style={styles.twoCol}>
                 <Field label="Seats per row">
-                  <input name="seats_per_row" type="number" min="1" placeholder="40" style={styles.input} />
+                  <input
+                    name="seats_per_row"
+                    type="number"
+                    min="1"
+                    placeholder="40"
+                    style={styles.input}
+                  />
                 </Field>
 
                 <Field label="Aisles after seats">
@@ -1510,12 +1555,37 @@ export default async function AdminEventManagePage({
 
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
-                <SummaryCard label="Normal public" value={rowSeats.filter((seat) => !seat.ticket_type_id && seat.status === "available").length} />
-                <SummaryCard label="Special marked" value={rowSeats.filter((seat) => seat.ticket_type_id).length} />
-                <SummaryCard label="VIP" value={rowSeats.filter((seat) => seat.seat_purpose === "vip").length} />
-                <SummaryCard label="Complimentary" value={rowSeats.filter((seat) => seat.seat_purpose === "complimentary").length} />
-                <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
-                <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
+                <SummaryCard
+                  label="Normal public"
+                  value={
+                    rowSeats.filter(
+                      (seat) => !seat.ticket_type_id && seat.status === "available",
+                    ).length
+                  }
+                />
+                <SummaryCard
+                  label="Special marked"
+                  value={rowSeats.filter((seat) => seat.ticket_type_id).length}
+                />
+                <SummaryCard
+                  label="VIP"
+                  value={rowSeats.filter((seat) => seat.seat_purpose === "vip").length}
+                />
+                <SummaryCard
+                  label="Complimentary"
+                  value={
+                    rowSeats.filter((seat) => seat.seat_purpose === "complimentary")
+                      .length
+                  }
+                />
+                <SummaryCard
+                  label="Blocked"
+                  value={rowSeats.filter((seat) => seat.status === "blocked").length}
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={rowSeats.filter((seat) => seat.status === "sold").length}
+                />
               </div>
 
               <p style={styles.sectionText}>
@@ -1562,19 +1632,16 @@ export default async function AdminEventManagePage({
               />
             )}
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
       {isTables && (
-        <section id="table-seating" style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <p style={styles.sectionEyebrow}>Section 3</p>
-            <h2 style={styles.sectionTitle}>Table Seating</h2>
-            <p style={styles.sectionText}>
-              Generate table layouts first, then name tables before publishing.
-            </p>
-          </div>
-
+        <CollapsibleSection
+          id="table-seating"
+          eyebrow="Section 5"
+          title="Table Seating"
+          description="Generate table layouts first, then name tables before publishing."
+        >
           <div style={styles.twoPanel}>
             <form action={generateTablesAction} style={styles.panel}>
               <input type="hidden" name="event_id" value={event.id} />
@@ -1594,11 +1661,23 @@ export default async function AdminEventManagePage({
 
               <div style={styles.twoCol}>
                 <Field label="Number of tables">
-                  <input name="table_count" type="number" min="1" placeholder="10" style={styles.input} />
+                  <input
+                    name="table_count"
+                    type="number"
+                    min="1"
+                    placeholder="10"
+                    style={styles.input}
+                  />
                 </Field>
 
                 <Field label="Seats per table">
-                  <input name="seats_per_table" type="number" min="1" placeholder="8" style={styles.input} />
+                  <input
+                    name="seats_per_table"
+                    type="number"
+                    min="1"
+                    placeholder="8"
+                    style={styles.input}
+                  />
                 </Field>
               </div>
 
@@ -1618,11 +1697,29 @@ export default async function AdminEventManagePage({
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
                 <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
-                <SummaryCard label="Named tables" value={Object.keys(event.table_names_json || {}).length} />
-                <SummaryCard label="VIP" value={tableSeats.filter((seat) => seat.seat_purpose === "vip").length} />
-                <SummaryCard label="Complimentary" value={tableSeats.filter((seat) => seat.seat_purpose === "complimentary").length} />
-                <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
-                <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
+                <SummaryCard
+                  label="Named tables"
+                  value={Object.keys(event.table_names_json || {}).length}
+                />
+                <SummaryCard
+                  label="VIP"
+                  value={tableSeats.filter((seat) => seat.seat_purpose === "vip").length}
+                />
+                <SummaryCard
+                  label="Complimentary"
+                  value={
+                    tableSeats.filter((seat) => seat.seat_purpose === "complimentary")
+                      .length
+                  }
+                />
+                <SummaryCard
+                  label="Blocked"
+                  value={tableSeats.filter((seat) => seat.status === "blocked").length}
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={tableSeats.filter((seat) => seat.status === "sold").length}
+                />
               </div>
 
               <p style={styles.sectionText}>
@@ -1691,18 +1788,15 @@ export default async function AdminEventManagePage({
               />
             )}
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
-      <section id="admin-tools" style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <p style={styles.sectionEyebrow}>Admin tools</p>
-          <h2 style={styles.sectionTitle}>Event Admin Tools</h2>
-          <p style={styles.sectionText}>
-            Premium event controls live here as we add them safely.
-          </p>
-        </div>
-
+      <CollapsibleSection
+        id="admin-tools"
+        eyebrow="Admin tools"
+        title="Event Admin Tools"
+        description="Premium event controls and shortcuts."
+      >
         <div style={styles.adminToolsGrid}>
           <EventAdminToolCard
             icon="🎫"
@@ -1718,7 +1812,7 @@ export default async function AdminEventManagePage({
             title="Prizes & menu"
             badge="Active"
             description="Manage event prizes, public prize visibility, menu choices, and guest questions."
-            href="#prizes"
+            href="#prizes-menu"
             actionLabel="Manage prizes"
           />
 
@@ -1760,19 +1854,56 @@ export default async function AdminEventManagePage({
             muted
           />
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section style={styles.dangerSection}>
-        <h2 style={styles.sectionTitle}>Danger zone</h2>
-
-        <form action={deleteEventAction}>
-          <input type="hidden" name="event_id" value={event.id} />
-          <button type="submit" style={styles.dangerButton}>
-            Delete event
-          </button>
-        </form>
-      </section>
+      <CollapsibleSection
+        id="danger-zone"
+        eyebrow="Final section"
+        title="Danger Zone"
+        description="Permanent destructive actions for this event."
+      >
+        <div style={styles.dangerSectionInner}>
+          <form action={deleteEventAction}>
+            <input type="hidden" name="event_id" value={event.id} />
+            <button type="submit" style={styles.dangerButton}>
+              Delete event
+            </button>
+          </form>
+        </div>
+      </CollapsibleSection>
     </main>
+  );
+}
+
+function CollapsibleSection({
+  id,
+  title,
+  eyebrow,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  description?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} open={defaultOpen} style={styles.section}>
+      <summary style={styles.collapsibleSummary}>
+        <div style={styles.collapsibleHeading}>
+          {eyebrow && <p style={styles.sectionEyebrow}>{eyebrow}</p>}
+          <h2 style={styles.sectionTitle}>{title}</h2>
+          {description && <p style={styles.sectionText}>{description}</p>}
+        </div>
+
+        <span style={styles.collapsibleToggle}>Open / close</span>
+      </summary>
+
+      <div style={styles.collapsibleBody}>{children}</div>
+    </details>
   );
 }
 
@@ -1974,6 +2105,16 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 14,
   },
+  tabDanger: {
+    padding: "10px 12px",
+    border: "1px solid #fecaca",
+    borderRadius: 999,
+    color: "#b91c1c",
+    background: "#fff7f7",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
   successBox: {
     padding: 12,
     background: "#dcfce7",
@@ -1999,6 +2140,32 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+  },
+  collapsibleSummary: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  collapsibleHeading: {
+    minWidth: 0,
+  },
+  collapsibleToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  collapsibleBody: {
+    marginTop: 16,
   },
   sectionHeader: { marginBottom: 16 },
   sectionEyebrow: {
@@ -2289,11 +2456,10 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 14,
   },
-  dangerSection: {
-    padding: 18,
-    borderRadius: 22,
+  dangerSectionInner: {
+    padding: 16,
+    borderRadius: 18,
     background: "#fef2f2",
     border: "1px solid #fecaca",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
 };
