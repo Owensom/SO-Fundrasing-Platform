@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useMemo, useState, type CSSProperties } from "react";
 
 type EventPrize = {
   id?: string;
@@ -6,6 +8,10 @@ type EventPrize = {
   title?: string;
   name?: string;
   description?: string;
+  isPublic?: boolean;
+  is_public?: boolean;
+  sortOrder?: number;
+  sort_order?: number;
 };
 
 type EventWinner = {
@@ -13,38 +19,50 @@ type EventWinner = {
   prize_id: string | null;
   prize_title: string;
   prize_position: number | null;
+  draw_scope: string;
   table_number: string | null;
   row_label: string | null;
   seat_number: string | null;
   winner_name: string | null;
   winner_email: string | null;
-  draw_scope: string;
-  draw_settings: Record<string, unknown>;
   status: string;
   drawn_at: string;
+  created_at: string;
 };
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "Unknown";
-
-  try {
-    return new Intl.DateTimeFormat("en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  } catch {
-    return "Unknown";
-  }
-}
-
-function prizeTitle(prize: EventPrize, index: number) {
-  return String(prize.title || prize.name || `Prize ${index + 1}`).trim();
+function prizeTitle(prize: EventPrize) {
+  return String(prize.title || prize.name || "").trim();
 }
 
 function prizePosition(prize: EventPrize, index: number) {
-  const raw = Number(prize.position);
-  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
-  return index + 1;
+  const position = Number(prize.position);
+  return Number.isFinite(position) && position > 0
+    ? Math.floor(position)
+    : index + 1;
+}
+
+function prizeId(prize: EventPrize, index: number) {
+  return String(prize.id || `prize-${index + 1}`);
+}
+
+function prizePayload(prize: EventPrize, index: number) {
+  return JSON.stringify({
+    id: prizeId(prize, index),
+    title: prizeTitle(prize),
+    position: prizePosition(prize, index),
+  });
+}
+
+function formatWinnerSeat(winner: EventWinner) {
+  if (winner.table_number) {
+    return `Table ${winner.table_number}${winner.seat_number ? ` · Seat ${winner.seat_number}` : ""}`;
+  }
+
+  if (winner.row_label || winner.seat_number) {
+    return `Row ${winner.row_label || "-"} · Seat ${winner.seat_number || "-"}`;
+  }
+
+  return "General admission";
 }
 
 export default function EventWinnerDrawPanel({
@@ -64,128 +82,205 @@ export default function EventWinnerDrawPanel({
   deleteWinnerAction: (formData: FormData) => void | Promise<void>;
   clearWinnersAction: (formData: FormData) => void | Promise<void>;
 }) {
-  const hasPrizes = prizes.length > 0;
-  const isTables = eventType === "tables";
+  const validPrizes = useMemo(
+    () => prizes.filter((prize) => prizeTitle(prize)),
+    [prizes],
+  );
+
+  const drawnPrizeIds = useMemo(
+    () =>
+      new Set(
+        winners
+          .filter((winner) => winner.status === "drawn")
+          .map((winner) => String(winner.prize_id || "").trim())
+          .filter(Boolean),
+      ),
+    [winners],
+  );
+
+  const remainingPrizes = useMemo(
+    () =>
+      validPrizes.filter(
+        (prize, index) => !drawnPrizeIds.has(prizeId(prize, index)),
+      ),
+    [validPrizes, drawnPrizeIds],
+  );
+
+  const firstRemainingPrize = remainingPrizes[0];
+  const firstRemainingIndex = firstRemainingPrize
+    ? validPrizes.findIndex((prize) => prize === firstRemainingPrize)
+    : -1;
+
+  const [selectedPrizeKey, setSelectedPrizeKey] = useState(
+    firstRemainingPrize && firstRemainingIndex >= 0
+      ? prizePayload(firstRemainingPrize, firstRemainingIndex)
+      : "",
+  );
+
+  const hasPrizes = validPrizes.length > 0;
+  const hasRemainingPrizes = remainingPrizes.length > 0;
 
   return (
     <section id="winner-draw" style={styles.section}>
       <div style={styles.sectionHeader}>
-        <p style={styles.sectionEyebrow}>Admin tools</p>
-        <h2 style={styles.sectionTitle}>Winner Draw</h2>
+        <p style={styles.sectionEyebrow}>Winner draw</p>
+        <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
         <p style={styles.sectionText}>
-          Draw event prize winners from paid event entries only. This is
-          events-only and does not affect raffles, squares, checkout, or public
-          event pages.
+          Draw winners from eligible paid event entries only. Already drawn
+          tickets are excluded before the draw starts.
         </p>
       </div>
 
-      <div style={styles.drawGrid}>
+      <div style={styles.statsGrid}>
+        <div style={styles.statBox}>
+          <p style={styles.statLabel}>Prizes</p>
+          <p style={styles.statValue}>{validPrizes.length}</p>
+        </div>
+
+        <div style={styles.statBox}>
+          <p style={styles.statLabel}>Remaining</p>
+          <p style={styles.statValue}>{remainingPrizes.length}</p>
+        </div>
+
+        <div style={styles.statBox}>
+          <p style={styles.statLabel}>Winners</p>
+          <p style={styles.statValue}>{winners.length}</p>
+        </div>
+
+        <div style={styles.statBox}>
+          <p style={styles.statLabel}>Event type</p>
+          <p style={styles.statValueSmall}>
+            {eventType === "tables"
+              ? "Tables"
+              : eventType === "reserved_seating"
+                ? "Reserved seating"
+                : "General admission"}
+          </p>
+        </div>
+      </div>
+
+      <div style={styles.grid}>
         <form action={drawWinnerAction} style={styles.panel}>
           <input type="hidden" name="event_id" value={eventId} />
 
           <div>
-            <h3 style={styles.panelTitle}>Draw a winner</h3>
+            <h3 style={styles.panelTitle}>Draw controls</h3>
             <p style={styles.sectionText}>
-              Select a prize and draw from eligible paid event tickets/seats.
+              Use “Draw selected prize” for one prize. “Draw all remaining
+              prizes” will be wired in the next server action step.
             </p>
           </div>
 
           {!hasPrizes ? (
-            <div style={styles.warningBox}>
-              Add prizes first in the Prizes section before drawing winners.
+            <div style={styles.emptyBox}>
+              Add prizes in the Prizes section before running a draw.
             </div>
           ) : (
             <>
               <label style={styles.field}>
-                <span style={styles.label}>Prize</span>
-                <select name="prize_key" required style={styles.input}>
-                  <option value="">Choose prize</option>
-
-                  {prizes.map((prize, index) => {
-                    const title = prizeTitle(prize, index);
-                    const position = prizePosition(prize, index);
-                    const id = String(prize.id || `prize-${index + 1}`);
+                <span style={styles.label}>Prize to draw</span>
+                <select
+                  name="prize_key"
+                  value={selectedPrizeKey}
+                  onChange={(event) => setSelectedPrizeKey(event.target.value)}
+                  style={styles.input}
+                  required
+                >
+                  <option value="">Choose a prize</option>
+                  {validPrizes.map((prize, index) => {
+                    const id = prizeId(prize, index);
+                    const alreadyDrawn = drawnPrizeIds.has(id);
 
                     return (
                       <option
-                        key={`${id}-${index}`}
-                        value={JSON.stringify({
-                          id,
-                          title,
-                          position,
-                        })}
+                        key={id}
+                        value={prizePayload(prize, index)}
+                        disabled={alreadyDrawn}
                       >
-                        {position}. {title}
+                        {prizePosition(prize, index)}. {prizeTitle(prize)}
+                        {alreadyDrawn ? " — already drawn" : ""}
                       </option>
                     );
                   })}
                 </select>
               </label>
 
-              <div style={styles.twoCol}>
-                <label style={styles.field}>
-                  <span style={styles.label}>Draw scope</span>
-                  <select name="draw_scope" defaultValue="all" style={styles.input}>
-                    <option value="all">All eligible paid entries</option>
-                    <option value="not_previous_winners">
-                      Exclude previous winner emails
-                    </option>
-                  </select>
-                </label>
+              <label style={styles.field}>
+                <span style={styles.label}>Draw scope</span>
+                <select name="draw_scope" defaultValue="not_previous_winners" style={styles.input}>
+                  <option value="not_previous_winners">
+                    Exclude previous winner emails
+                  </option>
+                  <option value="all">Allow previous winner emails</option>
+                </select>
+              </label>
 
-                {isTables ? (
-                  <label style={styles.field}>
-                    <span style={styles.label}>Max winners per table</span>
-                    <select
-                      name="max_winners_per_table"
-                      defaultValue="1"
-                      style={styles.input}
-                    >
-                      <option value="1">1 winner per table</option>
-                      <option value="2">2 winners per table</option>
-                      <option value="3">3 winners per table</option>
-                      <option value="0">Unlimited</option>
-                    </select>
-                  </label>
-                ) : (
-                  <input type="hidden" name="max_winners_per_table" value="0" />
-                )}
-              </div>
+              {eventType === "tables" && (
+                <label style={styles.field}>
+                  <span style={styles.label}>Max winners per table</span>
+                  <input
+                    name="max_winners_per_table"
+                    type="number"
+                    min="1"
+                    defaultValue="1"
+                    style={styles.input}
+                  />
+                </label>
+              )}
 
               <div style={styles.checkGrid}>
                 <label style={styles.checkboxLabel}>
-                  <input type="checkbox" name="include_vip" value="yes" defaultChecked />
-                  Include VIP seats
+                  <input type="checkbox" name="include_vip" value="yes" />
+                  Include VIP
                 </label>
 
                 <label style={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    name="include_complimentary"
-                    value="yes"
-                  />
-                  Include complimentary seats
+                  <input type="checkbox" name="include_complimentary" value="yes" />
+                  Include complimentary
                 </label>
 
                 <label style={styles.checkboxLabel}>
                   <input type="checkbox" name="include_staff" value="yes" />
-                  Include staff seats
+                  Include staff
                 </label>
 
                 <label style={styles.checkboxLabel}>
                   <input type="checkbox" name="include_sponsors" value="yes" />
-                  Include sponsor seats
+                  Include sponsors
                 </label>
 
                 <label style={styles.checkboxLabel}>
                   <input type="checkbox" name="include_guests" value="yes" />
-                  Include guest allocations
+                  Include guests
                 </label>
               </div>
 
-              <button type="submit" style={styles.primaryButton}>
-                Draw winner
-              </button>
+              <div style={styles.buttonRow}>
+                <button
+                  type="submit"
+                  name="draw_mode"
+                  value="single"
+                  disabled={!hasRemainingPrizes || !selectedPrizeKey}
+                  style={{
+                    ...styles.primaryButton,
+                    opacity:
+                      !hasRemainingPrizes || !selectedPrizeKey ? 0.45 : 1,
+                  }}
+                >
+                  Draw selected prize
+                </button>
+
+                <button
+                  type="submit"
+                  name="draw_mode"
+                  value="all_remaining"
+                  disabled
+                  style={{ ...styles.secondaryButton, opacity: 0.45 }}
+                  title="Next step: server action wiring"
+                >
+                  Draw all remaining prizes
+                </button>
+              </div>
             </>
           )}
         </form>
@@ -195,7 +290,7 @@ export default function EventWinnerDrawPanel({
             <div>
               <h3 style={styles.panelTitle}>Winner history</h3>
               <p style={styles.sectionText}>
-                Winners are saved to this event for audit/history.
+                Winners are stored against this event only.
               </p>
             </div>
 
@@ -203,7 +298,7 @@ export default function EventWinnerDrawPanel({
               <form action={clearWinnersAction}>
                 <input type="hidden" name="event_id" value={eventId} />
                 <button type="submit" style={styles.dangerOutlineButton}>
-                  Clear history
+                  Clear winners
                 </button>
               </form>
             )}
@@ -220,35 +315,19 @@ export default function EventWinnerDrawPanel({
                       {winner.prize_position ? `${winner.prize_position}. ` : ""}
                       {winner.prize_title}
                     </p>
-
                     <p style={styles.winnerName}>
                       {winner.winner_name || "Unnamed winner"}
                     </p>
-
                     <p style={styles.winnerMeta}>
-                      {winner.winner_email || "No email"}
-                    </p>
-
-                    <p style={styles.winnerMeta}>
-                      {winner.table_number
-                        ? `Table ${winner.table_number}`
-                        : winner.row_label || winner.seat_number
-                          ? `Row ${winner.row_label || "-"} Seat ${
-                              winner.seat_number || "-"
-                            }`
-                          : "General admission"}
-                    </p>
-
-                    <p style={styles.winnerMeta}>
-                      Drawn {formatDateTime(winner.drawn_at)}
+                      {winner.winner_email || "No email"} · {formatWinnerSeat(winner)}
                     </p>
                   </div>
 
                   <form action={deleteWinnerAction}>
                     <input type="hidden" name="event_id" value={eventId} />
                     <input type="hidden" name="winner_id" value={winner.id} />
-                    <button type="submit" style={styles.dangerOutlineButton}>
-                      Delete
+                    <button type="submit" style={styles.dangerMiniButton}>
+                      Remove
                     </button>
                   </form>
                 </div>
@@ -291,9 +370,39 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
   },
-  drawGrid: {
+  statsGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.9fr) minmax(320px, 1.1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  statBox: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  statLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  statValue: {
+    margin: "6px 0 0",
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 900,
+  },
+  statValueSmall: {
+    margin: "6px 0 0",
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 900,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 0.95fr) minmax(320px, 1.2fr)",
     gap: 16,
     alignItems: "start",
   },
@@ -321,7 +430,6 @@ const styles: Record<string, CSSProperties> = {
   field: {
     display: "grid",
     gap: 6,
-    minWidth: 0,
   },
   label: {
     color: "#334155",
@@ -339,27 +447,23 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxSizing: "border-box",
   },
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-  },
   checkGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
     gap: 8,
-    padding: 12,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
   },
   checkboxLabel: {
     display: "flex",
     gap: 8,
     alignItems: "center",
-    color: "#334155",
     fontWeight: 900,
+    color: "#334155",
     fontSize: 13,
+  },
+  buttonRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
   },
   primaryButton: {
     width: "fit-content",
@@ -368,6 +472,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  secondaryButton: {
+    width: "fit-content",
+    padding: "13px 18px",
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
     fontWeight: 900,
     cursor: "pointer",
   },
@@ -380,6 +494,16 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
+  dangerMiniButton: {
+    padding: "8px 11px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#ffffff",
+    color: "#b91c1c",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 12,
+  },
   emptyBox: {
     padding: 16,
     borderRadius: 16,
@@ -388,18 +512,10 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontWeight: 800,
   },
-  warningBox: {
-    padding: 16,
-    borderRadius: 16,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontWeight: 900,
-  },
   winnerList: {
     display: "grid",
     gap: 10,
-    maxHeight: 560,
+    maxHeight: 520,
     overflow: "auto",
     paddingRight: 4,
   },
@@ -407,7 +523,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "flex-start",
+    alignItems: "center",
     padding: 12,
     borderRadius: 16,
     background: "#ffffff",
@@ -419,12 +535,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 900,
     textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    letterSpacing: "0.06em",
   },
   winnerName: {
     margin: "5px 0 0",
     color: "#0f172a",
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: 900,
   },
   winnerMeta: {
