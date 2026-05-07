@@ -721,6 +721,7 @@ async function generateSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
+
 async function generateTablesAction(formData: FormData) {
   "use server";
 
@@ -786,11 +787,11 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
-
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
+  const drawMode = String(formData.get("draw_mode") || "single").trim();
   const selectedPrize = parsePrizeSelection(formData.get("prize_key"));
   const drawScope = String(formData.get("draw_scope") || "all").trim();
 
@@ -799,14 +800,57 @@ async function runWinnerDrawAction(formData: FormData) {
     0,
   );
 
-  if (!eventId || !selectedPrize) {
-    redirect(`/admin/events/${eventId}?error=missing-draw-data#winner-draw`);
+  if (!eventId) {
+    redirect("/admin/events?error=missing-event");
   }
 
   const event = await requireEventAccess(eventId);
+  const existingWinners = await listEventWinners(eventId);
 
-  const candidates = await getEligibleEventDrawCandidates({
-    eventId,
+  const drawnPrizeIds = new Set(
+    existingWinners
+      .filter((winner) => winner.status === "drawn")
+      .map((winner) => String(winner.prize_id || "").trim())
+      .filter(Boolean),
+  );
+
+  const eventPrizes: ParsedPrizeSelection[] = (event.prizes_json || [])
+    .map((prize, index) => {
+      const title = String(prize.title || prize.name || "").trim();
+      if (!title) return null;
+
+      const rawPosition = Number(prize.position);
+
+      return {
+        id: String(prize.id || `prize-${index + 1}`),
+        title,
+        position:
+          Number.isFinite(rawPosition) && rawPosition > 0
+            ? Math.floor(rawPosition)
+            : index + 1,
+      };
+    })
+    .filter(Boolean) as ParsedPrizeSelection[];
+
+  const prizesToDraw =
+    drawMode === "all_remaining"
+      ? eventPrizes.filter((prize) => !drawnPrizeIds.has(prize.id))
+      : selectedPrize
+        ? [selectedPrize]
+        : [];
+
+  if (prizesToDraw.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-draw-data#winner-draw`);
+  }
+
+  if (drawMode !== "all_remaining" && selectedPrize) {
+    if (drawnPrizeIds.has(selectedPrize.id)) {
+      redirect(`/admin/events/${eventId}?error=prize-already-drawn#winner-draw`);
+    }
+  }
+
+  const drawSettings = {
+    eventType: event.event_type,
     includeVip: String(formData.get("include_vip") || "") === "yes",
     includeComplimentary:
       String(formData.get("include_complimentary") || "") === "yes",
@@ -818,47 +862,61 @@ async function runWinnerDrawAction(formData: FormData) {
       event.event_type === "tables" && maxWinnersPerTableRaw > 0
         ? maxWinnersPerTableRaw
         : null,
-  });
+  };
 
-  const winner = chooseRandomCandidate(candidates);
+  let drawnCount = 0;
 
-  if (!winner) {
+  for (const prize of prizesToDraw) {
+    const candidates = await getEligibleEventDrawCandidates({
+      eventId,
+      includeVip: drawSettings.includeVip,
+      includeComplimentary: drawSettings.includeComplimentary,
+      includeStaff: drawSettings.includeStaff,
+      includeSponsors: drawSettings.includeSponsors,
+      includeGuests: drawSettings.includeGuests,
+      excludeWinnerEmails: drawSettings.excludeWinnerEmails,
+      maxWinnersPerTable: drawSettings.maxWinnersPerTable,
+    });
+
+    const winner = chooseRandomCandidate(candidates);
+
+    if (!winner) {
+      if (drawMode === "all_remaining" && drawnCount > 0) break;
+
+      redirect(`/admin/events/${eventId}?error=no-eligible-winner#winner-draw`);
+    }
+
+    await createEventWinner({
+      tenantSlug: event.tenant_slug,
+      eventId,
+      prizeId: prize.id,
+      prizeTitle: prize.title,
+      prizePosition: prize.position,
+      drawScope,
+      drawSettings,
+      eventOrderId: winner.event_order_id,
+      eventOrderItemId: winner.event_order_item_id,
+      eventSeatId: winner.event_seat_id,
+      ticketTypeId: winner.ticket_type_id,
+      tableNumber: winner.table_number,
+      rowLabel: winner.row_label,
+      seatNumber: winner.seat_number,
+      winnerName: winner.winner_name,
+      winnerEmail: winner.winner_email,
+    });
+
+    drawnCount += 1;
+  }
+
+  if (drawnCount === 0) {
     redirect(`/admin/events/${eventId}?error=no-eligible-winner#winner-draw`);
   }
 
-  await createEventWinner({
-    tenantSlug: event.tenant_slug,
-    eventId,
-    prizeId: selectedPrize.id,
-    prizeTitle: selectedPrize.title,
-    prizePosition: selectedPrize.position,
-    drawScope,
-    drawSettings: {
-      eventType: event.event_type,
-      includeVip: String(formData.get("include_vip") || "") === "yes",
-      includeComplimentary:
-        String(formData.get("include_complimentary") || "") === "yes",
-      includeStaff: String(formData.get("include_staff") || "") === "yes",
-      includeSponsors: String(formData.get("include_sponsors") || "") === "yes",
-      includeGuests: String(formData.get("include_guests") || "") === "yes",
-      excludeWinnerEmails: drawScope === "not_previous_winners",
-      maxWinnersPerTable:
-        event.event_type === "tables" && maxWinnersPerTableRaw > 0
-          ? maxWinnersPerTableRaw
-          : null,
-    },
-    eventOrderId: winner.event_order_id,
-    eventOrderItemId: winner.event_order_item_id,
-    eventSeatId: winner.event_seat_id,
-    ticketTypeId: winner.ticket_type_id,
-    tableNumber: winner.table_number,
-    rowLabel: winner.row_label,
-    seatNumber: winner.seat_number,
-    winnerName: winner.winner_name,
-    winnerEmail: winner.winner_email,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=winner-drawn#winner-draw`);
+  redirect(
+    `/admin/events/${eventId}?saved=${
+      drawMode === "all_remaining" ? "all-winners-drawn" : "winner-drawn"
+    }#winner-draw`,
+  );
 }
 
 async function deleteWinnerAction(formData: FormData) {
@@ -1098,8 +1156,7 @@ export default async function AdminEventManagePage({
                 )}
               </div>
             </div>
-
-            <div style={styles.twoCol}>
+                        <div style={styles.twoCol}>
               <Field label="Location">
                 <input name="location" defaultValue={event.location || ""} style={styles.input} />
               </Field>
@@ -1192,7 +1249,8 @@ export default async function AdminEventManagePage({
           </form>
         </div>
       </section>
-            <section id="tickets" style={styles.section}>
+
+      <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
           <p style={styles.sectionEyebrow}>Section 2</p>
           <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
