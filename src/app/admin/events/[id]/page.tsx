@@ -376,7 +376,6 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
-
 async function updatePrizesAction(formData: FormData) {
   "use server";
 
@@ -481,6 +480,7 @@ async function addTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=ticket#tickets`);
 }
+
 async function updateTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -598,13 +598,10 @@ async function updateSelectedSeatsStatusAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
-
   const status = String(formData.get("status") || "").trim() as
     | "available"
     | "blocked";
-
   const seatIds = parseJsonStringArray(formData.get("seat_ids"));
-
   const returnAnchor =
     String(formData.get("return_anchor") || "").trim() === "table-seating"
       ? "table-seating"
@@ -638,7 +635,6 @@ async function deleteSelectedSeatsAction(formData: FormData) {
 
   const eventId = String(formData.get("event_id") || "").trim();
   const seatIds = parseJsonStringArray(formData.get("seat_ids"));
-
   const returnAnchor =
     String(formData.get("return_anchor") || "").trim() === "table-seating"
       ? "table-seating"
@@ -688,21 +684,11 @@ async function generateSeatsAction(formData: FormData) {
   const eventId = String(formData.get("event_id") || "").trim();
   const section = String(formData.get("section") || "").trim();
   const rowsRaw = String(formData.get("rows") || "").trim();
-
-  const seatsPerRow = positiveInteger(
-    formData.get("seats_per_row"),
-    0,
-  );
-
-  const aisleAfterList = parseAisleAfterList(
-    formData.get("aisle_after"),
-  );
-
+  const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
+  const aisleAfterList = parseAisleAfterList(formData.get("aisle_after"));
   const ticketTypeId =
     String(formData.get("ticket_type_id") || "").trim() || null;
-
-  const clearExisting =
-    String(formData.get("clear_existing") || "") === "yes";
+  const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
   if (!eventId || !rowsRaw || seatsPerRow <= 0) {
     redirect(`/admin/events/${eventId}?error=missing-seats#row-seating`);
@@ -728,34 +714,22 @@ async function generateSeatsAction(formData: FormData) {
           status: "available",
         });
       } catch {
-        // ignore duplicates
+        // Skip duplicate seats safely.
       }
     }
   }
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
-
 async function generateTablesAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
-
-  const tableCount = positiveInteger(
-    formData.get("table_count"),
-    0,
-  );
-
-  const seatsPerTable = positiveInteger(
-    formData.get("seats_per_table"),
-    0,
-  );
-
+  const tableCount = positiveInteger(formData.get("table_count"), 0);
+  const seatsPerTable = positiveInteger(formData.get("seats_per_table"), 0);
   const ticketTypeId =
     String(formData.get("ticket_type_id") || "").trim() || null;
-
-  const clearExisting =
-    String(formData.get("clear_existing") || "") === "yes";
+  const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
   if (!eventId || tableCount <= 0 || seatsPerTable <= 0) {
     redirect(`/admin/events/${eventId}?error=missing-tables#table-seating`);
@@ -779,7 +753,7 @@ async function generateTablesAction(formData: FormData) {
           status: "available",
         });
       } catch {
-        // ignore duplicates
+        // Skip duplicate seats safely.
       }
     }
   }
@@ -813,144 +787,6 @@ async function clearTableSeatsAction(formData: FormData) {
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
 
-async function runWinnerDrawAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  const selectedPrize = parsePrizeSelection(
-    formData.get("selected_prize"),
-  );
-
-  const allowMultipleWinnersPerTable =
-    String(formData.get("allow_multiple_winners_per_table") || "") === "yes";
-
-  const maxWinnersPerTable = Math.max(
-    1,
-    positiveInteger(formData.get("max_winners_per_table"), 1),
-  );
-
-  if (!eventId || !selectedPrize) {
-    redirect(`/admin/events/${eventId}?error=missing-draw-data#admin-tools`);
-  }
-
-  const event = await requireEventAccess(eventId);
-
-  const existingWinners = await listEventWinners(eventId);
-
-  const existingWinningSeatIds = new Set(
-    existingWinners
-      .map((winner) => winner.seat_id)
-      .filter(Boolean),
-  );
-
-  const winnersPerTable = new Map<string, number>();
-
-  for (const winner of existingWinners) {
-    const tableNumber = String(winner.table_number || "").trim();
-
-    if (!tableNumber) continue;
-
-    winnersPerTable.set(
-      tableNumber,
-      (winnersPerTable.get(tableNumber) || 0) + 1,
-    );
-  }
-
-  let candidates = await getEligibleEventDrawCandidates(eventId);
-
-  candidates = candidates.filter(
-    (candidate) => !existingWinningSeatIds.has(candidate.seat_id),
-  );
-
-  if (event.event_type === "tables" && !allowMultipleWinnersPerTable) {
-    candidates = candidates.filter((candidate) => {
-      const tableNumber = String(candidate.table_number || "").trim();
-
-      if (!tableNumber) return true;
-
-      return !winnersPerTable.has(tableNumber);
-    });
-  }
-
-  if (event.event_type === "tables" && allowMultipleWinnersPerTable) {
-    candidates = candidates.filter((candidate) => {
-      const tableNumber = String(candidate.table_number || "").trim();
-
-      if (!tableNumber) return true;
-
-      return (winnersPerTable.get(tableNumber) || 0) < maxWinnersPerTable;
-    });
-  }
-
-  const winner = chooseRandomCandidate(candidates);
-
-  if (!winner) {
-    redirect(`/admin/events/${eventId}?error=no-eligible-winner#admin-tools`);
-  }
-
-  await createEventWinner({
-    eventId,
-    prizeId: selectedPrize.id,
-    prizeTitle: selectedPrize.title,
-    prizePosition: selectedPrize.position,
-    winnerName: winner.customer_name,
-    winnerEmail: winner.customer_email,
-    seatId: winner.seat_id,
-    rowLabel: winner.row_label,
-    seatNumber: winner.seat_number,
-    tableNumber: winner.table_number,
-    ticketTypeName: winner.ticket_type_name,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=winner-drawn#admin-tools`);
-}
-
-async function deleteWinnerAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const winnerId = String(formData.get("winner_id") || "").trim();
-
-  if (!eventId || !winnerId) {
-    redirect(`/admin/events/${eventId}?error=missing-winner#admin-tools`);
-  }
-
-  await requireEventAccess(eventId);
-
-  await deleteEventWinner(winnerId);
-
-  redirect(`/admin/events/${eventId}?saved=winner-deleted#admin-tools`);
-}
-
-async function clearWinnersAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (!eventId) {
-    redirect(`/admin/events?error=missing-event`);
-  }
-
-  await requireEventAccess(eventId);
-
-  await clearEventWinners(eventId);
-
-  redirect(`/admin/events/${eventId}?saved=winners-cleared#admin-tools`);
-}
-
-async function deleteEventAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (eventId) {
-    await requireEventAccess(eventId);
-    await deleteEvent(eventId);
-  }
-
-  redirect("/admin/events");
-}
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -1068,6 +904,7 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1355,8 +1192,7 @@ export default async function AdminEventManagePage({
           </form>
         </div>
       </section>
-
-      <section id="tickets" style={styles.section}>
+            <section id="tickets" style={styles.section}>
         <div style={styles.sectionHeader}>
           <p style={styles.sectionEyebrow}>Section 2</p>
           <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
