@@ -121,6 +121,42 @@ export type EventOrderItem = {
   created_at: string;
 };
 
+export type EventWinner = {
+  id: string;
+  tenant_slug: string;
+  event_id: string;
+  prize_id: string | null;
+  prize_title: string;
+  prize_position: number | null;
+  draw_scope: string;
+  draw_settings: Record<string, unknown>;
+  event_order_id: string | null;
+  event_order_item_id: string | null;
+  event_seat_id: string | null;
+  ticket_type_id: string | null;
+  table_number: string | null;
+  row_label: string | null;
+  seat_number: string | null;
+  winner_name: string | null;
+  winner_email: string | null;
+  status: string;
+  drawn_at: string;
+  created_at: string;
+};
+
+export type EventDrawCandidate = {
+  event_order_id: string | null;
+  event_order_item_id: string | null;
+  event_seat_id: string | null;
+  ticket_type_id: string | null;
+  table_number: string | null;
+  row_label: string | null;
+  seat_number: string | null;
+  winner_name: string | null;
+  winner_email: string | null;
+  seat_purpose: string | null;
+};
+
 export type CreateEventInput = {
   tenantSlug: string;
   slug: string;
@@ -970,6 +1006,263 @@ export async function deleteEventTableSeats(eventId: string): Promise<void> {
 }
 
 /* =========================
+   EVENT WINNERS
+========================= */
+
+export async function listEventWinners(
+  eventId: string,
+): Promise<EventWinner[]> {
+  return query<EventWinner>(
+    `
+    select *
+    from event_winners
+    where event_id = $1
+    order by
+      prize_position asc nulls last,
+      drawn_at desc,
+      created_at desc
+    `,
+    [eventId],
+  );
+}
+
+export async function deleteEventWinner(id: string): Promise<void> {
+  await query(
+    `
+    delete from event_winners
+    where id = $1
+    `,
+    [id],
+  );
+}
+
+export async function clearEventWinners(eventId: string): Promise<void> {
+  await query(
+    `
+    delete from event_winners
+    where event_id = $1
+    `,
+    [eventId],
+  );
+}
+
+export async function createEventWinner(input: {
+  tenantSlug: string;
+  eventId: string;
+  prizeId?: string | null;
+  prizeTitle: string;
+  prizePosition?: number | null;
+  drawScope?: string;
+  drawSettings?: Record<string, unknown>;
+  eventOrderId?: string | null;
+  eventOrderItemId?: string | null;
+  eventSeatId?: string | null;
+  ticketTypeId?: string | null;
+  tableNumber?: string | null;
+  rowLabel?: string | null;
+  seatNumber?: string | null;
+  winnerName?: string | null;
+  winnerEmail?: string | null;
+  status?: string;
+}): Promise<EventWinner> {
+  const created = await queryOne<EventWinner>(
+    `
+    insert into event_winners (
+      tenant_slug,
+      event_id,
+      prize_id,
+      prize_title,
+      prize_position,
+      draw_scope,
+      draw_settings,
+      event_order_id,
+      event_order_item_id,
+      event_seat_id,
+      ticket_type_id,
+      table_number,
+      row_label,
+      seat_number,
+      winner_name,
+      winner_email,
+      status
+    )
+    values (
+      $1,$2,
+      $3,$4,$5,
+      $6,$7::jsonb,
+      $8,$9,$10,
+      $11,
+      $12,$13,$14,
+      $15,$16,
+      $17
+    )
+    returning *
+    `,
+    [
+      input.tenantSlug,
+      input.eventId,
+      input.prizeId ?? null,
+      input.prizeTitle,
+      input.prizePosition ?? null,
+      input.drawScope ?? "all",
+      JSON.stringify(input.drawSettings ?? {}),
+      input.eventOrderId ?? null,
+      input.eventOrderItemId ?? null,
+      input.eventSeatId ?? null,
+      input.ticketTypeId ?? null,
+      input.tableNumber ?? null,
+      input.rowLabel ?? null,
+      input.seatNumber ?? null,
+      normaliseNullableText(input.winnerName),
+      normaliseNullableText(input.winnerEmail),
+      input.status ?? "drawn",
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event winner");
+  }
+
+  return created;
+}
+
+export async function getEligibleEventDrawCandidates(input: {
+  eventId: string;
+  includeComplimentary?: boolean;
+  includeVip?: boolean;
+  includeStaff?: boolean;
+  includeSponsors?: boolean;
+  includeGuests?: boolean;
+  excludeWinnerEmails?: boolean;
+  maxWinnersPerTable?: number | null;
+}): Promise<EventDrawCandidate[]> {
+  const winners = input.excludeWinnerEmails
+    ? await query<{ winner_email: string }>(
+        `
+        select distinct winner_email
+        from event_winners
+        where event_id = $1
+          and winner_email is not null
+        `,
+        [input.eventId],
+      )
+    : [];
+
+  const excludedEmails = winners
+    .map((row) => String(row.winner_email || "").trim().toLowerCase())
+    .filter(Boolean);
+
+  const rows = await query<EventDrawCandidate>(
+    `
+    select
+      eo.id as event_order_id,
+      eoi.id as event_order_item_id,
+      es.id as event_seat_id,
+      coalesce(es.ticket_type_id, eoi.ticket_type_id) as ticket_type_id,
+      es.table_number,
+      es.row_label,
+      es.seat_number,
+      coalesce(
+        es.guest_name,
+        eoi.guest_name,
+        es.customer_name,
+        eo.customer_name
+      ) as winner_name,
+      lower(
+        coalesce(
+          es.guest_email,
+          es.customer_email,
+          eo.customer_email
+        )
+      ) as winner_email,
+      es.seat_purpose
+    from event_orders eo
+    inner join event_order_items eoi
+      on eoi.order_id = eo.id
+    left join event_seats es
+      on es.id = eoi.seat_id
+    where eo.event_id = $1
+      and eo.status = 'paid'
+    `,
+    [input.eventId],
+  );
+
+  const tableWinnerCounts = new Map<string, number>();
+
+  if (input.maxWinnersPerTable && input.maxWinnersPerTable > 0) {
+    const existingTableWinners = await query<{
+      table_number: string | null;
+      total: string;
+    }>(
+      `
+      select
+        table_number,
+        count(*)::text as total
+      from event_winners
+      where event_id = $1
+        and table_number is not null
+      group by table_number
+      `,
+      [input.eventId],
+    );
+
+    for (const row of existingTableWinners) {
+      if (!row.table_number) continue;
+      tableWinnerCounts.set(row.table_number, Number(row.total || 0));
+    }
+  }
+
+  return rows.filter((candidate) => {
+    const purpose = String(candidate.seat_purpose || "");
+
+    if (
+      purpose === "complimentary" &&
+      input.includeComplimentary === false
+    ) {
+      return false;
+    }
+
+    if (purpose === "vip" && input.includeVip === false) {
+      return false;
+    }
+
+    if (purpose === "staff" && input.includeStaff === false) {
+      return false;
+    }
+
+    if (purpose === "sponsor" && input.includeSponsors === false) {
+      return false;
+    }
+
+    if (purpose === "guest" && input.includeGuests === false) {
+      return false;
+    }
+
+    if (
+      excludedEmails.length > 0 &&
+      candidate.winner_email &&
+      excludedEmails.includes(candidate.winner_email)
+    ) {
+      return false;
+    }
+
+    if (
+      input.maxWinnersPerTable &&
+      input.maxWinnersPerTable > 0 &&
+      candidate.table_number
+    ) {
+      const currentCount = tableWinnerCounts.get(candidate.table_number) || 0;
+
+      if (currentCount >= input.maxWinnersPerTable) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/* =========================
    ORDERS
 ========================= */
 
@@ -1002,6 +1295,7 @@ export async function listEventOrderItems(
 export async function deleteEvent(id: string): Promise<void> {
   await query(`delete from event_order_items where event_id = $1`, [id]);
   await query(`delete from event_orders where event_id = $1`, [id]);
+  await query(`delete from event_winners where event_id = $1`, [id]);
   await query(`delete from event_seats where event_id = $1`, [id]);
   await query(`delete from event_ticket_types where event_id = $1`, [id]);
   await query(`delete from events where id = $1`, [id]);
