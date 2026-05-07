@@ -340,7 +340,6 @@ export function slugifyEventTitle(value: string): string {
 
   return slug || `event-${Date.now()}`;
 }
-
 /* =========================
    EVENTS
 ========================= */
@@ -906,7 +905,6 @@ export async function updateEventSeatsMetadata(input: {
     ],
   );
 }
-
 export async function updateEventSeatsStatus(input: {
   eventId: string;
   seatIds: string[];
@@ -1136,21 +1134,51 @@ export async function getEligibleEventDrawCandidates(input: {
   excludeWinnerEmails?: boolean;
   maxWinnersPerTable?: number | null;
 }): Promise<EventDrawCandidate[]> {
-  const winners = input.excludeWinnerEmails
+  const excludedEmailRows = input.excludeWinnerEmails
     ? await query<{ winner_email: string }>(
         `
-        select distinct winner_email
+        select distinct lower(winner_email) as winner_email
         from event_winners
         where event_id = $1
           and winner_email is not null
+          and trim(winner_email) <> ''
         `,
         [input.eventId],
       )
     : [];
 
-  const excludedEmails = winners
-    .map((row) => String(row.winner_email || "").trim().toLowerCase())
-    .filter(Boolean);
+  const excludedEmails = new Set(
+    excludedEmailRows
+      .map((row) => String(row.winner_email || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  const alreadyDrawnRows = await query<{
+    event_order_item_id: string | null;
+    event_seat_id: string | null;
+  }>(
+    `
+    select
+      event_order_item_id,
+      event_seat_id
+    from event_winners
+    where event_id = $1
+      and status = 'drawn'
+    `,
+    [input.eventId],
+  );
+
+  const alreadyDrawnOrderItemIds = new Set(
+    alreadyDrawnRows
+      .map((row) => row.event_order_item_id)
+      .filter(Boolean) as string[],
+  );
+
+  const alreadyDrawnSeatIds = new Set(
+    alreadyDrawnRows
+      .map((row) => row.event_seat_id)
+      .filter(Boolean) as string[],
+  );
 
   const rows = await query<EventDrawCandidate>(
     `
@@ -1183,6 +1211,7 @@ export async function getEligibleEventDrawCandidates(input: {
       on es.id = eoi.seat_id
     where eo.event_id = $1
       and eo.status = 'paid'
+    order by eo.created_at asc, eoi.created_at asc
     `,
     [input.eventId],
   );
@@ -1200,6 +1229,7 @@ export async function getEligibleEventDrawCandidates(input: {
         count(*)::text as total
       from event_winners
       where event_id = $1
+        and status = 'drawn'
         and table_number is not null
       group by table_number
       `,
@@ -1213,12 +1243,23 @@ export async function getEligibleEventDrawCandidates(input: {
   }
 
   return rows.filter((candidate) => {
-    const purpose = String(candidate.seat_purpose || "");
+    if (
+      candidate.event_order_item_id &&
+      alreadyDrawnOrderItemIds.has(candidate.event_order_item_id)
+    ) {
+      return false;
+    }
 
     if (
-      purpose === "complimentary" &&
-      input.includeComplimentary === false
+      candidate.event_seat_id &&
+      alreadyDrawnSeatIds.has(candidate.event_seat_id)
     ) {
+      return false;
+    }
+
+    const purpose = String(candidate.seat_purpose || "");
+
+    if (purpose === "complimentary" && input.includeComplimentary === false) {
       return false;
     }
 
@@ -1239,9 +1280,9 @@ export async function getEligibleEventDrawCandidates(input: {
     }
 
     if (
-      excludedEmails.length > 0 &&
+      input.excludeWinnerEmails &&
       candidate.winner_email &&
-      excludedEmails.includes(candidate.winner_email)
+      excludedEmails.has(String(candidate.winner_email).trim().toLowerCase())
     ) {
       return false;
     }
