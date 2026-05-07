@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -95,7 +96,12 @@ function createAudioContext() {
   if (typeof window === "undefined") return null;
 
   const AudioContextClass =
-    window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    window.AudioContext ||
+    (
+      window as unknown as {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext;
 
   return AudioContextClass ? new AudioContextClass() : null;
 }
@@ -153,7 +159,6 @@ function playRiser(audioCtx: AudioContext) {
   osc.start(now);
   osc.stop(now + 0.3);
 }
-
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
@@ -231,6 +236,9 @@ export default function EventWinnerDrawPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const allowRealSubmitRef = useRef(false);
 
   const [selectedPrizeKey, setSelectedPrizeKey] = useState("");
   const [drawMode, setDrawMode] = useState<"single" | "all_remaining">("single");
@@ -316,18 +324,30 @@ export default function EventWinnerDrawPanel({
     return audioCtx;
   }
 
-  function stopTimer() {
+  function clearDrawTimers() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    if (submitTimeoutRef.current) {
+      clearTimeout(submitTimeoutRef.current);
+      submitTimeoutRef.current = null;
+    }
   }
 
   function closeDraw() {
-    stopTimer();
+    clearDrawTimers();
+    allowRealSubmitRef.current = false;
     setDrawOverlayOpen(false);
     setDrawing(false);
     setSaving(false);
+    setConfetti([]);
   }
 
   function randomDisplayValue() {
@@ -358,9 +378,15 @@ export default function EventWinnerDrawPanel({
 
     return selectedPrizeLabel;
   }
+    async function runDramaticDraw(event: FormEvent<HTMLFormElement>) {
+    if (allowRealSubmitRef.current) {
+      allowRealSubmitRef.current = false;
+      return;
+    }
 
-  async function runDramaticDraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (drawing || saving) return;
 
     if (!hasPrizes) {
       setError("Add prizes before running a draw.");
@@ -389,7 +415,7 @@ export default function EventWinnerDrawPanel({
 
     let ticks = 0;
 
-    stopTimer();
+    clearDrawTimers();
 
     timerRef.current = setInterval(() => {
       setDisplayText(randomDisplayValue());
@@ -403,8 +429,13 @@ export default function EventWinnerDrawPanel({
       ticks += 1;
     }, 72);
 
-    window.setTimeout(() => {
-      stopTimer();
+    timeoutRef.current = setTimeout(() => {
+      if (!timerRef.current && !drawOverlayOpen) return;
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
 
       setDisplayText("WINNER");
       setDisplayPrize(selectedPrizeLabel);
@@ -414,11 +445,19 @@ export default function EventWinnerDrawPanel({
 
       if (audioCtx) playWinner(audioCtx);
 
-      window.setTimeout(() => {
+      submitTimeoutRef.current = setTimeout(() => {
+        allowRealSubmitRef.current = true;
         formRef.current?.requestSubmit();
       }, 950);
     }, 3200);
   }
+
+  useEffect(() => {
+    return () => {
+      clearDrawTimers();
+      allowRealSubmitRef.current = false;
+    };
+  }, []);
 
   return (
     <section id="winner-draw" style={styles.section}>
@@ -615,7 +654,8 @@ export default function EventWinnerDrawPanel({
             </>
           )}
         </form>
-                <div style={styles.panel}>
+
+        <div style={styles.panel}>
           <div style={styles.panelHeader}>
             <div>
               <h3 style={styles.panelTitle}>Winner history</h3>
@@ -667,8 +707,7 @@ export default function EventWinnerDrawPanel({
           )}
         </div>
       </div>
-
-      {drawOverlayOpen ? (
+            {drawOverlayOpen ? (
         <div style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
