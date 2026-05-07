@@ -79,6 +79,16 @@ function purposeLabel(value: string | null | undefined) {
   return "Normal";
 }
 
+function seatLabel(seat: Seat) {
+  if (seat.table_number) {
+    return `Table ${seat.table_number} · Seat ${seat.seat_number || "-"}`;
+  }
+
+  return `Row ${seat.row_label || "-"} · Seat ${seat.seat_number || "-"}${
+    seat.section ? ` · ${seat.section}` : ""
+  }`;
+}
+
 function colourForTicketType(
   ticketType: TicketType | undefined,
   ticketTypes: TicketType[],
@@ -117,114 +127,201 @@ function seatStyle({
 }): CSSProperties {
   const colour = colourForTicketType(ticketType, ticketTypes);
 
-  if (status === "blocked") {
-    return {
-      minWidth: 34,
-      height: 34,
-      borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "1px solid #64748b",
-      background: selected ? "#bae6fd" : "#334155",
-      color: selected ? "#082f49" : "#e2e8f0",
-      fontSize: 12,
-      fontWeight: 900,
-      cursor: "pointer",
-      position: "relative",
-    };
-  }
-
-  if (status === "sold") {
-    return {
-      minWidth: 34,
-      height: 34,
-      borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "1px solid #991b1b",
-      background: selected ? "#bae6fd" : "#fecaca",
-      color: selected ? "#082f49" : "#7f1d1d",
-      fontSize: 12,
-      fontWeight: 900,
-      cursor: "pointer",
-      position: "relative",
-    };
-  }
-
-  if (status === "reserved") {
-    return {
-      minWidth: 34,
-      height: 34,
-      borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "1px solid #f59e0b",
-      background: selected ? "#bae6fd" : "#fef3c7",
-      color: selected ? "#082f49" : "#92400e",
-      fontSize: 12,
-      fontWeight: 900,
-      cursor: "pointer",
-      position: "relative",
-    };
-  }
-
-  if (seatPurpose === "vip") {
-    return {
-      minWidth: 34,
-      height: 34,
-      borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "2px solid #7c3aed",
-      background: selected ? "#bae6fd" : "#ede9fe",
-      color: selected ? "#082f49" : "#4c1d95",
-      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
-      fontSize: 12,
-      fontWeight: 900,
-      cursor: "pointer",
-      position: "relative",
-    };
-  }
-
-  if (seatPurpose === "complimentary") {
-    return {
-      minWidth: 34,
-      height: 34,
-      borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "2px dashed #0f766e",
-      background: selected ? "#bae6fd" : "#ccfbf1",
-      color: selected ? "#082f49" : "#134e4a",
-      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
-      fontSize: 12,
-      fontWeight: 900,
-      cursor: "pointer",
-      position: "relative",
-    };
-  }
-
-  if (seatPurpose === "staff" || seatPurpose === "sponsor" || seatPurpose === "guest" || seatPurpose === "other") {
-    return {
-      minWidth: 34,
-      height: 34,
-      borderRadius: 8,
-      border: selected ? "3px solid #0284c7" : "2px solid #0ea5e9",
-      background: selected ? "#bae6fd" : "#e0f2fe",
-      color: selected ? "#082f49" : "#075985",
-      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
-      fontSize: 12,
-      fontWeight: 900,
-      cursor: "pointer",
-      position: "relative",
-    };
-  }
-
-  return {
+  const base: CSSProperties = {
     minWidth: 34,
     height: 34,
     borderRadius: 8,
-    border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
-    background: selected ? "#bae6fd" : colour.background,
-    color: selected ? "#082f49" : colour.text,
-    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
     fontSize: 12,
     fontWeight: 900,
     cursor: "pointer",
     position: "relative",
   };
+
+  if (status === "blocked") {
+    return {
+      ...base,
+      border: selected ? "3px solid #0284c7" : "1px solid #64748b",
+      background: selected ? "#bae6fd" : "#334155",
+      color: selected ? "#082f49" : "#e2e8f0",
+    };
+  }
+
+  if (status === "sold") {
+    return {
+      ...base,
+      border: selected ? "3px solid #0284c7" : "1px solid #991b1b",
+      background: selected ? "#bae6fd" : "#fecaca",
+      color: selected ? "#082f49" : "#7f1d1d",
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      ...base,
+      border: selected ? "3px solid #0284c7" : "1px solid #f59e0b",
+      background: selected ? "#bae6fd" : "#fef3c7",
+      color: selected ? "#082f49" : "#92400e",
+    };
+  }
+
+  if (seatPurpose === "vip") {
+    return {
+      ...base,
+      border: selected ? "3px solid #0284c7" : "2px solid #7c3aed",
+      background: selected ? "#bae6fd" : "#ede9fe",
+      color: selected ? "#082f49" : "#4c1d95",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+    };
+  }
+
+  if (seatPurpose === "complimentary") {
+    return {
+      ...base,
+      border: selected ? "3px solid #0284c7" : "2px dashed #0f766e",
+      background: selected ? "#bae6fd" : "#ccfbf1",
+      color: selected ? "#082f49" : "#134e4a",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+    };
+  }
+
+  if (
+    seatPurpose === "staff" ||
+    seatPurpose === "sponsor" ||
+    seatPurpose === "guest" ||
+    seatPurpose === "other"
+  ) {
+    return {
+      ...base,
+      border: selected ? "3px solid #0284c7" : "2px solid #0ea5e9",
+      background: selected ? "#bae6fd" : "#e0f2fe",
+      color: selected ? "#082f49" : "#075985",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+    };
+  }
+
+  return {
+    ...base,
+    border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
+    background: selected ? "#bae6fd" : colour.background,
+    color: selected ? "#082f49" : colour.text,
+    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+  };
 }
 
+function SeatAllocationRow({
+  seat,
+  eventId,
+  returnAnchor,
+  updateSelectedSeatsMetadataAction,
+}: {
+  seat: Seat;
+  eventId: string;
+  returnAnchor: string;
+  updateSelectedSeatsMetadataAction: (formData: FormData) => void | Promise<void>;
+}) {
+  return (
+    <form action={updateSelectedSeatsMetadataAction} style={styles.seatEditorRow}>
+      <input type="hidden" name="event_id" value={eventId} />
+      <input type="hidden" name="return_anchor" value={returnAnchor} />
+      <input type="hidden" name="seat_ids" value={JSON.stringify([seat.id])} />
+
+      <div style={styles.seatEditorHeader}>
+        <div>
+          <strong style={styles.seatEditorTitle}>{seatLabel(seat)}</strong>
+          <p style={styles.seatEditorMeta}>
+            Current: {purposeLabel(seat.seat_purpose)} · {seat.status}
+          </p>
+        </div>
+
+        <button type="submit" style={styles.miniPrimaryButton}>
+          Save this seat
+        </button>
+      </div>
+
+      <div style={styles.individualGrid}>
+        <label style={styles.field}>
+          <span style={styles.label}>Purpose</span>
+          <select
+            name="seat_purpose"
+            defaultValue={seat.seat_purpose || ""}
+            style={styles.input}
+          >
+            <option value="">Normal / no special purpose</option>
+            <option value="vip">VIP</option>
+            <option value="complimentary">Complimentary</option>
+            <option value="staff">Staff</option>
+            <option value="sponsor">Sponsor</option>
+            <option value="guest">Guest</option>
+            <option value="blocked">Blocked allocation</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+
+        <label style={styles.field}>
+          <span style={styles.label}>Admin label</span>
+          <input
+            name="admin_label"
+            defaultValue={seat.admin_label || ""}
+            placeholder="VIP, sponsor, staff..."
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.field}>
+          <span style={styles.label}>Guest name</span>
+          <input
+            name="guest_name"
+            defaultValue={seat.guest_name || ""}
+            placeholder="Optional"
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.field}>
+          <span style={styles.label}>Guest email</span>
+          <input
+            name="guest_email"
+            type="email"
+            defaultValue={seat.guest_email || ""}
+            placeholder="Optional"
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.field}>
+          <span style={styles.label}>Dietary requirements</span>
+          <input
+            name="dietary_requirements"
+            defaultValue={seat.dietary_requirements || ""}
+            placeholder="Optional"
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.field}>
+          <span style={styles.label}>Menu choice</span>
+          <input
+            name="menu_choice"
+            defaultValue={seat.menu_choice || ""}
+            placeholder="Optional"
+            style={styles.input}
+          />
+        </label>
+      </div>
+
+      <label style={styles.field}>
+        <span style={styles.label}>Admin note</span>
+        <textarea
+          name="admin_note"
+          defaultValue={seat.admin_note || ""}
+          rows={2}
+          placeholder="Internal note only."
+          style={styles.textarea}
+        />
+      </label>
+    </form>
+  );
+}
 export default function AdminSeatManager({
   eventId,
   seats,
@@ -255,13 +352,6 @@ export default function AdminSeatManager({
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
-  const [seatPurpose, setSeatPurpose] = useState<string>("");
-  const [adminLabel, setAdminLabel] = useState<string>("");
-  const [adminNote, setAdminNote] = useState<string>("");
-  const [guestName, setGuestName] = useState<string>("");
-  const [guestEmail, setGuestEmail] = useState<string>("");
-  const [dietaryRequirements, setDietaryRequirements] = useState<string>("");
-  const [menuChoice, setMenuChoice] = useState<string>("");
   const [manualOffsets, setManualOffsets] =
     useState<Record<string, number>>(initialSeatingLayout || {});
 
@@ -293,20 +383,6 @@ export default function AdminSeatManager({
     () => seats.filter((seat) => selectedSeatIds.includes(seat.id)),
     [seats, selectedSeatIds],
   );
-
-  useEffect(() => {
-    if (selectedSeats.length !== 1) return;
-
-    const seat = selectedSeats[0];
-
-    setSeatPurpose(seat.seat_purpose || "");
-    setAdminLabel(seat.admin_label || "");
-    setAdminNote(seat.admin_note || "");
-    setGuestName(seat.guest_name || "");
-    setGuestEmail(seat.guest_email || "");
-    setDietaryRequirements(seat.dietary_requirements || "");
-    setMenuChoice(seat.menu_choice || "");
-  }, [selectedSeats]);
 
   function changeRowOffset(rowKey: string, amount: number) {
     setManualOffsets((current) => ({
@@ -350,16 +426,6 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
-  function clearAllocationForm() {
-    setSeatPurpose("");
-    setAdminLabel("");
-    setAdminNote("");
-    setGuestName("");
-    setGuestEmail("");
-    setDietaryRequirements("");
-    setMenuChoice("");
-  }
-
   function selectNormalSeats() {
     setSelectedSeatIds(normalSeats.map((seat) => seat.id));
     setSelectedRowKeys([]);
@@ -381,9 +447,8 @@ export default function AdminSeatManager({
         <div>
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
-            Select seats to apply ticket markings, block/unblock seats, or save
-            guest and allocation details for VIP, complimentary, staff, sponsor,
-            guest, or blocked allocations.
+            Select seats to apply ticket markings, block/unblock seats, or edit
+            each guest allocation separately.
           </p>
         </div>
 
@@ -549,138 +614,6 @@ export default function AdminSeatManager({
           </button>
         </form>
 
-        <form action={updateSelectedSeatsMetadataAction} style={styles.allocationForm}>
-          <input type="hidden" name="event_id" value={eventId} />
-          <input type="hidden" name="return_anchor" value={returnAnchor} />
-          <input
-            type="hidden"
-            name="seat_ids"
-            value={JSON.stringify(selectedSeatIds)}
-          />
-
-          <div style={styles.allocationHeader}>
-            <div>
-              <h4 style={styles.allocationTitle}>Guest / allocation details</h4>
-              <p style={styles.text}>
-                Save admin-only details for selected seats. For blocked seats,
-                use the note field to explain why the seat is unavailable.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={clearAllocationForm}
-              style={styles.secondaryButton}
-            >
-              Clear form
-            </button>
-          </div>
-
-          <div style={styles.twoCol}>
-            <label style={styles.field}>
-              <span style={styles.label}>Seat purpose</span>
-              <select
-                name="seat_purpose"
-                value={seatPurpose}
-                onChange={(event) => setSeatPurpose(event.target.value)}
-                style={styles.input}
-              >
-                <option value="">Normal / no special purpose</option>
-                <option value="vip">VIP</option>
-                <option value="complimentary">Complimentary</option>
-                <option value="staff">Staff</option>
-                <option value="sponsor">Sponsor</option>
-                <option value="guest">Guest</option>
-                <option value="blocked">Blocked allocation</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Admin label</span>
-              <input
-                name="admin_label"
-                value={adminLabel}
-                onChange={(event) => setAdminLabel(event.target.value)}
-                placeholder="VIP guest, sponsor hold, staff seat..."
-                style={styles.input}
-              />
-            </label>
-          </div>
-
-          <div style={styles.twoCol}>
-            <label style={styles.field}>
-              <span style={styles.label}>Guest name</span>
-              <input
-                name="guest_name"
-                value={guestName}
-                onChange={(event) => setGuestName(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Guest email</span>
-              <input
-                name="guest_email"
-                type="email"
-                value={guestEmail}
-                onChange={(event) => setGuestEmail(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-          </div>
-
-          <div style={styles.twoCol}>
-            <label style={styles.field}>
-              <span style={styles.label}>Dietary requirements</span>
-              <input
-                name="dietary_requirements"
-                value={dietaryRequirements}
-                onChange={(event) => setDietaryRequirements(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Menu choice</span>
-              <input
-                name="menu_choice"
-                value={menuChoice}
-                onChange={(event) => setMenuChoice(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-          </div>
-
-          <label style={styles.field}>
-            <span style={styles.label}>Admin note</span>
-            <textarea
-              name="admin_note"
-              value={adminNote}
-              onChange={(event) => setAdminNote(event.target.value)}
-              rows={3}
-              placeholder="Internal note only. Example: Reserved for AV table, donor guest, sponsor allocation..."
-              style={styles.textarea}
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={selectedSeatIds.length === 0}
-            style={{
-              ...styles.primaryButton,
-              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
-            }}
-          >
-            Save allocation details
-          </button>
-        </form>
-
         <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
@@ -769,7 +702,34 @@ export default function AdminSeatManager({
         )}
       </div>
 
-      <div style={styles.mapPanel}>
+      <div style={styles.allocationPanel}>
+        <div>
+          <h4 style={styles.allocationTitle}>Individual seat allocation details</h4>
+          <p style={styles.text}>
+            Each selected seat can now have its own name, email, dietary
+            requirements, menu choice and admin note.
+          </p>
+        </div>
+
+        {selectedSeats.length === 0 ? (
+          <div style={styles.emptyBox}>
+            Select one or more seats to edit allocation details individually.
+          </div>
+        ) : (
+          <div style={styles.seatEditorList}>
+            {selectedSeats.map((seat) => (
+              <SeatAllocationRow
+                key={seat.id}
+                seat={seat}
+                eventId={eventId}
+                returnAnchor={returnAnchor}
+                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+            <div style={styles.mapPanel}>
         {Object.entries(byPrimaryGroup)
           .sort(([a], [b]) => numericSort(a, b))
           .map(([group, groupSeats]) => {
@@ -874,7 +834,9 @@ export default function AdminSeatManager({
                         >
                           ←
                         </button>
+
                         <span style={styles.offsetPill}>+{totalOffset}</span>
+
                         <button
                           type="button"
                           onClick={() => changeRowOffset(actualKey, 1)}
@@ -990,7 +952,7 @@ const styles: Record<string, CSSProperties> = {
   },
   summaryBox: { color: "#0f172a", fontSize: 14, fontWeight: 800 },
   actionForm: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
-  allocationForm: {
+  allocationPanel: {
     display: "grid",
     gap: 12,
     padding: 12,
@@ -998,18 +960,49 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
-  allocationHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "start",
-    flexWrap: "wrap",
-  },
   allocationTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 16,
     fontWeight: 900,
+  },
+  seatEditorList: {
+    display: "grid",
+    gap: 12,
+    maxHeight: 560,
+    overflow: "auto",
+    paddingRight: 4,
+  },
+  seatEditorRow: {
+    display: "grid",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  seatEditorHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  seatEditorTitle: {
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 900,
+  },
+  seatEditorMeta: {
+    margin: "3px 0 0",
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  individualGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 10,
   },
   twoCol: {
     display: "grid",
@@ -1066,6 +1059,17 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
+  miniPrimaryButton: {
+    minHeight: 36,
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    padding: "0 12px",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 13,
+  },
   secondaryButton: {
     minHeight: 40,
     borderRadius: 999,
@@ -1115,6 +1119,14 @@ const styles: Record<string, CSSProperties> = {
     padding: "0 14px",
     fontWeight: 900,
     cursor: "pointer",
+  },
+  emptyBox: {
+    padding: 16,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
   },
   mapPanel: {
     maxHeight: 640,
