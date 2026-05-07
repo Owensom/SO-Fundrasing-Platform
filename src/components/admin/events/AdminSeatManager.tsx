@@ -11,30 +11,21 @@ type TicketType = {
 type Seat = {
   id: string;
   ticket_type_id: string | null;
+
+  seat_purpose: string | null;
+  admin_label: string | null;
+  admin_note: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
+  dietary_requirements: string | null;
+  menu_choice: string | null;
+
   section: string | null;
   row_label: string | null;
   seat_number: string | null;
   table_number: string | null;
   aisle_after: number | null;
   status: string;
-
-  customer_name?: string | null;
-  customer_email?: string | null;
-
-  complimentary?: boolean | null;
-  vip?: boolean | null;
-  accessible?: boolean | null;
-  restricted_view?: boolean | null;
-
-  notes?: string | null;
-};
-
-type SeatMetadataForm = {
-  complimentary: boolean;
-  vip: boolean;
-  accessible: boolean;
-  restricted_view: boolean;
-  notes: string;
 };
 
 const specialColours = [
@@ -63,10 +54,8 @@ function numericSort(a: string | null, b: string | null) {
 function groupBy<T>(items: T[], getKey: (item: T) => string) {
   return items.reduce<Record<string, T[]>>((groups, item) => {
     const key = getKey(item);
-
     groups[key] = groups[key] || [];
     groups[key].push(item);
-
     return groups;
   }, {});
 }
@@ -77,6 +66,17 @@ function rowKeyForSeat(seat: Seat) {
 
 function rowVisualUnits(rowSeats: Seat[]) {
   return rowSeats.length + rowSeats.filter((seat) => seat.aisle_after).length * 2;
+}
+
+function purposeLabel(value: string | null | undefined) {
+  if (value === "vip") return "VIP";
+  if (value === "complimentary") return "Complimentary";
+  if (value === "staff") return "Staff";
+  if (value === "sponsor") return "Sponsor";
+  if (value === "guest") return "Guest";
+  if (value === "blocked") return "Blocked allocation";
+  if (value === "other") return "Other";
+  return "Normal";
 }
 
 function colourForTicketType(
@@ -107,45 +107,28 @@ function seatStyle({
   ticketType,
   ticketTypes,
   status,
-  complimentary,
-  vip,
+  seatPurpose,
 }: {
   selected: boolean;
   ticketType: TicketType | undefined;
   ticketTypes: TicketType[];
   status: string;
-  complimentary?: boolean | null;
-  vip?: boolean | null;
+  seatPurpose: string | null;
 }): CSSProperties {
   const colour = colourForTicketType(ticketType, ticketTypes);
-
-  let border = selected
-    ? "3px solid #0284c7"
-    : "1px solid #cbd5e1";
-
-  if (vip) {
-    border = selected
-      ? "3px solid #0284c7"
-      : "2px solid #7c3aed";
-  }
-
-  if (complimentary) {
-    border = selected
-      ? "3px solid #0284c7"
-      : "2px dashed #0f766e";
-  }
 
   if (status === "blocked") {
     return {
       minWidth: 34,
       height: 34,
       borderRadius: 8,
-      border,
+      border: selected ? "3px solid #0284c7" : "1px solid #64748b",
       background: selected ? "#bae6fd" : "#334155",
       color: selected ? "#082f49" : "#e2e8f0",
       fontSize: 12,
       fontWeight: 900,
       cursor: "pointer",
+      position: "relative",
     };
   }
 
@@ -154,12 +137,13 @@ function seatStyle({
       minWidth: 34,
       height: 34,
       borderRadius: 8,
-      border,
+      border: selected ? "3px solid #0284c7" : "1px solid #991b1b",
       background: selected ? "#bae6fd" : "#fecaca",
       color: selected ? "#082f49" : "#7f1d1d",
       fontSize: 12,
       fontWeight: 900,
       cursor: "pointer",
+      position: "relative",
     };
   }
 
@@ -168,12 +152,61 @@ function seatStyle({
       minWidth: 34,
       height: 34,
       borderRadius: 8,
-      border,
+      border: selected ? "3px solid #0284c7" : "1px solid #f59e0b",
       background: selected ? "#bae6fd" : "#fef3c7",
       color: selected ? "#082f49" : "#92400e",
       fontSize: 12,
       fontWeight: 900,
       cursor: "pointer",
+      position: "relative",
+    };
+  }
+
+  if (seatPurpose === "vip") {
+    return {
+      minWidth: 34,
+      height: 34,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "2px solid #7c3aed",
+      background: selected ? "#bae6fd" : "#ede9fe",
+      color: selected ? "#082f49" : "#4c1d95",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "pointer",
+      position: "relative",
+    };
+  }
+
+  if (seatPurpose === "complimentary") {
+    return {
+      minWidth: 34,
+      height: 34,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "2px dashed #0f766e",
+      background: selected ? "#bae6fd" : "#ccfbf1",
+      color: selected ? "#082f49" : "#134e4a",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "pointer",
+      position: "relative",
+    };
+  }
+
+  if (seatPurpose === "staff" || seatPurpose === "sponsor" || seatPurpose === "guest" || seatPurpose === "other") {
+    return {
+      minWidth: 34,
+      height: 34,
+      borderRadius: 8,
+      border: selected ? "3px solid #0284c7" : "2px solid #0ea5e9",
+      background: selected ? "#bae6fd" : "#e0f2fe",
+      color: selected ? "#082f49" : "#075985",
+      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
+      fontSize: 12,
+      fontWeight: 900,
+      cursor: "pointer",
+      position: "relative",
     };
   }
 
@@ -181,13 +214,14 @@ function seatStyle({
     minWidth: 34,
     height: 34,
     borderRadius: 8,
-    border,
+    border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
     background: selected ? "#bae6fd" : colour.background,
     color: selected ? "#082f49" : colour.text,
     boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
     fontSize: 12,
     fontWeight: 900,
     cursor: "pointer",
+    position: "relative",
   };
 }
 
@@ -198,8 +232,8 @@ export default function AdminSeatManager({
   currency,
   mode,
   applyTicketTypeAction,
-  updateSelectedSeatsStatusAction,
   updateSelectedSeatsMetadataAction,
+  updateSelectedSeatsStatusAction,
   updateSeatingLayoutAction,
   deleteSelectedSeatsAction,
   deleteSelectedRowsAction,
@@ -210,80 +244,32 @@ export default function AdminSeatManager({
   ticketTypes: TicketType[];
   currency: string;
   mode: "rows" | "tables";
-
-  applyTicketTypeAction: (
-    formData: FormData,
-  ) => void | Promise<void>;
-
-  updateSelectedSeatsStatusAction: (
-    formData: FormData,
-  ) => void | Promise<void>;
-
-  updateSelectedSeatsMetadataAction: (
-    formData: FormData,
-  ) => void | Promise<void>;
-
-  updateSeatingLayoutAction?: (
-    formData: FormData,
-  ) => void | Promise<void>;
-
-  deleteSelectedSeatsAction: (
-    formData: FormData,
-  ) => void | Promise<void>;
-
-  deleteSelectedRowsAction?: (
-    formData: FormData,
-  ) => void | Promise<void>;
-
+  applyTicketTypeAction: (formData: FormData) => void | Promise<void>;
+  updateSelectedSeatsMetadataAction: (formData: FormData) => void | Promise<void>;
+  updateSelectedSeatsStatusAction: (formData: FormData) => void | Promise<void>;
+  updateSeatingLayoutAction?: (formData: FormData) => void | Promise<void>;
+  deleteSelectedSeatsAction: (formData: FormData) => void | Promise<void>;
+  deleteSelectedRowsAction?: (formData: FormData) => void | Promise<void>;
   initialSeatingLayout?: Record<string, number>;
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
-
+  const [seatPurpose, setSeatPurpose] = useState<string>("");
+  const [adminLabel, setAdminLabel] = useState<string>("");
+  const [adminNote, setAdminNote] = useState<string>("");
+  const [guestName, setGuestName] = useState<string>("");
+  const [guestEmail, setGuestEmail] = useState<string>("");
+  const [dietaryRequirements, setDietaryRequirements] = useState<string>("");
+  const [menuChoice, setMenuChoice] = useState<string>("");
   const [manualOffsets, setManualOffsets] =
     useState<Record<string, number>>(initialSeatingLayout || {});
 
-  const [metadata, setMetadata] = useState<SeatMetadataForm>({
-    complimentary: false,
-    vip: false,
-    accessible: false,
-    restricted_view: false,
-    notes: "",
-  });
+  const returnAnchor = mode === "tables" ? "table-seating" : "row-seating";
 
   useEffect(() => {
     setManualOffsets(initialSeatingLayout || {});
   }, [initialSeatingLayout]);
-
-  const selectedSeats = useMemo(
-    () => seats.filter((seat) => selectedSeatIds.includes(seat.id)),
-    [seats, selectedSeatIds],
-  );
-
-  useEffect(() => {
-    if (selectedSeats.length === 0) {
-      setMetadata({
-        complimentary: false,
-        vip: false,
-        accessible: false,
-        restricted_view: false,
-        notes: "",
-      });
-
-      return;
-    }
-
-    const first = selectedSeats[0];
-
-    setMetadata({
-      complimentary: !!first.complimentary,
-      vip: !!first.vip,
-      accessible: !!first.accessible,
-      restricted_view: !!first.restricted_view,
-      notes: first.notes || "",
-    });
-  }, [selectedSeats]);
 
   const normalSeats = useMemo(
     () =>
@@ -303,6 +289,36 @@ export default function AdminSeatManager({
     [selectedRowKeys],
   );
 
+  const selectedSeats = useMemo(
+    () => seats.filter((seat) => selectedSeatIds.includes(seat.id)),
+    [seats, selectedSeatIds],
+  );
+
+  useEffect(() => {
+    if (selectedSeats.length !== 1) return;
+
+    const seat = selectedSeats[0];
+
+    setSeatPurpose(seat.seat_purpose || "");
+    setAdminLabel(seat.admin_label || "");
+    setAdminNote(seat.admin_note || "");
+    setGuestName(seat.guest_name || "");
+    setGuestEmail(seat.guest_email || "");
+    setDietaryRequirements(seat.dietary_requirements || "");
+    setMenuChoice(seat.menu_choice || "");
+  }, [selectedSeats]);
+
+  function changeRowOffset(rowKey: string, amount: number) {
+    setManualOffsets((current) => ({
+      ...current,
+      [rowKey]: Math.max(-20, Math.min(20, (current[rowKey] || 0) + amount)),
+    }));
+  }
+
+  function resetRowOffsets() {
+    setManualOffsets({});
+  }
+
   function toggleSeat(seatId: string) {
     setSelectedSeatIds((current) =>
       current.includes(seatId)
@@ -313,23 +329,17 @@ export default function AdminSeatManager({
 
   function toggleRow(rowKey: string, rowSeats: Seat[]) {
     const alreadySelected = selectedRowKeys.includes(rowKey);
-
     const rowSeatIds = rowSeats.map((seat) => seat.id);
 
     if (alreadySelected) {
-      setSelectedRowKeys((current) =>
-        current.filter((key) => key !== rowKey),
-      );
-
+      setSelectedRowKeys((current) => current.filter((key) => key !== rowKey));
       setSelectedSeatIds((current) =>
         current.filter((id) => !rowSeatIds.includes(id)),
       );
-
       return;
     }
 
     setSelectedRowKeys((current) => [...current, rowKey]);
-
     setSelectedSeatIds((current) =>
       Array.from(new Set([...current, ...rowSeatIds])),
     );
@@ -338,6 +348,16 @@ export default function AdminSeatManager({
   function clearSelection() {
     setSelectedSeatIds([]);
     setSelectedRowKeys([]);
+  }
+
+  function clearAllocationForm() {
+    setSeatPurpose("");
+    setAdminLabel("");
+    setAdminNote("");
+    setGuestName("");
+    setGuestEmail("");
+    setDietaryRequirements("");
+    setMenuChoice("");
   }
 
   function selectNormalSeats() {
@@ -350,20 +370,6 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
-  function changeRowOffset(rowKey: string, amount: number) {
-    setManualOffsets((current) => ({
-      ...current,
-      [rowKey]: Math.max(
-        -20,
-        Math.min(20, (current[rowKey] || 0) + amount),
-      ),
-    }));
-  }
-
-  function resetRowOffsets() {
-    setManualOffsets({});
-  }
-
   const byPrimaryGroup =
     mode === "tables"
       ? groupBy(seats, (seat) => seat.table_number || "No table")
@@ -374,10 +380,10 @@ export default function AdminSeatManager({
       <div style={styles.toolbar}>
         <div>
           <h3 style={styles.title}>Seat manager</h3>
-
           <p style={styles.text}>
-            Select seats to manage VIP, complimentary, accessibility,
-            restricted-view and blocked seats.
+            Select seats to apply ticket markings, block/unblock seats, or save
+            guest and allocation details for VIP, complimentary, staff, sponsor,
+            guest, or blocked allocations.
           </p>
         </div>
 
@@ -395,13 +401,11 @@ export default function AdminSeatManager({
               {updateSeatingLayoutAction && (
                 <form action={updateSeatingLayoutAction}>
                   <input type="hidden" name="event_id" value={eventId} />
-
                   <input
                     type="hidden"
                     name="seating_layout_json"
                     value={JSON.stringify(manualOffsets)}
                   />
-
                   <button type="submit" style={styles.primaryButton}>
                     Save row layout
                   </button>
@@ -413,17 +417,25 @@ export default function AdminSeatManager({
           <button
             type="button"
             onClick={selectNormalSeats}
-            style={styles.normalButton}
+            disabled={normalSeats.length === 0}
+            style={{
+              ...styles.normalButton,
+              opacity: normalSeats.length === 0 ? 0.45 : 1,
+            }}
           >
-            Select normal seats
+            Select normal seats ({normalSeats.length})
           </button>
 
           <button
             type="button"
             onClick={selectBlockedSeats}
-            style={styles.blockOutlineButton}
+            disabled={blockedSeats.length === 0}
+            style={{
+              ...styles.blockOutlineButton,
+              opacity: blockedSeats.length === 0 ? 0.45 : 1,
+            }}
           >
-            Select blocked seats
+            Select blocked seats ({blockedSeats.length})
           </button>
 
           <button
@@ -436,14 +448,73 @@ export default function AdminSeatManager({
         </div>
       </div>
 
+      <div style={styles.legendBox}>
+        <strong>Seat colours:</strong>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#dcfce7" }} />
+          Normal public
+        </span>
+
+        {ticketTypes.map((ticketType) => {
+          const colour = colourForTicketType(ticketType, ticketTypes);
+
+          return (
+            <span key={ticketType.id} style={styles.legendItem}>
+              <span style={{ ...styles.legendDot, background: colour.background }} />
+              {ticketType.name} — {currency} {moneyFromCents(ticketType.price)}
+            </span>
+          );
+        })}
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#ede9fe" }} />
+          VIP
+        </span>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#ccfbf1" }} />
+          Complimentary
+        </span>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#334155" }} />
+          Blocked
+        </span>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#fef3c7" }} />
+          Reserved
+        </span>
+
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: "#fecaca" }} />
+          Sold
+        </span>
+      </div>
+
+      <div style={styles.infoBox}>
+        <strong>{normalSeats.length}</strong> normal public seats ·{" "}
+        <strong>{blockedSeats.length}</strong> blocked seats ·{" "}
+        <strong>{seats.filter((seat) => seat.seat_purpose === "vip").length}</strong> VIP ·{" "}
+        <strong>{seats.filter((seat) => seat.seat_purpose === "complimentary").length}</strong>{" "}
+        complimentary.
+      </div>
+
       <div style={styles.actionPanel}>
         <div style={styles.summaryBox}>
           <strong>{selectedSeatIds.length}</strong> selected seats
+          {mode === "rows" && (
+            <>
+              {" "}
+              · <strong>{selectedRows.length}</strong> selected rows
+            </>
+          )}
         </div>
 
         <form action={applyTicketTypeAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
-
+          <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
             type="hidden"
             name="seat_ids"
@@ -458,176 +529,205 @@ export default function AdminSeatManager({
             required
           >
             <option value="">Choose seat marking</option>
-
-            <option value="__normal__">
-              Normal public seat
-            </option>
-
+            <option value="__normal__">Normal public seat</option>
             {ticketTypes.map((ticketType) => (
               <option key={ticketType.id} value={ticketType.id}>
-                {ticketType.name} — {currency}{" "}
-                {moneyFromCents(ticketType.price)}
+                {ticketType.name} — {currency} {moneyFromCents(ticketType.price)}
               </option>
             ))}
           </select>
 
           <button
             type="submit"
-            disabled={
-              selectedSeatIds.length === 0 || !ticketTypeId
-            }
-            style={styles.primaryButton}
+            disabled={selectedSeatIds.length === 0 || !ticketTypeId}
+            style={{
+              ...styles.primaryButton,
+              opacity: selectedSeatIds.length === 0 || !ticketTypeId ? 0.45 : 1,
+            }}
           >
             Apply marking
           </button>
         </form>
 
-        <form
-          action={updateSelectedSeatsMetadataAction}
-          style={styles.metadataPanel}
-        >
+        <form action={updateSelectedSeatsMetadataAction} style={styles.allocationForm}>
           <input type="hidden" name="event_id" value={eventId} />
-
+          <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
             type="hidden"
             name="seat_ids"
             value={JSON.stringify(selectedSeatIds)}
           />
 
-          <label style={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              name="complimentary"
-              checked={metadata.complimentary}
-              onChange={(event) =>
-                setMetadata((current) => ({
-                  ...current,
-                  complimentary: event.target.checked,
-                }))
-              }
-            />
-            Complimentary
-          </label>
+          <div style={styles.allocationHeader}>
+            <div>
+              <h4 style={styles.allocationTitle}>Guest / allocation details</h4>
+              <p style={styles.text}>
+                Save admin-only details for selected seats. For blocked seats,
+                use the note field to explain why the seat is unavailable.
+              </p>
+            </div>
 
-          <label style={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              name="vip"
-              checked={metadata.vip}
-              onChange={(event) =>
-                setMetadata((current) => ({
-                  ...current,
-                  vip: event.target.checked,
-                }))
-              }
-            />
-            VIP
-          </label>
+            <button
+              type="button"
+              onClick={clearAllocationForm}
+              style={styles.secondaryButton}
+            >
+              Clear form
+            </button>
+          </div>
 
-          <label style={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              name="accessible"
-              checked={metadata.accessible}
-              onChange={(event) =>
-                setMetadata((current) => ({
-                  ...current,
-                  accessible: event.target.checked,
-                }))
-              }
-            />
-            Accessible
-          </label>
+          <div style={styles.twoCol}>
+            <label style={styles.field}>
+              <span style={styles.label}>Seat purpose</span>
+              <select
+                name="seat_purpose"
+                value={seatPurpose}
+                onChange={(event) => setSeatPurpose(event.target.value)}
+                style={styles.input}
+              >
+                <option value="">Normal / no special purpose</option>
+                <option value="vip">VIP</option>
+                <option value="complimentary">Complimentary</option>
+                <option value="staff">Staff</option>
+                <option value="sponsor">Sponsor</option>
+                <option value="guest">Guest</option>
+                <option value="blocked">Blocked allocation</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
 
-          <label style={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              name="restricted_view"
-              checked={metadata.restricted_view}
-              onChange={(event) =>
-                setMetadata((current) => ({
-                  ...current,
-                  restricted_view: event.target.checked,
-                }))
-              }
-            />
-            Restricted view
-          </label>
+            <label style={styles.field}>
+              <span style={styles.label}>Admin label</span>
+              <input
+                name="admin_label"
+                value={adminLabel}
+                onChange={(event) => setAdminLabel(event.target.value)}
+                placeholder="VIP guest, sponsor hold, staff seat..."
+                style={styles.input}
+              />
+            </label>
+          </div>
 
-          <textarea
-            name="notes"
-            placeholder="Internal admin notes"
-            value={metadata.notes}
-            onChange={(event) =>
-              setMetadata((current) => ({
-                ...current,
-                notes: event.target.value,
-              }))
-            }
-            style={styles.notes}
-          />
+          <div style={styles.twoCol}>
+            <label style={styles.field}>
+              <span style={styles.label}>Guest name</span>
+              <input
+                name="guest_name"
+                value={guestName}
+                onChange={(event) => setGuestName(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Guest email</span>
+              <input
+                name="guest_email"
+                type="email"
+                value={guestEmail}
+                onChange={(event) => setGuestEmail(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <div style={styles.twoCol}>
+            <label style={styles.field}>
+              <span style={styles.label}>Dietary requirements</span>
+              <input
+                name="dietary_requirements"
+                value={dietaryRequirements}
+                onChange={(event) => setDietaryRequirements(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Menu choice</span>
+              <input
+                name="menu_choice"
+                value={menuChoice}
+                onChange={(event) => setMenuChoice(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <label style={styles.field}>
+            <span style={styles.label}>Admin note</span>
+            <textarea
+              name="admin_note"
+              value={adminNote}
+              onChange={(event) => setAdminNote(event.target.value)}
+              rows={3}
+              placeholder="Internal note only. Example: Reserved for AV table, donor guest, sponsor allocation..."
+              style={styles.textarea}
+            />
+          </label>
 
           <button
             type="submit"
             disabled={selectedSeatIds.length === 0}
-            style={styles.primaryButton}
+            style={{
+              ...styles.primaryButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
           >
-            Save metadata
+            Save allocation details
           </button>
         </form>
 
-        <form
-          action={updateSelectedSeatsStatusAction}
-          style={styles.actionForm}
-        >
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
-
+          <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
             type="hidden"
             name="seat_ids"
             value={JSON.stringify(selectedSeatIds)}
           />
-
           <input type="hidden" name="status" value="blocked" />
 
           <button
             type="submit"
             disabled={selectedSeatIds.length === 0}
-            style={styles.blockButton}
+            style={{
+              ...styles.blockButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
           >
-            Block seats
+            Block selected seats
           </button>
         </form>
 
-        <form
-          action={updateSelectedSeatsStatusAction}
-          style={styles.actionForm}
-        >
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
-
+          <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
             type="hidden"
             name="seat_ids"
             value={JSON.stringify(selectedSeatIds)}
           />
-
           <input type="hidden" name="status" value="available" />
 
           <button
             type="submit"
             disabled={selectedSeatIds.length === 0}
-            style={styles.normalButton}
+            style={{
+              ...styles.normalButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
           >
-            Unblock seats
+            Unblock selected seats
           </button>
         </form>
 
-        <form
-          action={deleteSelectedSeatsAction}
-          style={styles.actionForm}
-        >
+        <form action={deleteSelectedSeatsAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
-
+          <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
             type="hidden"
             name="seat_ids"
@@ -637,19 +737,18 @@ export default function AdminSeatManager({
           <button
             type="submit"
             disabled={selectedSeatIds.length === 0}
-            style={styles.dangerButton}
+            style={{
+              ...styles.dangerButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
           >
-            Delete seats
+            Delete selected seats
           </button>
         </form>
 
         {mode === "rows" && deleteSelectedRowsAction && (
-          <form
-            action={deleteSelectedRowsAction}
-            style={styles.actionForm}
-          >
+          <form action={deleteSelectedRowsAction} style={styles.actionForm}>
             <input type="hidden" name="event_id" value={eventId} />
-
             <input
               type="hidden"
               name="row_keys"
@@ -659,9 +758,12 @@ export default function AdminSeatManager({
             <button
               type="submit"
               disabled={selectedRows.length === 0}
-              style={styles.dangerButton}
+              style={{
+                ...styles.dangerButton,
+                opacity: selectedRows.length === 0 ? 0.45 : 1,
+              }}
             >
-              Delete rows
+              Delete selected rows
             </button>
           </form>
         )}
@@ -674,36 +776,37 @@ export default function AdminSeatManager({
             if (mode === "tables") {
               return (
                 <div key={group} style={styles.tableCard}>
-                  <h4 style={styles.groupTitle}>
-                    Table {group}
-                  </h4>
+                  <h4 style={styles.groupTitle}>Table {group}</h4>
 
                   <div style={styles.seatLineWrap}>
                     {groupSeats
                       .slice()
-                      .sort((a, b) =>
-                        numericSort(a.seat_number, b.seat_number),
-                      )
+                      .sort((a, b) => numericSort(a.seat_number, b.seat_number))
                       .map((seat) => {
                         const ticketType = ticketTypes.find(
-                          (item) =>
-                            item.id === seat.ticket_type_id,
+                          (item) => item.id === seat.ticket_type_id,
                         );
+                        const selected = selectedSeatIds.includes(seat.id);
+                        const labelParts = [
+                          `Seat ${seat.seat_number || ""}`,
+                          purposeLabel(seat.seat_purpose),
+                          seat.admin_label || "",
+                          seat.guest_name || "",
+                          seat.status,
+                        ].filter(Boolean);
 
                         return (
                           <button
                             key={seat.id}
                             type="button"
                             onClick={() => toggleSeat(seat.id)}
+                            title={labelParts.join(" · ")}
                             style={seatStyle({
-                              selected:
-                                selectedSeatIds.includes(seat.id),
+                              selected,
                               ticketType,
                               ticketTypes,
                               status: seat.status,
-                              complimentary:
-                                seat.complimentary,
-                              vip: seat.vip,
+                              seatPurpose: seat.seat_purpose,
                             })}
                           >
                             {seat.seat_number}
@@ -715,20 +818,15 @@ export default function AdminSeatManager({
               );
             }
 
-            const rows = groupBy(
-              groupSeats,
-              (seat) => seat.row_label || "No row",
-            );
+            const rows = groupBy(groupSeats, (seat) => seat.row_label || "No row");
 
-            const rowEntries = Object.entries(rows).sort(
-              ([a], [b]) => numericSort(a, b),
+            const rowEntries = Object.entries(rows).sort(([a], [b]) =>
+              numericSort(a, b),
             );
 
             const maxUnits = Math.max(
               1,
-              ...rowEntries.map(([, rowSeats]) =>
-                rowVisualUnits(rowSeats),
-              ),
+              ...rowEntries.map(([, rowSeats]) => rowVisualUnits(rowSeats)),
             );
 
             return (
@@ -739,49 +837,29 @@ export default function AdminSeatManager({
                   const actualKey =
                     rowSeats.length > 0
                       ? rowKeyForSeat(rowSeats[0])
-                      : `${group}|${row}`;
+                      : `${group === "Main" ? "" : group}|${row}`;
 
-                  const rowSelected =
-                    selectedRowKeys.includes(actualKey);
-
+                  const rowSelected = selectedRowKeys.includes(actualKey);
                   const sortedRowSeats = rowSeats
                     .slice()
-                    .sort((a, b) =>
-                      numericSort(a.seat_number, b.seat_number),
-                    );
+                    .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
                   const autoOffset = Math.max(
                     0,
-                    Math.floor(
-                      (maxUnits -
-                        rowVisualUnits(rowSeats)) /
-                        2,
-                    ),
+                    Math.floor((maxUnits - rowVisualUnits(rowSeats)) / 2),
                   );
 
-                  const manualOffset =
-                    manualOffsets[actualKey] || 0;
-
-                  const totalOffset = Math.max(
-                    0,
-                    autoOffset + manualOffset,
-                  );
+                  const manualOffset = manualOffsets[actualKey] || 0;
+                  const totalOffset = Math.max(0, autoOffset + manualOffset);
 
                   return (
-                    <div
-                      key={`${group}-${row}`}
-                      style={styles.rowLine}
-                    >
+                    <div key={`${group}-${row}`} style={styles.rowLine}>
                       <button
                         type="button"
-                        onClick={() =>
-                          toggleRow(actualKey, rowSeats)
-                        }
+                        onClick={() => toggleRow(actualKey, rowSeats)}
                         style={{
                           ...styles.rowButton,
-                          background: rowSelected
-                            ? "#bae6fd"
-                            : "#ffffff",
+                          background: rowSelected ? "#bae6fd" : "#ffffff",
                         }}
                       >
                         Row {row}
@@ -790,24 +868,18 @@ export default function AdminSeatManager({
                       <div style={styles.rowNudgeControls}>
                         <button
                           type="button"
-                          onClick={() =>
-                            changeRowOffset(actualKey, -1)
-                          }
+                          onClick={() => changeRowOffset(actualKey, -1)}
                           style={styles.nudgeButton}
+                          title="Move row left"
                         >
                           ←
                         </button>
-
-                        <span style={styles.offsetPill}>
-                          +{totalOffset}
-                        </span>
-
+                        <span style={styles.offsetPill}>+{totalOffset}</span>
                         <button
                           type="button"
-                          onClick={() =>
-                            changeRowOffset(actualKey, 1)
-                          }
+                          onClick={() => changeRowOffset(actualKey, 1)}
                           style={styles.nudgeButton}
+                          title="Move row right"
                         >
                           →
                         </button>
@@ -820,43 +892,37 @@ export default function AdminSeatManager({
                         }}
                       >
                         {sortedRowSeats.map((seat) => {
-                          const ticketType =
-                            ticketTypes.find(
-                              (item) =>
-                                item.id ===
-                                seat.ticket_type_id,
-                            );
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const labelParts = [
+                            `Row ${row} Seat ${seat.seat_number || ""}`,
+                            purposeLabel(seat.seat_purpose),
+                            seat.admin_label || "",
+                            seat.guest_name || "",
+                            seat.status,
+                          ].filter(Boolean);
 
                           return (
-                            <span
-                              key={seat.id}
-                              style={styles.seatWrap}
-                            >
+                            <span key={seat.id} style={styles.seatWrap}>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  toggleSeat(seat.id)
-                                }
+                                onClick={() => toggleSeat(seat.id)}
+                                title={labelParts.join(" · ")}
                                 style={seatStyle({
-                                  selected:
-                                    selectedSeatIds.includes(
-                                      seat.id,
-                                    ),
+                                  selected,
                                   ticketType,
                                   ticketTypes,
                                   status: seat.status,
-                                  complimentary:
-                                    seat.complimentary,
-                                  vip: seat.vip,
+                                  seatPurpose: seat.seat_purpose,
                                 })}
                               >
                                 {seat.seat_number}
                               </button>
 
                               {seat.aisle_after ? (
-                                <span style={styles.aisle}>
-                                  Aisle
-                                </span>
+                                <span style={styles.aisle}>Aisle</span>
                               ) : null}
                             </span>
                           );
@@ -875,7 +941,6 @@ export default function AdminSeatManager({
 
 const styles: Record<string, CSSProperties> = {
   manager: { display: "grid", gap: 14 },
-
   toolbar: {
     display: "flex",
     justifyContent: "space-between",
@@ -883,72 +948,106 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     flexWrap: "wrap",
   },
-
-  toolbarButtons: {
+  toolbarButtons: { display: "flex", gap: 8, flexWrap: "wrap" },
+  title: { margin: 0, color: "#0f172a", fontSize: 20, fontWeight: 900 },
+  text: { margin: "4px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.45 },
+  legendBox: {
     display: "flex",
-    gap: 8,
     flexWrap: "wrap",
-  },
-
-  title: {
-    margin: 0,
+    gap: 10,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
     color: "#0f172a",
-    fontSize: 20,
-    fontWeight: 900,
+    fontSize: 13,
+    fontWeight: 800,
   },
-
-  text: {
-    margin: "4px 0 0",
-    color: "#64748b",
-    fontSize: 14,
+  legendItem: { display: "inline-flex", alignItems: "center", gap: 6 },
+  legendDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 999,
+    border: "1px solid #94a3b8",
   },
-
+  infoBox: {
+    padding: 10,
+    borderRadius: 12,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    fontSize: 13,
+    fontWeight: 800,
+  },
   actionPanel: {
     display: "grid",
     gap: 12,
-    padding: 14,
+    padding: 12,
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
-
-  summaryBox: {
-    color: "#0f172a",
-    fontWeight: 900,
-  },
-
-  actionForm: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  metadataPanel: {
+  summaryBox: { color: "#0f172a", fontSize: 14, fontWeight: 800 },
+  actionForm: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
+  allocationForm: {
     display: "grid",
-    gap: 10,
+    gap: 12,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 16,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
-
-  checkboxLabel: {
+  allocationHeader: {
     display: "flex",
-    alignItems: "center",
-    gap: 8,
-    color: "#0f172a",
-    fontWeight: 800,
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "start",
+    flexWrap: "wrap",
   },
-
-  notes: {
-    minHeight: 80,
+  allocationTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 900,
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 10,
+  },
+  field: {
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  input: {
+    width: "100%",
+    minHeight: 40,
+    padding: "9px 10px",
     borderRadius: 12,
     border: "1px solid #cbd5e1",
-    padding: 10,
-    resize: "vertical",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    boxSizing: "border-box",
   },
-
+  textarea: {
+    width: "100%",
+    padding: "9px 10px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
   select: {
     minHeight: 42,
     minWidth: 220,
@@ -957,7 +1056,6 @@ const styles: Record<string, CSSProperties> = {
     padding: "8px 10px",
     fontWeight: 800,
   },
-
   primaryButton: {
     minHeight: 42,
     border: "none",
@@ -968,7 +1066,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   secondaryButton: {
     minHeight: 40,
     borderRadius: 999,
@@ -979,7 +1076,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   normalButton: {
     minHeight: 40,
     borderRadius: 999,
@@ -990,7 +1086,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   blockButton: {
     minHeight: 42,
     border: "none",
@@ -1001,7 +1096,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   blockOutlineButton: {
     minHeight: 40,
     borderRadius: 999,
@@ -1012,7 +1106,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   dangerButton: {
     minHeight: 42,
     border: "none",
@@ -1023,23 +1116,20 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   mapPanel: {
-    maxHeight: 680,
+    maxHeight: 640,
     overflow: "auto",
     padding: 14,
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
-
   groupBlock: {
     display: "grid",
     gap: 10,
     minWidth: "max-content",
     marginBottom: 22,
   },
-
   groupTitle: {
     margin: 0,
     color: "#334155",
@@ -1048,14 +1138,12 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
-
   rowLine: {
     display: "grid",
     gridTemplateColumns: "80px 104px 1fr",
     gap: 10,
     alignItems: "center",
   },
-
   rowButton: {
     minHeight: 32,
     borderRadius: 10,
@@ -1065,13 +1153,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   rowNudgeControls: {
     display: "flex",
     alignItems: "center",
     gap: 4,
   },
-
   nudgeButton: {
     width: 30,
     height: 30,
@@ -1082,7 +1168,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   offsetPill: {
     minWidth: 34,
     height: 26,
@@ -1096,7 +1181,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 900,
   },
-
   seatLine: {
     display: "flex",
     alignItems: "center",
@@ -1104,20 +1188,13 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "nowrap",
     transition: "padding-left 160ms ease",
   },
-
   seatLineWrap: {
     display: "flex",
     alignItems: "center",
     gap: 6,
     flexWrap: "wrap",
   },
-
-  seatWrap: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-
+  seatWrap: { display: "inline-flex", alignItems: "center", gap: 4 },
   aisle: {
     width: 48,
     height: 28,
@@ -1132,7 +1209,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#fef3c7",
     margin: "0 6px",
   },
-
   tableCard: {
     padding: 12,
     borderRadius: 16,
