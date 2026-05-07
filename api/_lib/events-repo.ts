@@ -26,6 +26,10 @@ export type EventSeat = {
   seat_purpose: string | null;
   admin_label: string | null;
   admin_note: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
+  dietary_requirements: string | null;
+  menu_choice: string | null;
   section: string | null;
   row_label: string | null;
   seat_number: string | null;
@@ -185,6 +189,7 @@ function normaliseSeatPurpose(value: string | null | undefined): string | null {
     clean === "staff" ||
     clean === "sponsor" ||
     clean === "guest" ||
+    clean === "blocked" ||
     clean === "other"
   ) {
     return clean;
@@ -678,6 +683,10 @@ export async function createEventSeat(input: {
   seatPurpose?: string | null;
   adminLabel?: string | null;
   adminNote?: string | null;
+  guestName?: string | null;
+  guestEmail?: string | null;
+  dietaryRequirements?: string | null;
+  menuChoice?: string | null;
   section?: string | null;
   rowLabel?: string | null;
   seatNumber?: string | null;
@@ -693,6 +702,10 @@ export async function createEventSeat(input: {
       seat_purpose,
       admin_label,
       admin_note,
+      guest_name,
+      guest_email,
+      dietary_requirements,
+      menu_choice,
       section,
       row_label,
       seat_number,
@@ -700,7 +713,7 @@ export async function createEventSeat(input: {
       aisle_after,
       status
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
     returning *
     `,
     [
@@ -709,6 +722,10 @@ export async function createEventSeat(input: {
       normaliseSeatPurpose(input.seatPurpose),
       normaliseNullableText(input.adminLabel),
       normaliseNullableText(input.adminNote),
+      normaliseNullableText(input.guestName),
+      normaliseNullableText(input.guestEmail),
+      normaliseNullableText(input.dietaryRequirements),
+      normaliseNullableText(input.menuChoice),
       input.section ?? null,
       input.rowLabel ?? null,
       input.seatNumber ?? null,
@@ -732,6 +749,10 @@ export async function updateEventSeat(
     seatPurpose?: string | null;
     adminLabel?: string | null;
     adminNote?: string | null;
+    guestName?: string | null;
+    guestEmail?: string | null;
+    dietaryRequirements?: string | null;
+    menuChoice?: string | null;
     section?: string | null;
     rowLabel?: string | null;
     seatNumber?: string | null;
@@ -750,14 +771,18 @@ export async function updateEventSeat(
       seat_purpose = $3,
       admin_label = $4,
       admin_note = $5,
-      section = $6,
-      row_label = $7,
-      seat_number = $8,
-      table_number = $9,
-      aisle_after = $10,
-      status = $11,
-      customer_name = $12,
-      customer_email = $13,
+      guest_name = $6,
+      guest_email = $7,
+      dietary_requirements = $8,
+      menu_choice = $9,
+      section = $10,
+      row_label = $11,
+      seat_number = $12,
+      table_number = $13,
+      aisle_after = $14,
+      status = $15,
+      customer_name = $16,
+      customer_email = $17,
       updated_at = now()
     where id = $1
     returning *
@@ -768,14 +793,18 @@ export async function updateEventSeat(
       normaliseSeatPurpose(input.seatPurpose),
       normaliseNullableText(input.adminLabel),
       normaliseNullableText(input.adminNote),
+      normaliseNullableText(input.guestName),
+      normaliseNullableText(input.guestEmail),
+      normaliseNullableText(input.dietaryRequirements),
+      normaliseNullableText(input.menuChoice),
       input.section ?? null,
       input.rowLabel ?? null,
       input.seatNumber ?? null,
       input.tableNumber ?? null,
       input.aisleAfter ?? null,
       normaliseSeatStatus(input.status),
-      input.customerName ?? null,
-      input.customerEmail ?? null,
+      normaliseNullableText(input.customerName),
+      normaliseNullableText(input.customerEmail),
     ],
   );
 }
@@ -806,6 +835,10 @@ export async function updateEventSeatsMetadata(input: {
   seatPurpose?: string | null;
   adminLabel?: string | null;
   adminNote?: string | null;
+  guestName?: string | null;
+  guestEmail?: string | null;
+  dietaryRequirements?: string | null;
+  menuChoice?: string | null;
 }): Promise<void> {
   if (input.seatIds.length === 0) return;
 
@@ -816,6 +849,10 @@ export async function updateEventSeatsMetadata(input: {
       seat_purpose = $3,
       admin_label = $4,
       admin_note = $5,
+      guest_name = $6,
+      guest_email = $7,
+      dietary_requirements = $8,
+      menu_choice = $9,
       updated_at = now()
     where event_id = $1
       and id = any($2::uuid[])
@@ -826,6 +863,10 @@ export async function updateEventSeatsMetadata(input: {
       normaliseSeatPurpose(input.seatPurpose),
       normaliseNullableText(input.adminLabel),
       normaliseNullableText(input.adminNote),
+      normaliseNullableText(input.guestName),
+      normaliseNullableText(input.guestEmail),
+      normaliseNullableText(input.dietaryRequirements),
+      normaliseNullableText(input.menuChoice),
     ],
   );
 }
