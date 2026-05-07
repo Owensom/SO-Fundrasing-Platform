@@ -1,5 +1,3 @@
-// app/admin/events/[id]/page.tsx
-
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -529,6 +527,11 @@ async function updateSelectedSeatsMetadataAction(formData: FormData) {
     seatPurpose: String(formData.get("seat_purpose") || "").trim() || null,
     adminLabel: String(formData.get("admin_label") || "").trim() || null,
     adminNote: String(formData.get("admin_note") || "").trim() || null,
+    guestName: String(formData.get("guest_name") || "").trim() || null,
+    guestEmail: String(formData.get("guest_email") || "").trim() || null,
+    dietaryRequirements:
+      String(formData.get("dietary_requirements") || "").trim() || null,
+    menuChoice: String(formData.get("menu_choice") || "").trim() || null,
   });
 
   redirect(`/admin/events/${eventId}?saved=seat-metadata#${returnAnchor}`);
@@ -773,7 +776,9 @@ export default async function AdminEventManagePage({
   const blockedSeats = visibleSeats.filter((seat) => seat.status === "blocked").length;
   const availableSeats = visibleSeats.filter((seat) => seat.status === "available").length;
   const vipSeats = visibleSeats.filter((seat) => seat.seat_purpose === "vip").length;
-  const complimentarySeats = visibleSeats.filter((seat) => seat.seat_purpose === "complimentary").length;
+  const complimentarySeats = visibleSeats.filter(
+    (seat) => seat.seat_purpose === "complimentary",
+  ).length;
 
   const uniqueTableNumbers = Array.from(
     new Set(tableSeats.map((seat) => String(seat.table_number || "").trim()).filter(Boolean)),
@@ -1283,7 +1288,7 @@ export default async function AdminEventManagePage({
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
                   Click seats to select them. Block/unblock selected seats,
-                  apply special markings, or save admin-only seat metadata.
+                  apply special markings, or save admin-only seat allocation details.
                 </p>
               </div>
 
@@ -1415,7 +1420,7 @@ export default async function AdminEventManagePage({
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
                   Click table seats to select them. Block/unblock selected seats,
-                  apply special markings, or save admin-only seat metadata.
+                  apply special markings, or save admin-only seat allocation details.
                 </p>
               </div>
 
@@ -1479,7 +1484,7 @@ export default async function AdminEventManagePage({
               icon="🪑"
               title="Seat tools"
               badge="Active"
-              description="Generate seats, block seats, apply special markings, and manage layouts."
+              description="Generate seats, block seats, apply special markings, and save guest allocation details."
               href={isReservedSeating ? "#row-seating" : "#table-seating"}
               actionLabel="Manage seats"
             />
