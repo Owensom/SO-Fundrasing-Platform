@@ -89,6 +89,36 @@ function seatLabel(seat: Seat) {
   }`;
 }
 
+function hasAllocationDetails(seat: Seat) {
+  return Boolean(
+    seat.seat_purpose ||
+      seat.admin_label ||
+      seat.admin_note ||
+      seat.guest_name ||
+      seat.guest_email ||
+      seat.dietary_requirements ||
+      seat.menu_choice ||
+      seat.status === "blocked",
+  );
+}
+
+function allocationSort(a: Seat, b: Seat) {
+  if (a.table_number || b.table_number) {
+    const tableCompare = numericSort(a.table_number, b.table_number);
+    if (tableCompare !== 0) return tableCompare;
+  }
+
+  const sectionCompare = String(a.section || "").localeCompare(
+    String(b.section || ""),
+  );
+  if (sectionCompare !== 0) return sectionCompare;
+
+  const rowCompare = numericSort(a.row_label, b.row_label);
+  if (rowCompare !== 0) return rowCompare;
+
+  return numericSort(a.seat_number, b.seat_number);
+}
+
 function colourForTicketType(
   ticketType: TicketType | undefined,
   ticketTypes: TicketType[],
@@ -256,8 +286,7 @@ function SeatAllocationRow({
             <option value="other">Other</option>
           </select>
         </label>
-
-        <label style={styles.field}>
+                <label style={styles.field}>
           <span style={styles.label}>Admin label</span>
           <input
             name="admin_label"
@@ -322,6 +351,87 @@ function SeatAllocationRow({
     </form>
   );
 }
+
+function AllocationSummary({
+  seats,
+  onSelectSeat,
+}: {
+  seats: Seat[];
+  onSelectSeat: (seatId: string) => void;
+}) {
+  const allocationSeats = seats
+    .filter(hasAllocationDetails)
+    .slice()
+    .sort(allocationSort);
+
+  return (
+    <div style={styles.allocationSummaryPanel}>
+      <div style={styles.allocationSummaryHeader}>
+        <div>
+          <h4 style={styles.allocationTitle}>Allocation summary</h4>
+          <p style={styles.text}>
+            Saved VIP, complimentary, blocked, sponsor, staff and named guest
+            details are shown here.
+          </p>
+        </div>
+
+        <span style={styles.summaryPill}>{allocationSeats.length} saved</span>
+      </div>
+
+      {allocationSeats.length === 0 ? (
+        <div style={styles.emptyBox}>
+          No saved allocation details yet. Select a seat and save its details to
+          show it here.
+        </div>
+      ) : (
+        <div style={styles.allocationTableWrap}>
+          <table style={styles.allocationTable}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Seat</th>
+                <th style={styles.th}>Purpose</th>
+                <th style={styles.th}>Label</th>
+                <th style={styles.th}>Guest</th>
+                <th style={styles.th}>Dietary</th>
+                <th style={styles.th}>Menu</th>
+                <th style={styles.th}>Note</th>
+                <th style={styles.th}>Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allocationSeats.map((seat) => (
+                <tr key={seat.id}>
+                  <td style={styles.tdStrong}>{seatLabel(seat)}</td>
+                  <td style={styles.td}>{purposeLabel(seat.seat_purpose)}</td>
+                  <td style={styles.td}>{seat.admin_label || "—"}</td>
+                  <td style={styles.td}>
+                    <strong>{seat.guest_name || "—"}</strong>
+                    {seat.guest_email ? (
+                      <span style={styles.smallLine}>{seat.guest_email}</span>
+                    ) : null}
+                  </td>
+                  <td style={styles.td}>{seat.dietary_requirements || "—"}</td>
+                  <td style={styles.td}>{seat.menu_choice || "—"}</td>
+                  <td style={styles.td}>{seat.admin_note || "—"}</td>
+                  <td style={styles.td}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectSeat(seat.id)}
+                      style={styles.miniSecondaryButton}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminSeatManager({
   eventId,
   seats,
@@ -436,6 +546,11 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
+  function selectOnlySeat(seatId: string) {
+    setSelectedSeatIds([seatId]);
+    setSelectedRowKeys([]);
+  }
+
   const byPrimaryGroup =
     mode === "tables"
       ? groupBy(seats, (seat) => seat.table_number || "No table")
@@ -512,8 +627,7 @@ export default function AdminSeatManager({
           </button>
         </div>
       </div>
-
-      <div style={styles.legendBox}>
+            <div style={styles.legendBox}>
         <strong>Seat colours:</strong>
 
         <span style={styles.legendItem}>
@@ -565,6 +679,8 @@ export default function AdminSeatManager({
         <strong>{seats.filter((seat) => seat.seat_purpose === "complimentary").length}</strong>{" "}
         complimentary.
       </div>
+
+      <AllocationSummary seats={seats} onSelectSeat={selectOnlySeat} />
 
       <div style={styles.actionPanel}>
         <div style={styles.summaryBox}>
@@ -706,7 +822,7 @@ export default function AdminSeatManager({
         <div>
           <h4 style={styles.allocationTitle}>Individual seat allocation details</h4>
           <p style={styles.text}>
-            Each selected seat can now have its own name, email, dietary
+            Each selected seat can have its own name, email, dietary
             requirements, menu choice and admin note.
           </p>
         </div>
@@ -729,7 +845,8 @@ export default function AdminSeatManager({
           </div>
         )}
       </div>
-            <div style={styles.mapPanel}>
+
+      <div style={styles.mapPanel}>
         {Object.entries(byPrimaryGroup)
           .sort(([a], [b]) => numericSort(a, b))
           .map(([group, groupSeats]) => {
@@ -960,6 +1077,73 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
+  allocationSummaryPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  allocationSummaryHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  summaryPill: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  allocationTableWrap: {
+    overflow: "auto",
+    borderRadius: 14,
+    border: "1px solid #e2e8f0",
+  },
+  allocationTable: {
+    width: "100%",
+    minWidth: 920,
+    borderCollapse: "collapse",
+    background: "#ffffff",
+  },
+  th: {
+    textAlign: "left",
+    padding: "10px 12px",
+    background: "#f8fafc",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+    borderBottom: "1px solid #e2e8f0",
+    whiteSpace: "nowrap",
+  },
+  td: {
+    padding: "10px 12px",
+    color: "#334155",
+    fontSize: 13,
+    borderBottom: "1px solid #f1f5f9",
+    verticalAlign: "top",
+  },
+  tdStrong: {
+    padding: "10px 12px",
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 900,
+    borderBottom: "1px solid #f1f5f9",
+    verticalAlign: "top",
+    whiteSpace: "nowrap",
+  },
+  smallLine: {
+    display: "block",
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 700,
+  },
   allocationTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1069,6 +1253,17 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
     fontSize: 13,
+  },
+  miniSecondaryButton: {
+    minHeight: 32,
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "0 10px",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 12,
   },
   secondaryButton: {
     minHeight: 40,
