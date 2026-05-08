@@ -252,7 +252,6 @@ function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
       .filter(Boolean) as [string, number][],
   );
 }
-
 function normaliseTableNamesJson(value: unknown): TableNamesJson {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 
@@ -340,11 +339,14 @@ export function slugifyEventTitle(value: string): string {
 
   return slug || `event-${Date.now()}`;
 }
+
 /* =========================
    EVENTS
 ========================= */
 
-export async function listEvents(tenantSlug: string): Promise<EventItem[]> {
+export async function listEvents(
+  tenantSlug: string,
+): Promise<EventItem[]> {
   const events = await query<EventItem>(
     `
     select *
@@ -375,7 +377,9 @@ export async function listPublishedEvents(
   return events.map(normaliseEvent);
 }
 
-export async function hydrateEvent(event: EventItem): Promise<EventItem> {
+export async function hydrateEvent(
+  event: EventItem,
+): Promise<EventItem> {
   const [ticketTypes, seats] = await Promise.all([
     listEventTicketTypes(event.id),
     listEventSeats(event.id),
@@ -388,7 +392,9 @@ export async function hydrateEvent(event: EventItem): Promise<EventItem> {
   };
 }
 
-export async function getEventById(id: string): Promise<EventItem | null> {
+export async function getEventById(
+  id: string,
+): Promise<EventItem | null> {
   const event = await queryOne<EventItem>(
     `
     select *
@@ -424,7 +430,9 @@ export async function getEventBySlug(
   return hydrateEvent(event);
 }
 
-export async function createEvent(input: CreateEventInput): Promise<EventItem> {
+export async function createEvent(
+  input: CreateEventInput,
+): Promise<EventItem> {
   const created = await queryOne<EventItem>(
     `
     insert into events (
@@ -447,7 +455,11 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       ask_dietary_requirements,
       ask_menu_choice
     )
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15::jsonb,$16::jsonb,$17,$18)
+    values (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+      $11,$12,$13::jsonb,$14::jsonb,
+      $15::jsonb,$16::jsonb,$17,$18
+    )
     returning *
     `,
     [
@@ -465,8 +477,12 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       input.capacity ?? null,
       JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
       JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
-      JSON.stringify(normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {})),
-      JSON.stringify(normaliseTableNamesJson(input.tableNamesJson ?? {})),
+      JSON.stringify(
+        normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {}),
+      ),
+      JSON.stringify(
+        normaliseTableNamesJson(input.tableNamesJson ?? {}),
+      ),
       input.askDietaryRequirements ?? true,
       input.askMenuChoice ?? true,
     ],
@@ -478,7 +494,6 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
 
   return hydrateEvent(created);
 }
-
 export async function updateEvent(
   id: string,
   input: UpdateEventInput,
@@ -776,7 +791,6 @@ export async function createEventSeat(input: {
 
   return created;
 }
-
 export async function updateEventSeat(
   id: string,
   input: {
@@ -905,6 +919,7 @@ export async function updateEventSeatsMetadata(input: {
     ],
   );
 }
+
 export async function updateEventSeatsStatus(input: {
   eventId: string;
   seatIds: string[];
@@ -1123,7 +1138,6 @@ export async function createEventWinner(input: {
 
   return created;
 }
-
 export async function getEligibleEventDrawCandidates(input: {
   eventId: string;
   includeComplimentary?: boolean;
@@ -1180,7 +1194,7 @@ export async function getEligibleEventDrawCandidates(input: {
       .filter(Boolean) as string[],
   );
 
-  const rows = await query<EventDrawCandidate>(
+  const paidCandidates = await query<EventDrawCandidate>(
     `
     select
       eo.id as event_order_id,
@@ -1215,6 +1229,53 @@ export async function getEligibleEventDrawCandidates(input: {
     `,
     [input.eventId],
   );
+
+  const adminSeatCandidates = await query<EventDrawCandidate>(
+    `
+    select
+      null::uuid as event_order_id,
+      null::uuid as event_order_item_id,
+      es.id as event_seat_id,
+      es.ticket_type_id,
+      es.table_number,
+      es.row_label,
+      es.seat_number,
+      coalesce(es.guest_name, es.customer_name) as winner_name,
+      lower(coalesce(es.guest_email, es.customer_email)) as winner_email,
+      es.seat_purpose
+    from event_seats es
+    where es.event_id = $1
+      and es.status <> 'blocked'
+      and es.seat_purpose in ('vip', 'complimentary', 'staff', 'sponsor', 'guest')
+      and (
+        coalesce(trim(es.guest_email), '') <> ''
+        or coalesce(trim(es.customer_email), '') <> ''
+      )
+    order by
+      case when es.table_number ~ '^[0-9]+$' then es.table_number::int else null end asc nulls last,
+      es.table_number asc nulls last,
+      es.row_label asc nulls last,
+      case when es.seat_number ~ '^[0-9]+$' then es.seat_number::int else null end asc nulls last,
+      es.seat_number asc nulls last,
+      es.created_at asc
+    `,
+    [input.eventId],
+  );
+
+  const candidatesByKey = new Map<string, EventDrawCandidate>();
+
+  for (const candidate of [...paidCandidates, ...adminSeatCandidates]) {
+    const key =
+      candidate.event_order_item_id ||
+      candidate.event_seat_id ||
+      `${candidate.winner_email}-${candidate.table_number}-${candidate.row_label}-${candidate.seat_number}`;
+
+    if (key) {
+      candidatesByKey.set(key, candidate);
+    }
+  }
+
+  const rows = Array.from(candidatesByKey.values());
 
   const tableWinnerCounts = new Map<string, number>();
 
@@ -1257,6 +1318,10 @@ export async function getEligibleEventDrawCandidates(input: {
       return false;
     }
 
+    if (!candidate.winner_email) {
+      return false;
+    }
+
     const purpose = String(candidate.seat_purpose || "");
 
     if (purpose === "complimentary" && input.includeComplimentary === false) {
@@ -1281,7 +1346,6 @@ export async function getEligibleEventDrawCandidates(input: {
 
     if (
       input.excludeWinnerEmails &&
-      candidate.winner_email &&
       excludedEmails.has(String(candidate.winner_email).trim().toLowerCase())
     ) {
       return false;
