@@ -35,6 +35,11 @@ function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function calculatePlatformFeeCents(subtotalCents: number) {
+  if (!subtotalCents || subtotalCents <= 0) return 0;
+  return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+}
+
 function tableSortValue(value: string | null | undefined) {
   const number = Number(value);
   if (Number.isFinite(number)) return number;
@@ -172,6 +177,7 @@ export default function PublicTableSelector({
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
+  const [coverFees, setCoverFees] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
@@ -220,12 +226,17 @@ export default function PublicTableSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
-  const total = cartSeats.reduce(
+  const ticketTotal = cartSeats.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
 
-  function getSeatTicketType(seat: Seat) {
+  const platformFeeCents = coverFees
+    ? calculatePlatformFeeCents(ticketTotal)
+    : 0;
+
+  const totalTodayCents = ticketTotal + platformFeeCents;
+    function getSeatTicketType(seat: Seat) {
     const cartTicketTypeId = cartItems.find(
       (item) => item.seatId === seat.id,
     )?.ticketTypeId;
@@ -319,6 +330,8 @@ export default function PublicTableSelector({
           eventId,
           buyerName,
           buyerEmail,
+          coverFees,
+          platformFeeCents,
           items: cartItems.map((item) => {
             const data = guestData[item.seatId] || getDefaultGuest();
 
@@ -438,8 +451,7 @@ export default function PublicTableSelector({
                         </button>
                       )}
                     </div>
-
-                    <div style={styles.roundTableArea}>
+                                        <div style={styles.roundTableArea}>
                       <div style={styles.tablePlate}>
                         <span style={styles.tablePlateTop}>
                           Table {group.tableNumber || "—"}
@@ -637,9 +649,33 @@ export default function PublicTableSelector({
               )}
 
               <div style={styles.totalBox}>
-                <span>Total</span>
+                <span>Ticket total</span>
                 <strong>
-                  {currency} {moneyFromCents(total)}
+                  {currency} {moneyFromCents(ticketTotal)}
+                </strong>
+              </div>
+
+              <label style={styles.feeBox}>
+                <input
+                  type="checkbox"
+                  checked={coverFees}
+                  onChange={(event) => setCoverFees(event.target.checked)}
+                  disabled={ticketTotal <= 0}
+                />
+                <span>
+                  <strong>I’d like to cover platform fees</strong>
+                  <small>
+                    Adds approximately {currency}{" "}
+                    {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so
+                    the organiser receives the full ticket value.
+                  </small>
+                </span>
+              </label>
+
+              <div style={styles.totalBoxStrong}>
+                <span>Total today</span>
+                <strong>
+                  {currency} {moneyFromCents(totalTodayCents)}
                 </strong>
               </div>
 
@@ -678,7 +714,6 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -1003,6 +1038,31 @@ const styles: Record<string, CSSProperties> = {
     color: "#fde68a",
     fontWeight: 950,
     fontSize: 18,
+  },
+  totalBoxStrong: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(34,197,94,0.16)",
+    color: "#bbf7d0",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(187,247,208,0.18)",
+  },
+  feeBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    cursor: "pointer",
   },
   checkout: {
     marginTop: 14,
