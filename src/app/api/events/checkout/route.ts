@@ -42,6 +42,16 @@ function positiveQuantity(value: unknown) {
   return Math.max(0, Math.floor(number));
 }
 
+function truthy(value: unknown) {
+  return value === true || value === "true" || value === "yes" || value === "1";
+}
+
+function calculatePlatformFeeCents(subtotalCents: number) {
+  if (!subtotalCents || subtotalCents <= 0) return 0;
+
+  return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+}
+
 function seatLabel(input: {
   tableNumber?: string | null;
   rowLabel?: string | null;
@@ -64,16 +74,14 @@ export async function POST(req: Request) {
 
   try {
     const tenantSlug = await getTenantSlugFromHeaders();
-
     const body = await req.json();
 
     const eventId = cleanText(body.eventId);
     const buyerName = cleanText(body.buyerName);
     const buyerEmail = cleanText(body.buyerEmail);
+    const coverFees = truthy(body.coverFees);
 
-    const items: CheckoutItem[] = Array.isArray(body.items)
-      ? body.items
-      : [];
+    const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
 
     if (!eventId || items.length === 0) {
       return NextResponse.json(
@@ -125,8 +133,7 @@ export async function POST(req: Request) {
       (ticketType) => ticketType.is_active,
     );
 
-    const isGeneralAdmission =
-      event.event_type === "general_admission";
+    const isGeneralAdmission = event.event_type === "general_admission";
 
     /*
       GENERAL ADMISSION
@@ -136,12 +143,10 @@ export async function POST(req: Request) {
       const checkoutRows = items
         .map((item) => {
           const ticketTypeId = cleanText(item.ticketTypeId);
-
           const quantity = positiveQuantity(item.quantity);
 
           const ticketType = ticketTypes.find(
-            (currentTicketType) =>
-              currentTicketType.id === ticketTypeId,
+            (currentTicketType) => currentTicketType.id === ticketTypeId,
           );
 
           if (!ticketType || quantity <= 0) {
@@ -169,14 +174,12 @@ export async function POST(req: Request) {
         );
       }
 
-      const total = checkoutRows.reduce(
-        (sum, row) =>
-          sum +
-          Number(row.ticketType.price || 0) * row.quantity,
+      const ticketTotal = checkoutRows.reduce(
+        (sum, row) => sum + Number(row.ticketType.price || 0) * row.quantity,
         0,
       );
 
-      if (total <= 0) {
+      if (ticketTotal <= 0) {
         return NextResponse.json(
           {
             error: "Invalid checkout total.",
@@ -186,6 +189,12 @@ export async function POST(req: Request) {
           },
         );
       }
+
+      const platformFeeCents = coverFees
+        ? calculatePlatformFeeCents(ticketTotal)
+        : 0;
+
+      const total = ticketTotal + platformFeeCents;
 
       const order = await createPendingEventOrder({
         tenantSlug: event.tenant_slug,
@@ -215,29 +224,39 @@ export async function POST(req: Request) {
         });
       }
 
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-
-        customer_email: buyerEmail,
-
-        success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-
-        cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
-
-        line_items: checkoutRows.map((row) => ({
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
+        checkoutRows.map((row) => ({
           quantity: row.quantity,
-
           price_data: {
             currency: event.currency.toLowerCase(),
-
             unit_amount: Number(row.ticketType.price || 0),
-
             product_data: {
               name: `${event.title} — ${row.ticketType.name}`,
             },
           },
-        })),
+        }));
 
+      if (platformFeeCents > 0) {
+        lineItems.push({
+          quantity: 1,
+          price_data: {
+            currency: event.currency.toLowerCase(),
+            unit_amount: platformFeeCents,
+            product_data: {
+              name: `${event.title} — Cover platform fees`,
+              description:
+                "Optional contribution to help cover platform and payment processing costs.",
+            },
+          },
+        });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        customer_email: buyerEmail,
+        success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+        line_items: lineItems,
         metadata: {
           type: "event",
 
@@ -254,6 +273,11 @@ export async function POST(req: Request) {
 
           buyer_name: buyerName,
           buyer_email: buyerEmail,
+
+          cover_fees: coverFees ? "true" : "false",
+          platform_fee_cents: String(platformFeeCents),
+          ticket_total_cents: String(ticketTotal),
+          amount_total_cents: String(total),
         },
       });
 
@@ -266,19 +290,14 @@ export async function POST(req: Request) {
         url: session.url,
       });
     }
-
-    /*
+        /*
       RESERVED / TABLE SEATING
     */
 
     const seats = event.seats || [];
 
     const seatIds = Array.from(
-      new Set(
-        items
-          .map((item) => cleanText(item.seatId))
-          .filter(Boolean),
-      ),
+      new Set(items.map((item) => cleanText(item.seatId)).filter(Boolean)),
     );
 
     if (seatIds.length !== items.length) {
@@ -294,44 +313,31 @@ export async function POST(req: Request) {
 
     const checkoutRows = items.map((item) => {
       const seatId = cleanText(item.seatId);
-
       const ticketTypeId = cleanText(item.ticketTypeId);
 
-      const seat = seats.find(
-        (currentSeat) => currentSeat.id === seatId,
-      );
+      const seat = seats.find((currentSeat) => currentSeat.id === seatId);
 
       if (!seat || seat.status !== "available") {
-        throw new Error(
-          "One or more seats are unavailable.",
-        );
+        throw new Error("One or more seats are unavailable.");
       }
 
       const ticketType = ticketTypes.find(
-        (currentTicketType) =>
-          currentTicketType.id === ticketTypeId,
+        (currentTicketType) => currentTicketType.id === ticketTypeId,
       );
 
       if (!ticketType) {
         throw new Error("Invalid ticket type.");
       }
 
-      if (
-        seat.ticket_type_id &&
-        seat.ticket_type_id !== ticketType.id
-      ) {
-        throw new Error(
-          "Invalid ticket type for selected seat.",
-        );
+      if (seat.ticket_type_id && seat.ticket_type_id !== ticketType.id) {
+        throw new Error("Invalid ticket type for selected seat.");
       }
 
       const tableName = cleanText(item.tableName);
-
       const guestName = cleanText(item.guestName);
 
       const dietaryRequirements =
-        cleanText(item.dietaryRequirements) ||
-        cleanText(item.dietary);
+        cleanText(item.dietaryRequirements) || cleanText(item.dietary);
 
       const menuChoice = cleanText(item.menuChoice);
 
@@ -345,13 +351,12 @@ export async function POST(req: Request) {
       };
     });
 
-    const total = checkoutRows.reduce(
-      (sum, row) =>
-        sum + Number(row.ticketType.price || 0),
+    const ticketTotal = checkoutRows.reduce(
+      (sum, row) => sum + Number(row.ticketType.price || 0),
       0,
     );
 
-    if (total <= 0) {
+    if (ticketTotal <= 0) {
       return NextResponse.json(
         {
           error: "Invalid checkout total.",
@@ -361,6 +366,12 @@ export async function POST(req: Request) {
         },
       );
     }
+
+    const platformFeeCents = coverFees
+      ? calculatePlatformFeeCents(ticketTotal)
+      : 0;
+
+    const total = ticketTotal + platformFeeCents;
 
     const order = await createPendingEventOrder({
       tenantSlug: event.tenant_slug,
@@ -375,12 +386,11 @@ export async function POST(req: Request) {
 
     orderId = order.id;
 
-    const reservedCount =
-      await reserveEventSeatsForOrder({
-        eventId: event.id,
-        orderId: order.id,
-        seatIds,
-      });
+    const reservedCount = await reserveEventSeatsForOrder({
+      eventId: event.id,
+      orderId: order.id,
+      seatIds,
+    });
 
     if (reservedCount !== seatIds.length) {
       await deleteEventOrderAndItems(order.id);
@@ -418,10 +428,40 @@ export async function POST(req: Request) {
 
         guest_name: row.guestName || buyerName,
 
-        dietary_requirements:
-          row.dietaryRequirements || null,
+        dietary_requirements: row.dietaryRequirements || null,
 
         menu_choice: row.menuChoice || null,
+      });
+    }
+
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        quantity: 1,
+
+        price_data: {
+          currency: event.currency.toLowerCase(),
+
+          unit_amount: ticketTotal,
+
+          product_data: {
+            name: event.title,
+          },
+        },
+      },
+    ];
+
+    if (platformFeeCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: event.currency.toLowerCase(),
+          unit_amount: platformFeeCents,
+          product_data: {
+            name: `${event.title} — Cover platform fees`,
+            description:
+              "Optional contribution to help cover platform and payment processing costs.",
+          },
+        },
       });
     }
 
@@ -434,21 +474,7 @@ export async function POST(req: Request) {
 
       cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
 
-      line_items: [
-        {
-          quantity: 1,
-
-          price_data: {
-            currency: event.currency.toLowerCase(),
-
-            unit_amount: total,
-
-            product_data: {
-              name: event.title,
-            },
-          },
-        },
-      ],
+      line_items: lineItems,
 
       metadata: {
         type: "event",
@@ -466,6 +492,11 @@ export async function POST(req: Request) {
 
         buyer_name: buyerName,
         buyer_email: buyerEmail,
+
+        cover_fees: coverFees ? "true" : "false",
+        platform_fee_cents: String(platformFeeCents),
+        ticket_total_cents: String(ticketTotal),
+        amount_total_cents: String(total),
       },
     });
 
@@ -489,10 +520,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Checkout failed.",
+        error: error instanceof Error ? error.message : "Checkout failed.",
       },
       {
         status: 500,
