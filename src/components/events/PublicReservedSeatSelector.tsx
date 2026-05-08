@@ -44,6 +44,12 @@ function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function calculatePlatformFeeCents(subtotalCents: number) {
+  if (!subtotalCents || subtotalCents <= 0) return 0;
+
+  return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+}
+
 function seatLabel(seat: Seat) {
   return `Row ${seat.row_label}, Seat ${seat.seat_number}`;
 }
@@ -194,7 +200,6 @@ function publicSeatStyle({
     boxSizing: "border-box",
   };
 }
-
 export default function PublicReservedSeatSelector({
   eventId,
   seats,
@@ -215,6 +220,7 @@ export default function PublicReservedSeatSelector({
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
+  const [coverFees, setCoverFees] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
@@ -247,10 +253,16 @@ export default function PublicReservedSeatSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
-  const total = cartSeats.reduce(
+  const ticketTotal = cartSeats.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
+
+  const platformFeeCents = coverFees
+    ? calculatePlatformFeeCents(ticketTotal)
+    : 0;
+
+  const totalTodayCents = ticketTotal + platformFeeCents;
 
   function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
@@ -319,6 +331,8 @@ export default function PublicReservedSeatSelector({
           eventId,
           buyerName,
           buyerEmail,
+          coverFees,
+          platformFeeCents,
           items: cartItems.map((item) => {
             const data = guestData[item.seatId] || getDefaultGuestData();
 
@@ -349,8 +363,7 @@ export default function PublicReservedSeatSelector({
       setIsCheckingOut(false);
     }
   }
-
-  return (
+    return (
     <div style={styles.shell}>
       <div style={styles.mapPanel}>
         <div style={styles.mapHeader}>
@@ -376,7 +389,10 @@ export default function PublicReservedSeatSelector({
           {Object.entries(groupedSections)
             .sort(([a], [b]) => numericSort(a, b))
             .map(([section, sectionSeats]) => {
-              const rows = groupBy(sectionSeats, (seat) => seat.row_label || "No row");
+              const rows = groupBy(
+                sectionSeats,
+                (seat) => seat.row_label || "No row",
+              );
 
               const rowEntries = Object.entries(rows).sort(([a], [b]) =>
                 numericSort(a, b),
@@ -405,7 +421,9 @@ export default function PublicReservedSeatSelector({
 
                     const autoOffset = Math.max(
                       0,
-                      Math.floor((maxUnits - rowVisualUnits(currentRowSeats)) / 2),
+                      Math.floor(
+                        (maxUnits - rowVisualUnits(currentRowSeats)) / 2,
+                      ),
                     );
 
                     const manualOffset = initialSeatingLayout[actualKey] || 0;
@@ -622,9 +640,33 @@ export default function PublicReservedSeatSelector({
             )}
 
             <div style={styles.totalBox}>
-              <span>Total</span>
+              <span>Ticket total</span>
               <strong>
-                {currency} {moneyFromCents(total)}
+                {currency} {moneyFromCents(ticketTotal)}
+              </strong>
+            </div>
+
+            <label style={styles.feeBox}>
+              <input
+                type="checkbox"
+                checked={coverFees}
+                onChange={(event) => setCoverFees(event.target.checked)}
+                disabled={ticketTotal <= 0}
+              />
+              <span>
+                <strong>I’d like to cover platform fees</strong>
+                <small>
+                  Adds approximately {currency}{" "}
+                  {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so
+                  the organiser receives the full ticket value.
+                </small>
+              </span>
+            </label>
+
+            <div style={styles.totalBoxStrong}>
+              <span>Total today</span>
+              <strong>
+                {currency} {moneyFromCents(totalTodayCents)}
               </strong>
             </div>
 
@@ -662,7 +704,6 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -959,6 +1000,31 @@ const styles: Record<string, CSSProperties> = {
     color: "#fde68a",
     fontWeight: 950,
     fontSize: 18,
+  },
+  totalBoxStrong: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(34,197,94,0.16)",
+    color: "#bbf7d0",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(187,247,208,0.18)",
+  },
+  feeBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    cursor: "pointer",
   },
   checkout: {
     marginTop: 14,
