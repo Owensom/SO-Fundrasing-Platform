@@ -8,7 +8,7 @@ import {
   getEventById,
   listEventWinners,
   type EventDrawCandidate,
-} from "../../../../_lib/events-repo";
+} from "../../../../../../../api/_lib/events-repo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
