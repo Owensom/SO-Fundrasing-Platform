@@ -165,7 +165,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   const totalSquares = Number(game.total_squares || 0);
   const remainingSquares = Math.max(totalSquares - soldSquares, 0);
   const progress = getProgressPercent(soldSquares, totalSquares);
-    return (
+
+  return (
     <main style={styles.page}>
       <section style={styles.topBar}>
         <Link href="/admin/squares" style={styles.backLink}>
@@ -540,28 +541,40 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <div style={styles.noWinnersBox}>No winners have been drawn yet.</div>
         )}
 
-        <div style={styles.drawGrid}>
-          <form
-            action={`/api/admin/squares/${game.id}/draw/auto`}
-            method="post"
-            style={styles.drawPanel}
-          >
-            <h3 style={styles.subTitle}>Automatic random draw</h3>
-            <p style={styles.sectionDescription}>
-              Randomly draw remaining undrawn prizes using the saved auto draw
-              range.
-            </p>
+        <details open style={styles.drawDetails}>
+          <summary style={styles.drawSummary}>
+            <div>
+              <h3 style={styles.subTitle}>Draw tools</h3>
+              <p style={styles.sectionDescription}>
+                Automatic draw and full-screen dramatic draw controls.
+              </p>
+            </div>
+            <span style={styles.drawToggle}>Open / close</span>
+          </summary>
 
-            <button type="submit" style={styles.drawButton}>
-              Auto draw remaining winners
-            </button>
-          </form>
+          <div style={styles.drawGrid}>
+            <form
+              action={`/api/admin/squares/${game.id}/draw/auto`}
+              method="post"
+              style={styles.drawPanel}
+            >
+              <h3 style={styles.subTitle}>Automatic random draw</h3>
+              <p style={styles.sectionDescription}>
+                Randomly draw remaining undrawn prizes using the saved auto draw
+                range.
+              </p>
 
-          <DramaticSquaresDraw
-            gameId={game.id}
-            soldSquareOptions={soldSquareOptions}
-          />
-        </div>
+              <button type="submit" style={styles.drawButton}>
+                Auto draw remaining winners
+              </button>
+            </form>
+
+            <DramaticSquaresDraw
+              gameId={game.id}
+              soldSquareOptions={soldSquareOptions}
+            />
+          </div>
+        </details>
       </section>
     </main>
   );
@@ -963,9 +976,36 @@ const styles: Record<string, CSSProperties> = {
   drawPanel: {
     padding: 16,
     borderRadius: 18,
-    background: "#f8fafc",
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 12,
+  },
+  drawDetails: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  drawSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    marginBottom: 14,
+  },
+  drawToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
   },
 };
