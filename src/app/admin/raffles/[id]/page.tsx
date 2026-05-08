@@ -295,8 +295,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
           )}
         </div>
       </section>
-
-      <section style={styles.summaryGrid}>
+            <section style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
           value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
@@ -528,8 +527,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               question is set.
             </p>
           </section>
-
-          <section style={styles.innerPanel}>
+                    <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
                 <h3 style={styles.subTitle}>Free postal entry</h3>
@@ -846,32 +844,44 @@ export default async function AdminRafflePage({ params }: PageProps) {
           </button>
         </form>
 
-        <div style={styles.drawGrid}>
-          <form
-            action={`/api/admin/raffles/${raffle.id}/draw/auto`}
-            method="post"
-            style={styles.drawPanel}
-          >
-            <input type="hidden" name="from_prize" value={autoDrawFromPrize} />
-            <input type="hidden" name="to_prize" value={autoDrawToPrize} />
+        <details open style={styles.drawDetails}>
+          <summary style={styles.drawSummary}>
+            <div>
+              <h3 style={styles.subTitle}>Draw tools</h3>
+              <p style={styles.sectionDescription}>
+                Automatic draw and full-screen dramatic draw controls.
+              </p>
+            </div>
+            <span style={styles.drawToggle}>Open / close</span>
+          </summary>
 
-            <h3 style={styles.subTitle}>Automatic random draw</h3>
+          <div style={styles.drawGrid}>
+            <form
+              action={`/api/admin/raffles/${raffle.id}/draw/auto`}
+              method="post"
+              style={styles.drawPanel}
+            >
+              <input type="hidden" name="from_prize" value={autoDrawFromPrize} />
+              <input type="hidden" name="to_prize" value={autoDrawToPrize} />
 
-            <p style={styles.sectionDescription}>
-              Randomly draw remaining undrawn prizes using the saved auto draw
-              range.
-            </p>
+              <h3 style={styles.subTitle}>Automatic random draw</h3>
 
-            <button type="submit" style={styles.drawButton}>
-              Auto draw remaining winners
-            </button>
-          </form>
+              <p style={styles.sectionDescription}>
+                Randomly draw remaining undrawn prizes using the saved auto draw
+                range.
+              </p>
 
-          <DramaticRaffleDraw
-            raffleId={raffle.id}
-            soldTickets={soldTicketsForDraw}
-          />
-        </div>
+              <button type="submit" style={styles.drawButton}>
+                Auto draw remaining winners
+              </button>
+            </form>
+
+            <DramaticRaffleDraw
+              raffleId={raffle.id}
+              soldTickets={soldTicketsForDraw}
+            />
+          </div>
+        </details>
       </section>
     </main>
   );
@@ -906,7 +916,6 @@ function Field({
     </label>
   );
 }
-
 const styles: Record<string, React.CSSProperties> = {
   page: {
     maxWidth: 1180,
@@ -1328,7 +1337,7 @@ const styles: Record<string, React.CSSProperties> = {
   drawPanel: {
     padding: 16,
     borderRadius: 18,
-    background: "#f8fafc",
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 12,
@@ -1341,5 +1350,32 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
+  },
+  drawDetails: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  drawSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    marginBottom: 14,
+  },
+  drawToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
   },
 };
