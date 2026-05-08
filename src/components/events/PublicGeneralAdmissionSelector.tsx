@@ -14,6 +14,11 @@ function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function calculatePlatformFeeCents(subtotalCents: number) {
+  if (!subtotalCents || subtotalCents <= 0) return 0;
+  return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+}
+
 export default function PublicGeneralAdmissionSelector({
   eventId,
   ticketTypes,
@@ -26,6 +31,7 @@ export default function PublicGeneralAdmissionSelector({
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [coverFees, setCoverFees] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
@@ -38,10 +44,16 @@ export default function PublicGeneralAdmissionSelector({
       .filter((item) => item.quantity > 0);
   }, [ticketTypes, quantities]);
 
-  const total = selectedItems.reduce(
+  const ticketTotal = selectedItems.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0) * item.quantity,
     0,
   );
+
+  const platformFeeCents = coverFees
+    ? calculatePlatformFeeCents(ticketTotal)
+    : 0;
+
+  const totalTodayCents = ticketTotal + platformFeeCents;
 
   const totalQuantity = selectedItems.reduce(
     (sum, item) => sum + item.quantity,
@@ -81,6 +93,8 @@ export default function PublicGeneralAdmissionSelector({
           eventId,
           buyerName,
           buyerEmail,
+          coverFees,
+          platformFeeCents,
           items: selectedItems.map((item) => ({
             ticketTypeId: item.ticketType.id,
             quantity: item.quantity,
@@ -149,8 +163,7 @@ export default function PublicGeneralAdmissionSelector({
                   >
                     −
                   </button>
-
-                  <input
+                                    <input
                     type="number"
                     min="0"
                     value={quantity}
@@ -204,7 +217,9 @@ export default function PublicGeneralAdmissionSelector({
                 </span>
                 <strong>
                   {currency}{" "}
-                  {moneyFromCents(Number(item.ticketType.price || 0) * item.quantity)}
+                  {moneyFromCents(
+                    Number(item.ticketType.price || 0) * item.quantity,
+                  )}
                 </strong>
               </div>
             ))}
@@ -214,7 +229,31 @@ export default function PublicGeneralAdmissionSelector({
         <div style={styles.totalBox}>
           <span>{totalQuantity} ticket{totalQuantity === 1 ? "" : "s"}</span>
           <strong>
-            {currency} {moneyFromCents(total)}
+            {currency} {moneyFromCents(ticketTotal)}
+          </strong>
+        </div>
+
+        <label style={styles.feeBox}>
+          <input
+            type="checkbox"
+            checked={coverFees}
+            onChange={(event) => setCoverFees(event.target.checked)}
+            disabled={ticketTotal <= 0}
+          />
+          <span>
+            <strong>I’d like to cover platform fees</strong>
+            <small>
+              Adds approximately {currency}{" "}
+              {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so the
+              organiser receives the full ticket value.
+            </small>
+          </span>
+        </label>
+
+        <div style={styles.totalBoxStrong}>
+          <span>Total today</span>
+          <strong>
+            {currency} {moneyFromCents(totalTodayCents)}
           </strong>
         </div>
 
@@ -239,7 +278,6 @@ export default function PublicGeneralAdmissionSelector({
     </div>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -380,6 +418,31 @@ const styles: Record<string, CSSProperties> = {
     color: "#fde68a",
     fontWeight: 950,
     fontSize: 18,
+  },
+  totalBoxStrong: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(34,197,94,0.16)",
+    color: "#bbf7d0",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(187,247,208,0.18)",
+  },
+  feeBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    cursor: "pointer",
   },
   checkoutButton: {
     marginTop: 14,
