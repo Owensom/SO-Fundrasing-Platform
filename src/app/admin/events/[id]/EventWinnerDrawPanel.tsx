@@ -5,9 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
   type CSSProperties,
-  type FormEvent,
 } from "react";
 
 type EventPrize = {
@@ -36,6 +34,25 @@ type EventWinner = {
   status: string;
   drawn_at: string;
   created_at: string;
+};
+
+type ApiWinner = {
+  id?: string;
+  prize_id?: string | null;
+  prize_title?: string | null;
+  prizeTitle?: string | null;
+  prize_position?: number | null;
+  prizePosition?: number | null;
+  winner_name?: string | null;
+  winnerName?: string | null;
+  winner_email?: string | null;
+  winnerEmail?: string | null;
+  table_number?: string | null;
+  tableNumber?: string | null;
+  row_label?: string | null;
+  rowLabel?: string | null;
+  seat_number?: string | null;
+  seatNumber?: string | null;
 };
 
 type ConfettiPiece = {
@@ -87,6 +104,40 @@ function formatWinnerSeat(winner: EventWinner) {
   return "General admission";
 }
 
+function formatApiWinnerSeat(winner: ApiWinner | null) {
+  if (!winner) return "";
+
+  const tableNumber = winner.tableNumber ?? winner.table_number ?? null;
+  const rowLabel = winner.rowLabel ?? winner.row_label ?? null;
+  const seatNumber = winner.seatNumber ?? winner.seat_number ?? null;
+
+  if (tableNumber) {
+    return `Table ${tableNumber}${seatNumber ? ` · Seat ${seatNumber}` : ""}`;
+  }
+
+  if (rowLabel || seatNumber) {
+    return `Row ${rowLabel || "-"} · Seat ${seatNumber || "-"}`;
+  }
+
+  return "General admission";
+}
+
+function getApiWinnerName(winner: ApiWinner | null) {
+  return String(winner?.winnerName ?? winner?.winner_name ?? "Winner").trim();
+}
+
+function getApiWinnerEmail(winner: ApiWinner | null) {
+  return String(winner?.winnerEmail ?? winner?.winner_email ?? "").trim();
+}
+
+function getApiWinnerPrize(winner: ApiWinner | null) {
+  const position = winner?.prizePosition ?? winner?.prize_position ?? null;
+  const title = String(winner?.prizeTitle ?? winner?.prize_title ?? "").trim();
+
+  if (!title) return "Prize winner";
+  return position ? `${position}. ${title}` : title;
+}
+
 function eventTypeLabel(eventType: string) {
   if (eventType === "tables") return "Tables";
   if (eventType === "reserved_seating") return "Reserved seating";
@@ -133,7 +184,6 @@ function playTick(audioCtx: AudioContext) {
   osc.start(now);
   osc.stop(now + 0.075);
 }
-
 function playRiser(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
@@ -160,6 +210,7 @@ function playRiser(audioCtx: AudioContext) {
   osc.start(now);
   osc.stop(now + 0.3);
 }
+
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
@@ -222,7 +273,6 @@ export default function EventWinnerDrawPanel({
   eventType,
   prizes,
   winners,
-  drawWinnerAction,
   deleteWinnerAction,
   clearWinnersAction,
 }: {
@@ -230,7 +280,7 @@ export default function EventWinnerDrawPanel({
   eventType: "general_admission" | "reserved_seating" | "tables";
   prizes: EventPrize[];
   winners: EventWinner[];
-  drawWinnerAction: (formData: FormData) => void | Promise<void>;
+  drawWinnerAction?: (formData: FormData) => void | Promise<void>;
   deleteWinnerAction: (formData: FormData) => void | Promise<void>;
   clearWinnersAction: (formData: FormData) => void | Promise<void>;
 }) {
@@ -238,7 +288,7 @@ export default function EventWinnerDrawPanel({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedPrizeKey, setSelectedPrizeKey] = useState("");
   const [drawMode, setDrawMode] = useState<"single" | "all_remaining">("single");
@@ -249,7 +299,7 @@ export default function EventWinnerDrawPanel({
   const [displayPrize, setDisplayPrize] = useState("Ready");
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
-  const [isPending, startTransition] = useTransition();
+  const [revealedWinner, setRevealedWinner] = useState<ApiWinner | null>(null);
 
   const validPrizes = useMemo(
     () => prizes.filter((prize) => prizeTitle(prize)),
@@ -336,9 +386,9 @@ export default function EventWinnerDrawPanel({
       timeoutRef.current = null;
     }
 
-    if (submitTimeoutRef.current) {
-      clearTimeout(submitTimeoutRef.current);
-      submitTimeoutRef.current = null;
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current);
+      reloadTimeoutRef.current = null;
     }
   }
 
@@ -378,10 +428,8 @@ export default function EventWinnerDrawPanel({
     return selectedPrizeLabel;
   }
 
-  async function runDramaticDraw(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (drawing || saving || isPending) return;
+  async function runDramaticDraw() {
+    if (drawing || saving) return;
 
     if (!hasPrizes) {
       setError("Add prizes before running a draw.");
@@ -402,6 +450,7 @@ export default function EventWinnerDrawPanel({
     setDrawOverlayOpen(true);
     setDrawing(true);
     setSaving(false);
+    setRevealedWinner(null);
     setConfetti([]);
     setDisplayText("—");
     setDisplayPrize(selectedPrizeLabel);
@@ -424,37 +473,59 @@ export default function EventWinnerDrawPanel({
       ticks += 1;
     }, 72);
 
-    timeoutRef.current = setTimeout(() => {
+    timeoutRef.current = setTimeout(async () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
 
-      setDisplayText("WINNER");
-      setDisplayPrize(selectedPrizeLabel);
       setDrawing(false);
       setSaving(true);
-      setConfetti(makeConfetti());
+      setDisplayText("SAVING");
+      setDisplayPrize(selectedPrizeLabel);
 
-      if (audioCtx) playWinner(audioCtx);
+      const form = formRef.current;
 
-      submitTimeoutRef.current = setTimeout(() => {
-        const form = formRef.current;
+      if (!form) {
+        setSaving(false);
+        setError("Draw form was not found.");
+        return;
+      }
 
-        if (!form) {
-          setSaving(false);
-          setError("Draw form was not found.");
-          return;
-        }
-
+      try {
         const formData = new FormData(form);
         formData.set("event_id", eventId);
         formData.set("draw_mode", drawMode);
 
-        startTransition(() => {
-          void drawWinnerAction(formData);
+        const response = await fetch(`/api/admin/events/${eventId}/draw`, {
+          method: "POST",
+          body: formData,
         });
-      }, 950);
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok || data?.ok === false) {
+          throw new Error(data?.error || "Draw failed.");
+        }
+
+        const apiWinner = (data?.winner || null) as ApiWinner | null;
+
+        setRevealedWinner(apiWinner);
+        setDisplayText("WINNER");
+        setDisplayPrize(getApiWinnerPrize(apiWinner));
+        setSaving(false);
+        setConfetti(makeConfetti());
+
+        if (audioCtx) playWinner(audioCtx);
+
+        reloadTimeoutRef.current = setTimeout(() => {
+          window.location.reload();
+        }, 2600);
+      } catch (err) {
+        setSaving(false);
+        setError(err instanceof Error ? err.message : "Draw failed.");
+        setDisplayText("ERROR");
+      }
     }, 3200);
   }
 
@@ -513,8 +584,11 @@ export default function EventWinnerDrawPanel({
       <div style={styles.grid}>
         <form
           ref={formRef}
-          action={drawWinnerAction}
-          onSubmit={runDramaticDraw}
+          action="#"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runDramaticDraw();
+          }}
           style={styles.panel}
         >
           <input type="hidden" name="event_id" value={eventId} />
@@ -524,7 +598,7 @@ export default function EventWinnerDrawPanel({
             <h3 style={styles.panelTitle}>Dramatic draw controls</h3>
             <p style={styles.sectionText}>
               Opens a full-screen draw with suspense, sound, confetti, and then
-              saves the verified winner to this event.
+              saves and reveals the verified winner.
             </p>
           </div>
 
@@ -576,7 +650,8 @@ export default function EventWinnerDrawPanel({
                   <option value="all_remaining">Draw all remaining prizes</option>
                 </select>
               </label>
-                            <label style={styles.field}>
+
+              <label style={styles.field}>
                 <span style={styles.label}>Draw scope</span>
                 <select
                   name="draw_scope"
@@ -589,8 +664,7 @@ export default function EventWinnerDrawPanel({
                   <option value="all">Allow previous winner emails</option>
                 </select>
               </label>
-
-              {eventType === "tables" && (
+                            {eventType === "tables" && (
                 <label style={styles.field}>
                   <span style={styles.label}>Max winners per table</span>
                   <input
@@ -639,7 +713,6 @@ export default function EventWinnerDrawPanel({
                     !hasRemainingPrizes ||
                     drawing ||
                     saving ||
-                    isPending ||
                     (drawMode === "single" && !activePrizeKey)
                   }
                   style={{
@@ -648,13 +721,12 @@ export default function EventWinnerDrawPanel({
                       !hasRemainingPrizes ||
                       drawing ||
                       saving ||
-                      isPending ||
                       (drawMode === "single" && !activePrizeKey)
                         ? 0.45
                         : 1,
                   }}
                 >
-                  {saving || isPending ? "Saving..." : "Open dramatic draw"}
+                  {saving ? "Saving..." : "Open dramatic draw"}
                 </button>
               </div>
             </>
@@ -774,11 +846,11 @@ export default function EventWinnerDrawPanel({
           <button
             type="button"
             onClick={closeDraw}
-            disabled={saving || isPending}
+            disabled={saving}
             style={{
               ...styles.closeOverlayButton,
-              opacity: saving || isPending ? 0.45 : 1,
-              cursor: saving || isPending ? "not-allowed" : "pointer",
+              opacity: saving ? 0.45 : 1,
+              cursor: saving ? "not-allowed" : "pointer",
             }}
           >
             Close
@@ -788,15 +860,17 @@ export default function EventWinnerDrawPanel({
             <p style={styles.overlayEyebrow}>Event prize draw</p>
 
             <h1 style={styles.overlayTitle}>
-              {drawing ? "Drawing..." : saving || isPending ? "Saving winner..." : "Winner!"}
+              {drawing ? "Drawing..." : saving ? "Saving winner..." : "Winner!"}
             </h1>
 
-            <p style={styles.overlayPrize}>{displayPrize}</p>
+            <p style={styles.overlayPrize}>
+              {revealedWinner ? getApiWinnerPrize(revealedWinner) : displayPrize}
+            </p>
 
             <div
               style={{
                 ...styles.drawOrb,
-                animation: drawing || saving || isPending ? "glowPulse 900ms infinite" : "",
+                animation: drawing || saving ? "glowPulse 900ms infinite" : "",
               }}
             >
               <div
@@ -809,25 +883,46 @@ export default function EventWinnerDrawPanel({
               </div>
             </div>
 
+            {revealedWinner ? (
+              <div style={styles.revealedWinnerCard}>
+                <p style={styles.revealedWinnerLabel}>Winner</p>
+                <h2 style={styles.revealedWinnerName}>
+                  {getApiWinnerName(revealedWinner)}
+                </h2>
+
+                {getApiWinnerEmail(revealedWinner) ? (
+                  <p style={styles.revealedWinnerMeta}>
+                    {getApiWinnerEmail(revealedWinner)}
+                  </p>
+                ) : null}
+
+                <p style={styles.revealedWinnerMeta}>
+                  {formatApiWinnerSeat(revealedWinner)}
+                </p>
+              </div>
+            ) : null}
+
             <p style={styles.overlaySubtext}>
               {drawing
                 ? "Selecting from eligible event entries..."
-                : saving || isPending
+                : saving
                   ? "Winner chosen — saving to event history..."
-                  : "Draw complete."}
+                  : revealedWinner
+                    ? "Winner saved. Refreshing history..."
+                    : "Ready."}
             </p>
 
             <button
               type="button"
               onClick={closeDraw}
-              disabled={saving || isPending}
+              disabled={saving}
               style={{
                 ...styles.overlaySecondaryButton,
-                opacity: saving || isPending ? 0.45 : 1,
-                cursor: saving || isPending ? "not-allowed" : "pointer",
+                opacity: saving ? 0.45 : 1,
+                cursor: saving ? "not-allowed" : "pointer",
               }}
             >
-              {saving || isPending ? "Saving..." : "Close"}
+              {saving ? "Saving..." : "Close"}
             </button>
           </div>
         </div>
@@ -1142,6 +1237,36 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     letterSpacing: "-0.06em",
     textShadow: "0 0 28px rgba(250,204,21,0.85)",
+  },
+  revealedWinnerCard: {
+    width: "min(520px, 100%)",
+    margin: "0 auto 16px",
+    padding: 18,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(250,204,21,0.4)",
+    boxShadow: "0 18px 50px rgba(0,0,0,0.24)",
+  },
+  revealedWinnerLabel: {
+    margin: 0,
+    color: "#facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+  },
+  revealedWinnerName: {
+    margin: "8px 0 0",
+    color: "#ffffff",
+    fontSize: "clamp(28px, 5vw, 44px)",
+    fontWeight: 950,
+    lineHeight: 1.05,
+  },
+  revealedWinnerMeta: {
+    margin: "8px 0 0",
+    color: "#d1d5db",
+    fontSize: 16,
+    fontWeight: 800,
   },
   overlaySubtext: {
     margin: "0 auto",
