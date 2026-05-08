@@ -13,11 +13,6 @@ type EventPrize = {
   position?: number;
   title?: string;
   name?: string;
-  description?: string;
-  isPublic?: boolean;
-  is_public?: boolean;
-  sortOrder?: number;
-  sort_order?: number;
 };
 
 type EventWinner = {
@@ -36,23 +31,16 @@ type EventWinner = {
   created_at: string;
 };
 
-type ApiWinner = {
+type WinnerPayload = {
   id?: string;
   prize_id?: string | null;
   prize_title?: string | null;
-  prizeTitle?: string | null;
   prize_position?: number | null;
-  prizePosition?: number | null;
   winner_name?: string | null;
-  winnerName?: string | null;
   winner_email?: string | null;
-  winnerEmail?: string | null;
   table_number?: string | null;
-  tableNumber?: string | null;
   row_label?: string | null;
-  rowLabel?: string | null;
   seat_number?: string | null;
-  seatNumber?: string | null;
 };
 
 type ConfettiPiece = {
@@ -73,6 +61,7 @@ function prizeTitle(prize: EventPrize) {
 
 function prizePosition(prize: EventPrize, index: number) {
   const position = Number(prize.position);
+
   return Number.isFinite(position) && position > 0
     ? Math.floor(position)
     : index + 1;
@@ -90,7 +79,23 @@ function prizePayload(prize: EventPrize, index: number) {
   });
 }
 
-function formatWinnerSeat(winner: EventWinner) {
+function buildAllPrizesPayload(prizes: EventPrize[]) {
+  return JSON.stringify(
+    prizes
+      .map((prize, index) => ({
+        id: prizeId(prize, index),
+        title: prizeTitle(prize),
+        position: prizePosition(prize, index),
+      }))
+      .filter((prize) => prize.title),
+  );
+}
+
+function formatWinnerSeat(winner: {
+  table_number?: string | null;
+  row_label?: string | null;
+  seat_number?: string | null;
+}) {
   if (winner.table_number) {
     return `Table ${winner.table_number}${
       winner.seat_number ? ` · Seat ${winner.seat_number}` : ""
@@ -101,46 +106,6 @@ function formatWinnerSeat(winner: EventWinner) {
     return `Row ${winner.row_label || "-"} · Seat ${winner.seat_number || "-"}`;
   }
 
-  return "General admission";
-}
-
-function formatApiWinnerSeat(winner: ApiWinner | null) {
-  if (!winner) return "";
-
-  const tableNumber = winner.tableNumber ?? winner.table_number ?? null;
-  const rowLabel = winner.rowLabel ?? winner.row_label ?? null;
-  const seatNumber = winner.seatNumber ?? winner.seat_number ?? null;
-
-  if (tableNumber) {
-    return `Table ${tableNumber}${seatNumber ? ` · Seat ${seatNumber}` : ""}`;
-  }
-
-  if (rowLabel || seatNumber) {
-    return `Row ${rowLabel || "-"} · Seat ${seatNumber || "-"}`;
-  }
-
-  return "General admission";
-}
-
-function getApiWinnerName(winner: ApiWinner | null) {
-  return String(winner?.winnerName ?? winner?.winner_name ?? "Winner").trim();
-}
-
-function getApiWinnerEmail(winner: ApiWinner | null) {
-  return String(winner?.winnerEmail ?? winner?.winner_email ?? "").trim();
-}
-
-function getApiWinnerPrize(winner: ApiWinner | null) {
-  const position = winner?.prizePosition ?? winner?.prize_position ?? null;
-  const title = String(winner?.prizeTitle ?? winner?.prize_title ?? "").trim();
-
-  if (!title) return "Prize winner";
-  return position ? `${position}. ${title}` : title;
-}
-
-function eventTypeLabel(eventType: string) {
-  if (eventType === "tables") return "Tables";
-  if (eventType === "reserved_seating") return "Reserved seating";
   return "General admission";
 }
 
@@ -163,95 +128,40 @@ function playTick(audioCtx: AudioContext) {
 
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "square";
-  osc.frequency.setValueAtTime(1250, now);
-  osc.frequency.exponentialRampToValueAtTime(360, now + 0.055);
-
-  filter.type = "bandpass";
-  filter.frequency.setValueAtTime(1300, now);
-  filter.Q.setValueAtTime(8, now);
+  osc.frequency.setValueAtTime(1100, now);
+  osc.frequency.exponentialRampToValueAtTime(320, now + 0.06);
 
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.006);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
 
-  osc.connect(filter);
-  filter.connect(gain);
+  osc.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 0.075);
+  osc.stop(now + 0.08);
 }
-function playRiser(audioCtx: AudioContext) {
+function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(72, now);
-  osc.frequency.linearRampToValueAtTime(145, now + 0.26);
-
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(520, now);
-  filter.frequency.linearRampToValueAtTime(1250, now + 0.26);
+  osc.frequency.setValueAtTime(240, now);
+  osc.frequency.exponentialRampToValueAtTime(820, now + 0.7);
 
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.045, now + 0.025);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+  gain.gain.exponentialRampToValueAtTime(0.22, now + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 1);
 
-  osc.connect(filter);
-  filter.connect(gain);
+  osc.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 0.3);
-}
-
-function playWinner(audioCtx: AudioContext) {
-  const now = audioCtx.currentTime;
-
-  const master = audioCtx.createGain();
-  master.gain.setValueAtTime(0.0001, now);
-  master.gain.exponentialRampToValueAtTime(0.3, now + 0.025);
-  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
-  master.connect(audioCtx.destination);
-
-  const bass = audioCtx.createOscillator();
-  bass.type = "triangle";
-  bass.frequency.setValueAtTime(210, now);
-  bass.frequency.exponentialRampToValueAtTime(58, now + 0.75);
-  bass.connect(master);
-  bass.start(now);
-  bass.stop(now + 1.1);
-
-  const hit = audioCtx.createOscillator();
-  hit.type = "square";
-  hit.frequency.setValueAtTime(920, now);
-  hit.frequency.exponentialRampToValueAtTime(300, now + 0.42);
-  hit.connect(master);
-  hit.start(now);
-  hit.stop(now + 0.45);
-
-  const sparkle = audioCtx.createOscillator();
-  const sparkleGain = audioCtx.createGain();
-
-  sparkle.type = "sine";
-  sparkle.frequency.setValueAtTime(1320, now + 0.18);
-  sparkle.frequency.exponentialRampToValueAtTime(1780, now + 0.55);
-
-  sparkleGain.gain.setValueAtTime(0.0001, now + 0.18);
-  sparkleGain.gain.exponentialRampToValueAtTime(0.09, now + 0.24);
-  sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
-
-  sparkle.connect(sparkleGain);
-  sparkleGain.connect(master);
-
-  sparkle.start(now + 0.18);
-  sparkle.stop(now + 0.65);
+  osc.stop(now + 1);
 }
 
 function makeConfetti(): ConfettiPiece[] {
@@ -299,7 +209,9 @@ export default function EventWinnerDrawPanel({
   const [displayPrize, setDisplayPrize] = useState("Ready");
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
-  const [revealedWinner, setRevealedWinner] = useState<ApiWinner | null>(null);
+  const [revealedWinner, setRevealedWinner] = useState<WinnerPayload | null>(
+    null,
+  );
 
   const validPrizes = useMemo(
     () => prizes.filter((prize) => prizeTitle(prize)),
@@ -428,11 +340,44 @@ export default function EventWinnerDrawPanel({
     return selectedPrizeLabel;
   }
 
+  async function checkEligibility() {
+    const form = formRef.current;
+
+    if (!form) {
+      throw new Error("Draw form was not found.");
+    }
+
+    const formData = new FormData(form);
+    formData.set("event_id", eventId);
+    formData.set("draw_mode", drawMode);
+    formData.set("check_only", "yes");
+    formData.set("all_prizes", buildAllPrizesPayload(validPrizes));
+
+    const response = await fetch(`/api/admin/events/${eventId}/draw`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Could not check eligible winners.");
+    }
+
+    const eligibleCount = Number(data?.eligibleCount || 0);
+
+    if (!Number.isFinite(eligibleCount) || eligibleCount <= 0) {
+      throw new Error("No eligible winner found for this draw.");
+    }
+
+    return eligibleCount;
+  }
+
   async function runDramaticDraw() {
     if (drawing || saving) return;
 
     if (!hasPrizes) {
-      setError("Add prizes before running a draw.");
+      setError("Add prizes in the Prizes section before running a draw.");
       return;
     }
 
@@ -446,7 +391,14 @@ export default function EventWinnerDrawPanel({
       return;
     }
 
-    setError("");
+    try {
+      setError("");
+      await checkEligibility();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No eligible winner found.");
+      return;
+    }
+
     setDrawOverlayOpen(true);
     setDrawing(true);
     setSaving(false);
@@ -465,10 +417,7 @@ export default function EventWinnerDrawPanel({
       setDisplayText(randomDisplayValue());
       setDisplayPrize(randomPrizeText());
 
-      if (audioCtx) {
-        playTick(audioCtx);
-        if (ticks % 4 === 0) playRiser(audioCtx);
-      }
+      if (audioCtx) playTick(audioCtx);
 
       ticks += 1;
     }, 72);
@@ -496,6 +445,7 @@ export default function EventWinnerDrawPanel({
         const formData = new FormData(form);
         formData.set("event_id", eventId);
         formData.set("draw_mode", drawMode);
+        formData.set("all_prizes", buildAllPrizesPayload(validPrizes));
 
         const response = await fetch(`/api/admin/events/${eventId}/draw`, {
           method: "POST",
@@ -508,11 +458,29 @@ export default function EventWinnerDrawPanel({
           throw new Error(data?.error || "Draw failed.");
         }
 
-        const apiWinner = (data?.winner || null) as ApiWinner | null;
+        const winner = drawMode === "all_remaining"
+          ? data?.winners?.[0] || null
+          : data?.winner || null;
 
-        setRevealedWinner(apiWinner);
+        const winnerPayload: WinnerPayload = {
+          id: winner?.id,
+          prize_id: winner?.prize_id,
+          prize_title: winner?.prize_title,
+          prize_position: winner?.prize_position,
+          winner_name: winner?.winner_name || "Winner",
+          winner_email: winner?.winner_email || "",
+          table_number: winner?.table_number || null,
+          row_label: winner?.row_label || null,
+          seat_number: winner?.seat_number || null,
+        };
+
+        setRevealedWinner(winnerPayload);
         setDisplayText("WINNER");
-        setDisplayPrize(getApiWinnerPrize(apiWinner));
+        setDisplayPrize(
+          winnerPayload.prize_position
+            ? `${winnerPayload.prize_position}. ${winnerPayload.prize_title || "Prize"}`
+            : winnerPayload.prize_title || selectedPrizeLabel,
+        );
         setSaving(false);
         setConfetti(makeConfetti());
 
@@ -534,8 +502,7 @@ export default function EventWinnerDrawPanel({
       clearDrawTimers();
     };
   }, []);
-
-  return (
+    return (
     <section style={styles.section}>
       <div style={styles.sectionHeader}>
         <p style={styles.sectionEyebrow}>Winner draw</p>
@@ -564,7 +531,13 @@ export default function EventWinnerDrawPanel({
 
         <div style={styles.statBox}>
           <p style={styles.statLabel}>Event type</p>
-          <p style={styles.statValueSmall}>{eventTypeLabel(eventType)}</p>
+          <p style={styles.statValueSmall}>
+            {eventType === "tables"
+              ? "Tables"
+              : eventType === "reserved_seating"
+                ? "Reserved seating"
+                : "General admission"}
+          </p>
         </div>
       </div>
 
@@ -597,8 +570,8 @@ export default function EventWinnerDrawPanel({
           <div>
             <h3 style={styles.panelTitle}>Dramatic draw controls</h3>
             <p style={styles.sectionText}>
-              Opens a full-screen draw with suspense, sound, confetti, and then
-              saves and reveals the verified winner.
+              Checks eligible entries first, then opens a full-screen reveal with
+              sound, confetti, and a saved winner.
             </p>
           </div>
 
@@ -664,7 +637,8 @@ export default function EventWinnerDrawPanel({
                   <option value="all">Allow previous winner emails</option>
                 </select>
               </label>
-                            {eventType === "tables" && (
+
+              {eventType === "tables" && (
                 <label style={styles.field}>
                   <span style={styles.label}>Max winners per table</span>
                   <input
@@ -726,7 +700,11 @@ export default function EventWinnerDrawPanel({
                         : 1,
                   }}
                 >
-                  {saving ? "Saving..." : "Open dramatic draw"}
+                  {drawing
+                    ? "Drawing..."
+                    : saving
+                      ? "Saving..."
+                      : "Open dramatic draw"}
                 </button>
               </div>
             </>
@@ -863,9 +841,7 @@ export default function EventWinnerDrawPanel({
               {drawing ? "Drawing..." : saving ? "Saving winner..." : "Winner!"}
             </h1>
 
-            <p style={styles.overlayPrize}>
-              {revealedWinner ? getApiWinnerPrize(revealedWinner) : displayPrize}
-            </p>
+            <p style={styles.overlayPrize}>{displayPrize}</p>
 
             <div
               style={{
@@ -887,17 +863,17 @@ export default function EventWinnerDrawPanel({
               <div style={styles.revealedWinnerCard}>
                 <p style={styles.revealedWinnerLabel}>Winner</p>
                 <h2 style={styles.revealedWinnerName}>
-                  {getApiWinnerName(revealedWinner)}
+                  {revealedWinner.winner_name || "Winner"}
                 </h2>
 
-                {getApiWinnerEmail(revealedWinner) ? (
+                {revealedWinner.winner_email ? (
                   <p style={styles.revealedWinnerMeta}>
-                    {getApiWinnerEmail(revealedWinner)}
+                    {revealedWinner.winner_email}
                   </p>
                 ) : null}
 
                 <p style={styles.revealedWinnerMeta}>
-                  {formatApiWinnerSeat(revealedWinner)}
+                  {formatWinnerSeat(revealedWinner)}
                 </p>
               </div>
             ) : null}
