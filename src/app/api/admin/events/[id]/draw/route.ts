@@ -1,5 +1,14 @@
+import { randomInt } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { query, queryOne } from "@/lib/db";
+import { auth } from "@/auth";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import {
+  createEventWinner,
+  getEligibleEventDrawCandidates,
+  getEventById,
+  listEventWinners,
+  type EventDrawCandidate,
+} from "../../../../_lib/events-repo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,459 +19,280 @@ type RouteContext = {
   }>;
 };
 
-type PrizePayload = {
+type ParsedPrizeSelection = {
   id: string;
   title: string;
-  position: number;
+  position: number | null;
 };
 
-function randomItem<T>(items: T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
+function positiveInteger(value: FormDataEntryValue | null, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.floor(number));
 }
 
-function truthy(value: FormDataEntryValue | null) {
-  return String(value || "").trim().toLowerCase() === "yes";
-}
-
-async function getEligibleCandidates(
-  eventId: string,
-  drawScope: string,
-  includeVip: boolean,
-  includeComplimentary: boolean,
-  includeStaff: boolean,
-  includeSponsors: boolean,
-  includeGuests: boolean,
-) {
-  const rows = await query<{
-    id: string;
-    customer_name: string | null;
-    customer_email: string | null;
-    guest_name: string | null;
-    guest_email: string | null;
-    table_number: string | null;
-    row_label: string | null;
-    seat_number: string | null;
-    admin_label: string | null;
-    seat_purpose: string | null;
-    order_id: string | null;
-    stripe_session_id: string | null;
-    status: string | null;
-  }>(
-    `
-      SELECT
-        es.id,
-        es.customer_name,
-        es.customer_email,
-        es.guest_name,
-        es.guest_email,
-        es.table_number,
-        es.row_label,
-        es.seat_number,
-        es.admin_label,
-        es.seat_purpose,
-        es.order_id,
-        es.stripe_session_id,
-        es.status
-      FROM event_seats es
-      WHERE es.event_id = $1
-        AND (
-          es.status = 'sold'
-          OR es.order_id IS NOT NULL
-          OR es.stripe_session_id IS NOT NULL
-        )
-    `,
-    [eventId],
-  );
-
-  const previousWinnerEmails =
-    drawScope === "not_previous_winners"
-      ? new Set(
-          (
-            await query<{
-              winner_email: string | null;
-            }>(
-              `
-                SELECT winner_email
-                FROM event_winners
-                WHERE event_id = $1
-              `,
-              [eventId],
-            )
-          )
-            .map((row) => String(row.winner_email || "").trim().toLowerCase())
-            .filter(Boolean),
-        )
-      : new Set<string>();
-
-  return rows.filter((row) => {
-    const adminLabel = String(row.admin_label || "")
-      .trim()
-      .toLowerCase();
-
-    const purpose = String(row.seat_purpose || "")
-      .trim()
-      .toLowerCase();
-
-    const email = String(
-      row.customer_email || row.guest_email || "",
-    ).trim();
-
-    if (!email) {
-      return false;
-    }
-
-    if (
-      drawScope === "not_previous_winners" &&
-      previousWinnerEmails.has(email.toLowerCase())
-    ) {
-      return false;
-    }
-
-    const isVip =
-      adminLabel.includes("vip") || purpose.includes("vip");
-
-    const isComplimentary =
-      adminLabel.includes("complimentary") ||
-      purpose.includes("complimentary");
-
-    const isStaff =
-      adminLabel.includes("staff") || purpose.includes("staff");
-
-    const isSponsor =
-      adminLabel.includes("sponsor") || purpose.includes("sponsor");
-
-    const isGuest =
-      adminLabel.includes("guest") || purpose.includes("guest");
-
-    if (isVip && !includeVip) return false;
-    if (isComplimentary && !includeComplimentary) return false;
-    if (isStaff && !includeStaff) return false;
-    if (isSponsor && !includeSponsors) return false;
-    if (isGuest && !includeGuests) return false;
-
-    return true;
-  });
-}
-
-async function saveWinner(
-  eventId: string,
-  prize: PrizePayload,
-  winner: any,
-  drawScope: string,
-) {
-  return queryOne(
-    `
-      INSERT INTO event_winners (
-        event_id,
-        prize_id,
-        prize_title,
-        prize_position,
-        draw_scope,
-        table_number,
-        row_label,
-        seat_number,
-        winner_name,
-        winner_email,
-        status,
-        drawn_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        'drawn',
-        NOW()
-      )
-      RETURNING *
-    `,
-    [
-      eventId,
-      prize.id,
-      prize.title,
-      prize.position,
-      drawScope,
-      winner.table_number || null,
-      winner.row_label || null,
-      winner.seat_number || null,
-      winner.customer_name ||
-        winner.guest_name ||
-        "Winner",
-      winner.customer_email ||
-        winner.guest_email ||
-        null,
-    ],
-  );
-}
-
-export async function POST(
-  request: NextRequest,
-  context: RouteContext,
-) {
+function parsePrizeSelection(
+  value: FormDataEntryValue | null,
+): ParsedPrizeSelection | null {
   try {
-    const { id: eventId } = await context.params;
+    const parsed = JSON.parse(String(value || ""));
+    const id = String(parsed?.id || "").trim();
+    const title = String(parsed?.title || "").trim();
+    const positionNumber = Number(parsed?.position);
 
+    if (!id || !title) return null;
+
+    return {
+      id,
+      title,
+      position:
+        Number.isFinite(positionNumber) && positionNumber > 0
+          ? Math.floor(positionNumber)
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function chooseRandomCandidate(
+  candidates: EventDrawCandidate[],
+): EventDrawCandidate | null {
+  if (candidates.length === 0) return null;
+  return candidates[randomInt(candidates.length)] || null;
+}
+
+async function requireEventAccess(eventId: string) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Not authenticated" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const event = await getEventById(eventId);
+
+  if (!event) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Event not found" },
+        { status: 404 },
+      ),
+    };
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (
+    !tenantSlug ||
+    event.tenant_slug !== tenantSlug ||
+    !sessionTenantSlugs.includes(tenantSlug)
+  ) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    event,
+  };
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
+  const { id: eventId } = await context.params;
+
+  try {
+    const access = await requireEventAccess(eventId);
+
+    if (!access.ok) {
+      return access.response;
+    }
+
+    const event = access.event;
     const formData = await request.formData();
 
-    const drawMode = String(
-      formData.get("draw_mode") || "single",
+    const checkOnly = String(formData.get("check_only") || "") === "yes";
+    const drawMode = String(formData.get("draw_mode") || "single").trim();
+    const selectedPrize = parsePrizeSelection(formData.get("prize_key"));
+    const drawScope = String(formData.get("draw_scope") || "all").trim();
+
+    const maxWinnersPerTableRaw = positiveInteger(
+      formData.get("max_winners_per_table"),
+      0,
     );
 
-    const drawScope = String(
-      formData.get("draw_scope") || "not_previous_winners",
+    const existingWinners = await listEventWinners(eventId);
+
+    const drawnPrizeIds = new Set(
+      existingWinners
+        .filter((winner) => winner.status === "drawn")
+        .map((winner) => String(winner.prize_id || "").trim())
+        .filter(Boolean),
     );
 
-    const includeVip = truthy(formData.get("include_vip"));
-    const includeComplimentary = truthy(
-      formData.get("include_complimentary"),
-    );
-        const includeStaff = truthy(
-      formData.get("include_staff"),
-    );
+    const eventPrizes: ParsedPrizeSelection[] = (event.prizes_json || [])
+      .map((prize, index) => {
+        const title = String(prize.title || prize.name || "").trim();
+        if (!title) return null;
 
-    const includeSponsors = truthy(
-      formData.get("include_sponsors"),
-    );
+        const rawPosition = Number(prize.position);
 
-    const includeGuests = truthy(
-      formData.get("include_guests"),
-    );
+        return {
+          id: String(prize.id || `prize-${index + 1}`),
+          title,
+          position:
+            Number.isFinite(rawPosition) && rawPosition > 0
+              ? Math.floor(rawPosition)
+              : index + 1,
+        };
+      })
+      .filter(Boolean) as ParsedPrizeSelection[];
 
-    const candidates = await getEligibleCandidates(
-      eventId,
-      drawScope,
-      includeVip,
-      includeComplimentary,
-      includeStaff,
-      includeSponsors,
-      includeGuests,
-    );
+    const prizesToDraw =
+      drawMode === "all_remaining"
+        ? eventPrizes.filter((prize) => !drawnPrizeIds.has(prize.id))
+        : selectedPrize
+          ? [selectedPrize]
+          : [];
 
-    if (!candidates.length) {
+    if (prizesToDraw.length === 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "No eligible winners found.",
-        },
+        { ok: false, error: "No prize selected or no prizes remaining." },
         { status: 400 },
       );
     }
 
-    if (drawMode === "all_remaining") {
-      const existingPrizeIds = new Set(
-        (
-          await query<{
-            prize_id: string | null;
-          }>(
-            `
-              SELECT prize_id
-              FROM event_winners
-              WHERE event_id = $1
-            `,
-            [eventId],
-          )
-        )
-          .map((row) => String(row.prize_id || "").trim())
-          .filter(Boolean),
-      );
-
-      const prizesRaw = String(
-        formData.get("all_prizes") || "[]",
-      );
-
-      let parsedPrizes: PrizePayload[] = [];
-
-      try {
-        parsedPrizes = JSON.parse(prizesRaw);
-      } catch {
-        parsedPrizes = [];
-      }
-
-      const remainingPrizes = parsedPrizes.filter(
-        (prize) =>
-          prize?.id &&
-          !existingPrizeIds.has(String(prize.id)),
-      );
-
-      if (!remainingPrizes.length) {
+    if (drawMode !== "all_remaining" && selectedPrize) {
+      if (drawnPrizeIds.has(selectedPrize.id)) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "No remaining prizes available.",
-          },
+          { ok: false, error: "This prize has already been drawn." },
+          { status: 409 },
+        );
+      }
+    }
+
+    const drawSettings = {
+      eventType: event.event_type,
+      includeVip: String(formData.get("include_vip") || "") === "yes",
+      includeComplimentary:
+        String(formData.get("include_complimentary") || "") === "yes",
+      includeStaff: String(formData.get("include_staff") || "") === "yes",
+      includeSponsors: String(formData.get("include_sponsors") || "") === "yes",
+      includeGuests: String(formData.get("include_guests") || "") === "yes",
+      excludeWinnerEmails: drawScope === "not_previous_winners",
+      maxWinnersPerTable:
+        event.event_type === "tables" && maxWinnersPerTableRaw > 0
+          ? maxWinnersPerTableRaw
+          : null,
+    };
+
+    if (checkOnly) {
+      const candidates = await getEligibleEventDrawCandidates({
+        eventId,
+        includeVip: drawSettings.includeVip,
+        includeComplimentary: drawSettings.includeComplimentary,
+        includeStaff: drawSettings.includeStaff,
+        includeSponsors: drawSettings.includeSponsors,
+        includeGuests: drawSettings.includeGuests,
+        excludeWinnerEmails: drawSettings.excludeWinnerEmails,
+        maxWinnersPerTable: drawSettings.maxWinnersPerTable,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        eligibleCount: candidates.length,
+        prizeCount: prizesToDraw.length,
+      });
+    }
+
+    const createdWinners = [];
+
+    for (const prize of prizesToDraw) {
+      const candidates = await getEligibleEventDrawCandidates({
+        eventId,
+        includeVip: drawSettings.includeVip,
+        includeComplimentary: drawSettings.includeComplimentary,
+        includeStaff: drawSettings.includeStaff,
+        includeSponsors: drawSettings.includeSponsors,
+        includeGuests: drawSettings.includeGuests,
+        excludeWinnerEmails: drawSettings.excludeWinnerEmails,
+        maxWinnersPerTable: drawSettings.maxWinnersPerTable,
+      });
+
+      const winner = chooseRandomCandidate(candidates);
+
+      if (!winner) {
+        if (drawMode === "all_remaining" && createdWinners.length > 0) break;
+
+        return NextResponse.json(
+          { ok: false, error: "No eligible winner found." },
           { status: 400 },
         );
       }
 
-      const savedWinners = [];
+      await createEventWinner({
+        tenantSlug: event.tenant_slug,
+        eventId,
+        prizeId: prize.id,
+        prizeTitle: prize.title,
+        prizePosition: prize.position,
+        drawScope,
+        drawSettings,
+        eventOrderId: winner.event_order_id,
+        eventOrderItemId: winner.event_order_item_id,
+        eventSeatId: winner.event_seat_id,
+        ticketTypeId: winner.ticket_type_id,
+        tableNumber: winner.table_number,
+        rowLabel: winner.row_label,
+        seatNumber: winner.seat_number,
+        winnerName: winner.winner_name,
+        winnerEmail: winner.winner_email,
+      });
 
-      const availableCandidates = [...candidates];
-
-      for (const prize of remainingPrizes) {
-        if (!availableCandidates.length) {
-          break;
-        }
-
-        const winner = randomItem(availableCandidates);
-
-        const winnerIndex = availableCandidates.findIndex(
-          (candidate) => candidate.id === winner.id,
-        );
-
-        if (winnerIndex >= 0) {
-          availableCandidates.splice(winnerIndex, 1);
-        }
-
-        const savedWinner = await saveWinner(
-          eventId,
-          prize,
-          winner,
-          drawScope,
-        );
-
-        savedWinners.push(savedWinner);
-      }
-
-      return NextResponse.json({
-        ok: true,
-        winners: savedWinners,
+      createdWinners.push({
+        prize_id: prize.id,
+        prize_title: prize.title,
+        prize_position: prize.position,
+        winner_name: winner.winner_name,
+        winner_email: winner.winner_email,
+        table_number: winner.table_number,
+        row_label: winner.row_label,
+        seat_number: winner.seat_number,
       });
     }
 
-    const prizeKey = String(
-      formData.get("prize_key") || "",
-    ).trim();
-
-    if (!prizeKey) {
+    if (createdWinners.length === 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Prize is required.",
-        },
+        { ok: false, error: "No eligible winner found." },
         { status: 400 },
       );
     }
-
-    let parsedPrize: PrizePayload;
-
-    try {
-      parsedPrize = JSON.parse(prizeKey);
-    } catch {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Invalid prize payload.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const existingWinner = await queryOne<{
-      id: string;
-    }>(
-      `
-        SELECT id
-        FROM event_winners
-        WHERE event_id = $1
-          AND prize_id = $2
-        LIMIT 1
-      `,
-      [eventId, parsedPrize.id],
-    );
-
-    if (existingWinner) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Prize already drawn.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const selectedWinner = randomItem(candidates);
-
-    const savedWinner = await saveWinner(
-      eventId,
-      parsedPrize,
-      selectedWinner,
-      drawScope,
-    );
 
     return NextResponse.json({
       ok: true,
-      winner: savedWinner,
+      winner: createdWinners[0],
+      winners: createdWinners,
     });
   } catch (error) {
-    console.error(
-      "POST /api/admin/events/[id]/draw failed",
-      error,
-    );
+    console.error("POST /api/admin/events/[id]/draw failed", error);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Internal server error.",
-      },
-      { status: 500 },
-    );
-  }
-}
-
-export async function DELETE(
-  request: NextRequest,
-  context: RouteContext,
-) {
-  try {
-    const { id: eventId } = await context.params;
-
-    const winnerId = request.nextUrl.searchParams.get(
-      "winner_id",
-    );
-
-    if (!winnerId) {
-      await query(
-        `
-          DELETE FROM event_winners
-          WHERE event_id = $1
-        `,
-        [eventId],
-      );
-
-      return NextResponse.json({
-        ok: true,
-      });
-    }
-
-    await query(
-      `
-        DELETE FROM event_winners
-        WHERE id = $1
-          AND event_id = $2
-      `,
-      [winnerId, eventId],
-    );
-
-    return NextResponse.json({
-      ok: true,
-    });
-  } catch (error) {
-    console.error(
-      "DELETE /api/admin/events/[id]/draw failed",
-      error,
-    );
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Internal server error.",
-      },
+      { ok: false, error: "Internal error" },
       { status: 500 },
     );
   }
