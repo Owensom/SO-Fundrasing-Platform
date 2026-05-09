@@ -131,6 +131,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const selectedPrize = parsePrizeSelection(formData.get("prize_key"));
     const drawScope = String(formData.get("draw_scope") || "all").trim();
 
+    const autoFromPosition = positiveInteger(
+      formData.get("auto_from_position"),
+      0,
+    );
+    const autoToPosition = positiveInteger(formData.get("auto_to_position"), 0);
+
     const maxWinnersPerTableRaw = positiveInteger(
       formData.get("max_winners_per_table"),
       0,
@@ -163,16 +169,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
       })
       .filter(Boolean) as ParsedPrizeSelection[];
 
+    const automatedPrizePool = eventPrizes.filter((prize) => {
+      const position = Number(prize.position || 0);
+
+      if (!Number.isFinite(position) || position <= 0) return false;
+      if (autoFromPosition > 0 && position < autoFromPosition) return false;
+      if (autoToPosition > 0 && position > autoToPosition) return false;
+
+      return true;
+    });
+
     const prizesToDraw =
       drawMode === "all_remaining"
-        ? eventPrizes.filter((prize) => !drawnPrizeIds.has(prize.id))
+        ? automatedPrizePool.filter((prize) => !drawnPrizeIds.has(prize.id))
         : selectedPrize
           ? [selectedPrize]
           : [];
 
     if (prizesToDraw.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "No prize selected or no prizes remaining." },
+        {
+          ok: false,
+          error:
+            drawMode === "all_remaining"
+              ? "No prizes remain in the selected automated range."
+              : "No prize selected or no prizes remaining.",
+        },
         { status: 400 },
       );
     }
@@ -188,6 +210,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const drawSettings = {
       eventType: event.event_type,
+      autoFromPosition: autoFromPosition || null,
+      autoToPosition: autoToPosition || null,
       includeVip: String(formData.get("include_vip") || "") === "yes",
       includeComplimentary:
         String(formData.get("include_complimentary") || "") === "yes",
