@@ -179,6 +179,12 @@ function makeConfetti(): ConfettiPiece[] {
   }));
 }
 
+function numberOrZero(value: string) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.floor(number));
+}
+
 export default function EventWinnerDrawPanel({
   eventId,
   eventType,
@@ -203,6 +209,8 @@ export default function EventWinnerDrawPanel({
 
   const [selectedPrizeKey, setSelectedPrizeKey] = useState("");
   const [drawMode, setDrawMode] = useState<"single" | "all_remaining">("single");
+  const [autoFromPosition, setAutoFromPosition] = useState("");
+  const [autoToPosition, setAutoToPosition] = useState("");
   const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -239,6 +247,21 @@ export default function EventWinnerDrawPanel({
     [validPrizes, drawnPrizeIds],
   );
 
+  const automatedRangePrizes = useMemo(() => {
+    const from = numberOrZero(autoFromPosition);
+    const to = numberOrZero(autoToPosition);
+
+    return remainingPrizes.filter((prize) => {
+      const index = validPrizes.findIndex((item) => item === prize);
+      const position = prizePosition(prize, index);
+
+      if (from > 0 && position < from) return false;
+      if (to > 0 && position > to) return false;
+
+      return true;
+    });
+  }, [autoFromPosition, autoToPosition, remainingPrizes, validPrizes]);
+
   const firstRemainingPrize = remainingPrizes[0];
   const firstRemainingIndex = firstRemainingPrize
     ? validPrizes.findIndex((prize) => prize === firstRemainingPrize)
@@ -252,7 +275,7 @@ export default function EventWinnerDrawPanel({
   const activePrizeKey = selectedPrizeKey || defaultPrizeKey;
 
   const selectedPrizeLabel = useMemo(() => {
-    if (drawMode === "all_remaining") return "All remaining prizes";
+    if (drawMode === "all_remaining") return "Automated prize range";
 
     const selectedIndex = validPrizes.findIndex(
       (prize, index) => prizePayload(prize, index) === activePrizeKey,
@@ -268,6 +291,7 @@ export default function EventWinnerDrawPanel({
   const latestWinner = winners[0] || null;
   const hasPrizes = validPrizes.length > 0;
   const hasRemainingPrizes = remainingPrizes.length > 0;
+  const hasAutomatedRangePrizes = automatedRangePrizes.length > 0;
     function getAudioContext() {
     if (typeof window === "undefined") return null;
 
@@ -331,9 +355,11 @@ export default function EventWinnerDrawPanel({
   function randomPrizeText() {
     if (drawMode === "all_remaining") {
       const prize =
-        remainingPrizes[Math.floor(Math.random() * remainingPrizes.length)];
+        automatedRangePrizes[
+          Math.floor(Math.random() * automatedRangePrizes.length)
+        ];
 
-      if (!prize) return "All remaining prizes";
+      if (!prize) return "Automated prize range";
 
       const index = validPrizes.findIndex((item) => item === prize);
       return `${prizePosition(prize, index)}. ${prizeTitle(prize)}`;
@@ -353,6 +379,8 @@ export default function EventWinnerDrawPanel({
     formData.set("event_id", eventId);
     formData.set("draw_mode", drawMode);
     formData.set("all_prizes", buildAllPrizesPayload(validPrizes));
+    formData.set("auto_from_position", autoFromPosition || "");
+    formData.set("auto_to_position", autoToPosition || "");
 
     if (checkOnly) {
       formData.set("check_only", "yes");
@@ -395,6 +423,19 @@ export default function EventWinnerDrawPanel({
 
     if (drawMode === "single" && !activePrizeKey) {
       throw new Error("Choose a prize before running the draw.");
+    }
+
+    if (drawMode === "all_remaining") {
+      const from = numberOrZero(autoFromPosition);
+      const to = numberOrZero(autoToPosition);
+
+      if (from > 0 && to > 0 && from > to) {
+        throw new Error("Automated prize range cannot start after it ends.");
+      }
+
+      if (!hasAutomatedRangePrizes) {
+        throw new Error("No remaining prizes found in this automated range.");
+      }
     }
   }
 
@@ -549,9 +590,8 @@ export default function EventWinnerDrawPanel({
         <p style={styles.sectionEyebrow}>Winner draw</p>
         <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
         <p style={styles.sectionText}>
-          Draw winners from eligible paid event entries only. Use the quick
-          automatic draw for admin work, or open the full dramatic draw for live
-          announcements.
+          Draw winners from eligible paid event entries only. Use a prize range
+          for automated draws so you can leave top prizes for a live draw.
         </p>
       </div>
 
@@ -567,19 +607,13 @@ export default function EventWinnerDrawPanel({
         </div>
 
         <div style={styles.statBox}>
-          <p style={styles.statLabel}>Winners</p>
-          <p style={styles.statValue}>{winners.length}</p>
+          <p style={styles.statLabel}>Automated range</p>
+          <p style={styles.statValue}>{automatedRangePrizes.length}</p>
         </div>
 
         <div style={styles.statBox}>
-          <p style={styles.statLabel}>Event type</p>
-          <p style={styles.statValueSmall}>
-            {eventType === "tables"
-              ? "Tables"
-              : eventType === "reserved_seating"
-                ? "Reserved seating"
-                : "General admission"}
-          </p>
+          <p style={styles.statLabel}>Winners</p>
+          <p style={styles.statValue}>{winners.length}</p>
         </div>
       </div>
 
@@ -628,8 +662,8 @@ export default function EventWinnerDrawPanel({
           <div>
             <h3 style={styles.panelTitle}>Draw controls</h3>
             <p style={styles.sectionText}>
-              Select the prize, choose the scope, then run either a quick
-              automatic draw or the full-screen dramatic draw.
+              Choose one prize, or draw all remaining prizes within a selected
+              position range.
             </p>
           </div>
 
@@ -677,9 +711,59 @@ export default function EventWinnerDrawPanel({
                   style={styles.input}
                 >
                   <option value="single">Draw selected prize</option>
-                  <option value="all_remaining">Draw all remaining prizes</option>
+                  <option value="all_remaining">Draw automated prize range</option>
                 </select>
               </label>
+
+              {drawMode === "all_remaining" && (
+                <div style={styles.rangeBox}>
+                  <div>
+                    <h3 style={styles.panelTitle}>Automated prize range</h3>
+                    <p style={styles.sectionText}>
+                      Choose which prize positions should be drawn automatically.
+                      Example: from 6 to 999 leaves prizes 1–5 for a live draw.
+                    </p>
+                  </div>
+
+                  <div style={styles.twoCol}>
+                    <label style={styles.field}>
+                      <span style={styles.label}>Draw prizes from position</span>
+                      <input
+                        name="auto_from_position"
+                        type="number"
+                        min="1"
+                        value={autoFromPosition}
+                        onChange={(event) =>
+                          setAutoFromPosition(event.target.value)
+                        }
+                        placeholder="6"
+                        style={styles.input}
+                      />
+                    </label>
+
+                    <label style={styles.field}>
+                      <span style={styles.label}>Draw prizes to position</span>
+                      <input
+                        name="auto_to_position"
+                        type="number"
+                        min="1"
+                        value={autoToPosition}
+                        onChange={(event) => setAutoToPosition(event.target.value)}
+                        placeholder="999"
+                        style={styles.input}
+                      />
+                    </label>
+                  </div>
+
+                  <div style={styles.rangeSummary}>
+                    {hasAutomatedRangePrizes
+                      ? `${automatedRangePrizes.length} remaining prize${
+                          automatedRangePrizes.length === 1 ? "" : "s"
+                        } in this automated range.`
+                      : "No remaining prizes in this automated range."}
+                  </div>
+                </div>
+              )}
 
               <label style={styles.field}>
                 <span style={styles.label}>Draw scope</span>
@@ -746,7 +830,8 @@ export default function EventWinnerDrawPanel({
                     drawing ||
                     saving ||
                     autoDrawing ||
-                    (drawMode === "single" && !activePrizeKey)
+                    (drawMode === "single" && !activePrizeKey) ||
+                    (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
                   }
                   style={{
                     ...styles.automaticButton,
@@ -755,7 +840,8 @@ export default function EventWinnerDrawPanel({
                       drawing ||
                       saving ||
                       autoDrawing ||
-                      (drawMode === "single" && !activePrizeKey)
+                      (drawMode === "single" && !activePrizeKey) ||
+                      (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
                         ? 0.45
                         : 1,
                   }}
@@ -770,7 +856,8 @@ export default function EventWinnerDrawPanel({
                     drawing ||
                     saving ||
                     autoDrawing ||
-                    (drawMode === "single" && !activePrizeKey)
+                    (drawMode === "single" && !activePrizeKey) ||
+                    (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
                   }
                   style={{
                     ...styles.primaryButton,
@@ -779,7 +866,8 @@ export default function EventWinnerDrawPanel({
                       drawing ||
                       saving ||
                       autoDrawing ||
-                      (drawMode === "single" && !activePrizeKey)
+                      (drawMode === "single" && !activePrizeKey) ||
+                      (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
                         ? 0.45
                         : 1,
                   }}
@@ -1045,12 +1133,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 24,
     fontWeight: 900,
   },
-  statValueSmall: {
-    margin: "6px 0 0",
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 900,
-  },
   latestWinnerBox: {
     padding: 16,
     borderRadius: 18,
@@ -1124,6 +1206,28 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 15,
     boxSizing: "border-box",
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 10,
+  },
+  rangeBox: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+  },
+  rangeSummary: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: 900,
   },
   checkGrid: {
     display: "grid",
