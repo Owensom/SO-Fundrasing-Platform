@@ -170,33 +170,47 @@ function getRowOffsets(layout: Record<string, SeatingLayoutValue> | undefined) {
   );
 }
 
-function tableShellStyle(shape: TableShape): CSSProperties {
-  if (shape === "square") {
-    return {
-      ...styles.tableShell,
-      width: 220,
-      minHeight: 220,
-      borderRadius: 28,
-      gridTemplateColumns: "repeat(3, 1fr)",
-    };
-  }
+function tableGridColumns(shape: TableShape, seatCount: number) {
+  if (shape === "rectangle") return "repeat(4, minmax(42px, 1fr))";
+  if (shape === "square") return "repeat(3, minmax(42px, 1fr))";
+
+  if (seatCount <= 4) return "repeat(2, minmax(42px, 1fr))";
+  if (seatCount <= 9) return "repeat(3, minmax(42px, 1fr))";
+  return "repeat(4, minmax(42px, 1fr))";
+}
+
+function tableVisualStyle(shape: TableShape, seatCount: number): CSSProperties {
+  const common: CSSProperties = {
+    ...styles.tableVisual,
+    gridTemplateColumns: tableGridColumns(shape, seatCount),
+  };
 
   if (shape === "rectangle") {
     return {
-      ...styles.tableShell,
-      width: 360,
-      minHeight: 190,
+      ...common,
+      maxWidth: 430,
+      borderRadius: 26,
+      padding: "62px 22px 22px",
+      aspectRatio: "16 / 9",
+    };
+  }
+
+  if (shape === "square") {
+    return {
+      ...common,
+      maxWidth: 320,
       borderRadius: 30,
-      gridTemplateColumns: "repeat(4, 1fr)",
+      padding: "62px 22px 22px",
+      aspectRatio: "1 / 1",
     };
   }
 
   return {
-    ...styles.tableShell,
-    width: 260,
-    minHeight: 260,
+    ...common,
+    maxWidth: 340,
     borderRadius: 999,
-    gridTemplateColumns: "repeat(3, 1fr)",
+    padding: "72px 30px 30px",
+    aspectRatio: "1 / 1",
   };
 }
 
@@ -216,13 +230,16 @@ function seatStyle({
   const colour = colourForTicketType(ticketType, ticketTypes);
 
   const base: CSSProperties = {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     fontSize: 12,
     fontWeight: 900,
     cursor: "pointer",
     position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   };
 
   if (status === "blocked") {
@@ -251,13 +268,13 @@ function seatStyle({
       color: selected ? "#082f49" : "#92400e",
     };
   }
-    if (seatPurpose === "vip") {
+
+  if (seatPurpose === "vip") {
     return {
       ...base,
       border: selected ? "3px solid #0284c7" : "2px solid #7c3aed",
       background: selected ? "#bae6fd" : "#ede9fe",
       color: selected ? "#082f49" : "#4c1d95",
-      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
     };
   }
 
@@ -267,7 +284,6 @@ function seatStyle({
       border: selected ? "3px solid #0284c7" : "2px dashed #0f766e",
       background: selected ? "#bae6fd" : "#ccfbf1",
       color: selected ? "#082f49" : "#134e4a",
-      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
     };
   }
 
@@ -282,7 +298,6 @@ function seatStyle({
       border: selected ? "3px solid #0284c7" : "2px solid #0ea5e9",
       background: selected ? "#bae6fd" : "#e0f2fe",
       color: selected ? "#082f49" : "#075985",
-      boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
     };
   }
 
@@ -291,10 +306,8 @@ function seatStyle({
     border: selected ? "3px solid #0284c7" : "1px solid #cbd5e1",
     background: selected ? "#bae6fd" : colour.background,
     color: selected ? "#082f49" : colour.text,
-    boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
   };
 }
-
 export default function AdminSeatManager({
   eventId,
   seats,
@@ -338,27 +351,12 @@ export default function AdminSeatManager({
     getRowOffsets(initialSeatingLayout),
   );
 
-  const [tableShape, setTableShape] = useState<TableShape>(
-    getTableShape(initialSeatingLayout),
-  );
-
+  const tableShape = getTableShape(initialSeatingLayout);
   const returnAnchor = mode === "tables" ? "table-seating" : "row-seating";
 
   useEffect(() => {
     setManualOffsets(getRowOffsets(initialSeatingLayout));
-    setTableShape(getTableShape(initialSeatingLayout));
   }, [initialSeatingLayout]);
-
-  const seatingLayoutPayload = useMemo(() => {
-    if (mode === "tables") {
-      return {
-        ...manualOffsets,
-        tableShape,
-      };
-    }
-
-    return manualOffsets;
-  }, [manualOffsets, mode, tableShape]);
 
   const normalSeats = useMemo(
     () =>
@@ -405,6 +403,8 @@ export default function AdminSeatManager({
     setMenuChoice(seat.menu_choice || "");
   }, [selectedSeats]);
 
+  const rowSeatingLayoutPayload = useMemo(() => manualOffsets, [manualOffsets]);
+
   function changeRowOffset(rowKey: string, amount: number) {
     setManualOffsets((current) => ({
       ...current,
@@ -430,22 +430,28 @@ export default function AdminSeatManager({
     }, 50);
   }
 
+  function toggleSeat(seatId: string) {
+    setSelectedRowKeys([]);
+    setSelectedSeatIds((current) =>
+      current.includes(seatId)
+        ? current.filter((id) => id !== seatId)
+        : [...current, seatId],
+    );
+  }
+
   function toggleRow(rowKey: string, rowSeats: Seat[]) {
     const alreadySelected = selectedRowKeys.includes(rowKey);
     const rowSeatIds = rowSeats.map((seat) => seat.id);
 
     if (alreadySelected) {
       setSelectedRowKeys((current) => current.filter((key) => key !== rowKey));
-
       setSelectedSeatIds((current) =>
         current.filter((id) => !rowSeatIds.includes(id)),
       );
-
       return;
     }
 
     setSelectedRowKeys((current) => [...current, rowKey]);
-
     setSelectedSeatIds((current) =>
       Array.from(new Set([...current, ...rowSeatIds])),
     );
@@ -480,16 +486,15 @@ export default function AdminSeatManager({
     mode === "tables"
       ? groupBy(seats, (seat) => seat.table_number || "No table")
       : groupBy(seats, (seat) => seat.section || "Main");
-    return (
+
+  return (
     <div style={styles.manager}>
       <div style={styles.toolbar}>
         <div>
           <h3 style={styles.title}>Seat manager</h3>
-
           <p style={styles.text}>
-            Select seats to apply ticket markings, block/unblock seats, or save
-            guest and allocation details for VIP, complimentary, staff, sponsor,
-            guest, or blocked allocations.
+            Select seats, then save allocation details, apply ticket markings or
+            block/unblock seats.
           </p>
         </div>
 
@@ -507,11 +512,11 @@ export default function AdminSeatManager({
               {updateSeatingLayoutAction && (
                 <form action={updateSeatingLayoutAction}>
                   <input type="hidden" name="event_id" value={eventId} />
-
+                  <input type="hidden" name="return_anchor" value={returnAnchor} />
                   <input
                     type="hidden"
                     name="seating_layout_json"
-                    value={JSON.stringify(seatingLayoutPayload)}
+                    value={JSON.stringify(rowSeatingLayoutPayload)}
                   />
 
                   <button type="submit" style={styles.primaryButton}>
@@ -520,38 +525,6 @@ export default function AdminSeatManager({
                 </form>
               )}
             </>
-          )}
-
-          {mode === "tables" && updateSeatingLayoutAction && (
-            <form action={updateSeatingLayoutAction} style={styles.tableShapeForm}>
-              <input type="hidden" name="event_id" value={eventId} />
-
-              <input
-                type="hidden"
-                name="seating_layout_json"
-                value={JSON.stringify(seatingLayoutPayload)}
-              />
-
-              <label style={styles.compactField}>
-                <span style={styles.label}>Table shape</span>
-
-                <select
-                  value={tableShape}
-                  onChange={(event) =>
-                    setTableShape(event.target.value as TableShape)
-                  }
-                  style={styles.select}
-                >
-                  <option value="round">Round</option>
-                  <option value="square">Square</option>
-                  <option value="rectangle">Rectangle</option>
-                </select>
-              </label>
-
-              <button type="submit" style={styles.primaryButton}>
-                Save table shape
-              </button>
-            </form>
           )}
 
           <button
@@ -563,7 +536,7 @@ export default function AdminSeatManager({
               opacity: normalSeats.length === 0 ? 0.45 : 1,
             }}
           >
-            Select normal seats ({normalSeats.length})
+            Select normal ({normalSeats.length})
           </button>
 
           <button
@@ -575,14 +548,10 @@ export default function AdminSeatManager({
               opacity: blockedSeats.length === 0 ? 0.45 : 1,
             }}
           >
-            Select blocked seats ({blockedSeats.length})
+            Select blocked ({blockedSeats.length})
           </button>
 
-          <button
-            type="button"
-            onClick={clearSelection}
-            style={styles.secondaryButton}
-          >
+          <button type="button" onClick={clearSelection} style={styles.secondaryButton}>
             Clear selection
           </button>
         </div>
@@ -634,72 +603,15 @@ export default function AdminSeatManager({
       </div>
 
       <div style={styles.infoBox}>
-        <strong>{normalSeats.length}</strong> normal public seats ·{" "}
-        <strong>{blockedSeats.length}</strong> blocked seats ·{" "}
-        <strong>{seats.filter((seat) => seat.seat_purpose === "vip").length}</strong> VIP ·{" "}
+        <strong>{selectedSeatIds.length}</strong> selected ·{" "}
+        <strong>{normalSeats.length}</strong> normal public ·{" "}
+        <strong>{blockedSeats.length}</strong> blocked ·{" "}
+        <strong>{seats.filter((seat) => seat.seat_purpose === "vip").length}</strong>{" "}
+        VIP ·{" "}
         <strong>
           {seats.filter((seat) => seat.seat_purpose === "complimentary").length}
         </strong>{" "}
-        complimentary · <strong>{seatsWithDetails.length}</strong> saved
-        allocations.
-      </div>
-
-      <div style={styles.savedAllocationsPanel}>
-        <div style={styles.allocationHeader}>
-          <div>
-            <h4 style={styles.allocationTitle}>Saved allocation summary</h4>
-            <p style={styles.text}>
-              This shows every seat with saved VIP, complimentary, blocked,
-              guest, dietary, menu, label, or note details.
-            </p>
-          </div>
-        </div>
-
-        {seatsWithDetails.length === 0 ? (
-          <div style={styles.emptyBox}>No saved allocation details yet.</div>
-        ) : (
-          <div style={styles.tableScroll}>
-            <table style={styles.allocationTable}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Seat</th>
-                  <th style={styles.th}>Purpose</th>
-                  <th style={styles.th}>Label</th>
-                  <th style={styles.th}>Guest</th>
-                  <th style={styles.th}>Email</th>
-                  <th style={styles.th}>Dietary</th>
-                  <th style={styles.th}>Menu</th>
-                  <th style={styles.th}>Note</th>
-                  <th style={styles.th}>Edit</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {seatsWithDetails.map((seat) => (
-                  <tr key={seat.id}>
-                    <td style={styles.tdStrong}>{seatLabel(seat)}</td>
-                    <td style={styles.td}>{purposeLabel(seat.seat_purpose)}</td>
-                    <td style={styles.td}>{seat.admin_label || "—"}</td>
-                    <td style={styles.td}>{seat.guest_name || "—"}</td>
-                    <td style={styles.td}>{seat.guest_email || "—"}</td>
-                    <td style={styles.td}>{seat.dietary_requirements || "—"}</td>
-                    <td style={styles.td}>{seat.menu_choice || "—"}</td>
-                    <td style={styles.td}>{seat.admin_note || "—"}</td>
-                    <td style={styles.td}>
-                      <button
-                        type="button"
-                        onClick={() => selectOnlySeat(seat.id)}
-                        style={styles.smallButton}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        complimentary · <strong>{seatsWithDetails.length}</strong> saved allocations.
       </div>
 
       <div style={styles.actionPanel}>
@@ -713,10 +625,154 @@ export default function AdminSeatManager({
           )}
         </div>
 
+        <form
+          id="individual-seat-editor"
+          action={updateSelectedSeatsMetadataAction}
+          style={styles.allocationForm}
+        >
+          <input type="hidden" name="event_id" value={eventId} />
+          <input type="hidden" name="return_anchor" value={returnAnchor} />
+          <input
+            type="hidden"
+            name="seat_ids"
+            value={JSON.stringify(selectedSeatIds)}
+          />
+
+          <div style={styles.allocationHeader}>
+            <div>
+              <h4 style={styles.allocationTitle}>Guest / allocation details</h4>
+              <p style={styles.text}>
+                Select a seat, enter the allocation details, then save. Multiple
+                selected seats receive the same details.
+              </p>
+            </div>
+
+            <button type="button" onClick={clearAllocationForm} style={styles.secondaryButton}>
+              Clear form
+            </button>
+          </div>
+
+          {selectedSeats.length === 1 ? (
+            <div style={styles.selectedSeatNotice}>
+              Editing: <strong>{seatLabel(selectedSeats[0])}</strong>
+            </div>
+          ) : selectedSeats.length > 1 ? (
+            <div style={styles.warningBox}>
+              Multiple seats selected. Saving applies these details to all selected seats.
+            </div>
+          ) : (
+            <div style={styles.emptyBox}>Select a seat to edit allocation details.</div>
+          )}
+
+          <div style={styles.twoCol}>
+            <label style={styles.field}>
+              <span style={styles.label}>Seat purpose</span>
+              <select
+                name="seat_purpose"
+                value={seatPurpose}
+                onChange={(event) => setSeatPurpose(event.target.value)}
+                style={styles.input}
+              >
+                <option value="">Normal / no special purpose</option>
+                <option value="vip">VIP</option>
+                <option value="complimentary">Complimentary</option>
+                <option value="staff">Staff</option>
+                <option value="sponsor">Sponsor</option>
+                <option value="guest">Guest</option>
+                <option value="blocked">Blocked allocation</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Admin label</span>
+              <input
+                name="admin_label"
+                value={adminLabel}
+                onChange={(event) => setAdminLabel(event.target.value)}
+                placeholder="VIP guest, sponsor hold, staff seat..."
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <div style={styles.twoCol}>
+            <label style={styles.field}>
+              <span style={styles.label}>Guest name</span>
+              <input
+                name="guest_name"
+                value={guestName}
+                onChange={(event) => setGuestName(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Guest email</span>
+              <input
+                name="guest_email"
+                type="email"
+                value={guestEmail}
+                onChange={(event) => setGuestEmail(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <div style={styles.twoCol}>
+            <label style={styles.field}>
+              <span style={styles.label}>Dietary requirements</span>
+              <input
+                name="dietary_requirements"
+                value={dietaryRequirements}
+                onChange={(event) => setDietaryRequirements(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Menu choice</span>
+              <input
+                name="menu_choice"
+                value={menuChoice}
+                onChange={(event) => setMenuChoice(event.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <label style={styles.field}>
+            <span style={styles.label}>Admin note</span>
+            <textarea
+              name="admin_note"
+              value={adminNote}
+              onChange={(event) => setAdminNote(event.target.value)}
+              rows={3}
+              placeholder="Internal note only."
+              style={styles.textarea}
+            />
+          </label>
+
+          <button
+            type="submit"
+            disabled={selectedSeatIds.length === 0}
+            style={{
+              ...styles.primaryButton,
+              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
+            }}
+          >
+            Save allocation details
+          </button>
+        </form>
+      </div>
+            <div style={styles.bulkPanel}>
         <form action={applyTicketTypeAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
-
           <input
             type="hidden"
             name="seat_ids"
@@ -751,177 +807,15 @@ export default function AdminSeatManager({
             Apply marking
           </button>
         </form>
-                <form
-          id="individual-seat-editor"
-          action={updateSelectedSeatsMetadataAction}
-          style={styles.allocationForm}
-        >
-          <input type="hidden" name="event_id" value={eventId} />
-          <input type="hidden" name="return_anchor" value={returnAnchor} />
-
-          <input
-            type="hidden"
-            name="seat_ids"
-            value={JSON.stringify(selectedSeatIds)}
-          />
-
-          <div style={styles.allocationHeader}>
-            <div>
-              <h4 style={styles.allocationTitle}>Guest / allocation details</h4>
-
-              <p style={styles.text}>
-                Select a single seat from the summary table or seating plan to
-                edit its saved details. You can still select multiple seats for
-                bulk changes if needed.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={clearAllocationForm}
-              style={styles.secondaryButton}
-            >
-              Clear form
-            </button>
-          </div>
-
-          {selectedSeats.length === 1 ? (
-            <div style={styles.selectedSeatNotice}>
-              Editing: <strong>{seatLabel(selectedSeats[0])}</strong>
-            </div>
-          ) : selectedSeats.length > 1 ? (
-            <div style={styles.warningBox}>
-              Multiple seats selected. Saving this form will apply the same
-              allocation details to all selected seats.
-            </div>
-          ) : (
-            <div style={styles.emptyBox}>
-              Select a seat to edit allocation details.
-            </div>
-          )}
-
-          <div style={styles.twoCol}>
-            <label style={styles.field}>
-              <span style={styles.label}>Seat purpose</span>
-
-              <select
-                name="seat_purpose"
-                value={seatPurpose}
-                onChange={(event) => setSeatPurpose(event.target.value)}
-                style={styles.input}
-              >
-                <option value="">Normal / no special purpose</option>
-                <option value="vip">VIP</option>
-                <option value="complimentary">Complimentary</option>
-                <option value="staff">Staff</option>
-                <option value="sponsor">Sponsor</option>
-                <option value="guest">Guest</option>
-                <option value="blocked">Blocked allocation</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Admin label</span>
-
-              <input
-                name="admin_label"
-                value={adminLabel}
-                onChange={(event) => setAdminLabel(event.target.value)}
-                placeholder="VIP guest, sponsor hold, staff seat..."
-                style={styles.input}
-              />
-            </label>
-          </div>
-
-          <div style={styles.twoCol}>
-            <label style={styles.field}>
-              <span style={styles.label}>Guest name</span>
-
-              <input
-                name="guest_name"
-                value={guestName}
-                onChange={(event) => setGuestName(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Guest email</span>
-
-              <input
-                name="guest_email"
-                type="email"
-                value={guestEmail}
-                onChange={(event) => setGuestEmail(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-          </div>
-
-          <div style={styles.twoCol}>
-            <label style={styles.field}>
-              <span style={styles.label}>Dietary requirements</span>
-
-              <input
-                name="dietary_requirements"
-                value={dietaryRequirements}
-                onChange={(event) => setDietaryRequirements(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.label}>Menu choice</span>
-
-              <input
-                name="menu_choice"
-                value={menuChoice}
-                onChange={(event) => setMenuChoice(event.target.value)}
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-          </div>
-
-          <label style={styles.field}>
-            <span style={styles.label}>Admin note</span>
-
-            <textarea
-              name="admin_note"
-              value={adminNote}
-              onChange={(event) => setAdminNote(event.target.value)}
-              rows={3}
-              placeholder="Internal note only. Example: Reserved for AV table, donor guest, sponsor allocation..."
-              style={styles.textarea}
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={selectedSeatIds.length === 0}
-            style={{
-              ...styles.primaryButton,
-              opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
-            }}
-          >
-            Save allocation details
-          </button>
-        </form>
 
         <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
-
           <input
             type="hidden"
             name="seat_ids"
             value={JSON.stringify(selectedSeatIds)}
           />
-
           <input type="hidden" name="status" value="blocked" />
 
           <button
@@ -932,20 +826,18 @@ export default function AdminSeatManager({
               opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
             }}
           >
-            Block selected seats
+            Block selected
           </button>
         </form>
 
         <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
-
           <input
             type="hidden"
             name="seat_ids"
             value={JSON.stringify(selectedSeatIds)}
           />
-
           <input type="hidden" name="status" value="available" />
 
           <button
@@ -956,14 +848,13 @@ export default function AdminSeatManager({
               opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
             }}
           >
-            Unblock selected seats
+            Unblock selected
           </button>
         </form>
 
         <form action={deleteSelectedSeatsAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
-
           <input
             type="hidden"
             name="seat_ids"
@@ -978,14 +869,13 @@ export default function AdminSeatManager({
               opacity: selectedSeatIds.length === 0 ? 0.45 : 1,
             }}
           >
-            Delete selected seats
+            Delete selected
           </button>
         </form>
 
         {mode === "rows" && deleteSelectedRowsAction && (
           <form action={deleteSelectedRowsAction} style={styles.actionForm}>
             <input type="hidden" name="event_id" value={eventId} />
-
             <input
               type="hidden"
               name="row_keys"
@@ -1017,12 +907,17 @@ export default function AdminSeatManager({
 
               return (
                 <div key={group} style={styles.tableCard}>
-                  <h4 style={styles.groupTitle}>Table {group}</h4>
+                  <div style={styles.tableCardHeader}>
+                    <h4 style={styles.groupTitle}>Table {group}</h4>
+                    <span style={styles.tableMeta}>
+                      {sortedSeats.length} seats · {tableShape}
+                    </span>
+                  </div>
 
-                  <div style={tableShellStyle(tableShape)}>
+                  <div style={tableVisualStyle(tableShape, sortedSeats.length)}>
                     <div style={styles.tableCentreLabel}>
                       <strong>Table {group}</strong>
-                      <span>{tableShape}</span>
+                      <span>{sortedSeats.length} seats</span>
                     </div>
 
                     {sortedSeats.map((seat) => {
@@ -1043,7 +938,8 @@ export default function AdminSeatManager({
                         <button
                           key={seat.id}
                           type="button"
-                          onClick={() => selectOnlySeat(seat.id)}
+                          onClick={() => toggleSeat(seat.id)}
+                          onDoubleClick={() => selectOnlySeat(seat.id)}
                           title={labelParts.join(" · ")}
                           style={seatStyle({
                             selected,
@@ -1157,7 +1053,8 @@ export default function AdminSeatManager({
                             <span key={seat.id} style={styles.seatWrap}>
                               <button
                                 type="button"
-                                onClick={() => selectOnlySeat(seat.id)}
+                                onClick={() => toggleSeat(seat.id)}
+                                onDoubleClick={() => selectOnlySeat(seat.id)}
                                 title={labelParts.join(" · ")}
                                 style={seatStyle({
                                   selected,
@@ -1184,9 +1081,68 @@ export default function AdminSeatManager({
             );
           })}
       </div>
+
+      <div style={styles.savedAllocationsPanel}>
+        <div style={styles.allocationHeader}>
+          <div>
+            <h4 style={styles.allocationTitle}>Saved allocation summary</h4>
+            <p style={styles.text}>
+              Seats with saved VIP, complimentary, blocked, guest, dietary,
+              menu, label, or note details.
+            </p>
+          </div>
+        </div>
+
+        {seatsWithDetails.length === 0 ? (
+          <div style={styles.emptyBox}>No saved allocation details yet.</div>
+        ) : (
+          <div style={styles.tableScroll}>
+            <table style={styles.allocationTable}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Seat</th>
+                  <th style={styles.th}>Purpose</th>
+                  <th style={styles.th}>Label</th>
+                  <th style={styles.th}>Guest</th>
+                  <th style={styles.th}>Email</th>
+                  <th style={styles.th}>Dietary</th>
+                  <th style={styles.th}>Menu</th>
+                  <th style={styles.th}>Note</th>
+                  <th style={styles.th}>Edit</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {seatsWithDetails.map((seat) => (
+                  <tr key={seat.id}>
+                    <td style={styles.tdStrong}>{seatLabel(seat)}</td>
+                    <td style={styles.td}>{purposeLabel(seat.seat_purpose)}</td>
+                    <td style={styles.td}>{seat.admin_label || "—"}</td>
+                    <td style={styles.td}>{seat.guest_name || "—"}</td>
+                    <td style={styles.td}>{seat.guest_email || "—"}</td>
+                    <td style={styles.td}>{seat.dietary_requirements || "—"}</td>
+                    <td style={styles.td}>{seat.menu_choice || "—"}</td>
+                    <td style={styles.td}>{seat.admin_note || "—"}</td>
+                    <td style={styles.td}>
+                      <button
+                        type="button"
+                        onClick={() => selectOnlySeat(seat.id)}
+                        style={styles.smallButton}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   manager: { display: "grid", gap: 14 },
 
@@ -1212,23 +1168,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
-  },
-
-  compactField: {
-    display: "grid",
-    gap: 5,
-    minWidth: 180,
-  },
-
-  tableShapeForm: {
-    display: "flex",
-    gap: 8,
-    alignItems: "end",
-    flexWrap: "wrap",
-    padding: 8,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
   },
 
   legendBox: {
@@ -1264,63 +1203,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
   },
 
-  savedAllocationsPanel: {
-    display: "grid",
-    gap: 12,
-    padding: 12,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-
-  tableScroll: {
-    overflow: "auto",
-    borderRadius: 14,
-    border: "1px solid #e2e8f0",
-  },
-
-  allocationTable: {
-    width: "100%",
-    minWidth: 920,
-    borderCollapse: "collapse",
-    background: "#ffffff",
-  },
-
-  th: {
-    padding: "10px 12px",
-    textAlign: "left",
-    background: "#f8fafc",
-    borderBottom: "1px solid #e2e8f0",
-    color: "#334155",
-    fontSize: 12,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-  },
-
-  td: {
-    padding: "10px 12px",
-    borderBottom: "1px solid #f1f5f9",
-    color: "#334155",
-    fontSize: 13,
-    verticalAlign: "top",
-  },
-
-  tdStrong: {
-    padding: "10px 12px",
-    borderBottom: "1px solid #f1f5f9",
-    color: "#0f172a",
-    fontSize: 13,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-    verticalAlign: "top",
-  },
-
   actionPanel: {
     display: "grid",
     gap: 12,
     padding: 12,
     borderRadius: 16,
     background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  bulkPanel: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
 
@@ -1615,21 +1513,38 @@ const styles: Record<string, CSSProperties> = {
   },
 
   tableCard: {
-    padding: 12,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    marginBottom: 12,
+    marginBottom: 14,
     overflowX: "auto",
   },
 
-  tableShell: {
+  tableCardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  tableMeta: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+
+  tableVisual: {
     position: "relative",
     display: "grid",
     gap: 8,
     alignItems: "center",
     justifyItems: "center",
-    padding: 34,
+    width: "100%",
+    minHeight: 220,
     marginTop: 10,
     background: "linear-gradient(135deg, #ffffff, #eff6ff)",
     border: "2px solid #cbd5e1",
@@ -1638,19 +1553,72 @@ const styles: Record<string, CSSProperties> = {
 
   tableCentreLabel: {
     position: "absolute",
-    inset: "50% auto auto 50%",
-    transform: "translate(-50%, -50%)",
+    top: 16,
+    left: "50%",
+    transform: "translateX(-50%)",
     display: "grid",
     gap: 2,
     placeItems: "center",
-    width: 96,
-    minHeight: 54,
-    padding: 8,
-    borderRadius: 16,
-    background: "rgba(15,23,42,0.88)",
+    minWidth: 112,
+    minHeight: 44,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.9)",
     color: "#ffffff",
     fontSize: 12,
     textAlign: "center",
     pointerEvents: "none",
+    zIndex: 1,
+  },
+
+  savedAllocationsPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  tableScroll: {
+    overflow: "auto",
+    borderRadius: 14,
+    border: "1px solid #e2e8f0",
+  },
+
+  allocationTable: {
+    width: "100%",
+    minWidth: 920,
+    borderCollapse: "collapse",
+    background: "#ffffff",
+  },
+
+  th: {
+    padding: "10px 12px",
+    textAlign: "left",
+    background: "#f8fafc",
+    borderBottom: "1px solid #e2e8f0",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  td: {
+    padding: "10px 12px",
+    borderBottom: "1px solid #f1f5f9",
+    color: "#334155",
+    fontSize: 13,
+    verticalAlign: "top",
+  },
+
+  tdStrong: {
+    padding: "10px 12px",
+    borderBottom: "1px solid #f1f5f9",
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+    verticalAlign: "top",
   },
 };
