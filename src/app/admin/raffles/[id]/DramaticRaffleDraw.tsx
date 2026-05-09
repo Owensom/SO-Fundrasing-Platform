@@ -15,6 +15,8 @@ type SoldTicketOption = {
 type Props = {
   raffleId: string;
   soldTickets: SoldTicketOption[];
+  drawnPrizePositions?: number[];
+  drawnTicketNumbers?: number[];
 };
 
 type ConfettiPiece = {
@@ -26,14 +28,15 @@ type ConfettiPiece = {
   height: number;
   rotate: number;
   hue: number;
+  drift: number;
 };
 
 function getTicketNumber(item: SoldTicketOption) {
   return Number(item.ticketNumber ?? item.ticket_number);
 }
 
-function getTicketColour(item: SoldTicketOption) {
-  return item.colour || "No colour";
+function getTicketColour(item: SoldTicketOption | null) {
+  return item?.colour || "No colour";
 }
 
 function getBuyerName(item: SoldTicketOption | null) {
@@ -45,8 +48,15 @@ function getBuyerEmail(item: SoldTicketOption | null) {
 }
 
 function createAudioContext() {
+  if (typeof window === "undefined") return null;
+
   const AudioContextClass =
-    window.AudioContext || (window as any).webkitAudioContext;
+    window.AudioContext ||
+    (
+      window as unknown as {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext;
 
   return AudioContextClass ? new AudioContextClass() : null;
 }
@@ -102,7 +112,6 @@ function playRiser(audioCtx: AudioContext) {
   osc.start(now);
   osc.stop(now + 0.3);
 }
-
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
@@ -156,10 +165,16 @@ function makeConfetti(): ConfettiPiece[] {
     height: 10 + Math.random() * 14,
     rotate: Math.random() * 360,
     hue: Math.random() * 360,
+    drift: Math.random() * 240 - 120,
   }));
 }
 
-export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
+export default function DramaticRaffleDraw({
+  raffleId,
+  soldTickets,
+  drawnPrizePositions = [],
+  drawnTicketNumbers = [],
+}: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [prizePosition, setPrizePosition] = useState("1");
   const [displayTicket, setDisplayTicket] = useState<number | null>(null);
@@ -176,8 +191,9 @@ export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
     () =>
       soldTickets
         .map(getTicketNumber)
-        .filter((number) => Number.isFinite(number) && number > 0),
-    [soldTickets],
+        .filter((number) => Number.isFinite(number) && number > 0)
+        .filter((number) => !drawnTicketNumbers.includes(number)),
+    [soldTickets, drawnTicketNumbers],
   );
 
   function getAudioContext() {
@@ -222,6 +238,11 @@ export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
       return;
     }
 
+    if (drawnPrizePositions.includes(parsedPrizePosition)) {
+      setError(`Prize ${parsedPrizePosition} has already been drawn.`);
+      return;
+    }
+
     if (!soldNumbers.length || drawing || saving) return;
 
     setError("");
@@ -244,13 +265,15 @@ export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
 
       if (audioCtx) {
         playTick(audioCtx);
-        if (ticks % 4 === 0) playRiser(audioCtx);
+
+        if (ticks % 4 === 0) {
+          playRiser(audioCtx);
+        }
       }
 
       ticks += 1;
     }, 72);
-
-    window.setTimeout(async () => {
+        window.setTimeout(async () => {
       stopTimer();
 
       const winningTicketNumber =
@@ -266,7 +289,9 @@ export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
       setDrawing(false);
       setSaving(true);
 
-      if (audioCtx) playWinner(audioCtx);
+      if (audioCtx) {
+        playWinner(audioCtx);
+      }
 
       setConfetti(makeConfetti());
 
@@ -344,7 +369,8 @@ export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
 
         {!soldNumbers.length ? (
           <p style={{ margin: "12px 0 0", color: "#b91c1c" }}>
-            No sold tickets available yet.
+            No eligible sold tickets available. Tickets that have already won are
+            excluded.
           </p>
         ) : null}
       </section>
@@ -418,7 +444,7 @@ export default function DramaticRaffleDraw({ raffleId, soldTickets }: Props) {
                       background: `hsl(${piece.hue}, 92%, 58%)`,
                       transform: `rotate(${piece.rotate}deg)`,
                       animation: `confettiFall ${piece.duration}s linear ${piece.delay}s forwards`,
-                      "--drift": `${Math.random() * 240 - 120}px`,
+                      "--drift": `${piece.drift}px`,
                     } as React.CSSProperties
                   }
                 />
