@@ -31,7 +31,6 @@ type TableConfigInput = {
   table_count?: string | number;
   seats_per_table?: string | number;
   ticket_type_id?: string;
-  table_shape?: string;
 };
 
 function positiveInteger(
@@ -75,6 +74,7 @@ function cleanStatus(value: FormDataEntryValue | null): EventStatus {
 
 function optionalDate(value: FormDataEntryValue | null) {
   const clean = String(value || "").trim();
+
   if (!clean) return null;
 
   const date = new Date(clean);
@@ -115,16 +115,6 @@ function parseTableNames(value: FormDataEntryValue | null): Record<string, strin
       .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
       .filter(([, name]) => name),
   );
-}
-
-function cleanTableShape(value: string | undefined) {
-  const shape = String(value || "").trim();
-
-  if (shape === "round" || shape === "rectangle" || shape === "square") {
-    return shape;
-  }
-
-  return "round";
 }
 
 function parseAisleAfterList(value: string | undefined) {
@@ -234,9 +224,8 @@ export async function POST(request: Request) {
       formData.get("table_seating"),
     );
     const tableNamesJson = parseTableNames(formData.get("table_names_json"));
-    const tableShape = cleanTableShape(tableSeating?.table_shape);
 
-    const createPayload = {
+    const event = await createEvent({
       tenantSlug,
       title,
       slug,
@@ -251,18 +240,11 @@ export async function POST(request: Request) {
       status: cleanStatus(formData.get("status")),
       prizesJson: prizes,
       tableNamesJson,
-      seatingLayoutJson:
-        eventType === "tables"
-          ? {
-              __table_shape: tableShape,
-            }
-          : {},
+      seatingLayoutJson: {},
       menuOptions: [],
       askDietaryRequirements: true,
       askMenuChoice: true,
-    };
-
-    const event = await createEvent(createPayload);
+    });
 
     const ticketTypeIdMap = new Map<string, string>();
 
