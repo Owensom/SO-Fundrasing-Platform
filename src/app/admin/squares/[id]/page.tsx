@@ -50,14 +50,19 @@ function formatMoney(cents: number | null | undefined, currency: string) {
 
 function formatDateTimeLocal(value: string | null | undefined) {
   if (!value) return "";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "";
+
   return date.toISOString().slice(0, 16);
 }
 
 function formatDrawDate(value: string | null | undefined) {
   if (!value) return "Not set";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not set";
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -68,6 +73,7 @@ function formatDrawDate(value: string | null | undefined) {
 
 function getProgressPercent(sold: number, total: number) {
   if (!total || total <= 0) return 0;
+
   return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
 }
 
@@ -161,6 +167,14 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     )
     .sort((a, b) => a.squareNumber - b.squareNumber);
 
+  const drawnPrizeNumbers = winners
+    .map((winner: any) => Number(winner.prize_number))
+    .filter((number) => Number.isFinite(number) && number > 0);
+
+  const drawnSquareNumbers = winners
+    .map((winner: any) => Number(winner.square_number))
+    .filter((number) => Number.isFinite(number) && number > 0);
+
   const soldSquares = soldSquareOptions.length;
   const totalSquares = Number(game.total_squares || 0);
   const remainingSquares = Math.max(totalSquares - soldSquares, 0);
@@ -239,8 +253,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <div style={{ ...styles.progressFill, width: `${progress}%` }} />
         </div>
       </section>
-
-      <form
+            <form
         action={`/api/admin/squares/${game.id}`}
         method="post"
         style={styles.form}
@@ -310,7 +323,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             </div>
           </div>
         </section>
-                <section style={styles.section}>
+
+        <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
               <h2 style={styles.sectionTitle}>Squares setup</h2>
@@ -502,8 +516,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           </button>
         </section>
       </form>
-
-      <section style={styles.section}>
+            <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
             <h2 style={styles.sectionTitle}>Winners</h2>
@@ -516,7 +529,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
         {winners.length ? (
           <div style={styles.winnerList}>
-            {winners.map((winner) => (
+            {winners.map((winner: any) => (
               <div key={winner.id} style={styles.winnerCard}>
                 <div>
                   <div style={styles.winnerLabel}>Prize</div>
@@ -572,6 +585,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             <DramaticSquaresDraw
               gameId={game.id}
               soldSquareOptions={soldSquareOptions}
+              drawnPrizeNumbers={drawnPrizeNumbers}
+              drawnSquareNumbers={drawnSquareNumbers}
             />
           </div>
         </details>
