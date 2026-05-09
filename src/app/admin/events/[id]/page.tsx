@@ -394,7 +394,7 @@ async function updatePrizesAction(formData: FormData) {
     askMenuChoice: event.ask_menu_choice,
   });
 
-  redirect(`/admin/events/${eventId}?saved=prizes#prizes`);
+  redirect(`/admin/events/${eventId}?saved=prizes#prizes-menu`);
 }
 
 async function updateMenuOptionsAction(formData: FormData) {
@@ -414,9 +414,8 @@ async function updateMenuOptionsAction(formData: FormData) {
     askMenuChoice: event.ask_menu_choice,
   });
 
-  redirect(`/admin/events/${eventId}?saved=menu#menu`);
+  redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
-
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
@@ -456,6 +455,7 @@ async function updateTableNamesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
+
 async function addTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -761,7 +761,6 @@ async function generateTablesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
-
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -919,6 +918,7 @@ async function runWinnerDrawAction(formData: FormData) {
     }#winner-draw`,
   );
 }
+
 async function deleteWinnerAction(formData: FormData) {
   "use server";
 
@@ -1013,7 +1013,9 @@ export default async function AdminEventManagePage({
   const availableSeats = visibleSeats.filter(
     (seat) => seat.status === "available",
   ).length;
-  const vipSeats = visibleSeats.filter((seat) => seat.seat_purpose === "vip").length;
+  const vipSeats = visibleSeats.filter(
+    (seat) => seat.seat_purpose === "vip",
+  ).length;
   const complimentarySeats = visibleSeats.filter(
     (seat) => seat.seat_purpose === "complimentary",
   ).length;
@@ -1089,9 +1091,6 @@ export default async function AdminEventManagePage({
         <a href="#winner-draw" style={styles.tab}>
           Winner Draw
         </a>
-        <a href="#admin-tools" style={styles.tab}>
-          Admin Tools
-        </a>
         {isReservedSeating && (
           <a href="#row-seating" style={styles.tab}>
             Row Seating
@@ -1146,8 +1145,7 @@ export default async function AdminEventManagePage({
           <SummaryCard label="VIP" value={vipSeats} />
           <SummaryCard label="Complimentary" value={complimentarySeats} />
         </div>
-
-        <div style={styles.panel}>
+                <div style={styles.panel}>
           <h3 style={styles.panelTitle}>Event details</h3>
 
           <form action={updateEventAction} style={styles.form}>
@@ -1484,7 +1482,8 @@ export default async function AdminEventManagePage({
           clearWinnersAction={clearWinnersAction}
         />
       </CollapsibleSection>
-            {isReservedSeating && (
+
+      {isReservedSeating && (
         <CollapsibleSection
           id="row-seating"
           eyebrow="Section 5"
@@ -1792,71 +1791,6 @@ export default async function AdminEventManagePage({
       )}
 
       <CollapsibleSection
-        id="admin-tools"
-        eyebrow="Admin tools"
-        title="Event Admin Tools"
-        description="Premium event controls and shortcuts."
-      >
-        <div style={styles.adminToolsGrid}>
-          <EventAdminToolCard
-            icon="🎫"
-            title="Tickets & pricing"
-            badge="Active"
-            description="Manage public ticket types, pricing, limits, and visibility."
-            href="#tickets"
-            actionLabel="Manage tickets"
-          />
-
-          <EventAdminToolCard
-            icon="🏆"
-            title="Prizes & menu"
-            badge="Active"
-            description="Manage event prizes, public prize visibility, menu choices, and guest questions."
-            href="#prizes-menu"
-            actionLabel="Manage prizes"
-          />
-
-          <EventAdminToolCard
-            icon="🎯"
-            title="Winner draw"
-            badge="Active"
-            description="Draw event winners from eligible paid event entries and keep history."
-            href="#winner-draw"
-            actionLabel="Open draw"
-          />
-
-          {(isReservedSeating || isTables) && (
-            <EventAdminToolCard
-              icon="🪑"
-              title="Seat tools"
-              badge="Active"
-              description="Generate seats, block seats, apply special markings, and save guest allocation details."
-              href={isReservedSeating ? "#row-seating" : "#table-seating"}
-              actionLabel="Manage seats"
-            />
-          )}
-
-          <EventAdminToolCard
-            icon="✉️"
-            title="Winner emails"
-            badge="Coming next"
-            description="Send winner notification emails and store event winner email history."
-            actionLabel="Planned"
-            muted
-          />
-
-          <EventAdminToolCard
-            icon="📦"
-            title="Orders dashboard"
-            badge="Later"
-            description="A proper event orders dashboard will be added after draw tools are stable."
-            actionLabel="Planned"
-            muted
-          />
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
         id="danger-zone"
         eyebrow="Final section"
         title="Danger Zone"
@@ -1904,44 +1838,6 @@ function CollapsibleSection({
 
       <div style={styles.collapsibleBody}>{children}</div>
     </details>
-  );
-}
-
-function EventAdminToolCard({
-  icon,
-  title,
-  badge,
-  description,
-  href,
-  actionLabel,
-  muted = false,
-}: {
-  icon: string;
-  title: string;
-  badge: string;
-  description: string;
-  href?: string;
-  actionLabel: string;
-  muted?: boolean;
-}) {
-  return (
-    <div style={styles.adminToolCard}>
-      <div style={styles.adminToolTitleRow}>
-        <span style={styles.adminToolIcon}>{icon}</span>
-        <span style={styles.adminToolBadge}>{badge}</span>
-      </div>
-
-      <h3 style={styles.panelTitle}>{title}</h3>
-      <p style={styles.sectionText}>{description}</p>
-
-      {href && !muted ? (
-        <a href={href} style={styles.adminToolButton}>
-          {actionLabel}
-        </a>
-      ) : (
-        <span style={styles.mutedToolButton}>{actionLabel}</span>
-      )}
-    </div>
   );
 }
 
@@ -2167,7 +2063,6 @@ const styles: Record<string, CSSProperties> = {
   collapsibleBody: {
     marginTop: 16,
   },
-  sectionHeader: { marginBottom: 16 },
   sectionEyebrow: {
     margin: "0 0 6px",
     color: "#2563eb",
@@ -2396,65 +2291,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
-  },
-  adminToolsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 14,
-  },
-  adminToolCard: {
-    display: "grid",
-    gap: 10,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  adminToolTitleRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-  },
-  adminToolIcon: {
-    width: 42,
-    height: 42,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    fontSize: 22,
-  },
-  adminToolBadge: {
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "#e0f2fe",
-    color: "#075985",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  adminToolButton: {
-    width: "fit-content",
-    marginTop: 4,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-  mutedToolButton: {
-    width: "fit-content",
-    marginTop: 4,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#64748b",
-    fontWeight: 900,
-    fontSize: 14,
   },
   dangerSectionInner: {
     padding: 16,
