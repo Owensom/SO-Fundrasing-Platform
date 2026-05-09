@@ -1,6 +1,5 @@
 import { randomInt } from "crypto";
 import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
@@ -51,6 +50,24 @@ type ParsedPrizeSelection = {
   title: string;
   position: number | null;
 };
+
+type TableShape = "round" | "square" | "rectangle";
+
+const TABLE_SHAPE_KEY = "__table_shape";
+
+function cleanTableShape(value: FormDataEntryValue | string | null): TableShape {
+  const clean = String(value || "").trim();
+
+  if (clean === "square" || clean === "rectangle" || clean === "round") {
+    return clean;
+  }
+
+  return "round";
+}
+
+function getTableShape(tableNamesJson: Record<string, string> | null | undefined) {
+  return cleanTableShape(tableNamesJson?.[TABLE_SHAPE_KEY] || "round");
+}
 
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
@@ -376,7 +393,6 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
-
 async function updatePrizesAction(formData: FormData) {
   "use server";
 
@@ -416,10 +432,16 @@ async function updateMenuOptionsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
+
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
+
   if (!eventId) redirect("/admin/events?error=missing-event");
 
   const event = await requireEventAccess(eventId);
@@ -433,7 +455,7 @@ async function updateSeatingLayoutAction(formData: FormData) {
     askMenuChoice: event.ask_menu_choice,
   });
 
-  redirect(`/admin/events/${eventId}?saved=layout#row-seating`);
+  redirect(`/admin/events/${eventId}?saved=layout#${returnAnchor}`);
 }
 
 async function updateTableNamesAction(formData: FormData) {
@@ -444,16 +466,45 @@ async function updateTableNamesAction(formData: FormData) {
 
   const event = await requireEventAccess(eventId);
 
+  const nextTableNames = {
+    ...(event.table_names_json || {}),
+    ...parseTableNames(formData.get("table_names_json")),
+  };
+
   await updateEvent(eventId, {
     prizesJson: event.prizes_json || [],
     menuOptions: event.menu_options || [],
     seatingLayoutJson: event.seating_layout_json || {},
-    tableNamesJson: parseTableNames(formData.get("table_names_json")),
+    tableNamesJson: nextTableNames,
     askDietaryRequirements: event.ask_dietary_requirements,
     askMenuChoice: event.ask_menu_choice,
   });
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
+}
+
+async function updateTableShapeAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  if (!eventId) redirect("/admin/events?error=missing-event");
+
+  const event = await requireEventAccess(eventId);
+  const tableShape = cleanTableShape(formData.get("table_shape"));
+
+  await updateEvent(eventId, {
+    prizesJson: event.prizes_json || [],
+    menuOptions: event.menu_options || [],
+    seatingLayoutJson: event.seating_layout_json || {},
+    tableNamesJson: {
+      ...(event.table_names_json || {}),
+      [TABLE_SHAPE_KEY]: tableShape,
+    },
+    askDietaryRequirements: event.ask_dietary_requirements,
+    askMenuChoice: event.ask_menu_choice,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=table-shape#table-seating`);
 }
 
 async function addTicketTypeAction(formData: FormData) {
@@ -655,7 +706,6 @@ async function deleteSelectedSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats-deleted#${returnAnchor}`);
 }
-
 async function deleteSelectedRowsAction(formData: FormData) {
   "use server";
 
@@ -761,6 +811,7 @@ async function generateTablesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
+
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -1035,6 +1086,8 @@ export default async function AdminEventManagePage({
     return a.localeCompare(b);
   });
 
+  const tableShape = getTableShape(event.table_names_json);
+
   const tableNamesFromExistingTables = Object.fromEntries(
     uniqueTableNumbers.map((tableNumber) => [
       tableNumber,
@@ -1042,7 +1095,8 @@ export default async function AdminEventManagePage({
     ]),
   );
 
-  return (
+  const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+    return (
     <main style={styles.page}>
       <section style={styles.hero}>
         <div style={styles.heroContent}>
@@ -1069,41 +1123,23 @@ export default async function AdminEventManagePage({
         </div>
 
         <div style={styles.heroActions}>
-          <Link href="/admin/events" style={styles.secondaryButton}>
+          <a href="/admin/events" style={styles.secondaryButton}>
             Back to events
-          </Link>
-          <Link href={`/e/${event.slug}`} style={styles.primaryLink}>
+          </a>
+          <a href={publicEventHref} style={styles.primaryLink}>
             View public page
-          </Link>
+          </a>
         </div>
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>
-          Overview
-        </a>
-        <a href="#tickets" style={styles.tab}>
-          Tickets & Prices
-        </a>
-        <a href="#prizes-menu" style={styles.tab}>
-          Prizes & Menu
-        </a>
-        <a href="#winner-draw" style={styles.tab}>
-          Winner Draw
-        </a>
-        {isReservedSeating && (
-          <a href="#row-seating" style={styles.tab}>
-            Row Seating
-          </a>
-        )}
-        {isTables && (
-          <a href="#table-seating" style={styles.tab}>
-            Table Seating
-          </a>
-        )}
-        <a href="#danger-zone" style={styles.tabDanger}>
-          Danger Zone
-        </a>
+        <a href="#overview" style={styles.tab}>Overview</a>
+        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
+        <a href="#prizes-menu" style={styles.tab}>Prizes & Menu</a>
+        <a href="#winner-draw" style={styles.tab}>Winner Draw</a>
+        {isReservedSeating && <a href="#row-seating" style={styles.tab}>Row Seating</a>}
+        {isTables && <a href="#table-seating" style={styles.tab}>Table Seating</a>}
+        <a href="#danger-zone" style={styles.tabDanger}>Danger Zone</a>
       </nav>
 
       {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
@@ -1145,7 +1181,8 @@ export default async function AdminEventManagePage({
           <SummaryCard label="VIP" value={vipSeats} />
           <SummaryCard label="Complimentary" value={complimentarySeats} />
         </div>
-                <div style={styles.panel}>
+
+        <div style={styles.panel}>
           <h3 style={styles.panelTitle}>Event details</h3>
 
           <form action={updateEventAction} style={styles.form}>
@@ -1339,14 +1376,7 @@ export default async function AdminEventManagePage({
           </div>
 
           <div style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Current ticket types</h3>
-                <p style={styles.sectionText}>
-                  Compact list so the page does not keep stretching as you add tickets.
-                </p>
-              </div>
-            </div>
+            <h3 style={styles.panelTitle}>Current ticket types</h3>
 
             <div style={styles.ticketListScroll}>
               {ticketTypes.length === 0 ? (
@@ -1422,11 +1452,9 @@ export default async function AdminEventManagePage({
                         </Field>
                       </div>
 
-                      <div style={styles.inlineActions}>
-                        <button type="submit" style={styles.primaryButton}>
-                          Save
-                        </button>
-                      </div>
+                      <button type="submit" style={styles.primaryButton}>
+                        Save
+                      </button>
                     </form>
 
                     <form action={deleteTicketTypeAction}>
@@ -1493,7 +1521,6 @@ export default async function AdminEventManagePage({
           <div style={styles.twoPanel}>
             <form action={generateSeatsAction} style={styles.panel}>
               <input type="hidden" name="event_id" value={event.id} />
-
               <h3 style={styles.panelTitle}>Generate row seating</h3>
 
               <Field label="Initial marking">
@@ -1551,46 +1578,11 @@ export default async function AdminEventManagePage({
 
             <div style={styles.panel}>
               <h3 style={styles.panelTitle}>Row seating summary</h3>
-
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
-                <SummaryCard
-                  label="Normal public"
-                  value={
-                    rowSeats.filter(
-                      (seat) => !seat.ticket_type_id && seat.status === "available",
-                    ).length
-                  }
-                />
-                <SummaryCard
-                  label="Special marked"
-                  value={rowSeats.filter((seat) => seat.ticket_type_id).length}
-                />
-                <SummaryCard
-                  label="VIP"
-                  value={rowSeats.filter((seat) => seat.seat_purpose === "vip").length}
-                />
-                <SummaryCard
-                  label="Complimentary"
-                  value={
-                    rowSeats.filter((seat) => seat.seat_purpose === "complimentary")
-                      .length
-                  }
-                />
-                <SummaryCard
-                  label="Blocked"
-                  value={rowSeats.filter((seat) => seat.status === "blocked").length}
-                />
-                <SummaryCard
-                  label="Sold"
-                  value={rowSeats.filter((seat) => seat.status === "sold").length}
-                />
+                <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
               </div>
-
-              <p style={styles.sectionText}>
-                Row nudges are saved to this event, so the public page can match
-                the admin layout.
-              </p>
             </div>
           </div>
 
@@ -1599,8 +1591,7 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click seats to select them. Block/unblock selected seats,
-                  apply special markings, or save admin-only seat allocation details.
+                  Click seats to select them, then save guest/allocation details or block/unblock seats.
                 </p>
               </div>
 
@@ -1639,12 +1630,11 @@ export default async function AdminEventManagePage({
           id="table-seating"
           eyebrow="Section 5"
           title="Table Seating"
-          description="Generate table layouts first, then name tables before publishing."
+          description="Generate table layouts, choose a table shape, name tables and manage allocations."
         >
           <div style={styles.twoPanel}>
             <form action={generateTablesAction} style={styles.panel}>
               <input type="hidden" name="event_id" value={event.id} />
-
               <h3 style={styles.panelTitle}>Generate table seating</h3>
 
               <Field label="Initial marking">
@@ -1696,36 +1686,45 @@ export default async function AdminEventManagePage({
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
                 <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
+                <SummaryCard label="Shape" value={tableShape} />
                 <SummaryCard
                   label="Named tables"
-                  value={Object.keys(event.table_names_json || {}).length}
-                />
-                <SummaryCard
-                  label="VIP"
-                  value={tableSeats.filter((seat) => seat.seat_purpose === "vip").length}
-                />
-                <SummaryCard
-                  label="Complimentary"
                   value={
-                    tableSeats.filter((seat) => seat.seat_purpose === "complimentary")
-                      .length
+                    Object.keys(event.table_names_json || {}).filter(
+                      (key) => key !== TABLE_SHAPE_KEY,
+                    ).length
                   }
                 />
-                <SummaryCard
-                  label="Blocked"
-                  value={tableSeats.filter((seat) => seat.status === "blocked").length}
-                />
-                <SummaryCard
-                  label="Sold"
-                  value={tableSeats.filter((seat) => seat.status === "sold").length}
-                />
+                <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
               </div>
-
-              <p style={styles.sectionText}>
-                Named tables show on the public page. Buyers no longer type table names.
-              </p>
             </div>
           </div>
+
+          <form action={updateTableShapeAction} style={styles.panel}>
+            <input type="hidden" name="event_id" value={event.id} />
+
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Table shape</h3>
+                <p style={styles.sectionText}>
+                  Choose how tables are drawn in admin and public views.
+                </p>
+              </div>
+
+              <button type="submit" style={styles.primaryButton}>
+                Save table shape
+              </button>
+            </div>
+
+            <Field label="Shape">
+              <select name="table_shape" defaultValue={tableShape} style={styles.input}>
+                <option value="round">Round tables</option>
+                <option value="square">Square tables</option>
+                <option value="rectangle">Rectangle tables</option>
+              </select>
+            </Field>
+          </form>
 
           <form action={updateTableNamesAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
@@ -1758,8 +1757,7 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click table seats to select them. Block/unblock selected seats,
-                  apply special markings, or save admin-only seat allocation details.
+                  Select one or more seats, then save allocation details or block/unblock seats.
                 </p>
               </div>
 
@@ -1784,6 +1782,10 @@ export default async function AdminEventManagePage({
                 updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
                 updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
                 deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                initialSeatingLayout={{
+                  ...(event.seating_layout_json || {}),
+                  tableShape,
+                }}
               />
             )}
           </div>
@@ -2045,9 +2047,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     listStyle: "none",
   },
-  collapsibleHeading: {
-    minWidth: 0,
-  },
+  collapsibleHeading: { minWidth: 0 },
   collapsibleToggle: {
     flexShrink: 0,
     padding: "8px 12px",
@@ -2060,9 +2060,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
-  collapsibleBody: {
-    marginTop: 16,
-  },
+  collapsibleBody: { marginTop: 16 },
   sectionEyebrow: {
     margin: "0 0 6px",
     color: "#2563eb",
@@ -2137,10 +2135,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     fontWeight: 900,
   },
-  form: {
-    display: "grid",
-    gap: 14,
-  },
+  form: { display: "grid", gap: 14 },
   field: {
     display: "grid",
     gap: 6,
@@ -2271,11 +2266,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#ffffff",
-  },
-  inlineActions: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
   },
   checkboxLabel: {
     display: "flex",
