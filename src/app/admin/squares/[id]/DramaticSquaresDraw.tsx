@@ -14,6 +14,8 @@ type SoldSquareOption = {
 type DramaticSquaresDrawProps = {
   gameId: string;
   soldSquareOptions: SoldSquareOption[];
+  drawnPrizeNumbers?: number[];
+  drawnSquareNumbers?: number[];
 };
 
 type ConfettiPiece = {
@@ -25,23 +27,31 @@ type ConfettiPiece = {
   height: number;
   rotate: number;
   hue: number;
+  drift: number;
 };
 
 function getSquareNumber(item: SoldSquareOption) {
   return Number(item.squareNumber ?? item.square_number);
 }
 
-function getCustomerName(item: SoldSquareOption) {
-  return item.customerName ?? item.customer_name ?? "Winner";
+function getCustomerName(item: SoldSquareOption | null) {
+  return item?.customerName ?? item?.customer_name ?? "Winner";
 }
 
-function getCustomerEmail(item: SoldSquareOption) {
-  return item.customerEmail ?? item.customer_email ?? "";
+function getCustomerEmail(item: SoldSquareOption | null) {
+  return item?.customerEmail ?? item?.customer_email ?? "";
 }
 
 function createAudioContext() {
+  if (typeof window === "undefined") return null;
+
   const AudioContextClass =
-    window.AudioContext || (window as any).webkitAudioContext;
+    window.AudioContext ||
+    (
+      window as unknown as {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext;
 
   return AudioContextClass ? new AudioContextClass() : null;
 }
@@ -99,7 +109,6 @@ function playRiser(audioCtx: AudioContext) {
   osc.start(now);
   osc.stop(now + 0.3);
 }
-
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
@@ -153,12 +162,15 @@ function makeConfetti(): ConfettiPiece[] {
     height: 10 + Math.random() * 14,
     rotate: Math.random() * 360,
     hue: Math.random() * 360,
+    drift: Math.random() * 240 - 120,
   }));
 }
 
 export default function DramaticSquaresDraw({
   gameId,
   soldSquareOptions,
+  drawnPrizeNumbers = [],
+  drawnSquareNumbers = [],
 }: DramaticSquaresDrawProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState("1");
@@ -176,8 +188,9 @@ export default function DramaticSquaresDraw({
     () =>
       soldSquareOptions
         .map(getSquareNumber)
-        .filter((number) => Number.isFinite(number) && number > 0),
-    [soldSquareOptions],
+        .filter((number) => Number.isFinite(number) && number > 0)
+        .filter((number) => !drawnSquareNumbers.includes(number)),
+    [soldSquareOptions, drawnSquareNumbers],
   );
 
   function getAudioContext() {
@@ -222,6 +235,11 @@ export default function DramaticSquaresDraw({
       return;
     }
 
+    if (drawnPrizeNumbers.includes(parsedPrizeNumber)) {
+      setError(`Prize ${parsedPrizeNumber} has already been drawn.`);
+      return;
+    }
+
     if (!soldNumbers.length || drawing || saving) return;
 
     setError("");
@@ -249,8 +267,7 @@ export default function DramaticSquaresDraw({
 
       ticks += 1;
     }, 72);
-
-    window.setTimeout(async () => {
+        window.setTimeout(async () => {
       stopTimer();
 
       const winningSquareNumber =
@@ -340,7 +357,8 @@ export default function DramaticSquaresDraw({
 
         {!soldNumbers.length ? (
           <p style={{ margin: "12px 0 0", color: "#b91c1c" }}>
-            No sold squares available yet.
+            No eligible sold squares available. Squares that have already won
+            are excluded.
           </p>
         ) : null}
       </section>
@@ -390,8 +408,7 @@ export default function DramaticSquaresDraw({
               }
             }
           `}</style>
-
-          {confetti.length ? (
+                    {confetti.length ? (
             <div
               style={{
                 position: "absolute",
@@ -414,7 +431,7 @@ export default function DramaticSquaresDraw({
                       background: `hsl(${piece.hue}, 92%, 58%)`,
                       transform: `rotate(${piece.rotate}deg)`,
                       animation: `confettiFall ${piece.duration}s linear ${piece.delay}s forwards`,
-                      "--drift": `${Math.random() * 240 - 120}px`,
+                      "--drift": `${piece.drift}px`,
                     } as React.CSSProperties
                   }
                 />
