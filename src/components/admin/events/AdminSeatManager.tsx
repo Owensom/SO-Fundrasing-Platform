@@ -28,7 +28,6 @@ type Seat = {
   status: string;
 };
 
-type TableShape = "round" | "square" | "rectangle";
 type SeatingLayoutValue = number | string | null | undefined;
 
 const specialColours = [
@@ -145,18 +144,6 @@ function colourForTicketType(
   };
 }
 
-function getTableShape(
-  layout: Record<string, SeatingLayoutValue> | undefined,
-): TableShape {
-  const raw = String(layout?.tableShape || layout?.table_shape || "").trim();
-
-  if (raw === "square" || raw === "rectangle" || raw === "round") {
-    return raw;
-  }
-
-  return "round";
-}
-
 function getRowOffsets(layout: Record<string, SeatingLayoutValue> | undefined) {
   return Object.fromEntries(
     Object.entries(layout || {})
@@ -170,48 +157,33 @@ function getRowOffsets(layout: Record<string, SeatingLayoutValue> | undefined) {
   );
 }
 
-function tableGridColumns(shape: TableShape, seatCount: number) {
-  if (shape === "rectangle") return "repeat(4, minmax(42px, 1fr))";
-  if (shape === "square") return "repeat(3, minmax(42px, 1fr))";
-
-  if (seatCount <= 4) return "repeat(2, minmax(42px, 1fr))";
-  if (seatCount <= 9) return "repeat(3, minmax(42px, 1fr))";
-  return "repeat(4, minmax(42px, 1fr))";
+function cleanTableName(value: string | null | undefined) {
+  return String(value || "").trim();
 }
 
-function tableVisualStyle(shape: TableShape, seatCount: number): CSSProperties {
-  const common: CSSProperties = {
-    ...styles.tableVisual,
-    gridTemplateColumns: tableGridColumns(shape, seatCount),
-  };
+function displayTableTitle(
+  tableNumber: string,
+  tableNames: Record<string, string> | undefined,
+) {
+  const tableName = cleanTableName(tableNames?.[tableNumber]);
 
-  if (shape === "rectangle") {
-    return {
-      ...common,
-      maxWidth: 430,
-      borderRadius: 26,
-      padding: "62px 22px 22px",
-      aspectRatio: "16 / 9",
-    };
+  if (tableName) {
+    return `Table ${tableNumber} — ${tableName}`;
   }
 
-  if (shape === "square") {
-    return {
-      ...common,
-      maxWidth: 320,
-      borderRadius: 30,
-      padding: "62px 22px 22px",
-      aspectRatio: "1 / 1",
-    };
-  }
+  return `Table ${tableNumber}`;
+}
 
-  return {
-    ...common,
-    maxWidth: 340,
-    borderRadius: 999,
-    padding: "72px 30px 30px",
-    aspectRatio: "1 / 1",
-  };
+function seatTitle(seat: Seat) {
+  return [
+    seatLabel(seat),
+    purposeLabel(seat.seat_purpose),
+    seat.admin_label || "",
+    seat.guest_name || "",
+    seat.status,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function seatStyle({
@@ -240,6 +212,7 @@ function seatStyle({
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   };
 
   if (status === "blocked") {
@@ -321,6 +294,7 @@ export default function AdminSeatManager({
   deleteSelectedSeatsAction,
   deleteSelectedRowsAction,
   initialSeatingLayout = {},
+  tableNames = {},
 }: {
   eventId: string;
   seats: Seat[];
@@ -334,6 +308,7 @@ export default function AdminSeatManager({
   deleteSelectedSeatsAction: (formData: FormData) => void | Promise<void>;
   deleteSelectedRowsAction?: (formData: FormData) => void | Promise<void>;
   initialSeatingLayout?: Record<string, SeatingLayoutValue>;
+  tableNames?: Record<string, string>;
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
@@ -351,7 +326,6 @@ export default function AdminSeatManager({
     getRowOffsets(initialSeatingLayout),
   );
 
-  const tableShape = getTableShape(initialSeatingLayout);
   const returnAnchor = mode === "tables" ? "table-seating" : "row-seating";
 
   useEffect(() => {
@@ -389,6 +363,8 @@ export default function AdminSeatManager({
     [seats, selectedSeatIds],
   );
 
+  const rowSeatingLayoutPayload = useMemo(() => manualOffsets, [manualOffsets]);
+
   useEffect(() => {
     if (selectedSeats.length !== 1) return;
 
@@ -402,8 +378,6 @@ export default function AdminSeatManager({
     setDietaryRequirements(seat.dietary_requirements || "");
     setMenuChoice(seat.menu_choice || "");
   }, [selectedSeats]);
-
-  const rowSeatingLayoutPayload = useMemo(() => manualOffsets, [manualOffsets]);
 
   function changeRowOffset(rowKey: string, amount: number) {
     setManualOffsets((current) => ({
@@ -493,7 +467,7 @@ export default function AdminSeatManager({
         <div>
           <h3 style={styles.title}>Seat manager</h3>
           <p style={styles.text}>
-            Select seats, then save allocation details, apply ticket markings or
+            Select seats, then save allocation details, apply ticket markings, or
             block/unblock seats.
           </p>
         </div>
@@ -663,8 +637,7 @@ export default function AdminSeatManager({
           ) : (
             <div style={styles.emptyBox}>Select a seat to edit allocation details.</div>
           )}
-
-          <div style={styles.twoCol}>
+                    <div style={styles.twoCol}>
             <label style={styles.field}>
               <span style={styles.label}>Seat purpose</span>
               <select
@@ -769,7 +742,8 @@ export default function AdminSeatManager({
           </button>
         </form>
       </div>
-            <div style={styles.bulkPanel}>
+
+      <div style={styles.bulkPanel}>
         <form action={applyTicketTypeAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
@@ -906,33 +880,41 @@ export default function AdminSeatManager({
                 .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
               return (
-                <div key={group} style={styles.tableCard}>
-                  <div style={styles.tableCardHeader}>
-                    <h4 style={styles.groupTitle}>Table {group}</h4>
-                    <span style={styles.tableMeta}>
-                      {sortedSeats.length} seats · {tableShape}
-                    </span>
-                  </div>
-
-                  <div style={tableVisualStyle(tableShape, sortedSeats.length)}>
-                    <div style={styles.tableCentreLabel}>
-                      <strong>Table {group}</strong>
-                      <span>{sortedSeats.length} seats</span>
+                <div key={group} style={styles.tableRowCard}>
+                  <div style={styles.tableRowHeader}>
+                    <div>
+                      <h4 style={styles.groupTitle}>
+                        {displayTableTitle(group, tableNames)}
+                      </h4>
+                      <p style={styles.text}>
+                        {sortedSeats.length} seats. Click seats to select; double-click to edit.
+                      </p>
                     </div>
 
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedSeatIds((current) =>
+                          Array.from(
+                            new Set([
+                              ...current,
+                              ...sortedSeats.map((seat) => seat.id),
+                            ]),
+                          ),
+                        )
+                      }
+                      style={styles.secondaryButton}
+                    >
+                      Select table
+                    </button>
+                  </div>
+
+                  <div style={styles.tableSeatLine}>
                     {sortedSeats.map((seat) => {
                       const ticketType = ticketTypes.find(
                         (item) => item.id === seat.ticket_type_id,
                       );
                       const selected = selectedSeatIds.includes(seat.id);
-
-                      const labelParts = [
-                        `Seat ${seat.seat_number || ""}`,
-                        purposeLabel(seat.seat_purpose),
-                        seat.admin_label || "",
-                        seat.guest_name || "",
-                        seat.status,
-                      ].filter(Boolean);
 
                       return (
                         <button
@@ -940,7 +922,7 @@ export default function AdminSeatManager({
                           type="button"
                           onClick={() => toggleSeat(seat.id)}
                           onDoubleClick={() => selectOnlySeat(seat.id)}
-                          title={labelParts.join(" · ")}
+                          title={seatTitle(seat)}
                           style={seatStyle({
                             selected,
                             ticketType,
@@ -1041,21 +1023,13 @@ export default function AdminSeatManager({
 
                           const selected = selectedSeatIds.includes(seat.id);
 
-                          const labelParts = [
-                            `Row ${row} Seat ${seat.seat_number || ""}`,
-                            purposeLabel(seat.seat_purpose),
-                            seat.admin_label || "",
-                            seat.guest_name || "",
-                            seat.status,
-                          ].filter(Boolean);
-
                           return (
                             <span key={seat.id} style={styles.seatWrap}>
                               <button
                                 type="button"
                                 onClick={() => toggleSeat(seat.id)}
                                 onDoubleClick={() => selectOnlySeat(seat.id)}
-                                title={labelParts.join(" · ")}
+                                title={seatTitle(seat)}
                                 style={seatStyle({
                                   selected,
                                   ticketType,
@@ -1512,63 +1486,33 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 6px",
   },
 
-  tableCard: {
+  tableRowCard: {
+    display: "grid",
+    gap: 12,
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    marginBottom: 14,
-    overflowX: "auto",
+    marginBottom: 12,
   },
 
-  tableCardHeader: {
+  tableRowHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 12,
     alignItems: "center",
-    marginBottom: 10,
+    flexWrap: "wrap",
   },
 
-  tableMeta: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-
-  tableVisual: {
-    position: "relative",
-    display: "grid",
-    gap: 8,
+  tableSeatLine: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
     alignItems: "center",
-    justifyItems: "center",
-    width: "100%",
-    minHeight: 220,
-    marginTop: 10,
-    background: "linear-gradient(135deg, #ffffff, #eff6ff)",
-    border: "2px solid #cbd5e1",
-    boxShadow: "inset 0 0 0 10px rgba(255,255,255,0.55)",
-  },
-
-  tableCentreLabel: {
-    position: "absolute",
-    top: 16,
-    left: "50%",
-    transform: "translateX(-50%)",
-    display: "grid",
-    gap: 2,
-    placeItems: "center",
-    minWidth: 112,
-    minHeight: 44,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(15,23,42,0.9)",
-    color: "#ffffff",
-    fontSize: 12,
-    textAlign: "center",
-    pointerEvents: "none",
-    zIndex: 1,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
   },
 
   savedAllocationsPanel: {
