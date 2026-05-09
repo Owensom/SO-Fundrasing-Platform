@@ -28,6 +28,10 @@ type Seat = {
   status: string;
 };
 
+type TableShape = "round" | "square" | "rectangle";
+
+type SeatingLayoutValue = number | string | null | undefined;
+
 const specialColours = [
   { background: "#facc15", text: "#422006" },
   { background: "#a78bfa", text: "#2e1065" },
@@ -142,6 +146,61 @@ function colourForTicketType(
   };
 }
 
+function getTableShape(
+  layout: Record<string, SeatingLayoutValue> | undefined,
+): TableShape {
+  const raw = String(layout?.tableShape || layout?.table_shape || "").trim();
+
+  if (raw === "square" || raw === "rectangle" || raw === "round") {
+    return raw;
+  }
+
+  return "round";
+}
+
+function getRowOffsets(layout: Record<string, SeatingLayoutValue> | undefined) {
+  return Object.fromEntries(
+    Object.entries(layout || {})
+      .filter(([key]) => key !== "tableShape" && key !== "table_shape")
+      .map(([key, value]) => {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return null;
+        return [key, Math.max(-20, Math.min(20, Math.floor(number)))];
+      })
+      .filter(Boolean) as [string, number][],
+  );
+}
+
+function tableShellStyle(shape: TableShape): CSSProperties {
+  if (shape === "square") {
+    return {
+      ...styles.tableShell,
+      width: 210,
+      minHeight: 210,
+      borderRadius: 26,
+      gridTemplateColumns: "repeat(3, 1fr)",
+    };
+  }
+
+  if (shape === "rectangle") {
+    return {
+      ...styles.tableShell,
+      width: 340,
+      minHeight: 190,
+      borderRadius: 28,
+      gridTemplateColumns: "repeat(4, 1fr)",
+    };
+  }
+
+  return {
+    ...styles.tableShell,
+    width: 250,
+    minHeight: 250,
+    borderRadius: 999,
+    gridTemplateColumns: "repeat(3, 1fr)",
+  };
+}
+
 function seatStyle({
   selected,
   ticketType,
@@ -193,8 +252,7 @@ function seatStyle({
       color: selected ? "#082f49" : "#92400e",
     };
   }
-
-  if (seatPurpose === "vip") {
+    if (seatPurpose === "vip") {
     return {
       ...base,
       border: selected ? "3px solid #0284c7" : "2px solid #7c3aed",
@@ -237,6 +295,7 @@ function seatStyle({
     boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.25)" : "none",
   };
 }
+
 export default function AdminSeatManager({
   eventId,
   seats,
@@ -262,7 +321,7 @@ export default function AdminSeatManager({
   updateSeatingLayoutAction?: (formData: FormData) => void | Promise<void>;
   deleteSelectedSeatsAction: (formData: FormData) => void | Promise<void>;
   deleteSelectedRowsAction?: (formData: FormData) => void | Promise<void>;
-  initialSeatingLayout?: Record<string, number>;
+  initialSeatingLayout?: Record<string, SeatingLayoutValue>;
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
@@ -276,14 +335,31 @@ export default function AdminSeatManager({
   const [dietaryRequirements, setDietaryRequirements] = useState<string>("");
   const [menuChoice, setMenuChoice] = useState<string>("");
 
-  const [manualOffsets, setManualOffsets] =
-    useState<Record<string, number>>(initialSeatingLayout || {});
+  const [manualOffsets, setManualOffsets] = useState<Record<string, number>>(
+    getRowOffsets(initialSeatingLayout),
+  );
+
+  const [tableShape, setTableShape] = useState<TableShape>(
+    getTableShape(initialSeatingLayout),
+  );
 
   const returnAnchor = mode === "tables" ? "table-seating" : "row-seating";
 
   useEffect(() => {
-    setManualOffsets(initialSeatingLayout || {});
+    setManualOffsets(getRowOffsets(initialSeatingLayout));
+    setTableShape(getTableShape(initialSeatingLayout));
   }, [initialSeatingLayout]);
+
+  const seatingLayoutPayload = useMemo(() => {
+    if (mode === "tables") {
+      return {
+        ...manualOffsets,
+        tableShape,
+      };
+    }
+
+    return manualOffsets;
+  }, [manualOffsets, mode, tableShape]);
 
   const normalSeats = useMemo(
     () =>
@@ -445,7 +521,7 @@ export default function AdminSeatManager({
                   <input
                     type="hidden"
                     name="seating_layout_json"
-                    value={JSON.stringify(manualOffsets)}
+                    value={JSON.stringify(seatingLayoutPayload)}
                   />
 
                   <button type="submit" style={styles.primaryButton}>
@@ -456,7 +532,38 @@ export default function AdminSeatManager({
             </>
           )}
 
-          <button
+          {mode === "tables" && updateSeatingLayoutAction && (
+            <form action={updateSeatingLayoutAction} style={styles.tableShapeForm}>
+              <input type="hidden" name="event_id" value={eventId} />
+
+              <input
+                type="hidden"
+                name="seating_layout_json"
+                value={JSON.stringify(seatingLayoutPayload)}
+              />
+
+              <label style={styles.compactField}>
+                <span style={styles.label}>Table shape</span>
+
+                <select
+                  value={tableShape}
+                  onChange={(event) =>
+                    setTableShape(event.target.value as TableShape)
+                  }
+                  style={styles.select}
+                >
+                  <option value="round">Round</option>
+                  <option value="square">Square</option>
+                  <option value="rectangle">Rectangle</option>
+                </select>
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Save table shape
+              </button>
+            </form>
+          )}
+                    <button
             type="button"
             onClick={selectNormalSeats}
             disabled={normalSeats.length === 0}
@@ -489,7 +596,8 @@ export default function AdminSeatManager({
           </button>
         </div>
       </div>
-            <div style={styles.legendBox}>
+
+      <div style={styles.legendBox}>
         <strong>Seat colours:</strong>
 
         <span style={styles.legendItem}>
@@ -732,8 +840,7 @@ export default function AdminSeatManager({
               />
             </label>
           </div>
-
-          <div style={styles.twoCol}>
+                    <div style={styles.twoCol}>
             <label style={styles.field}>
               <span style={styles.label}>Guest name</span>
 
@@ -810,7 +917,8 @@ export default function AdminSeatManager({
             Save allocation details
           </button>
         </form>
-                <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
+
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
 
@@ -882,7 +990,7 @@ export default function AdminSeatManager({
 
         {mode === "rows" && deleteSelectedRowsAction && (
           <form action={deleteSelectedRowsAction} style={styles.actionForm}>
-            <input type="hidden" name="event_id" value={eventId} />
+            <input type="hidden" name="event_id" />
 
             <input
               type="hidden"
@@ -909,46 +1017,52 @@ export default function AdminSeatManager({
           .sort(([a], [b]) => numericSort(a, b))
           .map(([group, groupSeats]) => {
             if (mode === "tables") {
+              const sortedSeats = groupSeats
+                .slice()
+                .sort((a, b) => numericSort(a.seat_number, b.seat_number));
+
               return (
                 <div key={group} style={styles.tableCard}>
                   <h4 style={styles.groupTitle}>Table {group}</h4>
 
-                  <div style={styles.seatLineWrap}>
-                    {groupSeats
-                      .slice()
-                      .sort((a, b) => numericSort(a.seat_number, b.seat_number))
-                      .map((seat) => {
-                        const ticketType = ticketTypes.find(
-                          (item) => item.id === seat.ticket_type_id,
-                        );
-                        const selected = selectedSeatIds.includes(seat.id);
+                  <div style={tableShellStyle(tableShape)}>
+                    <div style={styles.tableCentreLabel}>
+                      <strong>Table {group}</strong>
+                      <span>{tableShape}</span>
+                    </div>
 
-                        const labelParts = [
-                          `Seat ${seat.seat_number || ""}`,
-                          purposeLabel(seat.seat_purpose),
-                          seat.admin_label || "",
-                          seat.guest_name || "",
-                          seat.status,
-                        ].filter(Boolean);
+                    {sortedSeats.map((seat) => {
+                      const ticketType = ticketTypes.find(
+                        (item) => item.id === seat.ticket_type_id,
+                      );
+                      const selected = selectedSeatIds.includes(seat.id);
 
-                        return (
-                          <button
-                            key={seat.id}
-                            type="button"
-                            onClick={() => selectOnlySeat(seat.id)}
-                            title={labelParts.join(" · ")}
-                            style={seatStyle({
-                              selected,
-                              ticketType,
-                              ticketTypes,
-                              status: seat.status,
-                              seatPurpose: seat.seat_purpose,
-                            })}
-                          >
-                            {seat.seat_number}
-                          </button>
-                        );
-                      })}
+                      const labelParts = [
+                        `Seat ${seat.seat_number || ""}`,
+                        purposeLabel(seat.seat_purpose),
+                        seat.admin_label || "",
+                        seat.guest_name || "",
+                        seat.status,
+                      ].filter(Boolean);
+
+                      return (
+                        <button
+                          key={seat.id}
+                          type="button"
+                          onClick={() => selectOnlySeat(seat.id)}
+                          title={labelParts.join(" · ")}
+                          style={seatStyle({
+                            selected,
+                            ticketType,
+                            ticketTypes,
+                            status: seat.status,
+                            seatPurpose: seat.seat_purpose,
+                          })}
+                        >
+                          {seat.seat_number}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -1105,6 +1219,23 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+  },
+
+  compactField: {
+    display: "grid",
+    gap: 5,
+    minWidth: 180,
+  },
+
+  tableShapeForm: {
+    display: "flex",
+    gap: 8,
+    alignItems: "end",
+    flexWrap: "wrap",
+    padding: 8,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
   },
 
   legendBox: {
@@ -1297,11 +1428,12 @@ const styles: Record<string, CSSProperties> = {
 
   select: {
     minHeight: 42,
-    minWidth: 220,
+    minWidth: 180,
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     padding: "8px 10px",
     fontWeight: 800,
+    background: "#ffffff",
   },
 
   primaryButton: {
@@ -1472,13 +1604,6 @@ const styles: Record<string, CSSProperties> = {
     transition: "padding-left 160ms ease",
   },
 
-  seatLineWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-
   seatWrap: { display: "inline-flex", alignItems: "center", gap: 4 },
 
   aisle: {
@@ -1502,5 +1627,36 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     marginBottom: 12,
+  },
+
+  tableShell: {
+    position: "relative",
+    display: "grid",
+    gap: 8,
+    alignItems: "center",
+    justifyItems: "center",
+    padding: 34,
+    marginTop: 10,
+    background: "linear-gradient(135deg, #ffffff, #eff6ff)",
+    border: "2px solid #cbd5e1",
+    boxShadow: "inset 0 0 0 10px rgba(255,255,255,0.55)",
+  },
+
+  tableCentreLabel: {
+    position: "absolute",
+    inset: "50% auto auto 50%",
+    transform: "translate(-50%, -50%)",
+    display: "grid",
+    gap: 2,
+    placeItems: "center",
+    width: 96,
+    minHeight: 54,
+    padding: 8,
+    borderRadius: 16,
+    background: "rgba(15,23,42,0.88)",
+    color: "#ffffff",
+    fontSize: 12,
+    textAlign: "center",
+    pointerEvents: "none",
   },
 };
