@@ -135,7 +135,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       formData.get("auto_from_position"),
       0,
     );
-    const autoToPosition = positiveInteger(formData.get("auto_to_position"), 0);
+    const autoToPosition = positiveInteger(
+      formData.get("auto_to_position"),
+      0,
+    );
 
     const maxWinnersPerTableRaw = positiveInteger(
       formData.get("max_winners_per_table"),
