@@ -143,6 +143,7 @@ function playTick(audioCtx: AudioContext) {
   osc.start(now);
   osc.stop(now + 0.08);
 }
+
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
@@ -205,6 +206,7 @@ export default function EventWinnerDrawPanel({
   const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoDrawing, setAutoDrawing] = useState(false);
   const [displayText, setDisplayText] = useState("—");
   const [displayPrize, setDisplayPrize] = useState("Ready");
   const [error, setError] = useState("");
@@ -266,8 +268,7 @@ export default function EventWinnerDrawPanel({
   const latestWinner = winners[0] || null;
   const hasPrizes = validPrizes.length > 0;
   const hasRemainingPrizes = remainingPrizes.length > 0;
-
-  function getAudioContext() {
+    function getAudioContext() {
     if (typeof window === "undefined") return null;
 
     if (!audioCtxRef.current) {
@@ -311,7 +312,8 @@ export default function EventWinnerDrawPanel({
     setSaving(false);
     setConfetti([]);
   }
-    function randomDisplayValue() {
+
+  function randomDisplayValue() {
     if (eventType === "tables") {
       return `T${Math.floor(Math.random() * 24) + 1} · S${
         Math.floor(Math.random() * 12) + 1
@@ -340,7 +342,7 @@ export default function EventWinnerDrawPanel({
     return selectedPrizeLabel;
   }
 
-  async function checkEligibility() {
+  function buildDrawFormData(checkOnly = false) {
     const form = formRef.current;
 
     if (!form) {
@@ -350,8 +352,17 @@ export default function EventWinnerDrawPanel({
     const formData = new FormData(form);
     formData.set("event_id", eventId);
     formData.set("draw_mode", drawMode);
-    formData.set("check_only", "yes");
     formData.set("all_prizes", buildAllPrizesPayload(validPrizes));
+
+    if (checkOnly) {
+      formData.set("check_only", "yes");
+    }
+
+    return formData;
+  }
+
+  async function checkEligibility() {
+    const formData = buildDrawFormData(true);
 
     const response = await fetch(`/api/admin/events/${eventId}/draw`, {
       method: "POST",
@@ -373,26 +384,95 @@ export default function EventWinnerDrawPanel({
     return eligibleCount;
   }
 
-  async function runDramaticDraw() {
-    if (drawing || saving) return;
-
+  function validateDraw() {
     if (!hasPrizes) {
-      setError("Add prizes in the Prizes section before running a draw.");
-      return;
+      throw new Error("Add prizes in the Prizes section before running a draw.");
     }
 
     if (!hasRemainingPrizes) {
-      setError("There are no remaining prizes to draw.");
-      return;
+      throw new Error("There are no remaining prizes to draw.");
     }
 
     if (drawMode === "single" && !activePrizeKey) {
-      setError("Choose a prize before running the draw.");
-      return;
+      throw new Error("Choose a prize before running the draw.");
     }
+  }
+
+  async function saveWinnerFromApi() {
+    const formData = buildDrawFormData(false);
+
+    const response = await fetch(`/api/admin/events/${eventId}/draw`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Draw failed.");
+    }
+
+    const winner =
+      drawMode === "all_remaining" ? data?.winners?.[0] || null : data?.winner || null;
+
+    if (!winner) {
+      throw new Error("Draw completed but no winner was returned.");
+    }
+
+    return {
+      id: winner?.id,
+      prize_id: winner?.prize_id,
+      prize_title: winner?.prize_title,
+      prize_position: winner?.prize_position,
+      winner_name: winner?.winner_name || "Winner",
+      winner_email: winner?.winner_email || "",
+      table_number: winner?.table_number || null,
+      row_label: winner?.row_label || null,
+      seat_number: winner?.seat_number || null,
+    } satisfies WinnerPayload;
+  }
+
+  async function runAutomaticDraw() {
+    if (drawing || saving || autoDrawing) return;
 
     try {
       setError("");
+      setAutoDrawing(true);
+      validateDraw();
+      await checkEligibility();
+
+      const winnerPayload = await saveWinnerFromApi();
+
+      setRevealedWinner(winnerPayload);
+      setDisplayText("WINNER");
+      setDisplayPrize(
+        winnerPayload.prize_position
+          ? `${winnerPayload.prize_position}. ${
+              winnerPayload.prize_title || "Prize"
+            }`
+          : winnerPayload.prize_title || selectedPrizeLabel,
+      );
+      setConfetti(makeConfetti());
+
+      const audioCtx = await unlockAudio();
+      if (audioCtx) playWinner(audioCtx);
+
+      reloadTimeoutRef.current = setTimeout(() => {
+        window.location.reload();
+      }, 1600);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Draw failed.");
+    } finally {
+      setAutoDrawing(false);
+    }
+  }
+
+  async function runDramaticDraw() {
+    if (drawing || saving || autoDrawing) return;
+
+    try {
+      setError("");
+      validateDraw();
       await checkEligibility();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No eligible winner found.");
@@ -409,8 +489,6 @@ export default function EventWinnerDrawPanel({
 
     const audioCtx = await unlockAudio();
 
-    let ticks = 0;
-
     clearDrawTimers();
 
     timerRef.current = setInterval(() => {
@@ -418,8 +496,6 @@ export default function EventWinnerDrawPanel({
       setDisplayPrize(randomPrizeText());
 
       if (audioCtx) playTick(audioCtx);
-
-      ticks += 1;
     }, 72);
 
     timeoutRef.current = setTimeout(async () => {
@@ -433,52 +509,16 @@ export default function EventWinnerDrawPanel({
       setDisplayText("SAVING");
       setDisplayPrize(selectedPrizeLabel);
 
-      const form = formRef.current;
-
-      if (!form) {
-        setSaving(false);
-        setError("Draw form was not found.");
-        return;
-      }
-
       try {
-        const formData = new FormData(form);
-        formData.set("event_id", eventId);
-        formData.set("draw_mode", drawMode);
-        formData.set("all_prizes", buildAllPrizesPayload(validPrizes));
-
-        const response = await fetch(`/api/admin/events/${eventId}/draw`, {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok || data?.ok === false) {
-          throw new Error(data?.error || "Draw failed.");
-        }
-
-        const winner = drawMode === "all_remaining"
-          ? data?.winners?.[0] || null
-          : data?.winner || null;
-
-        const winnerPayload: WinnerPayload = {
-          id: winner?.id,
-          prize_id: winner?.prize_id,
-          prize_title: winner?.prize_title,
-          prize_position: winner?.prize_position,
-          winner_name: winner?.winner_name || "Winner",
-          winner_email: winner?.winner_email || "",
-          table_number: winner?.table_number || null,
-          row_label: winner?.row_label || null,
-          seat_number: winner?.seat_number || null,
-        };
+        const winnerPayload = await saveWinnerFromApi();
 
         setRevealedWinner(winnerPayload);
         setDisplayText("WINNER");
         setDisplayPrize(
           winnerPayload.prize_position
-            ? `${winnerPayload.prize_position}. ${winnerPayload.prize_title || "Prize"}`
+            ? `${winnerPayload.prize_position}. ${
+                winnerPayload.prize_title || "Prize"
+              }`
             : winnerPayload.prize_title || selectedPrizeLabel,
         );
         setSaving(false);
@@ -502,14 +542,16 @@ export default function EventWinnerDrawPanel({
       clearDrawTimers();
     };
   }, []);
-    return (
+
+  return (
     <section style={styles.section}>
       <div style={styles.sectionHeader}>
         <p style={styles.sectionEyebrow}>Winner draw</p>
         <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
         <p style={styles.sectionText}>
-          Draw winners from eligible paid event entries only. Already drawn
-          prizes are excluded before the draw starts.
+          Draw winners from eligible paid event entries only. Use the quick
+          automatic draw for admin work, or open the full dramatic draw for live
+          announcements.
         </p>
       </div>
 
@@ -554,6 +596,22 @@ export default function EventWinnerDrawPanel({
         </div>
       ) : null}
 
+      {revealedWinner && !drawOverlayOpen ? (
+        <div style={styles.latestWinnerBox}>
+          <p style={styles.latestWinnerLabel}>New winner</p>
+          <h3 style={styles.latestWinnerName}>
+            {revealedWinner.winner_name || "Winner"}
+          </h3>
+          <p style={styles.latestWinnerMeta}>
+            {revealedWinner.prize_position
+              ? `${revealedWinner.prize_position}. `
+              : ""}
+            {revealedWinner.prize_title || "Prize"} ·{" "}
+            {formatWinnerSeat(revealedWinner)}
+          </p>
+        </div>
+      ) : null}
+
       <div style={styles.grid}>
         <form
           ref={formRef}
@@ -568,10 +626,10 @@ export default function EventWinnerDrawPanel({
           <input type="hidden" name="draw_mode" value={drawMode} />
 
           <div>
-            <h3 style={styles.panelTitle}>Dramatic draw controls</h3>
+            <h3 style={styles.panelTitle}>Draw controls</h3>
             <p style={styles.sectionText}>
-              Checks eligible entries first, then opens a full-screen reveal with
-              sound, confetti, and a saved winner.
+              Select the prize, choose the scope, then run either a quick
+              automatic draw or the full-screen dramatic draw.
             </p>
           </div>
 
@@ -609,8 +667,7 @@ export default function EventWinnerDrawPanel({
                   })}
                 </select>
               </label>
-
-              <label style={styles.field}>
+                            <label style={styles.field}>
                 <span style={styles.label}>Draw type</span>
                 <select
                   value={drawMode}
@@ -680,13 +737,39 @@ export default function EventWinnerDrawPanel({
 
               {error ? <div style={styles.errorBox}>{error}</div> : null}
 
-              <div style={styles.buttonRow}>
+              <div style={styles.drawButtonGrid}>
+                <button
+                  type="button"
+                  onClick={() => void runAutomaticDraw()}
+                  disabled={
+                    !hasRemainingPrizes ||
+                    drawing ||
+                    saving ||
+                    autoDrawing ||
+                    (drawMode === "single" && !activePrizeKey)
+                  }
+                  style={{
+                    ...styles.automaticButton,
+                    opacity:
+                      !hasRemainingPrizes ||
+                      drawing ||
+                      saving ||
+                      autoDrawing ||
+                      (drawMode === "single" && !activePrizeKey)
+                        ? 0.45
+                        : 1,
+                  }}
+                >
+                  {autoDrawing ? "Drawing..." : "Automatic random draw"}
+                </button>
+
                 <button
                   type="submit"
                   disabled={
                     !hasRemainingPrizes ||
                     drawing ||
                     saving ||
+                    autoDrawing ||
                     (drawMode === "single" && !activePrizeKey)
                   }
                   style={{
@@ -695,6 +778,7 @@ export default function EventWinnerDrawPanel({
                       !hasRemainingPrizes ||
                       drawing ||
                       saving ||
+                      autoDrawing ||
                       (drawMode === "single" && !activePrizeKey)
                         ? 0.45
                         : 1,
@@ -1054,17 +1138,27 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
   },
-  buttonRow: {
-    display: "flex",
+  drawButtonGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 10,
-    flexWrap: "wrap",
   },
   primaryButton: {
-    width: "fit-content",
+    width: "100%",
     padding: "13px 18px",
     border: "none",
     borderRadius: 999,
     background: "#111827",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  automaticButton: {
+    width: "100%",
+    padding: "13px 18px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
     color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
