@@ -877,9 +877,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </form>
 
             <DramaticRaffleDraw
-              raffleId={raffle.id}
-              soldTickets={soldTicketsForDraw}
-            />
+  raffleId={raffle.id}
+  soldTickets={soldTicketsForDraw}
+  drawnPrizePositions={winners.map((winner) => Number(winner.prize_position))}
+  drawnTicketNumbers={winners.map((winner) => Number(winner.ticket_number))}
+/>
           </div>
         </details>
       </section>
