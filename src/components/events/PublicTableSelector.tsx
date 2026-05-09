@@ -31,6 +31,10 @@ type GuestData = {
   menuChoice: string;
 };
 
+type TableShape = "round" | "square" | "rectangle";
+
+type SeatingLayoutValue = number | string | null | undefined;
+
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -99,6 +103,20 @@ function getDefaultGuest(): GuestData {
   };
 }
 
+function getTableShape(
+  seatingLayoutJson?: Record<string, SeatingLayoutValue> | null,
+): TableShape {
+  const raw = String(
+    seatingLayoutJson?.tableShape || seatingLayoutJson?.table_shape || "",
+  ).trim();
+
+  if (raw === "square" || raw === "rectangle" || raw === "round") {
+    return raw;
+  }
+
+  return "round";
+}
+
 function seatColours(status: string, selected: boolean) {
   if (selected) {
     return {
@@ -149,15 +167,74 @@ function seatColours(status: string, selected: boolean) {
   };
 }
 
-function seatPosition(index: number, total: number) {
+function roundSeatPosition(index: number, total: number) {
   const angle = -90 + (360 / Math.max(total, 1)) * index;
   const radians = (angle * Math.PI) / 180;
   const radius = 104;
 
   return {
+    position: "absolute" as const,
     left: `calc(50% + ${Math.cos(radians) * radius}px)`,
     top: `calc(50% + ${Math.sin(radians) * radius}px)`,
+    transform: "translate(-50%, -50%)",
   };
+}
+
+function shapedSeatPosition(index: number, total: number, shape: TableShape) {
+  if (shape === "round") {
+    return roundSeatPosition(index, total);
+  }
+
+  return {
+    position: "relative" as const,
+    left: "auto",
+    top: "auto",
+    transform: "none",
+  };
+}
+
+function tableAreaStyle(shape: TableShape): CSSProperties {
+  if (shape === "square") {
+    return {
+      ...styles.shapedTableArea,
+      width: 292,
+      minHeight: 292,
+      borderRadius: 26,
+    };
+  }
+
+  if (shape === "rectangle") {
+    return {
+      ...styles.shapedTableArea,
+      width: 420,
+      minHeight: 260,
+      borderRadius: 28,
+    };
+  }
+
+  return styles.roundTableArea;
+}
+
+function tablePlateStyle(shape: TableShape): CSSProperties {
+  if (shape === "square") {
+    return {
+      ...styles.tablePlate,
+      width: 136,
+      height: 136,
+      borderRadius: 24,
+    };
+  }
+
+  if (shape === "rectangle") {
+    return {
+      ...styles.tablePlate,
+      width: 180,
+      height: 104,
+      borderRadius: 24,
+    };
+  }
+
+  return styles.tablePlate;
 }
 
 export default function PublicTableSelector({
@@ -166,12 +243,14 @@ export default function PublicTableSelector({
   ticketTypes,
   currency,
   menuOptions = [],
+  seatingLayoutJson = {},
 }: {
   eventId: string;
   seats: Seat[];
   ticketTypes: TicketType[];
   currency: string;
   menuOptions?: string[];
+  seatingLayoutJson?: Record<string, SeatingLayoutValue> | null;
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -182,8 +261,8 @@ export default function PublicTableSelector({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
-
-  const groupedSeats = useMemo(() => {
+  const tableShape = getTableShape(seatingLayoutJson);
+    const groupedSeats = useMemo(() => {
     const groups = new Map<string, Seat[]>();
 
     for (const seat of seats.filter((seat) => seat.table_number)) {
@@ -236,7 +315,8 @@ export default function PublicTableSelector({
     : 0;
 
   const totalTodayCents = ticketTotal + platformFeeCents;
-    function getSeatTicketType(seat: Seat) {
+
+  function getSeatTicketType(seat: Seat) {
     const cartTicketTypeId = cartItems.find(
       (item) => item.seatId === seat.id,
     )?.ticketTypeId;
@@ -415,7 +495,7 @@ export default function PublicTableSelector({
               className="public-table-selector-table-grid"
               style={styles.tableGrid}
             >
-              {groupedSeats.map((group) => {
+                            {groupedSeats.map((group) => {
                 const availableCount = group.seats.filter(
                   (seat) => seat.status === "available",
                 ).length;
@@ -451,46 +531,61 @@ export default function PublicTableSelector({
                         </button>
                       )}
                     </div>
-                                        <div style={styles.roundTableArea}>
-                      <div style={styles.tablePlate}>
+
+                    <div style={tableAreaStyle(tableShape)}>
+                      <div style={tablePlateStyle(tableShape)}>
                         <span style={styles.tablePlateTop}>
                           Table {group.tableNumber || "—"}
                         </span>
                         <strong style={styles.tablePlateName}>{group.label}</strong>
                       </div>
 
-                      {group.seats.map((seat, index) => {
-                        const selected = selectedSeatIds.includes(seat.id);
-                        const unavailable = seat.status !== "available";
-                        const colours = seatColours(seat.status, selected);
-                        const position = seatPosition(index, group.seats.length);
+                      <div
+                        style={
+                          tableShape === "round"
+                            ? styles.roundSeatLayer
+                            : tableShape === "rectangle"
+                              ? styles.rectangleSeatGrid
+                              : styles.squareSeatGrid
+                        }
+                      >
+                        {group.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const unavailable = seat.status !== "available";
+                          const colours = seatColours(seat.status, selected);
+                          const position = shapedSeatPosition(
+                            index,
+                            group.seats.length,
+                            tableShape,
+                          );
 
-                        return (
-                          <button
-                            key={seat.id}
-                            type="button"
-                            disabled={unavailable}
-                            onClick={() => toggleSeat(seat)}
-                            title={seatHoverLabel(
-                              seat,
-                              getSeatTicketType(seat),
-                              currency,
-                            )}
-                            style={{
-                              ...styles.roundSeatButton,
-                              ...position,
-                              background: colours.background,
-                              color: colours.color,
-                              border: colours.border,
-                              opacity: colours.opacity,
-                              cursor: unavailable ? "not-allowed" : "pointer",
-                              boxShadow: colours.boxShadow,
-                            }}
-                          >
-                            {seat.seat_number}
-                          </button>
-                        );
-                      })}
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              disabled={unavailable}
+                              onClick={() => toggleSeat(seat)}
+                              title={seatHoverLabel(
+                                seat,
+                                getSeatTicketType(seat),
+                                currency,
+                              )}
+                              style={{
+                                ...styles.roundSeatButton,
+                                ...position,
+                                background: colours.background,
+                                color: colours.color,
+                                border: colours.border,
+                                opacity: colours.opacity,
+                                cursor: unavailable ? "not-allowed" : "pointer",
+                                boxShadow: colours.boxShadow,
+                              }}
+                            >
+                              {seat.seat_number}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 );
@@ -609,8 +704,7 @@ export default function PublicTableSelector({
                             style={styles.textarea}
                           />
                         </label>
-
-                        <label style={styles.field}>
+                                                <label style={styles.field}>
                           <span style={styles.label}>Menu choice</span>
                           {menuOptions.length > 0 ? (
                             <select
@@ -714,6 +808,7 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -790,6 +885,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "rgba(255,255,255,0.055)",
     border: "1px solid rgba(255,255,255,0.1)",
+    overflowX: "auto",
   },
   groupHeader: {
     display: "flex",
@@ -838,6 +934,38 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.055) 42%, rgba(15,23,42,0.16) 43%, rgba(15,23,42,0.16) 100%)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
+  shapedTableArea: {
+    position: "relative",
+    display: "grid",
+    placeItems: "center",
+    margin: "0 auto",
+    padding: 22,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.035))",
+    border: "1px solid rgba(255,255,255,0.12)",
+  },
+  roundSeatLayer: {
+    position: "absolute",
+    inset: 0,
+  },
+  squareSeatGrid: {
+    position: "relative",
+    zIndex: 2,
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 42px)",
+    gap: 8,
+    alignItems: "center",
+    justifyItems: "center",
+  },
+  rectangleSeatGrid: {
+    position: "relative",
+    zIndex: 2,
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 42px)",
+    gap: 8,
+    alignItems: "center",
+    justifyItems: "center",
+  },
   tablePlate: {
     position: "absolute",
     left: "50%",
@@ -857,6 +985,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     textAlign: "center",
     padding: 14,
+    zIndex: 1,
   },
   tablePlateTop: {
     color: "#64748b",
@@ -873,15 +1002,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.15,
   },
   roundSeatButton: {
-    position: "absolute",
     width: 42,
     height: 42,
-    transform: "translate(-50%, -50%)",
     borderRadius: 999,
     fontSize: 13,
     fontWeight: 950,
     transition: "box-shadow 140ms ease, transform 140ms ease",
-    zIndex: 2,
+    zIndex: 3,
   },
   cart: {
     position: "sticky",
