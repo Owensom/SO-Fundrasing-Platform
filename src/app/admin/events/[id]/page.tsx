@@ -65,7 +65,9 @@ function cleanTableShape(value: FormDataEntryValue | string | null): TableShape 
   return "round";
 }
 
-function getTableShape(tableNamesJson: Record<string, string> | null | undefined) {
+function getTableShape(
+  tableNamesJson: Record<string, string> | null | undefined,
+) {
   return cleanTableShape(tableNamesJson?.[TABLE_SHAPE_KEY] || "round");
 }
 
@@ -466,7 +468,6 @@ async function updateTableNamesAction(formData: FormData) {
 
   const event = await requireEventAccess(eventId);
 
-  const existingTableNames = event.table_names_json || {};
   const parsedTableNames = parseTableNames(formData.get("table_names_json"));
 
   await updateEvent(eventId, {
@@ -474,9 +475,10 @@ async function updateTableNamesAction(formData: FormData) {
     menuOptions: event.menu_options || [],
     seatingLayoutJson: event.seating_layout_json || {},
     tableNamesJson: {
-      ...existingTableNames,
+      ...(event.table_names_json || {}),
       ...parsedTableNames,
-      [TABLE_SHAPE_KEY]: existingTableNames[TABLE_SHAPE_KEY] || "round",
+      [TABLE_SHAPE_KEY]:
+        event.table_names_json?.[TABLE_SHAPE_KEY] || "round",
     },
     askDietaryRequirements: event.ask_dietary_requirements,
     askMenuChoice: event.ask_menu_choice,
@@ -527,7 +529,7 @@ async function addTicketTypeAction(formData: FormData) {
     description: String(formData.get("description") || "").trim() || null,
     price: poundsToCents(formData.get("price")),
     capacity: positiveInteger(formData.get("capacity"), 0) || null,
-    sortOrder: positiveInteger(formData.get("display_order"), 0),
+    sortOrder: positiveInteger(formData.get("sort_order"), 0),
     isActive: String(formData.get("is_active") || "true") === "true",
   });
 
@@ -552,7 +554,7 @@ async function updateTicketTypeAction(formData: FormData) {
     description: String(formData.get("description") || "").trim() || null,
     price: poundsToCents(formData.get("price")),
     capacity: positiveInteger(formData.get("capacity"), 0) || null,
-    sortOrder: positiveInteger(formData.get("display_order"), 0),
+    sortOrder: positiveInteger(formData.get("sort_order"), 0),
     isActive: String(formData.get("is_active") || "true") === "true",
   });
 
@@ -583,235 +585,412 @@ async function clearTicketTypesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
-async function generateRowsAction(formData: FormData) {
+
+async function applySeatTicketTypeAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
+  const rawTicketTypeId = String(formData.get("ticket_type_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
 
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
+  if (!eventId || !rawTicketTypeId || seatIds.length === 0) {
+    redirect(
+      `/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`,
+    );
   }
 
   await requireEventAccess(eventId);
 
-  const section = String(formData.get("section") || "").trim() || null;
+  await updateEventSeatsTicketType({
+    eventId,
+    seatIds,
+    ticketTypeId: rawTicketTypeId === "__normal__" ? null : rawTicketTypeId,
+  });
 
-  const startRow = positiveInteger(formData.get("start_row"), 1);
-  const endRow = positiveInteger(formData.get("end_row"), startRow);
+  redirect(`/admin/events/${eventId}?saved=seat-marking#${returnAnchor}`);
+}
 
-  const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
+async function updateSelectedSeatsMetadataAction(formData: FormData) {
+  "use server";
 
-  const aisleAfterRaw = String(formData.get("aisle_after") || "").trim();
+  const eventId = String(formData.get("event_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
 
-  const aisleAfter =
-    aisleAfterRaw.length > 0
-      ? positiveInteger(aisleAfterRaw, 0)
-      : null;
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
 
-  if (seatsPerRow <= 0 || endRow < startRow) {
-    redirect(`/admin/events/${eventId}?error=invalid-rows#row-seating`);
+  if (!eventId || seatIds.length === 0) {
+    redirect(
+      `/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`,
+    );
   }
 
-  for (let row = startRow; row <= endRow; row += 1) {
+  await requireEventAccess(eventId);
+
+  await updateEventSeatsMetadata({
+    eventId,
+    seatIds,
+    seatPurpose: String(formData.get("seat_purpose") || "").trim() || null,
+    adminLabel: String(formData.get("admin_label") || "").trim() || null,
+    adminNote: String(formData.get("admin_note") || "").trim() || null,
+    guestName: String(formData.get("guest_name") || "").trim() || null,
+    guestEmail: String(formData.get("guest_email") || "").trim() || null,
+    dietaryRequirements:
+      String(formData.get("dietary_requirements") || "").trim() || null,
+    menuChoice: String(formData.get("menu_choice") || "").trim() || null,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seat-metadata#${returnAnchor}`);
+}
+async function updateSelectedSeatsStatusAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const status = String(formData.get("status") || "").trim() as
+    | "available"
+    | "blocked";
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
+
+  if (!eventId || seatIds.length === 0) {
+    redirect(
+      `/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`,
+    );
+  }
+
+  if (status !== "available" && status !== "blocked") {
+    redirect(
+      `/admin/events/${eventId}?error=invalid-seat-status#${returnAnchor}`,
+    );
+  }
+
+  await requireEventAccess(eventId);
+
+  await updateEventSeatsStatus({
+    eventId,
+    seatIds,
+    status,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seat-status#${returnAnchor}`);
+}
+
+async function deleteSelectedSeatsAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const seatIds = parseJsonStringArray(formData.get("seat_ids"));
+  const returnAnchor =
+    String(formData.get("return_anchor") || "").trim() === "table-seating"
+      ? "table-seating"
+      : "row-seating";
+
+  if (!eventId || seatIds.length === 0) {
+    redirect(
+      `/admin/events/${eventId}?error=missing-seat-selection#${returnAnchor}`,
+    );
+  }
+
+  await requireEventAccess(eventId);
+
+  await deleteEventSeatsByIds({
+    eventId,
+    seatIds,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=seats-deleted#${returnAnchor}`);
+}
+
+async function deleteSelectedRowsAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const rowKeys = parseJsonStringArray(formData.get("row_keys"));
+
+  if (!eventId || rowKeys.length === 0) {
+    redirect(
+      `/admin/events/${eventId}?error=missing-row-selection#row-seating`,
+    );
+  }
+
+  await requireEventAccess(eventId);
+
+  await deleteEventRowsByKeys({
+    eventId,
+    rowKeys,
+  });
+
+  redirect(`/admin/events/${eventId}?saved=rows-deleted#row-seating`);
+}
+
+async function generateSeatsAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const section = String(formData.get("section") || "").trim();
+  const rowsRaw = String(formData.get("rows") || "").trim();
+  const seatsPerRow = positiveInteger(formData.get("seats_per_row"), 0);
+  const aisleAfterList = parseAisleAfterList(formData.get("aisle_after"));
+  const ticketTypeId =
+    String(formData.get("ticket_type_id") || "").trim() || null;
+  const clearExisting = String(formData.get("clear_existing") || "") === "yes";
+
+  if (!eventId || !rowsRaw || seatsPerRow <= 0) {
+    redirect(`/admin/events/${eventId}?error=missing-seats#row-seating`);
+  }
+
+  await requireEventAccess(eventId);
+
+  if (clearExisting) await deleteEventRowSeats(eventId);
+
+  const rows = expandRows(rowsRaw);
+
+  for (const row of rows) {
     for (let seat = 1; seat <= seatsPerRow; seat += 1) {
-      await createEventSeat({
-        eventId,
-        section,
-        rowLabel: String(row),
-        seatNumber: String(seat),
-        tableNumber: null,
-        aisleAfter:
-          aisleAfter && seat === aisleAfter ? aisleAfter : null,
-      });
+      try {
+        await createEventSeat({
+          eventId,
+          ticketTypeId,
+          section: section || null,
+          rowLabel: row,
+          seatNumber: String(seat),
+          tableNumber: null,
+          aisleAfter: aisleAfterList.includes(seat) ? seat : null,
+          status: "available",
+        });
+      } catch {
+        // Skip duplicate seats safely.
+      }
     }
   }
 
-  redirect(`/admin/events/${eventId}?saved=rows#row-seating`);
+  redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
 
 async function generateTablesAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
+  const tableCount = positiveInteger(formData.get("table_count"), 0);
+  const seatsPerTable = positiveInteger(formData.get("seats_per_table"), 0);
+  const ticketTypeId =
+    String(formData.get("ticket_type_id") || "").trim() || null;
+  const clearExisting = String(formData.get("clear_existing") || "") === "yes";
 
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
+  if (!eventId || tableCount <= 0 || seatsPerTable <= 0) {
+    redirect(`/admin/events/${eventId}?error=missing-tables#table-seating`);
   }
 
   await requireEventAccess(eventId);
 
-  const startTable = positiveInteger(formData.get("start_table"), 1);
+  if (clearExisting) await deleteEventTableSeats(eventId);
 
-  const endTable = positiveInteger(
-    formData.get("end_table"),
-    startTable,
-  );
-
-  const seatsPerTable = positiveInteger(
-    formData.get("seats_per_table"),
-    0,
-  );
-
-  if (seatsPerTable <= 0 || endTable < startTable) {
-    redirect(`/admin/events/${eventId}?error=invalid-tables#table-seating`);
-  }
-
-  for (let table = startTable; table <= endTable; table += 1) {
+  for (let table = 1; table <= tableCount; table += 1) {
     for (let seat = 1; seat <= seatsPerTable; seat += 1) {
-      await createEventSeat({
-        eventId,
-        section: null,
-        rowLabel: null,
-        seatNumber: String(seat),
-        tableNumber: String(table),
-        aisleAfter: null,
-      });
+      try {
+        await createEventSeat({
+          eventId,
+          ticketTypeId,
+          section: null,
+          rowLabel: null,
+          seatNumber: String(seat),
+          tableNumber: String(table),
+          aisleAfter: null,
+          status: "available",
+        });
+      } catch {
+        // Skip duplicate seats safely.
+      }
     }
   }
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
 
-async function updateSeatTicketTypeAction(formData: FormData) {
+async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
 
-  const seatIds = parseIdArray(formData.get("seat_ids"));
-
-  const ticketTypeId = String(
-    formData.get("ticket_type_id") || "",
-  ).trim();
-
-  const returnAnchor =
-    String(formData.get("return_anchor") || "").trim() ||
-    "row-seating";
-
-  if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=no-seats#${returnAnchor}`);
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEventRowSeats(eventId);
   }
 
-  await requireEventAccess(eventId);
+  redirect(`/admin/events/${eventId}?saved=row-seats-cleared#row-seating`);
+}
 
-  await updateEventSeatsTicketType(
-    seatIds,
-    ticketTypeId === "__normal__" ? null : ticketTypeId,
+async function clearTableSeatsAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEventTableSeats(eventId);
+  }
+
+  redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
+}
+
+async function runWinnerDrawAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const drawMode = String(formData.get("draw_mode") || "single").trim();
+  const selectedPrize = parsePrizeSelection(formData.get("prize_key"));
+  const drawScope = String(formData.get("draw_scope") || "all").trim();
+
+  const maxWinnersPerTableRaw = positiveInteger(
+    formData.get("max_winners_per_table"),
+    0,
   );
 
-  redirect(`/admin/events/${eventId}?saved=seat-ticket#${returnAnchor}`);
+  if (!eventId) {
+    redirect("/admin/events?error=missing-event");
+  }
+
+  const event = await requireEventAccess(eventId);
+  const existingWinners = await listEventWinners(eventId);
+
+  const drawnPrizeIds = new Set(
+    existingWinners
+      .filter((winner) => winner.status === "drawn")
+      .map((winner) => String(winner.prize_id || "").trim())
+      .filter(Boolean),
+  );
+
+  const eventPrizes: ParsedPrizeSelection[] = (event.prizes_json || [])
+    .map((prize, index) => {
+      const title = String(prize.title || prize.name || "").trim();
+      if (!title) return null;
+
+      const rawPosition = Number(prize.position);
+
+      return {
+        id: String(prize.id || `prize-${index + 1}`),
+        title,
+        position:
+          Number.isFinite(rawPosition) && rawPosition > 0
+            ? Math.floor(rawPosition)
+            : index + 1,
+      };
+    })
+    .filter(Boolean) as ParsedPrizeSelection[];
+
+  const prizesToDraw =
+    drawMode === "all_remaining"
+      ? eventPrizes.filter((prize) => !drawnPrizeIds.has(prize.id))
+      : selectedPrize
+        ? [selectedPrize]
+        : [];
+
+  if (prizesToDraw.length === 0) {
+    redirect(`/admin/events/${eventId}?error=missing-draw-data#winner-draw`);
+  }
+
+  if (drawMode !== "all_remaining" && selectedPrize) {
+    if (drawnPrizeIds.has(selectedPrize.id)) {
+      redirect(`/admin/events/${eventId}?error=prize-already-drawn#winner-draw`);
+    }
+  }
+
+  const drawSettings = {
+    eventType: event.event_type,
+    includeVip: String(formData.get("include_vip") || "") === "yes",
+    includeComplimentary:
+      String(formData.get("include_complimentary") || "") === "yes",
+    includeStaff: String(formData.get("include_staff") || "") === "yes",
+    includeSponsors: String(formData.get("include_sponsors") || "") === "yes",
+    includeGuests: String(formData.get("include_guests") || "") === "yes",
+    excludeWinnerEmails: drawScope === "not_previous_winners",
+    maxWinnersPerTable:
+      event.event_type === "tables" && maxWinnersPerTableRaw > 0
+        ? maxWinnersPerTableRaw
+        : null,
+  };
+
+  let drawnCount = 0;
+
+  for (const prize of prizesToDraw) {
+    const candidates = await getEligibleEventDrawCandidates({
+      eventId,
+      includeVip: drawSettings.includeVip,
+      includeComplimentary: drawSettings.includeComplimentary,
+      includeStaff: drawSettings.includeStaff,
+      includeSponsors: drawSettings.includeSponsors,
+      includeGuests: drawSettings.includeGuests,
+      excludeWinnerEmails: drawSettings.excludeWinnerEmails,
+      maxWinnersPerTable: drawSettings.maxWinnersPerTable,
+    });
+
+    const winner = chooseRandomCandidate(candidates);
+
+    if (!winner) {
+      if (drawMode === "all_remaining" && drawnCount > 0) break;
+
+      redirect(`/admin/events/${eventId}?error=no-eligible-winner#winner-draw`);
+    }
+
+    await createEventWinner({
+      tenantSlug: event.tenant_slug,
+      eventId,
+      prizeId: prize.id,
+      prizeTitle: prize.title,
+      prizePosition: prize.position,
+      drawScope,
+      drawSettings,
+      eventOrderId: winner.event_order_id,
+      eventOrderItemId: winner.event_order_item_id,
+      eventSeatId: winner.event_seat_id,
+      ticketTypeId: winner.ticket_type_id,
+      tableNumber: winner.table_number,
+      rowLabel: winner.row_label,
+      seatNumber: winner.seat_number,
+      winnerName: winner.winner_name,
+      winnerEmail: winner.winner_email,
+    });
+
+    drawnCount += 1;
+  }
+
+  if (drawnCount === 0) {
+    redirect(`/admin/events/${eventId}?error=no-eligible-winner#winner-draw`);
+  }
+
+  redirect(
+    `/admin/events/${eventId}?saved=${
+      drawMode === "all_remaining" ? "all-winners-drawn" : "winner-drawn"
+    }#winner-draw`,
+  );
 }
 
-async function updateSeatStatusAction(formData: FormData) {
+async function deleteWinnerAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
+  const winnerId = String(formData.get("winner_id") || "").trim();
 
-  const seatIds = parseIdArray(formData.get("seat_ids"));
-
-  const status = String(formData.get("status") || "").trim() as
-    | "available"
-    | "blocked";
-
-  const returnAnchor =
-    String(formData.get("return_anchor") || "").trim() ||
-    "row-seating";
-
-  if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=no-seats#${returnAnchor}`);
+  if (!eventId || !winnerId) {
+    redirect(`/admin/events/${eventId}?error=missing-winner#winner-draw`);
   }
 
   await requireEventAccess(eventId);
+  await deleteEventWinner(winnerId);
 
-  await updateEventSeatsStatus(seatIds, status);
-
-  redirect(`/admin/events/${eventId}?saved=seat-status#${returnAnchor}`);
+  redirect(`/admin/events/${eventId}?saved=winner-deleted#winner-draw`);
 }
 
-async function updateSeatMetadataAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  const seatIds = parseIdArray(formData.get("seat_ids"));
-
-  const returnAnchor =
-    String(formData.get("return_anchor") || "").trim() ||
-    "row-seating";
-
-  if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=no-seats#${returnAnchor}`);
-  }
-
-  await requireEventAccess(eventId);
-
-  await updateEventSeatsMetadata(seatIds, {
-    seatPurpose:
-      String(formData.get("seat_purpose") || "").trim() || null,
-
-    adminLabel:
-      String(formData.get("admin_label") || "").trim() || null,
-
-    adminNote:
-      String(formData.get("admin_note") || "").trim() || null,
-
-    guestName:
-      String(formData.get("guest_name") || "").trim() || null,
-
-    guestEmail:
-      String(formData.get("guest_email") || "").trim() || null,
-
-    dietaryRequirements:
-      String(formData.get("dietary_requirements") || "").trim() ||
-      null,
-
-    menuChoice:
-      String(formData.get("menu_choice") || "").trim() || null,
-  });
-
-  redirect(`/admin/events/${eventId}?saved=seat-meta#${returnAnchor}`);
-}
-
-async function deleteSeatsAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  const seatIds = parseIdArray(formData.get("seat_ids"));
-
-  const returnAnchor =
-    String(formData.get("return_anchor") || "").trim() ||
-    "row-seating";
-
-  if (!eventId || seatIds.length === 0) {
-    redirect(`/admin/events/${eventId}?error=no-seats#${returnAnchor}`);
-  }
-
-  await requireEventAccess(eventId);
-
-  await deleteEventSeatsByIds(seatIds);
-
-  redirect(`/admin/events/${eventId}?saved=seats-deleted#${returnAnchor}`);
-}
-
-async function deleteRowsAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  const rowKeys = parseStringArray(formData.get("row_keys"));
-
-  if (!eventId || rowKeys.length === 0) {
-    redirect(`/admin/events/${eventId}?error=no-rows#row-seating`);
-  }
-
-  await requireEventAccess(eventId);
-
-  await deleteEventRowsByKeys(eventId, rowKeys);
-
-  redirect(`/admin/events/${eventId}?saved=rows-deleted#row-seating`);
-}
-
-async function clearSeatsAction(formData: FormData) {
+async function clearWinnersAction(formData: FormData) {
   "use server";
 
   const eventId = String(formData.get("event_id") || "").trim();
@@ -821,88 +1000,110 @@ async function clearSeatsAction(formData: FormData) {
   }
 
   await requireEventAccess(eventId);
+  await clearEventWinners(eventId);
 
-  await deleteAllEventSeats(eventId);
-
-  redirect(`/admin/events/${eventId}?saved=all-seats-cleared#seat-tools`);
+  redirect(`/admin/events/${eventId}?saved=winners-cleared#winner-draw`);
 }
 
-export default async function AdminEventPage({
+async function deleteEventAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+
+  if (eventId) {
+    await requireEventAccess(eventId);
+    await deleteEvent(eventId);
+  }
+
+  redirect("/admin/events");
+}
+export default async function AdminEventManagePage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-
-  const event = await getEventById(id);
-
-  if (!event) {
-    notFound();
-  }
-
+  searchParams,
+}: PageProps) {
   const session = await auth();
+  if (!session?.user) redirect("/admin/login");
 
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
+  const event = await getEventById(params.id);
+  if (!event) notFound();
 
-  const tenantSlug = getTenantSlugFromHeaders();
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
 
   if (
-    tenantSlug &&
-    !session.user.tenantSlugs?.includes(tenantSlug)
+    !tenantSlug ||
+    event.tenant_slug !== tenantSlug ||
+    !sessionTenantSlugs.includes(tenantSlug)
   ) {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const ticketTypes = await listEventTicketTypes(id);
-  const seats = await listEventSeats(id);
-  const winners = await listEventWinners(id);
+  const ticketTypes = event.ticket_types || [];
+  const seats = event.seats || [];
+  const winners = await listEventWinners(event.id);
 
-  const soldCount = seats.filter(
-    (seat) => seat.status === "sold",
-  ).length;
+  const isGeneralAdmission = event.event_type === "general_admission";
+  const isReservedSeating = event.event_type === "reserved_seating";
+  const isTables = event.event_type === "tables";
 
-  const reservedCount = seats.filter(
-    (seat) => seat.status === "reserved",
-  ).length;
-
-  const blockedCount = seats.filter(
-    (seat) => seat.status === "blocked",
-  ).length;
-
-  const availableCount = seats.filter(
-    (seat) => seat.status === "available",
-  ).length;
-
-  const rowSeats = seats.filter((seat) => !seat.table_number);
-
+  const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
   const tableSeats = seats.filter((seat) => seat.table_number);
 
-  const currency = event.currency || "GBP";
+  const visibleSeats = isReservedSeating
+    ? rowSeats
+    : isTables
+      ? tableSeats
+      : seats;
 
-  const prizes = Array.isArray(event.prizes_json)
-    ? event.prizes_json
-    : [];
+  const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
+  const reservedSeats = visibleSeats.filter(
+    (seat) => seat.status === "reserved",
+  ).length;
+  const blockedSeats = visibleSeats.filter(
+    (seat) => seat.status === "blocked",
+  ).length;
+  const availableSeats = visibleSeats.filter(
+    (seat) => seat.status === "available",
+  ).length;
+  const vipSeats = visibleSeats.filter(
+    (seat) => seat.seat_purpose === "vip",
+  ).length;
+  const complimentarySeats = visibleSeats.filter(
+    (seat) => seat.seat_purpose === "complimentary",
+  ).length;
 
-  const menuOptions = Array.isArray(event.menu_options)
-    ? event.menu_options
-    : [];
+  const uniqueTableNumbers = Array.from(
+    new Set(
+      tableSeats
+        .map((seat) => String(seat.table_number || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => {
+    const aNumber = Number(a);
+    const bNumber = Number(b);
 
-  const seatingLayout =
-    event.seating_layout_json &&
-    typeof event.seating_layout_json === "object"
-      ? event.seating_layout_json
-      : {};
+    if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+      return aNumber - bNumber;
+    }
 
-  const tableNames =
-    event.table_names_json &&
-    typeof event.table_names_json === "object"
-      ? event.table_names_json
-      : {};
+    return a.localeCompare(b);
+  });
 
-  const publicUrl = `/e/${event.slug}`;
-    return (
+  const tableShape = getTableShape(event.table_names_json);
+
+  const tableNamesFromExistingTables = Object.fromEntries(
+    uniqueTableNumbers.map((tableNumber) => [
+      tableNumber,
+      event.table_names_json?.[tableNumber] || "",
+    ]),
+  );
+
+  const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+
+  return (
     <main style={styles.page}>
       <section style={styles.hero}>
         <div style={styles.heroContent}>
@@ -912,7 +1113,7 @@ export default async function AdminEventPage({
           <div style={styles.badgeRow}>
             <span style={styles.goldBadge}>{eventTypeLabel(event.event_type)}</span>
             <span style={styles.darkBadge}>{statusLabel(event.status)}</span>
-            <span style={styles.darkBadge}>{currency}</span>
+            <span style={styles.darkBadge}>{event.currency}</span>
           </div>
 
           <p style={styles.subtle}>
@@ -932,299 +1133,368 @@ export default async function AdminEventPage({
           <a href="/admin/events" style={styles.secondaryButton}>
             Back to events
           </a>
-          <a href={publicUrl} style={styles.primaryLink}>
+          <a href={publicEventHref} style={styles.primaryLink}>
             View public page
           </a>
         </div>
       </section>
 
       <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>Overview</a>
-        <a href="#tickets" style={styles.tab}>Tickets & Prices</a>
-        <a href="#prizes-menu" style={styles.tab}>Prizes & Menu</a>
-        <a href="#winner-draw" style={styles.tab}>Winner Draw</a>
-        {event.event_type === "reserved_seating" && (
-          <a href="#row-seating" style={styles.tab}>Row Seating</a>
+        <a href="#overview" style={styles.tab}>
+          Overview
+        </a>
+        <a href="#tickets" style={styles.tab}>
+          Tickets & Prices
+        </a>
+        <a href="#prizes-menu" style={styles.tab}>
+          Prizes & Menu
+        </a>
+        <a href="#winner-draw" style={styles.tab}>
+          Winner Draw
+        </a>
+        {isReservedSeating && (
+          <a href="#row-seating" style={styles.tab}>
+            Row Seating
+          </a>
         )}
-        {event.event_type === "tables" && (
-          <a href="#table-seating" style={styles.tab}>Table Seating</a>
+        {isTables && (
+          <a href="#table-seating" style={styles.tab}>
+            Table Seating
+          </a>
         )}
-        <a href="#danger-zone" style={styles.tabDanger}>Danger Zone</a>
+        <a href="#danger-zone" style={styles.tabDanger}>
+          Danger Zone
+        </a>
       </nav>
 
-      <section id="overview" style={styles.section}>
-        <h2 style={styles.sectionTitle}>Overview</h2>
+      {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
 
+      {searchParams?.error && (
+        <div style={styles.errorBox}>
+          Please check the missing fields and try again.
+        </div>
+      )}
+
+      <CollapsibleSection
+        id="overview"
+        eyebrow="Section 1"
+        title="Overview"
+        description="Core event details and headline status. This is open by default because it contains the main event save form."
+        defaultOpen
+      >
         <div style={styles.statsGrid}>
           <SummaryCard label="Ticket types" value={ticketTypes.length} />
-          <SummaryCard label="Prizes" value={prizes.length} />
-          <SummaryCard label="Menu options" value={menuOptions.length} />
+          <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
+          <SummaryCard label="Menu options" value={(event.menu_options || []).length} />
           <SummaryCard label="Winners" value={winners.length} />
-          <SummaryCard label="Available" value={availableCount} />
-          <SummaryCard label="Reserved" value={reservedCount} />
-          <SummaryCard label="Sold" value={soldCount} />
-          <SummaryCard label="Blocked" value={blockedCount} />
+          <SummaryCard
+            label="Capacity"
+            value={
+              isGeneralAdmission
+                ? event.capacity
+                  ? `${event.capacity} tickets`
+                  : "Unlimited"
+                : isReservedSeating
+                  ? `${rowSeats.length} row seats`
+                  : `${tableSeats.length} table seats`
+            }
+          />
+          <SummaryCard label="Available" value={availableSeats} />
+          <SummaryCard label="Reserved" value={reservedSeats} />
+          <SummaryCard label="Sold" value={soldSeats} />
+          <SummaryCard label="Blocked" value={blockedSeats} />
+          <SummaryCard label="VIP" value={vipSeats} />
+          <SummaryCard label="Complimentary" value={complimentarySeats} />
         </div>
 
-        <form action={updateEventAction} style={styles.panel}>
-          <input type="hidden" name="id" value={event.id} />
+        <div style={styles.panel}>
+          <h3 style={styles.panelTitle}>Event details</h3>
 
-          <Field label="Title">
-            <input name="title" required defaultValue={event.title} style={styles.input} />
-          </Field>
+          <form action={updateEventAction} style={styles.form}>
+            <input type="hidden" name="id" value={event.id} />
 
-          <Field label="Slug">
-            <input name="slug" required defaultValue={event.slug} style={styles.input} />
-          </Field>
-
-          <Field label="Description">
-            <textarea
-              name="description"
-              rows={5}
-              defaultValue={event.description || ""}
-              style={styles.textarea}
-            />
-          </Field>
-
-          <div style={styles.mediaBox}>
-            <div>
-              <h3 style={styles.panelTitle}>Event image</h3>
-              <ImageUploadField currentImageUrl={event.image_url ?? ""} />
-            </div>
-            <div style={styles.previewBox}>
-              {event.image_url ? (
-                <img src={event.image_url} alt={event.title} style={styles.previewImage} />
-              ) : (
-                <div style={styles.emptyPreview}>🎫</div>
-              )}
-            </div>
-          </div>
-
-          <div style={styles.twoCol}>
-            <Field label="Location">
-              <input name="location" defaultValue={event.location || ""} style={styles.input} />
+            <Field label="Title">
+              <input name="title" required defaultValue={event.title} style={styles.input} />
             </Field>
 
-            <Field label="General admission capacity">
-              <input
-                name="capacity"
-                type="number"
-                min="0"
-                defaultValue={event.capacity || ""}
-                placeholder="Leave blank for unlimited"
-                style={styles.input}
-              />
-            </Field>
-          </div>
-
-          <div style={styles.twoCol}>
-            <Field label="Starts at">
-              <input
-                name="starts_at"
-                type="datetime-local"
-                defaultValue={formatDateTimeLocal(event.starts_at)}
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Ends at">
-              <input
-                name="ends_at"
-                type="datetime-local"
-                defaultValue={formatDateTimeLocal(event.ends_at)}
-                style={styles.input}
-              />
-            </Field>
-          </div>
-
-          <div style={styles.threeCol}>
-            <Field label="Currency">
-              <select name="currency" defaultValue={currency} style={styles.input}>
-                <option value="GBP">GBP</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </Field>
-
-            <Field label="Type">
-              <select name="event_type" defaultValue={event.event_type} style={styles.input}>
-                <option value="general_admission">General admission</option>
-                <option value="reserved_seating">Reserved seating</option>
-                <option value="tables">Tables</option>
-              </select>
-            </Field>
-
-            <Field label="Status">
-              <select name="status" defaultValue={event.status} style={styles.input}>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed</option>
-              </select>
-            </Field>
-          </div>
-
-          <div style={styles.twoCol}>
-            <Field label="Ask for dietary requirements">
-              <select
-                name="ask_dietary_requirements"
-                defaultValue={event.ask_dietary_requirements ? "true" : "false"}
-                style={styles.input}
-              >
-                <option value="true">Yes, ask buyers/guests</option>
-                <option value="false">No, hide this field</option>
-              </select>
-            </Field>
-
-            <Field label="Ask for menu choice">
-              <select
-                name="ask_menu_choice"
-                defaultValue={event.ask_menu_choice ? "true" : "false"}
-                style={styles.input}
-              >
-                <option value="true">Yes, ask buyers/guests</option>
-                <option value="false">No, hide this field</option>
-              </select>
-            </Field>
-          </div>
-
-          <button type="submit" style={styles.primaryButton}>
-            Save event details
-          </button>
-        </form>
-      </section>
-
-      <section id="tickets" style={styles.section}>
-        <h2 style={styles.sectionTitle}>Tickets & Prices</h2>
-
-        <div style={styles.ticketLayout}>
-          <form action={addTicketTypeAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
-
-            <h3 style={styles.panelTitle}>Add ticket type</h3>
-
-            <Field label="Ticket name">
-              <input name="name" required style={styles.input} />
+            <Field label="Slug">
+              <input name="slug" required defaultValue={event.slug} style={styles.input} />
             </Field>
 
             <Field label="Description">
-              <input name="description" style={styles.input} />
+              <textarea
+                name="description"
+                rows={5}
+                defaultValue={event.description || ""}
+                style={styles.textarea}
+              />
             </Field>
 
-            <div style={styles.threeCol}>
-              <Field label="Price">
-                <input name="price" type="number" step="0.01" min="0" style={styles.input} />
+            <div style={styles.mediaBox}>
+              <div>
+                <h3 style={styles.panelTitle}>Event image</h3>
+                <p style={styles.sectionText}>Upload or replace the public event image.</p>
+                <ImageUploadField currentImageUrl={event.image_url ?? ""} />
+              </div>
+
+              <div style={styles.previewBox}>
+                {event.image_url ? (
+                  <img src={event.image_url} alt={event.title} style={styles.previewImage} />
+                ) : (
+                  <div style={styles.emptyPreview}>🎫</div>
+                )}
+              </div>
+            </div>
+
+            <div style={styles.twoCol}>
+              <Field label="Location">
+                <input name="location" defaultValue={event.location || ""} style={styles.input} />
               </Field>
 
-              <Field label="Ticket limit">
-                <input name="capacity" type="number" min="0" style={styles.input} />
-              </Field>
-
-              <Field label="Display order">
+              <Field label="General admission capacity">
                 <input
-                  name="display_order"
+                  name="capacity"
                   type="number"
                   min="0"
-                  defaultValue={ticketTypes.length}
+                  defaultValue={event.capacity || ""}
+                  placeholder="Leave blank for unlimited"
                   style={styles.input}
                 />
-                <p style={styles.helperText}>Lower numbers appear first.</p>
               </Field>
             </div>
 
-            <Field label="Visibility">
-              <select name="is_active" defaultValue="true" style={styles.input}>
-                <option value="true">Active</option>
-                <option value="false">Hidden</option>
-              </select>
-            </Field>
+            <div style={styles.twoCol}>
+              <Field label="Starts at">
+                <input
+                  name="starts_at"
+                  type="datetime-local"
+                  defaultValue={formatDateTimeLocal(event.starts_at)}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Ends at">
+                <input
+                  name="ends_at"
+                  type="datetime-local"
+                  defaultValue={formatDateTimeLocal(event.ends_at)}
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <div style={styles.threeCol}>
+              <Field label="Currency">
+                <select name="currency" defaultValue={event.currency} style={styles.input}>
+                  <option value="GBP">GBP</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </Field>
+
+              <Field label="Type">
+                <select name="event_type" defaultValue={event.event_type} style={styles.input}>
+                  <option value="general_admission">General admission</option>
+                  <option value="reserved_seating">Reserved seating</option>
+                  <option value="tables">Tables</option>
+                </select>
+              </Field>
+
+              <Field label="Status">
+                <select name="status" defaultValue={event.status} style={styles.input}>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </Field>
+            </div>
+
+            <div style={styles.twoCol}>
+              <Field label="Ask for dietary requirements">
+                <select
+                  name="ask_dietary_requirements"
+                  defaultValue={event.ask_dietary_requirements ? "true" : "false"}
+                  style={styles.input}
+                >
+                  <option value="true">Yes, ask buyers/guests</option>
+                  <option value="false">No, hide this field</option>
+                </select>
+              </Field>
+
+              <Field label="Ask for menu choice">
+                <select
+                  name="ask_menu_choice"
+                  defaultValue={event.ask_menu_choice ? "true" : "false"}
+                  style={styles.input}
+                >
+                  <option value="true">Yes, ask buyers/guests</option>
+                  <option value="false">No, hide this field</option>
+                </select>
+              </Field>
+            </div>
 
             <button type="submit" style={styles.primaryButton}>
-              Add ticket type
+              Save event details
             </button>
           </form>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="tickets"
+        eyebrow="Section 2"
+        title="Tickets & Prices"
+        description="Add public ticket choices, pricing, limits, and visibility."
+      >
+        <div style={styles.ticketLayout}>
+          <div style={styles.panel}>
+            <h3 style={styles.panelTitle}>Add ticket type</h3>
+
+            <form action={addTicketTypeAction} style={styles.form}>
+              <input type="hidden" name="event_id" value={event.id} />
+
+              <Field label="Ticket name">
+                <input name="name" required style={styles.input} />
+              </Field>
+
+              <Field label="Description">
+                <input name="description" style={styles.input} />
+              </Field>
+
+              <div style={styles.threeCol}>
+                <Field label="Price">
+                  <input name="price" type="number" step="0.01" min="0" style={styles.input} />
+                </Field>
+
+                <Field label="Ticket limit">
+                  <input
+                    name="capacity"
+                    type="number"
+                    min="0"
+                    placeholder="Leave blank"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Display order">
+                  <input
+                    name="sort_order"
+                    type="number"
+                    min="0"
+                    defaultValue={ticketTypes.length}
+                    style={styles.input}
+                  />
+                  <p style={styles.helperText}>Lower numbers appear first.</p>
+                </Field>
+              </div>
+
+              <Field label="Visibility">
+                <select name="is_active" defaultValue="true" style={styles.input}>
+                  <option value="true">Active</option>
+                  <option value="false">Hidden</option>
+                </select>
+              </Field>
+
+              <button type="submit" style={styles.primaryButton}>
+                Add ticket type
+              </button>
+            </form>
+          </div>
 
           <div style={styles.panel}>
             <h3 style={styles.panelTitle}>Current ticket types</h3>
 
-            {ticketTypes.length === 0 ? (
-              <div style={styles.emptyBox}>No ticket types yet.</div>
-            ) : (
-              ticketTypes.map((ticketType) => (
-                <div key={ticketType.id} style={styles.editTicketCard}>
-                  <form action={updateTicketTypeAction} style={styles.form}>
-                    <input type="hidden" name="event_id" value={event.id} />
-                    <input type="hidden" name="ticket_type_id" value={ticketType.id} />
+            <div style={styles.ticketListScroll}>
+              {ticketTypes.length === 0 ? (
+                <div style={styles.emptyBox}>No ticket types yet.</div>
+              ) : (
+                ticketTypes.map((ticketType) => (
+                  <div key={ticketType.id} style={styles.editTicketCard}>
+                    <form action={updateTicketTypeAction} style={styles.form}>
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
 
-                    <div style={styles.twoCol}>
-                      <Field label="Name">
-                        <input name="name" required defaultValue={ticketType.name} style={styles.input} />
-                      </Field>
+                      <div style={styles.twoCol}>
+                        <Field label="Name">
+                          <input
+                            name="name"
+                            required
+                            defaultValue={ticketType.name}
+                            style={styles.input}
+                          />
+                        </Field>
 
-                      <Field label="Description">
-                        <input
-                          name="description"
-                          defaultValue={ticketType.description || ""}
-                          style={styles.input}
-                        />
-                      </Field>
-                    </div>
+                        <Field label="Description">
+                          <input
+                            name="description"
+                            defaultValue={ticketType.description || ""}
+                            style={styles.input}
+                          />
+                        </Field>
+                      </div>
 
-                    <div style={styles.fourCol}>
-                      <Field label="Price">
-                        <input
-                          name="price"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          defaultValue={moneyFromCents(ticketType.price)}
-                          style={styles.input}
-                        />
-                      </Field>
+                      <div style={styles.fourCol}>
+                        <Field label="Price">
+                          <input
+                            name="price"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={moneyFromCents(ticketType.price)}
+                            style={styles.input}
+                          />
+                        </Field>
 
-                      <Field label="Limit">
-                        <input
-                          name="capacity"
-                          type="number"
-                          min="0"
-                          defaultValue={ticketType.capacity || ""}
-                          style={styles.input}
-                        />
-                      </Field>
+                        <Field label="Limit">
+                          <input
+                            name="capacity"
+                            type="number"
+                            min="0"
+                            defaultValue={ticketType.capacity || ""}
+                            placeholder="Unlimited"
+                            style={styles.input}
+                          />
+                        </Field>
 
-                      <Field label="Display order">
-                        <input
-                          name="display_order"
-                          type="number"
-                          min="0"
-                          defaultValue={ticketType.sort_order}
-                          style={styles.input}
-                        />
-                        <p style={styles.helperText}>Lower numbers appear first.</p>
-                      </Field>
+                        <Field label="Display order">
+                          <input
+                            name="sort_order"
+                            type="number"
+                            min="0"
+                            defaultValue={ticketType.sort_order}
+                            style={styles.input}
+                          />
+                          <p style={styles.helperText}>Lower numbers appear first.</p>
+                        </Field>
 
-                      <Field label="Visibility">
-                        <select
-                          name="is_active"
-                          defaultValue={ticketType.is_active ? "true" : "false"}
-                          style={styles.input}
-                        >
-                          <option value="true">Active</option>
-                          <option value="false">Hidden</option>
-                        </select>
-                      </Field>
-                    </div>
+                        <Field label="Visibility">
+                          <select
+                            name="is_active"
+                            defaultValue={ticketType.is_active ? "true" : "false"}
+                            style={styles.input}
+                          >
+                            <option value="true">Active</option>
+                            <option value="false">Hidden</option>
+                          </select>
+                        </Field>
+                      </div>
 
-                    <button type="submit" style={styles.primaryButton}>Save ticket</button>
-                  </form>
+                      <button type="submit" style={styles.primaryButton}>
+                        Save
+                      </button>
+                    </form>
 
-                  <form action={deleteTicketTypeAction}>
-                    <input type="hidden" name="event_id" value={event.id} />
-                    <input type="hidden" name="ticket_type_id" value={ticketType.id} />
-                    <button type="submit" style={styles.dangerOutlineButton}>Delete</button>
-                  </form>
-                </div>
-              ))
-            )}
+                    <form action={deleteTicketTypeAction}>
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
+                      <button type="submit" style={styles.dangerOutlineButton}>
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                ))
+              )}
+            </div>
 
             <form action={clearTicketTypesAction}>
               <input type="hidden" name="event_id" value={event.id} />
@@ -1234,157 +1504,369 @@ export default async function AdminEventPage({
             </form>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="prizes-menu" style={styles.section}>
-        <h2 style={styles.sectionTitle}>Prizes & Menu</h2>
+      <CollapsibleSection
+        id="prizes-menu"
+        eyebrow="Section 3"
+        title="Prizes & Menu"
+        description="Manage optional golden-ticket prizes and event menu choices."
+      >
         <EventPrizeMenuSettings
           eventId={event.id}
-          initialPrizes={prizes}
-          initialMenuOptions={menuOptions}
+          initialPrizes={event.prizes_json || []}
+          initialMenuOptions={event.menu_options || []}
           updatePrizesAction={updatePrizesAction}
           updateMenuOptionsAction={updateMenuOptionsAction}
         />
-      </section>
+      </CollapsibleSection>
 
-      <section id="winner-draw" style={styles.section}>
-        <h2 style={styles.sectionTitle}>Winner Draw</h2>
+      <CollapsibleSection
+        id="winner-draw"
+        eyebrow="Section 4"
+        title="Winner Draw"
+        description="Draw event winners from eligible paid event entries and keep winner history."
+      >
         <EventWinnerDrawPanel
           eventId={event.id}
           eventType={event.event_type}
-          prizes={prizes}
+          prizes={event.prizes_json || []}
           winners={winners}
           drawWinnerAction={runWinnerDrawAction}
           deleteWinnerAction={deleteWinnerAction}
           clearWinnersAction={clearWinnersAction}
         />
-      </section>
+      </CollapsibleSection>
 
-      {event.event_type === "reserved_seating" && (
-        <section id="row-seating" style={styles.section}>
-          <h2 style={styles.sectionTitle}>Row Seating</h2>
+      {isReservedSeating && (
+        <CollapsibleSection
+          id="row-seating"
+          eyebrow="Section 5"
+          title="Row Seating"
+          description="Generate seats first, then use Seat Manager to block seats, mark VIP/complimentary seats, and save row layout nudges."
+        >
+          <div style={styles.twoPanel}>
+            <form action={generateSeatsAction} style={styles.panel}>
+              <input type="hidden" name="event_id" value={event.id} />
+              <h3 style={styles.panelTitle}>Generate row seating</h3>
 
-          <form action={generateRowsAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
+              <Field label="Initial marking">
+                <select name="ticket_type_id" style={styles.input}>
+                  <option value="">Normal public seats</option>
+                  {ticketTypes.map((ticketType) => (
+                    <option key={ticketType.id} value={ticketType.id}>
+                      {ticketType.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-            <div style={styles.threeCol}>
               <Field label="Section">
-                <input name="section" placeholder="Main, Balcony, VIP..." style={styles.input} />
+                <input
+                  name="section"
+                  placeholder="Main, VIP, Balcony, Left, Centre..."
+                  style={styles.input}
+                />
               </Field>
 
-              <Field label="Start row">
-                <input name="start_row" type="number" min="1" defaultValue="1" style={styles.input} />
+              <Field label="Rows">
+                <input
+                  name="rows"
+                  placeholder="1-10 or A-C or 1-3,8-10"
+                  style={styles.input}
+                />
               </Field>
 
-              <Field label="End row">
-                <input name="end_row" type="number" min="1" defaultValue="1" style={styles.input} />
-              </Field>
+              <div style={styles.twoCol}>
+                <Field label="Seats per row">
+                  <input
+                    name="seats_per_row"
+                    type="number"
+                    min="1"
+                    placeholder="40"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Aisles after seats">
+                  <input name="aisle_after" placeholder="10,20,30" style={styles.input} />
+                </Field>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input type="checkbox" name="clear_existing" value="yes" />
+                Clear existing row seats before generating
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Generate row seating
+              </button>
+            </form>
+
+            <div style={styles.panel}>
+              <h3 style={styles.panelTitle}>Row seating summary</h3>
+              <div style={styles.statsGridCompact}>
+                <SummaryCard label="Row seats" value={rowSeats.length} />
+                <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Seat Manager</h3>
+                <p style={styles.sectionText}>
+                  Click seats to select them, then save guest/allocation details or block/unblock seats.
+                </p>
+              </div>
+
+              <form action={clearRowSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button type="submit" style={styles.dangerOutlineButton}>
+                  Clear row seats only
+                </button>
+              </form>
             </div>
 
-            <div style={styles.twoCol}>
-              <Field label="Seats per row">
-                <input name="seats_per_row" type="number" min="1" style={styles.input} />
-              </Field>
-
-              <Field label="Aisle after seat">
-                <input name="aisle_after" type="number" min="1" style={styles.input} />
-              </Field>
-            </div>
-
-            <button type="submit" style={styles.primaryButton}>Generate row seats</button>
-          </form>
-
-          <AdminSeatManager
-            eventId={event.id}
-            seats={rowSeats}
-            ticketTypes={ticketTypes}
-            currency={currency}
-            mode="rows"
-            applyTicketTypeAction={updateSeatTicketTypeAction}
-            updateSelectedSeatsMetadataAction={updateSeatMetadataAction}
-            updateSelectedSeatsStatusAction={updateSeatStatusAction}
-            updateSeatingLayoutAction={updateSeatingLayoutAction}
-            deleteSelectedSeatsAction={deleteSeatsAction}
-            deleteSelectedRowsAction={deleteRowsAction}
-            initialSeatingLayout={seatingLayout}
-          />
-        </section>
+            {rowSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No row seats generated yet.</div>
+            ) : (
+              <AdminSeatManager
+                eventId={event.id}
+                seats={rowSeats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                mode="rows"
+                applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
+                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
+                updateSeatingLayoutAction={updateSeatingLayoutAction}
+                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                deleteSelectedRowsAction={deleteSelectedRowsAction}
+                initialSeatingLayout={event.seating_layout_json || {}}
+              />
+            )}
+          </div>
+        </CollapsibleSection>
       )}
 
-      {event.event_type === "tables" && (
-        <section id="table-seating" style={styles.section}>
-          <h2 style={styles.sectionTitle}>Table Seating</h2>
+      {isTables && (
+        <CollapsibleSection
+          id="table-seating"
+          eyebrow="Section 5"
+          title="Table Seating"
+          description="Generate table layouts, choose a table shape, name tables and manage allocations."
+        >
+          <div style={styles.twoPanel}>
+            <form action={generateTablesAction} style={styles.panel}>
+              <input type="hidden" name="event_id" value={event.id} />
+              <h3 style={styles.panelTitle}>Generate table seating</h3>
 
-          <form action={generateTablesAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
-
-            <div style={styles.threeCol}>
-              <Field label="Start table">
-                <input name="start_table" type="number" min="1" defaultValue="1" style={styles.input} />
+              <Field label="Initial marking">
+                <select name="ticket_type_id" style={styles.input}>
+                  <option value="">Normal public seats</option>
+                  {ticketTypes.map((ticketType) => (
+                    <option key={ticketType.id} value={ticketType.id}>
+                      {ticketType.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
 
-              <Field label="End table">
-                <input name="end_table" type="number" min="1" defaultValue="1" style={styles.input} />
-              </Field>
+              <div style={styles.twoCol}>
+                <Field label="Number of tables">
+                  <input
+                    name="table_count"
+                    type="number"
+                    min="1"
+                    placeholder="10"
+                    style={styles.input}
+                  />
+                </Field>
 
-              <Field label="Seats per table">
-                <input name="seats_per_table" type="number" min="1" style={styles.input} />
-              </Field>
+                <Field label="Seats per table">
+                  <input
+                    name="seats_per_table"
+                    type="number"
+                    min="1"
+                    placeholder="8"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input type="checkbox" name="clear_existing" value="yes" />
+                Clear existing table seats before generating
+              </label>
+
+              <button type="submit" style={styles.primaryButton}>
+                Generate table seating
+              </button>
+            </form>
+
+            <div style={styles.panel}>
+              <h3 style={styles.panelTitle}>Table seating summary</h3>
+
+              <div style={styles.statsGridCompact}>
+                <SummaryCard label="Table seats" value={tableSeats.length} />
+                <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
+                <SummaryCard label="Shape" value={tableShape} />
+                <SummaryCard
+                  label="Named tables"
+                  value={
+                    Object.keys(event.table_names_json || {}).filter(
+                      (key) => key !== TABLE_SHAPE_KEY,
+                    ).length
+                  }
+                />
+                <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
+                <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
+              </div>
             </div>
-
-            <button type="submit" style={styles.primaryButton}>Generate table seats</button>
-          </form>
+          </div>
 
           <form action={updateTableShapeAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <Field label="Public table shape">
-              <select name="table_shape" defaultValue={getTableShape(tableNames)} style={styles.input}>
-                <option value="round">Round</option>
-                <option value="square">Square</option>
-                <option value="rectangle">Rectangle</option>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Table shape</h3>
+                <p style={styles.sectionText}>
+                  Choose how tables are drawn in admin and public views.
+                </p>
+              </div>
+
+              <button type="submit" style={styles.primaryButton}>
+                Save table shape
+              </button>
+            </div>
+
+            <Field label="Shape">
+              <select name="table_shape" defaultValue={tableShape} style={styles.input}>
+                <option value="round">Round tables</option>
+                <option value="square">Square tables</option>
+                <option value="rectangle">Rectangle tables</option>
               </select>
             </Field>
-
-            <button type="submit" style={styles.primaryButton}>Save table shape</button>
           </form>
 
           <form action={updateTableNamesAction} style={styles.panel}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <TableNamesEditor
-              tableNumbers={Array.from(new Set(tableSeats.map((seat) => String(seat.table_number || "")).filter(Boolean)))}
-              initialTableNames={tableNames}
-            />
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Table names</h3>
+                <p style={styles.sectionText}>
+                  Add friendly names such as Sponsors, VIP, Smith Family, or Staff.
+                </p>
+              </div>
 
-            <button type="submit" style={styles.primaryButton}>Save table names</button>
+              <button type="submit" style={styles.primaryButton}>
+                Save table names
+              </button>
+            </div>
+
+            <TableNamesEditor
+              tableNumbers={uniqueTableNumbers}
+              initialTableNames={
+                uniqueTableNumbers.length > 0
+                  ? tableNamesFromExistingTables
+                  : event.table_names_json || {}
+              }
+            />
           </form>
 
-          <AdminSeatManager
-            eventId={event.id}
-            seats={tableSeats}
-            ticketTypes={ticketTypes}
-            currency={currency}
-            mode="tables"
-            applyTicketTypeAction={updateSeatTicketTypeAction}
-            updateSelectedSeatsMetadataAction={updateSeatMetadataAction}
-            updateSelectedSeatsStatusAction={updateSeatStatusAction}
-            deleteSelectedSeatsAction={deleteSeatsAction}
-            initialSeatingLayout={seatingLayout}
-            tableNames={tableNames}
-          />
-        </section>
+          <div style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Seat Manager</h3>
+                <p style={styles.sectionText}>
+                  Select one or more seats, then save allocation details or block/unblock seats.
+                </p>
+              </div>
+
+              <form action={clearTableSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button type="submit" style={styles.dangerOutlineButton}>
+                  Clear table seats only
+                </button>
+              </form>
+            </div>
+
+            {tableSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No table seats generated yet.</div>
+            ) : (
+              <AdminSeatManager
+                eventId={event.id}
+                seats={tableSeats}
+                ticketTypes={ticketTypes}
+                currency={event.currency}
+                mode="tables"
+                applyTicketTypeAction={applySeatTicketTypeAction}
+                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
+                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
+                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                initialSeatingLayout={{
+                  ...(event.seating_layout_json || {}),
+                  tableShape,
+                }}
+              />
+            )}
+          </div>
+        </CollapsibleSection>
       )}
 
-      <section id="danger-zone" style={styles.section}>
-        <h2 style={styles.sectionTitle}>Danger Zone</h2>
-
-        <form action={deleteEventAction} style={styles.dangerSectionInner}>
-          <input type="hidden" name="event_id" value={event.id} />
-          <button type="submit" style={styles.dangerButton}>Delete event</button>
-        </form>
-      </section>
+      <CollapsibleSection
+        id="danger-zone"
+        eyebrow="Final section"
+        title="Danger Zone"
+        description="Permanent destructive actions for this event."
+      >
+        <div style={styles.dangerSectionInner}>
+          <form action={deleteEventAction}>
+            <input type="hidden" name="event_id" value={event.id} />
+            <button type="submit" style={styles.dangerButton}>
+              Delete event
+            </button>
+          </form>
+        </div>
+      </CollapsibleSection>
     </main>
+  );
+}
+
+function CollapsibleSection({
+  id,
+  title,
+  eyebrow,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  description?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} open={defaultOpen} style={styles.section}>
+      <summary style={styles.collapsibleSummary}>
+        <div style={styles.collapsibleHeading}>
+          {eyebrow && <p style={styles.sectionEyebrow}>{eyebrow}</p>}
+          <h2 style={styles.sectionTitle}>{title}</h2>
+          {description && <p style={styles.sectionText}>{description}</p>}
+        </div>
+
+        <span style={styles.collapsibleToggle}>Open / close</span>
+      </summary>
+
+      <div style={styles.collapsibleBody}>{children}</div>
+    </details>
   );
 }
 
@@ -1454,6 +1936,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 34,
     lineHeight: 1.08,
     letterSpacing: "-0.04em",
+    wordBreak: "break-word",
   },
   subtle: {
     margin: "12px 0 0",
@@ -1485,6 +1968,7 @@ const styles: Record<string, CSSProperties> = {
   heroImageWrap: {
     borderRadius: 18,
     background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.12)",
     overflow: "hidden",
     minHeight: 150,
   },
@@ -1556,23 +2040,91 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 14,
   },
+  successBox: {
+    padding: 12,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  errorBox: {
+    padding: 12,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
   section: {
     padding: 18,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
   },
+  collapsibleSummary: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  collapsibleHeading: { minWidth: 0 },
+  collapsibleToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  collapsibleBody: { marginTop: 16 },
+  sectionEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontWeight: 900,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
   sectionTitle: {
-    margin: "0 0 16px",
+    margin: 0,
     color: "#0f172a",
     fontSize: 24,
+    letterSpacing: "-0.02em",
+  },
+  sectionText: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  helperText: {
+    margin: "3px 0 0",
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
   },
   statsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 12,
     marginBottom: 16,
+  },
+  statsGridCompact: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: 10,
+    marginBottom: 12,
   },
   statBox: {
     padding: 15,
@@ -1589,8 +2141,9 @@ const styles: Record<string, CSSProperties> = {
   statValue: {
     margin: "6px 0 0",
     color: "#0f172a",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 900,
+    wordBreak: "break-word",
   },
   panel: {
     display: "grid",
@@ -1601,16 +2154,21 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     marginBottom: 16,
   },
+  panelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
   panelTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 18,
     fontWeight: 900,
   },
-  form: {
-    display: "grid",
-    gap: 14,
-  },
+  form: { display: "grid", gap: 14 },
   field: {
     display: "grid",
     gap: 6,
@@ -1620,12 +2178,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
     fontWeight: 900,
-  },
-  helperText: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 700,
   },
   input: {
     width: "100%",
@@ -1694,11 +2246,23 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
     gap: 12,
   },
+  twoPanel: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 16,
+  },
   ticketLayout: {
     display: "grid",
     gridTemplateColumns: "minmax(280px, 0.9fr) minmax(320px, 1.4fr)",
     gap: 16,
     alignItems: "start",
+  },
+  ticketListScroll: {
+    display: "grid",
+    gap: 10,
+    maxHeight: 520,
+    overflow: "auto",
+    paddingRight: 4,
   },
   primaryButton: {
     width: "fit-content",
@@ -1720,7 +2284,6 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   dangerOutlineButton: {
-    width: "fit-content",
     padding: "10px 14px",
     borderRadius: 999,
     border: "1px solid #fecaca",
@@ -1736,7 +2299,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#ffffff",
-    marginBottom: 10,
+  },
+  checkboxLabel: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    fontWeight: 900,
+    color: "#334155",
   },
   emptyBox: {
     padding: 16,
