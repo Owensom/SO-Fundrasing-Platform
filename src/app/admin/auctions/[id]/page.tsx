@@ -77,6 +77,19 @@ function focusValue(value: number | null | undefined) {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
+function focusedImageStyle(
+  focusX: number | null | undefined,
+  focusY: number | null | undefined,
+): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${focusValue(focusX)}% ${focusValue(focusY)}%`,
+    display: "block",
+  };
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
@@ -116,7 +129,7 @@ function cleanDateTime(value: FormDataEntryValue | null) {
 function getStatusStyle(status: string | null | undefined): CSSProperties {
   const clean = String(status || "draft").toLowerCase();
 
-  if (clean === "published") {
+  if (clean === "published" || clean === "active") {
     return {
       background: "#dcfce7",
       color: "#166534",
@@ -132,23 +145,18 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
     };
   }
 
+  if (clean === "withdrawn") {
+    return {
+      background: "#fee2e2",
+      color: "#991b1b",
+      border: "1px solid #fecaca",
+    };
+  }
+
   return {
     background: "#f1f5f9",
     color: "#475569",
     border: "1px solid #e2e8f0",
-  };
-}
-
-function focusedImageStyle(
-  focusX: number | null | undefined,
-  focusY: number | null | undefined,
-): CSSProperties {
-  return {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    objectPosition: `${focusValue(focusX)}% ${focusValue(focusY)}%`,
-    display: "block",
   };
 }
 
@@ -176,7 +184,6 @@ async function requireAuctionAccess(id: string) {
 
   return { auction, tenantSlug };
 }
-
 async function updateAuctionAction(formData: FormData) {
   "use server";
 
@@ -231,6 +238,7 @@ async function createAuctionItemAction(formData: FormData) {
 
   redirect(`/admin/auctions/${auction.id}#items`);
 }
+
 async function updateAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -330,8 +338,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           value={moneyFromCents(highestBid, auction.currency)}
         />
       </section>
-
-      <form action={updateAuctionAction} style={styles.form}>
+            <form action={updateAuctionAction} style={styles.form}>
         <input type="hidden" name="id" value={auction.id} />
 
         <section style={styles.card}>
@@ -465,7 +472,19 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </div>
         </section>
       </form>
-              <form action={createAuctionItemAction} style={styles.itemCreateCard}>
+
+      <section id="items" style={styles.card}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>Auction items</h2>
+            <p style={styles.sectionText}>
+              Add prizes, experiences, donated items or sponsor lots. Bids are
+              collected per item.
+            </p>
+          </div>
+        </div>
+
+        <form action={createAuctionItemAction} style={styles.itemCreateCard}>
           <input type="hidden" name="auction_id" value={auction.id} />
 
           <h3 style={styles.subTitle}>Add new item</h3>
@@ -566,7 +585,84 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             </button>
           </div>
         </form>
-              <div style={styles.itemsList}>
+
+        <div style={styles.itemsList}>
+          {items.length === 0 ? (
+            <div style={styles.emptyState}>No auction items added yet.</div>
+          ) : (
+            items.map((item) => {
+              const itemBids = bids.filter((bid) => bid.item_id === item.id);
+              const highestBidAmount =
+                itemBids.length > 0
+                  ? Math.max(
+                      ...itemBids.map((bid) => Number(bid.amount_cents || 0)),
+                    )
+                  : item.starting_bid_cents || 0;
+
+              return (
+                <article key={item.id} style={styles.itemCard}>
+                  <div style={styles.itemTop}>
+                    <div style={styles.itemImageWrap}>
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.title}
+                          style={focusedImageStyle(
+                            item.image_focus_x,
+                            item.image_focus_y,
+                          )}
+                        />
+                      ) : (
+                        <div style={styles.imageEmpty}>🔨</div>
+                      )}
+                    </div>
+
+                    <div style={styles.itemMeta}>
+                      <div style={styles.itemMetaTop}>
+                        <div>
+                          <h3 style={styles.itemTitle}>{item.title}</h3>
+                          <div style={styles.itemSub}>
+                            Donor: {item.donor_name || "Not set"}
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            ...styles.status,
+                            ...getStatusStyle(item.status),
+                          }}
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+
+                      <div style={styles.bidGrid}>
+                        <Detail
+                          label="Starting bid"
+                          value={moneyFromCents(
+                            item.starting_bid_cents,
+                            auction.currency,
+                          )}
+                        />
+                        <Detail
+                          label="Highest bid"
+                          value={moneyFromCents(
+                            highestBidAmount,
+                            auction.currency,
+                          )}
+                        />
+                        <Detail label="Bid count" value={itemBids.length} />
+                        <Detail
+                          label="Minimum increment"
+                          value={moneyFromCents(
+                            item.minimum_increment_cents,
+                            auction.currency,
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                          <div style={styles.itemsList}>
           {items.length === 0 ? (
             <div style={styles.emptyState}>
               No auction items added yet.
