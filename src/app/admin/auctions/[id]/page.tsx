@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import {
   createAuctionItem,
   deleteAuctionItem,
@@ -37,15 +38,19 @@ function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
 function poundsToCents(value: FormDataEntryValue | null) {
   const raw = String(value || "").replace(/[£,\s]/g, "").trim();
   const amount = Number(raw);
+
   if (!Number.isFinite(amount) || amount < 0) return 0;
+
   return Math.round(amount * 100);
 }
 
 function optionalPoundsToCents(value: FormDataEntryValue | null) {
   const raw = String(value || "").replace(/[£,\s]/g, "").trim();
+
   if (!raw) return null;
 
   const amount = Number(raw);
+
   if (!Number.isFinite(amount) || amount < 0) return null;
 
   return Math.round(amount * 100);
@@ -58,13 +63,17 @@ function centsToPoundsInput(cents: number | null | undefined) {
 
 function cleanFocus(value: FormDataEntryValue | null) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
 function focusValue(value: number | null | undefined) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -72,6 +81,7 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not set";
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -84,6 +94,7 @@ function toDateTimeLocalValue(value: string | null | undefined) {
   if (!value) return "";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "";
 
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
@@ -92,9 +103,11 @@ function toDateTimeLocalValue(value: string | null | undefined) {
 
 function cleanDateTime(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim();
+
   if (!raw) return null;
 
   const date = new Date(raw);
+
   if (Number.isNaN(date.getTime())) return null;
 
   return date.toISOString();
@@ -126,7 +139,7 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   };
 }
 
-function getFocusedImageStyle(
+function focusedImageStyle(
   focusX: number | null | undefined,
   focusY: number | null | undefined,
 ): CSSProperties {
@@ -168,6 +181,7 @@ async function updateAuctionAction(formData: FormData) {
   "use server";
 
   const id = String(formData.get("id") || "").trim();
+
   if (!id) redirect("/admin/auctions");
 
   const { auction } = await requireAuctionAccess(id);
@@ -175,8 +189,7 @@ async function updateAuctionAction(formData: FormData) {
   await updateAuction(auction.id, {
     title: String(formData.get("title") || "").trim() || "Untitled auction",
     slug:
-      String(formData.get("slug") || "").trim().toLowerCase() ||
-      auction.slug,
+      String(formData.get("slug") || "").trim().toLowerCase() || auction.slug,
     description: String(formData.get("description") || "").trim() || null,
     imageUrl: String(formData.get("image_url") || "").trim() || null,
     imageFocusX: cleanFocus(formData.get("image_focus_x")),
@@ -195,6 +208,7 @@ async function createAuctionItemAction(formData: FormData) {
   "use server";
 
   const auctionId = String(formData.get("auction_id") || "").trim();
+
   if (!auctionId) redirect("/admin/auctions");
 
   const { auction } = await requireAuctionAccess(auctionId);
@@ -217,7 +231,6 @@ async function createAuctionItemAction(formData: FormData) {
 
   redirect(`/admin/auctions/${auction.id}#items`);
 }
-
 async function updateAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -260,6 +273,7 @@ async function deleteAuctionItemAction(formData: FormData) {
 
   redirect(`/admin/auctions/${auction.id}#items`);
 }
+
 export default async function AdminAuctionDetailPage({ params }: PageProps) {
   const { auction, tenantSlug } = await requireAuctionAccess(params.id);
   const items = await listAuctionItems(auction.id);
@@ -416,66 +430,21 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
           <section style={styles.imageFocusPanel}>
             <div>
-              <h3 style={styles.subTitle}>Main auction image focus</h3>
+              <h3 style={styles.subTitle}>Main auction image</h3>
               <p style={styles.sectionText}>
-                Choose the exact part of the image that should stay visible
-                when the public page crops it.
+                Upload or replace the main public image, then use the live
+                previews to set the image focus point.
               </p>
             </div>
 
-            {auction.image_url ? (
-              <div style={styles.focusPreviewWrap}>
-                <img
-                  src={auction.image_url}
-                  alt={auction.title}
-                  style={getFocusedImageStyle(
-                    auction.image_focus_x,
-                    auction.image_focus_y,
-                  )}
-                />
-              </div>
-            ) : null}
-
-            <label style={styles.label}>
-              Image URL
-              <input
-                name="image_url"
-                defaultValue={auction.image_url || ""}
-                placeholder="https://..."
-                style={styles.input}
+            <div style={styles.uploadBox}>
+              <ImageFocusUploadField
+                currentImageUrl={auction.image_url || ""}
+                currentFocusX={auction.image_focus_x}
+                currentFocusY={auction.image_focus_y}
+                label="Main auction image"
+                previewAlt={auction.title}
               />
-            </label>
-
-            <div style={styles.focusGrid}>
-              <label style={styles.label}>
-                Horizontal focus
-                <input
-                  name="image_focus_x"
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue={focusValue(auction.image_focus_x)}
-                  style={styles.range}
-                />
-                <span style={styles.helpText}>
-                  Current: {focusValue(auction.image_focus_x)}%
-                </span>
-              </label>
-
-              <label style={styles.label}>
-                Vertical focus
-                <input
-                  name="image_focus_y"
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue={focusValue(auction.image_focus_y)}
-                  style={styles.range}
-                />
-                <span style={styles.helpText}>
-                  Current: {focusValue(auction.image_focus_y)}%
-                </span>
-              </label>
             </div>
           </section>
 
@@ -496,8 +465,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </div>
         </section>
       </form>
-
-      <section id="items" style={styles.card}>
+            <section id="items" style={styles.card}>
         <div style={styles.sectionHeader}>
           <div>
             <h2 style={styles.sectionTitle}>Auction items</h2>
@@ -508,7 +476,8 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <form action={createAuctionItemAction} style={styles.itemCreateCard}>
+        <form action={createAuctionItemAction}
+                  <form action={createAuctionItemAction} style={styles.itemCreateCard}>
           <input type="hidden" name="auction_id" value={auction.id} />
 
           <h3 style={styles.subTitle}>Add new item</h3>
@@ -581,47 +550,16 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                 <option value="withdrawn">Withdrawn</option>
               </select>
             </label>
-
-            <label style={styles.label}>
-              Image URL
-              <input
-                name="image_url"
-                placeholder="https://..."
-                style={styles.input}
-              />
-            </label>
           </div>
 
-          <div style={styles.focusGrid}>
-            <label style={styles.label}>
-              Item image horizontal focus
-              <input
-                name="image_focus_x"
-                type="range"
-                min="0"
-                max="100"
-                defaultValue="50"
-                style={styles.range}
-              />
-              <span style={styles.helpText}>
-                0 = left, 50 = centre, 100 = right
-              </span>
-            </label>
-
-            <label style={styles.label}>
-              Item image vertical focus
-              <input
-                name="image_focus_y"
-                type="range"
-                min="0"
-                max="100"
-                defaultValue="50"
-                style={styles.range}
-              />
-              <span style={styles.helpText}>
-                0 = top, 50 = centre, 100 = bottom
-              </span>
-            </label>
+          <div style={styles.uploadBox}>
+            <ImageFocusUploadField
+              currentImageUrl=""
+              currentFocusX={50}
+              currentFocusY={50}
+              label="Item image"
+              previewAlt="Auction item image preview"
+            />
           </div>
 
           <label style={styles.label}>
@@ -640,687 +578,3 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             </button>
           </div>
         </form>
-                {items.length === 0 ? (
-          <div style={styles.emptyBox}>
-            <h3 style={{ margin: 0 }}>No items yet</h3>
-            <p style={styles.muted}>Add your first auction item above.</p>
-          </div>
-        ) : (
-          <div style={styles.itemsList}>
-            {items.map((item) => {
-              const itemBids = bids.filter((bid) => bid.item_id === item.id);
-              const winningBid = itemBids.find((bid) => bid.is_winning);
-
-              return (
-                <article key={item.id} style={styles.itemCard}>
-                  <div style={styles.itemTop}>
-                    <div style={styles.itemImageWrap}>
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.title}
-                          style={getFocusedImageStyle(
-                            item.image_focus_x,
-                            item.image_focus_y,
-                          )}
-                        />
-                      ) : (
-                        <div style={styles.itemImageEmpty}>🎁</div>
-                      )}
-                    </div>
-
-                    <div style={styles.itemMain}>
-                      <div style={styles.cardHeader}>
-                        <div>
-                          <h3 style={styles.itemTitle}>{item.title}</h3>
-                          <p style={styles.slug}>
-                            {item.donor_name
-                              ? `Donated by ${item.donor_name}`
-                              : "No donor listed"}
-                          </p>
-                        </div>
-
-                        <span style={styles.itemStatus}>{item.status}</span>
-                      </div>
-
-                      <div style={styles.detailGrid}>
-                        <Detail
-                          label="Starting bid"
-                          value={moneyFromCents(
-                            item.starting_bid_cents,
-                            auction.currency,
-                          )}
-                        />
-                        <Detail
-                          label="Increment"
-                          value={moneyFromCents(
-                            item.minimum_increment_cents,
-                            auction.currency,
-                          )}
-                        />
-                        <Detail
-                          label="Reserve"
-                          value={
-                            item.reserve_price_cents === null
-                              ? "None"
-                              : moneyFromCents(
-                                  item.reserve_price_cents,
-                                  auction.currency,
-                                )
-                          }
-                        />
-                        <Detail
-                          label="Highest bid"
-                          value={
-                            item.highest_bid_cents === null
-                              ? "No bids"
-                              : moneyFromCents(
-                                  item.highest_bid_cents,
-                                  auction.currency,
-                                )
-                          }
-                        />
-                        <Detail label="Bid count" value={item.bid_count} />
-                      </div>
-
-                      {item.description ? (
-                        <p style={styles.description}>{item.description}</p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <details style={styles.detailsPanel}>
-                    <summary style={styles.summary}>Edit item</summary>
-
-                    <form action={updateAuctionItemAction} style={styles.form}>
-                      <input
-                        type="hidden"
-                        name="auction_id"
-                        value={auction.id}
-                      />
-                      <input type="hidden" name="item_id" value={item.id} />
-
-                      <div style={styles.grid}>
-                        <label style={styles.label}>
-                          Item title
-                          <input
-                            name="title"
-                            required
-                            defaultValue={item.title}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.label}>
-                          Donor / sponsor
-                          <input
-                            name="donor_name"
-                            defaultValue={item.donor_name || ""}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.label}>
-                          Starting bid
-                          <input
-                            name="starting_bid"
-                            inputMode="decimal"
-                            defaultValue={centsToPoundsInput(
-                              item.starting_bid_cents,
-                            )}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.label}>
-                          Minimum increment
-                          <input
-                            name="minimum_increment"
-                            inputMode="decimal"
-                            defaultValue={centsToPoundsInput(
-                              item.minimum_increment_cents,
-                            )}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.label}>
-                          Reserve price
-                          <input
-                            name="reserve_price"
-                            inputMode="decimal"
-                            defaultValue={centsToPoundsInput(
-                              item.reserve_price_cents,
-                            )}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.label}>
-                          Sort order
-                          <input
-                            name="sort_order"
-                            type="number"
-                            defaultValue={item.sort_order}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.label}>
-                          Status
-                          <select
-                            name="status"
-                            defaultValue={item.status}
-                            style={styles.input}
-                          >
-                            <option value="active">Active</option>
-                            <option value="closed">Closed</option>
-                            <option value="withdrawn">Withdrawn</option>
-                          </select>
-                        </label>
-
-                        <label style={styles.label}>
-                          Image URL
-                          <input
-                            name="image_url"
-                            defaultValue={item.image_url || ""}
-                            style={styles.input}
-                          />
-                        </label>
-                      </div>
-
-                      <div style={styles.focusGrid}>
-                        <label style={styles.label}>
-                          Item image horizontal focus
-                          <input
-                            name="image_focus_x"
-                            type="range"
-                            min="0"
-                            max="100"
-                            defaultValue={focusValue(item.image_focus_x)}
-                            style={styles.range}
-                          />
-                          <span style={styles.helpText}>
-                            Current: {focusValue(item.image_focus_x)}%
-                          </span>
-                        </label>
-
-                        <label style={styles.label}>
-                          Item image vertical focus
-                          <input
-                            name="image_focus_y"
-                            type="range"
-                            min="0"
-                            max="100"
-                            defaultValue={focusValue(item.image_focus_y)}
-                            style={styles.range}
-                          />
-                          <span style={styles.helpText}>
-                            Current: {focusValue(item.image_focus_y)}%
-                          </span>
-                        </label>
-                      </div>
-
-                      <label style={styles.label}>
-                        Description
-                        <textarea
-                          name="description"
-                          rows={4}
-                          defaultValue={item.description || ""}
-                          style={styles.textarea}
-                        />
-                      </label>
-
-                      <div style={styles.actionsRight}>
-                        <button type="submit" style={styles.saveButton}>
-                          Save item
-                        </button>
-                      </div>
-                    </form>
-
-                    <form
-                      action={deleteAuctionItemAction}
-                      style={styles.deleteItemForm}
-                    >
-                      <input
-                        type="hidden"
-                        name="auction_id"
-                        value={auction.id}
-                      />
-                      <input type="hidden" name="item_id" value={item.id} />
-                      <button type="submit" style={styles.deleteButton}>
-                        Delete item
-                      </button>
-                    </form>
-                  </details>
-
-                  <details style={styles.detailsPanel}>
-                    <summary style={styles.summary}>View bids</summary>
-
-                    {itemBids.length === 0 ? (
-                      <p style={styles.muted}>No bids for this item yet.</p>
-                    ) : (
-                      <div style={styles.bidsTable}>
-                        {itemBids.map((bid) => (
-                          <div key={bid.id} style={styles.bidRow}>
-                            <div>
-                              <strong>{bid.bidder_name}</strong>
-                              <div style={styles.muted}>{bid.bidder_email}</div>
-                              {bid.bidder_phone ? (
-                                <div style={styles.muted}>
-                                  {bid.bidder_phone}
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div style={styles.bidAmount}>
-                              {moneyFromCents(
-                                bid.amount_cents,
-                                auction.currency,
-                              )}
-                              {winningBid?.id === bid.id ? (
-                                <span style={styles.winningBadge}>
-                                  Winning
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <div style={styles.muted}>
-                              {formatDate(bid.created_at)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </details>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    </main>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
-      <div style={styles.statValue}>{value}</div>
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={styles.detail}>
-      <div style={styles.detailLabel}>{label}</div>
-      <div style={styles.detailValue}>{value}</div>
-    </div>
-  );
-}
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 24,
-  },
-  badge: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
-    fontSize: 13,
-    fontWeight: 900,
-    marginBottom: 10,
-  },
-  title: {
-    margin: 0,
-    fontSize: 38,
-    lineHeight: 1.1,
-    color: "#0f172a",
-  },
-  subtitle: {
-    margin: "10px 0 0",
-    color: "#64748b",
-  },
-  nav: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-  navButton: {
-    padding: "12px 18px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 900,
-  },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 14,
-    marginBottom: 22,
-  },
-  statCard: {
-    padding: 18,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  statLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  statValue: {
-    marginTop: 6,
-    fontSize: 24,
-    fontWeight: 950,
-    color: "#0f172a",
-    textTransform: "capitalize",
-  },
-  form: {
-    display: "grid",
-    gap: 18,
-  },
-  card: {
-    padding: 22,
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 18,
-  },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    flexWrap: "wrap",
-    marginBottom: 18,
-  },
-  sectionTitle: {
-    margin: 0,
-    fontSize: 24,
-    color: "#0f172a",
-  },
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.55,
-  },
-  subTitle: {
-    margin: 0,
-    fontSize: 20,
-    color: "#0f172a",
-  },
-  status: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontSize: 13,
-    fontWeight: 900,
-    textTransform: "capitalize",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  },
-  focusGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-    marginTop: 12,
-  },
-  label: {
-    display: "grid",
-    gap: 7,
-    marginTop: 14,
-    color: "#0f172a",
-    fontWeight: 900,
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    padding: "12px 13px",
-    fontSize: 15,
-    color: "#0f172a",
-    background: "#ffffff",
-  },
-  range: {
-    width: "100%",
-  },
-  textarea: {
-    width: "100%",
-    boxSizing: "border-box",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    padding: "12px 13px",
-    fontSize: 15,
-    color: "#0f172a",
-    background: "#ffffff",
-    resize: "vertical",
-    fontFamily: "inherit",
-  },
-  helpText: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 700,
-  },
-  imageFocusPanel: {
-    marginTop: 18,
-    padding: 18,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  focusPreviewWrap: {
-    marginTop: 14,
-    width: "100%",
-    height: 230,
-    borderRadius: 18,
-    overflow: "hidden",
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
-  },
-  actionsRight: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 18,
-  },
-  saveButton: {
-    padding: "12px 18px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 900,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-  itemCreateCard: {
-    padding: 18,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    marginBottom: 20,
-  },
-  emptyBox: {
-    padding: 20,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-  },
-  muted: {
-    color: "#64748b",
-  },
-  itemsList: {
-    display: "grid",
-    gap: 16,
-  },
-  itemCard: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  itemTop: {
-    display: "grid",
-    gridTemplateColumns: "130px 1fr",
-    gap: 18,
-  },
-  itemImageWrap: {
-    width: 130,
-    height: 130,
-    borderRadius: 18,
-    overflow: "hidden",
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
-  },
-  itemImageEmpty: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 34,
-    color: "#94a3b8",
-  },
-  itemMain: {
-    minWidth: 0,
-  },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-  itemTitle: {
-    margin: 0,
-    fontSize: 22,
-    color: "#0f172a",
-  },
-  slug: {
-    margin: "4px 0 0",
-    color: "#64748b",
-    fontWeight: 700,
-  },
-  itemStatus: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontSize: 13,
-    fontWeight: 900,
-    textTransform: "capitalize",
-    background: "#f1f5f9",
-    color: "#475569",
-    border: "1px solid #e2e8f0",
-  },
-  detailGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-    gap: 10,
-    marginTop: 14,
-  },
-  detail: {
-    padding: 12,
-    borderRadius: 14,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  detailLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  detailValue: {
-    marginTop: 4,
-    color: "#0f172a",
-    fontWeight: 900,
-  },
-  description: {
-    color: "#334155",
-    lineHeight: 1.6,
-    margin: "14px 0 0",
-  },
-  detailsPanel: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  summary: {
-    cursor: "pointer",
-    fontWeight: 950,
-    color: "#0f172a",
-  },
-  deleteItemForm: {
-    marginTop: 12,
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  deleteButton: {
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "#dc2626",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  bidsTable: {
-    display: "grid",
-    gap: 10,
-    marginTop: 14,
-  },
-  bidRow: {
-    display: "grid",
-    gridTemplateColumns: "1.3fr 0.8fr 0.8fr",
-    gap: 12,
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 14,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  bidAmount: {
-    display: "grid",
-    gap: 6,
-    justifyItems: "start",
-    color: "#0f172a",
-    fontWeight: 950,
-  },
-  winningBadge: {
-    display: "inline-flex",
-    padding: "5px 8px",
-    borderRadius: 999,
-    background: "#dcfce7",
-    color: "#166534",
-    fontSize: 12,
-    fontWeight: 950,
-    border: "1px solid #bbf7d0",
-  },
-};
