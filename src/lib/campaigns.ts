@@ -6,7 +6,7 @@ export type Campaign = {
   slug: string;
   description: string | null;
   tenant_slug: string;
-  type: "raffle" | "squares" | "event";
+  type: "raffle" | "squares" | "event" | "auction";
   image_url: string | null;
   imageUrl: string | null;
   status: "draft" | "published" | "closed" | "drawn";
@@ -34,7 +34,10 @@ function normaliseStatus(value: string | null | undefined): Campaign["status"] {
   return "draft";
 }
 
-function mapCampaign(row: CampaignRow, type: Campaign["type"]): Campaign {
+function mapCampaign(
+  row: CampaignRow,
+  type: Campaign["type"],
+): Campaign {
   return {
     id: row.id,
     title: row.title,
@@ -103,10 +106,28 @@ export async function getAllCampaignsForTenant(
     [tenantSlug],
   );
 
+  const auctions = await query<CampaignRow>(
+    `
+      select
+        id,
+        title,
+        slug,
+        description,
+        tenant_slug,
+        image_url,
+        status::text as status,
+        created_at
+      from silent_auctions
+      where tenant_slug = $1
+    `,
+    [tenantSlug],
+  );
+
   return [
     ...raffles.map((row) => mapCampaign(row, "raffle")),
     ...squares.map((row) => mapCampaign(row, "squares")),
     ...events.map((row) => mapCampaign(row, "event")),
+    ...auctions.map((row) => mapCampaign(row, "auction")),
   ].sort((a, b) => {
     const aTime = new Date(a.created_at || 0).getTime();
     const bTime = new Date(b.created_at || 0).getTime();
