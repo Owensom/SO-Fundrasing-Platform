@@ -226,6 +226,7 @@ export default async function EventSlugPage({
                   ticketTypes={ticketTypes}
                   currency={event.currency}
                   menuOptions={menuOptions}
+                  seatingLayoutJson={event.seating_layout_json || {}}
                 />
               )
             ) : seats.length === 0 ? (
