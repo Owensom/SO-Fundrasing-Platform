@@ -42,6 +42,12 @@ function positiveInteger(
   return Math.max(0, Math.floor(number));
 }
 
+function cleanImageFocus(value: FormDataEntryValue | null) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 function moneyToCents(value: string | number | null | undefined) {
   const number = Number(String(value || "0").replace(",", "."));
   if (!Number.isFinite(number) || number < 0) return 0;
@@ -231,6 +237,8 @@ export async function POST(request: Request) {
       slug,
       description: String(formData.get("description") || "").trim() || null,
       imageUrl: String(formData.get("image_url") || "").trim() || null,
+      imageFocusX: cleanImageFocus(formData.get("image_focus_x")),
+      imageFocusY: cleanImageFocus(formData.get("image_focus_y")),
       location: String(formData.get("location") || "").trim() || null,
       startsAt: optionalDate(formData.get("starts_at")),
       endsAt: optionalDate(formData.get("ends_at")),
