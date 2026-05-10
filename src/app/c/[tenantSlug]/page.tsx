@@ -15,7 +15,7 @@ type PageProps = {
 
 type Campaign = {
   id: string;
-  type: "raffle" | "squares" | "event";
+  type: "raffle" | "squares" | "event" | "auction";
   title: string;
   slug: string;
   description?: string | null;
@@ -27,13 +27,22 @@ function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "raffle") return `/r/${campaign.slug}`;
   if (campaign.type === "squares") return `/s/${campaign.slug}`;
   if (campaign.type === "event") return `/e/${campaign.slug}`;
+  if (campaign.type === "auction") return `/a/${campaign.slug}`;
   return "#";
 }
 
 function getTypeLabel(type: Campaign["type"]) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
-  return "Event";
+  if (type === "event") return "Event";
+  return "Silent Auction";
+}
+
+function getTypeIcon(type: Campaign["type"]) {
+  if (type === "squares") return "🔲";
+  if (type === "event") return "🎫";
+  if (type === "auction") return "🔨";
+  return "🎟️";
 }
 
 function getSafeAdminReturn(value?: string) {
@@ -71,7 +80,8 @@ export default async function TenantCampaignsPage({
         <h1 style={styles.title}>Active Campaigns</h1>
 
         <p style={styles.subtitle}>
-          Choose an active raffle, squares campaign, or event to support.
+          Choose an active raffle, squares campaign, event, or silent auction to
+          support.
         </p>
 
         <div style={styles.legalLinks}>
@@ -109,11 +119,7 @@ export default async function TenantCampaignsPage({
                   />
                 ) : (
                   <div style={styles.imageEmpty}>
-                    {campaign.type === "squares"
-                      ? "🔲"
-                      : campaign.type === "event"
-                        ? "🎫"
-                        : "🎟️"}
+                    {getTypeIcon(campaign.type)}
                   </div>
                 )}
               </div>
