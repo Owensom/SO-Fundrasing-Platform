@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 
 type PrizeRow = {
   id: string;
@@ -15,14 +16,6 @@ type PrizeRow = {
   description: string;
   is_public: boolean;
 };
-
-const IMAGE_POSITIONS = [
-  { value: "center", label: "Center" },
-  { value: "top", label: "Top" },
-  { value: "bottom", label: "Bottom" },
-  { value: "left", label: "Left" },
-  { value: "right", label: "Right" },
-];
 
 function safeId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -74,9 +67,8 @@ export default function NewSquaresGamePage() {
   const [drawAt, setDrawAt] = useState("");
 
   const [imageUrl, setImageUrl] = useState("");
-  const [imagePosition, setImagePosition] = useState("center");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
+  const [imageFocusX, setImageFocusX] = useState(50);
+  const [imageFocusY, setImageFocusY] = useState(50);
 
   const [totalSquares, setTotalSquares] = useState("100");
   const [pricePerSquare, setPricePerSquare] = useState("2.00");
@@ -177,49 +169,9 @@ export default function NewSquaresGamePage() {
     setPrizes((current) => current.filter((prize) => prize.id !== id));
   }
 
-  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setUploading(true);
-      setUploadError("");
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/admin/uploads", {
-        method: "POST",
-        body: formData,
-      });
-
-      const text = await response.text();
-
-      let parsed: { ok?: boolean; url?: string; error?: string } | null = null;
-
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new Error(`Upload API did not return JSON: ${text.slice(0, 120)}`);
-      }
-
-      if (!response.ok || !parsed?.ok) {
-        throw new Error(parsed?.error || "Upload failed");
-      }
-
-      setImageUrl(String(parsed.url ?? ""));
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
-  }
-
   return (
     <form action="/api/admin/squares" method="post" style={styles.form}>
-      <input type="hidden" name="image_url" value={imageUrl} />
-      <input type="hidden" name="image_position" value={imagePosition} />
+      <input type="hidden" name="image_position" value="center" />
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="question" value={questionValue} />
       <input type="hidden" name="free_entry" value={freeEntryValue} />
@@ -265,7 +217,7 @@ export default function NewSquaresGamePage() {
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
-                objectPosition: imagePosition,
+                objectPosition: `${imageFocusX}% ${imageFocusY}%`,
                 display: "block",
               }}
             />
@@ -340,42 +292,19 @@ export default function NewSquaresGamePage() {
             <div>
               <h3 style={styles.subTitle}>Squares image</h3>
               <p style={styles.sectionDescription}>
-                Upload or paste the public image, then choose the focus position.
+                Upload or replace the public image, then choose the crop focus.
               </p>
 
-              <div style={styles.uploadRow}>
-                <label
-                  style={{
-                    ...styles.uploadButton,
-                    cursor: uploading ? "not-allowed" : "pointer",
-                    opacity: uploading ? 0.7 : 1,
-                  }}
-                >
-                  {uploading ? "Uploading..." : "Upload image"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={uploading}
-                    style={{ display: "none" }}
-                  />
-                </label>
-
-                {imageUrl ? (
-                  <span style={styles.successText}>Image uploaded</span>
-                ) : (
-                  <span style={styles.mutedSmall}>No image uploaded yet</span>
-                )}
-              </div>
-
-              <input
-                value={imageUrl}
-                onChange={(event) => setImageUrl(event.target.value)}
-                style={styles.input}
-                placeholder="Or paste image URL"
+              <ImageFocusUploadField
+                currentImageUrl={imageUrl}
+                currentFocusX={imageFocusX}
+                currentFocusY={imageFocusY}
+                label="Squares image"
+                previewAlt={title.trim() || "Squares preview"}
+                onImageUrlChange={setImageUrl}
+                onFocusXChange={setImageFocusX}
+                onFocusYChange={setImageFocusY}
               />
-
-              {uploadError ? <div style={styles.errorBox}>{uploadError}</div> : null}
             </div>
 
             <div style={styles.previewBox}>
@@ -387,7 +316,7 @@ export default function NewSquaresGamePage() {
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    objectPosition: imagePosition,
+                    objectPosition: `${imageFocusX}% ${imageFocusY}%`,
                     display: "block",
                   }}
                 />
@@ -397,31 +326,15 @@ export default function NewSquaresGamePage() {
             </div>
           </div>
 
-          <div style={styles.twoColumn}>
-            <Field label="Image focus">
-              <select
-                value={imagePosition}
-                onChange={(event) => setImagePosition(event.target.value)}
-                style={styles.input}
-              >
-                {IMAGE_POSITIONS.map((position) => (
-                  <option key={position.value} value={position.value}>
-                    {position.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Draw date">
-              <input
-                name="draw_at"
-                type="datetime-local"
-                value={drawAt}
-                onChange={(event) => setDrawAt(event.target.value)}
-                style={styles.input}
-              />
-            </Field>
-          </div>
+          <Field label="Draw date">
+            <input
+              name="draw_at"
+              type="datetime-local"
+              value={drawAt}
+              onChange={(event) => setDrawAt(event.target.value)}
+              style={styles.input}
+            />
+          </Field>
 
           <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
@@ -924,26 +837,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     letterSpacing: "-0.01em",
   },
-  uploadRow: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-    margin: "12px 0",
-  },
-  uploadButton: {
-    display: "inline-flex",
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 900,
-  },
-  successText: {
-    color: "#166534",
-    fontWeight: 900,
-    fontSize: 14,
-  },
   previewBox: {
     height: 220,
     borderRadius: 18,
@@ -1036,15 +929,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     marginTop: 3,
-  },
-  errorBox: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-    fontWeight: 700,
-    marginTop: 12,
   },
   submitBar: {
     display: "flex",
