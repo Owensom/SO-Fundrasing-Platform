@@ -45,14 +45,6 @@ const PRESET_COLOURS = [
   "White",
 ];
 
-const IMAGE_POSITIONS = [
-  { value: "center", label: "Center" },
-  { value: "top", label: "Top" },
-  { value: "bottom", label: "Bottom" },
-  { value: "left", label: "Left" },
-  { value: "right", label: "Right" },
-];
-
 function colourToText(colour: any) {
   if (typeof colour === "string") return colour;
   if (colour?.name) return colour.name;
@@ -96,6 +88,12 @@ function normaliseImagePosition(value: unknown) {
   }
 
   return "center";
+}
+
+function normaliseFocus(value: unknown, fallback = 50) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
 function formatDateTimeLocal(value: string | null | undefined) {
@@ -180,6 +178,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
   const config = (raffle.config_json as any) ?? {};
   const imagePosition = normaliseImagePosition(config.image_position);
+  const imageFocusX = normaliseFocus(config.image_focus_x, 50);
+  const imageFocusY = normaliseFocus(config.image_focus_y, 50);
+  const imageObjectPosition =
+    config.image_focus_x != null || config.image_focus_y != null
+      ? `${imageFocusX}% ${imageFocusY}%`
+      : imagePosition;
 
   const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
   const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
@@ -286,7 +290,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
-                objectPosition: imagePosition,
+                objectPosition: imageObjectPosition,
                 display: "block",
               }}
             />
@@ -295,7 +299,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
           )}
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
           value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
@@ -350,6 +355,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
           method="post"
           style={styles.form}
         >
+          <input type="hidden" name="image_position" value={imagePosition} />
+
           <div style={styles.twoColumn}>
             <Field label="Title">
               <input
@@ -383,15 +390,16 @@ export default async function AdminRafflePage({ params }: PageProps) {
             <div>
               <h3 style={styles.subTitle}>Raffle image</h3>
               <p style={styles.sectionDescription}>
-                Upload or replace the public image, then choose the focus
-                position.
+                Upload or replace the public image, then choose the crop focus.
               </p>
 
-<ImageFocusUploadField
-  currentImageUrl={raffle.image_url ?? ""}
-  label="Raffle image"
-  previewAlt={raffle.title}
-/>
+              <ImageFocusUploadField
+                currentImageUrl={raffle.image_url ?? ""}
+                currentFocusX={imageFocusX}
+                currentFocusY={imageFocusY}
+                label="Raffle image"
+                previewAlt={raffle.title}
+              />
             </div>
 
             <div style={styles.previewBox}>
@@ -403,7 +411,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    objectPosition: imagePosition,
+                    objectPosition: imageObjectPosition,
                     display: "block",
                   }}
                 />
@@ -413,30 +421,14 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </div>
           </div>
 
-          <div style={styles.twoColumn}>
-            <Field label="Image focus">
-              <select
-                name="image_position"
-                defaultValue={imagePosition}
-                style={styles.input}
-              >
-                {IMAGE_POSITIONS.map((position) => (
-                  <option key={position.value} value={position.value}>
-                    {position.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Draw date">
-              <input
-                name="draw_at"
-                type="datetime-local"
-                defaultValue={formatDateTimeLocal(raffle.draw_at)}
-                style={styles.input}
-              />
-            </Field>
-          </div>
+          <Field label="Draw date">
+            <input
+              name="draw_at"
+              type="datetime-local"
+              defaultValue={formatDateTimeLocal(raffle.draw_at)}
+              style={styles.input}
+            />
+          </Field>
 
           <div style={styles.threeColumn}>
             <Field label="Ticket price">
@@ -531,7 +523,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
               question is set.
             </p>
           </section>
-                    <section style={styles.innerPanel}>
+
+          <section style={styles.innerPanel}>
             <div style={styles.innerHeader}>
               <div>
                 <h3 style={styles.subTitle}>Free postal entry</h3>
@@ -881,11 +874,15 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </form>
 
             <DramaticRaffleDraw
-  raffleId={raffle.id}
-  soldTickets={soldTicketsForDraw}
-  drawnPrizePositions={winners.map((winner) => Number(winner.prize_position))}
-  drawnTicketNumbers={winners.map((winner) => Number(winner.ticket_number))}
-/>
+              raffleId={raffle.id}
+              soldTickets={soldTicketsForDraw}
+              drawnPrizePositions={winners.map((winner) =>
+                Number(winner.prize_position),
+              )}
+              drawnTicketNumbers={winners.map((winner) =>
+                Number(winner.ticket_number),
+              )}
+            />
           </div>
         </details>
       </section>
@@ -922,6 +919,7 @@ function Field({
     </label>
   );
 }
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     maxWidth: 1180,
