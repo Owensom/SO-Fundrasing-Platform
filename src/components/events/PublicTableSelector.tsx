@@ -35,12 +35,6 @@ type TableShape = "round" | "square" | "rectangle";
 
 type SeatingLayoutJson = Record<string, unknown>;
 
-type TableGroup = {
-  label: string;
-  tableNumber: string;
-  seats: Seat[];
-};
-
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -249,6 +243,31 @@ function roundSeatPosition(index: number, total: number) {
   };
 }
 
+function rectangleSeatCounts(total: number) {
+  if (total <= 2) {
+    return { top: total, right: 0, bottom: 0, left: 0 };
+  }
+
+  if (total <= 4) {
+    return {
+      top: Math.ceil(total / 2),
+      right: 0,
+      bottom: Math.floor(total / 2),
+      left: 0,
+    };
+  }
+
+  const endSeats = total >= 6 ? 2 : 0;
+  const sideSeats = Math.max(0, total - endSeats);
+
+  return {
+    top: Math.ceil(sideSeats / 2),
+    right: endSeats >= 1 ? 1 : 0,
+    bottom: Math.floor(sideSeats / 2),
+    left: endSeats >= 2 ? 1 : 0,
+  };
+}
+
 function squareSeatCounts(total: number) {
   const top = Math.ceil(total / 4);
   const right = Math.ceil((total - top) / 3);
@@ -258,49 +277,24 @@ function squareSeatCounts(total: number) {
   return { top, right, bottom, left };
 }
 
-function rectangleSeatCounts(total: number) {
-  if (total <= 2) {
-    return { top: total, right: 0, bottom: 0, left: 0 };
-  }
-
-  if (total <= 4) {
-    return { top: Math.ceil(total / 2), right: 0, bottom: Math.floor(total / 2), left: 0 };
-  }
-
-  const endSeats = total >= 6 ? 2 : 0;
-  const sideSeats = Math.max(0, total - endSeats);
-  const top = Math.ceil(sideSeats / 2);
-  const bottom = Math.floor(sideSeats / 2);
-
-  return {
-    top,
-    right: endSeats >= 1 ? 1 : 0,
-    bottom,
-    left: endSeats >= 2 ? 1 : 0,
-  };
-}
-
-function distributeSeatCounts(total: number, shape: TableShape) {
-  if (shape === "rectangle") return rectangleSeatCounts(total);
-  return squareSeatCounts(total);
-}
-
 function edgeSeatPosition(index: number, total: number, shape: TableShape) {
-  const width = shape === "rectangle" ? 560 : 360;
-  const height = shape === "rectangle" ? 320 : 360;
-  const seatInset = 34;
-  const longSideInset = shape === "rectangle" ? 58 : 54;
-  const shortSideInset = shape === "rectangle" ? 90 : 54;
+  const width = shape === "rectangle" ? 500 : 360;
+  const height = shape === "rectangle" ? 300 : 360;
+  const tableTop = shape === "rectangle" ? 88 : 76;
+  const tableBottom = height - tableTop;
+  const tableLeft = shape === "rectangle" ? 92 : 76;
+  const tableRight = width - tableLeft;
 
-  const counts = distributeSeatCounts(total, shape);
+  const counts =
+    shape === "rectangle" ? rectangleSeatCounts(total) : squareSeatCounts(total);
 
   if (index < counts.top) {
     const position = (index + 1) / (counts.top + 1);
 
     return {
       position: "absolute" as const,
-      left: longSideInset + position * (width - longSideInset * 2),
-      top: seatInset,
+      left: tableLeft + position * (tableRight - tableLeft),
+      top: tableTop - 42,
       transform: "translate(-50%, -50%)",
     };
   }
@@ -311,8 +305,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
     return {
       position: "absolute" as const,
-      left: width - seatInset,
-      top: shortSideInset + position * (height - shortSideInset * 2),
+      left: tableRight + 48,
+      top: tableTop + position * (tableBottom - tableTop),
       transform: "translate(-50%, -50%)",
     };
   }
@@ -323,8 +317,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
     return {
       position: "absolute" as const,
-      left: width - longSideInset - position * (width - longSideInset * 2),
-      top: height - seatInset,
+      left: tableRight - position * (tableRight - tableLeft),
+      top: tableBottom + 42,
       transform: "translate(-50%, -50%)",
     };
   }
@@ -334,8 +328,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
   return {
     position: "absolute" as const,
-    left: seatInset,
-    top: height - shortSideInset - position * (height - shortSideInset * 2),
+    left: tableLeft - 48,
+    top: tableBottom - position * (tableBottom - tableTop),
     transform: "translate(-50%, -50%)",
   };
 }
@@ -358,8 +352,8 @@ function tableAreaStyle(shape: TableShape): CSSProperties {
   if (shape === "rectangle") {
     return {
       ...styles.tableArea,
-      width: 560,
-      height: 320,
+      width: 500,
+      height: 300,
       borderRadius: 34,
     };
   }
@@ -385,7 +379,7 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "rectangle") {
     return {
       ...styles.tablePlate,
-      width: 300,
+      width: 288,
       height: 122,
       borderRadius: 30,
     };
@@ -398,7 +392,6 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
-
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -449,7 +442,8 @@ export default function PublicTableSelector({
         return a.label.localeCompare(b.label);
       });
   }, [seats]);
-    const safeActiveTableIndex =
+
+  const safeActiveTableIndex =
     groupedSeats.length === 0
       ? 0
       : Math.min(activeTableIndex, groupedSeats.length - 1);
@@ -637,6 +631,10 @@ export default function PublicTableSelector({
             .public-table-selector-cart-grid {
               grid-template-columns: 1fr !important;
             }
+
+            .public-table-selector-map-panel {
+              padding: 16px !important;
+            }
           }
 
           @media (max-width: 620px) {
@@ -651,17 +649,28 @@ export default function PublicTableSelector({
             }
 
             .public-table-selector-table-actions {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr !important;
               justify-content: stretch !important;
-            }
-
-            .public-table-selector-table-actions button,
-            .public-table-selector-table-actions select {
               width: 100% !important;
             }
 
-            .public-table-selector-table-actions {
-              display: grid !important;
-              grid-template-columns: 1fr !important;
+            .public-table-selector-table-actions select {
+              grid-column: 1 / -1 !important;
+              width: 100% !important;
+              max-width: none !important;
+            }
+
+            .public-table-selector-table-actions button {
+              width: 100% !important;
+            }
+
+            .public-table-selector-select-table {
+              grid-column: 1 / -1 !important;
+            }
+
+            .public-table-selector-desktop-title {
+              font-size: 24px !important;
             }
           }
         `}
@@ -671,10 +680,11 @@ export default function PublicTableSelector({
         <div className="public-table-selector-map-panel" style={styles.mapPanel}>
           <div style={styles.mapHeader}>
             <div>
-              <h3 style={styles.mapTitle}>Table layout</h3>
+              <h3 className="public-table-selector-desktop-title" style={styles.mapTitle}>
+                Table layout
+              </h3>
               <p style={styles.mapText}>
-                Choose a table, then select individual seats or every available
-                seat at that table.
+                Choose a table, then select individual seats at that table.
               </p>
             </div>
 
@@ -717,8 +727,8 @@ export default function PublicTableSelector({
                     >
                       <div>
                         <p style={styles.tableNumber}>
-                          Table {activeTable.tableNumber || "Unassigned"} ·{" "}
-                          {safeActiveTableIndex + 1} of {groupedSeats.length}
+                          Table {safeActiveTableIndex + 1} of{" "}
+                          {groupedSeats.length}
                         </p>
                         <h4 style={styles.groupTitle}>{activeTable.label}</h4>
                         <p style={styles.groupSub}>
@@ -742,7 +752,10 @@ export default function PublicTableSelector({
                           style={styles.tableSelect}
                         >
                           {groupedSeats.map((group, index) => (
-                            <option key={`${group.tableNumber}-${group.label}`} value={index}>
+                            <option
+                              key={`${group.tableNumber}-${group.label}`}
+                              value={index}
+                            >
                               Table {group.tableNumber || "—"} — {group.label}
                             </option>
                           ))}
@@ -755,6 +768,10 @@ export default function PublicTableSelector({
                           style={{
                             ...styles.smallNavButton,
                             opacity: safeActiveTableIndex === 0 ? 0.5 : 1,
+                            cursor:
+                              safeActiveTableIndex === 0
+                                ? "not-allowed"
+                                : "pointer",
                           }}
                         >
                           Previous
@@ -763,13 +780,19 @@ export default function PublicTableSelector({
                         <button
                           type="button"
                           onClick={goToNextTable}
-                          disabled={safeActiveTableIndex >= groupedSeats.length - 1}
+                          disabled={
+                            safeActiveTableIndex >= groupedSeats.length - 1
+                          }
                           style={{
                             ...styles.smallNavButton,
                             opacity:
                               safeActiveTableIndex >= groupedSeats.length - 1
                                 ? 0.5
                                 : 1,
+                            cursor:
+                              safeActiveTableIndex >= groupedSeats.length - 1
+                                ? "not-allowed"
+                                : "pointer",
                           }}
                         >
                           Next
@@ -778,7 +801,10 @@ export default function PublicTableSelector({
                         {availableCount > 0 && (
                           <button
                             type="button"
-                            onClick={() => selectAvailableTable(activeTable.seats)}
+                            onClick={() =>
+                              selectAvailableTable(activeTable.seats)
+                            }
+                            className="public-table-selector-select-table"
                             style={styles.selectTableButton}
                           >
                             Select table
@@ -834,6 +860,12 @@ export default function PublicTableSelector({
                           );
                         })}
                       </div>
+                    </div>
+
+                    <div style={styles.helperNotice}>
+                      <span style={styles.helperIcon}>ⓘ</span>
+                      Tap a seat to select. Selected seats will appear in your
+                      basket.
                     </div>
                   </>
                 );
@@ -1256,6 +1288,31 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     transition: "box-shadow 140ms ease, transform 140ms ease",
     zIndex: 3,
+  },
+  helperNotice: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "13px 15px",
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.055)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "#cbd5e1",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.4,
+  },
+  helperIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.24)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "0 0 auto",
+    color: "#ffffff",
+    fontSize: 13,
   },
   cart: {
     position: "sticky",
