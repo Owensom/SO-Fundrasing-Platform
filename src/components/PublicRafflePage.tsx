@@ -58,6 +58,9 @@ type SafeRaffle = {
   description: string;
   imageUrl: string;
   imagePosition: string;
+  imageFocusX: number;
+  imageFocusY: number;
+  imageObjectPosition: string;
   tenantSlug: string;
   drawAt: string | null;
   startNumber: number;
@@ -161,6 +164,12 @@ function normaliseImagePosition(value: unknown) {
   return "center";
 }
 
+function normaliseFocus(value: unknown, fallback = 50) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
 function normaliseAnswer(value: string) {
   return String(value || "").trim().toLowerCase();
 }
@@ -187,6 +196,30 @@ function toSafeRaffle(input: any): SafeRaffle {
     raw.winnerTicketNumber ?? raw.winner_ticket_number;
 
   const winnerTicketNumber = Number(rawWinnerTicketNumber);
+
+  const imagePosition = normaliseImagePosition(
+    raw.imagePosition ?? raw.image_position ?? config.image_position,
+  );
+
+  const imageFocusX = normaliseFocus(
+    raw.imageFocusX ?? raw.image_focus_x ?? config.image_focus_x,
+    50,
+  );
+
+  const imageFocusY = normaliseFocus(
+    raw.imageFocusY ?? raw.image_focus_y ?? config.image_focus_y,
+    50,
+  );
+
+  const imageObjectPosition =
+    raw.imageFocusX != null ||
+    raw.image_focus_x != null ||
+    config.image_focus_x != null ||
+    raw.imageFocusY != null ||
+    raw.image_focus_y != null ||
+    config.image_focus_y != null
+      ? `${imageFocusX}% ${imageFocusY}%`
+      : imagePosition;
 
   const question =
     raw.question ??
@@ -226,9 +259,10 @@ function toSafeRaffle(input: any): SafeRaffle {
     title: String(raw.title ?? "Raffle"),
     description: String(raw.description ?? ""),
     imageUrl: String(raw.imageUrl ?? raw.image_url ?? ""),
-    imagePosition: normaliseImagePosition(
-      raw.imagePosition ?? raw.image_position ?? config.image_position,
-    ),
+    imagePosition,
+    imageFocusX,
+    imageFocusY,
+    imageObjectPosition,
     tenantSlug: String(raw.tenantSlug ?? raw.tenant_slug ?? ""),
     drawAt: raw.drawAt ?? null,
     startNumber: Number.isFinite(startNumber) ? startNumber : 1,
@@ -535,7 +569,8 @@ export default function PublicRafflePage({ slug }: Props) {
       cancelled = true;
     };
   }, [slug]);
-    const availability = useMemo(() => {
+
+  const availability = useMemo(() => {
     const sold = new Set<string>();
     const reserved = new Set<string>();
 
@@ -636,8 +671,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
     return count;
   }, [raffle, visibleNumbers, availability]);
-
-  function toggleTicket(number: number) {
+    function toggleTicket(number: number) {
     if (!raffle || !selectedColour || !canReserve) return;
 
     const key = makeTicketKey(selectedColour, number);
@@ -920,7 +954,8 @@ export default function PublicRafflePage({ slug }: Props) {
       setSaving(false);
     }
   }
-    if (!slug) return <div style={styles.wrap}>Loading…</div>;
+
+  if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
   if (!raffle) return <div style={styles.wrap}>Raffle not found.</div>;
@@ -949,7 +984,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
-                objectPosition: raffle.imagePosition || "center",
+                objectPosition: raffle.imageObjectPosition || "center",
                 display: "block",
               }}
             />
