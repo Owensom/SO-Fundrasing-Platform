@@ -5,7 +5,7 @@ import { getRaffleById } from "@/lib/raffles";
 import { query } from "@/lib/db";
 import RaffleAdminActions from "./RaffleAdminActions";
 import PrizeSettings from "./PrizeSettings";
-import ImageUploadField from "@/components/ImageUploadField";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import DramaticRaffleDraw from "./DramaticRaffleDraw";
 
 export const dynamic = "force-dynamic";
@@ -387,7 +387,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 position.
               </p>
 
-              <ImageUploadField currentImageUrl={raffle.image_url ?? ""} />
+<ImageFocusUploadField
+  currentImageUrl={raffle.image_url ?? ""}
+  label="Raffle image"
+  previewAlt={raffle.title}
+/>
             </div>
 
             <div style={styles.previewBox}>
