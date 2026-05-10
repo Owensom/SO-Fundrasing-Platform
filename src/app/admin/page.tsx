@@ -88,11 +88,27 @@ export default async function AdminHomePage() {
             </div>
           </Link>
 
-          <Link href="/admin/events" style={styles.card}>
+          <Link href="/admin/events/new" style={styles.card}>
             <div style={styles.cardIcon}>➕</div>
             <div style={styles.cardTitle}>Create Event</div>
             <div style={styles.cardDesc}>
               Launch a new event with tickets, rows, seats or tables.
+            </div>
+          </Link>
+
+          <Link href="/admin/auctions" style={styles.card}>
+            <div style={styles.cardIcon}>🔨</div>
+            <div style={styles.cardTitle}>Manage Silent Auctions</div>
+            <div style={styles.cardDesc}>
+              View, edit and manage auction items, bids and winners.
+            </div>
+          </Link>
+
+          <Link href="/admin/auctions/new" style={styles.card}>
+            <div style={styles.cardIcon}>➕</div>
+            <div style={styles.cardTitle}>Create Silent Auction</div>
+            <div style={styles.cardDesc}>
+              Launch a new silent auction with items, bids and closing times.
             </div>
           </Link>
         </div>
