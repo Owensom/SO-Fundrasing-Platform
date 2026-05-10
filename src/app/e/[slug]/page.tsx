@@ -19,6 +19,8 @@ type PageProps = {
   }>;
 };
 
+const TABLE_SHAPE_KEY = "__table_shape";
+
 function formatDate(value: string | null) {
   if (!value) return "Date to be confirmed";
 
@@ -65,6 +67,13 @@ export default async function EventSlugPage({
   );
 
   const seats = event.seats || [];
+
+  const tableShape =
+    event.table_names_json?.[TABLE_SHAPE_KEY] === "square" ||
+    event.table_names_json?.[TABLE_SHAPE_KEY] === "rectangle" ||
+    event.table_names_json?.[TABLE_SHAPE_KEY] === "round"
+      ? event.table_names_json[TABLE_SHAPE_KEY]
+      : "round";
 
   const tableSeatsWithNames = seats.map((seat) => ({
     ...seat,
@@ -226,7 +235,11 @@ export default async function EventSlugPage({
                   ticketTypes={ticketTypes}
                   currency={event.currency}
                   menuOptions={menuOptions}
-                  seatingLayoutJson={event.seating_layout_json || {}}
+                  seatingLayoutJson={{
+                    ...(event.seating_layout_json || {}),
+                    tableShape,
+                    table_shape: tableShape,
+                  }}
                 />
               )
             ) : seats.length === 0 ? (
