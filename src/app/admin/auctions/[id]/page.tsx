@@ -289,8 +289,17 @@ async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
   }
 
   await updateAuction(auction.id, {
+    title: auction.title,
+    slug: auction.slug,
+    description: auction.description,
+    imageUrl: auction.image_url,
+    imageFocusX: auction.image_focus_x ?? 50,
+    imageFocusY: auction.image_focus_y ?? 50,
     status: "closed",
+    currency: auction.currency || "GBP",
+    opensAt: auction.opens_at,
     closesAt: auction.closes_at || new Date().toISOString(),
+    termsText: auction.terms_text,
   });
 
   redirect(`/admin/auctions/${auction.id}#winner-tools`);
@@ -396,7 +405,8 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
       item.reserve_price_cents === null ||
       item.reserve_price_cents === undefined
         ? true
-        : Number(topBid.amount_cents || 0) >= Number(item.reserve_price_cents || 0);
+        : Number(topBid.amount_cents || 0) >=
+          Number(item.reserve_price_cents || 0);
 
     return {
       item,
