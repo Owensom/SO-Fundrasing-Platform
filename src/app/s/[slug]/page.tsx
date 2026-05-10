@@ -25,6 +25,7 @@ type FreeEntry = {
   address?: string | null;
   instructions?: string | null;
   closes_at?: string | null;
+  closesAt?: string | null;
 };
 
 type SquaresGame = {
@@ -34,6 +35,10 @@ type SquaresGame = {
   title: string;
   description?: string;
   imageUrl?: string;
+  imageFocusX?: number | null;
+  imageFocusY?: number | null;
+  image_focus_x?: number | null;
+  image_focus_y?: number | null;
   drawAt?: string | null;
   status: string;
   currency: string;
@@ -93,6 +98,12 @@ function ordinal(position: number) {
   return `${position}${suffix}`;
 }
 
+function normaliseFocus(value: unknown, fallback = 50) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
 function hasEntryQuestion(question: EntryQuestion | null | undefined) {
   return Boolean(
     String(question?.text ?? "").trim() && String(question?.answer ?? "").trim(),
@@ -103,7 +114,7 @@ function hasFreeEntry(freeEntry: FreeEntry | null | undefined) {
   return Boolean(
     String(freeEntry?.address ?? "").trim() ||
       String(freeEntry?.instructions ?? "").trim() ||
-      String(freeEntry?.closes_at ?? "").trim(),
+      String(freeEntry?.closes_at ?? freeEntry?.closesAt ?? "").trim(),
   );
 }
 
@@ -198,6 +209,18 @@ export default function PublicSquaresPage({ params }: Props) {
   const canReserve = Boolean(game && isPublished);
   const requiresQuestion = hasEntryQuestion(game?.question);
   const showFreeEntry = hasFreeEntry(game?.freeEntry);
+
+  const imageFocusX = normaliseFocus(
+    game?.imageFocusX ?? game?.image_focus_x,
+    50,
+  );
+
+  const imageFocusY = normaliseFocus(
+    game?.imageFocusY ?? game?.image_focus_y,
+    50,
+  );
+
+  const imageObjectPosition = `${imageFocusX}% ${imageFocusY}%`;
 
   const subtotalCents =
     selectedSquares.length * Number(game?.pricePerSquareCents || 0);
@@ -294,7 +317,9 @@ export default function PublicSquaresPage({ params }: Props) {
       }
 
       if (!acceptedTerms) {
-        throw new Error("Please confirm you have accepted the terms and privacy policy.");
+        throw new Error(
+          "Please confirm you have accepted the terms and privacy policy.",
+        );
       }
 
       const reserveResponse = await fetch(
@@ -412,7 +437,14 @@ export default function PublicSquaresPage({ params }: Props) {
 
         {game.imageUrl ? (
           <div style={styles.imageWrap}>
-            <img src={game.imageUrl} alt={game.title} style={styles.image} />
+            <img
+              src={game.imageUrl}
+              alt={game.title}
+              style={{
+                ...styles.image,
+                objectPosition: imageObjectPosition,
+              }}
+            />
           </div>
         ) : null}
 
@@ -733,11 +765,13 @@ export default function PublicSquaresPage({ params }: Props) {
                     </div>
                   ) : null}
 
-                  {game.freeEntry?.closes_at ? (
+                  {game.freeEntry?.closes_at || game.freeEntry?.closesAt ? (
                     <div style={styles.freeEntryBlock}>
                       <div style={styles.freeEntryLabel}>Postal entry closes</div>
                       <div style={styles.freeEntryText}>
-                        {formatDateTime(game.freeEntry.closes_at)}
+                        {formatDateTime(
+                          game.freeEntry.closes_at ?? game.freeEntry.closesAt,
+                        )}
                       </div>
                     </div>
                   ) : null}
