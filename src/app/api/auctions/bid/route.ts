@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { sendAuctionBidConfirmationEmail } from "@/lib/email";
 import {
   createAuctionBid,
   getAuctionBySlug,
@@ -14,9 +15,7 @@ function poundsToCents(value: FormDataEntryValue | null) {
   const raw = String(value || "").replace(/[£,\s]/g, "").trim();
   const amount = Number(raw);
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return 0;
-  }
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
 
   return Math.round(amount * 100);
 }
@@ -36,15 +35,11 @@ function redirectToAuction(
 }
 
 function redirectWithError(request: NextRequest, slug: string, message: string) {
-  return redirectToAuction(request, slug, {
-    error: message,
-  });
+  return redirectToAuction(request, slug, { error: message });
 }
 
 function redirectWithSuccess(request: NextRequest, slug: string) {
-  return redirectToAuction(request, slug, {
-    bid: "success",
-  });
+  return redirectToAuction(request, slug, { bid: "success" });
 }
 
 function auctionIsOpen(auction: {
@@ -167,6 +162,16 @@ export async function POST(request: NextRequest) {
       bidderEmail,
       bidderPhone: bidderPhone || null,
       amountCents,
+    });
+
+    await sendAuctionBidConfirmationEmail({
+      to: bidderEmail,
+      name: bidderName,
+      auctionTitle: auction.title,
+      itemTitle: item.title,
+      amountCents,
+      currency: auction.currency || "GBP",
+      closesAt: auction.closes_at,
     });
 
     return redirectWithSuccess(request, auction.slug);
