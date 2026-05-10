@@ -119,7 +119,14 @@ export default async function EventSlugPage({
 
         <Card>
           {event.image_url ? (
-            <img src={event.image_url} alt={event.title} style={styles.heroImage} />
+            <img
+              src={event.image_url}
+              alt={event.title}
+              style={{
+               ...styles.heroImage,
+               objectPosition: `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`,
+             }}
+              />
           ) : (
             <div style={styles.heroFallback}>🎫</div>
           )}
