@@ -33,7 +33,7 @@ type GuestData = {
 
 type TableShape = "round" | "square" | "rectangle";
 
-type SeatingLayoutValue = number | string | null | undefined;
+type SeatingLayoutJson = Record<string, unknown>;
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
@@ -48,6 +48,87 @@ function tableSortValue(value: string | null | undefined) {
   const number = Number(value);
   if (Number.isFinite(number)) return number;
   return Number.MAX_SAFE_INTEGER;
+}
+
+function normaliseShape(value: unknown): TableShape | null {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (raw === "round" || raw === "circle" || raw === "circular") {
+    return "round";
+  }
+
+  if (raw === "square") {
+    return "square";
+  }
+
+  if (raw === "rectangle" || raw === "rectangular" || raw === "long") {
+    return "rectangle";
+  }
+
+  return null;
+}
+
+function readShapeFromObject(
+  value: unknown,
+  tableNumber: string,
+  tableLabel: string,
+): TableShape | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const objectValue = value as Record<string, unknown>;
+
+  return (
+    normaliseShape(objectValue[tableNumber]) ||
+    normaliseShape(objectValue[tableLabel]) ||
+    normaliseShape(objectValue[`Table ${tableNumber}`]) ||
+    normaliseShape(objectValue.shape) ||
+    normaliseShape(objectValue.tableShape) ||
+    normaliseShape(objectValue.table_shape)
+  );
+}
+
+function getTableShapeForGroup({
+  seatingLayoutJson,
+  tableNumber,
+  tableLabel,
+  seatCount,
+}: {
+  seatingLayoutJson?: SeatingLayoutJson | null;
+  tableNumber: string;
+  tableLabel: string;
+  seatCount: number;
+}): TableShape {
+  const layout = seatingLayoutJson || {};
+
+  const directShape =
+    normaliseShape(layout[`tableShape:${tableNumber}`]) ||
+    normaliseShape(layout[`table_shape:${tableNumber}`]) ||
+    normaliseShape(layout[`table:${tableNumber}:shape`]) ||
+    normaliseShape(layout[`tableShape:${tableLabel}`]) ||
+    normaliseShape(layout[`table_shape:${tableLabel}`]);
+
+  if (directShape) return directShape;
+
+  const mappedShape =
+    readShapeFromObject(layout.tableShapes, tableNumber, tableLabel) ||
+    readShapeFromObject(layout.table_shapes, tableNumber, tableLabel) ||
+    readShapeFromObject(layout.tableLayouts, tableNumber, tableLabel) ||
+    readShapeFromObject(layout.table_layouts, tableNumber, tableLabel) ||
+    readShapeFromObject(layout.tables, tableNumber, tableLabel);
+
+  if (mappedShape) return mappedShape;
+
+  const globalShape =
+    normaliseShape(layout.tableShape) || normaliseShape(layout.table_shape);
+
+  if (globalShape) return globalShape;
+
+  if (seatCount >= 10) return "rectangle";
+  if (seatCount === 4 || seatCount === 8) return "square";
+
+  return "round";
 }
 
 function seatLabel(seat: Seat) {
@@ -103,20 +184,6 @@ function getDefaultGuest(): GuestData {
   };
 }
 
-function getTableShape(
-  seatingLayoutJson?: Record<string, SeatingLayoutValue> | null,
-): TableShape {
-  const raw = String(
-    seatingLayoutJson?.tableShape || seatingLayoutJson?.table_shape || "",
-  ).trim();
-
-  if (raw === "square" || raw === "rectangle" || raw === "round") {
-    return raw;
-  }
-
-  return "round";
-}
-
 function seatColours(status: string, selected: boolean) {
   if (selected) {
     return {
@@ -170,7 +237,7 @@ function seatColours(status: string, selected: boolean) {
 function roundSeatPosition(index: number, total: number) {
   const angle = -90 + (360 / Math.max(total, 1)) * index;
   const radians = (angle * Math.PI) / 180;
-  const radius = 104;
+  const radius = 106;
 
   return {
     position: "absolute" as const,
@@ -180,47 +247,104 @@ function roundSeatPosition(index: number, total: number) {
   };
 }
 
-function shapedSeatPosition(index: number, total: number, shape: TableShape) {
-  if (shape === "round") {
-    return roundSeatPosition(index, total);
+function edgeSeatPosition(index: number, total: number, shape: TableShape) {
+  const width = shape === "rectangle" ? 420 : 304;
+  const height = shape === "rectangle" ? 276 : 304;
+  const margin = 23;
+
+  const topCount =
+    shape === "rectangle"
+      ? Math.max(2, Math.ceil(total * 0.32))
+      : Math.max(1, Math.ceil(total / 4));
+  const bottomCount =
+    shape === "rectangle"
+      ? Math.max(2, Math.ceil(total * 0.32))
+      : Math.max(1, Math.ceil(total / 4));
+  const remaining = Math.max(0, total - topCount - bottomCount);
+  const rightCount = Math.ceil(remaining / 2);
+  const leftCount = remaining - rightCount;
+
+  if (index < topCount) {
+    const position = (index + 1) / (topCount + 1);
+    return {
+      position: "absolute" as const,
+      left: margin + position * (width - margin * 2),
+      top: 8,
+      transform: "translate(-50%, -50%)",
+    };
   }
 
+  if (index < topCount + rightCount) {
+    const sideIndex = index - topCount;
+    const position = (sideIndex + 1) / (rightCount + 1);
+    return {
+      position: "absolute" as const,
+      left: width - 8,
+      top: margin + position * (height - margin * 2),
+      transform: "translate(-50%, -50%)",
+    };
+  }
+
+  if (index < topCount + rightCount + bottomCount) {
+    const bottomIndex = index - topCount - rightCount;
+    const position = (bottomIndex + 1) / (bottomCount + 1);
+    return {
+      position: "absolute" as const,
+      left: width - margin - position * (width - margin * 2),
+      top: height - 8,
+      transform: "translate(-50%, -50%)",
+    };
+  }
+
+  const leftIndex = index - topCount - rightCount - bottomCount;
+  const position = (leftIndex + 1) / (Math.max(leftCount, 1) + 1);
+
   return {
-    position: "relative" as const,
-    left: "auto",
-    top: "auto",
-    transform: "none",
+    position: "absolute" as const,
+    left: 8,
+    top: height - margin - position * (height - margin * 2),
+    transform: "translate(-50%, -50%)",
   };
+}
+
+function seatPosition(index: number, total: number, shape: TableShape) {
+  if (shape === "round") return roundSeatPosition(index, total);
+  return edgeSeatPosition(index, total, shape);
 }
 
 function tableAreaStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
-      ...styles.shapedTableArea,
-      width: 292,
-      minHeight: 292,
-      borderRadius: 26,
+      ...styles.tableArea,
+      width: 304,
+      height: 304,
+      borderRadius: 28,
     };
   }
 
   if (shape === "rectangle") {
     return {
-      ...styles.shapedTableArea,
+      ...styles.tableArea,
       width: 420,
-      minHeight: 260,
-      borderRadius: 28,
+      height: 276,
+      borderRadius: 30,
     };
   }
 
-  return styles.roundTableArea;
+  return {
+    ...styles.tableArea,
+    width: 304,
+    height: 304,
+    borderRadius: 999,
+  };
 }
 
 function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
       ...styles.tablePlate,
-      width: 136,
-      height: 136,
+      width: 140,
+      height: 140,
       borderRadius: 24,
     };
   }
@@ -228,13 +352,18 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "rectangle") {
     return {
       ...styles.tablePlate,
-      width: 180,
-      height: 104,
+      width: 206,
+      height: 112,
       borderRadius: 24,
     };
   }
 
-  return styles.tablePlate;
+  return {
+    ...styles.tablePlate,
+    width: 142,
+    height: 142,
+    borderRadius: 999,
+  };
 }
 
 export default function PublicTableSelector({
@@ -250,7 +379,7 @@ export default function PublicTableSelector({
   ticketTypes: TicketType[];
   currency: string;
   menuOptions?: string[];
-  seatingLayoutJson?: Record<string, SeatingLayoutValue> | null;
+  seatingLayoutJson?: SeatingLayoutJson | null;
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -261,8 +390,8 @@ export default function PublicTableSelector({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
-  const tableShape = getTableShape(seatingLayoutJson);
-    const groupedSeats = useMemo(() => {
+
+  const groupedSeats = useMemo(() => {
     const groups = new Map<string, Seat[]>();
 
     for (const seat of seats.filter((seat) => seat.table_number)) {
@@ -446,7 +575,7 @@ export default function PublicTableSelector({
     <>
       <style>
         {`
-          @media (max-width: 900px) {
+          @media (max-width: 980px) {
             .public-table-selector-shell {
               grid-template-columns: 1fr !important;
             }
@@ -463,11 +592,33 @@ export default function PublicTableSelector({
               grid-template-columns: 1fr !important;
             }
           }
+
+          @media (max-width: 560px) {
+            .public-table-selector-map-panel,
+            .public-table-selector-cart {
+              padding: 12px !important;
+              border-radius: 20px !important;
+            }
+
+            .public-table-selector-group-card {
+              padding: 12px !important;
+              border-radius: 18px !important;
+            }
+
+            .public-table-selector-group-header {
+              flex-direction: column !important;
+              align-items: stretch !important;
+            }
+
+            .public-table-selector-select-table {
+              width: 100% !important;
+            }
+          }
         `}
       </style>
 
       <div className="public-table-selector-shell" style={styles.shell}>
-        <div style={styles.mapPanel}>
+        <div className="public-table-selector-map-panel" style={styles.mapPanel}>
           <div style={styles.mapHeader}>
             <div>
               <h3 style={styles.mapTitle}>Table layout</h3>
@@ -495,7 +646,7 @@ export default function PublicTableSelector({
               className="public-table-selector-table-grid"
               style={styles.tableGrid}
             >
-                            {groupedSeats.map((group) => {
+              {groupedSeats.map((group) => {
                 const availableCount = group.seats.filter(
                   (seat) => seat.status === "available",
                 ).length;
@@ -504,15 +655,27 @@ export default function PublicTableSelector({
                   selectedSeatIds.includes(seat.id),
                 ).length;
 
+                const tableShape = getTableShapeForGroup({
+                  seatingLayoutJson,
+                  tableNumber: group.tableNumber,
+                  tableLabel: group.label,
+                  seatCount: group.seats.length,
+                });
+
                 return (
                   <div
                     key={`${group.tableNumber}-${group.label}`}
+                    className="public-table-selector-group-card"
                     style={styles.groupCard}
                   >
-                    <div style={styles.groupHeader}>
+                    <div
+                      className="public-table-selector-group-header"
+                      style={styles.groupHeader}
+                    >
                       <div>
                         <p style={styles.tableNumber}>
-                          Table {group.tableNumber || "Unassigned"}
+                          Table {group.tableNumber || "Unassigned"} ·{" "}
+                          {tableShape}
                         </p>
                         <h4 style={styles.groupTitle}>{group.label}</h4>
                         <p style={styles.groupSub}>
@@ -525,6 +688,7 @@ export default function PublicTableSelector({
                         <button
                           type="button"
                           onClick={() => selectAvailableTable(group.seats)}
+                          className="public-table-selector-select-table"
                           style={styles.selectTableButton}
                         >
                           Select table
@@ -532,28 +696,22 @@ export default function PublicTableSelector({
                       )}
                     </div>
 
-                    <div style={tableAreaStyle(tableShape)}>
-                      <div style={tablePlateStyle(tableShape)}>
-                        <span style={styles.tablePlateTop}>
-                          Table {group.tableNumber || "—"}
-                        </span>
-                        <strong style={styles.tablePlateName}>{group.label}</strong>
-                      </div>
+                    <div style={styles.tableScroll}>
+                      <div style={tableAreaStyle(tableShape)}>
+                        <div style={tablePlateStyle(tableShape)}>
+                          <span style={styles.tablePlateTop}>
+                            Table {group.tableNumber || "—"}
+                          </span>
+                          <strong style={styles.tablePlateName}>
+                            {group.label}
+                          </strong>
+                        </div>
 
-                      <div
-                        style={
-                          tableShape === "round"
-                            ? styles.roundSeatLayer
-                            : tableShape === "rectangle"
-                              ? styles.rectangleSeatGrid
-                              : styles.squareSeatGrid
-                        }
-                      >
                         {group.seats.map((seat, index) => {
                           const selected = selectedSeatIds.includes(seat.id);
                           const unavailable = seat.status !== "available";
                           const colours = seatColours(seat.status, selected);
-                          const position = shapedSeatPosition(
+                          const position = seatPosition(
                             index,
                             group.seats.length,
                             tableShape,
@@ -571,7 +729,7 @@ export default function PublicTableSelector({
                                 currency,
                               )}
                               style={{
-                                ...styles.roundSeatButton,
+                                ...styles.seatButton,
                                 ...position,
                                 background: colours.background,
                                 color: colours.color,
@@ -704,7 +862,8 @@ export default function PublicTableSelector({
                             style={styles.textarea}
                           />
                         </label>
-                                                <label style={styles.field}>
+
+                        <label style={styles.field}>
                           <span style={styles.label}>Menu choice</span>
                           {menuOptions.length > 0 ? (
                             <select
@@ -815,6 +974,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "minmax(0, 1fr) minmax(330px, 420px)",
     gap: 22,
     alignItems: "start",
+    width: "100%",
+    maxWidth: "100%",
   },
   mapPanel: {
     padding: 18,
@@ -823,6 +984,7 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
     border: "1px solid rgba(255,255,255,0.12)",
     boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+    minWidth: 0,
   },
   mapHeader: {
     display: "flex",
@@ -875,8 +1037,9 @@ const styles: Record<string, CSSProperties> = {
   },
   tableGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
     gap: 18,
+    minWidth: 0,
   },
   groupCard: {
     display: "grid",
@@ -885,7 +1048,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "rgba(255,255,255,0.055)",
     border: "1px solid rgba(255,255,255,0.1)",
-    overflowX: "auto",
+    minWidth: 0,
   },
   groupHeader: {
     display: "flex",
@@ -924,56 +1087,27 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
-  roundTableArea: {
-    position: "relative",
-    width: 292,
-    height: 292,
-    margin: "0 auto",
-    borderRadius: 999,
-    background:
-      "radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.055) 42%, rgba(15,23,42,0.16) 43%, rgba(15,23,42,0.16) 100%)",
-    border: "1px solid rgba(255,255,255,0.08)",
+  tableScroll: {
+    width: "100%",
+    overflowX: "auto",
+    overflowY: "hidden",
+    padding: "6px 4px 10px",
+    boxSizing: "border-box",
   },
-  shapedTableArea: {
+  tableArea: {
     position: "relative",
-    display: "grid",
-    placeItems: "center",
     margin: "0 auto",
-    padding: 22,
     background:
       "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.035))",
     border: "1px solid rgba(255,255,255,0.12)",
-  },
-  roundSeatLayer: {
-    position: "absolute",
-    inset: 0,
-  },
-  squareSeatGrid: {
-    position: "relative",
-    zIndex: 2,
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 42px)",
-    gap: 8,
-    alignItems: "center",
-    justifyItems: "center",
-  },
-  rectangleSeatGrid: {
-    position: "relative",
-    zIndex: 2,
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 42px)",
-    gap: 8,
-    alignItems: "center",
-    justifyItems: "center",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+    flex: "0 0 auto",
   },
   tablePlate: {
     position: "absolute",
     left: "50%",
     top: "50%",
-    width: 142,
-    height: 142,
     transform: "translate(-50%, -50%)",
-    borderRadius: 999,
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(226,232,240,0.92))",
     border: "1px solid rgba(255,255,255,0.8)",
@@ -986,6 +1120,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     padding: 14,
     zIndex: 1,
+    boxSizing: "border-box",
   },
   tablePlateTop: {
     color: "#64748b",
@@ -997,11 +1132,11 @@ const styles: Record<string, CSSProperties> = {
   tablePlateName: {
     marginTop: 6,
     color: "#0f172a",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 950,
     lineHeight: 1.15,
   },
-  roundSeatButton: {
+  seatButton: {
     width: 42,
     height: 42,
     borderRadius: 999,
@@ -1019,6 +1154,7 @@ const styles: Record<string, CSSProperties> = {
     background:
       "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
     boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+    minWidth: 0,
   },
   cartGrid: {
     display: "grid",
