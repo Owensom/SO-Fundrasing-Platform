@@ -338,7 +338,6 @@ function seatPosition(index: number, total: number, shape: TableShape) {
   if (shape === "round") return roundSeatPosition(index, total);
   return edgeSeatPosition(index, total, shape);
 }
-
 function tableAreaStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
@@ -392,6 +391,7 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
+
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -614,14 +614,18 @@ export default function PublicTableSelector({
       setIsCheckingOut(false);
     }
   }
-
-  return (
+    return (
     <>
       <style>
         {`
           @media (max-width: 980px) {
             .public-table-selector-shell {
               grid-template-columns: 1fr !important;
+            }
+
+            .public-table-selector-map-panel,
+            .public-table-selector-cart {
+              min-height: auto !important;
             }
 
             .public-table-selector-cart {
@@ -823,7 +827,8 @@ export default function PublicTableSelector({
                             {activeTable.label}
                           </strong>
                         </div>
-                                                {activeTable.seats.map((seat, index) => {
+
+                        {activeTable.seats.map((seat, index) => {
                           const selected = selectedSeatIds.includes(seat.id);
                           const unavailable = seat.status !== "available";
                           const colours = seatColours(seat.status, selected);
@@ -1095,11 +1100,13 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) minmax(330px, 420px)",
     gap: 22,
-    alignItems: "start",
+    alignItems: "stretch",
     width: "100%",
     maxWidth: "100%",
   },
   mapPanel: {
+    display: "flex",
+    flexDirection: "column",
     padding: 18,
     borderRadius: 28,
     background:
@@ -1107,6 +1114,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.12)",
     boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
     minWidth: 0,
+    minHeight: 650,
   },
   mapHeader: {
     display: "flex",
@@ -1159,8 +1167,10 @@ const styles: Record<string, CSSProperties> = {
   },
   singleTablePanel: {
     display: "grid",
+    gridTemplateRows: "auto 1fr auto",
     gap: 18,
     minWidth: 0,
+    flex: 1,
   },
   singleTableHeader: {
     display: "grid",
@@ -1237,6 +1247,8 @@ const styles: Record<string, CSSProperties> = {
     overflowY: "hidden",
     padding: "10px 4px 14px",
     boxSizing: "border-box",
+    display: "flex",
+    alignItems: "center",
   },
   tableArea: {
     position: "relative",
