@@ -686,3 +686,68 @@ export async function sendEventReceiptEmail({
     console.error("event receipt email failed", err);
   }
 }
+export async function sendAuctionBidConfirmationEmail({
+  to,
+  name,
+  auctionTitle,
+  itemTitle,
+  amountCents,
+  currency,
+  closesAt,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  auctionTitle: string;
+  itemTitle: string;
+  amountCents: number;
+  currency: string;
+  closesAt?: string | null;
+  branding?: EmailBranding;
+}) {
+  const formattedAmount = formatCurrency(amountCents, currency);
+  const formattedCloseDate = formatDrawDate(closesAt);
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Bid confirmation",
+    heading: "Your bid has been placed",
+    intro: `Hi ${name || "there"}, thank you — your silent auction bid has been received.`,
+    body: `
+      <div style="
+        border:1px solid #e2e8f0;
+        border-radius:18px;
+        padding:18px;
+        margin:20px 0;
+        background:#f8fafc;
+      ">
+        ${renderInfoRow("Auction", auctionTitle)}
+        ${renderInfoRow("Item", itemTitle)}
+        ${renderInfoRow("Your bid", formattedAmount)}
+        ${renderInfoRow("Auction closes", formattedCloseDate)}
+      </div>
+
+      <div style="
+        border-radius:18px;
+        padding:18px;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+      ">
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#1e3a8a;font-weight:800;">
+          Your bid is binding. If you are the winning bidder, the organiser will contact you after the auction closes.
+        </p>
+      </div>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `Your bid for ${itemTitle}`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("auction bid confirmation email failed", err);
+  }
+}
