@@ -1,13 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
-export default function ImageUploadField({
-  currentImageUrl,
-}: {
-  currentImageUrl: string;
-}) {
-  const [imageUrl, setImageUrl] = useState(currentImageUrl);
+type Props = {
+  currentImageUrl?: string | null;
+  currentFocusX?: number | null;
+  currentFocusY?: number | null;
+  imageFieldName?: string;
+  focusXFieldName?: string;
+  focusYFieldName?: string;
+  label?: string;
+  previewAlt?: string;
+};
+
+function cleanFocus(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+export default function ImageFocusUploadField({
+  currentImageUrl = "",
+  currentFocusX = 50,
+  currentFocusY = 50,
+  imageFieldName = "image_url",
+  focusXFieldName = "image_focus_x",
+  focusYFieldName = "image_focus_y",
+  label = "Image upload",
+  previewAlt = "Uploaded image preview",
+}: Props) {
+  const [imageUrl, setImageUrl] = useState(currentImageUrl || "");
+  const [focusX, setFocusX] = useState(cleanFocus(currentFocusX));
+  const [focusY, setFocusY] = useState(cleanFocus(currentFocusY));
   const [uploading, setUploading] = useState(false);
 
   async function uploadImage(file: File) {
@@ -43,18 +67,30 @@ export default function ImageUploadField({
       }
 
       setImageUrl(data.secure_url);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       alert("Upload error");
     } finally {
       setUploading(false);
     }
   }
 
+  const previewImageStyle: CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${focusX}% ${focusY}%`,
+    display: "block",
+  };
+
   return (
-    <div>
-      <label>
-        Image upload
+    <div style={styles.wrapper}>
+      <input type="hidden" name={imageFieldName} value={imageUrl} />
+      <input type="hidden" name={focusXFieldName} value={focusX} />
+      <input type="hidden" name={focusYFieldName} value={focusY} />
+
+      <label style={styles.label}>
+        {label}
         <input
           type="file"
           accept="image/*"
@@ -62,44 +98,178 @@ export default function ImageUploadField({
             const file = event.target.files?.[0];
             if (file) uploadImage(file);
           }}
-          style={{
-            display: "block",
-            width: "100%",
-            padding: 10,
-            marginTop: 6,
-          }}
+          style={styles.fileInput}
         />
       </label>
 
-      <input type="hidden" name="image_url" value={imageUrl} />
+      {uploading ? <p style={styles.muted}>Uploading image...</p> : null}
 
-      {uploading && (
-        <p style={{ marginTop: 8 }}>Uploading image...</p>
-      )}
+      {imageUrl ? (
+        <>
+          <div style={styles.previewGrid}>
+            <div>
+              <div style={styles.previewLabel}>Wide banner preview</div>
+              <div style={styles.bannerPreview}>
+                <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
+                <div
+                  style={{
+                    ...styles.crosshair,
+                    left: `${focusX}%`,
+                    top: `${focusY}%`,
+                  }}
+                />
+              </div>
+            </div>
 
-      {imageUrl && (
-        <div style={{ marginTop: 12 }}>
-          <img
-            src={imageUrl}
-            alt="Uploaded"
-            style={{
-              maxWidth: 240,
-              borderRadius: 12,
-              display: "block",
-              marginBottom: 8,
-            }}
-          />
-          <p
-            style={{
-              fontSize: 12,
-              wordBreak: "break-all",
-              color: "#6b7280",
-            }}
-          >
-            {imageUrl}
-          </p>
+            <div>
+              <div style={styles.previewLabel}>Card preview</div>
+              <div style={styles.cardPreview}>
+                <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
+                <div
+                  style={{
+                    ...styles.crosshair,
+                    left: `${focusX}%`,
+                    top: `${focusY}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.controls}>
+            <label style={styles.label}>
+              Horizontal focus: {focusX}%
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={focusX}
+                onChange={(event) =>
+                  setFocusX(cleanFocus(Number(event.target.value)))
+                }
+                style={styles.range}
+              />
+              <span style={styles.helpText}>
+                0 = left, 50 = centre, 100 = right
+              </span>
+            </label>
+
+            <label style={styles.label}>
+              Vertical focus: {focusY}%
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={focusY}
+                onChange={(event) =>
+                  setFocusY(cleanFocus(Number(event.target.value)))
+                }
+                style={styles.range}
+              />
+              <span style={styles.helpText}>
+                0 = top, 50 = centre, 100 = bottom
+              </span>
+            </label>
+          </div>
+
+          <p style={styles.urlText}>{imageUrl}</p>
+        </>
+      ) : (
+        <div style={styles.emptyPreview}>
+          Upload an image to preview and set the crop focus.
         </div>
       )}
     </div>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  wrapper: {
+    display: "grid",
+    gap: 14,
+  },
+  label: {
+    display: "grid",
+    gap: 7,
+    color: "#0f172a",
+    fontWeight: 900,
+  },
+  fileInput: {
+    display: "block",
+    width: "100%",
+    boxSizing: "border-box",
+    padding: 10,
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+  },
+  muted: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  previewGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 14,
+  },
+  previewLabel: {
+    marginBottom: 8,
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  bannerPreview: {
+    position: "relative",
+    height: 190,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#e2e8f0",
+    border: "1px solid #cbd5e1",
+  },
+  cardPreview: {
+    position: "relative",
+    height: 190,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#e2e8f0",
+    border: "1px solid #cbd5e1",
+  },
+  crosshair: {
+    position: "absolute",
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    border: "3px solid #ffffff",
+    boxShadow: "0 0 0 2px rgba(15,23,42,0.75)",
+    transform: "translate(-50%, -50%)",
+    pointerEvents: "none",
+  },
+  controls: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gap: 14,
+  },
+  range: {
+    width: "100%",
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  urlText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    wordBreak: "break-all",
+  },
+  emptyPreview: {
+    padding: 18,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+  },
+};
