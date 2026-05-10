@@ -686,6 +686,7 @@ export async function sendEventReceiptEmail({
     console.error("event receipt email failed", err);
   }
 }
+
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
@@ -749,5 +750,75 @@ export async function sendAuctionBidConfirmationEmail({
     });
   } catch (err) {
     console.error("auction bid confirmation email failed", err);
+  }
+}
+
+export async function sendAuctionOutbidEmail({
+  to,
+  name,
+  auctionTitle,
+  itemTitle,
+  previousAmountCents,
+  newAmountCents,
+  currency,
+  closesAt,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  auctionTitle: string;
+  itemTitle: string;
+  previousAmountCents: number;
+  newAmountCents: number;
+  currency: string;
+  closesAt?: string | null;
+  branding?: EmailBranding;
+}) {
+  const previousAmount = formatCurrency(previousAmountCents, currency);
+  const newAmount = formatCurrency(newAmountCents, currency);
+  const formattedCloseDate = formatDrawDate(closesAt);
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Auction update",
+    heading: "You have been outbid",
+    intro: `Hi ${name || "there"}, another bidder has placed a higher bid on an item you were leading.`,
+    body: `
+      <div style="
+        border:1px solid #fed7aa;
+        border-radius:18px;
+        padding:18px;
+        margin:20px 0;
+        background:#fff7ed;
+      ">
+        ${renderInfoRow("Auction", auctionTitle)}
+        ${renderInfoRow("Item", itemTitle)}
+        ${renderInfoRow("Your previous bid", previousAmount)}
+        ${renderInfoRow("New highest bid", newAmount)}
+        ${renderInfoRow("Auction closes", formattedCloseDate)}
+      </div>
+
+      <div style="
+        border-radius:18px;
+        padding:18px;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+      ">
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#1e3a8a;font-weight:800;">
+          You can return to the auction page and place a new bid before the auction closes.
+        </p>
+      </div>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `You have been outbid on ${itemTitle}`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("auction outbid email failed", err);
   }
 }
