@@ -93,7 +93,6 @@ function getTableShapeForGroup({
   seatingLayoutJson,
   tableNumber,
   tableLabel,
-  seatCount,
 }: {
   seatingLayoutJson?: SeatingLayoutJson | null;
   tableNumber: string;
@@ -124,9 +123,6 @@ function getTableShapeForGroup({
     normaliseShape(layout.tableShape) || normaliseShape(layout.table_shape);
 
   if (globalShape) return globalShape;
-
-  if (seatCount >= 10) return "rectangle";
-  if (seatCount === 4 || seatCount === 8) return "square";
 
   return "round";
 }
@@ -512,8 +508,7 @@ export default function PublicTableSelector({
       return [...current, ...additions];
     });
   }
-
-  async function startCheckout() {
+    async function startCheckout() {
     if (isCheckingOut) return;
 
     if (!buyerName.trim() || !buyerEmail.trim()) {
@@ -674,13 +669,14 @@ export default function PublicTableSelector({
                     >
                       <div>
                         <p style={styles.tableNumber}>
-                          Table {group.tableNumber || "Unassigned"} ·{" "}
-                          {tableShape}
+                          Table {group.tableNumber || "Unassigned"}
                         </p>
                         <h4 style={styles.groupTitle}>{group.label}</h4>
                         <p style={styles.groupSub}>
                           {availableCount} available from {group.seats.length}
-                          {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
+                          {selectedCount > 0
+                            ? ` · ${selectedCount} selected`
+                            : ""}
                         </p>
                       </div>
 
