@@ -243,62 +243,85 @@ function roundSeatPosition(index: number, total: number) {
   };
 }
 
+function distributeSeatCounts(total: number, shape: TableShape) {
+  if (shape === "rectangle") {
+    const top = Math.max(1, Math.ceil(total * 0.34));
+    const bottom = Math.max(1, Math.floor(total * 0.34));
+    const remaining = Math.max(0, total - top - bottom);
+    const right = Math.ceil(remaining / 2);
+    const left = remaining - right;
+
+    return {
+      top,
+      right,
+      bottom,
+      left,
+    };
+  }
+
+  const top = Math.ceil(total / 4);
+  const right = Math.ceil((total - top) / 3);
+  const bottom = Math.ceil((total - top - right) / 2);
+  const left = Math.max(0, total - top - right - bottom);
+
+  return {
+    top,
+    right,
+    bottom,
+    left,
+  };
+}
+
 function edgeSeatPosition(index: number, total: number, shape: TableShape) {
   const width = shape === "rectangle" ? 420 : 304;
   const height = shape === "rectangle" ? 276 : 304;
-  const margin = 23;
+  const edgeInset = 22;
+  const sideInset = 54;
 
-  const topCount =
-    shape === "rectangle"
-      ? Math.max(2, Math.ceil(total * 0.32))
-      : Math.max(1, Math.ceil(total / 4));
-  const bottomCount =
-    shape === "rectangle"
-      ? Math.max(2, Math.ceil(total * 0.32))
-      : Math.max(1, Math.ceil(total / 4));
-  const remaining = Math.max(0, total - topCount - bottomCount);
-  const rightCount = Math.ceil(remaining / 2);
-  const leftCount = remaining - rightCount;
+  const counts = distributeSeatCounts(total, shape);
 
-  if (index < topCount) {
-    const position = (index + 1) / (topCount + 1);
+  if (index < counts.top) {
+    const position = (index + 1) / (counts.top + 1);
+
     return {
       position: "absolute" as const,
-      left: margin + position * (width - margin * 2),
-      top: 8,
+      left: edgeInset + position * (width - edgeInset * 2),
+      top: 26,
       transform: "translate(-50%, -50%)",
     };
   }
 
-  if (index < topCount + rightCount) {
-    const sideIndex = index - topCount;
-    const position = (sideIndex + 1) / (rightCount + 1);
+  if (index < counts.top + counts.right) {
+    const sideIndex = index - counts.top;
+    const position = (sideIndex + 1) / (counts.right + 1);
+
     return {
       position: "absolute" as const,
-      left: width - 8,
-      top: margin + position * (height - margin * 2),
+      left: width - 26,
+      top: sideInset + position * (height - sideInset * 2),
       transform: "translate(-50%, -50%)",
     };
   }
 
-  if (index < topCount + rightCount + bottomCount) {
-    const bottomIndex = index - topCount - rightCount;
-    const position = (bottomIndex + 1) / (bottomCount + 1);
+  if (index < counts.top + counts.right + counts.bottom) {
+    const bottomIndex = index - counts.top - counts.right;
+    const position = (bottomIndex + 1) / (counts.bottom + 1);
+
     return {
       position: "absolute" as const,
-      left: width - margin - position * (width - margin * 2),
-      top: height - 8,
+      left: width - edgeInset - position * (width - edgeInset * 2),
+      top: height - 26,
       transform: "translate(-50%, -50%)",
     };
   }
 
-  const leftIndex = index - topCount - rightCount - bottomCount;
-  const position = (leftIndex + 1) / (Math.max(leftCount, 1) + 1);
+  const leftIndex = index - counts.top - counts.right - counts.bottom;
+  const position = (leftIndex + 1) / (Math.max(counts.left, 1) + 1);
 
   return {
     position: "absolute" as const,
-    left: 8,
-    top: height - margin - position * (height - margin * 2),
+    left: 26,
+    top: height - sideInset - position * (height - sideInset * 2),
     transform: "translate(-50%, -50%)",
   };
 }
@@ -314,7 +337,7 @@ function tableAreaStyle(shape: TableShape): CSSProperties {
       ...styles.tableArea,
       width: 304,
       height: 304,
-      borderRadius: 28,
+      borderRadius: 30,
     };
   }
 
@@ -323,7 +346,7 @@ function tableAreaStyle(shape: TableShape): CSSProperties {
       ...styles.tableArea,
       width: 420,
       height: 276,
-      borderRadius: 30,
+      borderRadius: 32,
     };
   }
 
@@ -339,18 +362,18 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
       ...styles.tablePlate,
-      width: 140,
-      height: 140,
-      borderRadius: 24,
+      width: 142,
+      height: 142,
+      borderRadius: 26,
     };
   }
 
   if (shape === "rectangle") {
     return {
       ...styles.tablePlate,
-      width: 206,
+      width: 208,
       height: 112,
-      borderRadius: 24,
+      borderRadius: 26,
     };
   }
 
