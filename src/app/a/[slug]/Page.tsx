@@ -33,6 +33,25 @@ function centsToPoundsInput(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function focusValue(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function focusedImageStyle(
+  focusX: number | null | undefined,
+  focusY: number | null | undefined,
+): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${focusValue(focusX)}% ${focusValue(focusY)}%`,
+    display: "block",
+  };
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
@@ -62,6 +81,7 @@ function getAuctionAvailability(auction: {
 
   if (auction.opens_at) {
     const opensAt = new Date(auction.opens_at).getTime();
+
     if (!Number.isNaN(opensAt) && now < opensAt) {
       return {
         canBid: false,
@@ -73,6 +93,7 @@ function getAuctionAvailability(auction: {
 
   if (auction.closes_at) {
     const closesAt = new Date(auction.closes_at).getTime();
+
     if (!Number.isNaN(closesAt) && now > closesAt) {
       return {
         canBid: false,
@@ -159,7 +180,10 @@ export default async function PublicAuctionPage({
             <img
               src={auction.image_url}
               alt={auction.title}
-              style={styles.heroImage}
+              style={focusedImageStyle(
+                auction.image_focus_x,
+                auction.image_focus_y,
+              )}
             />
           ) : (
             <div style={styles.heroImageEmpty}>🔨</div>
@@ -195,8 +219,7 @@ export default async function PublicAuctionPage({
                 : Number(highestBid || 0) +
                   Number(item.minimum_increment_cents || 0);
 
-            const itemCanBid =
-              availability.canBid && item.status === "active";
+            const itemCanBid = availability.canBid && item.status === "active";
 
             return (
               <article key={item.id} style={styles.itemCard}>
@@ -205,7 +228,10 @@ export default async function PublicAuctionPage({
                     <img
                       src={item.image_url}
                       alt={item.title}
-                      style={styles.itemImage}
+                      style={focusedImageStyle(
+                        item.image_focus_x,
+                        item.image_focus_y,
+                      )}
                     />
                   ) : (
                     <div style={styles.itemImageEmpty}>🎁</div>
@@ -258,11 +284,20 @@ export default async function PublicAuctionPage({
                       </strong>
                     </div>
                   </div>
-                                    {itemCanBid ? (
-                    <form method="post" action="/api/auctions/bid" style={styles.bidForm}>
+
+                  {itemCanBid ? (
+                    <form
+                      method="post"
+                      action="/api/auctions/bid"
+                      style={styles.bidForm}
+                    >
                       <input type="hidden" name="auction_id" value={auction.id} />
                       <input type="hidden" name="item_id" value={item.id} />
-                      <input type="hidden" name="auction_slug" value={auction.slug} />
+                      <input
+                        type="hidden"
+                        name="auction_slug"
+                        value={auction.slug}
+                      />
 
                       <div style={styles.formGrid}>
                         <label style={styles.label}>
@@ -419,13 +454,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 18px 44px rgba(15,23,42,0.12)",
   },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-    minHeight: 310,
-    objectFit: "cover",
-    display: "block",
-  },
   heroImageEmpty: {
     width: "100%",
     height: "100%",
@@ -497,12 +525,6 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     height: 230,
     background: "#f1f5f9",
-  },
-  itemImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
   },
   itemImageEmpty: {
     width: "100%",
