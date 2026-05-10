@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import ImageUploadField from "@/components/ImageUploadField";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import {
   createAuction,
   slugifyAuctionTitle,
@@ -207,50 +207,19 @@ export default async function NewAuctionPage() {
             <div>
               <h3 style={styles.subTitle}>Main auction image</h3>
               <p style={styles.sectionText}>
-                Upload the main public image, then use the focus sliders to
-                choose the exact part that should stay visible when cropped.
+                Upload the main public image, then use the live previews to set
+                the image focus point.
               </p>
             </div>
 
             <div style={styles.uploadBox}>
-              <ImageUploadField currentImageUrl="" />
-            </div>
-
-            <div style={styles.focusGrid}>
-              <label style={styles.label}>
-                Horizontal focus
-                <input
-                  name="image_focus_x"
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue="50"
-                  style={styles.range}
-                />
-                <span style={styles.helpText}>
-                  0 = left, 50 = centre, 100 = right
-                </span>
-              </label>
-
-              <label style={styles.label}>
-                Vertical focus
-                <input
-                  name="image_focus_y"
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue="50"
-                  style={styles.range}
-                />
-                <span style={styles.helpText}>
-                  0 = top, 50 = centre, 100 = bottom
-                </span>
-              </label>
-            </div>
-
-            <div style={styles.previewNote}>
-              After saving, the public auction page and campaigns page will use
-              the stored focus point.
+              <ImageFocusUploadField
+                currentImageUrl=""
+                currentFocusX={50}
+                currentFocusY={50}
+                label="Main auction image"
+                previewAlt="Auction image preview"
+              />
             </div>
           </section>
 
@@ -368,11 +337,6 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
     gap: 14,
   },
-  focusGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 14,
-  },
   label: {
     display: "grid",
     gap: 7,
@@ -389,9 +353,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     color: "#0f172a",
     background: "#ffffff",
-  },
-  range: {
-    width: "100%",
   },
   textarea: {
     width: "100%",
@@ -423,15 +384,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-  },
-  previewNote: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    color: "#475569",
-    fontWeight: 800,
   },
   actionsCard: {
     display: "flex",
