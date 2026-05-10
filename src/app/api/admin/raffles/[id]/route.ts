@@ -29,6 +29,14 @@ function normaliseImagePosition(value: unknown) {
   return "center";
 }
 
+function normaliseFocus(value: FormDataEntryValue | null, fallback = 50) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
 function parsePositiveInteger(value: FormDataEntryValue | null, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
@@ -67,6 +75,9 @@ export async function POST(
     const image_position = normaliseImagePosition(
       formData.get("image_position"),
     );
+
+    const image_focus_x = normaliseFocus(formData.get("image_focus_x"), 50);
+    const image_focus_y = normaliseFocus(formData.get("image_focus_y"), 50);
 
     const rawDrawAt = String(formData.get("draw_at") || "").trim();
     const draw_at = rawDrawAt ? rawDrawAt : null;
@@ -157,17 +168,27 @@ export async function POST(
         config_json = jsonb_set(
           jsonb_set(
             jsonb_set(
-              coalesce(config_json, '{}'::jsonb),
-              '{auto_draw_from_prize}',
-              to_jsonb($3::int),
+              jsonb_set(
+                jsonb_set(
+                  coalesce(config_json, '{}'::jsonb),
+                  '{auto_draw_from_prize}',
+                  to_jsonb($3::int),
+                  true
+                ),
+                '{auto_draw_to_prize}',
+                to_jsonb($4::int),
+                true
+              ),
+              '{free_entry}',
+              $5::jsonb,
               true
             ),
-            '{auto_draw_to_prize}',
-            to_jsonb($4::int),
+            '{image_focus_x}',
+            to_jsonb($6::int),
             true
           ),
-          '{free_entry}',
-          $5::jsonb,
+          '{image_focus_y}',
+          to_jsonb($7::int),
           true
         ),
         updated_at = now()
@@ -181,6 +202,8 @@ export async function POST(
         autoDrawFromPrize,
         autoDrawToPrize,
         JSON.stringify(freeEntry),
+        image_focus_x,
+        image_focus_y,
       ],
     );
 
