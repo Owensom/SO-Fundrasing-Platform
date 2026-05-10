@@ -10,6 +10,10 @@ type PageProps = {
   params: {
     slug: string;
   };
+  searchParams?: {
+    bid?: string;
+    error?: string;
+  };
 };
 
 function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
@@ -81,11 +85,15 @@ function getAuctionAvailability(auction: {
   return {
     canBid: true,
     label: "Open for bids",
-    message: "Place your bid below. Winning bidders will be contacted after the auction closes.",
+    message:
+      "Place your bid below. Winning bidders will be contacted after the auction closes.",
   };
 }
 
-export default async function PublicAuctionPage({ params }: PageProps) {
+export default async function PublicAuctionPage({
+  params,
+  searchParams,
+}: PageProps) {
   const tenantSlug = await getTenantSlugFromHeaders();
 
   if (!tenantSlug) {
@@ -101,6 +109,15 @@ export default async function PublicAuctionPage({ params }: PageProps) {
   const items = await listAuctionItems(auction.id);
   const visibleItems = items.filter((item) => item.status !== "withdrawn");
   const availability = getAuctionAvailability(auction);
+
+  const successMessage =
+    searchParams?.bid === "success"
+      ? "Thank you — your bid has been placed successfully."
+      : null;
+
+  const errorMessage = searchParams?.error
+    ? decodeURIComponent(searchParams.error)
+    : null;
 
   return (
     <main style={styles.page}>
@@ -149,6 +166,14 @@ export default async function PublicAuctionPage({ params }: PageProps) {
           )}
         </div>
       </section>
+
+      {successMessage ? (
+        <section style={styles.successCard}>{successMessage}</section>
+      ) : null}
+
+      {errorMessage ? (
+        <section style={styles.errorCard}>{errorMessage}</section>
+      ) : null}
 
       <section style={styles.noticeCard}>
         <h2 style={styles.noticeTitle}>{availability.label}</h2>
@@ -238,11 +263,6 @@ export default async function PublicAuctionPage({ params }: PageProps) {
                       <input type="hidden" name="auction_id" value={auction.id} />
                       <input type="hidden" name="item_id" value={item.id} />
                       <input type="hidden" name="auction_slug" value={auction.slug} />
-                      <input
-                        type="hidden"
-                        name="minimum_bid"
-                        value={minimumNextBid}
-                      />
 
                       <div style={styles.formGrid}>
                         <label style={styles.label}>
@@ -415,6 +435,24 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     fontSize: 54,
     background: "#f1f5f9",
+  },
+  successCard: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontWeight: 950,
+    marginBottom: 16,
+  },
+  errorCard: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontWeight: 950,
+    marginBottom: 16,
   },
   noticeCard: {
     padding: 20,
