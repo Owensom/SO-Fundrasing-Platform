@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import ImageUploadField from "@/components/ImageUploadField";
 import {
   createAuction,
   slugifyAuctionTitle,
@@ -204,21 +205,16 @@ export default async function NewAuctionPage() {
 
           <section style={styles.imageFocusPanel}>
             <div>
-              <h3 style={styles.subTitle}>Main auction image focus</h3>
+              <h3 style={styles.subTitle}>Main auction image</h3>
               <p style={styles.sectionText}>
-                Use these sliders to choose the exact part of the image that
-                should stay visible when the page crops it.
+                Upload the main public image, then use the focus sliders to
+                choose the exact part that should stay visible when cropped.
               </p>
             </div>
 
-            <label style={styles.label}>
-              Image URL
-              <input
-                name="image_url"
-                placeholder="https://..."
-                style={styles.input}
-              />
-            </label>
+            <div style={styles.uploadBox}>
+              <ImageUploadField currentImageUrl="" />
+            </div>
 
             <div style={styles.focusGrid}>
               <label style={styles.label}>
@@ -253,11 +249,12 @@ export default async function NewAuctionPage() {
             </div>
 
             <div style={styles.previewNote}>
-              Preview will use: <strong>50% 50%</strong> by default. After
-              saving, the public page will use the stored focus point.
+              After saving, the public auction page and campaigns page will use
+              the stored focus point.
             </div>
           </section>
-                    <label style={styles.label}>
+
+          <label style={styles.label}>
             Terms / auction rules
             <textarea
               name="terms_text"
@@ -418,6 +415,13 @@ const styles: Record<string, CSSProperties> = {
     padding: 18,
     borderRadius: 20,
     background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  uploadBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
   previewNote: {
