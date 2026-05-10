@@ -21,6 +21,17 @@ function parseNumber(
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normaliseFocus(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback = 50,
+) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
 function parsePrizeRows(formData: FormData) {
   const titles = formData.getAll("prize_title");
   const descriptions = formData.getAll("prize_description");
@@ -122,6 +133,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       formData.get("image_url") ?? existing.image_url ?? "",
     ).trim();
 
+    const currentConfig = (existing.config_json ?? {}) as any;
+
+    const imageFocusX = normaliseFocus(
+      formData.get("image_focus_x"),
+      normaliseFocus(currentConfig.image_focus_x, 50),
+    );
+
+    const imageFocusY = normaliseFocus(
+      formData.get("image_focus_y"),
+      normaliseFocus(currentConfig.image_focus_y, 50),
+    );
+
     const currency = String(
       formData.get("currency") ?? existing.currency ?? "GBP",
     );
@@ -144,8 +167,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const pricePerSquareCents = Math.round(priceMajor * 100);
     const drawAt = parseDateTime(formData.get("draw_at"));
     const prizes = parsePrizeRows(formData);
-
-    const currentConfig = (existing.config_json ?? {}) as any;
 
     const autoDrawFromPrize = Math.max(
       1,
@@ -179,6 +200,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       reserved: Array.isArray(currentConfig.reserved)
         ? currentConfig.reserved
         : [],
+      image_focus_x: imageFocusX,
+      image_focus_y: imageFocusY,
       auto_draw_from_prize: autoDrawFromPrize,
       auto_draw_to_prize: autoDrawToPrize,
       question:
