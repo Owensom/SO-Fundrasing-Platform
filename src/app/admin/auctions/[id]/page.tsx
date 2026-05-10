@@ -56,6 +56,18 @@ function centsToPoundsInput(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function cleanFocus(value: FormDataEntryValue | null) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function focusValue(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
@@ -114,6 +126,19 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   };
 }
 
+function getFocusedImageStyle(
+  focusX: number | null | undefined,
+  focusY: number | null | undefined,
+): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${focusValue(focusX)}% ${focusValue(focusY)}%`,
+    display: "block",
+  };
+}
+
 async function requireAuctionAccess(id: string) {
   const session = await auth();
 
@@ -154,6 +179,8 @@ async function updateAuctionAction(formData: FormData) {
       auction.slug,
     description: String(formData.get("description") || "").trim() || null,
     imageUrl: String(formData.get("image_url") || "").trim() || null,
+    imageFocusX: cleanFocus(formData.get("image_focus_x")),
+    imageFocusY: cleanFocus(formData.get("image_focus_y")),
     status: String(formData.get("status") || "draft") as AuctionStatus,
     currency: String(formData.get("currency") || "GBP").trim() || "GBP",
     opensAt: cleanDateTime(formData.get("opens_at")),
@@ -177,6 +204,8 @@ async function createAuctionItemAction(formData: FormData) {
     title: String(formData.get("title") || "").trim() || "Untitled item",
     description: String(formData.get("description") || "").trim() || null,
     imageUrl: String(formData.get("image_url") || "").trim() || null,
+    imageFocusX: cleanFocus(formData.get("image_focus_x")),
+    imageFocusY: cleanFocus(formData.get("image_focus_y")),
     donorName: String(formData.get("donor_name") || "").trim() || null,
     startingBidCents: poundsToCents(formData.get("starting_bid")),
     minimumIncrementCents:
@@ -203,6 +232,8 @@ async function updateAuctionItemAction(formData: FormData) {
     title: String(formData.get("title") || "").trim() || "Untitled item",
     description: String(formData.get("description") || "").trim() || null,
     imageUrl: String(formData.get("image_url") || "").trim() || null,
+    imageFocusX: cleanFocus(formData.get("image_focus_x")),
+    imageFocusY: cleanFocus(formData.get("image_focus_y")),
     donorName: String(formData.get("donor_name") || "").trim() || null,
     startingBidCents: poundsToCents(formData.get("starting_bid")),
     minimumIncrementCents:
@@ -383,15 +414,70 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             />
           </label>
 
-          <label style={styles.label}>
-            Image URL
-            <input
-              name="image_url"
-              defaultValue={auction.image_url || ""}
-              placeholder="https://..."
-              style={styles.input}
-            />
-          </label>
+          <section style={styles.imageFocusPanel}>
+            <div>
+              <h3 style={styles.subTitle}>Main auction image focus</h3>
+              <p style={styles.sectionText}>
+                Choose the exact part of the image that should stay visible
+                when the public page crops it.
+              </p>
+            </div>
+
+            {auction.image_url ? (
+              <div style={styles.focusPreviewWrap}>
+                <img
+                  src={auction.image_url}
+                  alt={auction.title}
+                  style={getFocusedImageStyle(
+                    auction.image_focus_x,
+                    auction.image_focus_y,
+                  )}
+                />
+              </div>
+            ) : null}
+
+            <label style={styles.label}>
+              Image URL
+              <input
+                name="image_url"
+                defaultValue={auction.image_url || ""}
+                placeholder="https://..."
+                style={styles.input}
+              />
+            </label>
+
+            <div style={styles.focusGrid}>
+              <label style={styles.label}>
+                Horizontal focus
+                <input
+                  name="image_focus_x"
+                  type="range"
+                  min="0"
+                  max="100"
+                  defaultValue={focusValue(auction.image_focus_x)}
+                  style={styles.range}
+                />
+                <span style={styles.helpText}>
+                  Current: {focusValue(auction.image_focus_x)}%
+                </span>
+              </label>
+
+              <label style={styles.label}>
+                Vertical focus
+                <input
+                  name="image_focus_y"
+                  type="range"
+                  min="0"
+                  max="100"
+                  defaultValue={focusValue(auction.image_focus_y)}
+                  style={styles.range}
+                />
+                <span style={styles.helpText}>
+                  Current: {focusValue(auction.image_focus_y)}%
+                </span>
+              </label>
+            </div>
+          </section>
 
           <label style={styles.label}>
             Terms / auction rules
@@ -506,6 +592,38 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             </label>
           </div>
 
+          <div style={styles.focusGrid}>
+            <label style={styles.label}>
+              Item image horizontal focus
+              <input
+                name="image_focus_x"
+                type="range"
+                min="0"
+                max="100"
+                defaultValue="50"
+                style={styles.range}
+              />
+              <span style={styles.helpText}>
+                0 = left, 50 = centre, 100 = right
+              </span>
+            </label>
+
+            <label style={styles.label}>
+              Item image vertical focus
+              <input
+                name="image_focus_y"
+                type="range"
+                min="0"
+                max="100"
+                defaultValue="50"
+                style={styles.range}
+              />
+              <span style={styles.helpText}>
+                0 = top, 50 = centre, 100 = bottom
+              </span>
+            </label>
+          </div>
+
           <label style={styles.label}>
             Description
             <textarea
@@ -525,9 +643,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                 {items.length === 0 ? (
           <div style={styles.emptyBox}>
             <h3 style={{ margin: 0 }}>No items yet</h3>
-            <p style={styles.muted}>
-              Add your first auction item above.
-            </p>
+            <p style={styles.muted}>Add your first auction item above.</p>
           </div>
         ) : (
           <div style={styles.itemsList}>
@@ -543,7 +659,10 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                         <img
                           src={item.image_url}
                           alt={item.title}
-                          style={styles.itemImage}
+                          style={getFocusedImageStyle(
+                            item.image_focus_x,
+                            item.image_focus_y,
+                          )}
                         />
                       ) : (
                         <div style={styles.itemImageEmpty}>🎁</div>
@@ -710,6 +829,38 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                         </label>
                       </div>
 
+                      <div style={styles.focusGrid}>
+                        <label style={styles.label}>
+                          Item image horizontal focus
+                          <input
+                            name="image_focus_x"
+                            type="range"
+                            min="0"
+                            max="100"
+                            defaultValue={focusValue(item.image_focus_x)}
+                            style={styles.range}
+                          />
+                          <span style={styles.helpText}>
+                            Current: {focusValue(item.image_focus_x)}%
+                          </span>
+                        </label>
+
+                        <label style={styles.label}>
+                          Item image vertical focus
+                          <input
+                            name="image_focus_y"
+                            type="range"
+                            min="0"
+                            max="100"
+                            defaultValue={focusValue(item.image_focus_y)}
+                            style={styles.range}
+                          />
+                          <span style={styles.helpText}>
+                            Current: {focusValue(item.image_focus_y)}%
+                          </span>
+                        </label>
+                      </div>
+
                       <label style={styles.label}>
                         Description
                         <textarea
@@ -727,7 +878,10 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                       </div>
                     </form>
 
-                    <form action={deleteAuctionItemAction} style={styles.deleteItemForm}>
+                    <form
+                      action={deleteAuctionItemAction}
+                      style={styles.deleteItemForm}
+                    >
                       <input
                         type="hidden"
                         name="auction_id"
@@ -753,14 +907,21 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                               <strong>{bid.bidder_name}</strong>
                               <div style={styles.muted}>{bid.bidder_email}</div>
                               {bid.bidder_phone ? (
-                                <div style={styles.muted}>{bid.bidder_phone}</div>
+                                <div style={styles.muted}>
+                                  {bid.bidder_phone}
+                                </div>
                               ) : null}
                             </div>
 
                             <div style={styles.bidAmount}>
-                              {moneyFromCents(bid.amount_cents, auction.currency)}
+                              {moneyFromCents(
+                                bid.amount_cents,
+                                auction.currency,
+                              )}
                               {winningBid?.id === bid.id ? (
-                                <span style={styles.winningBadge}>Winning</span>
+                                <span style={styles.winningBadge}>
+                                  Winning
+                                </span>
                               ) : null}
                             </div>
 
@@ -905,6 +1066,11 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
   },
+  subTitle: {
+    margin: 0,
+    fontSize: 20,
+    color: "#0f172a",
+  },
   status: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -917,6 +1083,12 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 14,
+  },
+  focusGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 14,
+    marginTop: 12,
   },
   label: {
     display: "grid",
@@ -935,6 +1107,9 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     background: "#ffffff",
   },
+  range: {
+    width: "100%",
+  },
   textarea: {
     width: "100%",
     boxSizing: "border-box",
@@ -946,6 +1121,27 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     resize: "vertical",
     fontFamily: "inherit",
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  imageFocusPanel: {
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  focusPreviewWrap: {
+    marginTop: 14,
+    width: "100%",
+    height: 230,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
   },
   actionsRight: {
     display: "flex",
@@ -970,11 +1166,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     marginBottom: 20,
-  },
-  subTitle: {
-    margin: 0,
-    fontSize: 20,
-    color: "#0f172a",
   },
   emptyBox: {
     padding: 20,
@@ -1007,12 +1198,6 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
-  },
-  itemImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
   },
   itemImageEmpty: {
     width: "100%",
