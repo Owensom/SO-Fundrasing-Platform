@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Auction = {
   id: string;
@@ -83,6 +84,7 @@ function getAvailability(auction: Auction | null) {
     return {
       canBid: false,
       label: "Loading",
+      tone: "neutral",
       message: "Loading auction details.",
     };
   }
@@ -93,6 +95,7 @@ function getAvailability(auction: Auction | null) {
     return {
       canBid: false,
       label: "Not open",
+      tone: "neutral",
       message: "This auction is not currently accepting bids.",
     };
   }
@@ -104,6 +107,7 @@ function getAvailability(auction: Auction | null) {
       return {
         canBid: false,
         label: "Opening soon",
+        tone: "gold",
         message: `Bidding opens on ${formatDate(auction.opens_at)}.`,
       };
     }
@@ -116,6 +120,7 @@ function getAvailability(auction: Auction | null) {
       return {
         canBid: false,
         label: "Closed",
+        tone: "closed",
         message: "This auction has now closed.",
       };
     }
@@ -124,13 +129,61 @@ function getAvailability(auction: Auction | null) {
   return {
     canBid: true,
     label: "Open for bids",
+    tone: "open",
     message:
       "Place your bid below. Winning bidders will be contacted after the auction closes.",
   };
 }
 
+function reserveStatus(item: AuctionItem, currency: string) {
+  if (item.reserve_price_cents === null || item.reserve_price_cents === undefined) {
+    return "No reserve";
+  }
+
+  if (item.highest_bid_cents !== null && item.highest_bid_cents >= item.reserve_price_cents) {
+    return "Reserve met";
+  }
+
+  return `Reserve ${moneyFromCents(item.reserve_price_cents, currency)}`;
+}
+
+function statusStyle(status: string): CSSProperties {
+  const clean = status.toLowerCase();
+
+  if (clean === "active" || clean === "published") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      border: "1px solid #bbf7d0",
+    };
+  }
+
+  if (clean === "closed") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid #fed7aa",
+    };
+  }
+
+  if (clean === "withdrawn") {
+    return {
+      background: "#fee2e2",
+      color: "#991b1b",
+      border: "1px solid #fecaca",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+  };
+}
+
 export default function PublicAuctionPage({ params }: Props) {
   const { slug } = params;
+  const searchParams = useSearchParams();
 
   const [auction, setAuction] = useState<Auction | null>(null);
   const [items, setItems] = useState<AuctionItem[]>([]);
@@ -182,12 +235,30 @@ export default function PublicAuctionPage({ params }: Props) {
 
   const availability = useMemo(() => getAvailability(auction), [auction]);
 
+  const successMessage =
+    searchParams.get("bid") === "success"
+      ? "Thank you — your bid has been placed successfully."
+      : "";
+
+  const queryError = searchParams.get("error") || "";
+
+  const activeItems = items.filter((item) => item.status === "active").length;
+  const totalBids = items.reduce((total, item) => total + Number(item.bid_count || 0), 0);
+  const topBid = items.reduce(
+    (highest, item) => Math.max(highest, Number(item.highest_bid_cents || 0)),
+    0,
+  );
+
   if (!slug) return <main style={styles.page}>Loading auction…</main>;
 
   if (loading) {
     return (
       <main style={styles.page}>
-        <section style={styles.emptyCard}>Loading silent auction…</section>
+        <section style={styles.loadingCard}>
+          <div style={styles.loadingIcon}>🔨</div>
+          <h1 style={styles.loadingTitle}>Loading silent auction…</h1>
+          <p style={styles.loadingText}>Preparing the auction lots.</p>
+        </section>
       </main>
     );
   }
@@ -216,7 +287,12 @@ export default function PublicAuctionPage({ params }: Props) {
             ← Back to campaigns
           </Link>
 
-          <div style={styles.badge}>Silent auction</div>
+          <div style={styles.badgeRow}>
+            <span style={styles.badge}>Silent auction</span>
+            <span style={{ ...styles.statusPill, ...statusStyle(availability.label) }}>
+              {availability.label}
+            </span>
+          </div>
 
           <h1 style={styles.title}>{auction.title}</h1>
 
@@ -226,23 +302,23 @@ export default function PublicAuctionPage({ params }: Props) {
 
           <div style={styles.heroMeta}>
             <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>Status</span>
-              <strong>{availability.label}</strong>
-            </div>
-
-            <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>Opens</span>
-              <strong>{formatDate(auction.opens_at)}</strong>
-            </div>
-
-            <div style={styles.metaCard}>
               <span style={styles.metaLabel}>Closes</span>
               <strong>{formatDate(auction.closes_at)}</strong>
             </div>
 
             <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>Items</span>
+              <span style={styles.metaLabel}>Auction lots</span>
               <strong>{items.length}</strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Active lots</span>
+              <strong>{activeItems}</strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Top bid</span>
+              <strong>{topBid > 0 ? moneyFromCents(topBid, auction.currency) : "No bids yet"}</strong>
             </div>
           </div>
         </div>
@@ -254,23 +330,39 @@ export default function PublicAuctionPage({ params }: Props) {
               alt={auction.title}
               style={{
                 ...styles.image,
-                objectPosition: `${focusValue(
-                  auction.image_focus_x,
-                )}% ${focusValue(auction.image_focus_y)}%`,
+                objectPosition: `${focusValue(auction.image_focus_x)}% ${focusValue(
+                  auction.image_focus_y,
+                )}%`,
               }}
             />
           ) : (
             <div style={styles.heroImageEmpty}>🔨</div>
           )}
+
+          <div style={styles.heroImageOverlay}>
+            <span>Supporting the organiser</span>
+            <strong>{totalBids} bids placed</strong>
+          </div>
         </div>
       </section>
 
-      <section style={styles.noticeCard}>
-        <h2 style={styles.noticeTitle}>{availability.label}</h2>
-        <p style={styles.noticeText}>{availability.message}</p>
-      </section>
+      {successMessage ? (
+        <section style={styles.successCard}>{successMessage}</section>
+      ) : null}
 
+      {queryError ? <section style={styles.errorCard}>{queryError}</section> : null}
       {error ? <section style={styles.errorCard}>{error}</section> : null}
+
+      <section style={styles.noticeCard}>
+        <div>
+          <h2 style={styles.noticeTitle}>{availability.label}</h2>
+          <p style={styles.noticeText}>{availability.message}</p>
+        </div>
+        <div style={styles.noticeChip}>
+          <span>Opens</span>
+          <strong>{formatDate(auction.opens_at)}</strong>
+        </div>
+      </section>
 
       {items.length === 0 ? (
         <section style={styles.emptyCard}>
@@ -279,16 +371,14 @@ export default function PublicAuctionPage({ params }: Props) {
         </section>
       ) : (
         <section style={styles.itemsGrid}>
-          {items.map((item) => {
+          {items.map((item, index) => {
             const highestBid = item.highest_bid_cents;
             const minimumNextBid =
               highestBid === null
                 ? item.starting_bid_cents
-                : Number(highestBid || 0) +
-                  Number(item.minimum_increment_cents || 0);
+                : Number(highestBid || 0) + Number(item.minimum_increment_cents || 0);
 
-            const itemCanBid =
-              availability.canBid && item.status === "active";
+            const itemCanBid = availability.canBid && item.status === "active";
 
             return (
               <article key={item.id} style={styles.itemCard}>
@@ -299,14 +389,16 @@ export default function PublicAuctionPage({ params }: Props) {
                       alt={item.title}
                       style={{
                         ...styles.image,
-                        objectPosition: `${focusValue(
-                          item.image_focus_x,
-                        )}% ${focusValue(item.image_focus_y)}%`,
+                        objectPosition: `${focusValue(item.image_focus_x)}% ${focusValue(
+                          item.image_focus_y,
+                        )}%`,
                       }}
                     />
                   ) : (
                     <div style={styles.itemImageEmpty}>🎁</div>
                   )}
+
+                  <div style={styles.lotBadge}>Lot {item.sort_order || index + 1}</div>
                 </div>
 
                 <div style={styles.itemBody}>
@@ -321,54 +413,51 @@ export default function PublicAuctionPage({ params }: Props) {
                       ) : null}
                     </div>
 
-                    <span style={styles.itemStatus}>{item.status}</span>
+                    <span style={{ ...styles.itemStatus, ...statusStyle(item.status) }}>
+                      {item.status}
+                    </span>
                   </div>
 
                   {item.description ? (
                     <p style={styles.itemDescription}>{item.description}</p>
                   ) : null}
 
+                  <div style={styles.bidFeature}>
+                    <span>Current highest bid</span>
+                    <strong>
+                      {highestBid === null
+                        ? "No bids yet"
+                        : moneyFromCents(highestBid, auction.currency)}
+                    </strong>
+                  </div>
+
                   <div style={styles.bidStats}>
                     <div style={styles.bidStat}>
                       <span>Starting bid</span>
-                      <strong>
-                        {moneyFromCents(
-                          item.starting_bid_cents,
-                          auction.currency,
-                        )}
-                      </strong>
+                      <strong>{moneyFromCents(item.starting_bid_cents, auction.currency)}</strong>
                     </div>
 
                     <div style={styles.bidStat}>
-                      <span>Current highest</span>
-                      <strong>
-                        {highestBid === null
-                          ? "No bids yet"
-                          : moneyFromCents(highestBid, auction.currency)}
-                      </strong>
+                      <span>Next bid from</span>
+                      <strong>{moneyFromCents(minimumNextBid, auction.currency)}</strong>
                     </div>
 
                     <div style={styles.bidStat}>
-                      <span>Minimum next bid</span>
-                      <strong>
-                        {moneyFromCents(minimumNextBid, auction.currency)}
-                      </strong>
+                      <span>Bid count</span>
+                      <strong>{item.bid_count || 0}</strong>
+                    </div>
+
+                    <div style={styles.bidStat}>
+                      <span>Reserve</span>
+                      <strong>{reserveStatus(item, auction.currency)}</strong>
                     </div>
                   </div>
 
                   {itemCanBid ? (
-                    <form
-                      method="post"
-                      action="/api/auctions/bid"
-                      style={styles.bidForm}
-                    >
+                    <form method="post" action="/api/auctions/bid" style={styles.bidForm}>
                       <input type="hidden" name="auction_id" value={auction.id} />
                       <input type="hidden" name="item_id" value={item.id} />
-                      <input
-                        type="hidden"
-                        name="auction_slug"
-                        value={auction.slug}
-                      />
+                      <input type="hidden" name="auction_slug" value={auction.slug} />
 
                       <div style={styles.formGrid}>
                         <label style={styles.label}>
@@ -416,8 +505,8 @@ export default function PublicAuctionPage({ params }: Props) {
                       <label style={styles.checkboxLabel}>
                         <input name="termsAccepted" type="checkbox" required />
                         <span>
-                          I understand that bids are binding and that the
-                          organiser may contact me if I am the winning bidder.
+                          I understand that bids are binding and that the organiser may
+                          contact me if I am the winning bidder.
                         </span>
                       </label>
 
@@ -451,26 +540,27 @@ export default function PublicAuctionPage({ params }: Props) {
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: 1180,
+    maxWidth: 1220,
     margin: "0 auto",
-    padding: "28px 16px 56px",
+    padding: "28px 16px 64px",
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.16), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.18), transparent 34%), radial-gradient(circle at 80% 8%, rgba(22,131,248,0.1), transparent 28%), #f8fafc",
     minHeight: "100vh",
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(300px, 0.8fr)",
     gap: 22,
     alignItems: "stretch",
     marginBottom: 20,
   },
   heroContent: {
-    padding: 28,
-    borderRadius: 28,
-    background: "#0f172a",
+    padding: 30,
+    borderRadius: 32,
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #78350f 125%)",
     color: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+    boxShadow: "0 26px 70px rgba(15,23,42,0.24)",
   },
   backLink: {
     display: "inline-flex",
@@ -484,6 +574,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 13,
   },
+  badgeRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 14,
+  },
   badge: {
     display: "inline-flex",
     padding: "7px 11px",
@@ -493,26 +590,32 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(251,191,36,0.28)",
     fontSize: 13,
     fontWeight: 950,
-    marginBottom: 14,
+  },
+  statusPill: {
+    display: "inline-flex",
+    padding: "7px 11px",
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 950,
   },
   title: {
     margin: 0,
-    fontSize: "clamp(34px, 7vw, 54px)",
-    lineHeight: 1.02,
-    letterSpacing: "-0.05em",
+    fontSize: "clamp(38px, 8vw, 64px)",
+    lineHeight: 0.98,
+    letterSpacing: "-0.06em",
   },
   description: {
-    margin: "14px 0 0",
+    margin: "16px 0 0",
     color: "#cbd5e1",
     fontSize: 17,
-    lineHeight: 1.65,
-    maxWidth: 780,
+    lineHeight: 1.7,
+    maxWidth: 820,
   },
   heroMeta: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
     gap: 12,
-    marginTop: 24,
+    marginTop: 26,
   },
   metaCard: {
     padding: 14,
@@ -530,12 +633,13 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.06em",
   },
   heroImageWrap: {
-    minHeight: 310,
-    borderRadius: 28,
+    position: "relative",
+    minHeight: 330,
+    borderRadius: 32,
     overflow: "hidden",
     background: "#e2e8f0",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 44px rgba(15,23,42,0.12)",
+    boxShadow: "0 22px 54px rgba(15,23,42,0.14)",
   },
   image: {
     width: "100%",
@@ -546,39 +650,97 @@ const styles: Record<string, CSSProperties> = {
   heroImageEmpty: {
     width: "100%",
     height: "100%",
-    minHeight: 310,
+    minHeight: 330,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 54,
+    fontSize: 56,
     background: "#f1f5f9",
+  },
+  heroImageOverlay: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    bottom: 18,
+    padding: 16,
+    borderRadius: 20,
+    background: "rgba(15,23,42,0.82)",
+    color: "#ffffff",
+    display: "grid",
+    gap: 4,
+    backdropFilter: "blur(10px)",
   },
   noticeCard: {
     padding: 20,
-    borderRadius: 24,
+    borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
     marginBottom: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    alignItems: "center",
   },
   noticeTitle: {
     margin: 0,
-    fontSize: 22,
+    fontSize: 23,
     color: "#0f172a",
+    letterSpacing: "-0.03em",
   },
   noticeText: {
     margin: "8px 0 0",
     color: "#475569",
     lineHeight: 1.6,
   },
+  noticeChip: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 5,
+    minWidth: 210,
+  },
+  successCard: {
+    padding: 16,
+    borderRadius: 22,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontWeight: 950,
+    marginBottom: 16,
+  },
   errorCard: {
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 22,
     background: "#fee2e2",
     color: "#991b1b",
     border: "1px solid #fecaca",
     fontWeight: 950,
     marginBottom: 16,
+  },
+  loadingCard: {
+    maxWidth: 560,
+    margin: "80px auto",
+    padding: 32,
+    borderRadius: 30,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    textAlign: "center",
+    boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
+  },
+  loadingIcon: {
+    fontSize: 54,
+  },
+  loadingTitle: {
+    margin: "14px 0 0",
+    color: "#0f172a",
+  },
+  loadingText: {
+    margin: "8px 0 0",
+    color: "#64748b",
   },
   emptyCard: {
     padding: 24,
@@ -591,20 +753,32 @@ const styles: Record<string, CSSProperties> = {
   },
   itemsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-    gap: 18,
+    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+    gap: 20,
   },
   itemCard: {
-    borderRadius: 26,
+    borderRadius: 30,
     overflow: "hidden",
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.08)",
   },
   itemImageWrap: {
+    position: "relative",
     width: "100%",
-    height: 230,
+    height: 270,
     background: "#f1f5f9",
+  },
+  lotBadge: {
+    position: "absolute",
+    left: 14,
+    top: 14,
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.84)",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: 950,
   },
   itemImageEmpty: {
     width: "100%",
@@ -616,7 +790,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#94a3b8",
   },
   itemBody: {
-    padding: 20,
+    padding: 22,
   },
   itemTop: {
     display: "flex",
@@ -626,35 +800,43 @@ const styles: Record<string, CSSProperties> = {
   },
   itemTitle: {
     margin: 0,
-    fontSize: 24,
-    lineHeight: 1.15,
+    fontSize: 26,
+    lineHeight: 1.12,
     color: "#0f172a",
+    letterSpacing: "-0.035em",
   },
   donor: {
-    margin: "6px 0 0",
+    margin: "7px 0 0",
     color: "#64748b",
   },
   itemStatus: {
     display: "inline-flex",
     padding: "7px 10px",
     borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "capitalize",
-    border: "1px solid #fde68a",
+    whiteSpace: "nowrap",
   },
   itemDescription: {
     color: "#334155",
-    lineHeight: 1.6,
-    margin: "14px 0 0",
+    lineHeight: 1.65,
+    margin: "16px 0 0",
+  },
+  bidFeature: {
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 22,
+    background: "linear-gradient(135deg, #0f172a, #1e293b)",
+    color: "#ffffff",
+    display: "grid",
+    gap: 5,
   },
   bidStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
     gap: 10,
-    marginTop: 16,
+    marginTop: 14,
   },
   bidStat: {
     padding: 12,
@@ -667,9 +849,9 @@ const styles: Record<string, CSSProperties> = {
   bidForm: {
     display: "grid",
     gap: 14,
-    marginTop: 16,
+    marginTop: 18,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
@@ -703,7 +885,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
   },
   bidButton: {
-    padding: "13px 18px",
+    padding: "14px 18px",
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
