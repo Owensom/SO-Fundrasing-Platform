@@ -9,6 +9,8 @@ export type Campaign = {
   type: "raffle" | "squares" | "event" | "auction";
   image_url: string | null;
   imageUrl: string | null;
+  image_focus_x: number;
+  image_focus_y: number;
   status: "draft" | "published" | "closed" | "drawn";
   created_at: string | null;
 };
@@ -20,6 +22,8 @@ type CampaignRow = {
   description: string | null;
   tenant_slug: string;
   image_url: string | null;
+  image_focus_x: number | null;
+  image_focus_y: number | null;
   status: string | null;
   created_at: string | null;
 };
@@ -34,10 +38,13 @@ function normaliseStatus(value: string | null | undefined): Campaign["status"] {
   return "draft";
 }
 
-function mapCampaign(
-  row: CampaignRow,
-  type: Campaign["type"],
-): Campaign {
+function normaliseFocus(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function mapCampaign(row: CampaignRow, type: Campaign["type"]): Campaign {
   return {
     id: row.id,
     title: row.title,
@@ -47,6 +54,8 @@ function mapCampaign(
     type,
     image_url: row.image_url,
     imageUrl: row.image_url,
+    image_focus_x: normaliseFocus(row.image_focus_x),
+    image_focus_y: normaliseFocus(row.image_focus_y),
     status: normaliseStatus(row.status),
     created_at: row.created_at,
   };
@@ -64,6 +73,8 @@ export async function getAllCampaignsForTenant(
         description,
         tenant_slug,
         image_url,
+        image_focus_x,
+        image_focus_y,
         status::text as status,
         created_at
       from raffles
@@ -81,6 +92,8 @@ export async function getAllCampaignsForTenant(
         description,
         tenant_slug,
         image_url,
+        image_focus_x,
+        image_focus_y,
         status::text as status,
         created_at
       from squares_games
@@ -98,6 +111,8 @@ export async function getAllCampaignsForTenant(
         description,
         tenant_slug,
         image_url,
+        image_focus_x,
+        image_focus_y,
         status::text as status,
         created_at
       from events
@@ -115,6 +130,8 @@ export async function getAllCampaignsForTenant(
         description,
         tenant_slug,
         image_url,
+        image_focus_x,
+        image_focus_y,
         status::text as status,
         created_at
       from silent_auctions
