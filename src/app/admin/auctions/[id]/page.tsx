@@ -298,34 +298,50 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
   return (
     <main style={styles.page}>
+      <section style={styles.topBar}>
+        <Link href="/admin/auctions" style={styles.backLink}>
+          ← Back to auctions
+        </Link>
+
+        <div style={styles.topActions}>
+          <a
+            href={`/a/${auction.slug}`}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.navButton}
+          >
+            View public page
+          </a>
+
+          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
+            Campaigns page
+          </Link>
+        </div>
+      </section>
+
       <section style={styles.hero}>
-        <div style={styles.heroContent}>
-          <div style={styles.badge}>Silent auction</div>
+        <div style={styles.heroText}>
+          <div style={styles.badge}>Silent auction editor</div>
 
           <h1 style={styles.title}>{auction.title || "Untitled auction"}</h1>
 
           <p style={styles.subtitle}>
-            Tenant: <strong>{tenantSlug}</strong> · Public page:{" "}
-            <strong>/a/{auction.slug}</strong>
+            /a/{auction.slug}
           </p>
 
-          <div style={styles.heroMeta}>
-            <div style={styles.heroMetaCard}>
-              <span>Status</span>
-              <strong>{auction.status}</strong>
-            </div>
-
-            <div style={styles.heroMetaCard}>
-              <span>Opens</span>
-              <strong>{formatDate(auction.opens_at)}</strong>
-            </div>
-
-            <div style={styles.heroMetaCard}>
-              <span>Closes</span>
-              <strong>{formatDate(auction.closes_at)}</strong>
-            </div>
-          </div>
+          <p style={styles.description}>
+            {auction.description || "No description added yet."}
+          </p>
         </div>
+
+        <span
+          style={{
+            ...styles.heroStatus,
+            ...getStatusStyle(auction.status),
+          }}
+        >
+          {auction.status}
+        </span>
 
         <div style={styles.heroImageWrap}>
           {auction.image_url ? (
@@ -341,25 +357,6 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             <div style={styles.heroImageEmpty}>🔨</div>
           )}
         </div>
-      </section>
-
-      <section style={styles.nav}>
-        <Link href="/admin/auctions" style={styles.darkButton}>
-          ← Back to auctions
-        </Link>
-
-        <a
-          href={`/a/${auction.slug}`}
-          target="_blank"
-          rel="noreferrer"
-          style={styles.navButton}
-        >
-          View public page
-        </a>
-
-        <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
-          Campaigns page
-        </Link>
       </section>
 
       <section style={styles.statsGrid}>
@@ -525,7 +522,9 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           <summary style={styles.createSummary}>
             <span>
               <strong>Add a new auction item</strong>
-              <small>Open this section to add another lot.</small>
+              <small style={styles.summarySmall}>
+                Open this section to add another lot.
+              </small>
             </span>
             <span style={styles.summaryChevron}>⌄</span>
           </summary>
@@ -919,91 +918,25 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at top left, rgba(251,191,36,0.13), transparent 34%), #f8fafc",
     minHeight: "100vh",
   },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)",
-    gap: 18,
-    alignItems: "stretch",
-    marginBottom: 18,
-  },
-  heroContent: {
-    padding: 30,
-    borderRadius: 30,
-    background:
-      "linear-gradient(135deg, #0f172a 0%, #1e293b 52%, #78350f 130%)",
-    color: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
-  },
-  badge: {
-    display: "inline-flex",
-    padding: "7px 11px",
-    borderRadius: 999,
-    background: "rgba(251,191,36,0.16)",
-    color: "#fef3c7",
-    border: "1px solid rgba(251,191,36,0.3)",
-    fontSize: 13,
-    fontWeight: 950,
-    marginBottom: 14,
-  },
-  title: {
-    margin: 0,
-    fontSize: "clamp(34px, 7vw, 54px)",
-    lineHeight: 1,
-    letterSpacing: "-0.055em",
-  },
-  subtitle: {
-    margin: "14px 0 0",
-    color: "#cbd5e1",
-    fontSize: 16,
-    lineHeight: 1.6,
-  },
-  heroMeta: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
-    gap: 12,
-    marginTop: 24,
-  },
-  heroMetaCard: {
-    display: "grid",
-    gap: 5,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.13)",
-  },
-  heroImageWrap: {
-    minHeight: 310,
-    borderRadius: 30,
-    overflow: "hidden",
-    background: "#e2e8f0",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 44px rgba(15,23,42,0.12)",
-  },
-  heroImageEmpty: {
-    width: "100%",
-    height: "100%",
-    minHeight: 310,
+  topBar: {
     display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "center",
-    fontSize: 56,
-    background: "#f1f5f9",
+    marginBottom: 16,
   },
-  nav: {
+  topActions: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 10,
     flexWrap: "wrap",
-    marginBottom: 18,
   },
-  darkButton: {
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    border: "1px solid #0f172a",
+  backLink: {
+    color: "#334155",
     textDecoration: "none",
     fontWeight: 950,
+    fontSize: 16,
   },
   navButton: {
     padding: "11px 15px",
@@ -1013,6 +946,97 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
+    boxShadow: "0 1px 4px rgba(15,23,42,0.04)",
+  },
+  hero: {
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 290px",
+    gap: 24,
+    alignItems: "center",
+    minHeight: 350,
+    padding: 28,
+    borderRadius: 26,
+    overflow: "hidden",
+    marginBottom: 18,
+    background:
+      "linear-gradient(135deg, #020617 0%, #0f172a 50%, #111827 100%)",
+    color: "#ffffff",
+    boxShadow: "0 20px 52px rgba(15,23,42,0.18)",
+  },
+  heroText: {
+    minWidth: 0,
+    position: "relative",
+    zIndex: 2,
+  },
+  badge: {
+    display: "inline-flex",
+    padding: "7px 11px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    color: "#e2e8f0",
+    border: "1px solid rgba(255,255,255,0.14)",
+    fontSize: 12,
+    fontWeight: 950,
+    marginBottom: 16,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  title: {
+    margin: 0,
+    fontSize: "clamp(32px, 6vw, 52px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
+  },
+  subtitle: {
+    margin: "10px 0 0",
+    color: "#cbd5e1",
+    fontSize: 15,
+    lineHeight: 1.5,
+    fontWeight: 850,
+  },
+  description: {
+    margin: "16px 0 0",
+    color: "#94a3b8",
+    fontSize: 16,
+    lineHeight: 1.65,
+    maxWidth: 680,
+  },
+  heroStatus: {
+    position: "absolute",
+    right: 300,
+    top: "50%",
+    transform: "translateY(-50%)",
+    zIndex: 3,
+    display: "inline-flex",
+    padding: "9px 14px",
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "capitalize",
+    whiteSpace: "nowrap",
+  },
+  heroImageWrap: {
+    position: "relative",
+    zIndex: 2,
+    width: "100%",
+    height: 230,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#e2e8f0",
+    border: "1px solid rgba(255,255,255,0.18)",
+    boxShadow: "0 16px 36px rgba(2,6,23,0.28)",
+  },
+  heroImageEmpty: {
+    width: "100%",
+    height: "100%",
+    minHeight: 230,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 54,
+    background: "#f1f5f9",
+    color: "#64748b",
   },
   form: {
     display: "grid",
@@ -1169,6 +1193,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     alignItems: "center",
     color: "#0f172a",
+  },
+  summarySmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#64748b",
+    fontWeight: 750,
   },
   summaryChevron: {
     width: 34,
