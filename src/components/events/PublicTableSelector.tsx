@@ -35,6 +35,12 @@ type TableShape = "round" | "square" | "rectangle";
 
 type SeatingLayoutJson = Record<string, unknown>;
 
+type TableGroup = {
+  label: string;
+  tableNumber: string;
+  seats: Seat[];
+};
+
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -243,40 +249,48 @@ function roundSeatPosition(index: number, total: number) {
   };
 }
 
-function distributeSeatCounts(total: number, shape: TableShape) {
-  if (shape === "rectangle") {
-    const top = Math.max(1, Math.ceil(total * 0.34));
-    const bottom = Math.max(1, Math.floor(total * 0.34));
-    const remaining = Math.max(0, total - top - bottom);
-    const right = Math.ceil(remaining / 2);
-    const left = remaining - right;
-
-    return {
-      top,
-      right,
-      bottom,
-      left,
-    };
-  }
-
+function squareSeatCounts(total: number) {
   const top = Math.ceil(total / 4);
   const right = Math.ceil((total - top) / 3);
   const bottom = Math.ceil((total - top - right) / 2);
   const left = Math.max(0, total - top - right - bottom);
 
+  return { top, right, bottom, left };
+}
+
+function rectangleSeatCounts(total: number) {
+  if (total <= 2) {
+    return { top: total, right: 0, bottom: 0, left: 0 };
+  }
+
+  if (total <= 4) {
+    return { top: Math.ceil(total / 2), right: 0, bottom: Math.floor(total / 2), left: 0 };
+  }
+
+  const endSeats = total >= 6 ? 2 : 0;
+  const sideSeats = Math.max(0, total - endSeats);
+  const top = Math.ceil(sideSeats / 2);
+  const bottom = Math.floor(sideSeats / 2);
+
   return {
     top,
-    right,
+    right: endSeats >= 1 ? 1 : 0,
     bottom,
-    left,
+    left: endSeats >= 2 ? 1 : 0,
   };
 }
 
+function distributeSeatCounts(total: number, shape: TableShape) {
+  if (shape === "rectangle") return rectangleSeatCounts(total);
+  return squareSeatCounts(total);
+}
+
 function edgeSeatPosition(index: number, total: number, shape: TableShape) {
-  const width = shape === "rectangle" ? 420 : 304;
-  const height = shape === "rectangle" ? 276 : 304;
-  const edgeInset = 22;
-  const sideInset = 54;
+  const width = shape === "rectangle" ? 560 : 360;
+  const height = shape === "rectangle" ? 320 : 360;
+  const seatInset = 34;
+  const longSideInset = shape === "rectangle" ? 58 : 54;
+  const shortSideInset = shape === "rectangle" ? 90 : 54;
 
   const counts = distributeSeatCounts(total, shape);
 
@@ -285,8 +299,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
     return {
       position: "absolute" as const,
-      left: edgeInset + position * (width - edgeInset * 2),
-      top: 26,
+      left: longSideInset + position * (width - longSideInset * 2),
+      top: seatInset,
       transform: "translate(-50%, -50%)",
     };
   }
@@ -297,8 +311,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
     return {
       position: "absolute" as const,
-      left: width - 26,
-      top: sideInset + position * (height - sideInset * 2),
+      left: width - seatInset,
+      top: shortSideInset + position * (height - shortSideInset * 2),
       transform: "translate(-50%, -50%)",
     };
   }
@@ -309,8 +323,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
     return {
       position: "absolute" as const,
-      left: width - edgeInset - position * (width - edgeInset * 2),
-      top: height - 26,
+      left: width - longSideInset - position * (width - longSideInset * 2),
+      top: height - seatInset,
       transform: "translate(-50%, -50%)",
     };
   }
@@ -320,8 +334,8 @@ function edgeSeatPosition(index: number, total: number, shape: TableShape) {
 
   return {
     position: "absolute" as const,
-    left: 26,
-    top: height - sideInset - position * (height - sideInset * 2),
+    left: seatInset,
+    top: height - shortSideInset - position * (height - shortSideInset * 2),
     transform: "translate(-50%, -50%)",
   };
 }
@@ -335,18 +349,18 @@ function tableAreaStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
       ...styles.tableArea,
-      width: 304,
-      height: 304,
-      borderRadius: 30,
+      width: 360,
+      height: 360,
+      borderRadius: 34,
     };
   }
 
   if (shape === "rectangle") {
     return {
       ...styles.tableArea,
-      width: 420,
-      height: 276,
-      borderRadius: 32,
+      width: 560,
+      height: 320,
+      borderRadius: 34,
     };
   }
 
@@ -362,18 +376,18 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
       ...styles.tablePlate,
-      width: 142,
-      height: 142,
-      borderRadius: 26,
+      width: 164,
+      height: 164,
+      borderRadius: 30,
     };
   }
 
   if (shape === "rectangle") {
     return {
       ...styles.tablePlate,
-      width: 208,
-      height: 112,
-      borderRadius: 26,
+      width: 300,
+      height: 122,
+      borderRadius: 30,
     };
   }
 
@@ -407,6 +421,7 @@ export default function PublicTableSelector({
   const [coverFees, setCoverFees] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [activeTableIndex, setActiveTableIndex] = useState(0);
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
@@ -434,6 +449,12 @@ export default function PublicTableSelector({
         return a.label.localeCompare(b.label);
       });
   }, [seats]);
+    const safeActiveTableIndex =
+    groupedSeats.length === 0
+      ? 0
+      : Math.min(activeTableIndex, groupedSeats.length - 1);
+
+  const activeTable = groupedSeats[safeActiveTableIndex] || null;
 
   const cartSeats = useMemo(() => {
     return cartItems
@@ -531,7 +552,18 @@ export default function PublicTableSelector({
       return [...current, ...additions];
     });
   }
-    async function startCheckout() {
+
+  function goToPreviousTable() {
+    setActiveTableIndex((current) => Math.max(0, current - 1));
+  }
+
+  function goToNextTable() {
+    setActiveTableIndex((current) =>
+      Math.min(groupedSeats.length - 1, current + 1),
+    );
+  }
+
+  async function startCheckout() {
     if (isCheckingOut) return;
 
     if (!buyerName.trim() || !buyerEmail.trim()) {
@@ -605,31 +637,31 @@ export default function PublicTableSelector({
             .public-table-selector-cart-grid {
               grid-template-columns: 1fr !important;
             }
-
-            .public-table-selector-table-grid {
-              grid-template-columns: 1fr !important;
-            }
           }
 
-          @media (max-width: 560px) {
+          @media (max-width: 620px) {
             .public-table-selector-map-panel,
             .public-table-selector-cart {
               padding: 12px !important;
               border-radius: 20px !important;
             }
 
-            .public-table-selector-group-card {
-              padding: 12px !important;
-              border-radius: 18px !important;
+            .public-table-selector-table-header {
+              grid-template-columns: 1fr !important;
             }
 
-            .public-table-selector-group-header {
-              flex-direction: column !important;
-              align-items: stretch !important;
+            .public-table-selector-table-actions {
+              justify-content: stretch !important;
             }
 
-            .public-table-selector-select-table {
+            .public-table-selector-table-actions button,
+            .public-table-selector-table-actions select {
               width: 100% !important;
+            }
+
+            .public-table-selector-table-actions {
+              display: grid !important;
+              grid-template-columns: 1fr !important;
             }
           }
         `}
@@ -641,8 +673,8 @@ export default function PublicTableSelector({
             <div>
               <h3 style={styles.mapTitle}>Table layout</h3>
               <p style={styles.mapText}>
-                Choose individual table seats or select every available seat at a
-                table.
+                Choose a table, then select individual seats or every available
+                seat at that table.
               </p>
             </div>
 
@@ -655,84 +687,123 @@ export default function PublicTableSelector({
             </div>
           </div>
 
-          {groupedSeats.length === 0 ? (
+          {groupedSeats.length === 0 || !activeTable ? (
             <div style={styles.emptyMap}>
               No table seats are available for this event yet.
             </div>
           ) : (
-            <div
-              className="public-table-selector-table-grid"
-              style={styles.tableGrid}
-            >
-              {groupedSeats.map((group) => {
-                const availableCount = group.seats.filter(
+            <div style={styles.singleTablePanel}>
+              {(() => {
+                const availableCount = activeTable.seats.filter(
                   (seat) => seat.status === "available",
                 ).length;
 
-                const selectedCount = group.seats.filter((seat) =>
+                const selectedCount = activeTable.seats.filter((seat) =>
                   selectedSeatIds.includes(seat.id),
                 ).length;
 
                 const tableShape = getTableShapeForGroup({
                   seatingLayoutJson,
-                  tableNumber: group.tableNumber,
-                  tableLabel: group.label,
-                  seatCount: group.seats.length,
+                  tableNumber: activeTable.tableNumber,
+                  tableLabel: activeTable.label,
+                  seatCount: activeTable.seats.length,
                 });
 
                 return (
-                  <div
-                    key={`${group.tableNumber}-${group.label}`}
-                    className="public-table-selector-group-card"
-                    style={styles.groupCard}
-                  >
+                  <>
                     <div
-                      className="public-table-selector-group-header"
-                      style={styles.groupHeader}
+                      className="public-table-selector-table-header"
+                      style={styles.singleTableHeader}
                     >
                       <div>
                         <p style={styles.tableNumber}>
-                          Table {group.tableNumber || "Unassigned"}
+                          Table {activeTable.tableNumber || "Unassigned"} ·{" "}
+                          {safeActiveTableIndex + 1} of {groupedSeats.length}
                         </p>
-                        <h4 style={styles.groupTitle}>{group.label}</h4>
+                        <h4 style={styles.groupTitle}>{activeTable.label}</h4>
                         <p style={styles.groupSub}>
-                          {availableCount} available from {group.seats.length}
+                          {availableCount} available from{" "}
+                          {activeTable.seats.length}
                           {selectedCount > 0
                             ? ` · ${selectedCount} selected`
                             : ""}
                         </p>
                       </div>
 
-                      {availableCount > 0 && (
+                      <div
+                        className="public-table-selector-table-actions"
+                        style={styles.tableActions}
+                      >
+                        <select
+                          value={safeActiveTableIndex}
+                          onChange={(event) =>
+                            setActiveTableIndex(Number(event.target.value))
+                          }
+                          style={styles.tableSelect}
+                        >
+                          {groupedSeats.map((group, index) => (
+                            <option key={`${group.tableNumber}-${group.label}`} value={index}>
+                              Table {group.tableNumber || "—"} — {group.label}
+                            </option>
+                          ))}
+                        </select>
+
                         <button
                           type="button"
-                          onClick={() => selectAvailableTable(group.seats)}
-                          className="public-table-selector-select-table"
-                          style={styles.selectTableButton}
+                          onClick={goToPreviousTable}
+                          disabled={safeActiveTableIndex === 0}
+                          style={{
+                            ...styles.smallNavButton,
+                            opacity: safeActiveTableIndex === 0 ? 0.5 : 1,
+                          }}
                         >
-                          Select table
+                          Previous
                         </button>
-                      )}
+
+                        <button
+                          type="button"
+                          onClick={goToNextTable}
+                          disabled={safeActiveTableIndex >= groupedSeats.length - 1}
+                          style={{
+                            ...styles.smallNavButton,
+                            opacity:
+                              safeActiveTableIndex >= groupedSeats.length - 1
+                                ? 0.5
+                                : 1,
+                          }}
+                        >
+                          Next
+                        </button>
+
+                        {availableCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => selectAvailableTable(activeTable.seats)}
+                            style={styles.selectTableButton}
+                          >
+                            Select table
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div style={styles.tableScroll}>
                       <div style={tableAreaStyle(tableShape)}>
                         <div style={tablePlateStyle(tableShape)}>
                           <span style={styles.tablePlateTop}>
-                            Table {group.tableNumber || "—"}
+                            Table {activeTable.tableNumber || "—"}
                           </span>
                           <strong style={styles.tablePlateName}>
-                            {group.label}
+                            {activeTable.label}
                           </strong>
                         </div>
-
-                        {group.seats.map((seat, index) => {
+                                                {activeTable.seats.map((seat, index) => {
                           const selected = selectedSeatIds.includes(seat.id);
                           const unavailable = seat.status !== "available";
                           const colours = seatColours(seat.status, selected);
                           const position = seatPosition(
                             index,
-                            group.seats.length,
+                            activeTable.seats.length,
                             tableShape,
                           );
 
@@ -764,9 +835,9 @@ export default function PublicTableSelector({
                         })}
                       </div>
                     </div>
-                  </div>
+                  </>
                 );
-              })}
+              })()}
             </div>
           )}
         </div>
@@ -1054,26 +1125,47 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     textAlign: "center",
   },
-  tableGrid: {
+  singleTablePanel: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
     gap: 18,
     minWidth: 0,
   },
-  groupCard: {
+  singleTableHeader: {
     display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 16,
+    alignItems: "start",
     padding: 16,
-    borderRadius: 24,
+    borderRadius: 22,
     background: "rgba(255,255,255,0.055)",
     border: "1px solid rgba(255,255,255,0.1)",
-    minWidth: 0,
   },
-  groupHeader: {
+  tableActions: {
     display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+  },
+  tableSelect: {
+    minHeight: 42,
+    maxWidth: 260,
+    padding: "9px 12px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.22)",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontWeight: 900,
+  },
+  smallNavButton: {
+    minHeight: 42,
+    border: "1px solid rgba(255,255,255,0.22)",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    padding: "9px 12px",
+    fontWeight: 950,
+    cursor: "pointer",
   },
   tableNumber: {
     margin: "0 0 4px",
@@ -1086,7 +1178,7 @@ const styles: Record<string, CSSProperties> = {
   groupTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 19,
+    fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.02em",
   },
@@ -1097,6 +1189,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
   },
   selectTableButton: {
+    minHeight: 42,
     border: "none",
     borderRadius: 999,
     background: "#facc15",
@@ -1110,7 +1203,7 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     overflowX: "auto",
     overflowY: "hidden",
-    padding: "6px 4px 10px",
+    padding: "10px 4px 14px",
     boxSizing: "border-box",
   },
   tableArea: {
@@ -1151,7 +1244,7 @@ const styles: Record<string, CSSProperties> = {
   tablePlateName: {
     marginTop: 6,
     color: "#0f172a",
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: 950,
     lineHeight: 1.15,
   },
