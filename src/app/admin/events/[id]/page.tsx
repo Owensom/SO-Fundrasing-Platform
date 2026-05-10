@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import ImageUploadField from "@/components/ImageUploadField";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import AdminSeatManager from "@/components/admin/events/AdminSeatManager";
 import TableNamesEditor from "@/components/admin/events/TableNamesEditor";
 import EventPrizeMenuSettings from "./EventPrizeMenuSettings";
@@ -98,6 +98,12 @@ function positiveInteger(value: FormDataEntryValue | null, fallback = 0) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(0, Math.floor(number));
+}
+
+function cleanImageFocus(value: FormDataEntryValue | null) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
 }
 
 function parseAisleAfterList(value: FormDataEntryValue | null) {
@@ -340,6 +346,7 @@ async function requireEventAccess(eventId: string) {
 
   return event;
 }
+
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -348,6 +355,8 @@ async function updateEventAction(formData: FormData) {
   const slug = String(formData.get("slug") || "").trim();
   const description = String(formData.get("description") || "").trim();
   const imageUrl = String(formData.get("image_url") || "").trim();
+  const imageFocusX = cleanImageFocus(formData.get("image_focus_x"));
+  const imageFocusY = cleanImageFocus(formData.get("image_focus_y"));
   const location = String(formData.get("location") || "").trim();
   const startsAt = String(formData.get("starts_at") || "").trim();
   const endsAt = String(formData.get("ends_at") || "").trim();
@@ -377,6 +386,8 @@ async function updateEventAction(formData: FormData) {
     slug,
     description: description || null,
     imageUrl: imageUrl || null,
+    imageFocusX,
+    imageFocusY,
     location: location || null,
     startsAt: startsAt ? new Date(startsAt).toISOString() : null,
     endsAt: endsAt ? new Date(endsAt).toISOString() : null,
@@ -486,7 +497,6 @@ async function updateTableNamesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
-
 async function updateTableShapeAction(formData: FormData) {
   "use server";
 
@@ -648,6 +658,7 @@ async function updateSelectedSeatsMetadataAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-metadata#${returnAnchor}`);
 }
+
 async function updateSelectedSeatsStatusAction(formData: FormData) {
   "use server";
 
@@ -1045,6 +1056,10 @@ export default async function AdminEventManagePage({
   const seats = event.seats || [];
   const winners = await listEventWinners(event.id);
 
+  const imageFocusStyle: CSSProperties = {
+    objectPosition: `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`,
+  };
+
   const isGeneralAdmission = event.event_type === "general_admission";
   const isReservedSeating = event.event_type === "reserved_seating";
   const isTables = event.event_type === "tables";
@@ -1123,7 +1138,14 @@ export default async function AdminEventManagePage({
 
         <div style={styles.heroImageWrap}>
           {event.image_url ? (
-            <img src={event.image_url} alt={event.title} style={styles.heroImage} />
+            <img
+              src={event.image_url}
+              alt={event.title}
+              style={{
+                ...styles.heroImage,
+                ...imageFocusStyle,
+              }}
+            />
           ) : (
             <div style={styles.heroImageEmpty}>🎫</div>
           )}
@@ -1233,13 +1255,29 @@ export default async function AdminEventManagePage({
             <div style={styles.mediaBox}>
               <div>
                 <h3 style={styles.panelTitle}>Event image</h3>
-                <p style={styles.sectionText}>Upload or replace the public event image.</p>
-                <ImageUploadField currentImageUrl={event.image_url ?? ""} />
+                <p style={styles.sectionText}>
+                  Upload or replace the public event image, then choose the focal
+                  point for wide banners and cards.
+                </p>
+                <ImageFocusUploadField
+                  currentImageUrl={event.image_url ?? ""}
+                  currentFocusX={event.image_focus_x ?? 50}
+                  currentFocusY={event.image_focus_y ?? 50}
+                  label="Event image upload"
+                  previewAlt={event.title}
+                />
               </div>
 
               <div style={styles.previewBox}>
                 {event.image_url ? (
-                  <img src={event.image_url} alt={event.title} style={styles.previewImage} />
+                  <img
+                    src={event.image_url}
+                    alt={event.title}
+                    style={{
+                      ...styles.previewImage,
+                      ...imageFocusStyle,
+                    }}
+                  />
                 ) : (
                   <div style={styles.emptyPreview}>🎫</div>
                 )}
@@ -1520,8 +1558,7 @@ export default async function AdminEventManagePage({
           updateMenuOptionsAction={updateMenuOptionsAction}
         />
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="winner-draw"
         eyebrow="Section 4"
         title="Winner Draw"
@@ -1589,7 +1626,11 @@ export default async function AdminEventManagePage({
                 </Field>
 
                 <Field label="Aisles after seats">
-                  <input name="aisle_after" placeholder="10,20,30" style={styles.input} />
+                  <input
+                    name="aisle_after"
+                    placeholder="10,20,30"
+                    style={styles.input}
+                  />
                 </Field>
               </div>
 
@@ -1607,8 +1648,16 @@ export default async function AdminEventManagePage({
               <h3 style={styles.panelTitle}>Row seating summary</h3>
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
-                <SummaryCard label="Blocked" value={rowSeats.filter((seat) => seat.status === "blocked").length} />
-                <SummaryCard label="Sold" value={rowSeats.filter((seat) => seat.status === "sold").length} />
+                <SummaryCard
+                  label="Blocked"
+                  value={
+                    rowSeats.filter((seat) => seat.status === "blocked").length
+                  }
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={rowSeats.filter((seat) => seat.status === "sold").length}
+                />
               </div>
             </div>
           </div>
@@ -1618,7 +1667,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Click seats to select them, then save guest/allocation details or block/unblock seats.
+                  Click seats to select them, then save guest/allocation details
+                  or block/unblock seats.
                 </p>
               </div>
 
@@ -1722,8 +1772,18 @@ export default async function AdminEventManagePage({
                     ).length
                   }
                 />
-                <SummaryCard label="Blocked" value={tableSeats.filter((seat) => seat.status === "blocked").length} />
-                <SummaryCard label="Sold" value={tableSeats.filter((seat) => seat.status === "sold").length} />
+                <SummaryCard
+                  label="Blocked"
+                  value={
+                    tableSeats.filter((seat) => seat.status === "blocked").length
+                  }
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={
+                    tableSeats.filter((seat) => seat.status === "sold").length
+                  }
+                />
               </div>
             </div>
           </div>
@@ -1745,7 +1805,11 @@ export default async function AdminEventManagePage({
             </div>
 
             <Field label="Shape">
-              <select name="table_shape" defaultValue={tableShape} style={styles.input}>
+              <select
+                name="table_shape"
+                defaultValue={tableShape}
+                style={styles.input}
+              >
                 <option value="round">Round tables</option>
                 <option value="square">Square tables</option>
                 <option value="rectangle">Rectangle tables</option>
@@ -1760,7 +1824,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Table names</h3>
                 <p style={styles.sectionText}>
-                  Add friendly names such as Sponsors, VIP, Smith Family, or Staff.
+                  Add friendly names such as Sponsors, VIP, Smith Family, or
+                  Staff.
                 </p>
               </div>
 
@@ -1784,7 +1849,8 @@ export default async function AdminEventManagePage({
               <div>
                 <h3 style={styles.panelTitle}>Seat Manager</h3>
                 <p style={styles.sectionText}>
-                  Select one or more seats, then save allocation details or block/unblock seats.
+                  Select one or more seats, then save allocation details or
+                  block/unblock seats.
                 </p>
               </div>
 
