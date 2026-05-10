@@ -29,6 +29,12 @@ function cleanDateTime(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+function cleanFocus(value: FormDataEntryValue | null) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 async function createAuctionAction(formData: FormData) {
   "use server";
 
@@ -58,6 +64,8 @@ async function createAuctionAction(formData: FormData) {
     slug,
     description: String(formData.get("description") || "").trim() || null,
     imageUrl: String(formData.get("image_url") || "").trim() || null,
+    imageFocusX: cleanFocus(formData.get("image_focus_x")),
+    imageFocusY: cleanFocus(formData.get("image_focus_y")),
     status: String(formData.get("status") || "draft") as AuctionStatus,
     currency: String(formData.get("currency") || "GBP").trim() || "GBP",
     opensAt: cleanDateTime(formData.get("opens_at")),
@@ -194,16 +202,62 @@ export default async function NewAuctionPage() {
             />
           </label>
 
-          <label style={styles.label}>
-            Image URL
-            <input
-              name="image_url"
-              placeholder="https://..."
-              style={styles.input}
-            />
-          </label>
+          <section style={styles.imageFocusPanel}>
+            <div>
+              <h3 style={styles.subTitle}>Main auction image focus</h3>
+              <p style={styles.sectionText}>
+                Use these sliders to choose the exact part of the image that
+                should stay visible when the page crops it.
+              </p>
+            </div>
 
-          <label style={styles.label}>
+            <label style={styles.label}>
+              Image URL
+              <input
+                name="image_url"
+                placeholder="https://..."
+                style={styles.input}
+              />
+            </label>
+
+            <div style={styles.focusGrid}>
+              <label style={styles.label}>
+                Horizontal focus
+                <input
+                  name="image_focus_x"
+                  type="range"
+                  min="0"
+                  max="100"
+                  defaultValue="50"
+                  style={styles.range}
+                />
+                <span style={styles.helpText}>
+                  0 = left, 50 = centre, 100 = right
+                </span>
+              </label>
+
+              <label style={styles.label}>
+                Vertical focus
+                <input
+                  name="image_focus_y"
+                  type="range"
+                  min="0"
+                  max="100"
+                  defaultValue="50"
+                  style={styles.range}
+                />
+                <span style={styles.helpText}>
+                  0 = top, 50 = centre, 100 = bottom
+                </span>
+              </label>
+            </div>
+
+            <div style={styles.previewNote}>
+              Preview will use: <strong>50% 50%</strong> by default. After
+              saving, the public page will use the stored focus point.
+            </div>
+          </section>
+                    <label style={styles.label}>
             Terms / auction rules
             <textarea
               name="terms_text"
@@ -307,7 +361,17 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
   },
+  subTitle: {
+    margin: 0,
+    fontSize: 20,
+    color: "#0f172a",
+  },
   grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gap: 14,
+  },
+  focusGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
     gap: 14,
@@ -329,6 +393,9 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     background: "#ffffff",
   },
+  range: {
+    width: "100%",
+  },
   textarea: {
     width: "100%",
     boxSizing: "border-box",
@@ -345,6 +412,22 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 700,
+  },
+  imageFocusPanel: {
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  previewNote: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontWeight: 800,
   },
   actionsCard: {
     display: "flex",
