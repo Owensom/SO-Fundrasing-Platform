@@ -20,8 +20,28 @@ type Campaign = {
   slug: string;
   description?: string | null;
   imageUrl?: string | null;
+  image_focus_x?: number | null;
+  image_focus_y?: number | null;
   status: "draft" | "published" | "closed" | "drawn";
 };
+
+function normaliseFocus(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function getImageStyle(campaign: Campaign): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${normaliseFocus(campaign.image_focus_x)}% ${normaliseFocus(
+      campaign.image_focus_y,
+    )}%`,
+    display: "block",
+  };
+}
 
 function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "raffle") return `/r/${campaign.slug}`;
@@ -115,7 +135,7 @@ export default async function TenantCampaignsPage({
                   <img
                     src={campaign.imageUrl}
                     alt={campaign.title}
-                    style={styles.image}
+                    style={getImageStyle(campaign)}
                   />
                 ) : (
                   <div style={styles.imageEmpty}>
@@ -240,12 +260,6 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
   },
   imageEmpty: {
     height: "100%",
