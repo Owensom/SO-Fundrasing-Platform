@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type Auction = {
   id: string;
@@ -84,7 +84,6 @@ function getAvailability(auction: Auction | null) {
     return {
       canBid: false,
       label: "Loading",
-      tone: "neutral",
       message: "Loading auction details.",
     };
   }
@@ -95,7 +94,6 @@ function getAvailability(auction: Auction | null) {
     return {
       canBid: false,
       label: "Not open",
-      tone: "neutral",
       message: "This auction is not currently accepting bids.",
     };
   }
@@ -107,7 +105,6 @@ function getAvailability(auction: Auction | null) {
       return {
         canBid: false,
         label: "Opening soon",
-        tone: "gold",
         message: `Bidding opens on ${formatDate(auction.opens_at)}.`,
       };
     }
@@ -120,7 +117,6 @@ function getAvailability(auction: Auction | null) {
       return {
         canBid: false,
         label: "Closed",
-        tone: "closed",
         message: "This auction has now closed.",
       };
     }
@@ -129,7 +125,6 @@ function getAvailability(auction: Auction | null) {
   return {
     canBid: true,
     label: "Open for bids",
-    tone: "open",
     message:
       "Place your bid below. Winning bidders will be contacted after the auction closes.",
   };
@@ -140,7 +135,10 @@ function reserveStatus(item: AuctionItem, currency: string) {
     return "No reserve";
   }
 
-  if (item.highest_bid_cents !== null && item.highest_bid_cents >= item.reserve_price_cents) {
+  if (
+    item.highest_bid_cents !== null &&
+    item.highest_bid_cents >= item.reserve_price_cents
+  ) {
     return "Reserve met";
   }
 
@@ -150,7 +148,7 @@ function reserveStatus(item: AuctionItem, currency: string) {
 function statusStyle(status: string): CSSProperties {
   const clean = status.toLowerCase();
 
-  if (clean === "active" || clean === "published") {
+  if (clean === "active" || clean === "published" || clean === "open for bids") {
     return {
       background: "#dcfce7",
       color: "#166534",
@@ -184,6 +182,9 @@ function statusStyle(status: string): CSSProperties {
 export default function PublicAuctionPage({ params }: Props) {
   const { slug } = params;
   const searchParams = useSearchParams();
+
+  const bidQueryValue = searchParams?.get("bid") || "";
+  const errorQueryValue = searchParams?.get("error") || "";
 
   const [auction, setAuction] = useState<Auction | null>(null);
   const [items, setItems] = useState<AuctionItem[]>([]);
@@ -236,14 +237,19 @@ export default function PublicAuctionPage({ params }: Props) {
   const availability = useMemo(() => getAvailability(auction), [auction]);
 
   const successMessage =
-    searchParams.get("bid") === "success"
+    bidQueryValue === "success"
       ? "Thank you — your bid has been placed successfully."
       : "";
 
-  const queryError = searchParams.get("error") || "";
+  const queryError = errorQueryValue;
 
   const activeItems = items.filter((item) => item.status === "active").length;
-  const totalBids = items.reduce((total, item) => total + Number(item.bid_count || 0), 0);
+
+  const totalBids = items.reduce(
+    (total, item) => total + Number(item.bid_count || 0),
+    0,
+  );
+
   const topBid = items.reduce(
     (highest, item) => Math.max(highest, Number(item.highest_bid_cents || 0)),
     0,
@@ -318,7 +324,11 @@ export default function PublicAuctionPage({ params }: Props) {
 
             <div style={styles.metaCard}>
               <span style={styles.metaLabel}>Top bid</span>
-              <strong>{topBid > 0 ? moneyFromCents(topBid, auction.currency) : "No bids yet"}</strong>
+              <strong>
+                {topBid > 0
+                  ? moneyFromCents(topBid, auction.currency)
+                  : "No bids yet"}
+              </strong>
             </div>
           </div>
         </div>
@@ -351,6 +361,7 @@ export default function PublicAuctionPage({ params }: Props) {
       ) : null}
 
       {queryError ? <section style={styles.errorCard}>{queryError}</section> : null}
+
       {error ? <section style={styles.errorCard}>{error}</section> : null}
 
       <section style={styles.noticeCard}>
@@ -358,6 +369,7 @@ export default function PublicAuctionPage({ params }: Props) {
           <h2 style={styles.noticeTitle}>{availability.label}</h2>
           <p style={styles.noticeText}>{availability.message}</p>
         </div>
+
         <div style={styles.noticeChip}>
           <span>Opens</span>
           <strong>{formatDate(auction.opens_at)}</strong>
@@ -373,10 +385,12 @@ export default function PublicAuctionPage({ params }: Props) {
         <section style={styles.itemsGrid}>
           {items.map((item, index) => {
             const highestBid = item.highest_bid_cents;
+
             const minimumNextBid =
               highestBid === null
                 ? item.starting_bid_cents
-                : Number(highestBid || 0) + Number(item.minimum_increment_cents || 0);
+                : Number(highestBid || 0) +
+                  Number(item.minimum_increment_cents || 0);
 
             const itemCanBid = availability.canBid && item.status === "active";
 
@@ -434,7 +448,9 @@ export default function PublicAuctionPage({ params }: Props) {
                   <div style={styles.bidStats}>
                     <div style={styles.bidStat}>
                       <span>Starting bid</span>
-                      <strong>{moneyFromCents(item.starting_bid_cents, auction.currency)}</strong>
+                      <strong>
+                        {moneyFromCents(item.starting_bid_cents, auction.currency)}
+                      </strong>
                     </div>
 
                     <div style={styles.bidStat}>
