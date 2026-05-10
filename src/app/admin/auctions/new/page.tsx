@@ -10,16 +10,6 @@ import {
   type AuctionStatus,
 } from "../../../../../api/_lib/auctions-repo";
 
-function toDateTimeLocalValue(value: string | null | undefined) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
 function cleanDateTime(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim();
   if (!raw) return null;
@@ -95,42 +85,65 @@ export default async function NewAuctionPage() {
 
   return (
     <main style={styles.page}>
-      <section style={styles.header}>
-        <div>
-          <div style={styles.badge}>Silent auction</div>
-          <h1 style={styles.title}>Create auction</h1>
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.eyebrow}>Silent auction builder</div>
+          <h1 style={styles.title}>Create a premium silent auction</h1>
           <p style={styles.subtitle}>
-            Tenant: <strong>{tenantSlug}</strong>
+            Build the auction shell first, then add lots, images, bids and
+            winner management from the edit screen.
           </p>
+
+          <div style={styles.heroStats}>
+            <div style={styles.heroStat}>
+              <span>Tenant</span>
+              <strong>{tenantSlug}</strong>
+            </div>
+            <div style={styles.heroStat}>
+              <span>Public path</span>
+              <strong>/a/your-slug</strong>
+            </div>
+            <div style={styles.heroStat}>
+              <span>Recommended</span>
+              <strong>Start as draft</strong>
+            </div>
+          </div>
         </div>
 
-        <div style={styles.nav}>
-          <Link href="/admin/auctions" style={styles.navButton}>
-            ← Back to auctions
-          </Link>
+        <aside style={styles.heroPanel}>
+          <div style={styles.panelIcon}>🏷️</div>
+          <h2 style={styles.panelTitle}>Auction setup</h2>
+          <p style={styles.panelText}>
+            Use a clear title, strong image and closing time. Items are added
+            after creation so the edit page stays the source of truth.
+          </p>
+        </aside>
+      </section>
 
-          <Link href="/admin/events" style={styles.navButton}>
-            Events
-          </Link>
-
-          <Link href="/admin/raffles" style={styles.navButton}>
-            Raffles
-          </Link>
-
-          <Link href="/admin/squares" style={styles.navButton}>
-            Squares
-          </Link>
-        </div>
+      <section style={styles.topActions}>
+        <Link href="/admin/auctions" style={styles.secondaryButton}>
+          ← Back to auctions
+        </Link>
+        <Link href="/admin/events" style={styles.navButton}>
+          Events
+        </Link>
+        <Link href="/admin/raffles" style={styles.navButton}>
+          Raffles
+        </Link>
+        <Link href="/admin/squares" style={styles.navButton}>
+          Squares
+        </Link>
       </section>
 
       <form action={createAuctionAction} style={styles.form}>
         <section style={styles.card}>
-          <div style={styles.sectionHeader}>
+          <div style={styles.cardHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>Auction details</h2>
+              <p style={styles.cardKicker}>Step 1</p>
+              <h2 style={styles.sectionTitle}>Core auction details</h2>
               <p style={styles.sectionText}>
-                Create the public silent auction campaign. Items and bids are
-                managed after creation.
+                These details create the public auction campaign and control
+                whether supporters can view or bid.
               </p>
             </div>
           </div>
@@ -141,7 +154,7 @@ export default async function NewAuctionPage() {
               <input
                 name="title"
                 required
-                placeholder="Charity dinner silent auction"
+                placeholder="Friends of Anchor Silent Auction"
                 style={styles.input}
               />
             </label>
@@ -150,7 +163,7 @@ export default async function NewAuctionPage() {
               Public slug
               <input
                 name="slug"
-                placeholder="charity-dinner-auction"
+                placeholder="friends-of-anchor"
                 style={styles.input}
               />
               <span style={styles.helpText}>
@@ -161,9 +174,9 @@ export default async function NewAuctionPage() {
             <label style={styles.label}>
               Status
               <select name="status" defaultValue="draft" style={styles.input}>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed</option>
+                <option value="draft">Draft — hidden from public bidding</option>
+                <option value="published">Published — visible and open by dates</option>
+                <option value="closed">Closed — visible but not accepting bids</option>
               </select>
             </label>
 
@@ -174,22 +187,12 @@ export default async function NewAuctionPage() {
 
             <label style={styles.label}>
               Opens
-              <input
-                name="opens_at"
-                type="datetime-local"
-                defaultValue={toDateTimeLocalValue(null)}
-                style={styles.input}
-              />
+              <input name="opens_at" type="datetime-local" style={styles.input} />
             </label>
 
             <label style={styles.label}>
               Closes
-              <input
-                name="closes_at"
-                type="datetime-local"
-                defaultValue={toDateTimeLocalValue(null)}
-                style={styles.input}
-              />
+              <input name="closes_at" type="datetime-local" style={styles.input} />
             </label>
           </div>
 
@@ -197,51 +200,77 @@ export default async function NewAuctionPage() {
             Description
             <textarea
               name="description"
-              placeholder="Tell supporters what this auction is supporting."
-              rows={5}
-              style={styles.textarea}
-            />
-          </label>
-
-          <section style={styles.imageFocusPanel}>
-            <div>
-              <h3 style={styles.subTitle}>Main auction image</h3>
-              <p style={styles.sectionText}>
-                Upload the main public image, then use the live previews to set
-                the image focus point.
-              </p>
-            </div>
-
-            <div style={styles.uploadBox}>
-              <ImageFocusUploadField
-                currentImageUrl=""
-                currentFocusX={50}
-                currentFocusY={50}
-                label="Main auction image"
-                previewAlt="Auction image preview"
-              />
-            </div>
-          </section>
-
-          <label style={styles.label}>
-            Terms / auction rules
-            <textarea
-              name="terms_text"
-              placeholder="Bids are binding. Winning bidders will be contacted after the auction closes..."
+              placeholder="Tell supporters what this auction is supporting and why their bids matter."
               rows={5}
               style={styles.textarea}
             />
           </label>
         </section>
 
-        <section style={styles.actionsCard}>
-          <Link href="/admin/auctions" style={styles.cancelButton}>
-            Cancel
-          </Link>
+        <section style={styles.card}>
+          <div style={styles.cardHeader}>
+            <div>
+              <p style={styles.cardKicker}>Step 2</p>
+              <h2 style={styles.sectionTitle}>Public auction image</h2>
+              <p style={styles.sectionText}>
+                Add a premium campaign image. The focus controls help the public
+                page crop the image cleanly on desktop and mobile.
+              </p>
+            </div>
+          </div>
 
-          <button type="submit" style={styles.saveButton}>
-            Create auction
-          </button>
+          <div style={styles.uploadShell}>
+            <ImageFocusUploadField
+              currentImageUrl=""
+              currentFocusX={50}
+              currentFocusY={50}
+              label="Main auction image"
+              previewAlt="Auction image preview"
+            />
+          </div>
+        </section>
+
+        <section style={styles.card}>
+          <div style={styles.cardHeader}>
+            <div>
+              <p style={styles.cardKicker}>Step 3</p>
+              <h2 style={styles.sectionTitle}>Auction rules</h2>
+              <p style={styles.sectionText}>
+                Optional public terms shown underneath the auction. Keep this
+                short and clear.
+              </p>
+            </div>
+          </div>
+
+          <label style={styles.label}>
+            Terms / auction rules
+            <textarea
+              name="terms_text"
+              placeholder="Bids are binding. Winning bidders will be contacted after the auction closes. Payment and collection details will be confirmed by the organiser."
+              rows={6}
+              style={styles.textarea}
+            />
+          </label>
+        </section>
+
+        <section style={styles.nextCard}>
+          <div>
+            <h2 style={styles.nextTitle}>Next: add auction items</h2>
+            <p style={styles.nextText}>
+              After creation you’ll be taken to the edit page, where items,
+              donors, images, starting bids and increments are managed.
+            </p>
+          </div>
+
+          <div style={styles.actionRow}>
+            <Link href="/admin/auctions" style={styles.cancelButton}>
+              Cancel
+            </Link>
+
+            <button type="submit" style={styles.saveButton}>
+              Create auction
+            </button>
+          </div>
         </section>
       </form>
     </main>
@@ -253,45 +282,114 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
-    background: "#f8fafc",
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.14), transparent 34%), #f8fafc",
     minHeight: "100vh",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 24,
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
+    gap: 18,
+    alignItems: "stretch",
+    marginBottom: 18,
   },
-  badge: {
+  heroContent: {
+    padding: 30,
+    borderRadius: 30,
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 52%, #78350f 130%)",
+    color: "#ffffff",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+  },
+  eyebrow: {
     display: "inline-flex",
-    padding: "6px 10px",
+    padding: "7px 11px",
     borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
+    background: "rgba(251,191,36,0.16)",
+    color: "#fef3c7",
+    border: "1px solid rgba(251,191,36,0.3)",
     fontSize: 13,
-    fontWeight: 900,
-    marginBottom: 10,
+    fontWeight: 950,
+    marginBottom: 14,
   },
   title: {
     margin: 0,
-    fontSize: 38,
-    lineHeight: 1.1,
-    color: "#0f172a",
+    fontSize: "clamp(34px, 7vw, 56px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
   },
   subtitle: {
+    margin: "14px 0 0",
+    color: "#cbd5e1",
+    fontSize: 17,
+    lineHeight: 1.65,
+    maxWidth: 780,
+  },
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 12,
+    marginTop: 24,
+  },
+  heroStat: {
+    display: "grid",
+    gap: 5,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.13)",
+  },
+  heroPanel: {
+    padding: 24,
+    borderRadius: 30,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 18px 44px rgba(15,23,42,0.09)",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+  },
+  panelIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    background: "#fef3c7",
+    color: "#92400e",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 28,
+    marginBottom: 16,
+  },
+  panelTitle: {
+    margin: 0,
+    fontSize: 24,
+    color: "#0f172a",
+    letterSpacing: "-0.03em",
+  },
+  panelText: {
     margin: "10px 0 0",
     color: "#64748b",
+    lineHeight: 1.6,
   },
-  nav: {
+  topActions: {
     display: "flex",
+    justifyContent: "flex-end",
     gap: 10,
     flexWrap: "wrap",
-    justifyContent: "flex-end",
+    marginBottom: 18,
+  },
+  secondaryButton: {
+    padding: "11px 15px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
   },
   navButton: {
-    padding: "12px 18px",
+    padding: "11px 15px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -304,33 +402,37 @@ const styles: Record<string, CSSProperties> = {
     gap: 18,
   },
   card: {
-    padding: 22,
-    borderRadius: 24,
+    padding: 24,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
   },
-  sectionHeader: {
+  cardHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 16,
     flexWrap: "wrap",
     marginBottom: 18,
   },
+  cardKicker: {
+    margin: "0 0 7px",
+    color: "#b45309",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 950,
+  },
   sectionTitle: {
     margin: 0,
-    fontSize: 24,
+    fontSize: 26,
     color: "#0f172a",
+    letterSpacing: "-0.035em",
   },
   sectionText: {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.55,
-  },
-  subTitle: {
-    margin: 0,
-    fontSize: 20,
-    color: "#0f172a",
   },
   grid: {
     display: "grid",
@@ -371,47 +473,56 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
   },
-  imageFocusPanel: {
-    marginTop: 18,
-    padding: 18,
-    borderRadius: 20,
+  uploadShell: {
+    padding: 16,
+    borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
-  uploadBox: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  actionsCard: {
+  nextCard: {
     display: "flex",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 18,
+    flexWrap: "wrap",
+    padding: 22,
+    borderRadius: 28,
+    background: "#0f172a",
+    color: "#ffffff",
+    boxShadow: "0 18px 42px rgba(15,23,42,0.18)",
+  },
+  nextTitle: {
+    margin: 0,
+    fontSize: 24,
+    letterSpacing: "-0.03em",
+  },
+  nextText: {
+    margin: "7px 0 0",
+    color: "#cbd5e1",
+    lineHeight: 1.55,
+  },
+  actionRow: {
+    display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
   },
   cancelButton: {
     padding: "12px 18px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 950,
   },
   saveButton: {
     padding: "12px 18px",
     borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
+    background: "#f59e0b",
+    color: "#111827",
     border: "none",
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    boxShadow: "0 10px 20px rgba(245,158,11,0.22)",
   },
 };
