@@ -12,6 +12,17 @@ function parseNumber(
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normaliseFocus(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback = 50,
+) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
 function parseColours(value: string): string[] {
   return value
     .split(",")
@@ -132,6 +143,9 @@ export async function POST(request: NextRequest) {
       String(formData.get("image_position") ?? "center"),
     );
 
+    const image_focus_x = normaliseFocus(formData.get("image_focus_x"), 50);
+    const image_focus_y = normaliseFocus(formData.get("image_focus_y"), 50);
+
     const currency = String(formData.get("currency") ?? "EUR").trim();
     const status = String(formData.get("status") ?? "draft").trim();
 
@@ -173,6 +187,8 @@ export async function POST(request: NextRequest) {
       image_url,
       draw_at,
       image_position,
+      image_focus_x,
+      image_focus_y,
       currency: currency as "GBP" | "USD" | "EUR",
       ticket_price,
       total_tickets,
