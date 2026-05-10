@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { sendAuctionWinnerEmail } from "@/lib/email";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import {
   createAuctionItem,
@@ -212,6 +213,89 @@ async function updateAuctionAction(formData: FormData) {
   redirect(`/admin/auctions/${auction.id}`);
 }
 
+async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
+  "use server";
+
+  const auctionId = String(formData.get("auction_id") || "").trim();
+
+  if (!auctionId) redirect("/admin/auctions");
+
+  const { auction } = await requireAuctionAccess(auctionId);
+  const items = await listAuctionItems(auction.id);
+  const bids = await listAuctionBids(auction.id);
+
+  const winnerByItemId = new Map<
+    string,
+    {
+      bidder_name: string | null;
+      bidder_email: string | null;
+      amount_cents: number;
+    }
+  >();
+
+  for (const bid of bids) {
+    const itemId = String(bid.item_id || "");
+    if (!itemId) continue;
+
+    const amountCents = Number(bid.amount_cents || 0);
+    const existing = winnerByItemId.get(itemId);
+
+    if (!existing || amountCents > Number(existing.amount_cents || 0)) {
+      winnerByItemId.set(itemId, {
+        bidder_name: bid.bidder_name || null,
+        bidder_email: bid.bidder_email || null,
+        amount_cents: amountCents,
+      });
+    }
+  }
+
+  for (const item of items) {
+    if (item.status !== "active") continue;
+
+    await updateAuctionItem(item.id, {
+      title: item.title,
+      description: item.description,
+      imageUrl: item.image_url,
+      imageFocusX: item.image_focus_x ?? 50,
+      imageFocusY: item.image_focus_y ?? 50,
+      donorName: item.donor_name,
+      startingBidCents: Number(item.starting_bid_cents || 0),
+      minimumIncrementCents: Number(item.minimum_increment_cents || 100),
+      reservePriceCents: item.reserve_price_cents,
+      status: "closed",
+      sortOrder: Number(item.sort_order || 0),
+    });
+
+    const winner = winnerByItemId.get(item.id);
+
+    if (!winner?.bidder_email) continue;
+
+    if (
+      item.reserve_price_cents !== null &&
+      item.reserve_price_cents !== undefined &&
+      Number(winner.amount_cents || 0) < Number(item.reserve_price_cents || 0)
+    ) {
+      continue;
+    }
+
+    await sendAuctionWinnerEmail({
+      to: winner.bidder_email,
+      name: winner.bidder_name,
+      auctionTitle: auction.title,
+      itemTitle: item.title,
+      winningAmountCents: Number(winner.amount_cents || 0),
+      currency: auction.currency || "GBP",
+    });
+  }
+
+  await updateAuction(auction.id, {
+    status: "closed",
+    closesAt: auction.closes_at || new Date().toISOString(),
+  });
+
+  redirect(`/admin/auctions/${auction.id}#winner-tools`);
+}
+
 async function createAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -296,6 +380,32 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
       ? Math.max(...bids.map((bid) => Number(bid.amount_cents || 0)))
       : 0;
 
+  const winnerRows = items.map((item, index) => {
+    const itemBids = bids.filter((bid) => bid.item_id === item.id);
+    const topBid =
+      itemBids.length > 0
+        ? itemBids.reduce((highest, bid) =>
+            Number(bid.amount_cents || 0) > Number(highest.amount_cents || 0)
+              ? bid
+              : highest,
+          )
+        : null;
+
+    const reserveMet =
+      !topBid ||
+      item.reserve_price_cents === null ||
+      item.reserve_price_cents === undefined
+        ? true
+        : Number(topBid.amount_cents || 0) >= Number(item.reserve_price_cents || 0);
+
+    return {
+      item,
+      index,
+      topBid,
+      reserveMet,
+    };
+  });
+
   return (
     <main style={styles.page}>
       <section style={styles.topBar}>
@@ -325,9 +435,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
           <h1 style={styles.title}>{auction.title || "Untitled auction"}</h1>
 
-          <p style={styles.subtitle}>
-            /a/{auction.slug}
-          </p>
+          <p style={styles.subtitle}>/a/{auction.slug}</p>
 
           <p style={styles.description}>
             {auction.description || "No description added yet."}
@@ -367,6 +475,76 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           label="Highest bid"
           value={moneyFromCents(highestBid, auction.currency)}
         />
+      </section>
+
+      <section id="winner-tools" style={styles.card}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <p style={styles.kicker}>Close and notify</p>
+            <h2 style={styles.sectionTitle}>Auction winner tools</h2>
+            <p style={styles.sectionText}>
+              Close this auction, close all active lots and email the highest
+              valid bidder for each lot. Lots with a reserve price are only
+              notified if the reserve has been met.
+            </p>
+          </div>
+
+          <span
+            style={{
+              ...styles.status,
+              ...getStatusStyle(auction.status),
+            }}
+          >
+            {auction.status}
+          </span>
+        </div>
+
+        <div style={styles.winnerGrid}>
+          {winnerRows.length === 0 ? (
+            <div style={styles.emptyState}>No auction items added yet.</div>
+          ) : (
+            winnerRows.map(({ item, index, topBid, reserveMet }) => (
+              <div key={item.id} style={styles.winnerRow}>
+                <div>
+                  <div style={styles.winnerTitle}>
+                    Lot {item.sort_order || index + 1}: {item.title}
+                  </div>
+                  <div style={styles.winnerMeta}>
+                    {topBid?.bidder_name || "No bidder"}
+                    {topBid?.bidder_email ? ` · ${topBid.bidder_email}` : ""}
+                  </div>
+                </div>
+
+                <div style={styles.winnerAmount}>
+                  {topBid
+                    ? moneyFromCents(topBid.amount_cents, auction.currency)
+                    : "No bids"}
+                  {topBid && !reserveMet ? (
+                    <span style={styles.reserveWarning}>Reserve not met</span>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <form action={closeAuctionAndNotifyWinnersAction} style={styles.closeForm}>
+          <input type="hidden" name="auction_id" value={auction.id} />
+
+          <button
+            type="submit"
+            style={{
+              ...styles.closeButton,
+              opacity: auction.status === "closed" ? 0.55 : 1,
+              cursor: auction.status === "closed" ? "not-allowed" : "pointer",
+            }}
+            disabled={auction.status === "closed"}
+          >
+            {auction.status === "closed"
+              ? "Auction already closed"
+              : "Close auction and email winners"}
+          </button>
+        </form>
       </section>
 
       <form action={updateAuctionAction} style={styles.form}>
@@ -1113,6 +1291,58 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     textTransform: "capitalize",
     whiteSpace: "nowrap",
+  },
+  winnerGrid: {
+    display: "grid",
+    gap: 10,
+    marginTop: 16,
+  },
+  winnerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  winnerTitle: {
+    color: "#0f172a",
+    fontWeight: 950,
+  },
+  winnerMeta: {
+    marginTop: 4,
+    color: "#64748b",
+    fontWeight: 750,
+    fontSize: 13,
+  },
+  winnerAmount: {
+    color: "#0f172a",
+    fontWeight: 950,
+    textAlign: "right",
+    whiteSpace: "nowrap",
+  },
+  reserveWarning: {
+    display: "block",
+    marginTop: 5,
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  closeForm: {
+    marginTop: 18,
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  closeButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(15,23,42,0.18)",
   },
   grid: {
     display: "grid",
