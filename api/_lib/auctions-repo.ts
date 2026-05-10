@@ -1,482 +1,993 @@
-import { query, queryOne } from "@/lib/db";
+import type { CSSProperties } from "react";
+import { notFound } from "next/navigation";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import {
+  getAuctionBySlug,
+  listAuctionItems,
+} from "../../../../api/_lib/auctions-repo";
 
-export type AuctionStatus = "draft" | "published" | "closed";
-export type AuctionItemStatus = "active" | "closed" | "withdrawn";
+export const dynamic = "force-dynamic";
 
-export type SilentAuction = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  image_url: string | null;
-  image_focus_x: number;
-  image_focus_y: number;
-  status: AuctionStatus;
-  currency: string;
-  opens_at: string | null;
-  closes_at: string | null;
-  terms_text: string | null;
-  created_at: string;
-  updated_at: string;
+type PageProps = {
+  params: Promise<{
+    slug: string;
+  }>;
+  searchParams?: Promise<{
+    bid?: string;
+    error?: string;
+  }>;
 };
 
-export type SilentAuctionItem = {
-  id: string;
-  auction_id: string;
-  title: string;
-  description: string | null;
-  image_url: string | null;
-  image_focus_x: number;
-  image_focus_y: number;
-  donor_name: string | null;
-  starting_bid_cents: number;
-  minimum_increment_cents: number;
-  reserve_price_cents: number | null;
-  status: AuctionItemStatus;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-  highest_bid_cents: number | null;
-  bid_count: number;
-};
+function moneyFromCents(
+  cents: number | null | undefined,
+  currency = "GBP",
+) {
+  const amount = Number(cents || 0) / 100;
 
-export type SilentAuctionBid = {
-  id: string;
-  auction_id: string;
-  item_id: string;
-  bidder_name: string;
-  bidder_email: string;
-  bidder_phone: string | null;
-  amount_cents: number;
-  is_winning: boolean;
-  created_at: string;
-};
-
-function cleanStatus(value: unknown): AuctionStatus {
-  const status = String(value || "draft").toLowerCase();
-  if (status === "published" || status === "closed") return status;
-  return "draft";
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(amount);
+  } catch {
+    return `£${amount.toFixed(2)}`;
+  }
 }
 
-function cleanItemStatus(value: unknown): AuctionItemStatus {
-  const status = String(value || "active").toLowerCase();
-  if (status === "closed" || status === "withdrawn") return status;
-  return "active";
+function centsToPoundsInput(
+  cents: number | null | undefined,
+) {
+  return (Number(cents || 0) / 100).toFixed(2);
 }
 
-function cleanFocus(value: unknown, fallback = 50) {
+function focusValue(
+  value: number | null | undefined,
+) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
-    return fallback;
+    return 50;
   }
 
-  return Math.max(0, Math.min(100, Math.round(number)));
-}
-
-export function slugifyAuctionTitle(title: string) {
-  const base = title
-    .toLowerCase()
-    .trim()
-    .replace(/['"]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return base || `auction-${Date.now()}`;
-}
-
-export async function listAuctions(tenantSlug: string) {
-  return query<SilentAuction>(
-    `
-      select *
-      from silent_auctions
-      where tenant_slug = $1
-      order by created_at desc
-    `,
-    [tenantSlug],
+  return Math.max(
+    0,
+    Math.min(100, Math.round(number)),
   );
 }
 
-export async function getAuctionById(id: string, tenantSlug?: string) {
-  if (tenantSlug) {
-    return queryOne<SilentAuction>(
-      `
-        select *
-        from silent_auctions
-        where id = $1
-          and tenant_slug = $2
-        limit 1
-      `,
-      [id, tenantSlug],
-    );
+function focusedImageStyle(
+  focusX: number | null | undefined,
+  focusY: number | null | undefined,
+): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${focusValue(
+      focusX,
+    )}% ${focusValue(focusY)}%`,
+    display: "block",
+  };
+}
+
+function formatDate(
+  value: string | null | undefined,
+) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not set";
   }
 
-  return queryOne<SilentAuction>(
-    `
-      select *
-      from silent_auctions
-      where id = $1
-      limit 1
-    `,
-    [id],
-  );
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "full",
+    timeStyle: "short",
+  }).format(date);
 }
 
-export async function getAuctionBySlug(slug: string, tenantSlug: string) {
-  return queryOne<SilentAuction>(
-    `
-      select *
-      from silent_auctions
-      where slug = $1
-        and tenant_slug = $2
-      limit 1
-    `,
-    [slug, tenantSlug],
-  );
-}
-
-export async function createAuction(input: {
-  tenantSlug: string;
-  title: string;
-  slug?: string;
-  description?: string | null;
-  imageUrl?: string | null;
-  imageFocusX?: number;
-  imageFocusY?: number;
-  status?: AuctionStatus;
-  currency?: string;
-  opensAt?: string | null;
-  closesAt?: string | null;
-  termsText?: string | null;
+function getAuctionAvailability(auction: {
+  status: string;
+  opens_at: string | null;
+  closes_at: string | null;
 }) {
-  const title = input.title.trim() || "Untitled auction";
-  const slug = (input.slug?.trim() || slugifyAuctionTitle(title)).toLowerCase();
+  const now = Date.now();
 
-  return queryOne<SilentAuction>(
-    `
-      insert into silent_auctions (
-        tenant_slug,
-        slug,
-        title,
-        description,
-        image_url,
-        image_focus_x,
-        image_focus_y,
-        status,
-        currency,
-        opens_at,
-        closes_at,
-        terms_text
-      )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-      returning *
-    `,
-    [
-      input.tenantSlug,
-      slug,
-      title,
-      input.description || null,
-      input.imageUrl || null,
-      cleanFocus(input.imageFocusX),
-      cleanFocus(input.imageFocusY),
-      cleanStatus(input.status),
-      input.currency || "GBP",
-      input.opensAt || null,
-      input.closesAt || null,
-      input.termsText || null,
-    ],
+  if (auction.status !== "published") {
+    return {
+      canBid: false,
+      label: "Not open",
+      message:
+        "This auction is not currently accepting bids.",
+    };
+  }
+
+  if (auction.opens_at) {
+    const opensAt = new Date(
+      auction.opens_at,
+    ).getTime();
+
+    if (
+      !Number.isNaN(opensAt) &&
+      now < opensAt
+    ) {
+      return {
+        canBid: false,
+        label: "Opening soon",
+        message: `Bidding opens on ${formatDate(
+          auction.opens_at,
+        )}.`,
+      };
+    }
+  }
+
+  if (auction.closes_at) {
+    const closesAt = new Date(
+      auction.closes_at,
+    ).getTime();
+
+    if (
+      !Number.isNaN(closesAt) &&
+      now > closesAt
+    ) {
+      return {
+        canBid: false,
+        label: "Closed",
+        message:
+          "This auction has now closed.",
+      };
+    }
+  }
+
+  return {
+    canBid: true,
+    label: "Open for bids",
+    message:
+      "Place your bid below. Winning bidders will be contacted after the auction closes.",
+  };
+}
+
+export default async function PublicAuctionPage({
+  params,
+  searchParams,
+}: PageProps) {
+  const resolvedParams = await params;
+
+  const resolvedSearchParams =
+    await searchParams;
+
+  const tenantSlug =
+    await getTenantSlugFromHeaders();
+
+  if (!tenantSlug) {
+    notFound();
+  }
+
+  console.log(
+    "[PUBLIC AUCTION PAGE]",
+    "tenant:",
+    tenantSlug,
+    "slug:",
+    resolvedParams.slug,
+  );
+
+  const auction = await getAuctionBySlug(
+    resolvedParams.slug,
+    tenantSlug,
+  );
+
+  console.log(
+    "[PUBLIC AUCTION RESULT]",
+    auction,
+  );
+
+  if (!auction) {
+    notFound();
+  }
+
+  if (auction.status === "draft") {
+    notFound();
+  }
+
+  const items = await listAuctionItems(
+    auction.id,
+  );
+
+  const visibleItems = items.filter(
+    (item) => item.status !== "withdrawn",
+  );
+
+  const availability =
+    getAuctionAvailability(auction);
+
+  const successMessage =
+    resolvedSearchParams?.bid ===
+    "success"
+      ? "Thank you — your bid has been placed successfully."
+      : null;
+
+  const errorMessage =
+    resolvedSearchParams?.error
+      ? decodeURIComponent(
+          resolvedSearchParams.error,
+        )
+      : null;
+
+  return (
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.badge}>
+            Silent auction
+          </div>
+
+          <h1 style={styles.title}>
+            {auction.title}
+          </h1>
+
+          {auction.description ? (
+            <p style={styles.description}>
+              {auction.description}
+            </p>
+          ) : null}
+
+          <div style={styles.heroMeta}>
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>
+                Status
+              </span>
+
+              <strong>
+                {availability.label}
+              </strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>
+                Opens
+              </span>
+
+              <strong>
+                {formatDate(
+                  auction.opens_at,
+                )}
+              </strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>
+                Closes
+              </span>
+
+              <strong>
+                {formatDate(
+                  auction.closes_at,
+                )}
+              </strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>
+                Items
+              </span>
+
+              <strong>
+                {visibleItems.length}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.heroImageWrap}>
+          {auction.image_url ? (
+            <img
+              src={auction.image_url}
+              alt={auction.title}
+              style={focusedImageStyle(
+                auction.image_focus_x,
+                auction.image_focus_y,
+              )}
+            />
+          ) : (
+            <div
+              style={styles.heroImageEmpty}
+            >
+              🔨
+            </div>
+          )}
+        </div>
+      </section>
+
+      {successMessage ? (
+        <section style={styles.successCard}>
+          {successMessage}
+        </section>
+      ) : null}
+
+      {errorMessage ? (
+        <section style={styles.errorCard}>
+          {errorMessage}
+        </section>
+      ) : null}
+
+      <section style={styles.noticeCard}>
+        <h2 style={styles.noticeTitle}>
+          {availability.label}
+        </h2>
+
+        <p style={styles.noticeText}>
+          {availability.message}
+        </p>
+      </section>
+
+      {visibleItems.length === 0 ? (
+        <section style={styles.emptyCard}>
+          <h2 style={{ margin: 0 }}>
+            No auction items available
+          </h2>
+
+          <p style={styles.muted}>
+            Please check back later.
+          </p>
+        </section>
+      ) : (
+        <section style={styles.itemsGrid}>
+          {visibleItems.map((item) => {
+            const highestBid =
+              item.highest_bid_cents;
+
+            const minimumNextBid =
+              highestBid === null
+                ? item.starting_bid_cents
+                : Number(
+                    highestBid || 0,
+                  ) +
+                  Number(
+                    item.minimum_increment_cents ||
+                      0,
+                  );
+
+            const itemCanBid =
+              availability.canBid &&
+              item.status === "active";
+
+            return (
+              <article
+                key={item.id}
+                style={styles.itemCard}
+              >
+                <div
+                  style={
+                    styles.itemImageWrap
+                  }
+                >
+                  {item.image_url ? (
+                    <img
+                      src={item.image_url}
+                      alt={item.title}
+                      style={focusedImageStyle(
+                        item.image_focus_x,
+                        item.image_focus_y,
+                      )}
+                    />
+                  ) : (
+                    <div
+                      style={
+                        styles.itemImageEmpty
+                      }
+                    >
+                      🎁
+                    </div>
+                  )}
+                </div>
+
+                <div style={styles.itemBody}>
+                  <div style={styles.itemTop}>
+                    <div>
+                      <h2
+                        style={
+                          styles.itemTitle
+                        }
+                      >
+                        {item.title}
+                      </h2>
+
+                      {item.donor_name ? (
+                        <p
+                          style={
+                            styles.donor
+                          }
+                        >
+                          Donated by{" "}
+                          <strong>
+                            {
+                              item.donor_name
+                            }
+                          </strong>
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <span
+                      style={
+                        styles.itemStatus
+                      }
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+
+                  {item.description ? (
+                    <p
+                      style={
+                        styles.itemDescription
+                      }
+                    >
+                      {item.description}
+                    </p>
+                  ) : null}
+
+                  <div style={styles.bidStats}>
+                    <div
+                      style={
+                        styles.bidStat
+                      }
+                    >
+                      <span>
+                        Starting bid
+                      </span>
+
+                      <strong>
+                        {moneyFromCents(
+                          item.starting_bid_cents,
+                          auction.currency,
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={
+                        styles.bidStat
+                      }
+                    >
+                      <span>
+                        Current highest
+                      </span>
+
+                      <strong>
+                        {highestBid ===
+                        null
+                          ? "No bids yet"
+                          : moneyFromCents(
+                              highestBid,
+                              auction.currency,
+                            )}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={
+                        styles.bidStat
+                      }
+                    >
+                      <span>
+                        Minimum next bid
+                      </span>
+
+                      <strong>
+                        {moneyFromCents(
+                          minimumNextBid,
+                          auction.currency,
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {itemCanBid ? (
+                    <form
+                      method="post"
+                      action="/api/auctions/bid"
+                      style={
+                        styles.bidForm
+                      }
+                    >
+                      <input
+                        type="hidden"
+                        name="auction_id"
+                        value={
+                          auction.id
+                        }
+                      />
+
+                      <input
+                        type="hidden"
+                        name="item_id"
+                        value={item.id}
+                      />
+
+                      <input
+                        type="hidden"
+                        name="auction_slug"
+                        value={
+                          auction.slug
+                        }
+                      />
+
+                      <div
+                        style={
+                          styles.formGrid
+                        }
+                      >
+                        <label
+                          style={
+                            styles.label
+                          }
+                        >
+                          Your name
+
+                          <input
+                            name="bidder_name"
+                            required
+                            autoComplete="name"
+                            style={
+                              styles.input
+                            }
+                          />
+                        </label>
+
+                        <label
+                          style={
+                            styles.label
+                          }
+                        >
+                          Email
+
+                          <input
+                            name="bidder_email"
+                            type="email"
+                            required
+                            autoComplete="email"
+                            style={
+                              styles.input
+                            }
+                          />
+                        </label>
+
+                        <label
+                          style={
+                            styles.label
+                          }
+                        >
+                          Phone
+
+                          <input
+                            name="bidder_phone"
+                            autoComplete="tel"
+                            style={
+                              styles.input
+                            }
+                          />
+                        </label>
+
+                        <label
+                          style={
+                            styles.label
+                          }
+                        >
+                          Your bid
+
+                          <input
+                            name="amount"
+                            inputMode="decimal"
+                            required
+                            defaultValue={centsToPoundsInput(
+                              minimumNextBid,
+                            )}
+                            style={
+                              styles.input
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <label
+                        style={
+                          styles.checkboxLabel
+                        }
+                      >
+                        <input
+                          name="termsAccepted"
+                          type="checkbox"
+                          required
+                        />
+
+                        <span>
+                          I understand
+                          that bids are
+                          binding and
+                          that the
+                          organiser may
+                          contact me if
+                          I am the
+                          winning bidder.
+                        </span>
+                      </label>
+
+                      <button
+                        type="submit"
+                        style={
+                          styles.bidButton
+                        }
+                      >
+                        Place bid
+                      </button>
+                    </form>
+                  ) : (
+                    <div
+                      style={
+                        styles.closedBox
+                      }
+                    >
+                      {item.status ===
+                      "active"
+                        ? availability.message
+                        : "This item is not currently accepting bids."}
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+
+      {auction.terms_text ? (
+        <section style={styles.termsCard}>
+          <h2 style={styles.noticeTitle}>
+            Auction rules
+          </h2>
+
+          <p style={styles.termsText}>
+            {auction.terms_text}
+          </p>
+        </section>
+      ) : null}
+    </main>
   );
 }
 
-export async function updateAuction(
-  id: string,
-  input: {
-    title: string;
-    slug: string;
-    description?: string | null;
-    imageUrl?: string | null;
-    imageFocusX?: number;
-    imageFocusY?: number;
-    status?: AuctionStatus;
-    currency?: string;
-    opensAt?: string | null;
-    closesAt?: string | null;
-    termsText?: string | null;
+const styles: Record<
+  string,
+  CSSProperties
+> = {
+  page: {
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "28px 16px 56px",
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.16), transparent 34%), #f8fafc",
+    minHeight: "100vh",
   },
-) {
-  return queryOne<SilentAuction>(
-    `
-      update silent_auctions
-      set
-        title = $2,
-        slug = $3,
-        description = $4,
-        image_url = $5,
-        image_focus_x = $6,
-        image_focus_y = $7,
-        status = $8,
-        currency = $9,
-        opens_at = $10,
-        closes_at = $11,
-        terms_text = $12,
-        updated_at = now()
-      where id = $1
-      returning *
-    `,
-    [
-      id,
-      input.title.trim() || "Untitled auction",
-      input.slug.trim().toLowerCase() || slugifyAuctionTitle(input.title),
-      input.description || null,
-      input.imageUrl || null,
-      cleanFocus(input.imageFocusX),
-      cleanFocus(input.imageFocusY),
-      cleanStatus(input.status),
-      input.currency || "GBP",
-      input.opensAt || null,
-      input.closesAt || null,
-      input.termsText || null,
-    ],
-  );
-}
 
-export async function deleteAuction(id: string) {
-  await query(
-    `
-      delete from silent_auctions
-      where id = $1
-    `,
-    [id],
-  );
-}
-export async function listAuctionItems(auctionId: string) {
-  return query<SilentAuctionItem>(
-    `
-      select
-        item.*,
-        coalesce(max(bid.amount_cents), null) as highest_bid_cents,
-        count(bid.id)::int as bid_count
-      from silent_auction_items item
-      left join silent_auction_bids bid
-        on bid.item_id = item.id
-      where item.auction_id = $1
-      group by item.id
-      order by item.sort_order asc, item.created_at asc
-    `,
-    [auctionId],
-  );
-}
-
-export async function getAuctionItemById(itemId: string) {
-  return queryOne<SilentAuctionItem>(
-    `
-      select
-        item.*,
-        coalesce(max(bid.amount_cents), null) as highest_bid_cents,
-        count(bid.id)::int as bid_count
-      from silent_auction_items item
-      left join silent_auction_bids bid
-        on bid.item_id = item.id
-      where item.id = $1
-      group by item.id
-      limit 1
-    `,
-    [itemId],
-  );
-}
-
-export async function createAuctionItem(input: {
-  auctionId: string;
-  title: string;
-  description?: string | null;
-  imageUrl?: string | null;
-  imageFocusX?: number;
-  imageFocusY?: number;
-  donorName?: string | null;
-  startingBidCents?: number;
-  minimumIncrementCents?: number;
-  reservePriceCents?: number | null;
-  status?: AuctionItemStatus;
-  sortOrder?: number;
-}) {
-  return queryOne<SilentAuctionItem>(
-    `
-      insert into silent_auction_items (
-        auction_id,
-        title,
-        description,
-        image_url,
-        image_focus_x,
-        image_focus_y,
-        donor_name,
-        starting_bid_cents,
-        minimum_increment_cents,
-        reserve_price_cents,
-        status,
-        sort_order
-      )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-      returning *,
-        null::integer as highest_bid_cents,
-        0::integer as bid_count
-    `,
-    [
-      input.auctionId,
-      input.title.trim() || "Untitled item",
-      input.description || null,
-      input.imageUrl || null,
-      cleanFocus(input.imageFocusX),
-      cleanFocus(input.imageFocusY),
-      input.donorName || null,
-      Number(input.startingBidCents || 0),
-      Number(input.minimumIncrementCents || 100),
-      input.reservePriceCents ?? null,
-      cleanItemStatus(input.status),
-      Number(input.sortOrder || 0),
-    ],
-  );
-}
-
-export async function updateAuctionItem(
-  itemId: string,
-  input: {
-    title: string;
-    description?: string | null;
-    imageUrl?: string | null;
-    imageFocusX?: number;
-    imageFocusY?: number;
-    donorName?: string | null;
-    startingBidCents?: number;
-    minimumIncrementCents?: number;
-    reservePriceCents?: number | null;
-    status?: AuctionItemStatus;
-    sortOrder?: number;
+  hero: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
+    gap: 22,
+    alignItems: "stretch",
+    marginBottom: 20,
   },
-) {
-  return queryOne<SilentAuctionItem>(
-    `
-      update silent_auction_items
-      set
-        title = $2,
-        description = $3,
-        image_url = $4,
-        image_focus_x = $5,
-        image_focus_y = $6,
-        donor_name = $7,
-        starting_bid_cents = $8,
-        minimum_increment_cents = $9,
-        reserve_price_cents = $10,
-        status = $11,
-        sort_order = $12,
-        updated_at = now()
-      where id = $1
-      returning *,
-        null::integer as highest_bid_cents,
-        0::integer as bid_count
-    `,
-    [
-      itemId,
-      input.title.trim() || "Untitled item",
-      input.description || null,
-      input.imageUrl || null,
-      cleanFocus(input.imageFocusX),
-      cleanFocus(input.imageFocusY),
-      input.donorName || null,
-      Number(input.startingBidCents || 0),
-      Number(input.minimumIncrementCents || 100),
-      input.reservePriceCents ?? null,
-      cleanItemStatus(input.status),
-      Number(input.sortOrder || 0),
-    ],
-  );
-}
 
-export async function deleteAuctionItem(itemId: string) {
-  await query(
-    `
-      delete from silent_auction_items
-      where id = $1
-    `,
-    [itemId],
-  );
-}
+  heroContent: {
+    padding: 28,
+    borderRadius: 28,
+    background: "#0f172a",
+    color: "#ffffff",
+    boxShadow:
+      "0 24px 60px rgba(15,23,42,0.22)",
+  },
 
-export async function listAuctionBids(auctionId: string) {
-  return query<SilentAuctionBid>(
-    `
-      select *
-      from silent_auction_bids
-      where auction_id = $1
-      order by created_at desc
-    `,
-    [auctionId],
-  );
-}
+  badge: {
+    display: "inline-flex",
+    padding: "7px 11px",
+    borderRadius: 999,
+    background:
+      "rgba(251,191,36,0.16)",
+    color: "#fef3c7",
+    border:
+      "1px solid rgba(251,191,36,0.28)",
+    fontSize: 13,
+    fontWeight: 950,
+    marginBottom: 14,
+  },
 
-export async function listAuctionBidsForItem(itemId: string) {
-  return query<SilentAuctionBid>(
-    `
-      select *
-      from silent_auction_bids
-      where item_id = $1
-      order by amount_cents desc, created_at asc
-    `,
-    [itemId],
-  );
-}
+  title: {
+    margin: 0,
+    fontSize: 44,
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
+  },
 
-export async function createAuctionBid(input: {
-  auctionId: string;
-  itemId: string;
-  bidderName: string;
-  bidderEmail: string;
-  bidderPhone?: string | null;
-  amountCents: number;
-}) {
-  await query(
-    `
-      update silent_auction_bids
-      set is_winning = false
-      where item_id = $1
-    `,
-    [input.itemId],
-  );
+  description: {
+    margin: "14px 0 0",
+    color: "#cbd5e1",
+    fontSize: 17,
+    lineHeight: 1.65,
+    maxWidth: 780,
+  },
 
-  return queryOne<SilentAuctionBid>(
-    `
-      insert into silent_auction_bids (
-        auction_id,
-        item_id,
-        bidder_name,
-        bidder_email,
-        bidder_phone,
-        amount_cents,
-        is_winning
-      )
-      values ($1,$2,$3,$4,$5,$6,true)
-      returning *
-    `,
-    [
-      input.auctionId,
-      input.itemId,
-      input.bidderName.trim(),
-      input.bidderEmail.trim().toLowerCase(),
-      input.bidderPhone || null,
-      Number(input.amountCents),
-    ],
-  );
-}
+  heroMeta: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(145px, 1fr))",
+    gap: 12,
+    marginTop: 24,
+  },
 
-export async function getHighestBidForItem(itemId: string) {
-  return queryOne<SilentAuctionBid>(
-    `
-      select *
-      from silent_auction_bids
-      where item_id = $1
-      order by amount_cents desc, created_at asc
-      limit 1
-    `,
-    [itemId],
-  );
-}
+  metaCard: {
+    padding: 14,
+    borderRadius: 18,
+    background:
+      "rgba(255,255,255,0.08)",
+    border:
+      "1px solid rgba(255,255,255,0.12)",
+    display: "grid",
+    gap: 5,
+  },
+
+  metaLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  heroImageWrap: {
+    minHeight: 310,
+    borderRadius: 28,
+    overflow: "hidden",
+    background: "#e2e8f0",
+    border: "1px solid #e2e8f0",
+    boxShadow:
+      "0 18px 44px rgba(15,23,42,0.12)",
+  },
+
+  heroImageEmpty: {
+    width: "100%",
+    height: "100%",
+    minHeight: 310,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 54,
+    background: "#f1f5f9",
+  },
+
+  successCard: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontWeight: 950,
+    marginBottom: 16,
+  },
+
+  errorCard: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontWeight: 950,
+    marginBottom: 16,
+  },
+
+  noticeCard: {
+    padding: 20,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow:
+      "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+  },
+
+  noticeTitle: {
+    margin: 0,
+    fontSize: 22,
+    color: "#0f172a",
+  },
+
+  noticeText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.6,
+  },
+
+  emptyCard: {
+    padding: 24,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  muted: {
+    color: "#64748b",
+  },
+
+  itemsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 18,
+  },
+
+  itemCard: {
+    borderRadius: 26,
+    overflow: "hidden",
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow:
+      "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  itemImageWrap: {
+    width: "100%",
+    height: 230,
+    background: "#f1f5f9",
+  },
+
+  itemImageEmpty: {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 44,
+    color: "#94a3b8",
+  },
+
+  itemBody: {
+    padding: 20,
+  },
+
+  itemTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+
+  itemTitle: {
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.15,
+    color: "#0f172a",
+  },
+
+  donor: {
+    margin: "6px 0 0",
+    color: "#64748b",
+  },
+
+  itemStatus: {
+    display: "inline-flex",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "capitalize",
+    border: "1px solid #fde68a",
+  },
+
+  itemDescription: {
+    color: "#334155",
+    lineHeight: 1.6,
+    margin: "14px 0 0",
+  },
+
+  bidStats: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+
+  bidStat: {
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 4,
+  },
+
+  bidForm: {
+    display: "grid",
+    gap: 14,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 12,
+  },
+
+  label: {
+    display: "grid",
+    gap: 7,
+    color: "#0f172a",
+    fontWeight: 900,
+  },
+
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    padding: "12px 13px",
+    fontSize: 15,
+    color: "#0f172a",
+    background: "#ffffff",
+  },
+
+  checkboxLabel: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    color: "#334155",
+    fontWeight: 750,
+    lineHeight: 1.5,
+  },
+
+  bidButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow:
+      "0 10px 20px rgba(22,131,248,0.22)",
+  },
+
+  closedBox: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f1f5f9",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+    fontWeight: 800,
+  },
+
+  termsCard: {
+    marginTop: 18,
+    padding: 22,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow:
+      "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  termsText: {
+    whiteSpace: "pre-wrap",
+    color: "#334155",
+    lineHeight: 1.65,
+    margin: "10px 0 0",
+  },
+};
