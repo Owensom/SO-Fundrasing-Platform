@@ -74,6 +74,8 @@ export type EventItem = {
   title: string;
   description: string | null;
   image_url: string | null;
+  image_focus_x: number;
+  image_focus_y: number;
   location: string | null;
   starts_at: string | null;
   ends_at: string | null;
@@ -163,6 +165,8 @@ export type CreateEventInput = {
   title: string;
   description?: string | null;
   imageUrl?: string | null;
+  imageFocusX?: number | null;
+  imageFocusY?: number | null;
   location?: string | null;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -183,6 +187,8 @@ export type UpdateEventInput = {
   title?: string;
   description?: string | null;
   imageUrl?: string | null;
+  imageFocusX?: number | null;
+  imageFocusY?: number | null;
   location?: string | null;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -245,9 +251,13 @@ function normaliseNullableText(
   return clean || null;
 }
 
-function normaliseSeatingLayoutJson(
-  value: unknown,
-): SeatingLayoutJson {
+function normaliseImageFocus(value: number | null | undefined): number {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -261,28 +271,20 @@ function normaliseSeatingLayoutJson(
           return null;
         }
 
-        return [
-          String(key),
-          Math.max(-20, Math.min(20, Math.floor(number))),
-        ];
+        return [String(key), Math.max(-20, Math.min(20, Math.floor(number)))];
       })
       .filter(Boolean) as [string, number][],
   );
 }
 
-function normaliseTableNamesJson(
-  value: unknown,
-): TableNamesJson {
+function normaliseTableNamesJson(value: unknown): TableNamesJson {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
 
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .map(([key, rawValue]) => [
-        String(key),
-        String(rawValue || "").trim(),
-      ])
+      .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
       .filter(([, name]) => name),
   );
 }
@@ -294,9 +296,7 @@ function normalisePrizesJson(value: unknown): EventPrize[] {
     .map((item, index) => {
       const prize = item as EventPrize;
 
-      const title = String(
-        prize.title || prize.name || "",
-      ).trim();
+      const title = String(prize.title || prize.name || "").trim();
 
       if (!title) {
         return null;
@@ -324,18 +324,14 @@ function normalisePrizesJson(value: unknown): EventPrize[] {
     .filter(Boolean) as EventPrize[];
 }
 
-function normaliseMenuOptions(
-  value: unknown,
-): EventMenuOption[] {
+function normaliseMenuOptions(value: unknown): EventMenuOption[] {
   if (!Array.isArray(value)) return [];
 
   return value
     .map((item, index) => {
       const option = item as EventMenuOption;
 
-      const name = String(
-        option.name || option.title || "",
-      ).trim();
+      const name = String(option.name || option.title || "").trim();
 
       if (!name) {
         return null;
@@ -358,18 +354,14 @@ function normaliseMenuOptions(
 function normaliseEvent(event: EventItem): EventItem {
   return {
     ...event,
+    image_focus_x: normaliseImageFocus(event.image_focus_x),
+    image_focus_y: normaliseImageFocus(event.image_focus_y),
     prizes_json: normalisePrizesJson(event.prizes_json),
     menu_options: normaliseMenuOptions(event.menu_options),
-    seating_layout_json: normaliseSeatingLayoutJson(
-      event.seating_layout_json,
-    ),
-    table_names_json: normaliseTableNamesJson(
-      event.table_names_json,
-    ),
-    ask_dietary_requirements:
-      event.ask_dietary_requirements ?? true,
-    ask_menu_choice:
-      event.ask_menu_choice ?? true,
+    seating_layout_json: normaliseSeatingLayoutJson(event.seating_layout_json),
+    table_names_json: normaliseTableNamesJson(event.table_names_json),
+    ask_dietary_requirements: event.ask_dietary_requirements ?? true,
+    ask_menu_choice: event.ask_menu_choice ?? true,
   };
 }
 
@@ -383,13 +375,12 @@ export function slugifyEventTitle(value: string): string {
 
   return slug || `event-${Date.now()}`;
 }
+
 /* =========================
    EVENTS
 ========================= */
 
-export async function listEvents(
-  tenantSlug: string,
-): Promise<EventItem[]> {
+export async function listEvents(tenantSlug: string): Promise<EventItem[]> {
   const events = await query<EventItem>(
     `
     select *
@@ -420,9 +411,7 @@ export async function listPublishedEvents(
   return events.map(normaliseEvent);
 }
 
-export async function hydrateEvent(
-  event: EventItem,
-): Promise<EventItem> {
+export async function hydrateEvent(event: EventItem): Promise<EventItem> {
   const [ticketTypes, seats] = await Promise.all([
     listEventTicketTypes(event.id),
     listEventSeats(event.id),
@@ -435,9 +424,7 @@ export async function hydrateEvent(
   };
 }
 
-export async function getEventById(
-  id: string,
-): Promise<EventItem | null> {
+export async function getEventById(id: string): Promise<EventItem | null> {
   const event = await queryOne<EventItem>(
     `
     select *
@@ -488,6 +475,8 @@ export async function createEvent(
       title,
       description,
       image_url,
+      image_focus_x,
+      image_focus_y,
       location,
       starts_at,
       ends_at,
@@ -504,8 +493,8 @@ export async function createEvent(
     )
     values (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-      $11,$12,$13::jsonb,$14::jsonb,
-      $15::jsonb,$16::jsonb,$17,$18
+      $11,$12,$13,$14,$15::jsonb,$16::jsonb,
+      $17::jsonb,$18::jsonb,$19,$20
     )
     returning *
     `,
@@ -515,6 +504,8 @@ export async function createEvent(
       input.title,
       input.description ?? null,
       input.imageUrl ?? null,
+      normaliseImageFocus(input.imageFocusX),
+      normaliseImageFocus(input.imageFocusY),
       input.location ?? null,
       input.startsAt || null,
       input.endsAt || null,
@@ -522,22 +513,12 @@ export async function createEvent(
       normaliseEventType(input.eventType),
       normaliseStatus(input.status),
       input.capacity ?? null,
+      JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
+      JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
       JSON.stringify(
-        normalisePrizesJson(input.prizesJson ?? []),
+        normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {}),
       ),
-      JSON.stringify(
-        normaliseMenuOptions(input.menuOptions ?? []),
-      ),
-      JSON.stringify(
-        normaliseSeatingLayoutJson(
-          input.seatingLayoutJson ?? {},
-        ),
-      ),
-      JSON.stringify(
-        normaliseTableNamesJson(
-          input.tableNamesJson ?? {},
-        ),
-      ),
+      JSON.stringify(normaliseTableNamesJson(input.tableNamesJson ?? {})),
       input.askDietaryRequirements ?? true,
       input.askMenuChoice ?? true,
     ],
@@ -549,7 +530,6 @@ export async function createEvent(
 
   return hydrateEvent(created);
 }
-
 export async function updateEvent(
   id: string,
   input: UpdateEventInput,
@@ -568,19 +548,21 @@ export async function updateEvent(
       title = $3,
       description = $4,
       image_url = $5,
-      location = $6,
-      starts_at = $7,
-      ends_at = $8,
-      currency = $9,
-      event_type = $10,
-      status = $11,
-      capacity = $12,
-      prizes_json = $13::jsonb,
-      menu_options = $14::jsonb,
-      seating_layout_json = $15::jsonb,
-      table_names_json = $16::jsonb,
-      ask_dietary_requirements = $17,
-      ask_menu_choice = $18,
+      image_focus_x = $6,
+      image_focus_y = $7,
+      location = $8,
+      starts_at = $9,
+      ends_at = $10,
+      currency = $11,
+      event_type = $12,
+      status = $13,
+      capacity = $14,
+      prizes_json = $15::jsonb,
+      menu_options = $16::jsonb,
+      seating_layout_json = $17::jsonb,
+      table_names_json = $18::jsonb,
+      ask_dietary_requirements = $19,
+      ask_menu_choice = $20,
       updated_at = now()
     where id = $1
     returning *
@@ -591,6 +573,12 @@ export async function updateEvent(
       input.title ?? existing.title,
       input.description ?? existing.description,
       input.imageUrl ?? existing.image_url,
+      normaliseImageFocus(
+        input.imageFocusX ?? existing.image_focus_x,
+      ),
+      normaliseImageFocus(
+        input.imageFocusY ?? existing.image_focus_y,
+      ),
       input.location ?? existing.location,
       input.startsAt ?? existing.starts_at,
       input.endsAt ?? existing.ends_at,
@@ -1119,9 +1107,7 @@ export async function deleteEventRowsByKeys(input: {
   );
 }
 
-export async function deleteEventSeats(
-  eventId: string,
-): Promise<void> {
+export async function deleteEventSeats(eventId: string): Promise<void> {
   await query(
     `
     delete from event_seats
@@ -1131,9 +1117,7 @@ export async function deleteEventSeats(
   );
 }
 
-export async function deleteEventRowSeats(
-  eventId: string,
-): Promise<void> {
+export async function deleteEventRowSeats(eventId: string): Promise<void> {
   await query(
     `
     delete from event_seats
@@ -1145,9 +1129,7 @@ export async function deleteEventRowSeats(
   );
 }
 
-export async function deleteEventTableSeats(
-  eventId: string,
-): Promise<void> {
+export async function deleteEventTableSeats(eventId: string): Promise<void> {
   await query(
     `
     delete from event_seats
@@ -1162,9 +1144,7 @@ export async function deleteEventTableSeats(
    EVENT WINNERS
 ========================= */
 
-export async function listEventWinners(
-  eventId: string,
-): Promise<EventWinner[]> {
+export async function listEventWinners(eventId: string): Promise<EventWinner[]> {
   return query<EventWinner>(
     `
     select *
@@ -1179,9 +1159,7 @@ export async function listEventWinners(
   );
 }
 
-export async function deleteEventWinner(
-  id: string,
-): Promise<void> {
+export async function deleteEventWinner(id: string): Promise<void> {
   await query(
     `
     delete from event_winners
@@ -1191,9 +1169,7 @@ export async function deleteEventWinner(
   );
 }
 
-export async function clearEventWinners(
-  eventId: string,
-): Promise<void> {
+export async function clearEventWinners(eventId: string): Promise<void> {
   await query(
     `
     delete from event_winners
@@ -1308,9 +1284,7 @@ export async function getEligibleEventDrawCandidates(input: {
 
   const excludedEmails = new Set(
     excludedEmailRows
-      .map((row) =>
-        String(row.winner_email || "").trim().toLowerCase(),
-      )
+      .map((row) => String(row.winner_email || "").trim().toLowerCase())
       .filter(Boolean),
   );
 
@@ -1377,60 +1351,55 @@ export async function getEligibleEventDrawCandidates(input: {
     [input.eventId],
   );
 
-  const adminSeatCandidates =
-    await query<EventDrawCandidate>(
-      `
-      select
-        null::uuid as event_order_id,
-        null::uuid as event_order_item_id,
-        es.id as event_seat_id,
-        es.ticket_type_id,
-        es.table_number,
-        es.row_label,
-        es.seat_number,
-        coalesce(es.guest_name, es.customer_name) as winner_name,
-        lower(coalesce(es.guest_email, es.customer_email)) as winner_email,
-        es.seat_purpose
-      from event_seats es
-      where es.event_id = $1
-        and es.status <> 'blocked'
-        and es.seat_purpose in (
-          'vip',
-          'complimentary',
-          'staff',
-          'sponsor',
-          'guest'
-        )
-        and (
-          coalesce(trim(es.guest_email), '') <> ''
-          or coalesce(trim(es.customer_email), '') <> ''
-        )
-      order by
-        case
-          when es.table_number ~ '^[0-9]+$'
-          then es.table_number::int
-          else null
-        end asc nulls last,
-        es.table_number asc nulls last,
-        es.row_label asc nulls last,
-        case
-          when es.seat_number ~ '^[0-9]+$'
-          then es.seat_number::int
-          else null
-        end asc nulls last,
-        es.seat_number asc nulls last,
-        es.created_at asc
-      `,
-      [input.eventId],
-    );
+  const adminSeatCandidates = await query<EventDrawCandidate>(
+    `
+    select
+      null::uuid as event_order_id,
+      null::uuid as event_order_item_id,
+      es.id as event_seat_id,
+      es.ticket_type_id,
+      es.table_number,
+      es.row_label,
+      es.seat_number,
+      coalesce(es.guest_name, es.customer_name) as winner_name,
+      lower(coalesce(es.guest_email, es.customer_email)) as winner_email,
+      es.seat_purpose
+    from event_seats es
+    where es.event_id = $1
+      and es.status <> 'blocked'
+      and es.seat_purpose in (
+        'vip',
+        'complimentary',
+        'staff',
+        'sponsor',
+        'guest'
+      )
+      and (
+        coalesce(trim(es.guest_email), '') <> ''
+        or coalesce(trim(es.customer_email), '') <> ''
+      )
+    order by
+      case
+        when es.table_number ~ '^[0-9]+$'
+        then es.table_number::int
+        else null
+      end asc nulls last,
+      es.table_number asc nulls last,
+      es.row_label asc nulls last,
+      case
+        when es.seat_number ~ '^[0-9]+$'
+        then es.seat_number::int
+        else null
+      end asc nulls last,
+      es.seat_number asc nulls last,
+      es.created_at asc
+    `,
+    [input.eventId],
+  );
 
-  const candidatesByKey =
-    new Map<string, EventDrawCandidate>();
+  const candidatesByKey = new Map<string, EventDrawCandidate>();
 
-  for (const candidate of [
-    ...paidCandidates,
-    ...adminSeatCandidates,
-  ]) {
+  for (const candidate of [...paidCandidates, ...adminSeatCandidates]) {
     const key =
       candidate.event_order_item_id ||
       candidate.event_seat_id ||
@@ -1465,19 +1434,14 @@ export async function getEligibleEventDrawCandidates(input: {
 
     for (const row of existingTableWinners) {
       if (!row.table_number) continue;
-      tableWinnerCounts.set(
-        row.table_number,
-        Number(row.total || 0),
-      );
+      tableWinnerCounts.set(row.table_number, Number(row.total || 0));
     }
   }
 
   return rows.filter((candidate) => {
     if (
       candidate.event_order_item_id &&
-      alreadyDrawnOrderItemIds.has(
-        candidate.event_order_item_id,
-      )
+      alreadyDrawnOrderItemIds.has(candidate.event_order_item_id)
     ) {
       return false;
     }
@@ -1510,10 +1474,7 @@ export async function getEligibleEventDrawCandidates(input: {
       return false;
     }
 
-    if (
-      purpose === "sponsor" &&
-      input.includeSponsors === false
-    ) {
+    if (purpose === "sponsor" && input.includeSponsors === false) {
       return false;
     }
 
@@ -1523,9 +1484,7 @@ export async function getEligibleEventDrawCandidates(input: {
 
     if (
       input.excludeWinnerEmails &&
-      excludedEmails.has(
-        String(candidate.winner_email).trim().toLowerCase(),
-      )
+      excludedEmails.has(String(candidate.winner_email).trim().toLowerCase())
     ) {
       return false;
     }
@@ -1535,8 +1494,7 @@ export async function getEligibleEventDrawCandidates(input: {
       input.maxWinnersPerTable > 0 &&
       candidate.table_number
     ) {
-      const currentCount =
-        tableWinnerCounts.get(candidate.table_number) || 0;
+      const currentCount = tableWinnerCounts.get(candidate.table_number) || 0;
 
       if (currentCount >= input.maxWinnersPerTable) {
         return false;
@@ -1551,9 +1509,7 @@ export async function getEligibleEventDrawCandidates(input: {
    ORDERS
 ========================= */
 
-export async function listEventOrders(
-  eventId: string,
-): Promise<EventOrder[]> {
+export async function listEventOrders(eventId: string): Promise<EventOrder[]> {
   return query<EventOrder>(
     `
     select *
@@ -1642,16 +1598,10 @@ export async function createPendingEventOrder(input: {
   currency: string;
 }): Promise<EventOrder> {
   const customerName =
-    input.customerName ??
-    input.buyerName ??
-    input.buyer_name ??
-    null;
+    input.customerName ?? input.buyerName ?? input.buyer_name ?? null;
 
   const customerEmail =
-    input.customerEmail ??
-    input.buyerEmail ??
-    input.buyer_email ??
-    null;
+    input.customerEmail ?? input.buyerEmail ?? input.buyer_email ?? null;
 
   const created = await queryOne<EventOrder>(
     `
@@ -1860,9 +1810,7 @@ export async function releaseEventSeatsForStripeSession(input: {
   );
 }
 
-export async function deleteEventOrderAndItems(
-  orderId: string,
-): Promise<void> {
+export async function deleteEventOrderAndItems(orderId: string): Promise<void> {
   await query(
     `
     delete from event_order_items
