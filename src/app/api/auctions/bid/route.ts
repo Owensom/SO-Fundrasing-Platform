@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { sendAuctionBidConfirmationEmail } from "@/lib/email";
+import {
+  sendAuctionBidConfirmationEmail,
+  sendAuctionOutbidEmail,
+} from "@/lib/email";
 import {
   createAuctionBid,
   getAuctionBySlug,
@@ -15,7 +18,9 @@ function poundsToCents(value: FormDataEntryValue | null) {
   const raw = String(value || "").replace(/[£,\s]/g, "").trim();
   const amount = Number(raw);
 
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0;
+  }
 
   return Math.round(amount * 100);
 }
@@ -35,11 +40,15 @@ function redirectToAuction(
 }
 
 function redirectWithError(request: NextRequest, slug: string, message: string) {
-  return redirectToAuction(request, slug, { error: message });
+  return redirectToAuction(request, slug, {
+    error: message,
+  });
 }
 
 function redirectWithSuccess(request: NextRequest, slug: string) {
-  return redirectToAuction(request, slug, { bid: "success" });
+  return redirectToAuction(request, slug, {
+    bid: "success",
+  });
 }
 
 function auctionIsOpen(auction: {
@@ -173,6 +182,22 @@ export async function POST(request: NextRequest) {
       currency: auction.currency || "GBP",
       closesAt: auction.closes_at,
     });
+
+    if (
+      currentHighestBid?.bidder_email &&
+      currentHighestBid.bidder_email.toLowerCase() !== bidderEmail
+    ) {
+      await sendAuctionOutbidEmail({
+        to: currentHighestBid.bidder_email,
+        name: currentHighestBid.bidder_name,
+        auctionTitle: auction.title,
+        itemTitle: item.title,
+        previousAmountCents: Number(currentHighestBid.amount_cents || 0),
+        newAmountCents: amountCents,
+        currency: auction.currency || "GBP",
+        closesAt: auction.closes_at,
+      });
+    }
 
     return redirectWithSuccess(request, auction.slug);
   } catch (error) {
