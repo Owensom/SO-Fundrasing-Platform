@@ -11,6 +11,9 @@ type Props = {
   focusYFieldName?: string;
   label?: string;
   previewAlt?: string;
+  onImageUrlChange?: (url: string) => void;
+  onFocusXChange?: (value: number) => void;
+  onFocusYChange?: (value: number) => void;
 };
 
 function cleanFocus(value: number | null | undefined) {
@@ -28,11 +31,31 @@ export default function ImageFocusUploadField({
   focusYFieldName = "image_focus_y",
   label = "Image upload",
   previewAlt = "Uploaded image preview",
+  onImageUrlChange,
+  onFocusXChange,
+  onFocusYChange,
 }: Props) {
   const [imageUrl, setImageUrl] = useState(currentImageUrl || "");
   const [focusX, setFocusX] = useState(cleanFocus(currentFocusX));
   const [focusY, setFocusY] = useState(cleanFocus(currentFocusY));
   const [uploading, setUploading] = useState(false);
+
+  function updateImageUrl(url: string) {
+    setImageUrl(url);
+    onImageUrlChange?.(url);
+  }
+
+  function updateFocusX(value: number) {
+    const clean = cleanFocus(value);
+    setFocusX(clean);
+    onFocusXChange?.(clean);
+  }
+
+  function updateFocusY(value: number) {
+    const clean = cleanFocus(value);
+    setFocusY(clean);
+    onFocusYChange?.(clean);
+  }
 
   async function uploadImage(file: File) {
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
@@ -66,7 +89,7 @@ export default function ImageFocusUploadField({
         return;
       }
 
-      setImageUrl(data.secure_url);
+      updateImageUrl(data.secure_url);
     } catch (error) {
       console.error(error);
       alert("Upload error");
@@ -111,7 +134,13 @@ export default function ImageFocusUploadField({
               <div style={styles.previewLabel}>Wide banner preview</div>
               <div style={styles.bannerPreview}>
                 <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
-                <div style={{ ...styles.crosshair, left: `${focusX}%`, top: `${focusY}%` }} />
+                <div
+                  style={{
+                    ...styles.crosshair,
+                    left: `${focusX}%`,
+                    top: `${focusY}%`,
+                  }}
+                />
               </div>
             </div>
 
@@ -119,7 +148,13 @@ export default function ImageFocusUploadField({
               <div style={styles.previewLabel}>Card preview</div>
               <div style={styles.cardPreview}>
                 <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
-                <div style={{ ...styles.crosshair, left: `${focusX}%`, top: `${focusY}%` }} />
+                <div
+                  style={{
+                    ...styles.crosshair,
+                    left: `${focusX}%`,
+                    top: `${focusY}%`,
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -132,7 +167,7 @@ export default function ImageFocusUploadField({
                 min="0"
                 max="100"
                 value={focusX}
-                onChange={(event) => setFocusX(cleanFocus(Number(event.target.value)))}
+                onChange={(event) => updateFocusX(Number(event.target.value))}
                 style={styles.range}
               />
             </label>
@@ -144,7 +179,7 @@ export default function ImageFocusUploadField({
                 min="0"
                 max="100"
                 value={focusY}
-                onChange={(event) => setFocusY(cleanFocus(Number(event.target.value)))}
+                onChange={(event) => updateFocusY(Number(event.target.value))}
                 style={styles.range}
               />
             </label>
