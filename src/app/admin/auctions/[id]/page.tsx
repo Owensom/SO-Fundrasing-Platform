@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -17,9 +17,9 @@ import {
 } from "../../../../../api/_lib/auctions-repo";
 
 type PageProps = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
@@ -184,6 +184,7 @@ async function requireAuctionAccess(id: string) {
 
   return { auction, tenantSlug };
 }
+
 async function updateAuctionAction(formData: FormData) {
   "use server";
 
@@ -283,7 +284,8 @@ async function deleteAuctionItemAction(formData: FormData) {
 }
 
 export default async function AdminAuctionDetailPage({ params }: PageProps) {
-  const { auction, tenantSlug } = await requireAuctionAccess(params.id);
+  const resolvedParams = await params;
+  const { auction, tenantSlug } = await requireAuctionAccess(resolvedParams.id);
   const items = await listAuctionItems(auction.id);
   const bids = await listAuctionBids(auction.id);
 
@@ -296,8 +298,8 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
   return (
     <main style={styles.page}>
-      <section style={styles.header}>
-        <div>
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
           <div style={styles.badge}>Silent auction</div>
 
           <h1 style={styles.title}>{auction.title || "Untitled auction"}</h1>
@@ -306,30 +308,61 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             Tenant: <strong>{tenantSlug}</strong> · Public page:{" "}
             <strong>/a/{auction.slug}</strong>
           </p>
+
+          <div style={styles.heroMeta}>
+            <div style={styles.heroMetaCard}>
+              <span>Status</span>
+              <strong>{auction.status}</strong>
+            </div>
+
+            <div style={styles.heroMetaCard}>
+              <span>Opens</span>
+              <strong>{formatDate(auction.opens_at)}</strong>
+            </div>
+
+            <div style={styles.heroMetaCard}>
+              <span>Closes</span>
+              <strong>{formatDate(auction.closes_at)}</strong>
+            </div>
+          </div>
         </div>
 
-        <div style={styles.nav}>
-          <Link href="/admin/auctions" style={styles.navButton}>
-            ← Back to auctions
-          </Link>
-
-          <a
-            href={`/a/${auction.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            style={styles.navButton}
-          >
-            View public page
-          </a>
-
-          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
-            Campaigns page
-          </Link>
+        <div style={styles.heroImageWrap}>
+          {auction.image_url ? (
+            <img
+              src={auction.image_url}
+              alt={auction.title}
+              style={focusedImageStyle(
+                auction.image_focus_x,
+                auction.image_focus_y,
+              )}
+            />
+          ) : (
+            <div style={styles.heroImageEmpty}>🔨</div>
+          )}
         </div>
       </section>
 
+      <section style={styles.nav}>
+        <Link href="/admin/auctions" style={styles.darkButton}>
+          ← Back to auctions
+        </Link>
+
+        <a
+          href={`/a/${auction.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          style={styles.navButton}
+        >
+          View public page
+        </a>
+
+        <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
+          Campaigns page
+        </Link>
+      </section>
+
       <section style={styles.statsGrid}>
-        <StatCard label="Status" value={auction.status} />
         <StatCard label="Items" value={items.length} />
         <StatCard label="Active items" value={activeItems} />
         <StatCard label="Total bids" value={totalBids} />
@@ -338,12 +371,14 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           value={moneyFromCents(highestBid, auction.currency)}
         />
       </section>
-            <form action={updateAuctionAction} style={styles.form}>
+
+      <form action={updateAuctionAction} style={styles.form}>
         <input type="hidden" name="id" value={auction.id} />
 
         <section style={styles.card}>
           <div style={styles.sectionHeader}>
             <div>
+              <p style={styles.kicker}>Auction controls</p>
               <h2 style={styles.sectionTitle}>Auction settings</h2>
               <p style={styles.sectionText}>
                 Control public visibility, timing, rules and the main campaign
@@ -476,133 +511,147 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
       <section id="items" style={styles.card}>
         <div style={styles.sectionHeader}>
           <div>
+            <p style={styles.kicker}>Lots and prizes</p>
             <h2 style={styles.sectionTitle}>Auction items</h2>
             <p style={styles.sectionText}>
-              Add prizes, experiences, donated items or sponsor lots. Bids are
-              collected per item.
+              Add prizes, experiences, donated items or sponsor lots. Existing
+              items are collapsible to keep the page manageable as the auction
+              grows.
             </p>
           </div>
         </div>
 
-        <form action={createAuctionItemAction} style={styles.itemCreateCard}>
-          <input type="hidden" name="auction_id" value={auction.id} />
+        <details style={styles.createDetails}>
+          <summary style={styles.createSummary}>
+            <span>
+              <strong>Add a new auction item</strong>
+              <small>Open this section to add another lot.</small>
+            </span>
+            <span style={styles.summaryChevron}>⌄</span>
+          </summary>
 
-          <h3 style={styles.subTitle}>Add new item</h3>
+          <form action={createAuctionItemAction} style={styles.itemCreateCard}>
+            <input type="hidden" name="auction_id" value={auction.id} />
 
-          <div style={styles.grid}>
+            <div style={styles.grid}>
+              <label style={styles.label}>
+                Item title
+                <input
+                  name="title"
+                  required
+                  placeholder="Weekend hotel stay"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Donor / sponsor
+                <input
+                  name="donor_name"
+                  placeholder="Optional"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Starting bid
+                <input
+                  name="starting_bid"
+                  inputMode="decimal"
+                  placeholder="25.00"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Minimum increment
+                <input
+                  name="minimum_increment"
+                  inputMode="decimal"
+                  defaultValue="5.00"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Reserve price
+                <input
+                  name="reserve_price"
+                  inputMode="decimal"
+                  placeholder="Optional"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Sort order
+                <input
+                  name="sort_order"
+                  type="number"
+                  defaultValue="0"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Status
+                <select name="status" defaultValue="active" style={styles.input}>
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                  <option value="withdrawn">Withdrawn</option>
+                </select>
+              </label>
+            </div>
+
+            <div style={styles.uploadBox}>
+              <ImageFocusUploadField
+                currentImageUrl=""
+                currentFocusX={50}
+                currentFocusY={50}
+                label="Item image"
+                previewAlt="Auction item image preview"
+              />
+            </div>
+
             <label style={styles.label}>
-              Item title
-              <input
-                name="title"
-                required
-                placeholder="Weekend hotel stay"
-                style={styles.input}
+              Description
+              <textarea
+                name="description"
+                rows={4}
+                placeholder="Describe the auction item."
+                style={styles.textarea}
               />
             </label>
 
-            <label style={styles.label}>
-              Donor / sponsor
-              <input
-                name="donor_name"
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Starting bid
-              <input
-                name="starting_bid"
-                inputMode="decimal"
-                placeholder="25.00"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Minimum increment
-              <input
-                name="minimum_increment"
-                inputMode="decimal"
-                defaultValue="5.00"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Reserve price
-              <input
-                name="reserve_price"
-                inputMode="decimal"
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Sort order
-              <input
-                name="sort_order"
-                type="number"
-                defaultValue="0"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Status
-              <select name="status" defaultValue="active" style={styles.input}>
-                <option value="active">Active</option>
-                <option value="closed">Closed</option>
-                <option value="withdrawn">Withdrawn</option>
-              </select>
-            </label>
-          </div>
-
-          <div style={styles.uploadBox}>
-            <ImageFocusUploadField
-              currentImageUrl=""
-              currentFocusX={50}
-              currentFocusY={50}
-              label="Item image"
-              previewAlt="Auction item image preview"
-            />
-          </div>
-
-          <label style={styles.label}>
-            Description
-            <textarea
-              name="description"
-              rows={4}
-              placeholder="Describe the auction item."
-              style={styles.textarea}
-            />
-          </label>
-
-          <div style={styles.actionsRight}>
-            <button type="submit" style={styles.saveButton}>
-              Add item
-            </button>
-          </div>
-        </form>
+            <div style={styles.actionsRight}>
+              <button type="submit" style={styles.saveButton}>
+                Add item
+              </button>
+            </div>
+          </form>
+        </details>
 
         <div style={styles.itemsList}>
           {items.length === 0 ? (
             <div style={styles.emptyState}>No auction items added yet.</div>
           ) : (
-            items.map((item) => {
+            items.map((item, index) => {
               const itemBids = bids.filter((bid) => bid.item_id === item.id);
               const highestBidAmount =
                 itemBids.length > 0
                   ? Math.max(
                       ...itemBids.map((bid) => Number(bid.amount_cents || 0)),
                     )
-                  : item.starting_bid_cents || 0;
+                  : item.highest_bid_cents ?? item.starting_bid_cents ?? 0;
 
               return (
-                <article key={item.id} style={styles.itemCard}>
-                  <div style={styles.itemTop}>
-                    <div style={styles.itemImageWrap}>
+                <details
+                  key={item.id}
+                  style={styles.itemDetails}
+                  open={index === 0}
+                >
+                  <summary style={styles.itemSummary}>
+                    <div style={styles.summaryImageWrap}>
                       {item.image_url ? (
                         <img
                           src={item.image_url}
@@ -617,10 +666,12 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                       )}
                     </div>
 
-                    <div style={styles.itemMeta}>
-                      <div style={styles.itemMetaTop}>
+                    <div style={styles.summaryMain}>
+                      <div style={styles.summaryTitleRow}>
                         <div>
-                          <h3 style={styles.itemTitle}>{item.title}</h3>
+                          <h3 style={styles.itemTitle}>
+                            Lot {item.sort_order || index + 1}: {item.title}
+                          </h3>
                           <div style={styles.itemSub}>
                             Donor: {item.donor_name || "Not set"}
                           </div>
@@ -653,7 +704,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                         />
                         <Detail label="Bid count" value={itemBids.length} />
                         <Detail
-                          label="Minimum increment"
+                          label="Increment"
                           value={moneyFromCents(
                             item.minimum_increment_cents,
                             auction.currency,
@@ -661,168 +712,177 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                         />
                       </div>
                     </div>
-                  </div>
-                                    <form
-                    action={updateAuctionItemAction}
-                    style={styles.itemEditForm}
-                  >
-                    <input
-                      type="hidden"
-                      name="auction_id"
-                      value={auction.id}
-                    />
 
-                    <input type="hidden" name="item_id" value={item.id} />
+                    <span style={styles.summaryChevron}>⌄</span>
+                  </summary>
 
-                    <div style={styles.grid}>
-                      <label style={styles.label}>
-                        Item title
-                        <input
-                          name="title"
-                          defaultValue={item.title}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Donor / sponsor
-                        <input
-                          name="donor_name"
-                          defaultValue={item.donor_name || ""}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Starting bid
-                        <input
-                          name="starting_bid"
-                          defaultValue={centsToPoundsInput(
-                            item.starting_bid_cents,
-                          )}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Minimum increment
-                        <input
-                          name="minimum_increment"
-                          defaultValue={centsToPoundsInput(
-                            item.minimum_increment_cents,
-                          )}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Reserve price
-                        <input
-                          name="reserve_price"
-                          defaultValue={centsToPoundsInput(
-                            item.reserve_price_cents,
-                          )}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Sort order
-                        <input
-                          name="sort_order"
-                          type="number"
-                          defaultValue={item.sort_order || 0}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Status
-                        <select
-                          name="status"
-                          defaultValue={item.status}
-                          style={styles.input}
-                        >
-                          <option value="active">Active</option>
-                          <option value="closed">Closed</option>
-                          <option value="withdrawn">Withdrawn</option>
-                        </select>
-                      </label>
-                    </div>
-
-                    <div style={styles.uploadBox}>
-                      <ImageFocusUploadField
-                        currentImageUrl={item.image_url || ""}
-                        currentFocusX={item.image_focus_x}
-                        currentFocusY={item.image_focus_y}
-                        label="Item image"
-                        previewAlt={item.title}
+                  <div style={styles.itemExpanded}>
+                    <form
+                      action={updateAuctionItemAction}
+                      style={styles.itemEditForm}
+                    >
+                      <input
+                        type="hidden"
+                        name="auction_id"
+                        value={auction.id}
                       />
-                    </div>
 
-                    <label style={styles.label}>
-                      Description
-                      <textarea
-                        name="description"
-                        rows={4}
-                        defaultValue={item.description || ""}
-                        style={styles.textarea}
-                      />
-                    </label>
+                      <input type="hidden" name="item_id" value={item.id} />
 
-                    <div style={styles.itemActions}>
-                      <button type="submit" style={styles.saveButton}>
-                        Save item
-                      </button>
-                    </div>
-                  </form>
+                      <div style={styles.grid}>
+                        <label style={styles.label}>
+                          Item title
+                          <input
+                            name="title"
+                            defaultValue={item.title}
+                            style={styles.input}
+                          />
+                        </label>
 
-                  <form
-                    action={deleteAuctionItemAction}
-                    style={styles.deleteForm}
-                  >
-                    <input
-                      type="hidden"
-                      name="auction_id"
-                      value={auction.id}
-                    />
+                        <label style={styles.label}>
+                          Donor / sponsor
+                          <input
+                            name="donor_name"
+                            defaultValue={item.donor_name || ""}
+                            style={styles.input}
+                          />
+                        </label>
 
-                    <input type="hidden" name="item_id" value={item.id} />
+                        <label style={styles.label}>
+                          Starting bid
+                          <input
+                            name="starting_bid"
+                            defaultValue={centsToPoundsInput(
+                              item.starting_bid_cents,
+                            )}
+                            style={styles.input}
+                          />
+                        </label>
 
-                    <button type="submit" style={styles.deleteButton}>
-                      Delete item
-                    </button>
-                  </form>
+                        <label style={styles.label}>
+                          Minimum increment
+                          <input
+                            name="minimum_increment"
+                            defaultValue={centsToPoundsInput(
+                              item.minimum_increment_cents,
+                            )}
+                            style={styles.input}
+                          />
+                        </label>
 
-                  {itemBids.length > 0 ? (
-                    <div style={styles.bidHistory}>
-                      <h4 style={styles.bidHistoryTitle}>Bid history</h4>
+                        <label style={styles.label}>
+                          Reserve price
+                          <input
+                            name="reserve_price"
+                            defaultValue={centsToPoundsInput(
+                              item.reserve_price_cents,
+                            )}
+                            style={styles.input}
+                          />
+                        </label>
 
-                      <div style={styles.bidList}>
-                        {itemBids.map((bid) => (
-                          <div key={bid.id} style={styles.bidRow}>
-                            <div>
-                              <div style={styles.bidName}>
-                                {bid.bidder_name || "Anonymous"}
-                              </div>
+                        <label style={styles.label}>
+                          Sort order
+                          <input
+                            name="sort_order"
+                            type="number"
+                            defaultValue={item.sort_order || 0}
+                            style={styles.input}
+                          />
+                        </label>
 
-                              <div style={styles.bidEmail}>
-                                {bid.bidder_email}
-                              </div>
-                            </div>
-
-                            <div style={styles.bidAmount}>
-                              {moneyFromCents(
-                                bid.amount_cents,
-                                auction.currency,
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                        <label style={styles.label}>
+                          Status
+                          <select
+                            name="status"
+                            defaultValue={item.status}
+                            style={styles.input}
+                          >
+                            <option value="active">Active</option>
+                            <option value="closed">Closed</option>
+                            <option value="withdrawn">Withdrawn</option>
+                          </select>
+                        </label>
                       </div>
-                    </div>
-                  ) : null}
-                </article>
+
+                      <div style={styles.uploadBox}>
+                        <ImageFocusUploadField
+                          currentImageUrl={item.image_url || ""}
+                          currentFocusX={item.image_focus_x}
+                          currentFocusY={item.image_focus_y}
+                          label="Item image"
+                          previewAlt={item.title}
+                        />
+                      </div>
+
+                      <label style={styles.label}>
+                        Description
+                        <textarea
+                          name="description"
+                          rows={4}
+                          defaultValue={item.description || ""}
+                          style={styles.textarea}
+                        />
+                      </label>
+
+                      <div style={styles.itemActions}>
+                        <button type="submit" style={styles.saveButton}>
+                          Save item
+                        </button>
+                      </div>
+                    </form>
+
+                    <form
+                      action={deleteAuctionItemAction}
+                      style={styles.deleteForm}
+                    >
+                      <input
+                        type="hidden"
+                        name="auction_id"
+                        value={auction.id}
+                      />
+
+                      <input type="hidden" name="item_id" value={item.id} />
+
+                      <button type="submit" style={styles.deleteButton}>
+                        Delete item
+                      </button>
+                    </form>
+
+                    {itemBids.length > 0 ? (
+                      <div style={styles.bidHistory}>
+                        <h4 style={styles.bidHistoryTitle}>Bid history</h4>
+
+                        <div style={styles.bidList}>
+                          {itemBids.map((bid) => (
+                            <div key={bid.id} style={styles.bidRow}>
+                              <div>
+                                <div style={styles.bidName}>
+                                  {bid.bidder_name || "Anonymous"}
+                                </div>
+
+                                <div style={styles.bidEmail}>
+                                  {bid.bidder_email}
+                                </div>
+                              </div>
+
+                              <div style={styles.bidAmount}>
+                                {moneyFromCents(
+                                  bid.amount_cents,
+                                  auction.currency,
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={styles.noBidsBox}>
+                        No bids have been placed on this item yet.
+                      </div>
+                    )}
+                  </div>
+                </details>
               );
             })
           )}
@@ -832,13 +892,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
   );
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statLabel}>{label}</div>
@@ -847,13 +901,7 @@ function StatCard({
   );
 }
 
-function Detail({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -867,44 +915,98 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
-    background: "#f8fafc",
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.13), transparent 34%), #f8fafc",
     minHeight: "100vh",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 24,
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)",
+    gap: 18,
+    alignItems: "stretch",
+    marginBottom: 18,
+  },
+  heroContent: {
+    padding: 30,
+    borderRadius: 30,
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 52%, #78350f 130%)",
+    color: "#ffffff",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
   },
   badge: {
     display: "inline-flex",
-    padding: "6px 10px",
+    padding: "7px 11px",
     borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
+    background: "rgba(251,191,36,0.16)",
+    color: "#fef3c7",
+    border: "1px solid rgba(251,191,36,0.3)",
     fontSize: 13,
-    fontWeight: 900,
-    marginBottom: 10,
+    fontWeight: 950,
+    marginBottom: 14,
   },
   title: {
     margin: 0,
-    fontSize: 38,
-    lineHeight: 1.1,
-    color: "#0f172a",
+    fontSize: "clamp(34px, 7vw, 54px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
   },
   subtitle: {
-    margin: "10px 0 0",
-    color: "#64748b",
+    margin: "14px 0 0",
+    color: "#cbd5e1",
+    fontSize: 16,
+    lineHeight: 1.6,
+  },
+  heroMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
+    gap: 12,
+    marginTop: 24,
+  },
+  heroMetaCard: {
+    display: "grid",
+    gap: 5,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.13)",
+  },
+  heroImageWrap: {
+    minHeight: 310,
+    borderRadius: 30,
+    overflow: "hidden",
+    background: "#e2e8f0",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 18px 44px rgba(15,23,42,0.12)",
+  },
+  heroImageEmpty: {
+    width: "100%",
+    height: "100%",
+    minHeight: 310,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 56,
+    background: "#f1f5f9",
   },
   nav: {
     display: "flex",
+    justifyContent: "flex-end",
     gap: 10,
     flexWrap: "wrap",
+    marginBottom: 18,
+  },
+  darkButton: {
+    padding: "11px 15px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
   },
   navButton: {
-    padding: "12px 18px",
+    padding: "11px 15px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -924,9 +1026,10 @@ const styles: Record<string, CSSProperties> = {
   },
   statCard: {
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 20,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   statLabel: {
     color: "#64748b",
@@ -940,11 +1043,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
   },
   card: {
-    padding: 22,
-    borderRadius: 24,
+    padding: 24,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     marginBottom: 18,
+    boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
   },
   sectionHeader: {
     display: "flex",
@@ -953,10 +1057,19 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 18,
   },
+  kicker: {
+    margin: "0 0 7px",
+    color: "#b45309",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 950,
+  },
   sectionTitle: {
     margin: 0,
-    fontSize: 24,
+    fontSize: 26,
     color: "#0f172a",
+    letterSpacing: "-0.035em",
   },
   sectionText: {
     margin: "8px 0 0",
@@ -975,6 +1088,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 900,
     textTransform: "capitalize",
+    whiteSpace: "nowrap",
   },
   grid: {
     display: "grid",
@@ -996,6 +1110,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 13px",
     fontSize: 15,
     background: "#ffffff",
+    color: "#0f172a",
   },
   textarea: {
     width: "100%",
@@ -1005,20 +1120,21 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 13px",
     fontSize: 15,
     background: "#ffffff",
+    color: "#0f172a",
     resize: "vertical",
     fontFamily: "inherit",
   },
   imageFocusPanel: {
     marginTop: 18,
     padding: 18,
-    borderRadius: 20,
+    borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
   uploadBox: {
     marginTop: 14,
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
@@ -1033,35 +1149,67 @@ const styles: Record<string, CSSProperties> = {
     background: "#1683f8",
     color: "#ffffff",
     border: "none",
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
-  itemCreateCard: {
-    padding: 18,
-    borderRadius: 20,
+  createDetails: {
+    borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     marginBottom: 18,
+    overflow: "hidden",
+  },
+  createSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    color: "#0f172a",
+  },
+  summaryChevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#475569",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+  itemCreateCard: {
+    padding: "0 18px 18px",
+    background: "#f8fafc",
   },
   itemsList: {
     display: "grid",
-    gap: 18,
+    gap: 14,
   },
-  itemCard: {
-    padding: 18,
-    borderRadius: 22,
+  itemDetails: {
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  itemTop: {
+  itemSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: 16,
     display: "grid",
-    gridTemplateColumns: "140px 1fr",
-    gap: 18,
-    marginBottom: 18,
+    gridTemplateColumns: "110px minmax(0, 1fr) 38px",
+    gap: 16,
+    alignItems: "center",
   },
-  itemImageWrap: {
-    width: 140,
-    height: 140,
+  summaryImageWrap: {
+    width: 110,
+    height: 110,
     borderRadius: 18,
     overflow: "hidden",
     background: "#f1f5f9",
@@ -1073,22 +1221,24 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 42,
+    fontSize: 36,
     color: "#94a3b8",
   },
-  itemMeta: {
+  summaryMain: {
     minWidth: 0,
   },
-  itemMetaTop: {
+  summaryTitleRow: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
+    alignItems: "flex-start",
   },
   itemTitle: {
     margin: 0,
-    fontSize: 24,
+    fontSize: 23,
     color: "#0f172a",
+    letterSpacing: "-0.025em",
   },
   itemSub: {
     marginTop: 4,
@@ -1097,7 +1247,7 @@ const styles: Record<string, CSSProperties> = {
   },
   bidGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
     marginTop: 14,
   },
@@ -1116,6 +1266,11 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
     color: "#0f172a",
     fontWeight: 900,
+  },
+  itemExpanded: {
+    padding: "0 18px 18px",
+    borderTop: "1px solid #e2e8f0",
+    background: "#ffffff",
   },
   itemEditForm: {
     marginTop: 18,
@@ -1178,6 +1333,15 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     color: "#0f172a",
     whiteSpace: "nowrap",
+  },
+  noBidsBox: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
   },
   emptyState: {
     padding: 20,
