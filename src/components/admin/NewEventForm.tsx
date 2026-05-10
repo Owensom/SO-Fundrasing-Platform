@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import ImageUploadField from "@/components/ImageUploadField";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 
 type Props = {
   tenantSlug: string;
@@ -94,11 +94,21 @@ function makeTicketType(id: string, sortOrder: number): TicketTypeRow {
   };
 }
 
+function cleanFocus(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 export default function NewEventForm({ tenantSlug }: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [eventType, setEventType] = useState<EventType>("general_admission");
+
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFocusX, setImageFocusX] = useState(50);
+  const [imageFocusY, setImageFocusY] = useState(50);
 
   const [prizes, setPrizes] = useState<PrizeRow[]>([
     makePrize("prize-1", "1", "", ""),
@@ -267,6 +277,14 @@ export default function NewEventForm({ tenantSlug }: Props) {
     }));
   }
 
+  const focusedImageStyle: CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: `${imageFocusX}% ${imageFocusY}%`,
+    display: "block",
+  };
+
   return (
     <form action="/api/admin/events" method="post" style={styles.form}>
       <div style={styles.topBar}>
@@ -308,7 +326,15 @@ export default function NewEventForm({ tenantSlug }: Props) {
         </div>
 
         <div style={styles.heroImageWrap}>
-          <div style={styles.heroImageEmpty}>🎫</div>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={title.trim() || "Event image preview"}
+              style={focusedImageStyle}
+            />
+          ) : (
+            <div style={styles.heroImageEmpty}>🎫</div>
+          )}
         </div>
       </section>
 
@@ -363,14 +389,32 @@ export default function NewEventForm({ tenantSlug }: Props) {
             <div>
               <h3 style={styles.panelTitle}>Event image</h3>
               <p style={styles.sectionText}>
-                Upload or replace the public event image.
+                Upload or replace the public event image, then choose the focal
+                point for wide banners and cards.
               </p>
 
-              <ImageUploadField currentImageUrl="" />
+              <ImageFocusUploadField
+                currentImageUrl=""
+                currentFocusX={50}
+                currentFocusY={50}
+                label="Event image upload"
+                previewAlt={title.trim() || "Event image preview"}
+                onImageUrlChange={(url) => setImageUrl(url)}
+                onFocusXChange={(value) => setImageFocusX(cleanFocus(value))}
+                onFocusYChange={(value) => setImageFocusY(cleanFocus(value))}
+              />
             </div>
 
             <div style={styles.previewBox}>
-              <div style={styles.emptyPreview}>🎫</div>
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={title.trim() || "Event image preview"}
+                  style={focusedImageStyle}
+                />
+              ) : (
+                <div style={styles.emptyPreview}>🎫</div>
+              )}
             </div>
           </div>
 
@@ -1022,7 +1066,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.02em",
   },
   sectionText: {
-    margin: "6px 0 0",
+    margin: "6px 0 12px",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
