@@ -822,3 +822,58 @@ export async function sendAuctionOutbidEmail({
     console.error("auction outbid email failed", err);
   }
 }
+
+export async function sendAuctionWinnerEmail({
+  to,
+  name,
+  auctionTitle,
+  itemTitle,
+  winningAmountCents,
+  currency,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  auctionTitle: string;
+  itemTitle: string;
+  winningAmountCents: number;
+  currency: string;
+  branding?: EmailBranding;
+}) {
+  const winningAmount = formatCurrency(winningAmountCents, currency);
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Auction winner",
+    heading: "🎉 You are the winning bidder",
+    intro: `Hi ${name || "there"}, congratulations — you placed the winning bid in the silent auction.`,
+    body: `
+      <div style="
+        border:1px solid #bbf7d0;
+        border-radius:20px;
+        padding:22px;
+        margin:20px 0;
+        background:#ecfdf5;
+      ">
+        ${renderInfoRow("Auction", auctionTitle)}
+        ${renderInfoRow("Winning item", itemTitle)}
+        ${renderInfoRow("Winning bid", winningAmount)}
+      </div>
+
+      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
+        The organiser will be in touch soon with payment or collection details.
+      </p>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `You won ${itemTitle}`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("auction winner email failed", err);
+  }
+}
