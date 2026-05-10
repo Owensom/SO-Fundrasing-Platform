@@ -10,6 +10,8 @@ export type SilentAuction = {
   title: string;
   description: string | null;
   image_url: string | null;
+  image_focus_x: number;
+  image_focus_y: number;
   status: AuctionStatus;
   currency: string;
   opens_at: string | null;
@@ -25,6 +27,8 @@ export type SilentAuctionItem = {
   title: string;
   description: string | null;
   image_url: string | null;
+  image_focus_x: number;
+  image_focus_y: number;
   donor_name: string | null;
   starting_bid_cents: number;
   minimum_increment_cents: number;
@@ -59,6 +63,16 @@ function cleanItemStatus(value: unknown): AuctionItemStatus {
   const status = String(value || "active").toLowerCase();
   if (status === "closed" || status === "withdrawn") return status;
   return "active";
+}
+
+function cleanFocus(value: unknown, fallback = 50) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(number)));
 }
 
 export function slugifyAuctionTitle(title: string) {
@@ -128,6 +142,8 @@ export async function createAuction(input: {
   slug?: string;
   description?: string | null;
   imageUrl?: string | null;
+  imageFocusX?: number;
+  imageFocusY?: number;
   status?: AuctionStatus;
   currency?: string;
   opensAt?: string | null;
@@ -145,13 +161,15 @@ export async function createAuction(input: {
         title,
         description,
         image_url,
+        image_focus_x,
+        image_focus_y,
         status,
         currency,
         opens_at,
         closes_at,
         terms_text
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       returning *
     `,
     [
@@ -160,6 +178,8 @@ export async function createAuction(input: {
       title,
       input.description || null,
       input.imageUrl || null,
+      cleanFocus(input.imageFocusX),
+      cleanFocus(input.imageFocusY),
       cleanStatus(input.status),
       input.currency || "GBP",
       input.opensAt || null,
@@ -176,6 +196,8 @@ export async function updateAuction(
     slug: string;
     description?: string | null;
     imageUrl?: string | null;
+    imageFocusX?: number;
+    imageFocusY?: number;
     status?: AuctionStatus;
     currency?: string;
     opensAt?: string | null;
@@ -191,11 +213,13 @@ export async function updateAuction(
         slug = $3,
         description = $4,
         image_url = $5,
-        status = $6,
-        currency = $7,
-        opens_at = $8,
-        closes_at = $9,
-        terms_text = $10,
+        image_focus_x = $6,
+        image_focus_y = $7,
+        status = $8,
+        currency = $9,
+        opens_at = $10,
+        closes_at = $11,
+        terms_text = $12,
         updated_at = now()
       where id = $1
       returning *
@@ -206,6 +230,8 @@ export async function updateAuction(
       input.slug.trim().toLowerCase() || slugifyAuctionTitle(input.title),
       input.description || null,
       input.imageUrl || null,
+      cleanFocus(input.imageFocusX),
+      cleanFocus(input.imageFocusY),
       cleanStatus(input.status),
       input.currency || "GBP",
       input.opensAt || null,
@@ -224,7 +250,6 @@ export async function deleteAuction(id: string) {
     [id],
   );
 }
-
 export async function listAuctionItems(auctionId: string) {
   return query<SilentAuctionItem>(
     `
@@ -266,6 +291,8 @@ export async function createAuctionItem(input: {
   title: string;
   description?: string | null;
   imageUrl?: string | null;
+  imageFocusX?: number;
+  imageFocusY?: number;
   donorName?: string | null;
   startingBidCents?: number;
   minimumIncrementCents?: number;
@@ -280,6 +307,8 @@ export async function createAuctionItem(input: {
         title,
         description,
         image_url,
+        image_focus_x,
+        image_focus_y,
         donor_name,
         starting_bid_cents,
         minimum_increment_cents,
@@ -287,7 +316,7 @@ export async function createAuctionItem(input: {
         status,
         sort_order
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       returning *,
         null::integer as highest_bid_cents,
         0::integer as bid_count
@@ -297,6 +326,8 @@ export async function createAuctionItem(input: {
       input.title.trim() || "Untitled item",
       input.description || null,
       input.imageUrl || null,
+      cleanFocus(input.imageFocusX),
+      cleanFocus(input.imageFocusY),
       input.donorName || null,
       Number(input.startingBidCents || 0),
       Number(input.minimumIncrementCents || 100),
@@ -313,6 +344,8 @@ export async function updateAuctionItem(
     title: string;
     description?: string | null;
     imageUrl?: string | null;
+    imageFocusX?: number;
+    imageFocusY?: number;
     donorName?: string | null;
     startingBidCents?: number;
     minimumIncrementCents?: number;
@@ -328,12 +361,14 @@ export async function updateAuctionItem(
         title = $2,
         description = $3,
         image_url = $4,
-        donor_name = $5,
-        starting_bid_cents = $6,
-        minimum_increment_cents = $7,
-        reserve_price_cents = $8,
-        status = $9,
-        sort_order = $10,
+        image_focus_x = $5,
+        image_focus_y = $6,
+        donor_name = $7,
+        starting_bid_cents = $8,
+        minimum_increment_cents = $9,
+        reserve_price_cents = $10,
+        status = $11,
+        sort_order = $12,
         updated_at = now()
       where id = $1
       returning *,
@@ -345,6 +380,8 @@ export async function updateAuctionItem(
       input.title.trim() || "Untitled item",
       input.description || null,
       input.imageUrl || null,
+      cleanFocus(input.imageFocusX),
+      cleanFocus(input.imageFocusY),
       input.donorName || null,
       Number(input.startingBidCents || 0),
       Number(input.minimumIncrementCents || 100),
