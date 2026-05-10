@@ -7,7 +7,7 @@ import {
   listSquaresSales,
   listSquaresWinners,
 } from "../../../../../api/_lib/squares-repo";
-import ImageUploadField from "@/components/ImageUploadField";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import SquaresPrizeSettings from "./SquaresPrizeSettings";
 import DramaticSquaresDraw from "./DramaticSquaresDraw";
 
@@ -307,7 +307,11 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <p style={styles.sectionDescription}>
                 Upload or replace the public image for this squares game.
               </p>
-              <ImageUploadField currentImageUrl={game.image_url || ""} />
+              <ImageFocusUploadField
+                currentImageUrl={game.image_url || ""}
+                currentFocusX={Number(config.image_focus_x ?? 50)}
+                currentFocusY={Number(config.image_focus_y ?? 50)}
+              />
             </div>
 
             <div style={styles.previewBox}>
