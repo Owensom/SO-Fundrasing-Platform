@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { getSquaresGameByTenantAndSlug } from "../../../../../../api/_lib/squares-repo";
 
+function normaliseFocus(value: unknown, fallback = 50) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string } },
@@ -16,10 +24,7 @@ export async function GET(
   }
 
   try {
-    const game = await getSquaresGameByTenantAndSlug(
-      tenantSlug,
-      params.slug,
-    );
+    const game = await getSquaresGameByTenantAndSlug(tenantSlug, params.slug);
 
     if (!game) {
       return NextResponse.json(
@@ -30,6 +35,9 @@ export async function GET(
 
     const config = (game.config_json ?? {}) as any;
 
+    const imageFocusX = normaliseFocus(config.image_focus_x, 50);
+    const imageFocusY = normaliseFocus(config.image_focus_y, 50);
+
     return NextResponse.json({
       ok: true,
       game: {
@@ -39,6 +47,10 @@ export async function GET(
         title: game.title,
         description: game.description ?? "",
         imageUrl: game.image_url ?? "",
+        imageFocusX,
+        imageFocusY,
+        image_focus_x: imageFocusX,
+        image_focus_y: imageFocusY,
         drawAt: game.draw_at,
         status: game.status,
         currency: game.currency ?? "GBP",
@@ -50,15 +62,12 @@ export async function GET(
           ? config.reserved
           : [],
         winners: [],
-
-        // ✅ FIXED — THIS WAS MISSING / WRONG
         question: config.question ?? null,
-
-        // ✅ FIXED — map snake_case to camelCase
         freeEntry: config.free_entry
           ? {
               address: config.free_entry.address ?? "",
               instructions: config.free_entry.instructions ?? "",
+              closes_at: config.free_entry.closes_at ?? null,
               closesAt: config.free_entry.closes_at ?? null,
             }
           : null,
