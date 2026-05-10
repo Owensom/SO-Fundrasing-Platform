@@ -310,7 +310,6 @@ export default function PublicAuctionPage({ params }: Props) {
 
           <div style={styles.badgeRow}>
             <span style={styles.badge}>Silent auction</span>
-
             <span style={{ ...styles.statusPill, ...statusStyle(availability.label) }}>
               {availability.label}
             </span>
@@ -340,7 +339,6 @@ export default function PublicAuctionPage({ params }: Props) {
 
             <div style={styles.metaCard}>
               <span style={styles.metaLabel}>Top bid</span>
-
               <strong>
                 {topBid > 0
                   ? moneyFromCents(topBid, auction.currency)
@@ -356,237 +354,206 @@ export default function PublicAuctionPage({ params }: Props) {
         </div>
       </section>
 
-      {successMessage ? (
-        <section style={styles.successCard}>{successMessage}</section>
-      ) : null}
+      <div style={styles.contentWrap}>
+        {successMessage ? (
+          <section style={styles.successCard}>{successMessage}</section>
+        ) : null}
 
-      {queryError ? <section style={styles.errorCard}>{queryError}</section> : null}
+        {queryError ? <section style={styles.errorCard}>{queryError}</section> : null}
 
-      {error ? <section style={styles.errorCard}>{error}</section> : null}
+        {error ? <section style={styles.errorCard}>{error}</section> : null}
 
-      <section style={styles.noticeCard}>
-        <div>
-          <h2 style={styles.noticeTitle}>{availability.label}</h2>
-          <p style={styles.noticeText}>{availability.message}</p>
-        </div>
+        <section style={styles.noticeCard}>
+          <div>
+            <h2 style={styles.noticeTitle}>{availability.label}</h2>
+            <p style={styles.noticeText}>{availability.message}</p>
+          </div>
 
-        <div style={styles.noticeChip}>
-          <span>Opens</span>
-          <strong>{formatDate(auction.opens_at)}</strong>
-        </div>
-      </section>
+          <div style={styles.noticeChip}>
+            <span>Opens</span>
+            <strong>{formatDate(auction.opens_at)}</strong>
+          </div>
+        </section>
 
-      <section style={styles.itemsGrid}>
-        {items.map((item, index) => {
-          const highestBid = item.highest_bid_cents;
+        {items.length === 0 ? (
+          <section style={styles.emptyCard}>
+            <h2 style={{ margin: 0 }}>No auction items available</h2>
+            <p style={styles.muted}>Please check back later.</p>
+          </section>
+        ) : (
+          <section style={styles.itemsGrid}>
+            {items.map((item, index) => {
+              const highestBid = item.highest_bid_cents;
 
-          const minimumNextBid =
-            highestBid === null
-              ? item.starting_bid_cents
-              : Number(highestBid || 0) +
-                Number(item.minimum_increment_cents || 0);
+              const minimumNextBid =
+                highestBid === null
+                  ? item.starting_bid_cents
+                  : Number(highestBid || 0) +
+                    Number(item.minimum_increment_cents || 0);
 
-          const itemCanBid =
-            availability.canBid && item.status === "active";
+              const itemCanBid = availability.canBid && item.status === "active";
 
-          return (
-            <article key={item.id} style={styles.itemCard}>
-              <div style={styles.itemImageWrap}>
-                {item.image_url ? (
-                  <img
-                    src={item.image_url}
-                    alt={item.title}
-                    style={{
-                      ...styles.image,
-                      objectPosition: `${focusValue(item.image_focus_x)}% ${focusValue(
-                        item.image_focus_y,
-                      )}%`,
-                    }}
-                  />
-                ) : (
-                  <div style={styles.itemImageEmpty}>🎁</div>
-                )}
+              return (
+                <article key={item.id} style={styles.itemCard}>
+                  <div style={styles.itemImageWrap}>
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.title}
+                        style={{
+                          ...styles.image,
+                          objectPosition: `${focusValue(
+                            item.image_focus_x,
+                          )}% ${focusValue(item.image_focus_y)}%`,
+                        }}
+                      />
+                    ) : (
+                      <div style={styles.itemImageEmpty}>🎁</div>
+                    )}
 
-                <div style={styles.lotBadge}>
-                  Lot {item.sort_order || index + 1}
-                </div>
-              </div>
-
-              <div style={styles.itemBody}>
-                <div style={styles.itemTop}>
-                  <div>
-                    <h2 style={styles.itemTitle}>{item.title}</h2>
-
-                    {item.donor_name ? (
-                      <p style={styles.donor}>
-                        Donated by <strong>{item.donor_name}</strong>
-                      </p>
-                    ) : null}
+                    <div style={styles.lotBadge}>
+                      Lot {item.sort_order || index + 1}
+                    </div>
                   </div>
 
-                  <span
-                    style={{
-                      ...styles.itemStatus,
-                      ...statusStyle(item.status),
-                    }}
-                  >
-                    {item.status}
-                  </span>
-                </div>
+                  <div style={styles.itemBody}>
+                    <div style={styles.itemTop}>
+                      <div>
+                        <h2 style={styles.itemTitle}>{item.title}</h2>
 
-                {item.description ? (
-                  <p style={styles.itemDescription}>{item.description}</p>
-                ) : null}
+                        {item.donor_name ? (
+                          <p style={styles.donor}>
+                            Donated by <strong>{item.donor_name}</strong>
+                          </p>
+                        ) : null}
+                      </div>
 
-                <div style={styles.bidFeature}>
-                  <span>Current highest bid</span>
-
-                  <strong>
-                    {highestBid === null
-                      ? "No bids yet"
-                      : moneyFromCents(highestBid, auction.currency)}
-                  </strong>
-                </div>
-
-                <div style={styles.bidStats}>
-                  <div style={styles.bidStat}>
-                    <span>Starting bid</span>
-
-                    <strong>
-                      {moneyFromCents(item.starting_bid_cents, auction.currency)}
-                    </strong>
-                  </div>
-
-                  <div style={styles.bidStat}>
-                    <span>Next bid from</span>
-
-                    <strong>
-                      {moneyFromCents(minimumNextBid, auction.currency)}
-                    </strong>
-                  </div>
-
-                  <div style={styles.bidStat}>
-                    <span>Bid count</span>
-                    <strong>{item.bid_count || 0}</strong>
-                  </div>
-
-                  <div style={styles.bidStat}>
-                    <span>Reserve</span>
-
-                    <strong>
-                      {reserveStatus(item, auction.currency)}
-                    </strong>
-                  </div>
-                </div>
-
-                {itemCanBid ? (
-                  <form
-                    method="post"
-                    action="/api/auctions/bid"
-                    style={styles.bidForm}
-                  >
-                    <input
-                      type="hidden"
-                      name="auction_id"
-                      value={auction.id}
-                    />
-
-                    <input
-                      type="hidden"
-                      name="item_id"
-                      value={item.id}
-                    />
-
-                    <input
-                      type="hidden"
-                      name="auction_slug"
-                      value={auction.slug}
-                    />
-
-                    <div style={styles.formGrid}>
-                      <label style={styles.label}>
-                        Your name
-
-                        <input
-                          name="bidder_name"
-                          required
-                          autoComplete="name"
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Email
-
-                        <input
-                          name="bidder_email"
-                          type="email"
-                          required
-                          autoComplete="email"
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Phone
-
-                        <input
-                          name="bidder_phone"
-                          autoComplete="tel"
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.label}>
-                        Your bid
-
-                        <input
-                          name="amount"
-                          inputMode="decimal"
-                          required
-                          defaultValue={centsToPoundsInput(minimumNextBid)}
-                          style={styles.input}
-                        />
-                      </label>
+                      <span style={{ ...styles.itemStatus, ...statusStyle(item.status) }}>
+                        {item.status}
+                      </span>
                     </div>
 
-                    <label style={styles.checkboxLabel}>
-                      <input
-                        name="termsAccepted"
-                        type="checkbox"
-                        required
-                      />
+                    {item.description ? (
+                      <p style={styles.itemDescription}>{item.description}</p>
+                    ) : null}
 
-                      <span>
-                        I understand that bids are binding and that the
-                        organiser may contact me if I am the winning bidder.
-                      </span>
-                    </label>
+                    <div style={styles.bidFeature}>
+                      <span>Current highest bid</span>
+                      <strong>
+                        {highestBid === null
+                          ? "No bids yet"
+                          : moneyFromCents(highestBid, auction.currency)}
+                      </strong>
+                    </div>
 
-                    <button type="submit" style={styles.bidButton}>
-                      Place bid
-                    </button>
-                  </form>
-                ) : (
-                  <div style={styles.closedBox}>
-                    {item.status === "active"
-                      ? availability.message
-                      : "This item is not currently accepting bids."}
+                    <div style={styles.bidStats}>
+                      <div style={styles.bidStat}>
+                        <span>Starting bid</span>
+                        <strong>
+                          {moneyFromCents(item.starting_bid_cents, auction.currency)}
+                        </strong>
+                      </div>
+
+                      <div style={styles.bidStat}>
+                        <span>Next bid from</span>
+                        <strong>
+                          {moneyFromCents(minimumNextBid, auction.currency)}
+                        </strong>
+                      </div>
+
+                      <div style={styles.bidStat}>
+                        <span>Bid count</span>
+                        <strong>{item.bid_count || 0}</strong>
+                      </div>
+
+                      <div style={styles.bidStat}>
+                        <span>Reserve</span>
+                        <strong>{reserveStatus(item, auction.currency)}</strong>
+                      </div>
+                    </div>
+
+                    {itemCanBid ? (
+                      <form method="post" action="/api/auctions/bid" style={styles.bidForm}>
+                        <input type="hidden" name="auction_id" value={auction.id} />
+                        <input type="hidden" name="item_id" value={item.id} />
+                        <input type="hidden" name="auction_slug" value={auction.slug} />
+
+                        <div style={styles.formGrid}>
+                          <label style={styles.label}>
+                            Your name
+                            <input
+                              name="bidder_name"
+                              required
+                              autoComplete="name"
+                              style={styles.input}
+                            />
+                          </label>
+
+                          <label style={styles.label}>
+                            Email
+                            <input
+                              name="bidder_email"
+                              type="email"
+                              required
+                              autoComplete="email"
+                              style={styles.input}
+                            />
+                          </label>
+
+                          <label style={styles.label}>
+                            Phone
+                            <input
+                              name="bidder_phone"
+                              autoComplete="tel"
+                              style={styles.input}
+                            />
+                          </label>
+
+                          <label style={styles.label}>
+                            Your bid
+                            <input
+                              name="amount"
+                              inputMode="decimal"
+                              required
+                              defaultValue={centsToPoundsInput(minimumNextBid)}
+                              style={styles.input}
+                            />
+                          </label>
+                        </div>
+
+                        <label style={styles.checkboxLabel}>
+                          <input name="termsAccepted" type="checkbox" required />
+                          <span>
+                            I understand that bids are binding and that the organiser may
+                            contact me if I am the winning bidder.
+                          </span>
+                        </label>
+
+                        <button type="submit" style={styles.bidButton}>
+                          Place bid
+                        </button>
+                      </form>
+                    ) : (
+                      <div style={styles.closedBox}>
+                        {item.status === "active"
+                          ? availability.message
+                          : "This item is not currently accepting bids."}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </section>
+                </article>
+              );
+            })}
+          </section>
+        )}
 
-      {auction.terms_text ? (
-        <section style={styles.termsCard}>
-          <h2 style={styles.noticeTitle}>Auction rules</h2>
-
-          <p style={styles.termsText}>{auction.terms_text}</p>
-        </section>
-      ) : null}
+        {auction.terms_text ? (
+          <section style={styles.termsCard}>
+            <h2 style={styles.noticeTitle}>Auction rules</h2>
+            <p style={styles.termsText}>{auction.terms_text}</p>
+          </section>
+        ) : null}
+      </div>
     </main>
   );
 }
@@ -598,17 +565,16 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at top left, rgba(251,191,36,0.18), transparent 34%), radial-gradient(circle at 80% 8%, rgba(22,131,248,0.1), transparent 28%), #f8fafc",
     minHeight: "100vh",
     paddingBottom: 64,
+    overflowX: "hidden",
   },
-
   hero: {
     position: "relative",
     width: "100%",
-    minHeight: 720,
+    minHeight: "clamp(520px, 78vh, 760px)",
     overflow: "hidden",
     display: "flex",
     alignItems: "flex-end",
   },
-
   heroBackgroundImage: {
     position: "absolute",
     inset: 0,
@@ -616,27 +582,25 @@ const styles: Record<string, CSSProperties> = {
     height: "100%",
     objectFit: "cover",
   },
-
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(15,23,42,0.28) 0%, rgba(15,23,42,0.58) 40%, rgba(15,23,42,0.92) 100%)",
+      "linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(15,23,42,0.58) 42%, rgba(15,23,42,0.94) 100%)",
   },
-
   heroInner: {
     position: "relative",
     zIndex: 2,
     width: "100%",
     maxWidth: 1220,
     margin: "0 auto",
-    padding: "120px 16px 48px",
+    padding: "96px 16px 34px",
     color: "#ffffff",
+    boxSizing: "border-box",
   },
-
   backLink: {
     display: "inline-flex",
-    marginBottom: 18,
+    marginBottom: 16,
     padding: "10px 14px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
@@ -647,15 +611,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     backdropFilter: "blur(10px)",
   },
-
   badgeRow: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 16,
   },
-
   badge: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -667,7 +629,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     backdropFilter: "blur(10px)",
   },
-
   statusPill: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -676,90 +637,89 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     backdropFilter: "blur(10px)",
   },
-
   title: {
     margin: 0,
-    maxWidth: 820,
-    fontSize: "clamp(54px, 9vw, 96px)",
-    lineHeight: 0.92,
+    maxWidth: 900,
+    fontSize: "clamp(42px, 13vw, 96px)",
+    lineHeight: 0.94,
     letterSpacing: "-0.07em",
     fontWeight: 1000,
+    wordBreak: "break-word",
   },
-
   description: {
-    margin: "22px 0 0",
+    margin: "18px 0 0",
     color: "#e2e8f0",
-    fontSize: 20,
-    lineHeight: 1.7,
+    fontSize: "clamp(16px, 4vw, 20px)",
+    lineHeight: 1.6,
     maxWidth: 780,
   },
-
   heroMeta: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 14,
-    marginTop: 30,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 12,
+    marginTop: 26,
     maxWidth: 920,
   },
-
   metaCard: {
-    padding: 18,
-    borderRadius: 22,
+    padding: 15,
+    borderRadius: 20,
     background: "rgba(255,255,255,0.1)",
     border: "1px solid rgba(255,255,255,0.14)",
     display: "grid",
     gap: 6,
     backdropFilter: "blur(12px)",
+    minWidth: 0,
   },
-
   metaLabel: {
     color: "#cbd5e1",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
-
   heroFooter: {
-    marginTop: 24,
+    marginTop: 20,
     width: "fit-content",
-    padding: "18px 22px",
-    borderRadius: 22,
-    background: "rgba(15,23,42,0.7)",
+    maxWidth: "100%",
+    padding: "16px 18px",
+    borderRadius: 20,
+    background: "rgba(15,23,42,0.74)",
     color: "#ffffff",
     display: "grid",
     gap: 4,
     backdropFilter: "blur(12px)",
+    boxSizing: "border-box",
   },
-
-  noticeCard: {
+  contentWrap: {
     maxWidth: 1220,
-    margin: "24px auto 18px",
-    padding: 20,
-    borderRadius: 26,
+    margin: "0 auto",
+    padding: "0 16px",
+    boxSizing: "border-box",
+  },
+  noticeCard: {
+    padding: 18,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
+    margin: "22px 0 18px",
     display: "flex",
     justifyContent: "space-between",
     gap: 16,
     flexWrap: "wrap",
     alignItems: "center",
   },
-
   noticeTitle: {
     margin: 0,
-    fontSize: 23,
+    fontSize: "clamp(21px, 6vw, 26px)",
     color: "#0f172a",
     letterSpacing: "-0.03em",
   },
-
   noticeText: {
     margin: "8px 0 0",
     color: "#475569",
     lineHeight: 1.6,
   },
-
   noticeChip: {
     padding: 14,
     borderRadius: 18,
@@ -767,31 +727,29 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 5,
-    minWidth: 210,
+    minWidth: 0,
+    width: "min(100%, 260px)",
   },
-
   successCard: {
-    maxWidth: 1220,
-    margin: "0 auto 16px",
     padding: 16,
     borderRadius: 22,
     background: "#dcfce7",
     color: "#166534",
     border: "1px solid #bbf7d0",
     fontWeight: 950,
+    marginTop: 18,
+    marginBottom: 16,
   },
-
   errorCard: {
-    maxWidth: 1220,
-    margin: "0 auto 16px",
     padding: 16,
     borderRadius: 22,
     background: "#fee2e2",
     color: "#991b1b",
     border: "1px solid #fecaca",
     fontWeight: 950,
+    marginTop: 18,
+    marginBottom: 16,
   },
-
   loadingCard: {
     maxWidth: 560,
     margin: "80px auto",
@@ -802,61 +760,51 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
   },
-
   loadingIcon: {
     fontSize: 54,
   },
-
   loadingTitle: {
     margin: "14px 0 0",
     color: "#0f172a",
   },
-
   loadingText: {
     margin: "8px 0 0",
     color: "#64748b",
   },
-
   emptyCard: {
-    maxWidth: 1220,
-    margin: "0 auto",
-    padding: 24,
+    padding: 22,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
-
+  muted: {
+    color: "#64748b",
+  },
   itemsGrid: {
-    maxWidth: 1220,
-    margin: "0 auto",
-    padding: "0 16px",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
     gap: 20,
   },
-
   itemCard: {
-    borderRadius: 30,
+    borderRadius: 28,
     overflow: "hidden",
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 12px 34px rgba(15,23,42,0.08)",
+    minWidth: 0,
   },
-
   itemImageWrap: {
     position: "relative",
     width: "100%",
-    height: 270,
+    height: "clamp(220px, 54vw, 300px)",
     background: "#f1f5f9",
   },
-
   image: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
     display: "block",
   },
-
   lotBadge: {
     position: "absolute",
     left: 14,
@@ -868,7 +816,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
   },
-
   itemImageEmpty: {
     width: "100%",
     height: "100%",
@@ -878,31 +825,28 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 44,
     color: "#94a3b8",
   },
-
   itemBody: {
-    padding: 22,
+    padding: "clamp(16px, 5vw, 22px)",
   },
-
   itemTop: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "flex-start",
+    flexWrap: "wrap",
   },
-
   itemTitle: {
     margin: 0,
-    fontSize: 26,
-    lineHeight: 1.12,
+    fontSize: "clamp(23px, 7vw, 30px)",
+    lineHeight: 1.1,
     color: "#0f172a",
     letterSpacing: "-0.035em",
+    wordBreak: "break-word",
   },
-
   donor: {
     margin: "7px 0 0",
     color: "#64748b",
   },
-
   itemStatus: {
     display: "inline-flex",
     padding: "7px 10px",
@@ -912,13 +856,11 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "capitalize",
     whiteSpace: "nowrap",
   },
-
   itemDescription: {
     color: "#334155",
     lineHeight: 1.65,
     margin: "16px 0 0",
   },
-
   bidFeature: {
     marginTop: 18,
     padding: 18,
@@ -928,14 +870,12 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 5,
   },
-
   bidStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 132px), 1fr))",
     gap: 10,
     marginTop: 14,
   },
-
   bidStat: {
     padding: 12,
     borderRadius: 16,
@@ -944,41 +884,36 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 4,
   },
-
   bidForm: {
     display: "grid",
     gap: 14,
     marginTop: 18,
-    padding: 16,
+    padding: "clamp(14px, 4vw, 16px)",
     borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
-
   formGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
-
   label: {
     display: "grid",
     gap: 7,
     color: "#0f172a",
     fontWeight: 900,
   },
-
   input: {
     width: "100%",
     boxSizing: "border-box",
     borderRadius: 14,
     border: "1px solid #cbd5e1",
-    padding: "12px 13px",
-    fontSize: 15,
+    padding: "13px 13px",
+    fontSize: 16,
     color: "#0f172a",
     background: "#ffffff",
   },
-
   checkboxLabel: {
     display: "flex",
     gap: 10,
@@ -987,9 +922,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     lineHeight: 1.5,
   },
-
   bidButton: {
-    padding: "14px 18px",
+    width: "100%",
+    padding: "15px 18px",
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
@@ -997,8 +932,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    fontSize: 16,
   },
-
   closedBox: {
     marginTop: 16,
     padding: 16,
@@ -1008,17 +943,14 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     fontWeight: 800,
   },
-
   termsCard: {
-    maxWidth: 1220,
-    margin: "18px auto 0",
+    marginTop: 18,
     padding: 22,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-
   termsText: {
     whiteSpace: "pre-wrap",
     color: "#334155",
