@@ -46,7 +46,6 @@ function moneyFromCents(cents: number | null | undefined) {
 
 function calculatePlatformFeeCents(subtotalCents: number) {
   if (!subtotalCents || subtotalCents <= 0) return 0;
-
   return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
 }
 
@@ -129,10 +128,10 @@ function publicSeatStyle({
 
   if (status === "blocked") {
     return {
-      minWidth: 32,
-      width: 32,
-      height: 32,
-      borderRadius: 8,
+      minWidth: 36,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       border: selected ? "1px solid #0284c7" : "1px solid #64748b",
       background: selected ? "#bae6fd" : "#334155",
       color: selected ? "#082f49" : "#e2e8f0",
@@ -148,10 +147,10 @@ function publicSeatStyle({
 
   if (status === "sold") {
     return {
-      minWidth: 32,
-      width: 32,
-      height: 32,
-      borderRadius: 8,
+      minWidth: 36,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       border: selected ? "1px solid #0284c7" : "1px solid #991b1b",
       background: selected ? "#bae6fd" : "#fecaca",
       color: selected ? "#082f49" : "#7f1d1d",
@@ -167,10 +166,10 @@ function publicSeatStyle({
 
   if (status === "reserved") {
     return {
-      minWidth: 32,
-      width: 32,
-      height: 32,
-      borderRadius: 8,
+      minWidth: 36,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       border: selected ? "1px solid #0284c7" : "1px solid #f59e0b",
       background: selected ? "#bae6fd" : "#fef3c7",
       color: selected ? "#082f49" : "#92400e",
@@ -185,10 +184,10 @@ function publicSeatStyle({
   }
 
   return {
-    minWidth: 32,
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    minWidth: 36,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     border: selected ? "1px solid #0284c7" : "1px solid #cbd5e1",
     background: selected ? "#bae6fd" : colour.background,
     color: selected ? "#082f49" : colour.text,
@@ -200,6 +199,7 @@ function publicSeatStyle({
     boxSizing: "border-box",
   };
 }
+
 export default function PublicReservedSeatSelector({
   eventId,
   seats,
@@ -304,8 +304,7 @@ export default function PublicReservedSeatSelector({
   function removeSeat(seatId: string) {
     setCartItems((current) => current.filter((item) => item.seatId !== seatId));
   }
-
-  async function startCheckout() {
+    async function startCheckout() {
     if (isCheckingOut) return;
 
     if (!buyerName.trim() || !buyerEmail.trim()) {
@@ -363,336 +362,409 @@ export default function PublicReservedSeatSelector({
       setIsCheckingOut(false);
     }
   }
-    return (
-    <div style={styles.shell}>
-      <div style={styles.mapPanel}>
-        <div style={styles.mapHeader}>
-          <div>
-            <h3 style={styles.mapTitle}>Seat map</h3>
-            <p style={styles.mapText}>
-              Choose your preferred seats from the layout below.
-            </p>
+
+  return (
+    <>
+      <style>
+        {`
+          @media (max-width: 980px) {
+            .public-reserved-selector-shell {
+              grid-template-columns: 1fr !important;
+            }
+
+            .public-reserved-selector-map-panel,
+            .public-reserved-selector-cart {
+              min-height: auto !important;
+            }
+
+            .public-reserved-selector-cart {
+              position: static !important;
+            }
+
+            .public-reserved-selector-cart-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+
+          @media (max-width: 620px) {
+            .public-reserved-selector-map-panel,
+            .public-reserved-selector-cart {
+              padding: 12px !important;
+              border-radius: 20px !important;
+            }
+
+            .public-reserved-selector-map-title,
+            .public-reserved-selector-cart-title {
+              font-size: 24px !important;
+            }
+
+            .public-reserved-selector-seat-scroll {
+              padding: 10px !important;
+              border-radius: 14px !important;
+            }
+
+            .public-reserved-selector-row-line {
+              grid-template-columns: 64px 1fr !important;
+              gap: 8px !important;
+            }
+
+            .public-reserved-selector-row-label {
+              font-size: 11px !important;
+            }
+          }
+        `}
+      </style>
+
+      <div className="public-reserved-selector-shell" style={styles.shell}>
+        <div className="public-reserved-selector-map-panel" style={styles.mapPanel}>
+          <div style={styles.mapHeader}>
+            <div>
+              <h3 className="public-reserved-selector-map-title" style={styles.mapTitle}>
+                Seat map
+              </h3>
+              <p style={styles.mapText}>
+                Choose your preferred seats from the layout below.
+              </p>
+            </div>
+
+            <div style={styles.legend}>
+              <Legend color="#dcfce7" label="Available" />
+              <Legend color="#bae6fd" label="Selected" />
+              <Legend color="#334155" label="Blocked" />
+              <Legend color="#fef3c7" label="Reserved" />
+              <Legend color="#fecaca" label="Sold" />
+            </div>
           </div>
 
-          <div style={styles.legend}>
-            <Legend color="#dcfce7" label="Available" />
-            <Legend color="#bae6fd" label="Selected" />
-            <Legend color="#334155" label="Blocked" />
-            <Legend color="#fef3c7" label="Reserved" />
-            <Legend color="#fecaca" label="Sold" />
+          <div style={styles.stageWrap}>
+            <div style={styles.stage}>STAGE</div>
+          </div>
+
+          <div className="public-reserved-selector-seat-scroll" style={styles.seatMapScroll}>
+            {Object.entries(groupedSections)
+              .sort(([a], [b]) => numericSort(a, b))
+              .map(([section, sectionSeats]) => {
+                const rows = groupBy(
+                  sectionSeats,
+                  (seat) => seat.row_label || "No row",
+                );
+
+                const rowEntries = Object.entries(rows).sort(([a], [b]) =>
+                  numericSort(a, b),
+                );
+
+                const maxUnits = Math.max(
+                  1,
+                  ...rowEntries.map(([, currentRowSeats]) =>
+                    rowVisualUnits(currentRowSeats),
+                  ),
+                );
+
+                return (
+                  <div key={section} style={styles.groupBlock}>
+                    <h4 style={styles.groupTitle}>{section}</h4>
+
+                    {rowEntries.map(([row, currentRowSeats]) => {
+                      const actualKey =
+                        currentRowSeats.length > 0
+                          ? rowKeyForSeat(currentRowSeats[0])
+                          : `${section === "Main" ? "" : section}|${row}`;
+
+                      const sortedRowSeats = currentRowSeats
+                        .slice()
+                        .sort((a, b) => numericSort(a.seat_number, b.seat_number));
+
+                      const autoOffset = Math.max(
+                        0,
+                        Math.floor(
+                          (maxUnits - rowVisualUnits(currentRowSeats)) / 2,
+                        ),
+                      );
+
+                      const manualOffset = initialSeatingLayout[actualKey] || 0;
+                      const totalOffset = Math.max(0, autoOffset + manualOffset);
+
+                      return (
+                        <div
+                          key={`${section}-${row}`}
+                          className="public-reserved-selector-row-line"
+                          style={styles.rowLine}
+                        >
+                          <div
+                            className="public-reserved-selector-row-label"
+                            style={styles.rowButton}
+                          >
+                            Row {row}
+                          </div>
+
+                          <div
+                            style={{
+                              ...styles.seatLine,
+                              paddingLeft: totalOffset * 42,
+                            }}
+                          >
+                            {sortedRowSeats.map((seat) => {
+                              const ticketType = ticketTypes.find(
+                                (item) => item.id === seat.ticket_type_id,
+                              );
+
+                              const selected = selectedSeatIds.includes(seat.id);
+                              const unavailable = seat.status !== "available";
+
+                              return (
+                                <span key={seat.id} style={styles.seatWrap}>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleSeat(seat)}
+                                    disabled={unavailable}
+                                    title={
+                                      seat.status === "blocked"
+                                        ? `${seatLabel(seat)} — Blocked`
+                                        : seat.status === "reserved"
+                                          ? `${seatLabel(seat)} — Reserved`
+                                          : seat.status === "sold"
+                                            ? `${seatLabel(seat)} — Sold`
+                                            : ticketType?.name
+                                              ? `${seatLabel(seat)} — ${ticketType.name}`
+                                              : seatLabel(seat)
+                                    }
+                                    style={publicSeatStyle({
+                                      selected,
+                                      ticketType,
+                                      ticketTypes,
+                                      status: seat.status,
+                                    })}
+                                  >
+                                    {seat.seat_number}
+                                  </button>
+
+                                  {seat.aisle_after ? (
+                                    <span style={styles.aisle}>Aisle</span>
+                                  ) : null}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+          </div>
+
+          <div style={styles.helperNotice}>
+            <span style={styles.helperIcon}>ⓘ</span>
+            On smaller screens, swipe across the seat map to view all seats.
           </div>
         </div>
 
-        <div style={styles.stage}>STAGE</div>
+        <aside className="public-reserved-selector-cart" style={styles.cart}>
+          <div className="public-reserved-selector-cart-grid" style={styles.cartGrid}>
+            <div>
+              <BuyerDetailsFields
+                buyerName={buyerName}
+                buyerEmail={buyerEmail}
+                onBuyerNameChange={setBuyerName}
+                onBuyerEmailChange={setBuyerEmail}
+                dark
+              />
+            </div>
 
-        <div style={styles.seatMapScroll}>
-          {Object.entries(groupedSections)
-            .sort(([a], [b]) => numericSort(a, b))
-            .map(([section, sectionSeats]) => {
-              const rows = groupBy(
-                sectionSeats,
-                (seat) => seat.row_label || "No row",
-              );
+            <div>
+              <div style={styles.cartTop}>
+                <div>
+                  <p style={styles.cartEyebrow}>Booking summary</p>
+                  <h3 className="public-reserved-selector-cart-title" style={styles.cartTitle}>
+                    Your tickets
+                  </h3>
+                </div>
 
-              const rowEntries = Object.entries(rows).sort(([a], [b]) =>
-                numericSort(a, b),
-              );
+                <div style={styles.countBadge}>{cartSeats.length}</div>
+              </div>
 
-              const maxUnits = Math.max(
-                1,
-                ...rowEntries.map(([, currentRowSeats]) =>
-                  rowVisualUnits(currentRowSeats),
-                ),
-              );
-
-              return (
-                <div key={section} style={styles.groupBlock}>
-                  <h4 style={styles.groupTitle}>{section}</h4>
-
-                  {rowEntries.map(([row, currentRowSeats]) => {
-                    const actualKey =
-                      currentRowSeats.length > 0
-                        ? rowKeyForSeat(currentRowSeats[0])
-                        : `${section === "Main" ? "" : section}|${row}`;
-
-                    const sortedRowSeats = currentRowSeats
-                      .slice()
-                      .sort((a, b) => numericSort(a.seat_number, b.seat_number));
-
-                    const autoOffset = Math.max(
-                      0,
-                      Math.floor(
-                        (maxUnits - rowVisualUnits(currentRowSeats)) / 2,
-                      ),
-                    );
-
-                    const manualOffset = initialSeatingLayout[actualKey] || 0;
-                    const totalOffset = Math.max(0, autoOffset + manualOffset);
+              {cartSeats.length === 0 ? (
+                <div style={styles.emptyBox}>
+                  <div style={styles.emptyIcon}>🎟️</div>
+                  <p style={styles.emptyTitle}>Select seats to begin</p>
+                  <p style={styles.emptyText}>
+                    Your selected seats and guest details will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div style={styles.cartList}>
+                  {cartSeats.map(({ seat, ticketType }) => {
+                    const data = guestData[seat.id] || getDefaultGuestData();
+                    const availableTicketTypes = seat.ticket_type_id
+                      ? ticketTypes.filter(
+                          (currentTicketType) =>
+                            currentTicketType.id === seat.ticket_type_id,
+                        )
+                      : ticketTypes;
 
                     return (
-                      <div key={`${section}-${row}`} style={styles.rowLine}>
-                        <div style={styles.rowButton}>Row {row}</div>
+                      <div key={seat.id} style={styles.cartItem}>
+                        <div style={styles.cartItemHeader}>
+                          <div>
+                            <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
+                            <p style={styles.cartPrice}>
+                              {currency} {moneyFromCents(ticketType.price)}
+                            </p>
+                          </div>
 
-                        <div
-                          style={{
-                            ...styles.seatLine,
-                            paddingLeft: totalOffset * 42,
-                          }}
-                        >
-                          {sortedRowSeats.map((seat) => {
-                            const ticketType = ticketTypes.find(
-                              (item) => item.id === seat.ticket_type_id,
-                            );
-
-                            const selected = selectedSeatIds.includes(seat.id);
-                            const unavailable = seat.status !== "available";
-
-                            return (
-                              <span key={seat.id} style={styles.seatWrap}>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleSeat(seat)}
-                                  disabled={unavailable}
-                                  title={
-                                    seat.status === "blocked"
-                                      ? `${seatLabel(seat)} — Blocked`
-                                      : seat.status === "reserved"
-                                        ? `${seatLabel(seat)} — Reserved`
-                                        : seat.status === "sold"
-                                          ? `${seatLabel(seat)} — Sold`
-                                          : ticketType?.name
-                                            ? `${seatLabel(seat)} — ${ticketType.name}`
-                                            : seatLabel(seat)
-                                  }
-                                  style={publicSeatStyle({
-                                    selected,
-                                    ticketType,
-                                    ticketTypes,
-                                    status: seat.status,
-                                  })}
-                                >
-                                  {seat.seat_number}
-                                </button>
-
-                                {seat.aisle_after ? (
-                                  <span style={styles.aisle}>Aisle</span>
-                                ) : null}
-                              </span>
-                            );
-                          })}
+                          <button
+                            type="button"
+                            onClick={() => removeSeat(seat.id)}
+                            style={styles.removeButton}
+                          >
+                            Remove
+                          </button>
                         </div>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Ticket type</span>
+                          <select
+                            value={ticketType.id}
+                            onChange={(event) =>
+                              updateTicketType(seat.id, event.target.value)
+                            }
+                            disabled={Boolean(seat.ticket_type_id)}
+                            style={styles.input}
+                          >
+                            {availableTicketTypes.map((currentTicketType) => (
+                              <option
+                                key={currentTicketType.id}
+                                value={currentTicketType.id}
+                              >
+                                {currentTicketType.name} — {currency}{" "}
+                                {moneyFromCents(currentTicketType.price)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Guest name</span>
+                          <input
+                            value={data.guestName}
+                            onChange={(event) =>
+                              updateGuestData(seat.id, {
+                                guestName: event.target.value,
+                              })
+                            }
+                            placeholder="Guest name"
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Dietary requirements</span>
+                          <textarea
+                            value={data.dietaryRequirements}
+                            onChange={(event) =>
+                              updateGuestData(seat.id, {
+                                dietaryRequirements: event.target.value,
+                              })
+                            }
+                            placeholder="None, vegetarian, gluten free, allergies..."
+                            rows={2}
+                            style={styles.textarea}
+                          />
+                        </label>
+
+                        <label style={styles.field}>
+                          <span style={styles.label}>Menu choice</span>
+                          {menuOptions.length > 0 ? (
+                            <select
+                              value={data.menuChoice}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  menuChoice: event.target.value,
+                                })
+                              }
+                              style={styles.input}
+                            >
+                              <option value="">Select menu option</option>
+                              {menuOptions.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              value={data.menuChoice}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  menuChoice: event.target.value,
+                                })
+                              }
+                              placeholder="Optional menu choice"
+                              style={styles.input}
+                            />
+                          )}
+                        </label>
                       </div>
                     );
                   })}
                 </div>
-              );
-            })}
-        </div>
+              )}
+
+              <div style={styles.totalBox}>
+                <span>Ticket total</span>
+                <strong>
+                  {currency} {moneyFromCents(ticketTotal)}
+                </strong>
+              </div>
+
+              <label style={styles.feeBox}>
+                <input
+                  type="checkbox"
+                  checked={coverFees}
+                  onChange={(event) => setCoverFees(event.target.checked)}
+                  disabled={ticketTotal <= 0}
+                />
+                <span>
+                  <strong>I’d like to cover platform fees</strong>
+                  <small>
+                    Adds approximately {currency}{" "}
+                    {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so
+                    the organiser receives the full ticket value.
+                  </small>
+                </span>
+              </label>
+
+              <div style={styles.totalBoxStrong}>
+                <span>Total today</span>
+                <strong>
+                  {currency} {moneyFromCents(totalTodayCents)}
+                </strong>
+              </div>
+
+              {checkoutError ? (
+                <div style={styles.errorBox}>{checkoutError}</div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={startCheckout}
+                disabled={cartSeats.length === 0 || isCheckingOut}
+                style={{
+                  ...styles.checkout,
+                  opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
+                  cursor:
+                    cartSeats.length === 0 || isCheckingOut
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {isCheckingOut ? "Processing..." : "Continue to checkout"}
+              </button>
+            </div>
+          </div>
+        </aside>
       </div>
-
-      <aside style={styles.cart}>
-        <div style={styles.cartGrid}>
-          <div>
-            <BuyerDetailsFields
-              buyerName={buyerName}
-              buyerEmail={buyerEmail}
-              onBuyerNameChange={setBuyerName}
-              onBuyerEmailChange={setBuyerEmail}
-              dark
-            />
-          </div>
-
-          <div>
-            <div style={styles.cartTop}>
-              <div>
-                <p style={styles.cartEyebrow}>Booking summary</p>
-                <h3 style={styles.cartTitle}>Your tickets</h3>
-              </div>
-
-              <div style={styles.countBadge}>{cartSeats.length}</div>
-            </div>
-
-            {cartSeats.length === 0 ? (
-              <div style={styles.emptyBox}>
-                <div style={styles.emptyIcon}>🎟️</div>
-                <p style={styles.emptyTitle}>Select seats to begin</p>
-                <p style={styles.emptyText}>
-                  Your selected seats and guest details will appear here.
-                </p>
-              </div>
-            ) : (
-              <div style={styles.cartList}>
-                {cartSeats.map(({ seat, ticketType }) => {
-                  const data = guestData[seat.id] || getDefaultGuestData();
-                  const availableTicketTypes = seat.ticket_type_id
-                    ? ticketTypes.filter(
-                        (currentTicketType) =>
-                          currentTicketType.id === seat.ticket_type_id,
-                      )
-                    : ticketTypes;
-
-                  return (
-                    <div key={seat.id} style={styles.cartItem}>
-                      <div style={styles.cartItemHeader}>
-                        <div>
-                          <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
-                          <p style={styles.cartPrice}>
-                            {currency} {moneyFromCents(ticketType.price)}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => removeSeat(seat.id)}
-                          style={styles.removeButton}
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Ticket type</span>
-                        <select
-                          value={ticketType.id}
-                          onChange={(event) =>
-                            updateTicketType(seat.id, event.target.value)
-                          }
-                          disabled={Boolean(seat.ticket_type_id)}
-                          style={styles.input}
-                        >
-                          {availableTicketTypes.map((currentTicketType) => (
-                            <option
-                              key={currentTicketType.id}
-                              value={currentTicketType.id}
-                            >
-                              {currentTicketType.name} — {currency}{" "}
-                              {moneyFromCents(currentTicketType.price)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Guest name</span>
-                        <input
-                          value={data.guestName}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              guestName: event.target.value,
-                            })
-                          }
-                          placeholder="Guest name"
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Dietary requirements</span>
-                        <textarea
-                          value={data.dietaryRequirements}
-                          onChange={(event) =>
-                            updateGuestData(seat.id, {
-                              dietaryRequirements: event.target.value,
-                            })
-                          }
-                          placeholder="None, vegetarian, gluten free, allergies..."
-                          rows={2}
-                          style={styles.textarea}
-                        />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Menu choice</span>
-                        {menuOptions.length > 0 ? (
-                          <select
-                            value={data.menuChoice}
-                            onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                menuChoice: event.target.value,
-                              })
-                            }
-                            style={styles.input}
-                          >
-                            <option value="">Select menu option</option>
-                            {menuOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            value={data.menuChoice}
-                            onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                menuChoice: event.target.value,
-                              })
-                            }
-                            placeholder="Optional menu choice"
-                            style={styles.input}
-                          />
-                        )}
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div style={styles.totalBox}>
-              <span>Ticket total</span>
-              <strong>
-                {currency} {moneyFromCents(ticketTotal)}
-              </strong>
-            </div>
-
-            <label style={styles.feeBox}>
-              <input
-                type="checkbox"
-                checked={coverFees}
-                onChange={(event) => setCoverFees(event.target.checked)}
-                disabled={ticketTotal <= 0}
-              />
-              <span>
-                <strong>I’d like to cover platform fees</strong>
-                <small>
-                  Adds approximately {currency}{" "}
-                  {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so
-                  the organiser receives the full ticket value.
-                </small>
-              </span>
-            </label>
-
-            <div style={styles.totalBoxStrong}>
-              <span>Total today</span>
-              <strong>
-                {currency} {moneyFromCents(totalTodayCents)}
-              </strong>
-            </div>
-
-            {checkoutError ? (
-              <div style={styles.errorBox}>{checkoutError}</div>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={startCheckout}
-              disabled={cartSeats.length === 0 || isCheckingOut}
-              style={{
-                ...styles.checkout,
-                opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
-                cursor:
-                  cartSeats.length === 0 || isCheckingOut
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              {isCheckingOut ? "Processing..." : "Continue to checkout"}
-            </button>
-          </div>
-        </div>
-      </aside>
-    </div>
+    </>
   );
 }
 
@@ -704,15 +776,18 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr)",
     gap: 24,
-    alignItems: "start",
+    alignItems: "stretch",
     width: "100%",
   },
   mapPanel: {
+    display: "flex",
+    flexDirection: "column",
     padding: 20,
     borderRadius: 24,
     background: "#ffffff",
@@ -720,6 +795,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
     width: "100%",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   mapHeader: {
     display: "flex",
@@ -764,11 +840,15 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     border: "1px solid rgba(15,23,42,0.12)",
   },
+  stageWrap: {
+    overflowX: "auto",
+    overflowY: "hidden",
+    marginBottom: 16,
+  },
   stage: {
     width: "100%",
-    minWidth: 1080,
+    minWidth: 760,
     padding: "10px 14px",
-    marginBottom: 16,
     borderRadius: 14,
     background: "#111827",
     color: "#ffffff",
@@ -785,6 +865,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   groupBlock: {
     display: "grid",
@@ -807,7 +888,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
   },
   rowButton: {
-    minHeight: 32,
+    minHeight: 36,
     borderRadius: 10,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
@@ -822,7 +903,7 @@ const styles: Record<string, CSSProperties> = {
   seatLine: {
     display: "flex",
     alignItems: "center",
-    gap: 4,
+    gap: 5,
     flexWrap: "nowrap",
   },
   seatWrap: {
@@ -831,9 +912,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 4,
   },
   aisle: {
-    width: 48,
-    height: 28,
-    borderRadius: 8,
+    width: 52,
+    height: 30,
+    borderRadius: 9,
     border: "1px dashed #f59e0b",
     display: "inline-flex",
     alignItems: "center",
@@ -844,6 +925,32 @@ const styles: Record<string, CSSProperties> = {
     background: "#fef3c7",
     margin: "0 6px",
   },
+  helperNotice: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    padding: "13px 15px",
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.4,
+  },
+  helperIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "0 0 auto",
+    color: "#0f172a",
+    fontSize: 13,
+  },
   cart: {
     padding: 18,
     borderRadius: 28,
@@ -853,6 +960,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
     width: "100%",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   cartGrid: {
     display: "grid",
