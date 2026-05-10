@@ -21,24 +21,30 @@ function poundsToCents(value: FormDataEntryValue | null) {
   return Math.round(amount * 100);
 }
 
-function redirectWithError(slug: string, message: string) {
-  return NextResponse.redirect(
-    new URL(
-      `/a/${encodeURIComponent(slug)}?error=${encodeURIComponent(message)}`,
-      process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-    ),
-    { status: 303 },
-  );
+function redirectToAuction(
+  request: NextRequest,
+  slug: string,
+  params: Record<string, string>,
+) {
+  const url = new URL(`/a/${encodeURIComponent(slug)}`, request.nextUrl.origin);
+
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+
+  return NextResponse.redirect(url, { status: 303 });
 }
 
-function redirectWithSuccess(slug: string) {
-  return NextResponse.redirect(
-    new URL(
-      `/a/${encodeURIComponent(slug)}?bid=success`,
-      process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-    ),
-    { status: 303 },
-  );
+function redirectWithError(request: NextRequest, slug: string, message: string) {
+  return redirectToAuction(request, slug, {
+    error: message,
+  });
+}
+
+function redirectWithSuccess(request: NextRequest, slug: string) {
+  return redirectToAuction(request, slug, {
+    bid: "success",
+  });
 }
 
 function auctionIsOpen(auction: {
@@ -65,7 +71,7 @@ function auctionIsOpen(auction: {
 
 export async function POST(request: NextRequest) {
   try {
-    const tenantSlug = getTenantSlugFromRequest(request);
+    const tenantSlug = getTenantSlugFromRequest(request) || "demo-a";
     const formData = await request.formData();
 
     const auctionSlug = String(formData.get("auction_slug") || "").trim();
@@ -78,18 +84,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!tenantSlug) {
-      return redirectWithError(auctionSlug, "Tenant not found.");
-    }
-
     const auction = await getAuctionBySlug(auctionSlug, tenantSlug);
 
     if (!auction) {
-      return redirectWithError(auctionSlug, "Auction not found.");
+      return redirectWithError(request, auctionSlug, "Auction not found.");
     }
 
     if (!auctionIsOpen(auction)) {
       return redirectWithError(
+        request,
         auction.slug,
         "This auction is not currently accepting bids.",
       );
@@ -98,11 +101,12 @@ export async function POST(request: NextRequest) {
     const item = await getAuctionItemById(itemId);
 
     if (!item || item.auction_id !== auction.id) {
-      return redirectWithError(auction.slug, "Auction item not found.");
+      return redirectWithError(request, auction.slug, "Auction item not found.");
     }
 
     if (item.status !== "active") {
       return redirectWithError(
+        request,
         auction.slug,
         "This item is not accepting bids.",
       );
@@ -112,6 +116,7 @@ export async function POST(request: NextRequest) {
 
     if (!termsAccepted) {
       return redirectWithError(
+        request,
         auction.slug,
         "Please accept the auction terms before bidding.",
       );
@@ -126,13 +131,18 @@ export async function POST(request: NextRequest) {
 
     if (!bidderName || !bidderEmail || !bidderEmail.includes("@")) {
       return redirectWithError(
+        request,
         auction.slug,
         "Please enter your name and a valid email address.",
       );
     }
 
     if (amountCents <= 0) {
-      return redirectWithError(auction.slug, "Please enter a valid bid amount.");
+      return redirectWithError(
+        request,
+        auction.slug,
+        "Please enter a valid bid amount.",
+      );
     }
 
     const currentHighestBid = await getHighestBidForItem(item.id);
@@ -144,6 +154,7 @@ export async function POST(request: NextRequest) {
 
     if (amountCents < minimumBid) {
       return redirectWithError(
+        request,
         auction.slug,
         `Your bid must be at least £${(minimumBid / 100).toFixed(2)}.`,
       );
@@ -158,7 +169,7 @@ export async function POST(request: NextRequest) {
       amountCents,
     });
 
-    return redirectWithSuccess(auction.slug);
+    return redirectWithSuccess(request, auction.slug);
   } catch (error) {
     console.error("POST /api/auctions/bid failed", error);
 
