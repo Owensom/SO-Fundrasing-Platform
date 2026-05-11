@@ -35,6 +35,8 @@ type TableShape = "round" | "square" | "rectangle";
 
 type SeatingLayoutJson = Record<string, unknown>;
 
+const TICKET_PLACEHOLDER_IMAGE = "/brand/so-ticket-placeholder.png";
+
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -53,14 +55,8 @@ function tableSortValue(value: string | null | undefined) {
 function normaliseShape(value: unknown): TableShape | null {
   const raw = String(value || "").trim().toLowerCase();
 
-  if (raw === "round" || raw === "circle" || raw === "circular") {
-    return "round";
-  }
-
-  if (raw === "square") {
-    return "square";
-  }
-
+  if (raw === "round" || raw === "circle" || raw === "circular") return "round";
+  if (raw === "square") return "square";
   if (raw === "rectangle" || raw === "rectangular" || raw === "long") {
     return "rectangle";
   }
@@ -73,9 +69,7 @@ function readShapeFromObject(
   tableNumber: string,
   tableLabel: string,
 ): TableShape | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
   const objectValue = value as Record<string, unknown>;
 
@@ -244,9 +238,7 @@ function roundSeatPosition(index: number, total: number) {
 }
 
 function rectangleSeatCounts(total: number) {
-  if (total <= 2) {
-    return { top: total, right: 0, bottom: 0, left: 0 };
-  }
+  if (total <= 2) return { top: total, right: 0, bottom: 0, left: 0 };
 
   if (total <= 4) {
     return {
@@ -338,6 +330,7 @@ function seatPosition(index: number, total: number, shape: TableShape) {
   if (shape === "round") return roundSeatPosition(index, total);
   return edgeSeatPosition(index, total, shape);
 }
+
 function tableAreaStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
@@ -473,10 +466,7 @@ export default function PublicTableSelector({
     0,
   );
 
-  const platformFeeCents = coverFees
-    ? calculatePlatformFeeCents(ticketTotal)
-    : 0;
-
+  const platformFeeCents = coverFees ? calculatePlatformFeeCents(ticketTotal) : 0;
   const totalTodayCents = ticketTotal + platformFeeCents;
 
   function getSeatTicketType(seat: Seat) {
@@ -484,8 +474,7 @@ export default function PublicTableSelector({
       (item) => item.seatId === seat.id,
     )?.ticketTypeId;
 
-    const ticketTypeId =
-      cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
+    const ticketTypeId = cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
 
     return ticketTypes.find((ticketType) => ticketType.id === ticketTypeId);
   }
@@ -507,9 +496,7 @@ export default function PublicTableSelector({
     setCartItems((current) => {
       const exists = current.find((item) => item.seatId === seat.id);
 
-      if (exists) {
-        return current.filter((item) => item.seatId !== seat.id);
-      }
+      if (exists) return current.filter((item) => item.seatId !== seat.id);
 
       const ticketTypeId = seat.ticket_type_id || ticketTypes[0]?.id || "";
       if (!ticketTypeId) return current;
@@ -608,13 +595,12 @@ export default function PublicTableSelector({
 
       window.location.href = data.url;
     } catch (error) {
-      setCheckoutError(
-        error instanceof Error ? error.message : "Checkout failed.",
-      );
+      setCheckoutError(error instanceof Error ? error.message : "Checkout failed.");
       setIsCheckingOut(false);
     }
   }
-    return (
+
+  return (
     <>
       <style>
         {`
@@ -731,16 +717,12 @@ export default function PublicTableSelector({
                     >
                       <div>
                         <p style={styles.tableNumber}>
-                          Table {safeActiveTableIndex + 1} of{" "}
-                          {groupedSeats.length}
+                          Table {safeActiveTableIndex + 1} of {groupedSeats.length}
                         </p>
                         <h4 style={styles.groupTitle}>{activeTable.label}</h4>
                         <p style={styles.groupSub}>
-                          {availableCount} available from{" "}
-                          {activeTable.seats.length}
-                          {selectedCount > 0
-                            ? ` · ${selectedCount} selected`
-                            : ""}
+                          {availableCount} available from {activeTable.seats.length}
+                          {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
                         </p>
                       </div>
 
@@ -773,9 +755,7 @@ export default function PublicTableSelector({
                             ...styles.smallNavButton,
                             opacity: safeActiveTableIndex === 0 ? 0.5 : 1,
                             cursor:
-                              safeActiveTableIndex === 0
-                                ? "not-allowed"
-                                : "pointer",
+                              safeActiveTableIndex === 0 ? "not-allowed" : "pointer",
                           }}
                         >
                           Previous
@@ -784,9 +764,7 @@ export default function PublicTableSelector({
                         <button
                           type="button"
                           onClick={goToNextTable}
-                          disabled={
-                            safeActiveTableIndex >= groupedSeats.length - 1
-                          }
+                          disabled={safeActiveTableIndex >= groupedSeats.length - 1}
                           style={{
                             ...styles.smallNavButton,
                             opacity:
@@ -805,9 +783,7 @@ export default function PublicTableSelector({
                         {availableCount > 0 && (
                           <button
                             type="button"
-                            onClick={() =>
-                              selectAvailableTable(activeTable.seats)
-                            }
+                            onClick={() => selectAvailableTable(activeTable.seats)}
                             className="public-table-selector-select-table"
                             style={styles.selectTableButton}
                           >
@@ -903,7 +879,12 @@ export default function PublicTableSelector({
 
               {cartSeats.length === 0 ? (
                 <div style={styles.emptyBox}>
-                  <div style={styles.emptyIcon}>🎟️</div>
+                  <img
+                    src={TICKET_PLACEHOLDER_IMAGE}
+                    alt="SO ticket"
+                    style={styles.emptyTicketImage}
+                  />
+
                   <p style={styles.emptyTitle}>Select table seats to begin</p>
                   <p style={styles.emptyText}>
                     Your selected seats and guest details will appear here.
@@ -1059,9 +1040,7 @@ export default function PublicTableSelector({
                 </strong>
               </div>
 
-              {checkoutError ? (
-                <div style={styles.errorBox}>{checkoutError}</div>
-              ) : null}
+              {checkoutError ? <div style={styles.errorBox}>{checkoutError}</div> : null}
 
               <button
                 type="button"
@@ -1384,8 +1363,13 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
     textAlign: "center",
   },
-  emptyIcon: {
-    fontSize: 32,
+  emptyTicketImage: {
+    width: 78,
+    height: 78,
+    objectFit: "contain",
+    display: "block",
+    margin: "0 auto 10px",
+    filter: "drop-shadow(0 12px 22px rgba(0,0,0,0.28))",
   },
   emptyTitle: {
     margin: "8px 0 0",
