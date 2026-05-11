@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Cinzel, Poppins } from "next/font/google";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
 import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
@@ -9,16 +8,6 @@ import PublicReservedSeatSelector from "@/components/events/PublicReservedSeatSe
 import PublicTableSelector from "@/components/events/PublicTableSelector";
 
 export const dynamic = "force-dynamic";
-
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-});
-
-const cinzel = Cinzel({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-});
 
 type PageProps = {
   params: Promise<{
@@ -34,7 +23,7 @@ const TABLE_SHAPE_KEY = "__table_shape";
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
 function formatDate(value: string | null) {
-  if (!value) return "Date to be confirmed";
+  if (!value) return "Not set";
 
   try {
     return new Intl.DateTimeFormat("en-GB", {
@@ -42,7 +31,7 @@ function formatDate(value: string | null) {
       timeStyle: "short",
     }).format(new Date(value));
   } catch {
-    return "Date to be confirmed";
+    return "Not set";
   }
 }
 
@@ -113,98 +102,111 @@ export default async function EventSlugPage({
   const availableSeats = seats.filter((seat) => seat.status === "available").length;
 
   return (
-    <main className={poppins.className} style={styles.page}>
+    <main style={styles.page}>
       <section style={styles.hero}>
         <img
           src={event.image_url || DEFAULT_EVENTS_IMAGE}
           alt={event.title || "SO Events"}
           style={{
-            ...styles.heroImage,
-            objectFit: hasCustomImage ? "cover" : "contain",
+            ...styles.heroBackgroundImage,
             objectPosition: hasCustomImage
               ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
-              : "50% 34%",
-            opacity: hasCustomImage ? 0.5 : 0.68,
-            padding: hasCustomImage ? 0 : 18,
+              : "center",
+            objectFit: hasCustomImage ? "cover" : "contain",
+            background: hasCustomImage
+              ? "#0f172a"
+              : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
           }}
         />
 
         <div style={styles.heroOverlay} />
 
         <div style={styles.heroInner}>
-          <div style={styles.topBar}>
-            <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
-              ← Back to campaigns
-            </Link>
+          <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
+            ← Back to campaigns
+          </Link>
 
-            <div style={styles.topLinks}>
-              <Link href={`/c/${tenantSlug}/terms`} style={styles.smallLink}>
-                Terms
-              </Link>
-
-              <Link href={`/c/${tenantSlug}/privacy`} style={styles.smallLink}>
-                Privacy
-              </Link>
-            </div>
+          <div style={styles.badgeRow}>
+            <span style={styles.badge}>{eventTypeLabel(event.event_type)}</span>
+            <span style={styles.statusPill}>Open for bookings</span>
           </div>
 
-          <div style={styles.heroContent}>
-            <div style={styles.heroPills}>
-              <span style={styles.goldPill}>
-                {eventTypeLabel(event.event_type)}
-              </span>
+          <h1 style={styles.title}>{event.title}</h1>
 
-              {lowestTicketPrice > 0 && (
-                <span style={styles.lightPill}>
-                  From {event.currency} {moneyFromCents(lowestTicketPrice)}
-                </span>
-              )}
+          {event.description ? (
+            <p style={styles.description}>{event.description}</p>
+          ) : null}
+
+          <div style={styles.heroMeta}>
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Date</span>
+              <strong>{formatDate(event.starts_at)}</strong>
             </div>
 
-            <h1 style={styles.title}>{event.title}</h1>
-
-            <div className={cinzel.className} style={styles.heroTagline}>
-              Book. Attend. Make an impact.
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Location</span>
+              <strong>{event.location || "Location to be confirmed"}</strong>
             </div>
 
-            <div style={styles.heroStats}>
-              <HeroStat label="Date" value={formatDate(event.starts_at)} />
+            {lowestTicketPrice > 0 && (
+              <div style={styles.metaCard}>
+                <span style={styles.metaLabel}>Tickets from</span>
+                <strong>
+                  {event.currency} {moneyFromCents(lowestTicketPrice)}
+                </strong>
+              </div>
+            )}
 
-              <HeroStat
-                label="Location"
-                value={event.location || "Location to be confirmed"}
-              />
+            {event.event_type !== "general_admission" && (
+              <div style={styles.metaCard}>
+                <span style={styles.metaLabel}>Available</span>
+                <strong>{availableSeats}</strong>
+              </div>
+            )}
+          </div>
 
-              {event.event_type !== "general_admission" && (
-                <HeroStat label="Available" value={availableSeats} />
-              )}
-            </div>
+          <div style={styles.heroFooter}>
+            <span>Supporting the organiser</span>
+            <strong>Secure event booking</strong>
           </div>
         </div>
       </section>
 
-      <div style={styles.wrap}>
+      <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
-          <div style={styles.successBox}>
+          <section style={styles.successCard}>
             <strong>Payment successful.</strong>
             <br />
             Thank you. Your booking has been received.
-          </div>
+          </section>
         )}
 
         {resolvedSearchParams.checkout === "cancelled" && (
-          <div style={styles.cancelBox}>
+          <section style={styles.errorCard}>
             <strong>Checkout cancelled.</strong>
             <br />
             Your order was not completed. You can choose again below.
-          </div>
+          </section>
         )}
+
+        <section style={styles.noticeCard}>
+          <div>
+            <h2 style={styles.noticeTitle}>Open for bookings</h2>
+            <p style={styles.noticeText}>
+              Choose your tickets or seats below, then continue securely to
+              checkout.
+            </p>
+          </div>
+
+          <div style={styles.noticeChip}>
+            <span>Starts</span>
+            <strong>{formatDate(event.starts_at)}</strong>
+          </div>
+        </section>
 
         <div style={styles.contentGrid}>
           <Card>
-            <h2 className={cinzel.className} style={styles.sectionKicker}>
-              Event details
-            </h2>
+            <h2 style={styles.noticeTitle}>Event details</h2>
 
             <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
 
@@ -227,23 +229,21 @@ export default async function EventSlugPage({
             )}
 
             {event.description && (
-              <p style={styles.description}>{event.description}</p>
+              <p style={styles.detailDescription}>{event.description}</p>
             )}
           </Card>
 
           <section style={styles.ticketPanel}>
-            <h2 className={cinzel.className} style={styles.panelTitle}>
-              Tickets
-            </h2>
+            <h2 style={styles.ticketPanelTitle}>Tickets</h2>
 
             <div style={styles.stack}>
               {ticketTypes.length === 0 ? (
-                <div style={styles.emptyBox}>
+                <div style={styles.emptyDark}>
                   Ticket options have not been added yet.
                 </div>
               ) : (
                 ticketTypes.map((ticketType) => (
-                  <div key={ticketType.id} style={styles.listItem}>
+                  <div key={ticketType.id} style={styles.ticketItem}>
                     <div>
                       <strong>{ticketType.name}</strong>
 
@@ -343,234 +343,200 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={styles.heroStat}>
-      <span style={styles.heroStatLabel}>{label}</span>
-
-      <strong style={styles.heroStatValue}>{value}</strong>
-    </div>
-  );
-}
-
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.18), transparent 34%), radial-gradient(circle at 80% 8%, rgba(22,131,248,0.1), transparent 28%), #f8fafc",
     minHeight: "100vh",
-    background: "#f8fafc",
-    color: "#111827",
+    paddingBottom: 64,
+    overflowX: "hidden",
   },
-
   hero: {
     position: "relative",
-    minHeight: "650px",
+    width: "100%",
+    minHeight: "clamp(520px, 78vh, 760px)",
     overflow: "hidden",
-    background: "#0d1b3d",
+    display: "flex",
+    alignItems: "flex-end",
   },
-
-  heroImage: {
+  heroBackgroundImage: {
     position: "absolute",
     inset: 0,
     width: "100%",
     height: "100%",
     display: "block",
-    boxSizing: "border-box",
-    filter: "saturate(0.95) contrast(1.02)",
   },
-
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(248,250,252,0.58) 0%, rgba(96,112,133,0.52) 28%, rgba(13,27,61,0.78) 70%, rgba(7,18,39,0.96) 100%), linear-gradient(90deg, rgba(13,27,61,0.16) 0%, rgba(13,27,61,0.04) 48%, rgba(13,27,61,0.20) 100%)",
+      "linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.5) 42%, rgba(15,23,42,0.94) 100%)",
   },
-
   heroInner: {
     position: "relative",
     zIndex: 2,
-    maxWidth: 980,
-    minHeight: "650px",
+    width: "100%",
+    maxWidth: 1220,
     margin: "0 auto",
-    padding: "42px 28px 44px",
-    display: "flex",
-    flexDirection: "column",
+    padding: "96px 16px 34px",
+    color: "#ffffff",
+    boxSizing: "border-box",
   },
-
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-
-  topLinks: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-
   backLink: {
     display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
+    marginBottom: 16,
     padding: "10px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.14)",
-    border: "1px solid rgba(255,255,255,0.28)",
+    background: "rgba(255,255,255,0.12)",
     color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
     textDecoration: "none",
-    fontWeight: 800,
-    boxShadow: "0 8px 22px rgba(0,0,0,0.12)",
-    backdropFilter: "blur(12px)",
+    fontWeight: 900,
+    fontSize: 13,
+    backdropFilter: "blur(10px)",
   },
-
-  smallLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.14)",
-    border: "1px solid rgba(255,255,255,0.28)",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 800,
-    backdropFilter: "blur(12px)",
-  },
-
-  heroContent: {
-    marginTop: "auto",
-    maxWidth: 760,
-    textAlign: "left",
-  },
-
-  heroPills: {
+  badgeRow: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
+    alignItems: "center",
     marginBottom: 16,
   },
-
-  goldPill: {
+  badge: {
     display: "inline-flex",
-    alignItems: "center",
-    borderRadius: 999,
     padding: "8px 12px",
-    background: "rgba(200,162,74,0.26)",
-    border: "1px solid rgba(200,162,74,0.76)",
-    color: "#fff0bf",
-    fontWeight: 800,
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.16)",
+    color: "#fef3c7",
+    border: "1px solid rgba(251,191,36,0.32)",
     fontSize: 13,
-    boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+    fontWeight: 950,
+    backdropFilter: "blur(10px)",
   },
-
-  lightPill: {
+  statusPill: {
     display: "inline-flex",
-    alignItems: "center",
-    borderRadius: 999,
     padding: "8px 12px",
-    background: "rgba(255,255,255,0.14)",
-    border: "1px solid rgba(255,255,255,0.30)",
-    color: "#ffffff",
-    fontWeight: 800,
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
     fontSize: 13,
-    boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+    fontWeight: 950,
+    backdropFilter: "blur(10px)",
   },
-
   title: {
     margin: 0,
-    fontSize: "clamp(58px, 8.5vw, 96px)",
-    lineHeight: 0.9,
+    maxWidth: 900,
+    fontSize: "clamp(42px, 13vw, 96px)",
+    lineHeight: 0.94,
     letterSpacing: "-0.07em",
-    fontWeight: 900,
-    color: "#ffffff",
-    textShadow:
-      "0 3px 0 rgba(200,162,74,0.42), 0 18px 42px rgba(0,0,0,0.42)",
+    fontWeight: 1000,
+    wordBreak: "break-word",
   },
-
-  heroTagline: {
-    marginTop: 16,
-    color: "#111827",
-    letterSpacing: "0.27em",
-    textTransform: "uppercase",
-    fontSize: "clamp(13px, 1.6vw, 20px)",
-    fontWeight: 800,
-    textShadow: "0 1px 0 rgba(255,255,255,0.20)",
-  },
-
-  heroStats: {
-    marginTop: 28,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(176px, 1fr))",
-    gap: 12,
+  description: {
+    margin: "18px 0 0",
+    color: "#e2e8f0",
+    fontSize: "clamp(16px, 4vw, 20px)",
+    lineHeight: 1.6,
     maxWidth: 780,
   },
-
-  heroStat: {
-    padding: 14,
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.13)",
-    border: "1px solid rgba(255,255,255,0.24)",
-    backdropFilter: "blur(14px)",
-    textAlign: "left",
+  heroMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 12,
+    marginTop: 26,
+    maxWidth: 920,
   },
-
-  heroStatLabel: {
-    display: "block",
-    marginBottom: 6,
-    color: "rgba(255,255,255,0.68)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    fontWeight: 900,
+  metaCard: {
+    padding: 15,
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    display: "grid",
+    gap: 6,
+    backdropFilter: "blur(12px)",
+    minWidth: 0,
+  },
+  metaLabel: {
+    color: "#cbd5e1",
     fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
   },
-
-  heroStatValue: {
-    display: "block",
+  heroFooter: {
+    marginTop: 20,
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "16px 18px",
+    borderRadius: 20,
+    background: "rgba(15,23,42,0.74)",
     color: "#ffffff",
-    fontSize: 14,
-    lineHeight: 1.35,
+    display: "grid",
+    gap: 4,
+    backdropFilter: "blur(12px)",
+    boxSizing: "border-box",
   },
-
-  wrap: {
-    maxWidth: 1120,
-    margin: "24px auto 0",
-    padding: "0 24px 40px",
-    position: "relative",
-    zIndex: 3,
+  contentWrap: {
+    maxWidth: 1220,
+    margin: "0 auto",
+    padding: "0 16px",
+    boxSizing: "border-box",
   },
-
+  noticeCard: {
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
+    margin: "22px 0 18px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  noticeTitle: {
+    margin: 0,
+    fontSize: "clamp(21px, 6vw, 26px)",
+    color: "#0f172a",
+    letterSpacing: "-0.03em",
+  },
+  noticeText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.6,
+  },
+  noticeChip: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+    width: "min(100%, 260px)",
+  },
   contentGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
     gap: 18,
     marginBottom: 18,
   },
-
   card: {
     padding: 22,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid rgba(13,27,61,0.10)",
-    boxShadow: "0 18px 46px rgba(15,23,42,0.10)",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.08)",
   },
-
-  sectionKicker: {
-    margin: "0 0 14px",
-    color: "#0d1b3d",
-    letterSpacing: "0.16em",
-    textTransform: "uppercase",
-    fontSize: 18,
-    fontWeight: 900,
-  },
-
   infoRow: {
     margin: "0 0 8px",
     fontSize: 16,
     lineHeight: 1.45,
   },
-
-  description: {
+  detailDescription: {
     margin: "16px 0 0",
     color: "#475569",
     whiteSpace: "pre-line",
@@ -578,30 +544,25 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.7,
     fontWeight: 600,
   },
-
   ticketPanel: {
     padding: 22,
     borderRadius: 24,
-    background: "linear-gradient(180deg, #0d1b3d 0%, #132957 100%)",
-    border: "1px solid rgba(200,162,74,0.42)",
-    boxShadow: "0 18px 46px rgba(15,23,42,0.14)",
+    background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)",
+    color: "#ffffff",
+    border: "1px solid rgba(251,191,36,0.24)",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.12)",
   },
-
-  panelTitle: {
+  ticketPanelTitle: {
     margin: "0 0 14px",
-    color: "#f7d98a",
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    fontSize: 18,
-    fontWeight: 900,
+    color: "#fef3c7",
+    fontSize: "clamp(21px, 6vw, 26px)",
+    letterSpacing: "-0.03em",
   },
-
   stack: {
     display: "grid",
     gap: 10,
   },
-
-  listItem: {
+  ticketItem: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -612,32 +573,25 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
   },
-
   pricePill: {
     whiteSpace: "nowrap",
     borderRadius: 999,
     padding: "7px 11px",
-    background: "rgba(200,162,74,0.18)",
-    border: "1px solid rgba(200,162,74,0.42)",
-    color: "#f7d98a",
+    background: "rgba(251,191,36,0.16)",
+    border: "1px solid rgba(251,191,36,0.32)",
+    color: "#fef3c7",
     fontSize: 13,
   },
-
   muted: {
-    margin: "5px 0 0",
     color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
   },
-
   mutedLight: {
     margin: "5px 0 0",
     color: "rgba(255,255,255,0.72)",
     fontSize: 14,
     lineHeight: 1.45,
   },
-
-  emptyBox: {
+  emptyDark: {
     padding: 14,
     borderRadius: 14,
     background: "rgba(255,255,255,0.10)",
@@ -646,37 +600,33 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
   },
-
-  successBox: {
+  successCard: {
     padding: 16,
-    borderRadius: 18,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-    color: "#065f46",
-    marginBottom: 18,
-    lineHeight: 1.5,
-    boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
+    borderRadius: 22,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontWeight: 950,
+    marginTop: 18,
+    marginBottom: 16,
   },
-
-  cancelBox: {
+  errorCard: {
     padding: 16,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    marginBottom: 18,
-    lineHeight: 1.5,
-    boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
+    borderRadius: 22,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontWeight: 950,
+    marginTop: 18,
+    marginBottom: 16,
   },
-
   bookSection: {
     padding: 22,
     borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 46px rgba(15,23,42,0.10)",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.08)",
   },
-
   bookHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -685,16 +635,14 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 18,
   },
-
   bookTitle: {
     margin: 0,
-    color: "#0d1b3d",
-    fontSize: 34,
+    color: "#0f172a",
+    fontSize: "clamp(26px, 7vw, 34px)",
     lineHeight: 1.08,
     letterSpacing: "-0.045em",
-    fontWeight: 900,
+    fontWeight: 950,
   },
-
   bookText: {
     margin: "8px 0 0",
     color: "#64748b",
@@ -702,17 +650,14 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 700,
   },
-
   checkoutBadge: {
     padding: "10px 14px",
     borderRadius: 999,
-    background: "#0d1b3d",
+    background: "#0f172a",
     color: "#ffffff",
     fontWeight: 900,
     fontSize: 13,
-    border: "1px solid rgba(200,162,74,0.45)",
   },
-
   emptyLarge: {
     padding: 26,
     borderRadius: 16,
