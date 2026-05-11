@@ -1,30 +1,28 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { deleteEvent, listEvents } from '../../../../api/_lib/events-repo'
+import { listEvents } from "../../../../api/_lib/events-repo";
 
-function moneyFromCents(cents: number | null | undefined) {
-  return `£${(Number(cents || 0) / 100).toFixed(2)}`;
+function formatMoney(
+  cents: number | null | undefined,
+  currency: string | null | undefined,
+) {
+  return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
 }
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not set";
 
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function eventTypeLabel(type: string) {
-  if (type === "reserved_seating") return "Reserved seating";
-  if (type === "tables") return "Tables";
-  return "General admission";
 }
 
 function getStatusStyle(status: string | null | undefined): CSSProperties {
@@ -53,24 +51,6 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   };
 }
 
-function getEventIcon(type: string) {
-  if (type === "reserved_seating") return "🎭";
-  if (type === "tables") return "🍽️";
-  return "🎫";
-}
-
-async function deleteEventAction(formData: FormData) {
-  "use server";
-
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
-
-  const id = String(formData.get("id") || "").trim();
-  if (id) await deleteEvent(id);
-
-  redirect("/admin/events");
-}
-
 export default async function AdminEventsPage() {
   const session = await auth();
 
@@ -79,8 +59,9 @@ export default async function AdminEventsPage() {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((v) => String(v))
+    ? session.user.tenantSlugs.map((value) => String(value))
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
@@ -89,9 +70,14 @@ export default async function AdminEventsPage() {
 
   const events = await listEvents(tenantSlug);
 
-  const published = events.filter((event) => event.status === "published").length;
-  const draft = events.filter((event) => event.status === "draft").length;
-  const closed = events.filter((event) => event.status === "closed").length;
+  const publishedCount = events.filter(
+    (event) => event.status === "published",
+  ).length;
+
+  const totalCapacity = events.reduce(
+    (sum, event) => sum + Number(event.capacity || 0),
+    0,
+  );
 
   return (
     <main style={styles.page}>
@@ -123,6 +109,10 @@ export default async function AdminEventsPage() {
             Events
           </Link>
 
+          <Link href="/admin/auctions" style={styles.navButton}>
+            Auctions
+          </Link>
+
           <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
             Public campaigns page
           </Link>
@@ -135,15 +125,17 @@ export default async function AdminEventsPage() {
 
       <section style={styles.statsGrid}>
         <StatCard label="Total events" value={events.length} />
-        <StatCard label="Published" value={published} />
-        <StatCard label="Draft" value={draft} />
-        <StatCard label="Closed" value={closed} />
+        <StatCard label="Published" value={publishedCount} />
+        <StatCard label="Combined capacity" value={totalCapacity} />
       </section>
 
       {events.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0 }}>No events yet</h2>
-          <p style={styles.muted}>Create your first event.</p>
+
+          <p style={styles.muted}>
+            Create your first fundraising event.
+          </p>
 
           <Link href="/admin/events/new" style={styles.createButton}>
             + Create event
@@ -162,9 +154,7 @@ export default async function AdminEventsPage() {
                       style={styles.image}
                     />
                   ) : (
-                    <div style={styles.imageEmpty}>
-                      {getEventIcon(event.event_type)}
-                    </div>
+                    <div style={styles.imageEmpty}>🎟️</div>
                   )}
                 </div>
 
@@ -188,12 +178,39 @@ export default async function AdminEventsPage() {
                     </span>
                   </div>
 
+                  {event.description ? (
+                    <p style={styles.description}>
+                      {event.description.length > 150
+                        ? `${event.description.slice(0, 150)}…`
+                        : event.description}
+                    </p>
+                  ) : null}
+
                   <div style={styles.detailGrid}>
-                    <Detail label="Type" value={eventTypeLabel(event.event_type)} />
-                    <Detail label="Date" value={formatDate(event.starts_at)} />
-                    <Detail label="Location" value={event.location || "Not set"} />
-                    <Detail label="Currency" value={event.currency || "GBP"} />
-                    <Detail label="Starting from" value={moneyFromCents(0)} />
+                    <Detail
+                      label="Starts"
+                      value={formatDate(event.starts_at)}
+                    />
+
+                    <Detail
+                      label="Ends"
+                      value={formatDate(event.ends_at)}
+                    />
+
+                    <Detail
+                      label="Capacity"
+                      value={event.capacity || 0}
+                    />
+
+                    <Detail
+                      label="Currency"
+                      value={event.currency || "GBP"}
+                    />
+
+                    <Detail
+                      label="Type"
+                      value={event.event_type || "general"}
+                    />
                   </div>
 
                   <div style={styles.actions}>
@@ -201,7 +218,7 @@ export default async function AdminEventsPage() {
                       href={`/admin/events/${event.id}`}
                       style={styles.openButton}
                     >
-                      Manage
+                      Open details
                     </Link>
 
                     <a
@@ -212,13 +229,6 @@ export default async function AdminEventsPage() {
                     >
                       View campaign page
                     </a>
-
-                    <form action={deleteEventAction} style={styles.deleteForm}>
-                      <input type="hidden" name="id" value={event.id} />
-                      <button type="submit" style={styles.deleteButton}>
-                        Delete
-                      </button>
-                    </form>
                   </div>
                 </div>
               </div>
@@ -230,7 +240,7 @@ export default async function AdminEventsPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statLabel}>{label}</div>
@@ -239,7 +249,7 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -409,6 +419,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     textTransform: "capitalize",
   },
+  description: {
+    marginTop: 12,
+    color: "#475569",
+    lineHeight: 1.6,
+  },
   detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
@@ -435,7 +450,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    marginTop: 16,
+    marginTop: 18,
   },
   openButton: {
     padding: "12px 16px",
@@ -453,18 +468,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
-  },
-  deleteForm: {
-    margin: 0,
-  },
-  deleteButton: {
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "#dc2626",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 900,
-    cursor: "pointer",
   },
   emptyCard: {
     padding: 24,
