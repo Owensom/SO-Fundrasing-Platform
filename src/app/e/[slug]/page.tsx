@@ -20,6 +20,7 @@ type PageProps = {
 };
 
 const TABLE_SHAPE_KEY = "__table_shape";
+const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
 function formatDate(value: string | null) {
   if (!value) return "Date to be confirmed";
@@ -67,6 +68,7 @@ export default async function EventSlugPage({
   );
 
   const seats = event.seats || [];
+  const hasCustomImage = Boolean(event.image_url);
 
   const tableShape =
     event.table_names_json?.[TABLE_SHAPE_KEY] === "square" ||
@@ -118,20 +120,26 @@ export default async function EventSlugPage({
         </div>
 
         <Card>
-          {event.image_url ? (
-            <img
-              src={event.image_url}
-              alt={event.title}
-              style={{
-               ...styles.heroImage,
-               objectPosition: `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`,
-             }}
-              />
-          ) : (
-            <div style={styles.heroFallback}>🎫</div>
-          )}
+          <img
+            src={event.image_url || DEFAULT_EVENTS_IMAGE}
+            alt={event.title || "SO Events"}
+            style={{
+              ...styles.heroImage,
+              objectFit: hasCustomImage ? "cover" : "contain",
+              objectPosition: hasCustomImage
+                ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
+                : "center",
+              padding: hasCustomImage ? 0 : 40,
+              background: hasCustomImage
+                ? "#f8fafc"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+              boxSizing: "border-box",
+            }}
+          />
 
-          <h1 style={styles.title}>{event.title}</h1>
+          <h1 className="so-brand-heading" style={styles.title}>
+            {event.title}
+          </h1>
 
           <div style={styles.infoBox}>
             <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
@@ -176,7 +184,9 @@ export default async function EventSlugPage({
           )}
 
           <section style={styles.orangePanel}>
-            <h2 style={styles.panelTitle}>Tickets</h2>
+            <h2 className="so-brand-card-title" style={styles.panelTitle}>
+              Tickets
+            </h2>
 
             <div style={styles.stack}>
               {ticketTypes.length === 0 ? (
@@ -205,7 +215,7 @@ export default async function EventSlugPage({
           <section id="book" style={styles.bookSection}>
             <div style={styles.bookHeader}>
               <div>
-                <h2 style={styles.bookTitle}>
+                <h2 className="so-brand-card-title" style={styles.bookTitle}>
                   {event.event_type === "tables"
                     ? "Choose your table seats"
                     : event.event_type === "reserved_seating"
@@ -339,19 +349,8 @@ const styles: Record<string, CSSProperties> = {
   heroImage: {
     width: "100%",
     height: 340,
-    objectFit: "cover",
     borderRadius: 18,
     display: "block",
-  },
-  heroFallback: {
-    width: "100%",
-    height: 300,
-    borderRadius: 18,
-    background: "linear-gradient(135deg, #fed7aa, #fdba74, #fb7185)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 64,
   },
   title: {
     margin: "22px 0 14px",
