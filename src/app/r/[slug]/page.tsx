@@ -11,9 +11,5 @@ type PageProps = {
 export default async function RaffleSlugPage({ params }: PageProps) {
   const { slug } = await params;
 
-  return (
-    <div style={{ padding: 24, background: "#ffffff", minHeight: "100vh" }}>
-      <PublicRafflePage slug={slug} />
-    </div>
-  );
+  return <PublicRafflePage slug={slug} />;
 }
