@@ -8,9 +8,9 @@ type PageProps = {
   params: Promise<{
     tenantSlug: string;
   }>;
-  searchParams?: {
+  searchParams?: Promise<{
     adminReturn?: string;
-  };
+  }>;
 };
 
 type Campaign = {
@@ -27,7 +27,9 @@ type Campaign = {
 
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -36,7 +38,8 @@ function getDefaultImage(type: Campaign["type"]) {
   if (type === "squares") return "/brand/so-default-squares.png";
   if (type === "event") return "/brand/so-default-events.png";
   if (type === "auction") return "/brand/so-default-auctions.png";
-  return "/brand/so-logo-default-full.png";
+
+  return "/brand/so-logo-full.png";
 }
 
 function getImageStyle(campaign: Campaign): CSSProperties {
@@ -65,6 +68,7 @@ function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "squares") return `/s/${campaign.slug}`;
   if (campaign.type === "event") return `/e/${campaign.slug}`;
   if (campaign.type === "auction") return `/a/${campaign.slug}`;
+
   return "#";
 }
 
@@ -72,12 +76,15 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
-  return "Auction";
+  if (type === "auction") return "Auction";
+
+  return "Campaign";
 }
 
 function getSafeAdminReturn(value?: string) {
   if (!value) return "";
   if (value.startsWith("/admin/")) return value;
+
   return "";
 }
 
@@ -87,7 +94,9 @@ export default async function TenantCampaignsPage({
 }: PageProps) {
   const { tenantSlug } = await params;
 
-  const adminReturn = getSafeAdminReturn(searchParams?.adminReturn);
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const adminReturn = getSafeAdminReturn(resolvedSearchParams?.adminReturn);
+
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
 
   const publicCampaigns = campaigns.filter(
@@ -132,6 +141,7 @@ export default async function TenantCampaignsPage({
           <h2 className="so-brand-card-title" style={{ margin: 0 }}>
             No active campaigns found
           </h2>
+
           <p style={styles.muted}>
             This organiser has no published campaigns at the moment.
           </p>
