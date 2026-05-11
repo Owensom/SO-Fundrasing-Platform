@@ -39,7 +39,7 @@ const PRESET_COLOURS = [
   "Silver",
 ];
 
-const DEFAULT_TICKET_IMAGE = "/brand/so-ticket-placeholder.png";
+const DEFAULT_TICKET_IMAGE = "/brand/so-default-raffles.png";
 
 function safeId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
