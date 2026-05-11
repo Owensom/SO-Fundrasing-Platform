@@ -1363,14 +1363,14 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
     textAlign: "center",
   },
-  emptyTicketImage: {
-    width: 78,
-    height: 78,
-    objectFit: "contain",
-    display: "block",
-    margin: "0 auto 10px",
-    filter: "drop-shadow(0 12px 22px rgba(0,0,0,0.28))",
-  },
+ emptyTicketImage: {
+  width: 150,
+  height: 96,
+  objectFit: "contain",
+  display: "block",
+  margin: "0 auto 12px",
+  filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.32))",
+},
   emptyTitle: {
     margin: "8px 0 0",
     color: "#ffffff",
