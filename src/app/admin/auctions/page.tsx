@@ -88,7 +88,7 @@ export default async function AdminAuctionsPage() {
         <div>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 style={styles.title}>Manage silent auctions</h1>
+          <h1 style={styles.title}>Manage auctions</h1>
 
           <p style={styles.subtitle}>
             Tenant: <strong>{tenantSlug}</strong>
@@ -113,7 +113,7 @@ export default async function AdminAuctionsPage() {
           </Link>
 
           <Link href="/admin/auctions" style={styles.navButtonActive}>
-            Silent auctions
+            Auctions
           </Link>
 
           <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
@@ -135,9 +135,9 @@ export default async function AdminAuctionsPage() {
 
       {auctions.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0 }}>No silent auctions yet</h2>
+          <h2 style={{ margin: 0 }}>No auctions yet</h2>
           <p style={styles.muted}>
-            Create your first silent auction campaign.
+            Create your first auction campaign.
           </p>
 
           <Link href="/admin/auctions/new" style={styles.createButton}>
