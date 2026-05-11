@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
+const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
+
 type Auction = {
   id: string;
   tenant_slug: string;
@@ -288,18 +290,22 @@ export default function PublicAuctionPage({ params }: Props) {
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
-        {auction.image_url ? (
-          <img
-            src={auction.image_url}
-            alt={auction.title}
-            style={{
-              ...styles.heroBackgroundImage,
-              objectPosition: `${focusValue(auction.image_focus_x)}% ${focusValue(
-                auction.image_focus_y,
-              )}%`,
-            }}
-          />
-        ) : null}
+        <img
+          src={auction.image_url || DEFAULT_AUCTION_IMAGE}
+          alt={auction.title}
+          style={{
+            ...styles.heroBackgroundImage,
+            objectPosition: auction.image_url
+              ? `${focusValue(auction.image_focus_x)}% ${focusValue(
+                  auction.image_focus_y,
+                )}%`
+              : "center",
+            objectFit: auction.image_url ? "cover" : "contain",
+            background: auction.image_url
+              ? "#0f172a"
+              : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+          }}
+        />
 
         <div style={styles.heroOverlay} />
 
@@ -396,20 +402,24 @@ export default function PublicAuctionPage({ params }: Props) {
               return (
                 <article key={item.id} style={styles.itemCard}>
                   <div style={styles.itemImageWrap}>
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.title}
-                        style={{
-                          ...styles.image,
-                          objectPosition: `${focusValue(
-                            item.image_focus_x,
-                          )}% ${focusValue(item.image_focus_y)}%`,
-                        }}
-                      />
-                    ) : (
-                      <div style={styles.itemImageEmpty}>🎁</div>
-                    )}
+                    <img
+                      src={item.image_url || DEFAULT_AUCTION_IMAGE}
+                      alt={item.title}
+                      style={{
+                        ...styles.image,
+                        objectPosition: item.image_url
+                          ? `${focusValue(item.image_focus_x)}% ${focusValue(
+                              item.image_focus_y,
+                            )}%`
+                          : "center",
+                        objectFit: item.image_url ? "cover" : "contain",
+                        background: item.image_url
+                          ? "#f1f5f9"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+                        padding: item.image_url ? 0 : 24,
+                        boxSizing: "border-box",
+                      }}
+                    />
 
                     <div style={styles.lotBadge}>
                       Lot {item.sort_order || index + 1}
@@ -580,13 +590,13 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    display: "block",
   },
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(15,23,42,0.58) 42%, rgba(15,23,42,0.94) 100%)",
+      "linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.5) 42%, rgba(15,23,42,0.94) 100%)",
   },
   heroInner: {
     position: "relative",
@@ -802,7 +812,6 @@ const styles: Record<string, CSSProperties> = {
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
   },
   lotBadge: {
@@ -815,15 +824,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 13,
     fontWeight: 950,
-  },
-  itemImageEmpty: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 44,
-    color: "#94a3b8",
   },
   itemBody: {
     padding: "clamp(16px, 5vw, 22px)",
