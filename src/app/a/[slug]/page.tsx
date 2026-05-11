@@ -301,6 +301,8 @@ export default function PublicAuctionPage({ params }: Props) {
                 )}%`
               : "center",
             objectFit: auction.image_url ? "cover" : "contain",
+            padding: auction.image_url ? 0 : 26,
+            boxSizing: "border-box",
             background: auction.image_url
               ? "#0f172a"
               : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
@@ -370,7 +372,7 @@ export default function PublicAuctionPage({ params }: Props) {
         {error ? <section style={styles.errorCard}>{error}</section> : null}
 
         <section style={styles.noticeCard}>
-          <div>
+          <div style={styles.noticeTextBlock}>
             <h2 style={styles.noticeTitle}>{availability.label}</h2>
             <p style={styles.noticeText}>{availability.message}</p>
           </div>
@@ -428,7 +430,7 @@ export default function PublicAuctionPage({ params }: Props) {
 
                   <div style={styles.itemBody}>
                     <div style={styles.itemTop}>
-                      <div>
+                      <div style={styles.itemTitleWrap}>
                         <h2 style={styles.itemTitle}>{item.title}</h2>
 
                         {item.donor_name ? (
@@ -574,13 +576,13 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at top left, rgba(251,191,36,0.18), transparent 34%), radial-gradient(circle at 80% 8%, rgba(22,131,248,0.1), transparent 28%), #f8fafc",
     minHeight: "100vh",
-    paddingBottom: 64,
+    paddingBottom: 48,
     overflowX: "hidden",
   },
   hero: {
     position: "relative",
     width: "100%",
-    minHeight: "clamp(520px, 78vh, 760px)",
+    minHeight: "clamp(430px, 68vh, 740px)",
     overflow: "hidden",
     display: "flex",
     alignItems: "flex-end",
@@ -596,7 +598,7 @@ const styles: Record<string, CSSProperties> = {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.5) 42%, rgba(15,23,42,0.94) 100%)",
+      "linear-gradient(180deg, rgba(15,23,42,0.14) 0%, rgba(15,23,42,0.52) 46%, rgba(15,23,42,0.94) 100%)",
   },
   heroInner: {
     position: "relative",
@@ -604,13 +606,13 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     maxWidth: 1220,
     margin: "0 auto",
-    padding: "96px 16px 34px",
+    padding: "72px 14px 28px",
     color: "#ffffff",
     boxSizing: "border-box",
   },
   backLink: {
     display: "inline-flex",
-    marginBottom: 16,
+    marginBottom: 14,
     padding: "10px 14px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
@@ -620,13 +622,15 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 13,
     backdropFilter: "blur(10px)",
+    maxWidth: "100%",
+    boxSizing: "border-box",
   },
   badgeRow: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   badge: {
     display: "inline-flex",
@@ -650,35 +654,38 @@ const styles: Record<string, CSSProperties> = {
   title: {
     margin: 0,
     maxWidth: 900,
-    fontSize: "clamp(42px, 13vw, 96px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.07em",
+    fontSize: "clamp(34px, 11vw, 96px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.065em",
     fontWeight: 1000,
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   description: {
-    margin: "18px 0 0",
+    margin: "16px 0 0",
     color: "#e2e8f0",
-    fontSize: "clamp(16px, 4vw, 20px)",
-    lineHeight: 1.6,
+    fontSize: "clamp(15px, 4vw, 20px)",
+    lineHeight: 1.55,
     maxWidth: 780,
+    overflowWrap: "anywhere",
   },
   heroMeta: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 12,
-    marginTop: 26,
+    gap: 10,
+    marginTop: 22,
     maxWidth: 920,
   },
   metaCard: {
-    padding: 15,
-    borderRadius: 20,
+    padding: 14,
+    borderRadius: 18,
     background: "rgba(255,255,255,0.1)",
     border: "1px solid rgba(255,255,255,0.14)",
     display: "grid",
     gap: 6,
     backdropFilter: "blur(12px)",
     minWidth: 0,
+    overflowWrap: "anywhere",
   },
   metaLabel: {
     color: "#cbd5e1",
@@ -688,47 +695,55 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.06em",
   },
   heroFooter: {
-    marginTop: 20,
+    marginTop: 18,
     width: "fit-content",
     maxWidth: "100%",
-    padding: "16px 18px",
-    borderRadius: 20,
+    padding: "14px 16px",
+    borderRadius: 18,
     background: "rgba(15,23,42,0.74)",
     color: "#ffffff",
     display: "grid",
     gap: 4,
     backdropFilter: "blur(12px)",
     boxSizing: "border-box",
+    overflowWrap: "anywhere",
   },
   contentWrap: {
     maxWidth: 1220,
     margin: "0 auto",
-    padding: "0 16px",
+    padding: "0 14px",
     boxSizing: "border-box",
+    width: "100%",
   },
   noticeCard: {
-    padding: 18,
-    borderRadius: 24,
+    padding: 16,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
-    margin: "22px 0 18px",
+    margin: "18px 0",
     display: "flex",
     justifyContent: "space-between",
-    gap: 16,
+    gap: 14,
     flexWrap: "wrap",
     alignItems: "center",
+  },
+  noticeTextBlock: {
+    minWidth: 0,
+    flex: "1 1 260px",
   },
   noticeTitle: {
     margin: 0,
     fontSize: "clamp(21px, 6vw, 26px)",
     color: "#0f172a",
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
   noticeText: {
     margin: "8px 0 0",
     color: "#475569",
-    lineHeight: 1.6,
+    lineHeight: 1.55,
+    overflowWrap: "anywhere",
   },
   noticeChip: {
     padding: 14,
@@ -738,7 +753,8 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 5,
     minWidth: 0,
-    width: "min(100%, 260px)",
+    width: "min(100%, 300px)",
+    overflowWrap: "anywhere",
   },
   successCard: {
     padding: 16,
@@ -759,12 +775,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     marginTop: 18,
     marginBottom: 16,
+    overflowWrap: "anywhere",
   },
   loadingCard: {
     maxWidth: 560,
     margin: "80px auto",
-    padding: 32,
-    borderRadius: 30,
+    padding: 28,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     textAlign: "center",
@@ -786,17 +803,18 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    overflowWrap: "anywhere",
   },
   muted: {
     color: "#64748b",
   },
   itemsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
-    gap: 20,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 18,
   },
   itemCard: {
-    borderRadius: 28,
+    borderRadius: 26,
     overflow: "hidden",
     background: "#ffffff",
     border: "1px solid #e2e8f0",
@@ -806,7 +824,7 @@ const styles: Record<string, CSSProperties> = {
   itemImageWrap: {
     position: "relative",
     width: "100%",
-    height: "clamp(220px, 54vw, 300px)",
+    height: "clamp(210px, 56vw, 300px)",
     background: "#f1f5f9",
   },
   image: {
@@ -835,6 +853,10 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+  itemTitleWrap: {
+    minWidth: 0,
+    flex: "1 1 220px",
+  },
   itemTitle: {
     margin: 0,
     fontSize: "clamp(23px, 7vw, 30px)",
@@ -842,10 +864,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     letterSpacing: "-0.035em",
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   donor: {
     margin: "7px 0 0",
     color: "#64748b",
+    overflowWrap: "anywhere",
   },
   itemStatus: {
     display: "inline-flex",
@@ -855,20 +879,23 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "capitalize",
     whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   itemDescription: {
     color: "#334155",
-    lineHeight: 1.65,
+    lineHeight: 1.6,
     margin: "16px 0 0",
+    overflowWrap: "anywhere",
   },
   bidFeature: {
     marginTop: 18,
-    padding: 18,
-    borderRadius: 22,
+    padding: 16,
+    borderRadius: 20,
     background: "linear-gradient(135deg, #0f172a, #1e293b)",
     color: "#ffffff",
     display: "grid",
     gap: 5,
+    overflowWrap: "anywhere",
   },
   bidStats: {
     display: "grid",
@@ -883,6 +910,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 4,
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   bidForm: {
     display: "grid",
@@ -892,6 +921,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   formGrid: {
     display: "grid",
@@ -903,6 +933,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 7,
     color: "#0f172a",
     fontWeight: 900,
+    minWidth: 0,
   },
   input: {
     width: "100%",
@@ -913,6 +944,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 16,
     color: "#0f172a",
     background: "#ffffff",
+    minWidth: 0,
   },
   checkboxLabel: {
     display: "flex",
@@ -921,6 +953,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontWeight: 750,
     lineHeight: 1.5,
+    overflowWrap: "anywhere",
   },
   bidButton: {
     width: "100%",
@@ -942,10 +975,11 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     border: "1px solid #e2e8f0",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
   termsCard: {
     marginTop: 18,
-    padding: 22,
+    padding: 20,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
@@ -956,5 +990,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     lineHeight: 1.65,
     margin: "10px 0 0",
+    overflowWrap: "anywhere",
   },
 };
