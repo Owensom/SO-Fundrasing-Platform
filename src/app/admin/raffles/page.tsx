@@ -6,6 +6,7 @@ import { headers, cookies } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
+const TICKET_LOGO_IMAGE = "/brand/so-ticket-placeholder.png";
 
 type RaffleItem = {
   id: string;
@@ -208,7 +209,7 @@ export default async function AdminRafflesPage() {
         <StatCard
           label="Total raffles"
           value={totalRaffles}
-          icon="🎟️"
+          image={TICKET_LOGO_IMAGE}
           accent="#1683f8"
           tint="#eff6ff"
         />
@@ -395,12 +396,14 @@ function StatCard({
   label,
   value,
   icon,
+  image,
   accent,
   tint,
 }: {
   label: string;
   value: ReactNode;
-  icon: string;
+  icon?: string;
+  image?: string;
   accent: string;
   tint: string;
 }) {
@@ -423,9 +426,24 @@ function StatCard({
             background: tint,
             color: accent,
             borderColor: accent,
+            padding: image ? 4 : 0,
+            overflow: "hidden",
           }}
         >
-          {icon}
+          {image ? (
+            <img
+              src={image}
+              alt={label}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          ) : (
+            icon
+          )}
         </div>
       </div>
     </div>
