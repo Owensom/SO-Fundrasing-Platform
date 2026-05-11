@@ -2,6 +2,9 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const DEFAULT_TICKET_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/so-ticket-placeholder.png";
+
 type EmailBranding = {
   name?: string | null;
   logoUrl?: string | null;
@@ -89,6 +92,37 @@ function renderInfoRow(label: string, value: unknown) {
   `;
 }
 
+function renderTicketHero(label = "SO Fundraising Ticket") {
+  return `
+    <div style="
+      margin:0 auto 26px;
+      max-width:320px;
+      border-radius:24px;
+      background:linear-gradient(135deg,#ffffff 0%,#f8fafc 52%,#eff6ff 100%);
+      border:1px solid #dbeafe;
+      box-shadow:0 14px 34px rgba(15,23,42,0.08);
+      padding:18px;
+      text-align:center;
+    ">
+      <img
+        src="${DEFAULT_TICKET_IMAGE_URL}"
+        alt="${escapeHtml(label)}"
+        width="260"
+        style="
+          display:block;
+          width:100%;
+          max-width:260px;
+          height:auto;
+          margin:0 auto;
+          border:0;
+          outline:none;
+          text-decoration:none;
+        "
+      />
+    </div>
+  `;
+}
+
 function renderEmailShell(params: {
   branding?: EmailBranding;
   heading: string;
@@ -96,8 +130,11 @@ function renderEmailShell(params: {
   intro?: string;
   body: string;
   footer?: string;
+  ticketImageLabel?: string;
+  showTicketImage?: boolean;
 }) {
   const brand = getBranding(params.branding);
+  const showTicketImage = params.showTicketImage !== false;
 
   return `
     <!doctype html>
@@ -126,13 +163,15 @@ function renderEmailShell(params: {
             )};"></div>
 
             <div style="padding:30px 26px 28px;">
-              <div style="text-align:center;margin-bottom:28px;">
+              <div style="text-align:center;margin-bottom:22px;">
                 <img
                   src="${escapeHtml(brand.logoUrl)}"
                   alt="${escapeHtml(brand.name)}"
                   style="max-width:280px;width:100%;height:auto;display:block;margin:0 auto;"
                 />
               </div>
+
+              ${showTicketImage ? renderTicketHero(params.ticketImageLabel) : ""}
 
               ${
                 params.eyebrow
@@ -272,7 +311,7 @@ export async function sendReceiptEmail({
           background:#ffffff;
         ">
           <div style="font-size:16px;font-weight:800;color:#0f172a;">
-            🎟️ Ticket #${escapeHtml(ticket.ticket_number)}
+            Ticket #${escapeHtml(ticket.ticket_number)}
           </div>
           <div style="margin-top:5px;font-size:14px;color:#475569;">
             ${colourDot(ticket.colour)}${escapeHtml(colour)}
@@ -286,6 +325,7 @@ export async function sendReceiptEmail({
     branding,
     eyebrow: "Ticket confirmation",
     heading: "Payment successful",
+    ticketImageLabel: "Raffle ticket confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your raffle tickets are confirmed below.`,
     body: `
       <div style="
@@ -337,7 +377,6 @@ export async function sendReceiptEmail({
     console.error("receipt email failed", err);
   }
 }
-
 export async function sendWinnerEmail({
   to,
   name,
@@ -358,7 +397,8 @@ export async function sendWinnerEmail({
   const html = renderEmailShell({
     branding,
     eyebrow: "Winner notification",
-    heading: "🎉 You won!",
+    heading: "You won!",
+    ticketImageLabel: "Winning raffle ticket",
     intro: `Hi ${name || "there"}, congratulations — your ticket has been selected as a winner.`,
     body: `
       <div style="
@@ -446,7 +486,7 @@ export async function sendSquaresReceiptEmail({
           background:#ffffff;
         ">
           <div style="font-size:16px;font-weight:800;color:#0f172a;">
-            ◼️ Square #${escapeHtml(square)}
+            Square #${escapeHtml(square)}
           </div>
         </div>
       `,
@@ -457,6 +497,7 @@ export async function sendSquaresReceiptEmail({
     branding,
     eyebrow: "Squares confirmation",
     heading: "Payment successful",
+    ticketImageLabel: "Squares entry confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
     body: `
       <div style="
@@ -515,7 +556,8 @@ export async function sendSquaresWinnerEmail({
   const html = renderEmailShell({
     branding,
     eyebrow: "Winner notification",
-    heading: "🎉 You won!",
+    heading: "You won!",
+    ticketImageLabel: "Winning squares entry",
     intro: `Hi ${name || "there"}, congratulations — your square has been selected as a winner.`,
     body: `
       <div style="
@@ -615,7 +657,7 @@ export async function sendEventReceiptEmail({
           background:#ffffff;
         ">
           <div style="font-size:16px;font-weight:800;color:#0f172a;">
-            🎫 ${escapeHtml(ticket.label)}
+            ${escapeHtml(ticket.label)}
           </div>
           <div style="margin-top:5px;font-size:14px;color:#475569;">
             Quantity: ${escapeHtml(quantity)}
@@ -634,6 +676,7 @@ export async function sendEventReceiptEmail({
     branding,
     eyebrow: "Event ticket confirmation",
     heading: "Payment successful",
+    ticketImageLabel: "Event ticket confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your event tickets are confirmed below.`,
     body: `
       <div style="
@@ -686,7 +729,6 @@ export async function sendEventReceiptEmail({
     console.error("event receipt email failed", err);
   }
 }
-
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
@@ -713,6 +755,7 @@ export async function sendAuctionBidConfirmationEmail({
     branding,
     eyebrow: "Bid confirmation",
     heading: "Your bid has been placed",
+    ticketImageLabel: "Auction bid confirmation",
     intro: `Hi ${name || "there"}, thank you — your silent auction bid has been received.`,
     body: `
       <div style="
@@ -782,6 +825,7 @@ export async function sendAuctionOutbidEmail({
     branding,
     eyebrow: "Auction update",
     heading: "You have been outbid",
+    ticketImageLabel: "Auction update",
     intro: `Hi ${name || "there"}, another bidder has placed a higher bid on an item you were leading.`,
     body: `
       <div style="
@@ -845,7 +889,8 @@ export async function sendAuctionWinnerEmail({
   const html = renderEmailShell({
     branding,
     eyebrow: "Auction winner",
-    heading: "🎉 You are the winning bidder",
+    heading: "You are the winning bidder",
+    ticketImageLabel: "Winning auction notification",
     intro: `Hi ${name || "there"}, congratulations — you placed the winning bid in the silent auction.`,
     body: `
       <div style="
