@@ -91,15 +91,9 @@ export default async function AdminDashboardPage() {
     listAuctions(tenantSlug),
   ]);
 
-  const publishedRaffles = raffles.filter(
-    (item) => item.status === "published",
-  );
-  const publishedSquares = squares.filter(
-    (item) => item.status === "published",
-  );
-  const publishedEvents = events.filter(
-    (item) => item.status === "published",
-  );
+  const publishedRaffles = raffles.filter((item) => item.status === "published");
+  const publishedSquares = squares.filter((item) => item.status === "published");
+  const publishedEvents = events.filter((item) => item.status === "published");
   const publishedAuctions = auctions.filter(
     (item) => item.status === "published",
   );
@@ -157,9 +151,19 @@ export default async function AdminDashboardPage() {
           </p>
         </div>
 
-        <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.publicButton}>
-          Public campaigns page
-        </Link>
+        <div style={styles.headerActions}>
+          <Link href="/admin/metadata" style={styles.metadataButton}>
+            Admin metadata
+          </Link>
+
+          <Link
+            href={`/c/${tenantSlug}`}
+            target="_blank"
+            style={styles.publicButton}
+          >
+            Public campaigns page
+          </Link>
+        </div>
       </section>
 
       <section style={styles.statsGrid}>
@@ -188,6 +192,26 @@ export default async function AdminDashboardPage() {
         <StatCard label="Squares sold" value={squaresSold} />
 
         <StatCard label="Tickets remaining" value={totalRaffleTicketsRemaining} />
+      </section>
+
+      <section style={styles.financePanel}>
+        <div>
+          <p style={styles.financeKicker}>Finance and transaction metadata</p>
+
+          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            Detailed transaction breakdown
+          </h2>
+
+          <p style={styles.sectionText}>
+            Open the full metadata view for every tracked transaction, including
+            campaign type, supporter details, platform contribution, Stripe fees,
+            and organiser net estimate.
+          </p>
+        </div>
+
+        <Link href="/admin/metadata" style={styles.financeButton}>
+          View admin metadata →
+        </Link>
       </section>
 
       <section style={styles.dataPanel}>
@@ -343,6 +367,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     marginBottom: 26,
   },
+  headerActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
   badge: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -384,6 +414,19 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
   },
+  metadataButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+    boxShadow: "0 10px 22px rgba(15,23,42,0.16)",
+  },
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
@@ -408,6 +451,41 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     color: "#0f172a",
   },
+  financePanel: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 18,
+    flexWrap: "wrap",
+    padding: 22,
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 62%, #78350f 140%)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
+    marginBottom: 22,
+  },
+  financeKicker: {
+    margin: "0 0 8px",
+    color: "#fef3c7",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  financeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(2,6,23,0.22)",
+  },
   dataPanel: {
     padding: 22,
     borderRadius: 26,
@@ -426,6 +504,7 @@ const styles: Record<string, CSSProperties> = {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.55,
+    maxWidth: 760,
   },
   dataGrid: {
     display: "grid",
