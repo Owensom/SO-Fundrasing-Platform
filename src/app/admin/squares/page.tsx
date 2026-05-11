@@ -1,10 +1,11 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listSquaresGames } from "../../../../api/_lib/squares-repo";
+
+const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
 
 function formatMoney(
   cents: number | null | undefined,
@@ -179,25 +180,19 @@ export default async function AdminSquaresListPage() {
               <article key={game.id} style={styles.card}>
                 <div style={styles.cardTop}>
                   <div style={styles.imageWrap}>
-                    {game.image_url ? (
-                      <img
-                        src={game.image_url}
-                        alt={game.title}
-                        style={styles.image}
-                      />
-                    ) : (
-                      <div style={styles.defaultLogoWrap}>
-                        <Image
-                          src="/brand/so-squares-mark.png"
-                          alt="SO Squares"
-                          fill
-                          style={{
-                            objectFit: "contain",
-                            padding: "18px",
-                          }}
-                        />
-                      </div>
-                    )}
+                    <img
+                      src={game.image_url || DEFAULT_SQUARES_IMAGE}
+                      alt={game.title || "SO Squares"}
+                      style={{
+                        ...styles.image,
+                        objectFit: game.image_url ? "cover" : "contain",
+                        padding: game.image_url ? 0 : 12,
+                        background: game.image_url
+                          ? "#f1f5f9"
+                          : "linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f8fafc 100%)",
+                        boxSizing: "border-box",
+                      }}
+                    />
                   </div>
 
                   <div style={styles.cardMain}>
@@ -316,7 +311,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     minHeight: "100vh",
   },
-
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -325,7 +319,6 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 24,
   },
-
   badge: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -336,26 +329,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     marginBottom: 10,
   },
-
   title: {
     margin: 0,
     fontSize: 38,
     lineHeight: 1.1,
     color: "#0f172a",
   },
-
   subtitle: {
     margin: "10px 0 0",
     color: "#64748b",
   },
-
   nav: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     justifyContent: "flex-end",
   },
-
   navButton: {
     padding: "12px 18px",
     borderRadius: 999,
@@ -365,7 +354,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
   },
-
   navButtonActive: {
     padding: "12px 18px",
     borderRadius: 999,
@@ -375,7 +363,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
   },
-
   createButton: {
     display: "inline-flex",
     padding: "12px 18px",
@@ -386,14 +373,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
-
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 14,
     marginBottom: 22,
   },
-
   statCard: {
     padding: 18,
     borderRadius: 16,
@@ -401,25 +386,21 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-
   statLabel: {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 900,
   },
-
   statValue: {
     marginTop: 6,
     fontSize: 28,
     fontWeight: 950,
     color: "#0f172a",
   },
-
   list: {
     display: "grid",
     gap: 16,
   },
-
   card: {
     padding: 18,
     borderRadius: 22,
@@ -427,13 +408,11 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-
   cardTop: {
     display: "grid",
     gridTemplateColumns: "110px 1fr",
     gap: 18,
   },
-
   imageWrap: {
     width: 110,
     height: 110,
@@ -443,46 +422,31 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     position: "relative",
   },
-
-  defaultLogoWrap: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-    background:
-      "linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f8fafc 100%)",
-  },
-
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
   },
-
   cardMain: {
     minWidth: 0,
   },
-
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "flex-start",
   },
-
   cardTitle: {
     margin: 0,
     fontSize: 24,
     lineHeight: 1.15,
     color: "#0f172a",
   },
-
   slug: {
     margin: "4px 0 0",
     color: "#64748b",
     fontWeight: 700,
   },
-
   status: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -491,33 +455,28 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     textTransform: "capitalize",
   },
-
   detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
     marginTop: 14,
   },
-
   detail: {
     padding: 12,
     borderRadius: 14,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
-
   detailLabel: {
     color: "#64748b",
     fontSize: 12,
     fontWeight: 900,
   },
-
   detailValue: {
     marginTop: 4,
     color: "#0f172a",
     fontWeight: 900,
   },
-
   progressRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -526,11 +485,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 13,
   },
-
   progressLabel: {},
-
   progressPercent: {},
-
   progressTrack: {
     height: 10,
     background: "#e2e8f0",
@@ -538,20 +494,17 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     marginTop: 8,
   },
-
   progressFill: {
     height: "100%",
     background: "#16a34a",
     borderRadius: 999,
   },
-
   actions: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     marginTop: 16,
   },
-
   openButton: {
     padding: "12px 16px",
     borderRadius: 999,
@@ -560,7 +513,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
   },
-
   viewButton: {
     padding: "12px 16px",
     borderRadius: 999,
@@ -570,11 +522,9 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
   },
-
   deleteForm: {
     margin: 0,
   },
-
   deleteButton: {
     padding: "12px 16px",
     borderRadius: 999,
@@ -584,14 +534,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   emptyCard: {
     padding: 24,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
-
   muted: {
     color: "#64748b",
   },
