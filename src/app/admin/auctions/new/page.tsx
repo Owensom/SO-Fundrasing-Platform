@@ -154,19 +154,20 @@ export default async function NewAuctionPage() {
             </div>
           </div>
 
-          <div style={styles.grid}>
-            <label style={styles.label}>
-              Auction title
+          <div style={styles.fieldGrid}>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Auction title</span>
               <input
                 name="title"
                 required
                 placeholder="Friends of Anchor Silent Auction"
                 style={styles.input}
               />
+              <span style={styles.fieldHelpSpacer} />
             </label>
 
-            <label style={styles.label}>
-              Public slug
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Public slug</span>
               <input
                 name="slug"
                 placeholder="friends-of-anchor"
@@ -177,8 +178,8 @@ export default async function NewAuctionPage() {
               </span>
             </label>
 
-            <label style={styles.label}>
-              Status
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Status</span>
               <select name="status" defaultValue="draft" style={styles.input}>
                 <option value="draft">Draft — hidden from public bidding</option>
                 <option value="published">
@@ -188,34 +189,38 @@ export default async function NewAuctionPage() {
                   Closed — visible but not accepting bids
                 </option>
               </select>
+              <span style={styles.fieldHelpSpacer} />
             </label>
 
-            <label style={styles.label}>
-              Currency
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Currency</span>
               <input name="currency" defaultValue="GBP" style={styles.input} />
+              <span style={styles.fieldHelpSpacer} />
             </label>
 
-            <label style={styles.label}>
-              Opens
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Opens</span>
               <input
                 name="opens_at"
                 type="datetime-local"
                 style={styles.input}
               />
+              <span style={styles.fieldHelpSpacer} />
             </label>
 
-            <label style={styles.label}>
-              Closes
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Closes</span>
               <input
                 name="closes_at"
                 type="datetime-local"
                 style={styles.input}
               />
+              <span style={styles.fieldHelpSpacer} />
             </label>
           </div>
 
-          <label style={styles.label}>
-            Description
+          <label style={styles.fullWidthField}>
+            <span style={styles.fieldLabel}>Description</span>
             <textarea
               name="description"
               placeholder="Tell supporters what this auction is supporting and why their bids matter."
@@ -262,8 +267,8 @@ export default async function NewAuctionPage() {
             </div>
           </div>
 
-          <label style={styles.label}>
-            Terms / auction rules
+          <label style={styles.fullWidthField}>
+            <span style={styles.fieldLabel}>Terms / auction rules</span>
             <textarea
               name="terms_text"
               placeholder="Bids are binding. Winning bidders will be contacted after the auction closes. Payment and collection details will be confirmed by the organiser."
@@ -442,20 +447,39 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
   },
-  grid: {
+  fieldGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    columnGap: 14,
+    rowGap: 16,
+    alignItems: "start",
   },
-  label: {
+  field: {
+    display: "grid",
+    gridTemplateRows: "24px 58px 18px",
+    gap: 6,
+    color: "#0f172a",
+    fontWeight: 900,
+    minWidth: 0,
+  },
+  fullWidthField: {
     display: "grid",
     gap: 7,
-    marginTop: 14,
+    marginTop: 16,
     color: "#0f172a",
     fontWeight: 900,
   },
+  fieldLabel: {
+    display: "flex",
+    alignItems: "center",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 950,
+    lineHeight: 1.2,
+  },
   input: {
     width: "100%",
+    height: 58,
     boxSizing: "border-box",
     borderRadius: 14,
     border: "1px solid #cbd5e1",
@@ -480,6 +504,10 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 700,
+    lineHeight: 1.2,
+  },
+  fieldHelpSpacer: {
+    minHeight: 18,
   },
   uploadShell: {
     padding: 16,
