@@ -1,3 +1,4 @@
+import "./globals.css";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -19,15 +20,13 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-
         <link
           rel="preconnect"
           href="https://fonts.gstatic.com"
           crossOrigin=""
         />
-
         <link
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
       </head>
@@ -39,10 +38,9 @@ export default function RootLayout({
           background: "#f3f5f7",
           color: "#111111",
           fontFamily:
-            'Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            '"Sora", Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
-        {/* HEADER */}
         <header
           style={{
             width: "100%",
@@ -77,7 +75,6 @@ export default function RootLayout({
           </div>
         </header>
 
-        {/* MAIN CONTENT */}
         <main
           style={{
             minHeight: "calc(100vh - 180px)",
@@ -86,7 +83,6 @@ export default function RootLayout({
           {children}
         </main>
 
-        {/* FOOTER */}
         <footer
           style={{
             borderTop: "1px solid #e5e7eb",
@@ -135,19 +131,6 @@ export default function RootLayout({
               <Link href="/privacy" style={{ color: "#2563eb" }}>
                 Privacy
               </Link>
-            </div>
-
-            <div
-              style={{
-                marginTop: "16px",
-                fontFamily: '"Cinzel", Georgia, serif',
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                fontSize: "13px",
-                color: "#334155",
-              }}
-            >
-              POWERED BY SO FUNDRAISING PLATFORM
             </div>
 
             <div style={{ marginTop: "12px" }}>
