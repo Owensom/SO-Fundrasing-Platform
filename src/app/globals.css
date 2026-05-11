@@ -1,43 +1,33 @@
-@font-face {
-  font-family: "SO Display";
-  src: url("/fonts/so-display.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
+html,
+body {
+  margin: 0;
+  padding: 0;
 }
 
-@font-face {
-  font-family: "SO Display";
-  src: url("/fonts/so-display-bold.woff2") format("woff2");
-  font-weight: 700;
-  font-style: normal;
-}
-
-.so-brand-font {
-  font-family:
-    "SO Display",
-    Arial,
-    Helvetica,
-    sans-serif;
+* {
+  box-sizing: border-box;
 }
 
 .so-brand-heading {
   font-family:
-    "SO Display",
+    "Sora",
     Arial,
     Helvetica,
+    ui-sans-serif,
+    system-ui,
     sans-serif;
-
-  letter-spacing: -0.04em;
-  font-weight: 900;
+  letter-spacing: -0.045em;
+  font-weight: 800;
 }
 
 .so-brand-card-title {
   font-family:
-    "SO Display",
+    "Sora",
     Arial,
     Helvetica,
+    ui-sans-serif,
+    system-ui,
     sans-serif;
-
-  letter-spacing: -0.025em;
-  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-weight: 700;
 }
