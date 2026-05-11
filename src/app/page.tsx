@@ -1,3 +1,22 @@
+const features = [
+  {
+    title: "Raffles",
+    text: "Premium online raffles with Stripe checkout and live draws.",
+  },
+  {
+    title: "Squares",
+    text: "Interactive fundraising squares with automated winner selection.",
+  },
+  {
+    title: "Auctions",
+    text: "Run silent auctions with item listings, bids, and premium fundraising moments.",
+  },
+  {
+    title: "Events",
+    text: "Elegant ticketing, seating plans, and gala event management.",
+  },
+];
+
 export default function HomePage() {
   return (
     <main
@@ -14,11 +33,10 @@ export default function HomePage() {
       <section
         style={{
           width: "100%",
-          maxWidth: "1200px",
+          maxWidth: "1280px",
           textAlign: "center",
         }}
       >
-        {/* HERO TITLE */}
         <h1
           style={{
             margin: 0,
@@ -28,8 +46,7 @@ export default function HomePage() {
             letterSpacing: "-0.04em",
             color: "#ffffff",
             textTransform: "uppercase",
-            textShadow:
-              `
+            textShadow: `
               -1px -1px 0 #c8a24a,
                1px -1px 0 #c8a24a,
               -1px  1px 0 #c8a24a,
@@ -41,7 +58,6 @@ export default function HomePage() {
           SO Fundraising
         </h1>
 
-        {/* BRAND SUBTITLE */}
         <div
           style={{
             marginTop: "12px",
@@ -55,7 +71,6 @@ export default function HomePage() {
           Platform
         </div>
 
-        {/* LUXURY DIVIDER */}
         <div
           style={{
             width: "220px",
@@ -66,7 +81,6 @@ export default function HomePage() {
           }}
         />
 
-        {/* TAGLINE */}
         <p
           style={{
             maxWidth: "780px",
@@ -81,7 +95,6 @@ export default function HomePage() {
           auctions, and fundraising events.
         </p>
 
-        {/* CTA BUTTONS */}
         <div
           style={{
             marginTop: "42px",
@@ -135,29 +148,15 @@ export default function HomePage() {
           </a>
         </div>
 
-        {/* FEATURE CARDS */}
         <div
           style={{
             marginTop: "80px",
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
             gap: "24px",
           }}
         >
-          {[
-            {
-              title: "Raffles",
-              text: "Premium online raffles with Stripe checkout and live draws.",
-            },
-            {
-              title: "Squares",
-              text: "Interactive fundraising squares with automated winner selection.",
-            },
-            {
-              title: "Events",
-              text: "Elegant ticketing, seating plans, and gala event management.",
-            },
-          ].map((item) => (
+          {features.map((item) => (
             <div
               key={item.title}
               style={{
@@ -168,16 +167,16 @@ export default function HomePage() {
                 backdropFilter: "blur(12px)",
                 textAlign: "left",
                 boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                minHeight: "150px",
               }}
             >
               <div
                 style={{
-                  fontSize: "34px",
+                  fontSize: "clamp(26px, 2.2vw, 34px)",
                   fontWeight: 900,
                   color: "#ffffff",
                   marginBottom: "12px",
-                  textShadow:
-                    `
+                  textShadow: `
                     -1px -1px 0 #c8a24a,
                      1px -1px 0 #c8a24a,
                     -1px  1px 0 #c8a24a,
