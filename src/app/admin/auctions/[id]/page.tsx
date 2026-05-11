@@ -17,6 +17,8 @@ import {
   type AuctionStatus,
 } from "../../../../../api/_lib/auctions-repo";
 
+const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
+
 type PageProps = {
   params: Promise<{
     id: string;
@@ -88,6 +90,20 @@ function focusedImageStyle(
     objectFit: "cover",
     objectPosition: `${focusValue(focusX)}% ${focusValue(focusY)}%`,
     display: "block",
+  };
+}
+
+function defaultAuctionImageStyle(padding = 22): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    objectPosition: "center",
+    display: "block",
+    padding,
+    boxSizing: "border-box",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
   };
 }
 
@@ -441,9 +457,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
       <section style={styles.hero}>
         <div style={styles.heroText}>
-          <div style={styles.badge}>Silent auction editor</div>
+          <div style={styles.badge}>Auction editor</div>
 
-          <h1 style={styles.title}>{auction.title || "Untitled auction"}</h1>
+          <h1 className="so-brand-heading" style={styles.title}>
+            {auction.title || "Untitled auction"}
+          </h1>
 
           <p style={styles.subtitle}>/a/{auction.slug}</p>
 
@@ -472,7 +490,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
               )}
             />
           ) : (
-            <div style={styles.heroImageEmpty}>🔨</div>
+            <img
+              src={DEFAULT_AUCTION_IMAGE}
+              alt="SO Auctions"
+              style={defaultAuctionImageStyle(28)}
+            />
           )}
         </div>
       </section>
@@ -491,7 +513,9 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Close and notify</p>
-            <h2 style={styles.sectionTitle}>Auction winner tools</h2>
+            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+              Auction winner tools
+            </h2>
             <p style={styles.sectionText}>
               Close this auction, close all active lots and email the highest
               valid bidder for each lot. Lots with a reserve price are only
@@ -564,7 +588,9 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           <div style={styles.sectionHeader}>
             <div>
               <p style={styles.kicker}>Auction controls</p>
-              <h2 style={styles.sectionTitle}>Auction settings</h2>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Auction settings
+              </h2>
               <p style={styles.sectionText}>
                 Control public visibility, timing, rules and the main campaign
                 details.
@@ -659,8 +685,8 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             <div>
               <h3 style={styles.subTitle}>Main auction image</h3>
               <p style={styles.sectionText}>
-                Upload or replace the main public image, then use the live
-                previews to set the image focus point.
+                Upload or replace the main public image. If no custom image is
+                uploaded, the SO Auctions default image will be used.
               </p>
             </div>
 
@@ -697,7 +723,9 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Lots and prizes</p>
-            <h2 style={styles.sectionTitle}>Auction items</h2>
+            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+              Auction items
+            </h2>
             <p style={styles.sectionText}>
               Add prizes, experiences, donated items or sponsor lots. Existing
               items are collapsible to keep the page manageable as the auction
@@ -849,7 +877,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                           )}
                         />
                       ) : (
-                        <div style={styles.imageEmpty}>🔨</div>
+                        <img
+                          src={DEFAULT_AUCTION_IMAGE}
+                          alt="SO Auctions item"
+                          style={defaultAuctionImageStyle(12)}
+                        />
                       )}
                     </div>
 
@@ -1215,17 +1247,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.18)",
     boxShadow: "0 16px 36px rgba(2,6,23,0.28)",
   },
-  heroImageEmpty: {
-    width: "100%",
-    height: "100%",
-    minHeight: 230,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 54,
-    background: "#f1f5f9",
-    color: "#64748b",
-  },
   form: {
     display: "grid",
     gap: 18,
@@ -1484,15 +1505,6 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
-  },
-  imageEmpty: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 36,
-    color: "#94a3b8",
   },
   summaryMain: {
     minWidth: 0,
