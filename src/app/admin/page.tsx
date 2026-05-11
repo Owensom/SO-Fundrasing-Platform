@@ -388,19 +388,23 @@ function DashboardCard({
   return (
     <Link href={href} style={styles.cardLink}>
       <article style={styles.card}>
-        <div style={styles.logoBox}>
-          <img src={image} alt={title} style={styles.logoImage} />
+        <div style={styles.cardTop}>
+          <div style={styles.logoBox}>
+            <img src={image} alt={title} style={styles.logoImage} />
+          </div>
+
+          <h2 className="so-brand-card-title" style={styles.cardTitle}>
+            {title}
+          </h2>
+
+          <p style={styles.cardDescription}>{description}</p>
         </div>
 
-        <h2 className="so-brand-card-title" style={styles.cardTitle}>
-          {title}
-        </h2>
-
-        <p style={styles.cardDescription}>{description}</p>
-
-        <div style={styles.cardStats}>{stats}</div>
-
-        <div style={styles.openLink}>Open dashboard →</div>
+        <div style={styles.cardBottom}>
+          <div style={styles.cardStats}>{stats}</div>
+          <div style={styles.cardDivider} />
+          <div style={styles.openLink}>Open dashboard →</div>
+        </div>
       </article>
     </Link>
   );
@@ -585,19 +589,29 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))",
     gap: 18,
     marginBottom: 22,
+    alignItems: "stretch",
   },
   cardLink: {
     textDecoration: "none",
     color: "inherit",
+    display: "block",
+    height: "100%",
   },
   card: {
     height: "100%",
+    minHeight: 282,
     borderRadius: 30,
     padding: 24,
-    background:
-      "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
     border: "1px solid #e2e8f0",
     boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  cardTop: {
+    display: "flex",
+    flexDirection: "column",
   },
   logoBox: {
     width: 78,
@@ -611,6 +625,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     marginBottom: 18,
     overflow: "hidden",
+    flexShrink: 0,
   },
   logoImage: {
     width: "88%",
@@ -630,9 +645,15 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.65,
     fontSize: 15,
+    minHeight: 50,
+  },
+  cardBottom: {
+    marginTop: 24,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
   },
   cardStats: {
-    marginTop: 16,
     padding: "9px 11px",
     borderRadius: 999,
     background: "#f8fafc",
@@ -642,8 +663,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     width: "fit-content",
   },
+  cardDivider: {
+    width: "100%",
+    height: 1,
+    background: "#e2e8f0",
+    margin: "20px 0 18px",
+  },
   openLink: {
-    marginTop: 22,
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
