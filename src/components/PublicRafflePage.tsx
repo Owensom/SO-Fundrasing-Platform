@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
+
 type Props = {
   slug: string;
 };
@@ -671,7 +673,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
     return count;
   }, [raffle, visibleNumbers, availability]);
-    function toggleTicket(number: number) {
+
+  function toggleTicket(number: number) {
     if (!raffle || !selectedColour || !canReserve) return;
 
     const key = makeTicketKey(selectedColour, number);
@@ -711,8 +714,7 @@ export default function PublicRafflePage({ slug }: Props) {
     setError("");
     setReservationMessage("");
   }
-
-  function autoSelectTicketQuantity(quantity: number) {
+    function autoSelectTicketQuantity(quantity: number) {
     if (!raffle || !canReserve) return;
 
     const requested = Math.max(1, Math.floor(Number(quantity) || 0));
@@ -747,7 +749,6 @@ export default function PublicRafflePage({ slug }: Props) {
     }
 
     const randomTickets = shuffleTickets(availableTickets).slice(0, requested);
-
     const selected = [...basket, ...randomTickets];
 
     if (randomTickets.length < requested) {
@@ -975,21 +976,26 @@ export default function PublicRafflePage({ slug }: Props) {
           ) : null}
         </nav>
 
-        {raffle.imageUrl ? (
-          <div style={styles.imageWrap}>
-            <img
-              src={raffle.imageUrl}
-              alt={raffle.title}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: raffle.imageObjectPosition || "center",
-                display: "block",
-              }}
-            />
-          </div>
-        ) : null}
+        <div style={styles.imageWrap}>
+          <img
+            src={raffle.imageUrl || DEFAULT_RAFFLE_IMAGE}
+            alt={raffle.title}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: raffle.imageUrl ? "cover" : "contain",
+              objectPosition: raffle.imageUrl
+                ? raffle.imageObjectPosition || "center"
+                : "center",
+              display: "block",
+              background: raffle.imageUrl
+                ? "#f8fafc"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+              padding: raffle.imageUrl ? 0 : 28,
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
 
         <h1 style={styles.title}>{raffle.title}</h1>
 
@@ -1141,11 +1147,11 @@ export default function PublicRafflePage({ slug }: Props) {
         {isDraft ? (
           <div style={styles.notice}>This raffle is not published yet.</div>
         ) : null}
-
-        {canReserve ? (
+                {canReserve ? (
           <section style={styles.quickSelect}>
             <div>
               <h2 style={{ margin: 0 }}>Quick buy</h2>
+
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
                 Choose how many tickets you would like and we’ll randomly
                 auto-select available numbers across colours.
@@ -1159,6 +1165,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 >
                   Number of tickets
                 </span>
+
                 <input
                   type="number"
                   min={1}
@@ -1173,6 +1180,7 @@ export default function PublicRafflePage({ slug }: Props) {
                     }
 
                     const parsed = Number(raw);
+
                     if (!Number.isFinite(parsed)) return;
 
                     setAutoQuantity(parsed);
@@ -1218,7 +1226,8 @@ export default function PublicRafflePage({ slug }: Props) {
                     onClick={() => autoSelectTicketQuantity(offer.quantity)}
                     style={styles.offerPill}
                   >
-                    {offer.label} — {formatCurrency(offer.price, raffle.currency)}
+                    {offer.label} —{" "}
+                    {formatCurrency(offer.price, raffle.currency)}
                   </button>
                 ))}
             </div>
@@ -1278,7 +1287,9 @@ export default function PublicRafflePage({ slug }: Props) {
                           ? "#f59e0b"
                           : "#ffffff",
                     color:
-                      isSelected || isSold || isReserved ? "#ffffff" : "#111827",
+                      isSelected || isSold || isReserved
+                        ? "#ffffff"
+                        : "#111827",
                     opacity: canReserve ? 1 : 0.7,
                     cursor:
                       isSold || isReserved || !canReserve
@@ -1292,7 +1303,9 @@ export default function PublicRafflePage({ slug }: Props) {
             })}
           </div>
         ) : (
-          <div style={styles.notice}>Select a colour to view available numbers.</div>
+          <div style={styles.notice}>
+            Select a colour to view available numbers.
+          </div>
         )}
 
         <h2 style={styles.heading}>Basket</h2>
@@ -1326,17 +1339,23 @@ export default function PublicRafflePage({ slug }: Props) {
           <div>Tickets: {pricing.quantity}</div>
 
           <div>
-            Standard total: {formatCurrency(pricing.standardTotal, raffle.currency)}
+            Standard total:{" "}
+            {formatCurrency(pricing.standardTotal, raffle.currency)}
           </div>
 
-          <div>Ticket total: {formatCurrency(pricing.total, raffle.currency)}</div>
+          <div>
+            Ticket total: {formatCurrency(pricing.total, raffle.currency)}
+          </div>
 
           {pricing.appliedOffers.length > 0 ? (
             <div style={{ color: "#166534" }}>
               Best value applied:{" "}
               {pricing.appliedOffers
                 .map((offer) => {
-                  return offer.label + (offer.times > 1 ? " × " + offer.times : "");
+                  return (
+                    offer.label +
+                    (offer.times > 1 ? " × " + offer.times : "")
+                  );
                 })
                 .join(", ")}
             </div>
@@ -1344,7 +1363,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
           {pricing.savings > 0 ? (
             <div style={{ color: "#166534" }}>
-              You save {formatCurrency(pricing.savings, raffle.currency)}
+              You save{" "}
+              {formatCurrency(pricing.savings, raffle.currency)}
             </div>
           ) : null}
 
@@ -1359,14 +1379,18 @@ export default function PublicRafflePage({ slug }: Props) {
             <span>
               <strong>I’d like to cover platform fees</strong>
               <br />
+
               <span style={{ color: "#64748b", fontSize: 13 }}>
-                Adds approximately {formatCurrency(estimatedFee, raffle.currency)}{" "}
-                so the organiser receives the full ticket value.
+                Adds approximately{" "}
+                {formatCurrency(estimatedFee, raffle.currency)} so the organiser
+                receives the full ticket value.
               </span>
             </span>
           </label>
 
-          <div>Total today: {formatCurrency(displayTotal, raffle.currency)}</div>
+          <div>
+            Total today: {formatCurrency(displayTotal, raffle.currency)}
+          </div>
         </div>
 
         <h2 style={styles.heading}>Your details</h2>
@@ -1392,7 +1416,10 @@ export default function PublicRafflePage({ slug }: Props) {
           {raffle.legalQuestion ? (
             <div style={styles.legalQuestionBox}>
               <div style={styles.legalQuestionTitle}>Entry question</div>
-              <div style={styles.legalQuestionText}>{raffle.legalQuestion}</div>
+
+              <div style={styles.legalQuestionText}>
+                {raffle.legalQuestion}
+              </div>
 
               <input
                 value={entryAnswer}
@@ -1431,17 +1458,20 @@ export default function PublicRafflePage({ slug }: Props) {
                 {raffle.freeEntry.closesAt ? (
                   <p style={styles.freeEntryText}>
                     Postal entries must be received before{" "}
-                    <strong>{formatDateTime(raffle.freeEntry.closesAt)}</strong>.
+                    <strong>
+                      {formatDateTime(raffle.freeEntry.closesAt)}
+                    </strong>
+                    .
                   </p>
                 ) : null}
 
                 <p style={styles.freeEntryText}>
-                  Your email address is required so the organiser can contact you
-                  if you win and include your entry in the automatic or live draw.
-                  One entry per postcard/envelope. Multiple postal entries are
-                  permitted by sending multiple postcards/envelopes. No purchase
-                  is necessary. Paid and postal entries have equal chance of
-                  winning.
+                  Your email address is required so the organiser can contact
+                  you if you win and include your entry in the automatic or live
+                  draw. One entry per postcard/envelope. Multiple postal entries
+                  are permitted by sending multiple postcards/envelopes. No
+                  purchase is necessary. Paid and postal entries have equal
+                  chance of winning.
                 </p>
               </div>
             </details>
@@ -1474,7 +1504,8 @@ export default function PublicRafflePage({ slug }: Props) {
             disabled={saving || basket.length === 0 || !canReserve}
             style={{
               ...styles.primaryButton,
-              opacity: saving || basket.length === 0 || !canReserve ? 0.6 : 1,
+              opacity:
+                saving || basket.length === 0 || !canReserve ? 0.6 : 1,
               cursor:
                 saving || basket.length === 0 || !canReserve
                   ? "not-allowed"
@@ -1498,106 +1529,126 @@ export default function PublicRafflePage({ slug }: Props) {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#f8fafc",
-    padding: 16,
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 30%), #f8fafc",
+    padding: 18,
   },
+
   container: {
-    maxWidth: 1100,
+    maxWidth: 1120,
     margin: "0 auto",
     background: "#ffffff",
-    borderRadius: 16,
-    padding: 18,
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
+    borderRadius: 28,
+    padding: 22,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    border: "1px solid #e2e8f0",
   },
+
   wrap: {
     padding: 24,
   },
+
   navBar: {
     display: "flex",
     justifyContent: "space-between",
     gap: 10,
     flexWrap: "wrap",
-    marginBottom: 16,
+    marginBottom: 18,
   },
+
   navLink: {
     display: "inline-flex",
-    padding: "10px 14px",
+    padding: "11px 15px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
     fontSize: 14,
   },
+
   adminNavLink: {
     display: "inline-flex",
-    padding: "10px 14px",
+    padding: "11px 15px",
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
     fontSize: 14,
   },
+
   imageWrap: {
     width: "100%",
-    height: 360,
+    height: 420,
     overflow: "hidden",
-    borderRadius: 16,
-    marginBottom: 20,
+    borderRadius: 24,
+    marginBottom: 24,
     border: "1px solid #e2e8f0",
-    background: "#f8fafc",
+    background: "#ffffff",
+    boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
   },
+
   title: {
-    margin: "0 0 8px",
-    fontSize: "clamp(28px, 7vw, 42px)",
+    margin: "0 0 10px",
+    fontSize: "clamp(34px, 7vw, 56px)",
+    lineHeight: 1,
+    color: "#0f172a",
+    letterSpacing: "-0.05em",
+    fontWeight: 950,
+  },
+
+  description: {
+    margin: "0 0 18px",
+    color: "#475569",
+    lineHeight: 1.7,
+    fontSize: 16,
+  },
+
+  heading: {
+    marginTop: 28,
+    marginBottom: 14,
+    fontSize: "clamp(22px, 5vw, 30px)",
     lineHeight: 1.1,
     color: "#0f172a",
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
   },
-  description: {
-    margin: "0 0 16px",
-    color: "#475569",
-    lineHeight: 1.6,
-    wordBreak: "break-word",
-  },
-  heading: {
-    marginTop: 24,
-    marginBottom: 12,
-    fontSize: "clamp(20px, 5vw, 28px)",
-    lineHeight: 1.2,
-  },
+
   totalBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 10,
+    marginTop: 18,
+    padding: 16,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 8,
-    fontWeight: 700,
-    lineHeight: 1.4,
-    wordBreak: "break-word",
+    fontWeight: 800,
+    color: "#0f172a",
   },
+
   disclaimerBox: {
     marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 16,
     background: "#fff7ed",
     border: "1px solid #fed7aa",
-    color: "#7c2d12",
+    color: "#9a3412",
     fontSize: 13,
-    fontWeight: 700,
-    lineHeight: 1.5,
+    fontWeight: 800,
+    lineHeight: 1.6,
   },
+
   freeEntryBox: {
     marginTop: 4,
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 16,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
     color: "#1e3a8a",
   },
+
   freeEntrySummary: {
     cursor: "pointer",
     fontSize: 14,
@@ -1605,9 +1656,11 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#1e3a8a",
     listStyle: "none",
   },
+
   freeEntryContent: {
     marginTop: 10,
   },
+
   freeEntryText: {
     margin: "8px 0",
     color: "#1e40af",
@@ -1615,337 +1668,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     lineHeight: 1.55,
   },
+
   freeEntryAddress: {
     margin: "10px 0",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     background: "#ffffff",
     border: "1px solid #bfdbfe",
     color: "#0f172a",
     fontSize: 14,
     fontWeight: 800,
-    lineHeight: 1.45,
     whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
     fontFamily: "inherit",
-  },
-  prizesBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-  },
-  prizesTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#9a3412",
-    marginBottom: 12,
-  },
-  prizeCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #fed7aa",
-    alignItems: "flex-start",
-  },
-  prizePosition: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#c2410c",
-    minWidth: 70,
-    flexShrink: 0,
-  },
-  prizeContent: {
-    flex: "1 1 200px",
-    minWidth: 0,
-  },
-  prizeTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  prizeDescription: {
-    marginTop: 4,
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 1.45,
-    wordBreak: "break-word",
-    overflowWrap: "anywhere",
-  },
-  winnersBox: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-  },
-  winnersTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#065f46",
-    marginBottom: 12,
-  },
-  winnerCard: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 14,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #bbf7d0",
-    alignItems: "flex-start",
-  },
-  winnerBlock: {
-    flex: "1 1 140px",
-    minWidth: 0,
-  },
-  winnerLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-    fontWeight: 700,
-  },
-  winnerPrize: {
-    fontSize: 24,
-    fontWeight: 900,
-    color: "#065f46",
-    wordBreak: "break-word",
-  },
-  winnerTicket: {
-    fontSize: 24,
-    fontWeight: 900,
-    color: "#111827",
-    wordBreak: "break-word",
-  },
-  winnerColour: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: 18,
-    fontWeight: 800,
-    color: "#111827",
-    minWidth: 0,
-    flexWrap: "wrap",
-  },
-  quickSelect: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 14,
-    background: "#f0f9ff",
-    border: "1px solid #bae6fd",
-    display: "grid",
-    gap: 14,
-  },
-  quickControls: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    alignItems: "end",
-  },
-  quantityInput: {
-    width: 130,
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #93c5fd",
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  autoButton: {
-    height: 44,
-    padding: "0 16px",
-    border: "none",
-    borderRadius: 10,
-    background: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  clearButton: {
-    height: 44,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#334155",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  offerBox: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-  },
-  offerGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  offerPill: {
-    padding: "8px 10px",
-    borderRadius: 999,
-    background: "#ffffff",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-    fontWeight: 700,
-    fontSize: 14,
-    cursor: "pointer",
-  },
-  colourRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  colourButton: {
-    border: "none",
-    borderRadius: 999,
-    padding: "10px 16px",
-    fontWeight: 700,
-  },
-  numberGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))",
-    gap: 8,
-  },
-  numberButton: {
-    height: 48,
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontWeight: 700,
-  },
-  basket: {
-    display: "grid",
-    gap: 8,
-  },
-  basketRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-    flexWrap: "wrap",
-  },
-  removeButton: {
-    border: "none",
-    background: "transparent",
-    color: "#dc2626",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  coverFeesBox: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    cursor: "pointer",
-  },
-  form: {
-    display: "grid",
-    gap: 12,
-    marginTop: 24,
-  },
-  input: {
-    height: 44,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    fontSize: 16,
-    minWidth: 0,
-  },
-  legalQuestionBox: {
-    padding: 14,
-    borderRadius: 10,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    display: "grid",
-    gap: 10,
-  },
-  legalQuestionTitle: {
-    color: "#1e3a8a",
-    fontWeight: 900,
-  },
-  legalQuestionText: {
-    color: "#1e40af",
-    fontWeight: 700,
-    lineHeight: 1.45,
-  },
-  termsBox: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-    color: "#334155",
-    cursor: "pointer",
-    lineHeight: 1.45,
-  },
-  inlineLink: {
-    color: "#2563eb",
-    fontWeight: 800,
-  },
-  primaryButton: {
-    height: 48,
-    border: "none",
-    borderRadius: 10,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 700,
-    fontSize: 16,
-  },
-  notice: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    color: "#475569",
-  },
-  noticeDark: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    color: "#e2e8f0",
-    marginTop: 16,
-  },
-  success: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-  },
-  error: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#991b1b",
-  },
-  showMoreButton: {
-    marginTop: 12,
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: "1px solid #fdba74",
-    background: "#fff7ed",
-    color: "#9a3412",
-    fontWeight: 800,
-    cursor: "pointer",
   },
 };
