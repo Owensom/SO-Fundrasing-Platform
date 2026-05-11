@@ -5,6 +5,8 @@ import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listEvents } from "../../../../api/_lib/events-repo";
 
+const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
+
 function formatMoney(
   cents: number | null | undefined,
   currency: string | null | undefined,
@@ -85,7 +87,9 @@ export default async function AdminEventsPage() {
         <div>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 style={styles.title}>Manage events</h1>
+          <h1 className="so-brand-heading" style={styles.title}>
+            Manage events
+          </h1>
 
           <p style={styles.subtitle}>
             Tenant: <strong>{tenantSlug}</strong>
@@ -131,11 +135,11 @@ export default async function AdminEventsPage() {
 
       {events.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0 }}>No events yet</h2>
+          <h2 className="so-brand-card-title" style={{ margin: 0 }}>
+            No events yet
+          </h2>
 
-          <p style={styles.muted}>
-            Create your first fundraising event.
-          </p>
+          <p style={styles.muted}>Create your first fundraising event.</p>
 
           <Link href="/admin/events/new" style={styles.createButton}>
             + Create event
@@ -143,97 +147,90 @@ export default async function AdminEventsPage() {
         </section>
       ) : (
         <section style={styles.list}>
-          {events.map((event) => (
-            <article key={event.id} style={styles.card}>
-              <div style={styles.cardTop}>
-                <div style={styles.imageWrap}>
-                  {event.image_url ? (
+          {events.map((event) => {
+            const hasCustomImage = Boolean(event.image_url);
+
+            return (
+              <article key={event.id} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div style={styles.imageWrap}>
                     <img
-                      src={event.image_url}
-                      alt={event.title}
-                      style={styles.image}
+                      src={event.image_url || DEFAULT_EVENTS_IMAGE}
+                      alt={event.title || "SO Events"}
+                      style={{
+                        ...styles.image,
+                        objectFit: hasCustomImage ? "cover" : "contain",
+                        padding: hasCustomImage ? 0 : 12,
+                        background: hasCustomImage
+                          ? "#f1f5f9"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+                        boxSizing: "border-box",
+                      }}
                     />
-                  ) : (
-                    <div style={styles.imageEmpty}>🎟️</div>
-                  )}
-                </div>
+                  </div>
 
-                <div style={styles.cardMain}>
-                  <div style={styles.cardHeader}>
-                    <div>
-                      <h2 style={styles.cardTitle}>
-                        {event.title || "Untitled event"}
-                      </h2>
+                  <div style={styles.cardMain}>
+                    <div style={styles.cardHeader}>
+                      <div>
+                        <h2 className="so-brand-card-title" style={styles.cardTitle}>
+                          {event.title || "Untitled event"}
+                        </h2>
 
-                      <p style={styles.slug}>/e/{event.slug}</p>
+                        <p style={styles.slug}>/e/{event.slug}</p>
+                      </div>
+
+                      <span
+                        style={{
+                          ...styles.status,
+                          ...getStatusStyle(event.status),
+                        }}
+                      >
+                        {event.status}
+                      </span>
                     </div>
 
-                    <span
-                      style={{
-                        ...styles.status,
-                        ...getStatusStyle(event.status),
-                      }}
-                    >
-                      {event.status}
-                    </span>
-                  </div>
+                    {event.description ? (
+                      <p style={styles.description}>
+                        {event.description.length > 150
+                          ? `${event.description.slice(0, 150)}…`
+                          : event.description}
+                      </p>
+                    ) : null}
 
-                  {event.description ? (
-                    <p style={styles.description}>
-                      {event.description.length > 150
-                        ? `${event.description.slice(0, 150)}…`
-                        : event.description}
-                    </p>
-                  ) : null}
+                    <div style={styles.detailGrid}>
+                      <Detail label="Starts" value={formatDate(event.starts_at)} />
 
-                  <div style={styles.detailGrid}>
-                    <Detail
-                      label="Starts"
-                      value={formatDate(event.starts_at)}
-                    />
+                      <Detail label="Ends" value={formatDate(event.ends_at)} />
 
-                    <Detail
-                      label="Ends"
-                      value={formatDate(event.ends_at)}
-                    />
+                      <Detail label="Capacity" value={event.capacity || 0} />
 
-                    <Detail
-                      label="Capacity"
-                      value={event.capacity || 0}
-                    />
+                      <Detail label="Currency" value={event.currency || "GBP"} />
 
-                    <Detail
-                      label="Currency"
-                      value={event.currency || "GBP"}
-                    />
+                      <Detail label="Type" value={event.event_type || "general"} />
+                    </div>
 
-                    <Detail
-                      label="Type"
-                      value={event.event_type || "general"}
-                    />
-                  </div>
+                    <div style={styles.actions}>
+                      <Link
+                        href={`/admin/events/${event.id}`}
+                        style={styles.openButton}
+                      >
+                        Open details
+                      </Link>
 
-                  <div style={styles.actions}>
-                    <Link
-                      href={`/admin/events/${event.id}`}
-                      style={styles.openButton}
-                    >
-                      Open details
-                    </Link>
-
-                    <a
-                      href={`/e/${event.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.viewButton}
-                    >
-                      View campaign page
-                    </a>
+                      <a
+                        href={`/e/${event.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.viewButton}
+                      >
+                        View campaign page
+                      </a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </section>
       )}
     </main>
@@ -379,17 +376,7 @@ const styles: Record<string, CSSProperties> = {
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
-  },
-  imageEmpty: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 32,
-    color: "#94a3b8",
   },
   cardMain: {
     minWidth: 0,
