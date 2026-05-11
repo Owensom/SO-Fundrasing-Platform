@@ -141,8 +141,8 @@ export default async function EventSlugPage({
                 objectPosition: hasCustomImage
                   ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
                   : "center",
-                padding: hasCustomImage ? 0 : 54,
-                boxSizing: "border-box",
+                padding: hasCustomImage ? 0 : 64,
+                opacity: hasCustomImage ? 0.58 : 0.22,
               }}
             />
 
@@ -151,11 +151,11 @@ export default async function EventSlugPage({
             <div style={styles.heroContent}>
               <div style={styles.heroPills}>
                 <span style={styles.goldPill}>{eventTypeLabel(event.event_type)}</span>
-                <span style={styles.lightPill}>
-                  {lowestTicketPrice > 0
-                    ? `From ${event.currency} ${moneyFromCents(lowestTicketPrice)}`
-                    : "Tickets"}
-                </span>
+                {lowestTicketPrice > 0 && (
+                  <span style={styles.lightPill}>
+                    From {event.currency} {moneyFromCents(lowestTicketPrice)}
+                  </span>
+                )}
               </div>
 
               <h1 style={styles.title}>{event.title}</h1>
@@ -208,7 +208,7 @@ export default async function EventSlugPage({
               )}
             </section>
 
-            <section style={styles.orangePanel}>
+            <section style={styles.ticketPanel}>
               <h2 className={cinzel.className} style={styles.panelTitle}>
                 Tickets
               </h2>
@@ -224,7 +224,7 @@ export default async function EventSlugPage({
                       <div>
                         <strong>{ticketType.name}</strong>
                         {ticketType.description && (
-                          <p style={styles.muted}>{ticketType.description}</p>
+                          <p style={styles.mutedLight}>{ticketType.description}</p>
                         )}
                       </div>
 
@@ -344,8 +344,7 @@ function HeroStat({ label, value }: { label: string; value: ReactNode }) {
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background:
-      "linear-gradient(180deg, #f8fafc 0%, #f3f5f7 45%, #ffffff 100%)",
+    background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
     color: "#111827",
     padding: 24,
   },
@@ -376,7 +375,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(13,27,61,0.12)",
     color: "#0d1b3d",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     boxShadow: "0 8px 22px rgba(15,23,42,0.08)",
   },
   smallLink: {
@@ -396,16 +395,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 30,
     background: "#ffffff",
     border: "1px solid rgba(13,27,61,0.10)",
-    boxShadow: "0 24px 70px rgba(15,23,42,0.14)",
+    boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
     overflow: "hidden",
   },
   heroShell: {
     position: "relative",
-    minHeight: 520,
+    minHeight: 440,
     borderRadius: 24,
     overflow: "hidden",
     background: "#0d1b3d",
-    boxShadow: "0 20px 60px rgba(13,27,61,0.28)",
+    boxShadow: "0 20px 55px rgba(13,27,61,0.24)",
   },
   heroImage: {
     position: "absolute",
@@ -413,74 +412,74 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     height: "100%",
     display: "block",
-    background:
-      "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.12), rgba(13,27,61,0.95) 72%)",
+    background: "#0d1b3d",
+    boxSizing: "border-box",
   },
   heroShade: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(90deg, rgba(13,27,61,0.96) 0%, rgba(13,27,61,0.78) 38%, rgba(13,27,61,0.38) 70%, rgba(13,27,61,0.72) 100%), linear-gradient(180deg, rgba(13,27,61,0.30) 0%, rgba(13,27,61,0.92) 100%)",
+      "linear-gradient(90deg, rgba(13,27,61,0.96) 0%, rgba(13,27,61,0.78) 52%, rgba(13,27,61,0.56) 100%), linear-gradient(180deg, rgba(13,27,61,0.10) 0%, rgba(13,27,61,0.88) 100%)",
   },
   heroContent: {
     position: "relative",
     zIndex: 2,
-    minHeight: 520,
-    padding: "44px 42px",
+    minHeight: 440,
+    padding: "42px 38px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "flex-end",
-    maxWidth: 940,
+    maxWidth: 880,
   },
   heroPills: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   goldPill: {
     display: "inline-flex",
     alignItems: "center",
     borderRadius: 999,
-    padding: "9px 13px",
+    padding: "8px 12px",
     background: "rgba(200,162,74,0.18)",
     border: "1px solid rgba(200,162,74,0.55)",
     color: "#f7d98a",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 13,
   },
   lightPill: {
     display: "inline-flex",
     alignItems: "center",
     borderRadius: 999,
-    padding: "9px 13px",
+    padding: "8px 12px",
     background: "rgba(255,255,255,0.12)",
     border: "1px solid rgba(255,255,255,0.24)",
     color: "#ffffff",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 13,
   },
   title: {
     margin: 0,
-    fontSize: "clamp(54px, 9vw, 116px)",
-    lineHeight: 0.88,
-    letterSpacing: "-0.075em",
+    fontSize: "clamp(42px, 6vw, 76px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.055em",
     fontWeight: 900,
     color: "#ffffff",
-    textTransform: "lowercase",
-    textShadow:
-      "-1px -1px 0 #c8a24a, 1px -1px 0 #c8a24a, -1px 1px 0 #c8a24a, 1px 1px 0 #c8a24a, 0 20px 40px rgba(0,0,0,0.38)",
+    textTransform: "none",
+    textShadow: "0 14px 32px rgba(0,0,0,0.35)",
+    maxWidth: 820,
   },
   heroTagline: {
-    marginTop: 18,
+    marginTop: 16,
     color: "#f7d98a",
-    letterSpacing: "0.32em",
+    letterSpacing: "0.24em",
     textTransform: "uppercase",
-    fontSize: "clamp(13px, 1.7vw, 20px)",
+    fontSize: "clamp(12px, 1.5vw, 17px)",
     fontWeight: 800,
   },
   heroStats: {
-    marginTop: 28,
+    marginTop: 26,
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 12,
@@ -488,7 +487,7 @@ const styles: Record<string, CSSProperties> = {
   },
   heroStat: {
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 16,
     background: "rgba(255,255,255,0.12)",
     border: "1px solid rgba(255,255,255,0.22)",
     backdropFilter: "blur(12px)",
@@ -517,8 +516,7 @@ const styles: Record<string, CSSProperties> = {
   infoBox: {
     padding: 22,
     borderRadius: 22,
-    background:
-      "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
     border: "1px solid #e2e8f0",
   },
   sectionKicker: {
@@ -542,33 +540,11 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.7,
     fontWeight: 600,
   },
-  successBox: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-    color: "#065f46",
-    marginTop: 18,
-    marginBottom: 18,
-    lineHeight: 1.5,
-  },
-  cancelBox: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    marginTop: 18,
-    marginBottom: 18,
-    lineHeight: 1.5,
-  },
-  orangePanel: {
+  ticketPanel: {
     padding: 22,
     borderRadius: 22,
-    background:
-      "linear-gradient(180deg, #0d1b3d 0%, #132957 100%)",
+    background: "linear-gradient(180deg, #0d1b3d 0%, #132957 100%)",
     border: "1px solid rgba(200,162,74,0.42)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
   },
   panelTitle: {
     margin: "0 0 14px",
@@ -608,6 +584,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
   },
+  mutedLight: {
+    margin: "5px 0 0",
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
   emptyBox: {
     padding: 14,
     borderRadius: 14,
@@ -616,6 +598,26 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontWeight: 800,
     fontSize: 14,
+  },
+  successBox: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ecfdf5",
+    border: "1px solid #a7f3d0",
+    color: "#065f46",
+    marginTop: 18,
+    marginBottom: 18,
+    lineHeight: 1.5,
+  },
+  cancelBox: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    marginTop: 18,
+    marginBottom: 18,
+    lineHeight: 1.5,
   },
   bookSection: {
     marginTop: 18,
@@ -636,12 +638,10 @@ const styles: Record<string, CSSProperties> = {
   bookTitle: {
     margin: 0,
     color: "#0d1b3d",
-    fontSize: 38,
-    lineHeight: 1.05,
-    letterSpacing: "-0.055em",
+    fontSize: 34,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
     fontWeight: 900,
-    textShadow:
-      "-1px -1px 0 rgba(200,162,74,0.32), 1px -1px 0 rgba(200,162,74,0.32), -1px 1px 0 rgba(200,162,74,0.32), 1px 1px 0 rgba(200,162,74,0.32)",
   },
   bookText: {
     margin: "8px 0 0",
@@ -655,7 +655,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#0d1b3d",
     color: "#ffffff",
-    fontWeight: 950,
+    fontWeight: 900,
     fontSize: 13,
     border: "1px solid rgba(200,162,74,0.45)",
   },
