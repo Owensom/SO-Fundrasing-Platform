@@ -54,6 +54,7 @@ type ParsedPrizeSelection = {
 type TableShape = "round" | "square" | "rectangle";
 
 const TABLE_SHAPE_KEY = "__table_shape";
+const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
 function cleanTableShape(value: FormDataEntryValue | string | null): TableShape {
   const clean = String(value || "").trim();
@@ -488,8 +489,7 @@ async function updateTableNamesAction(formData: FormData) {
     tableNamesJson: {
       ...(event.table_names_json || {}),
       ...parsedTableNames,
-      [TABLE_SHAPE_KEY]:
-        event.table_names_json?.[TABLE_SHAPE_KEY] || "round",
+      [TABLE_SHAPE_KEY]: event.table_names_json?.[TABLE_SHAPE_KEY] || "round",
     },
     askDietaryRequirements: event.ask_dietary_requirements,
     askMenuChoice: event.ask_menu_choice,
@@ -497,6 +497,7 @@ async function updateTableNamesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
+
 async function updateTableShapeAction(formData: FormData) {
   "use server";
 
@@ -778,9 +779,7 @@ async function generateSeatsAction(formData: FormData) {
           aisleAfter: aisleAfterList.includes(seat) ? seat : null,
           status: "available",
         });
-      } catch {
-        // Skip duplicate seats safely.
-      }
+      } catch {}
     }
   }
 
@@ -818,9 +817,7 @@ async function generateTablesAction(formData: FormData) {
           aisleAfter: null,
           status: "available",
         });
-      } catch {
-        // Skip duplicate seats safely.
-      }
+      } catch {}
     }
   }
 
@@ -1028,6 +1025,7 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1055,9 +1053,19 @@ export default async function AdminEventManagePage({
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
   const winners = await listEventWinners(event.id);
+  const hasCustomImage = Boolean(event.image_url);
 
   const imageFocusStyle: CSSProperties = {
     objectPosition: `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`,
+  };
+
+  const defaultImageStyle: CSSProperties = {
+    objectFit: "contain",
+    objectPosition: "center",
+    padding: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+    boxSizing: "border-box",
   };
 
   const isGeneralAdmission = event.event_type === "general_admission";
@@ -1123,7 +1131,9 @@ export default async function AdminEventManagePage({
       <section style={styles.hero}>
         <div style={styles.heroContent}>
           <p style={styles.eyebrow}>Events & Tickets</p>
-          <h1 style={styles.title}>{event.title}</h1>
+          <h1 className="so-brand-heading" style={styles.title}>
+            {event.title}
+          </h1>
 
           <div style={styles.badgeRow}>
             <span style={styles.goldBadge}>{eventTypeLabel(event.event_type)}</span>
@@ -1137,18 +1147,14 @@ export default async function AdminEventManagePage({
         </div>
 
         <div style={styles.heroImageWrap}>
-          {event.image_url ? (
-            <img
-              src={event.image_url}
-              alt={event.title}
-              style={{
-                ...styles.heroImage,
-                ...imageFocusStyle,
-              }}
-            />
-          ) : (
-            <div style={styles.heroImageEmpty}>🎫</div>
-          )}
+          <img
+            src={event.image_url || DEFAULT_EVENTS_IMAGE}
+            alt={event.title || "SO Events"}
+            style={{
+              ...styles.heroImage,
+              ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
+            }}
+          />
         </div>
 
         <div style={styles.heroActions}>
@@ -1269,18 +1275,14 @@ export default async function AdminEventManagePage({
               </div>
 
               <div style={styles.previewBox}>
-                {event.image_url ? (
-                  <img
-                    src={event.image_url}
-                    alt={event.title}
-                    style={{
-                      ...styles.previewImage,
-                      ...imageFocusStyle,
-                    }}
-                  />
-                ) : (
-                  <div style={styles.emptyPreview}>🎫</div>
-                )}
+                <img
+                  src={event.image_url || DEFAULT_EVENTS_IMAGE}
+                  alt={event.title || "SO Events"}
+                  style={{
+                    ...styles.previewImage,
+                    ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
+                  }}
+                />
               </div>
             </div>
 
@@ -1558,7 +1560,8 @@ export default async function AdminEventManagePage({
           updateMenuOptionsAction={updateMenuOptionsAction}
         />
       </CollapsibleSection>
-            <CollapsibleSection
+
+      <CollapsibleSection
         id="winner-draw"
         eyebrow="Section 4"
         title="Winner Draw"
@@ -1924,7 +1927,9 @@ function CollapsibleSection({
       <summary style={styles.collapsibleSummary}>
         <div style={styles.collapsibleHeading}>
           {eyebrow && <p style={styles.sectionEyebrow}>{eyebrow}</p>}
-          <h2 style={styles.sectionTitle}>{title}</h2>
+          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            {title}
+          </h2>
           {description && <p style={styles.sectionText}>{description}</p>}
         </div>
 
@@ -2041,17 +2046,7 @@ const styles: Record<string, CSSProperties> = {
   heroImage: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
-  },
-  heroImageEmpty: {
-    height: "100%",
-    minHeight: 150,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 42,
-    color: "#94a3b8",
   },
   heroActions: {
     display: "grid",
@@ -2286,16 +2281,7 @@ const styles: Record<string, CSSProperties> = {
   previewImage: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
-  },
-  emptyPreview: {
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#94a3b8",
-    fontSize: 42,
   },
   twoCol: {
     display: "grid",
