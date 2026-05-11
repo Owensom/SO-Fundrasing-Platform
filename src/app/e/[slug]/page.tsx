@@ -114,211 +114,217 @@ export default async function EventSlugPage({
 
   return (
     <main className={poppins.className} style={styles.page}>
-      <div style={styles.wrap}>
-        <div style={styles.topBar}>
-          <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
-            ← Back to campaigns
-          </Link>
+      <section style={styles.hero}>
+        {hasCustomImage ? (
+          <img
+            src={event.image_url || DEFAULT_EVENTS_IMAGE}
+            alt={event.title || "SO Events"}
+            style={{
+              ...styles.customHeroImage,
+              objectPosition: `${event.image_focus_x ?? 50}% ${
+                event.image_focus_y ?? 50
+              }%`,
+            }}
+          />
+        ) : (
+          <img
+            src={DEFAULT_EVENTS_IMAGE}
+            alt={event.title || "SO Events"}
+            style={styles.defaultHeroImage}
+          />
+        )}
 
-          <div style={styles.topLinks}>
-            <Link href={`/c/${tenantSlug}/terms`} style={styles.smallLink}>
-              Terms
+        <div style={styles.heroOverlay} />
+
+        <div style={styles.heroInner}>
+          <div style={styles.topBar}>
+            <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
+              ← Back to campaigns
             </Link>
-            <Link href={`/c/${tenantSlug}/privacy`} style={styles.smallLink}>
-              Privacy
-            </Link>
-          </div>
-        </div>
 
-        <Card>
-          <section style={styles.heroShell}>
-            <img
-              src={event.image_url || DEFAULT_EVENTS_IMAGE}
-              alt={event.title || "SO Events"}
-              style={{
-                ...styles.heroImage,
-                objectFit: hasCustomImage ? "cover" : "contain",
-                objectPosition: hasCustomImage
-                  ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
-                  : "center",
-                padding: hasCustomImage ? 0 : 64,
-                opacity: hasCustomImage ? 0.58 : 0.22,
-              }}
-            />
-
-            <div style={styles.heroShade} />
-
-            <div style={styles.heroContent}>
-              <div style={styles.heroPills}>
-                <span style={styles.goldPill}>{eventTypeLabel(event.event_type)}</span>
-                {lowestTicketPrice > 0 && (
-                  <span style={styles.lightPill}>
-                    From {event.currency} {moneyFromCents(lowestTicketPrice)}
-                  </span>
-                )}
-              </div>
-
-              <h1 style={styles.title}>{event.title}</h1>
-
-              <div className={cinzel.className} style={styles.heroTagline}>
-                Book. Attend. Make an impact.
-              </div>
-
-              <div style={styles.heroStats}>
-                <HeroStat label="Date" value={formatDate(event.starts_at)} />
-                <HeroStat
-                  label="Location"
-                  value={event.location || "Location to be confirmed"}
-                />
-                {event.event_type !== "general_admission" && (
-                  <HeroStat label="Available" value={availableSeats} />
-                )}
-              </div>
+            <div style={styles.topLinks}>
+              <Link href={`/c/${tenantSlug}/terms`} style={styles.smallLink}>
+                Terms
+              </Link>
+              <Link href={`/c/${tenantSlug}/privacy`} style={styles.smallLink}>
+                Privacy
+              </Link>
             </div>
-          </section>
+          </div>
 
-          <div style={styles.contentGrid}>
-            <section style={styles.infoBox}>
-              <h2 className={cinzel.className} style={styles.sectionKicker}>
-                Event details
-              </h2>
-
-              <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
+          <div style={styles.heroContent}>
+            <div style={styles.heroPills}>
+              <span style={styles.goldPill}>{eventTypeLabel(event.event_type)}</span>
 
               {lowestTicketPrice > 0 && (
-                <InfoRow
-                  label="Tickets from"
-                  value={`${event.currency} ${moneyFromCents(lowestTicketPrice)}`}
-                />
+                <span style={styles.lightPill}>
+                  From {event.currency} {moneyFromCents(lowestTicketPrice)}
+                </span>
               )}
+            </div>
 
-              <InfoRow label="Date" value={formatDate(event.starts_at)} />
+            <h1 style={styles.title}>{event.title}</h1>
 
-              <InfoRow
+            <div className={cinzel.className} style={styles.heroTagline}>
+              Book. Attend. Make an impact.
+            </div>
+
+            <div style={styles.heroStats}>
+              <HeroStat label="Date" value={formatDate(event.starts_at)} />
+              <HeroStat
                 label="Location"
                 value={event.location || "Location to be confirmed"}
               />
-
               {event.event_type !== "general_admission" && (
-                <InfoRow label="Available now" value={availableSeats} />
+                <HeroStat label="Available" value={availableSeats} />
               )}
-
-              {event.description && (
-                <p style={styles.description}>{event.description}</p>
-              )}
-            </section>
-
-            <section style={styles.ticketPanel}>
-              <h2 className={cinzel.className} style={styles.panelTitle}>
-                Tickets
-              </h2>
-
-              <div style={styles.stack}>
-                {ticketTypes.length === 0 ? (
-                  <div style={styles.emptyBox}>
-                    Ticket options have not been added yet.
-                  </div>
-                ) : (
-                  ticketTypes.map((ticketType) => (
-                    <div key={ticketType.id} style={styles.listItem}>
-                      <div>
-                        <strong>{ticketType.name}</strong>
-                        {ticketType.description && (
-                          <p style={styles.mutedLight}>{ticketType.description}</p>
-                        )}
-                      </div>
-
-                      <strong style={styles.pricePill}>
-                        {event.currency} {moneyFromCents(ticketType.price)}
-                      </strong>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
+            </div>
           </div>
+        </div>
+      </section>
 
-          {resolvedSearchParams.checkout === "success" && (
-            <div style={styles.successBox}>
-              <strong>Payment successful.</strong>
-              <br />
-              Thank you. Your booking has been received.
-            </div>
-          )}
+      <div style={styles.wrap}>
+        {resolvedSearchParams.checkout === "success" && (
+          <div style={styles.successBox}>
+            <strong>Payment successful.</strong>
+            <br />
+            Thank you. Your booking has been received.
+          </div>
+        )}
 
-          {resolvedSearchParams.checkout === "cancelled" && (
-            <div style={styles.cancelBox}>
-              <strong>Checkout cancelled.</strong>
-              <br />
-              Your order was not completed. You can choose again below.
-            </div>
-          )}
+        {resolvedSearchParams.checkout === "cancelled" && (
+          <div style={styles.cancelBox}>
+            <strong>Checkout cancelled.</strong>
+            <br />
+            Your order was not completed. You can choose again below.
+          </div>
+        )}
 
-          <section id="book" style={styles.bookSection}>
-            <div style={styles.bookHeader}>
-              <div>
-                <h2 style={styles.bookTitle}>
-                  {event.event_type === "tables"
-                    ? "Choose your table seats"
-                    : event.event_type === "reserved_seating"
-                      ? "Choose your seats"
-                      : "Book tickets"}
-                </h2>
+        <div style={styles.contentGrid}>
+          <Card>
+            <h2 className={cinzel.className} style={styles.sectionKicker}>
+              Event details
+            </h2>
 
-                <p style={styles.bookText}>
-                  {event.event_type === "general_admission"
-                    ? "Choose how many of each ticket type you would like."
-                    : "Add your details, select tickets, then continue securely to checkout."}
-                </p>
-              </div>
+            <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
 
-              <div style={styles.checkoutBadge}>Secure Stripe checkout</div>
-            </div>
-
-            {event.event_type === "general_admission" ? (
-              <PublicGeneralAdmissionSelector
-                eventId={event.id}
-                ticketTypes={ticketTypes}
-                currency={event.currency}
+            {lowestTicketPrice > 0 && (
+              <InfoRow
+                label="Tickets from"
+                value={`${event.currency} ${moneyFromCents(lowestTicketPrice)}`}
               />
-            ) : event.event_type === "tables" ? (
-              seats.length === 0 ? (
-                <div style={styles.emptyLarge}>
-                  <strong>No table seats available yet</strong>
-                  <p style={styles.muted}>Tables may not have been released yet.</p>
+            )}
+
+            <InfoRow label="Date" value={formatDate(event.starts_at)} />
+
+            <InfoRow
+              label="Location"
+              value={event.location || "Location to be confirmed"}
+            />
+
+            {event.event_type !== "general_admission" && (
+              <InfoRow label="Available now" value={availableSeats} />
+            )}
+
+            {event.description && (
+              <p style={styles.description}>{event.description}</p>
+            )}
+          </Card>
+
+          <section style={styles.ticketPanel}>
+            <h2 className={cinzel.className} style={styles.panelTitle}>
+              Tickets
+            </h2>
+
+            <div style={styles.stack}>
+              {ticketTypes.length === 0 ? (
+                <div style={styles.emptyBox}>
+                  Ticket options have not been added yet.
                 </div>
               ) : (
-                <PublicTableSelector
-                  eventId={event.id}
-                  seats={tableSeatsWithNames}
-                  ticketTypes={ticketTypes}
-                  currency={event.currency}
-                  menuOptions={menuOptions}
-                  seatingLayoutJson={{
-                    ...(event.seating_layout_json || {}),
-                    tableShape,
-                    table_shape: tableShape,
-                  }}
-                />
-              )
-            ) : seats.length === 0 ? (
+                ticketTypes.map((ticketType) => (
+                  <div key={ticketType.id} style={styles.listItem}>
+                    <div>
+                      <strong>{ticketType.name}</strong>
+                      {ticketType.description && (
+                        <p style={styles.mutedLight}>{ticketType.description}</p>
+                      )}
+                    </div>
+
+                    <strong style={styles.pricePill}>
+                      {event.currency} {moneyFromCents(ticketType.price)}
+                    </strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+
+        <section id="book" style={styles.bookSection}>
+          <div style={styles.bookHeader}>
+            <div>
+              <h2 style={styles.bookTitle}>
+                {event.event_type === "tables"
+                  ? "Choose your table seats"
+                  : event.event_type === "reserved_seating"
+                    ? "Choose your seats"
+                    : "Book tickets"}
+              </h2>
+
+              <p style={styles.bookText}>
+                {event.event_type === "general_admission"
+                  ? "Choose how many of each ticket type you would like."
+                  : "Add your details, select tickets, then continue securely to checkout."}
+              </p>
+            </div>
+
+            <div style={styles.checkoutBadge}>Secure Stripe checkout</div>
+          </div>
+
+          {event.event_type === "general_admission" ? (
+            <PublicGeneralAdmissionSelector
+              eventId={event.id}
+              ticketTypes={ticketTypes}
+              currency={event.currency}
+            />
+          ) : event.event_type === "tables" ? (
+            seats.length === 0 ? (
               <div style={styles.emptyLarge}>
-                <strong>No seats available yet</strong>
-                <p style={styles.muted}>Seats may not have been released yet.</p>
+                <strong>No table seats available yet</strong>
+                <p style={styles.muted}>Tables may not have been released yet.</p>
               </div>
             ) : (
-              <PublicReservedSeatSelector
+              <PublicTableSelector
                 eventId={event.id}
-                eventType={event.event_type}
-                seats={seats}
+                seats={tableSeatsWithNames}
                 ticketTypes={ticketTypes}
                 currency={event.currency}
                 menuOptions={menuOptions}
-                initialSeatingLayout={event.seating_layout_json || {}}
+                seatingLayoutJson={{
+                  ...(event.seating_layout_json || {}),
+                  tableShape,
+                  table_shape: tableShape,
+                }}
               />
-            )}
-          </section>
-        </Card>
+            )
+          ) : seats.length === 0 ? (
+            <div style={styles.emptyLarge}>
+              <strong>No seats available yet</strong>
+              <p style={styles.muted}>Seats may not have been released yet.</p>
+            </div>
+          ) : (
+            <PublicReservedSeatSelector
+              eventId={event.id}
+              eventType={event.event_type}
+              seats={seats}
+              ticketTypes={ticketTypes}
+              currency={event.currency}
+              menuOptions={menuOptions}
+              initialSeatingLayout={event.seating_layout_json || {}}
+            />
+          )}
+        </section>
       </div>
     </main>
   );
@@ -344,13 +350,49 @@ function HeroStat({ label, value }: { label: string; value: ReactNode }) {
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+    background: "#f8fafc",
     color: "#111827",
-    padding: 24,
   },
-  wrap: {
-    maxWidth: 1160,
+  hero: {
+    position: "relative",
+    minHeight: "640px",
+    overflow: "hidden",
+    background: "#0d1b3d",
+  },
+  customHeroImage: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    opacity: 0.46,
+    filter: "saturate(0.95) contrast(1.05)",
+  },
+  defaultHeroImage: {
+    position: "absolute",
+    top: "50%",
+    right: "8%",
+    width: "min(560px, 42vw)",
+    height: "auto",
+    transform: "translateY(-50%)",
+    opacity: 0.72,
+    filter: "drop-shadow(0 28px 50px rgba(0,0,0,0.35))",
+  },
+  heroOverlay: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(90deg, rgba(13,27,61,0.98) 0%, rgba(13,27,61,0.88) 38%, rgba(13,27,61,0.52) 68%, rgba(13,27,61,0.80) 100%), linear-gradient(180deg, rgba(13,27,61,0.10) 0%, rgba(13,27,61,0.92) 100%)",
+  },
+  heroInner: {
+    position: "relative",
+    zIndex: 2,
+    maxWidth: 1200,
+    minHeight: "640px",
     margin: "0 auto",
+    padding: "34px 28px 54px",
+    display: "flex",
+    flexDirection: "column",
   },
   topBar: {
     display: "flex",
@@ -358,7 +400,6 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 12,
     flexWrap: "wrap",
-    marginBottom: 16,
   },
   topLinks: {
     display: "flex",
@@ -371,12 +412,13 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "#ffffff",
-    border: "1px solid rgba(13,27,61,0.12)",
-    color: "#0d1b3d",
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.24)",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
-    boxShadow: "0 8px 22px rgba(15,23,42,0.08)",
+    boxShadow: "0 8px 22px rgba(0,0,0,0.12)",
+    backdropFilter: "blur(12px)",
   },
   smallLink: {
     display: "inline-flex",
@@ -384,58 +426,22 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "#ffffff",
-    border: "1px solid rgba(13,27,61,0.12)",
-    color: "#334155",
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.24)",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
-  },
-  card: {
-    padding: 18,
-    borderRadius: 30,
-    background: "#ffffff",
-    border: "1px solid rgba(13,27,61,0.10)",
-    boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
-    overflow: "hidden",
-  },
-  heroShell: {
-    position: "relative",
-    minHeight: 440,
-    borderRadius: 24,
-    overflow: "hidden",
-    background: "#0d1b3d",
-    boxShadow: "0 20px 55px rgba(13,27,61,0.24)",
-  },
-  heroImage: {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    display: "block",
-    background: "#0d1b3d",
-    boxSizing: "border-box",
-  },
-  heroShade: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "linear-gradient(90deg, rgba(13,27,61,0.96) 0%, rgba(13,27,61,0.78) 52%, rgba(13,27,61,0.56) 100%), linear-gradient(180deg, rgba(13,27,61,0.10) 0%, rgba(13,27,61,0.88) 100%)",
+    backdropFilter: "blur(12px)",
   },
   heroContent: {
-    position: "relative",
-    zIndex: 2,
-    minHeight: 440,
-    padding: "42px 38px",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "flex-end",
-    maxWidth: 880,
+    marginTop: "auto",
+    maxWidth: 820,
   },
   heroPills: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    marginBottom: 16,
+    marginBottom: 18,
   },
   goldPill: {
     display: "inline-flex",
@@ -443,7 +449,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     padding: "8px 12px",
     background: "rgba(200,162,74,0.18)",
-    border: "1px solid rgba(200,162,74,0.55)",
+    border: "1px solid rgba(200,162,74,0.62)",
     color: "#f7d98a",
     fontWeight: 800,
     fontSize: 13,
@@ -461,25 +467,23 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: "clamp(42px, 6vw, 76px)",
-    lineHeight: 0.96,
-    letterSpacing: "-0.055em",
+    fontSize: "clamp(52px, 8vw, 96px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.065em",
     fontWeight: 900,
     color: "#ffffff",
-    textTransform: "none",
-    textShadow: "0 14px 32px rgba(0,0,0,0.35)",
-    maxWidth: 820,
+    textShadow: "0 18px 45px rgba(0,0,0,0.45)",
   },
   heroTagline: {
-    marginTop: 16,
+    marginTop: 18,
     color: "#f7d98a",
-    letterSpacing: "0.24em",
+    letterSpacing: "0.26em",
     textTransform: "uppercase",
-    fontSize: "clamp(12px, 1.5vw, 17px)",
+    fontSize: "clamp(12px, 1.5vw, 18px)",
     fontWeight: 800,
   },
   heroStats: {
-    marginTop: 26,
+    marginTop: 28,
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 12,
@@ -488,14 +492,14 @@ const styles: Record<string, CSSProperties> = {
   heroStat: {
     padding: 14,
     borderRadius: 16,
-    background: "rgba(255,255,255,0.12)",
-    border: "1px solid rgba(255,255,255,0.22)",
-    backdropFilter: "blur(12px)",
+    background: "rgba(255,255,255,0.13)",
+    border: "1px solid rgba(255,255,255,0.24)",
+    backdropFilter: "blur(14px)",
   },
   heroStatLabel: {
     display: "block",
     marginBottom: 6,
-    color: "rgba(255,255,255,0.66)",
+    color: "rgba(255,255,255,0.68)",
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     fontWeight: 900,
@@ -507,17 +511,25 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.35,
   },
+  wrap: {
+    maxWidth: 1120,
+    margin: "-46px auto 0",
+    padding: "0 24px 40px",
+    position: "relative",
+    zIndex: 3,
+  },
   contentGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
     gap: 18,
-    marginTop: 18,
+    marginBottom: 18,
   },
-  infoBox: {
+  card: {
     padding: 22,
-    borderRadius: 22,
-    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-    border: "1px solid #e2e8f0",
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid rgba(13,27,61,0.10)",
+    boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
   },
   sectionKicker: {
     margin: "0 0 14px",
@@ -542,9 +554,10 @@ const styles: Record<string, CSSProperties> = {
   },
   ticketPanel: {
     padding: 22,
-    borderRadius: 22,
+    borderRadius: 24,
     background: "linear-gradient(180deg, #0d1b3d 0%, #132957 100%)",
     border: "1px solid rgba(200,162,74,0.42)",
+    boxShadow: "0 24px 70px rgba(15,23,42,0.16)",
   },
   panelTitle: {
     margin: "0 0 14px",
@@ -605,9 +618,9 @@ const styles: Record<string, CSSProperties> = {
     background: "#ecfdf5",
     border: "1px solid #a7f3d0",
     color: "#065f46",
-    marginTop: 18,
     marginBottom: 18,
     lineHeight: 1.5,
+    boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
   },
   cancelBox: {
     padding: 16,
@@ -615,17 +628,16 @@ const styles: Record<string, CSSProperties> = {
     background: "#fffbeb",
     border: "1px solid #fde68a",
     color: "#92400e",
-    marginTop: 18,
     marginBottom: 18,
     lineHeight: 1.5,
+    boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
   },
   bookSection: {
-    marginTop: 18,
     padding: 22,
-    borderRadius: 24,
+    borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.08)",
+    boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
   },
   bookHeader: {
     display: "flex",
