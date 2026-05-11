@@ -1,10 +1,9 @@
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
-export default async function AdminHomePage() {
+export default async function AdminDashboardPage() {
   const session = await auth();
 
   if (!session?.user) {
@@ -12,6 +11,7 @@ export default async function AdminHomePage() {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
@@ -21,205 +21,229 @@ export default async function AdminHomePage() {
   }
 
   return (
-    <main style={styles.page}>
-      <section style={styles.hero}>
+    <main
+      style={{
+        maxWidth: 1180,
+        margin: "0 auto",
+        padding: "34px 16px 60px",
+        background:
+          "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), #f8fafc",
+        minHeight: "100vh",
+      }}
+    >
+      <section
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 20,
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+          marginBottom: 30,
+        }}
+      >
         <div>
-          <p style={styles.eyebrow}>SO Foundation Platform</p>
-          <h1 style={styles.title}>Admin Dashboard</h1>
-          <p style={styles.subtle}>
-            Tenant: <strong>{tenantSlug}</strong>
+          <div
+            style={{
+              display: "inline-flex",
+              padding: "6px 10px",
+              borderRadius: 999,
+              background: "#dbeafe",
+              color: "#1d4ed8",
+              fontWeight: 900,
+              fontSize: 13,
+              marginBottom: 12,
+            }}
+          >
+            SO Foundation Platform
+          </div>
+
+          <h1
+            className="so-brand-heading"
+            style={{
+              margin: 0,
+              fontSize: "clamp(38px, 8vw, 58px)",
+              lineHeight: 1,
+              letterSpacing: "-0.06em",
+              color: "#0f172a",
+            }}
+          >
+            Admin dashboard
+          </h1>
+
+          <p
+            style={{
+              margin: "14px 0 0",
+              color: "#64748b",
+              fontSize: 16,
+              lineHeight: 1.6,
+              maxWidth: 760,
+            }}
+          >
+            Manage raffles, squares, events and auctions across your tenant.
           </p>
-          <p style={styles.subtle}>
-            Signed in as <strong>{session.user.email}</strong>
+
+          <p
+            style={{
+              margin: "10px 0 0",
+              color: "#0f172a",
+              fontWeight: 800,
+            }}
+          >
+            Tenant: {tenantSlug}
           </p>
         </div>
 
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/admin/login" });
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
           }}
         >
-          <button style={styles.signOut}>Sign out</button>
-        </form>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Fundraising tools</h2>
-
-        <div style={styles.grid}>
-          <Link href="/admin/raffles" style={styles.card}>
-            <div style={styles.cardIcon}>🎟</div>
-            <div style={styles.cardTitle}>Manage Raffles</div>
-            <div style={styles.cardDesc}>
-              View, edit, draw winners and manage ticket campaigns.
-            </div>
-          </Link>
-
-          <Link href="/admin/raffles/new" style={styles.card}>
-            <div style={styles.cardIcon}>➕</div>
-            <div style={styles.cardTitle}>Create Raffle</div>
-            <div style={styles.cardDesc}>
-              Launch a new raffle with prizes, colours and offers.
-            </div>
-          </Link>
-
-          <Link href="/admin/squares" style={styles.card}>
-            <div style={styles.cardIcon}>🔲</div>
-            <div style={styles.cardTitle}>Manage Squares</div>
-            <div style={styles.cardDesc}>
-              View, edit, draw winners and manage squares games.
-            </div>
-          </Link>
-
-          <Link href="/admin/squares/new" style={styles.card}>
-            <div style={styles.cardIcon}>➕</div>
-            <div style={styles.cardTitle}>Create Squares Game</div>
-            <div style={styles.cardDesc}>
-              Launch a new squares game with draw date, image and prizes.
-            </div>
-          </Link>
-
-          <Link href="/admin/events" style={styles.card}>
-            <div style={styles.cardIcon}>🎫</div>
-            <div style={styles.cardTitle}>Manage Events</div>
-            <div style={styles.cardDesc}>
-              View, edit and manage admission tickets, seats and table plans.
-            </div>
-          </Link>
-
-          <Link href="/admin/events/new" style={styles.card}>
-            <div style={styles.cardIcon}>➕</div>
-            <div style={styles.cardTitle}>Create Event</div>
-            <div style={styles.cardDesc}>
-              Launch a new event with tickets, rows, seats or tables.
-            </div>
-          </Link>
-
-          <Link href="/admin/auctions" style={styles.card}>
-            <div style={styles.cardIcon}>🔨</div>
-            <div style={styles.cardTitle}>Manage Silent Auctions</div>
-            <div style={styles.cardDesc}>
-              View, edit and manage auction items, bids and winners.
-            </div>
-          </Link>
-
-          <Link href="/admin/auctions/new" style={styles.card}>
-            <div style={styles.cardIcon}>➕</div>
-            <div style={styles.cardTitle}>Create Silent Auction</div>
-            <div style={styles.cardDesc}>
-              Launch a new silent auction with items, bids and closing times.
-            </div>
+          <Link
+            href={`/c/${tenantSlug}`}
+            target="_blank"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "13px 18px",
+              borderRadius: 999,
+              background: "#ffffff",
+              color: "#0f172a",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none",
+              fontWeight: 900,
+            }}
+          >
+            Public campaigns page
           </Link>
         </div>
       </section>
 
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Platform</h2>
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: 18,
+        }}
+      >
+        <DashboardCard
+          href="/admin/raffles"
+          emoji="🎟️"
+          title="Raffles"
+          description="Create, manage and draw fundraising raffles."
+        />
 
-        <div style={styles.grid}>
-          <Link href="/admin/revenue" style={styles.card}>
-            <div style={styles.cardIcon}>💰</div>
-            <div style={styles.cardTitle}>Revenue & Fees</div>
-            <div style={styles.cardDesc}>
-              View sales, platform fees and payout information.
-            </div>
-          </Link>
-        </div>
+        <DashboardCard
+          href="/admin/squares"
+          emoji="🔲"
+          title="Squares"
+          description="Run football cards and live squares competitions."
+        />
+
+        <DashboardCard
+          href="/admin/events"
+          emoji="🎫"
+          title="Events"
+          description="Manage seating plans, ticketing and guest experiences."
+        />
+
+        <DashboardCard
+          href="/admin/auctions"
+          emoji="🔨"
+          title="Auctions"
+          description="Run premium silent auction fundraising campaigns."
+        />
       </section>
     </main>
   );
 }
 
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: 16,
-  },
-  hero: {
-    maxWidth: 1100,
-    margin: "24px auto 16px",
-    padding: 24,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-  },
-  eyebrow: {
-    margin: "0 0 8px",
-    color: "#2563eb",
-    fontWeight: 900,
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  title: {
-    margin: 0,
-    fontSize: "clamp(30px, 6vw, 44px)",
-    fontWeight: 950,
-    lineHeight: 1.05,
-    color: "#0f172a",
-  },
-  subtle: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-  },
-  section: {
-    maxWidth: 1100,
-    margin: "0 auto 16px",
-    padding: 20,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    boxShadow: "0 2px 14px rgba(15,23,42,0.08)",
-  },
-  sectionTitle: {
-    margin: "0 0 14px",
-    fontSize: 24,
-    color: "#0f172a",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 14,
-  },
-  card: {
-    display: "block",
-    padding: 18,
-    borderRadius: 16,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-    textDecoration: "none",
-    color: "#111827",
-  },
-  cardIcon: {
-    fontSize: 28,
-    marginBottom: 10,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    marginBottom: 6,
-  },
-  cardDesc: {
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 1.45,
-  },
-  signOut: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    border: "1px solid #111827",
-    background: "#111827",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-};
+function DashboardCard({
+  href,
+  emoji,
+  title,
+  description,
+}: {
+  href: string;
+  emoji: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        textDecoration: "none",
+      }}
+    >
+      <article
+        style={{
+          height: "100%",
+          borderRadius: 28,
+          padding: 24,
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+          transition: "all 0.2s ease",
+        }}
+      >
+        <div
+          style={{
+            width: 68,
+            height: 68,
+            borderRadius: 22,
+            background:
+              "linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f8fafc 100%)",
+            border: "1px solid #dbeafe",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 32,
+            marginBottom: 18,
+          }}
+        >
+          {emoji}
+        </div>
+
+        <h2
+          className="so-brand-card-title"
+          style={{
+            margin: 0,
+            fontSize: 28,
+            lineHeight: 1.1,
+            color: "#0f172a",
+            letterSpacing: "-0.04em",
+          }}
+        >
+          {title}
+        </h2>
+
+        <p
+          style={{
+            margin: "12px 0 0",
+            color: "#64748b",
+            lineHeight: 1.65,
+            fontSize: 15,
+          }}
+        >
+          {description}
+        </p>
+
+        <div
+          style={{
+            marginTop: 20,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            color: "#1683f8",
+            fontWeight: 900,
+          }}
+        >
+          Open dashboard →
+        </div>
+      </article>
+    </Link>
+  );
+}
