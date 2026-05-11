@@ -55,7 +55,7 @@ function getImageStyle(campaign: Campaign): CSSProperties {
         )}%`
       : "center",
     display: "block",
-    padding: hasImage ? 0 : 22,
+    padding: hasImage ? 0 : 28,
     boxSizing: "border-box",
     background: hasImage
       ? "#f1f5f9"
@@ -79,6 +79,55 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "auction") return "Auction";
 
   return "Campaign";
+}
+
+function getTypeStyle(type: Campaign["type"]): CSSProperties {
+  if (type === "raffle") {
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
+  }
+
+  if (type === "squares") {
+    return {
+      background: "#f5f3ff",
+      color: "#6d28d9",
+      borderColor: "#ddd6fe",
+    };
+  }
+
+  if (type === "event") {
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (type === "auction") {
+    return {
+      background: "#fffbeb",
+      color: "#92400e",
+      borderColor: "#fde68a",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
+}
+
+function getTypeMeta(type: Campaign["type"]) {
+  if (type === "raffle") return "Prize draw campaign";
+  if (type === "squares") return "Pick a square to support";
+  if (type === "event") return "Ticketed fundraising event";
+  if (type === "auction") return "Bid, support, make an impact";
+
+  return "Fundraising campaign";
 }
 
 function getSafeAdminReturn(value?: string) {
@@ -105,34 +154,36 @@ export default async function TenantCampaignsPage({
 
   return (
     <main style={styles.page}>
-      <section style={styles.header}>
-        {adminReturn ? (
-          <div style={{ marginBottom: 16 }}>
-            <Link href={adminReturn} style={styles.adminBack}>
-              ← Back to admin
+      <section style={styles.headerShell}>
+        <div style={styles.header}>
+          {adminReturn ? (
+            <div style={{ marginBottom: 16 }}>
+              <Link href={adminReturn} style={styles.adminBack}>
+                ← Back to admin
+              </Link>
+            </div>
+          ) : null}
+
+          <div style={styles.badge}>Fundraising campaigns</div>
+
+          <h1 className="so-brand-heading" style={styles.title}>
+            Active Campaigns
+          </h1>
+
+          <p style={styles.subtitle}>
+            Choose an active raffle, squares campaign, event, or auction to
+            support.
+          </p>
+
+          <div style={styles.legalLinks}>
+            <Link href={`/c/${tenantSlug}/terms`} style={styles.legalLink}>
+              Terms of Use
+            </Link>
+
+            <Link href={`/c/${tenantSlug}/privacy`} style={styles.legalLink}>
+              Privacy Policy
             </Link>
           </div>
-        ) : null}
-
-        <div style={styles.badge}>Fundraising campaigns</div>
-
-        <h1 className="so-brand-heading" style={styles.title}>
-          Active Campaigns
-        </h1>
-
-        <p style={styles.subtitle}>
-          Choose an active raffle, squares campaign, event, or auction to
-          support.
-        </p>
-
-        <div style={styles.legalLinks}>
-          <Link href={`/c/${tenantSlug}/terms`} style={styles.legalLink}>
-            Terms of Use
-          </Link>
-
-          <Link href={`/c/${tenantSlug}/privacy`} style={styles.legalLink}>
-            Privacy Policy
-          </Link>
         </div>
       </section>
 
@@ -163,11 +214,20 @@ export default async function TenantCampaignsPage({
               </div>
 
               <div style={styles.cardBody}>
-                <div style={styles.typePill}>{getTypeLabel(campaign.type)}</div>
+                <div
+                  style={{
+                    ...styles.typePill,
+                    ...getTypeStyle(campaign.type),
+                  }}
+                >
+                  {getTypeLabel(campaign.type)}
+                </div>
 
                 <h2 className="so-brand-card-title" style={styles.cardTitle}>
                   {campaign.title}
                 </h2>
+
+                <div style={styles.metaLine}>{getTypeMeta(campaign.type)}</div>
 
                 {campaign.description ? (
                   <p style={styles.description}>
@@ -176,9 +236,7 @@ export default async function TenantCampaignsPage({
                       : campaign.description}
                   </p>
                 ) : (
-                  <p style={styles.descriptionMuted}>
-                    No campaign description added yet.
-                  </p>
+                  <p style={styles.descriptionMuted}>More details coming soon.</p>
                 )}
 
                 <div style={styles.button}>View campaign</div>
@@ -195,11 +253,16 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f8fafc",
-    padding: "32px 16px 56px",
+    padding: "0 16px 56px",
+  },
+  headerShell: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: "34px 0 24px",
   },
   header: {
-    maxWidth: 1100,
-    margin: "0 auto 24px",
+    borderRadius: 26,
+    padding: "24px 0 0",
   },
   adminBack: {
     display: "inline-flex",
@@ -265,7 +328,7 @@ const styles: Record<string, CSSProperties> = {
   card: {
     display: "grid",
     gridTemplateColumns: "1fr",
-    gap: 12,
+    gap: 14,
     padding: 16,
     borderRadius: 22,
     border: "1px solid #e2e8f0",
@@ -275,11 +338,12 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   imageWrap: {
-    height: 180,
-    borderRadius: 16,
+    height: 178,
+    borderRadius: 18,
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
   },
   cardBody: {
     minWidth: 0,
@@ -291,8 +355,7 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     padding: "5px 9px",
     borderRadius: 999,
-    background: "#ecfdf5",
-    color: "#166534",
+    border: "1px solid",
     fontSize: 12,
     fontWeight: 900,
   },
@@ -303,6 +366,11 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     letterSpacing: "-0.02em",
     wordBreak: "break-word",
+  },
+  metaLine: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
   },
   description: {
     margin: 0,
@@ -323,13 +391,15 @@ const styles: Record<string, CSSProperties> = {
     background: "#1683f8",
     color: "#ffffff",
     fontWeight: 900,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
   emptyCard: {
     maxWidth: 1100,
     margin: "0 auto",
-    padding: 24,
+    padding: 28,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
 };
