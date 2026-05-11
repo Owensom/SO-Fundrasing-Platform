@@ -115,24 +115,19 @@ export default async function EventSlugPage({
   return (
     <main className={poppins.className} style={styles.page}>
       <section style={styles.hero}>
-        {hasCustomImage ? (
-          <img
-            src={event.image_url || DEFAULT_EVENTS_IMAGE}
-            alt={event.title || "SO Events"}
-            style={{
-              ...styles.customHeroImage,
-              objectPosition: `${event.image_focus_x ?? 50}% ${
-                event.image_focus_y ?? 50
-              }%`,
-            }}
-          />
-        ) : (
-          <img
-            src={DEFAULT_EVENTS_IMAGE}
-            alt={event.title || "SO Events"}
-            style={styles.defaultHeroImage}
-          />
-        )}
+        <img
+          src={event.image_url || DEFAULT_EVENTS_IMAGE}
+          alt={event.title || "SO Events"}
+          style={{
+            ...styles.heroImage,
+            objectFit: hasCustomImage ? "cover" : "contain",
+            objectPosition: hasCustomImage
+              ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
+              : "center",
+            padding: hasCustomImage ? 0 : 64,
+            opacity: hasCustomImage ? 0.3 : 0.24,
+          }}
+        />
 
         <div style={styles.heroOverlay} />
 
@@ -355,42 +350,33 @@ const styles: Record<string, CSSProperties> = {
   },
   hero: {
     position: "relative",
-    minHeight: "640px",
+    minHeight: "620px",
     overflow: "hidden",
-    background: "#0d1b3d",
+    background:
+      "radial-gradient(circle at 50% 38%, #1d315c 0%, #0d1b3d 42%, #071227 100%)",
   },
-  customHeroImage: {
+  heroImage: {
     position: "absolute",
     inset: 0,
     width: "100%",
     height: "100%",
-    objectFit: "cover",
-    opacity: 0.46,
-    filter: "saturate(0.95) contrast(1.05)",
-  },
-  defaultHeroImage: {
-    position: "absolute",
-    top: "50%",
-    right: "8%",
-    width: "min(560px, 42vw)",
-    height: "auto",
-    transform: "translateY(-50%)",
-    opacity: 0.72,
-    filter: "drop-shadow(0 28px 50px rgba(0,0,0,0.35))",
+    display: "block",
+    boxSizing: "border-box",
+    filter: "saturate(0.98) contrast(1.03)",
   },
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(90deg, rgba(13,27,61,0.98) 0%, rgba(13,27,61,0.88) 38%, rgba(13,27,61,0.52) 68%, rgba(13,27,61,0.80) 100%), linear-gradient(180deg, rgba(13,27,61,0.10) 0%, rgba(13,27,61,0.92) 100%)",
+      "radial-gradient(circle at 50% 34%, rgba(255,255,255,0.10) 0%, rgba(13,27,61,0.42) 30%, rgba(13,27,61,0.92) 78%), linear-gradient(180deg, rgba(13,27,61,0.28) 0%, rgba(13,27,61,0.98) 100%)",
   },
   heroInner: {
     position: "relative",
     zIndex: 2,
-    maxWidth: 1200,
-    minHeight: "640px",
+    maxWidth: 1160,
+    minHeight: "620px",
     margin: "0 auto",
-    padding: "34px 28px 54px",
+    padding: "34px 28px 58px",
     display: "flex",
     flexDirection: "column",
   },
@@ -412,8 +398,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.24)",
+    background: "rgba(255,255,255,0.11)",
+    border: "1px solid rgba(255,255,255,0.25)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
@@ -426,21 +412,24 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.24)",
+    background: "rgba(255,255,255,0.11)",
+    border: "1px solid rgba(255,255,255,0.25)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
     backdropFilter: "blur(12px)",
   },
   heroContent: {
-    marginTop: "auto",
-    maxWidth: 820,
+    margin: "auto auto 0",
+    maxWidth: 900,
+    width: "100%",
+    textAlign: "center",
   },
   heroPills: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
+    justifyContent: "center",
     marginBottom: 18,
   },
   goldPill: {
@@ -467,9 +456,9 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: "clamp(52px, 8vw, 96px)",
-    lineHeight: 0.92,
-    letterSpacing: "-0.065em",
+    fontSize: "clamp(44px, 7vw, 88px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.058em",
     fontWeight: 900,
     color: "#ffffff",
     textShadow: "0 18px 45px rgba(0,0,0,0.45)",
@@ -477,13 +466,13 @@ const styles: Record<string, CSSProperties> = {
   heroTagline: {
     marginTop: 18,
     color: "#f7d98a",
-    letterSpacing: "0.26em",
+    letterSpacing: "0.28em",
     textTransform: "uppercase",
-    fontSize: "clamp(12px, 1.5vw, 18px)",
+    fontSize: "clamp(12px, 1.45vw, 18px)",
     fontWeight: 800,
   },
   heroStats: {
-    marginTop: 28,
+    margin: "30px auto 0",
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 12,
@@ -495,6 +484,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.13)",
     border: "1px solid rgba(255,255,255,0.24)",
     backdropFilter: "blur(14px)",
+    textAlign: "left",
   },
   heroStatLabel: {
     display: "block",
@@ -513,7 +503,7 @@ const styles: Record<string, CSSProperties> = {
   },
   wrap: {
     maxWidth: 1120,
-    margin: "-46px auto 0",
+    margin: "-54px auto 0",
     padding: "0 24px 40px",
     position: "relative",
     zIndex: 3,
