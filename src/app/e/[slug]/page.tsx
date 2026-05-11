@@ -123,9 +123,9 @@ export default async function EventSlugPage({
             objectFit: hasCustomImage ? "cover" : "contain",
             objectPosition: hasCustomImage
               ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
-              : "center",
-            padding: hasCustomImage ? 0 : 64,
-            opacity: hasCustomImage ? 0.3 : 0.24,
+              : "50% 34%",
+            opacity: hasCustomImage ? 0.5 : 0.68,
+            padding: hasCustomImage ? 0 : 18,
           }}
         />
 
@@ -282,9 +282,7 @@ export default async function EventSlugPage({
               </p>
             </div>
 
-            <div style={styles.checkoutBadge}>
-              Secure Stripe checkout
-            </div>
+            <div style={styles.checkoutBadge}>Secure Stripe checkout</div>
           </div>
 
           {event.event_type === "general_admission" ? (
@@ -298,9 +296,7 @@ export default async function EventSlugPage({
               <div style={styles.emptyLarge}>
                 <strong>No table seats available yet</strong>
 
-                <p style={styles.muted}>
-                  Tables may not have been released yet.
-                </p>
+                <p style={styles.muted}>Tables may not have been released yet.</p>
               </div>
             ) : (
               <PublicTableSelector
@@ -320,9 +316,7 @@ export default async function EventSlugPage({
             <div style={styles.emptyLarge}>
               <strong>No seats available yet</strong>
 
-              <p style={styles.muted}>
-                Seats may not have been released yet.
-              </p>
+              <p style={styles.muted}>Seats may not have been released yet.</p>
             </div>
           ) : (
             <PublicReservedSeatSelector
@@ -341,13 +335,7 @@ export default async function EventSlugPage({
   );
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <p style={styles.infoRow}>
       <strong>{label}:</strong> {value}
@@ -355,13 +343,7 @@ function InfoRow({
   );
 }
 
-function HeroStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroStat}>
       <span style={styles.heroStatLabel}>{label}</span>
@@ -380,10 +362,9 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     position: "relative",
-    minHeight: "620px",
+    minHeight: "650px",
     overflow: "hidden",
-    background:
-      "radial-gradient(circle at 50% 38%, #1d315c 0%, #0d1b3d 42%, #071227 100%)",
+    background: "#0d1b3d",
   },
 
   heroImage: {
@@ -393,23 +374,23 @@ const styles: Record<string, CSSProperties> = {
     height: "100%",
     display: "block",
     boxSizing: "border-box",
-    filter: "saturate(0.98) contrast(1.03)",
+    filter: "saturate(0.95) contrast(1.02)",
   },
 
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "radial-gradient(circle at 50% 34%, rgba(255,255,255,0.10) 0%, rgba(13,27,61,0.42) 30%, rgba(13,27,61,0.92) 78%), linear-gradient(180deg, rgba(13,27,61,0.28) 0%, rgba(13,27,61,0.98) 100%)",
+      "linear-gradient(180deg, rgba(248,250,252,0.58) 0%, rgba(96,112,133,0.52) 28%, rgba(13,27,61,0.78) 70%, rgba(7,18,39,0.96) 100%), linear-gradient(90deg, rgba(13,27,61,0.16) 0%, rgba(13,27,61,0.04) 48%, rgba(13,27,61,0.20) 100%)",
   },
 
   heroInner: {
     position: "relative",
     zIndex: 2,
-    maxWidth: 1160,
-    minHeight: "620px",
+    maxWidth: 980,
+    minHeight: "650px",
     margin: "0 auto",
-    padding: "34px 28px 58px",
+    padding: "42px 28px 44px",
     display: "flex",
     flexDirection: "column",
   },
@@ -434,8 +415,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.11)",
-    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.28)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
@@ -449,8 +430,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.11)",
-    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.28)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
@@ -458,18 +439,16 @@ const styles: Record<string, CSSProperties> = {
   },
 
   heroContent: {
-    margin: "auto auto 0",
-    maxWidth: 900,
-    width: "100%",
-    textAlign: "center",
+    marginTop: "auto",
+    maxWidth: 760,
+    textAlign: "left",
   },
 
   heroPills: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    justifyContent: "center",
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
   goldPill: {
@@ -477,11 +456,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     borderRadius: 999,
     padding: "8px 12px",
-    background: "rgba(200,162,74,0.18)",
-    border: "1px solid rgba(200,162,74,0.62)",
-    color: "#f7d98a",
+    background: "rgba(200,162,74,0.26)",
+    border: "1px solid rgba(200,162,74,0.76)",
+    color: "#fff0bf",
     fontWeight: 800,
     fontSize: 13,
+    boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
   },
 
   lightPill: {
@@ -489,39 +469,41 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     borderRadius: 999,
     padding: "8px 12px",
-    background: "rgba(255,255,255,0.12)",
-    border: "1px solid rgba(255,255,255,0.24)",
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.30)",
     color: "#ffffff",
     fontWeight: 800,
     fontSize: 13,
+    boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(52px, 8vw, 96px)",
-    lineHeight: 0.92,
-    letterSpacing: "-0.065em",
+    fontSize: "clamp(58px, 8.5vw, 96px)",
+    lineHeight: 0.9,
+    letterSpacing: "-0.07em",
     fontWeight: 900,
     color: "#ffffff",
     textShadow:
-      "0 2px 0 rgba(200,162,74,0.55), 0 18px 45px rgba(0,0,0,0.45)",
+      "0 3px 0 rgba(200,162,74,0.42), 0 18px 42px rgba(0,0,0,0.42)",
   },
 
   heroTagline: {
-    marginTop: 18,
-    color: "#f7d98a",
-    letterSpacing: "0.28em",
+    marginTop: 16,
+    color: "#111827",
+    letterSpacing: "0.27em",
     textTransform: "uppercase",
-    fontSize: "clamp(12px, 1.45vw, 18px)",
+    fontSize: "clamp(13px, 1.6vw, 20px)",
     fontWeight: 800,
+    textShadow: "0 1px 0 rgba(255,255,255,0.20)",
   },
 
   heroStats: {
-    margin: "30px auto 0",
+    marginTop: 28,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(176px, 1fr))",
     gap: 12,
-    maxWidth: 820,
+    maxWidth: 780,
   },
 
   heroStat: {
@@ -552,7 +534,7 @@ const styles: Record<string, CSSProperties> = {
 
   wrap: {
     maxWidth: 1120,
-    margin: "-54px auto 0",
+    margin: "24px auto 0",
     padding: "0 24px 40px",
     position: "relative",
     zIndex: 3,
@@ -570,7 +552,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid rgba(13,27,61,0.10)",
-    boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
+    boxShadow: "0 18px 46px rgba(15,23,42,0.10)",
   },
 
   sectionKicker: {
@@ -602,7 +584,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "linear-gradient(180deg, #0d1b3d 0%, #132957 100%)",
     border: "1px solid rgba(200,162,74,0.42)",
-    boxShadow: "0 24px 70px rgba(15,23,42,0.16)",
+    boxShadow: "0 18px 46px rgba(15,23,42,0.14)",
   },
 
   panelTitle: {
@@ -692,7 +674,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
+    boxShadow: "0 18px 46px rgba(15,23,42,0.10)",
   },
 
   bookHeader: {
