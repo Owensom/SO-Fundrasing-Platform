@@ -11,6 +11,8 @@ import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import SquaresPrizeSettings from "./SquaresPrizeSettings";
 import DramaticSquaresDraw from "./DramaticSquaresDraw";
 
+const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
+
 type PageProps = {
   params: {
     id: string;
@@ -144,6 +146,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   const config = (game.config_json ?? {}) as any;
   const question = config.question ?? {};
   const freeEntry = config.free_entry ?? {};
+  const hasCustomImage = Boolean(game.image_url);
 
   const savedPrizes = Array.isArray(config.prizes)
     ? (config.prizes as Prize[])
@@ -197,7 +200,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <div style={styles.eyebrow}>Squares editor</div>
 
           <div style={styles.heroTitleRow}>
-            <h1 style={styles.heroTitle}>{game.title}</h1>
+            <h1 className="so-brand-heading" style={styles.heroTitle}>
+              {game.title}
+            </h1>
 
             <span style={{ ...styles.statusPill, ...statusStyle(game.status) }}>
               {game.status}
@@ -214,15 +219,19 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         </div>
 
         <div style={styles.heroImageWrap}>
-          {game.image_url ? (
-            <img
-              src={game.image_url}
-              alt={game.title}
-              style={styles.heroImage}
-            />
-          ) : (
-            <div style={styles.heroImageEmpty}>🔲</div>
-          )}
+          <img
+            src={game.image_url || DEFAULT_SQUARES_IMAGE}
+            alt={game.title || "SO Squares"}
+            style={{
+              ...styles.heroImage,
+              objectFit: hasCustomImage ? "cover" : "contain",
+              padding: hasCustomImage ? 0 : 28,
+              background: hasCustomImage
+                ? "#1e293b"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+              boxSizing: "border-box",
+            }}
+          />
         </div>
       </section>
 
@@ -253,7 +262,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <div style={{ ...styles.progressFill, width: `${progress}%` }} />
         </div>
       </section>
-            <form
+
+      <form
         action={`/api/admin/squares/${game.id}`}
         method="post"
         style={styles.form}
@@ -261,7 +271,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>Edit squares game</h2>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Edit squares game
+              </h2>
               <p style={styles.sectionDescription}>
                 Update the public details, image, pricing and draw settings.
               </p>
@@ -315,15 +327,19 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             </div>
 
             <div style={styles.previewBox}>
-              {game.image_url ? (
-                <img
-                  src={game.image_url}
-                  alt={game.title}
-                  style={styles.previewImage}
-                />
-              ) : (
-                <div style={styles.emptyPreview}>🔲</div>
-              )}
+              <img
+                src={game.image_url || DEFAULT_SQUARES_IMAGE}
+                alt={game.title || "SO Squares"}
+                style={{
+                  ...styles.previewImage,
+                  objectFit: hasCustomImage ? "cover" : "contain",
+                  padding: hasCustomImage ? 0 : 22,
+                  background: hasCustomImage
+                    ? "#ffffff"
+                    : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+                  boxSizing: "border-box",
+                }}
+              />
             </div>
           </div>
         </section>
@@ -331,7 +347,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>Squares setup</h2>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Squares setup
+              </h2>
               <p style={styles.sectionDescription}>
                 Configure board size, pricing, draw date and status.
               </p>
@@ -394,7 +412,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>Entry question (legal)</h2>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Entry question (legal)
+              </h2>
               <p style={styles.sectionDescription}>
                 Add a skill-based question for the public squares checkout flow.
               </p>
@@ -430,7 +450,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>Free postal entry</h2>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Free postal entry
+              </h2>
               <p style={styles.sectionDescription}>
                 Add the postal entry route shown on the public squares page.
               </p>
@@ -474,7 +496,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <div>
-              <h2 style={styles.sectionTitle}>Auto draw range</h2>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Auto draw range
+              </h2>
               <p style={styles.sectionDescription}>
                 Choose which prize numbers the randomizer should draw. Example:
                 set from 6 to 999 to keep the top 5 prizes for a live draw.
@@ -520,10 +544,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           </button>
         </section>
       </form>
-            <section style={styles.section}>
+
+      <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <div>
-            <h2 style={styles.sectionTitle}>Winners</h2>
+            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+              Winners
+            </h2>
             <p style={styles.sectionDescription}>
               View winners, auto draw remaining prizes, or manually add a live
               draw winner.
@@ -622,6 +649,7 @@ function Field({
     </label>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
@@ -734,18 +762,7 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     height: "100%",
     maxHeight: 220,
-    objectFit: "cover",
     display: "block",
-  },
-  heroImageEmpty: {
-    width: "100%",
-    height: "100%",
-    minHeight: 220,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 46,
-    color: "#94a3b8",
   },
   summaryGrid: {
     display: "grid",
@@ -904,16 +921,7 @@ const styles: Record<string, CSSProperties> = {
   previewImage: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
-  },
-  emptyPreview: {
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#94a3b8",
-    fontSize: 42,
   },
   submitBar: {
     display: "flex",
