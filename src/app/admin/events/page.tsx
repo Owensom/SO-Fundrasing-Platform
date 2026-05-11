@@ -6,13 +6,7 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listEvents } from "../../../../api/_lib/events-repo";
 
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
-
-function formatMoney(
-  cents: number | null | undefined,
-  currency: string | null | undefined,
-) {
-  return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
-}
+const EVENTS_LOGO_IMAGE = "/brand/so-default-events.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -27,14 +21,20 @@ function formatDate(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatEventType(value: string | null | undefined) {
+  return String(value || "general_admission")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function getStatusStyle(status: string | null | undefined): CSSProperties {
   const clean = String(status || "draft").toLowerCase();
 
   if (clean === "published") {
     return {
-      background: "#dcfce7",
+      background: "#ecfdf5",
       color: "#166534",
-      border: "1px solid #bbf7d0",
+      borderColor: "#bbf7d0",
     };
   }
 
@@ -42,14 +42,14 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
     return {
       background: "#fff7ed",
       color: "#9a3412",
-      border: "1px solid #fed7aa",
+      borderColor: "#fed7aa",
     };
   }
 
   return {
-    background: "#f1f5f9",
+    background: "#f8fafc",
     color: "#475569",
-    border: "1px solid #e2e8f0",
+    borderColor: "#e2e8f0",
   };
 }
 
@@ -76,6 +76,9 @@ export default async function AdminEventsPage() {
     (event) => event.status === "published",
   ).length;
 
+  const draftCount = events.filter((event) => event.status !== "published")
+    .length;
+
   const totalCapacity = events.reduce(
     (sum, event) => sum + Number(event.capacity || 0),
     0,
@@ -92,7 +95,7 @@ export default async function AdminEventsPage() {
           </h1>
 
           <p style={styles.subtitle}>
-            Tenant: <strong>{tenantSlug}</strong>
+            Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
           </p>
         </div>
 
@@ -109,16 +112,14 @@ export default async function AdminEventsPage() {
             Squares
           </Link>
 
-          <Link href="/admin/events" style={styles.navButtonActive}>
-            Events
-          </Link>
+          <div style={styles.navButtonActive}>Events</div>
 
           <Link href="/admin/auctions" style={styles.navButton}>
             Auctions
           </Link>
 
           <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
-            Public campaigns page
+            Public site
           </Link>
 
           <Link href="/admin/events/new" style={styles.createButton}>
@@ -128,9 +129,37 @@ export default async function AdminEventsPage() {
       </section>
 
       <section style={styles.statsGrid}>
-        <StatCard label="Total events" value={events.length} />
-        <StatCard label="Published" value={publishedCount} />
-        <StatCard label="Combined capacity" value={totalCapacity} />
+        <StatCard
+          label="Total events"
+          value={events.length}
+          image={EVENTS_LOGO_IMAGE}
+          accent="#1683f8"
+          tint="#eff6ff"
+        />
+
+        <StatCard
+          label="Published"
+          value={publishedCount}
+          icon="✓"
+          accent="#16a34a"
+          tint="#ecfdf5"
+        />
+
+        <StatCard
+          label="Combined capacity"
+          value={totalCapacity}
+          icon="↗"
+          accent="#7c3aed"
+          tint="#f5f3ff"
+        />
+
+        <StatCard
+          label="Draft / private"
+          value={draftCount}
+          icon="•"
+          accent="#64748b"
+          tint="#f8fafc"
+        />
       </section>
 
       {events.length === 0 ? (
@@ -149,6 +178,7 @@ export default async function AdminEventsPage() {
         <section style={styles.list}>
           {events.map((event) => {
             const hasCustomImage = Boolean(event.image_url);
+            const capacity = Number(event.capacity || 0);
 
             return (
               <article key={event.id} style={styles.card}>
@@ -171,7 +201,7 @@ export default async function AdminEventsPage() {
 
                   <div style={styles.cardMain}>
                     <div style={styles.cardHeader}>
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <h2 className="so-brand-card-title" style={styles.cardTitle}>
                           {event.title || "Untitled event"}
                         </h2>
@@ -189,6 +219,20 @@ export default async function AdminEventsPage() {
                       </span>
                     </div>
 
+                    <div style={styles.headlineGrid}>
+                      <div style={styles.headlineBox}>
+                        <div style={styles.headlineLabel}>Starts</div>
+                        <div style={styles.headlineValue}>
+                          {formatDate(event.starts_at)}
+                        </div>
+                      </div>
+
+                      <div style={styles.headlineBox}>
+                        <div style={styles.headlineLabel}>Capacity</div>
+                        <div style={styles.headlineValue}>{capacity}</div>
+                      </div>
+                    </div>
+
                     {event.description ? (
                       <p style={styles.description}>
                         {event.description.length > 150
@@ -202,11 +246,14 @@ export default async function AdminEventsPage() {
 
                       <Detail label="Ends" value={formatDate(event.ends_at)} />
 
-                      <Detail label="Capacity" value={event.capacity || 0} />
+                      <Detail label="Capacity" value={capacity} />
 
                       <Detail label="Currency" value={event.currency || "GBP"} />
 
-                      <Detail label="Type" value={event.event_type || "general"} />
+                      <Detail
+                        label="Type"
+                        value={formatEventType(event.event_type)}
+                      />
                     </div>
 
                     <div style={styles.actions}>
@@ -223,7 +270,7 @@ export default async function AdminEventsPage() {
                         rel="noreferrer"
                         style={styles.viewButton}
                       >
-                        View campaign page
+                        View campaign
                       </a>
                     </div>
                   </div>
@@ -237,11 +284,60 @@ export default async function AdminEventsPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: ReactNode }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  image,
+  accent,
+  tint,
+}: {
+  label: string;
+  value: ReactNode;
+  icon?: string;
+  image?: string;
+  accent: string;
+  tint: string;
+}) {
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
-      <div style={styles.statValue}>{value}</div>
+    <div
+      style={{
+        ...styles.statCard,
+        borderTopColor: accent,
+      }}
+    >
+      <div style={styles.statTop}>
+        <div>
+          <div style={styles.statLabel}>{label}</div>
+          <div style={styles.statValue}>{value}</div>
+        </div>
+
+        <div
+          style={{
+            ...styles.statIcon,
+            background: tint,
+            color: accent,
+            borderColor: accent,
+            padding: image ? 4 : 0,
+            overflow: "hidden",
+          }}
+        >
+          {image ? (
+            <img
+              src={image}
+              alt={label}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          ) : (
+            icon
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -259,7 +355,7 @@ const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
     margin: "0 auto",
-    padding: "28px 16px 56px",
+    padding: "32px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
   },
@@ -269,7 +365,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 24,
+    marginBottom: 22,
   },
   badge: {
     display: "inline-flex",
@@ -283,13 +379,15 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: 38,
+    fontSize: 34,
     lineHeight: 1.1,
+    letterSpacing: "-0.04em",
     color: "#0f172a",
   },
   subtitle: {
     margin: "10px 0 0",
     color: "#64748b",
+    fontSize: 15,
   },
   nav: {
     display: "flex",
@@ -298,8 +396,11 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "flex-end",
   },
   navButton: {
-    padding: "12px 18px",
-    borderRadius: 999,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
@@ -307,8 +408,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
   navButtonActive: {
-    padding: "12px 18px",
-    borderRadius: 999,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
     border: "1px solid #0f172a",
@@ -317,8 +421,10 @@ const styles: Record<string, CSSProperties> = {
   },
   createButton: {
     display: "inline-flex",
-    padding: "12px 18px",
-    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
@@ -327,16 +433,35 @@ const styles: Record<string, CSSProperties> = {
   },
   statsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
     marginBottom: 22,
   },
   statCard: {
-    padding: 18,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    borderTop: "4px solid #1683f8",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  statTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+  statIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    border: "1px solid",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 15,
+    fontWeight: 900,
+    flexShrink: 0,
   },
   statLabel: {
     color: "#64748b",
@@ -344,10 +469,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
   statValue: {
-    marginTop: 6,
+    marginTop: 4,
     fontSize: 28,
     fontWeight: 950,
     color: "#0f172a",
+    letterSpacing: "-0.03em",
   },
   list: {
     display: "grid",
@@ -362,21 +488,24 @@ const styles: Record<string, CSSProperties> = {
   },
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "110px 1fr",
-    gap: 18,
+    gridTemplateColumns: "104px 1fr",
+    gap: 16,
+    alignItems: "start",
   },
   imageWrap: {
-    width: 110,
-    height: 110,
-    borderRadius: 18,
+    width: 104,
+    height: 104,
+    borderRadius: 20,
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
   },
   image: {
     width: "100%",
     height: "100%",
     display: "block",
+    objectPosition: "center center",
   },
   cardMain: {
     minWidth: 0,
@@ -386,42 +515,75 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
     alignItems: "flex-start",
+    flexWrap: "wrap",
   },
   cardTitle: {
     margin: 0,
-    fontSize: 24,
+    fontSize: 22,
     lineHeight: 1.15,
     color: "#0f172a",
+    letterSpacing: "-0.02em",
+    wordBreak: "break-word",
   },
   slug: {
-    margin: "4px 0 0",
+    margin: "6px 0 0",
     color: "#64748b",
+    fontSize: 14,
     fontWeight: 700,
+    wordBreak: "break-word",
   },
   status: {
     display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
+    padding: "7px 11px",
+    borderRadius: 9999,
+    border: "1px solid",
     fontSize: 13,
     fontWeight: 900,
     textTransform: "capitalize",
   },
+  headlineGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  headlineBox: {
+    padding: "13px 14px",
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+    border: "1px solid #e2e8f0",
+  },
+  headlineLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 900,
+  },
+  headlineValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontSize: 19,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+    wordBreak: "break-word",
+  },
   description: {
     marginTop: 12,
     color: "#475569",
+    fontSize: 14,
     lineHeight: 1.6,
   },
   detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
-    marginTop: 14,
+    marginTop: 16,
   },
   detail: {
     padding: 12,
     borderRadius: 14,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   detailLabel: {
     color: "#64748b",
@@ -432,6 +594,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
     color: "#0f172a",
     fontWeight: 900,
+    wordBreak: "break-word",
   },
   actions: {
     display: "flex",
@@ -440,29 +603,40 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 18,
   },
   openButton: {
-    padding: "12px 16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 900,
+    fontSize: 14,
   },
   viewButton: {
-    padding: "12px 16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
     textDecoration: "none",
     fontWeight: 900,
+    fontSize: 14,
+    boxShadow: "none",
   },
   emptyCard: {
-    padding: 24,
+    padding: 28,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   muted: {
     color: "#64748b",
+    margin: "8px 0 18px",
   },
 };
