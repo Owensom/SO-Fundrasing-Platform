@@ -29,6 +29,8 @@ type TicketTypeRow = {
   is_active: boolean;
 };
 
+const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
+
 const DEFAULT_TICKETS: TicketTypeRow[] = [
   {
     id: "ticket-standard",
@@ -333,7 +335,11 @@ export default function NewEventForm({ tenantSlug }: Props) {
               style={focusedImageStyle}
             />
           ) : (
-            <div style={styles.heroImageEmpty}>🎫</div>
+            <img
+              src={DEFAULT_EVENTS_IMAGE}
+              alt="Event placeholder"
+              style={styles.placeholderImage}
+            />
           )}
         </div>
       </section>
@@ -386,7 +392,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
           </Field>
 
           <div style={styles.mediaBox}>
-            <div>
+            <div style={styles.mediaControls}>
               <h3 style={styles.panelTitle}>Event image</h3>
               <p style={styles.sectionText}>
                 Upload or replace the public event image, then choose the focal
@@ -413,7 +419,11 @@ export default function NewEventForm({ tenantSlug }: Props) {
                   style={focusedImageStyle}
                 />
               ) : (
-                <div style={styles.emptyPreview}>🎫</div>
+                <img
+                  src={DEFAULT_EVENTS_IMAGE}
+                  alt="Event placeholder"
+                  style={styles.previewPlaceholderImage}
+                />
               )}
             </div>
           </div>
@@ -904,7 +914,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
       </section>
 
       <section style={styles.submitBar}>
-        <div>
+        <div style={styles.submitText}>
           <strong style={{ color: "#0f172a" }}>Create event</strong>
           <div style={styles.mutedSmall}>
             After creation you’ll be taken to the full event manage page.
@@ -932,6 +942,8 @@ const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
     gap: 16,
+    width: "100%",
+    maxWidth: "100%",
   },
   topBar: {
     display: "flex",
@@ -965,16 +977,19 @@ const styles: Record<string, CSSProperties> = {
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 240px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 18,
     alignItems: "stretch",
-    padding: 22,
+    padding: "clamp(18px, 4vw, 22px)",
     borderRadius: 24,
     background: "#0f172a",
     color: "#ffffff",
     marginBottom: 0,
+    overflow: "hidden",
   },
-  heroContent: { minWidth: 0 },
+  heroContent: {
+    minWidth: 0,
+  },
   eyebrow: {
     display: "inline-flex",
     padding: "5px 9px",
@@ -988,15 +1003,17 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: 34,
+    fontSize: "clamp(30px, 8vw, 34px)",
     lineHeight: 1.08,
     letterSpacing: "-0.04em",
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   subtle: {
     margin: "12px 0 0",
     color: "#cbd5e1",
     fontSize: 14,
+    overflowWrap: "anywhere",
   },
   badgeRow: {
     display: "flex",
@@ -1025,23 +1042,25 @@ const styles: Record<string, CSSProperties> = {
     background: "#1e293b",
     border: "1px solid rgba(255,255,255,0.12)",
     overflow: "hidden",
-    minHeight: 150,
-  },
-  heroImageEmpty: {
-    height: "100%",
-    minHeight: 150,
+    minHeight: 220,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 42,
-    color: "#94a3b8",
+  },
+  placeholderImage: {
+    width: "min(82%, 230px)",
+    height: "min(82%, 230px)",
+    objectFit: "contain",
+    display: "block",
   },
   section: {
-    padding: 18,
+    padding: "clamp(14px, 4vw, 18px)",
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflow: "hidden",
   },
   sectionHeader: {
     display: "flex",
@@ -1064,12 +1083,14 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 24,
     letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
   },
   sectionText: {
     margin: "6px 0 12px",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
   formInner: {
     display: "grid",
@@ -1087,34 +1108,40 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
+    minHeight: 46,
+    padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
-    padding: "10px 12px",
+    padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
     gap: 16,
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
   },
   previewBox: {
     height: 220,
@@ -1122,14 +1149,15 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     background: "#ffffff",
     overflow: "hidden",
-  },
-  emptyPreview: {
-    height: "100%",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#94a3b8",
-    fontSize: 42,
+  },
+  previewPlaceholderImage: {
+    width: "min(82%, 200px)",
+    height: "min(82%, 200px)",
+    objectFit: "contain",
+    display: "block",
   },
   panel: {
     padding: 16,
@@ -1137,6 +1165,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     marginBottom: 0,
+    minWidth: 0,
   },
   panelTitle: {
     margin: 0,
@@ -1146,17 +1175,17 @@ const styles: Record<string, CSSProperties> = {
   },
   twoCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
   threeCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
     gap: 12,
   },
   twoPanel: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 16,
   },
   lightButton: {
@@ -1180,6 +1209,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#f8fafc",
+    minWidth: 0,
   },
   prizeList: {
     display: "grid",
@@ -1192,6 +1222,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#f8fafc",
+    minWidth: 0,
   },
   rowHeader: {
     display: "flex",
@@ -1203,7 +1234,7 @@ const styles: Record<string, CSSProperties> = {
   },
   prizeGrid: {
     display: "grid",
-    gridTemplateColumns: "110px minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(96px, 120px) minmax(0, 1fr)",
     gap: 12,
   },
   checkboxLabel: {
@@ -1234,6 +1265,10 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
+  submitText: {
+    minWidth: 0,
+    flex: "1 1 240px",
+  },
   mutedSmall: {
     color: "#64748b",
     fontSize: 13,
@@ -1257,6 +1292,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
   tableNamesGrid: {
     display: "grid",
@@ -1265,7 +1301,7 @@ const styles: Record<string, CSSProperties> = {
   },
   tableNameRow: {
     display: "grid",
-    gridTemplateColumns: "110px minmax(0, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 110px), 1fr))",
     gap: 10,
     alignItems: "center",
   },
