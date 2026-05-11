@@ -10,6 +10,8 @@ import {
   type AuctionStatus,
 } from "../../../../../api/_lib/auctions-repo";
 
+const DEFAULT_AUCTION_IMAGE_URL = "/brand/so-default-auctions.png";
+
 function cleanDateTime(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim();
   if (!raw) return null;
@@ -49,12 +51,14 @@ async function createAuctionAction(formData: FormData) {
     String(formData.get("slug") || "").trim().toLowerCase() ||
     slugifyAuctionTitle(title);
 
+  const submittedImageUrl = String(formData.get("image_url") || "").trim();
+
   const auction = await createAuction({
     tenantSlug,
     title,
     slug,
     description: String(formData.get("description") || "").trim() || null,
-    imageUrl: String(formData.get("image_url") || "").trim() || null,
+    imageUrl: submittedImageUrl || DEFAULT_AUCTION_IMAGE_URL,
     imageFocusX: cleanFocus(formData.get("image_focus_x")),
     imageFocusY: cleanFocus(formData.get("image_focus_y")),
     status: String(formData.get("status") || "draft") as AuctionStatus,
@@ -175,8 +179,12 @@ export default async function NewAuctionPage() {
               Status
               <select name="status" defaultValue="draft" style={styles.input}>
                 <option value="draft">Draft — hidden from public bidding</option>
-                <option value="published">Published — visible and open by dates</option>
-                <option value="closed">Closed — visible but not accepting bids</option>
+                <option value="published">
+                  Published — visible and open by dates
+                </option>
+                <option value="closed">
+                  Closed — visible but not accepting bids
+                </option>
               </select>
             </label>
 
@@ -187,12 +195,20 @@ export default async function NewAuctionPage() {
 
             <label style={styles.label}>
               Opens
-              <input name="opens_at" type="datetime-local" style={styles.input} />
+              <input
+                name="opens_at"
+                type="datetime-local"
+                style={styles.input}
+              />
             </label>
 
             <label style={styles.label}>
               Closes
-              <input name="closes_at" type="datetime-local" style={styles.input} />
+              <input
+                name="closes_at"
+                type="datetime-local"
+                style={styles.input}
+              />
             </label>
           </div>
 
@@ -213,15 +229,15 @@ export default async function NewAuctionPage() {
               <p style={styles.cardKicker}>Step 2</p>
               <h2 style={styles.sectionTitle}>Public auction image</h2>
               <p style={styles.sectionText}>
-                Add a premium campaign image. The focus controls help the public
-                page crop the image cleanly on desktop and mobile.
+                A branded auction image is already selected. Upload a custom
+                campaign image only if you want to replace it.
               </p>
             </div>
           </div>
 
           <div style={styles.uploadShell}>
             <ImageFocusUploadField
-              currentImageUrl=""
+              currentImageUrl={DEFAULT_AUCTION_IMAGE_URL}
               currentFocusX={50}
               currentFocusY={50}
               label="Main auction image"
