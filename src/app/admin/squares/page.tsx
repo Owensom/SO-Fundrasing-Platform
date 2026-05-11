@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -126,6 +126,10 @@ export default async function AdminSquaresListPage() {
 
           <Link href="/admin/events" style={styles.navButton}>
             Events
+          </Link>
+
+          <Link href="/admin/auctions" style={styles.navButton}>
+            Auctions
           </Link>
 
           <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
@@ -270,7 +274,7 @@ export default async function AdminSquaresListPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statLabel}>{label}</div>
@@ -279,7 +283,7 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
