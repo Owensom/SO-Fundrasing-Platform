@@ -118,7 +118,6 @@ function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
 
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -505,6 +504,45 @@ function shuffleTickets(tickets: TicketSelection[]) {
   return shuffled;
 }
 
+function getStatusLabel(status: SafeRaffleStatus) {
+  if (status === "published") return "Open now";
+  if (status === "drawn") return "Drawn";
+  if (status === "closed") return "Closed";
+  return "Draft";
+}
+
+function statusPillStyle(status: SafeRaffleStatus): React.CSSProperties {
+  if (status === "published") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      border: "1px solid #bbf7d0",
+    };
+  }
+
+  if (status === "drawn") {
+    return {
+      background: "#dbeafe",
+      color: "#1d4ed8",
+      border: "1px solid #bfdbfe",
+    };
+  }
+
+  if (status === "closed") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid #fed7aa",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+  };
+}
+
 export default function PublicRafflePage({ slug }: Props) {
   const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -674,6 +712,12 @@ export default function PublicRafflePage({ slug }: Props) {
     return count;
   }, [raffle, visibleNumbers, availability]);
 
+  const heroImageUrl = raffle?.imageUrl || DEFAULT_RAFFLE_IMAGE;
+  const heroObjectFit = raffle?.imageUrl ? "cover" : "contain";
+  const heroObjectPosition = raffle?.imageUrl
+    ? raffle.imageObjectPosition || "center"
+    : "center";
+
   function toggleTicket(number: number) {
     if (!raffle || !selectedColour || !canReserve) return;
 
@@ -749,6 +793,7 @@ export default function PublicRafflePage({ slug }: Props) {
     }
 
     const randomTickets = shuffleTickets(availableTickets).slice(0, requested);
+
     const selected = [...basket, ...randomTickets];
 
     if (randomTickets.length < requested) {
@@ -963,722 +1008,597 @@ export default function PublicRafflePage({ slug }: Props) {
 
   return (
     <div style={styles.page}>
-      <div style={styles.container}>
-        <nav style={styles.navBar}>
-          <Link href={"/c/" + raffle.tenantSlug} style={styles.navLink}>
-            ← Back to campaigns
-          </Link>
+      <section style={styles.hero}>
+        <img
+          src={heroImageUrl}
+          alt={raffle.title}
+          style={{
+            ...styles.heroBackgroundImage,
+            objectFit: heroObjectFit,
+            objectPosition: heroObjectPosition,
+            background: raffle.imageUrl
+              ? "#0f172a"
+              : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+          }}
+        />
 
-          {adminReturn ? (
-            <Link href={adminReturn} style={styles.adminNavLink}>
-              ← Back to admin raffle
+        <div style={styles.heroOverlay} />
+
+        <div style={styles.heroInner}>
+          <nav style={styles.heroNav}>
+            <Link href={"/c/" + raffle.tenantSlug} style={styles.heroBackLink}>
+              ← Back to campaigns
             </Link>
-          ) : null}
-        </nav>
 
-        <div style={styles.imageWrap}>
-          <img
-            src={raffle.imageUrl || DEFAULT_RAFFLE_IMAGE}
-            alt={raffle.title}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: raffle.imageUrl ? "cover" : "contain",
-              objectPosition: raffle.imageUrl
-                ? raffle.imageObjectPosition || "center"
-                : "center",
-              display: "block",
-              background: raffle.imageUrl
-                ? "#f8fafc"
-                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
-              padding: raffle.imageUrl ? 0 : 28,
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-
-        <h1 style={styles.title}>{raffle.title}</h1>
-
-        {raffle.description ? (
-          <p style={styles.description}>{raffle.description}</p>
-        ) : null}
-
-        <div style={styles.totalBox}>
-          <div>
-            Ticket price: {formatCurrency(raffle.ticketPrice, raffle.currency)}
-          </div>
-          <div>Draw date: {formatDateTime(raffle.drawAt)}</div>
-          <div>
-            Range: {raffle.startNumber} to {raffle.endNumber}
-          </div>
-          <div>Status: {raffle.status}</div>
-          <div>Available now: {availableCount}</div>
-        </div>
-
-        <div style={styles.disclaimerBox}>
-          This campaign is run by the organiser. The platform provides software
-          only and is not responsible for the operation of this draw. The
-          organiser is responsible for ensuring compliance with all applicable
-          laws.
-        </div>
-
-        {raffle.prizes.length > 0 ? (
-          <section style={styles.prizesBox}>
-            <div style={styles.prizesTitle}>Prizes</div>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              {(showAllPrizes ? raffle.prizes : raffle.prizes.slice(0, 3)).map(
-                (prize) => (
-                  <div
-                    key={String(prize.position) + "-" + prize.title}
-                    style={styles.prizeCard}
-                  >
-                    <div style={styles.prizePosition}>
-                      {ordinal(prize.position)}
-                    </div>
-
-                    <div style={styles.prizeContent}>
-                      <div style={styles.prizeTitle}>{prize.title}</div>
-
-                      {prize.description ? (
-                        <div style={styles.prizeDescription}>
-                          {prize.description}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-
-            {raffle.prizes.length > 3 ? (
-              <button
-                type="button"
-                onClick={() => setShowAllPrizes((value) => !value)}
-                style={styles.showMoreButton}
-              >
-                {showAllPrizes ? "Hide prizes" : "Show all prizes"}
-              </button>
+            {adminReturn ? (
+              <Link href={adminReturn} style={styles.heroAdminLink}>
+                ← Back to admin raffle
+              </Link>
             ) : null}
-          </section>
-        ) : null}
+          </nav>
 
-        {isDrawn ? (
-          <section style={styles.winnersBox}>
-            <div style={styles.winnersTitle}>Winning tickets</div>
+          <div style={styles.badgeRow}>
+            <span style={styles.typeBadge}>Raffle</span>
 
-            {raffle.winners.length > 0 ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                {raffle.winners.map((winner) => (
-                  <div
-                    key={
-                      String(winner.prizePosition) +
-                      "-" +
-                      String(winner.ticketNumber) +
-                      "-" +
-                      String(winner.colour || "")
-                    }
-                    style={styles.winnerCard}
-                  >
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Prize</div>
-                      <div style={styles.winnerPrize}>
-                        {ordinal(winner.prizePosition)}
-                      </div>
-                    </div>
-
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Ticket</div>
-                      <div style={styles.winnerTicket}>
-                        {"#" + winner.ticketNumber}
-                      </div>
-                    </div>
-
-                    <div style={styles.winnerBlock}>
-                      <div style={styles.winnerLabel}>Colour</div>
-                      <div style={styles.winnerColour}>
-                        {colourSwatch(winner.colour, raffle.colours)}
-                        <span>{winner.colour || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={styles.winnerCard}>
-                <div style={styles.winnerBlock}>
-                  <div style={styles.winnerLabel}>Prize</div>
-                  <div style={styles.winnerPrize}>1st</div>
-                </div>
-
-                <div style={styles.winnerBlock}>
-                  <div style={styles.winnerLabel}>Ticket</div>
-                  <div style={styles.winnerTicket}>
-                    {raffle.winnerTicketNumber != null
-                      ? "#" + raffle.winnerTicketNumber
-                      : "—"}
-                  </div>
-                </div>
-
-                <div style={styles.winnerBlock}>
-                  <div style={styles.winnerLabel}>Colour</div>
-                  <div style={styles.winnerColour}>
-                    {colourSwatch(raffle.winnerColour, raffle.colours)}
-                    <span>{raffle.winnerColour || "—"}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: 10, color: "#166534", fontWeight: 700 }}>
-              Drawn at:{" "}
-              {formatDateTime(raffle.drawnAt || raffle.winners[0]?.drawnAt)}
-            </div>
-          </section>
-        ) : null}
-
-        {isClosed ? (
-          <div style={styles.noticeDark}>
-            This raffle is now closed. Reservations and payments are no longer
-            available.
-          </div>
-        ) : null}
-
-        {isDraft ? (
-          <div style={styles.notice}>This raffle is not published yet.</div>
-        ) : null}
-                {canReserve ? (
-          <section style={styles.quickSelect}>
-            <div>
-              <h2 style={{ margin: 0 }}>Quick buy</h2>
-
-              <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Choose how many tickets you would like and we’ll randomly
-                auto-select available numbers across colours.
-              </p>
-            </div>
-
-            <div style={styles.quickControls}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span
-                  style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}
-                >
-                  Number of tickets
-                </span>
-
-                <input
-                  type="number"
-                  min={1}
-                  max={availableCount || 1}
-                  value={autoQuantity === 0 ? "" : autoQuantity}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-
-                    if (raw === "") {
-                      setAutoQuantity(0);
-                      return;
-                    }
-
-                    const parsed = Number(raw);
-
-                    if (!Number.isFinite(parsed)) return;
-
-                    setAutoQuantity(parsed);
-                  }}
-                  style={styles.quantityInput}
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={autoSelectTickets}
-                style={styles.autoButton}
-              >
-                Auto select
-              </button>
-
-              <button
-                type="button"
-                onClick={clearBasket}
-                style={styles.clearButton}
-              >
-                Clear basket
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {raffle.offers.length > 0 && canReserve ? (
-          <section style={styles.offerBox}>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>
-              Available offers
-            </div>
-
-            <div style={styles.offerGrid}>
-              {raffle.offers
-                .filter((offer) => offer.isActive)
-                .slice()
-                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                .map((offer) => (
-                  <button
-                    key={offer.id}
-                    type="button"
-                    onClick={() => autoSelectTicketQuantity(offer.quantity)}
-                    style={styles.offerPill}
-                  >
-                    {offer.label} —{" "}
-                    {formatCurrency(offer.price, raffle.currency)}
-                  </button>
-                ))}
-            </div>
-          </section>
-        ) : null}
-
-        <h2 style={styles.heading}>Choose colour</h2>
-
-        <div style={styles.colourRow}>
-          {raffle.colours.length === 0 ? (
-            <div style={styles.notice}>No colours configured.</div>
-          ) : (
-            raffle.colours.map((colour) => (
-              <button
-                key={colour.id}
-                type="button"
-                onClick={() => setSelectedColour(colour.name)}
-                disabled={!canReserve}
-                style={{
-                  ...styles.colourButton,
-                  background:
-                    selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
-                  color: selectedColour === colour.name ? "#ffffff" : "#111827",
-                  opacity: canReserve ? 1 : 0.7,
-                  cursor: canReserve ? "pointer" : "not-allowed",
-                }}
-              >
-                {renderColourLabel(colour)}
-              </button>
-            ))
-          )}
-        </div>
-
-        <h2 style={styles.heading}>Choose numbers</h2>
-
-        {selectedColour ? (
-          <div style={styles.numberGrid}>
-            {visibleNumbers.map((number) => {
-              const key = makeTicketKey(selectedColour, number);
-              const isSold = availability.sold.has(key);
-              const isReserved = availability.reserved.has(key);
-              const isSelected = basketKeys.has(key);
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleTicket(number)}
-                  disabled={isSold || isReserved || !canReserve}
-                  style={{
-                    ...styles.numberButton,
-                    background: isSelected
-                      ? "#2563eb"
-                      : isSold
-                        ? "#111827"
-                        : isReserved
-                          ? "#f59e0b"
-                          : "#ffffff",
-                    color:
-                      isSelected || isSold || isReserved
-                        ? "#ffffff"
-                        : "#111827",
-                    opacity: canReserve ? 1 : 0.7,
-                    cursor:
-                      isSold || isReserved || !canReserve
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  {number}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={styles.notice}>
-            Select a colour to view available numbers.
-          </div>
-        )}
-
-        <h2 style={styles.heading}>Basket</h2>
-
-        {basket.length === 0 ? (
-          <div style={styles.notice}>No tickets selected yet.</div>
-        ) : (
-          <div style={styles.basket}>
-            {basket.map((ticket) => (
-              <div
-                key={makeTicketKey(ticket.colour, ticket.number)}
-                style={styles.basketRow}
-              >
-                <span>
-                  {ticket.colour} #{ticket.number}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => removeFromBasket(ticket)}
-                  style={styles.removeButton}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={styles.totalBox}>
-          <div>Tickets: {pricing.quantity}</div>
-
-          <div>
-            Standard total:{" "}
-            {formatCurrency(pricing.standardTotal, raffle.currency)}
-          </div>
-
-          <div>
-            Ticket total: {formatCurrency(pricing.total, raffle.currency)}
-          </div>
-
-          {pricing.appliedOffers.length > 0 ? (
-            <div style={{ color: "#166534" }}>
-              Best value applied:{" "}
-              {pricing.appliedOffers
-                .map((offer) => {
-                  return (
-                    offer.label +
-                    (offer.times > 1 ? " × " + offer.times : "")
-                  );
-                })
-                .join(", ")}
-            </div>
-          ) : null}
-
-          {pricing.savings > 0 ? (
-            <div style={{ color: "#166534" }}>
-              You save{" "}
-              {formatCurrency(pricing.savings, raffle.currency)}
-            </div>
-          ) : null}
-
-          <label style={styles.coverFeesBox}>
-            <input
-              type="checkbox"
-              checked={coverFees}
-              onChange={(event) => setCoverFees(event.target.checked)}
-              disabled={!canReserve || basket.length === 0}
-            />
-
-            <span>
-              <strong>I’d like to cover platform fees</strong>
-              <br />
-
-              <span style={{ color: "#64748b", fontSize: 13 }}>
-                Adds approximately{" "}
-                {formatCurrency(estimatedFee, raffle.currency)} so the organiser
-                receives the full ticket value.
-              </span>
+            <span
+              style={{
+                ...styles.statusPill,
+                ...statusPillStyle(raffle.status),
+              }}
+            >
+              {getStatusLabel(raffle.status)}
             </span>
-          </label>
+          </div>
 
-          <div>
-            Total today: {formatCurrency(displayTotal, raffle.currency)}
+          <h1 style={styles.heroTitle}>{raffle.title}</h1>
+
+          {raffle.description ? (
+            <p style={styles.heroDescription}>{raffle.description}</p>
+          ) : null}
+
+          <div style={styles.heroMeta}>
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Ticket price</span>
+              <strong>
+                {formatCurrency(raffle.ticketPrice, raffle.currency)}
+              </strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Draw date</span>
+              <strong>{formatDateTime(raffle.drawAt)}</strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Ticket range</span>
+              <strong>
+                {raffle.startNumber}–{raffle.endNumber}
+              </strong>
+            </div>
+
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>Available now</span>
+              <strong>{availableCount}</strong>
+            </div>
+          </div>
+
+          <div style={styles.heroFooter}>
+            <span>Supporting the organiser</span>
+            <strong>
+              {basket.length > 0
+                ? `${basket.length} selected`
+                : "Choose tickets below"}
+            </strong>
           </div>
         </div>
+      </section>
 
-        <h2 style={styles.heading}>Your details</h2>
+      <main style={styles.contentWrap}>
+        <div style={styles.container}>
+          <div style={styles.disclaimerBox}>
+            This campaign is run by the organiser. The platform provides software
+            only and is not responsible for the operation of this draw. The
+            organiser is responsible for ensuring compliance with all applicable
+            laws.
+          </div>
 
-        <div style={styles.form}>
-          <input
-            value={buyerName}
-            onChange={(event) => setBuyerName(event.target.value)}
-            placeholder="Your name"
-            style={styles.input}
-            disabled={!canReserve}
-          />
+          {raffle.prizes.length > 0 ? (
+            <section style={styles.prizesBox}>
+              <div style={styles.prizesTitle}>Prizes</div>
 
-          <input
-            value={buyerEmail}
-            onChange={(event) => setBuyerEmail(event.target.value)}
-            placeholder="Your email"
-            type="email"
-            style={styles.input}
-            disabled={!canReserve}
-          />
+              <div style={{ display: "grid", gap: 10 }}>
+                {(showAllPrizes ? raffle.prizes : raffle.prizes.slice(0, 3)).map(
+                  (prize) => (
+                    <div
+                      key={String(prize.position) + "-" + prize.title}
+                      style={styles.prizeCard}
+                    >
+                      <div style={styles.prizePosition}>
+                        {ordinal(prize.position)}
+                      </div>
 
-          {raffle.legalQuestion ? (
-            <div style={styles.legalQuestionBox}>
-              <div style={styles.legalQuestionTitle}>Entry question</div>
+                      <div style={styles.prizeContent}>
+                        <div style={styles.prizeTitle}>{prize.title}</div>
 
-              <div style={styles.legalQuestionText}>
-                {raffle.legalQuestion}
+                        {prize.description ? (
+                          <div style={styles.prizeDescription}>
+                            {prize.description}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ),
+                )}
               </div>
 
-              <input
-                value={entryAnswer}
-                onChange={(event) => setEntryAnswer(event.target.value)}
-                placeholder="Your answer"
-                style={styles.input}
-                disabled={!canReserve}
-              />
+              {raffle.prizes.length > 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPrizes((value) => !value)}
+                  style={styles.showMoreButton}
+                >
+                  {showAllPrizes ? "Hide prizes" : "Show all prizes"}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isDrawn ? (
+            <section style={styles.winnersBox}>
+              <div style={styles.winnersTitle}>Winning tickets</div>
+
+              {raffle.winners.length > 0 ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {raffle.winners.map((winner) => (
+                    <div
+                      key={
+                        String(winner.prizePosition) +
+                        "-" +
+                        String(winner.ticketNumber) +
+                        "-" +
+                        String(winner.colour || "")
+                      }
+                      style={styles.winnerCard}
+                    >
+                      <div style={styles.winnerBlock}>
+                        <div style={styles.winnerLabel}>Prize</div>
+                        <div style={styles.winnerPrize}>
+                          {ordinal(winner.prizePosition)}
+                        </div>
+                      </div>
+
+                      <div style={styles.winnerBlock}>
+                        <div style={styles.winnerLabel}>Ticket</div>
+                        <div style={styles.winnerTicket}>
+                          {"#" + winner.ticketNumber}
+                        </div>
+                      </div>
+
+                      <div style={styles.winnerBlock}>
+                        <div style={styles.winnerLabel}>Colour</div>
+                        <div style={styles.winnerColour}>
+                          {colourSwatch(winner.colour, raffle.colours)}
+                          <span>{winner.colour || "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={styles.winnerCard}>
+                  <div style={styles.winnerBlock}>
+                    <div style={styles.winnerLabel}>Prize</div>
+                    <div style={styles.winnerPrize}>1st</div>
+                  </div>
+
+                  <div style={styles.winnerBlock}>
+                    <div style={styles.winnerLabel}>Ticket</div>
+                    <div style={styles.winnerTicket}>
+                      {raffle.winnerTicketNumber != null
+                        ? "#" + raffle.winnerTicketNumber
+                        : "—"}
+                    </div>
+                  </div>
+
+                  <div style={styles.winnerBlock}>
+                    <div style={styles.winnerLabel}>Colour</div>
+                    <div style={styles.winnerColour}>
+                      {colourSwatch(raffle.winnerColour, raffle.colours)}
+                      <span>{raffle.winnerColour || "—"}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: 10, color: "#166534", fontWeight: 700 }}>
+                Drawn at:{" "}
+                {formatDateTime(raffle.drawnAt || raffle.winners[0]?.drawnAt)}
+              </div>
+            </section>
+          ) : null}
+                    {isClosed ? (
+            <div style={styles.noticeDark}>
+              This raffle is now closed. Reservations and payments are no longer
+              available.
             </div>
           ) : null}
 
-          {raffle.freeEntry.address ? (
-            <details style={styles.freeEntryBox}>
-              <summary style={styles.freeEntrySummary}>
-                No purchase necessary — free postal entry available
-              </summary>
-
-              <div style={styles.freeEntryContent}>
-                <p style={styles.freeEntryText}>
-                  To enter for free by post, send your full name, email address,
-                  phone number, raffle/campaign name, answer to the entry
-                  question, and preferred ticket number and colour if applicable
-                  to:
-                </p>
-
-                <pre style={styles.freeEntryAddress}>
-                  {raffle.freeEntry.address}
-                </pre>
-
-                {raffle.freeEntry.instructions ? (
-                  <p style={styles.freeEntryText}>
-                    {raffle.freeEntry.instructions}
-                  </p>
-                ) : null}
-
-                {raffle.freeEntry.closesAt ? (
-                  <p style={styles.freeEntryText}>
-                    Postal entries must be received before{" "}
-                    <strong>
-                      {formatDateTime(raffle.freeEntry.closesAt)}
-                    </strong>
-                    .
-                  </p>
-                ) : null}
-
-                <p style={styles.freeEntryText}>
-                  Your email address is required so the organiser can contact
-                  you if you win and include your entry in the automatic or live
-                  draw. One entry per postcard/envelope. Multiple postal entries
-                  are permitted by sending multiple postcards/envelopes. No
-                  purchase is necessary. Paid and postal entries have equal
-                  chance of winning.
-                </p>
-              </div>
-            </details>
+          {isDraft ? (
+            <div style={styles.notice}>This raffle is not published yet.</div>
           ) : null}
 
-          <label style={styles.termsBox}>
+          {canReserve ? (
+            <section style={styles.quickSelect}>
+              <div>
+                <h2 style={{ margin: 0 }}>Quick buy</h2>
+
+                <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+                  Choose how many tickets you would like and we’ll randomly
+                  auto-select available numbers across colours.
+                </p>
+              </div>
+
+              <div style={styles.quickControls}>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span
+                    style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}
+                  >
+                    Number of tickets
+                  </span>
+
+                  <input
+                    type="number"
+                    min={1}
+                    max={availableCount || 1}
+                    value={autoQuantity === 0 ? "" : autoQuantity}
+                    onChange={(event) => {
+                      const raw = event.target.value;
+
+                      if (raw === "") {
+                        setAutoQuantity(0);
+                        return;
+                      }
+
+                      const parsed = Number(raw);
+                      if (!Number.isFinite(parsed)) return;
+
+                      setAutoQuantity(parsed);
+                    }}
+                    style={styles.quantityInput}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={autoSelectTickets}
+                  style={styles.autoButton}
+                >
+                  Auto select
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearBasket}
+                  style={styles.clearButton}
+                >
+                  Clear basket
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {raffle.offers.length > 0 && canReserve ? (
+            <section style={styles.offerBox}>
+              <div style={{ fontWeight: 800, marginBottom: 8 }}>
+                Available offers
+              </div>
+
+              <div style={styles.offerGrid}>
+                {raffle.offers
+                  .filter((offer) => offer.isActive)
+                  .slice()
+                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                  .map((offer) => (
+                    <button
+                      key={offer.id}
+                      type="button"
+                      onClick={() => autoSelectTicketQuantity(offer.quantity)}
+                      style={styles.offerPill}
+                    >
+                      {offer.label} —{" "}
+                      {formatCurrency(offer.price, raffle.currency)}
+                    </button>
+                  ))}
+              </div>
+            </section>
+          ) : null}
+
+          <h2 style={styles.heading}>Choose colour</h2>
+
+          <div style={styles.colourRow}>
+            {raffle.colours.length === 0 ? (
+              <div style={styles.notice}>No colours configured.</div>
+            ) : (
+              raffle.colours.map((colour) => (
+                <button
+                  key={colour.id}
+                  type="button"
+                  onClick={() => setSelectedColour(colour.name)}
+                  disabled={!canReserve}
+                  style={{
+                    ...styles.colourButton,
+                    background:
+                      selectedColour === colour.name ? "#2563eb" : "#e5e7eb",
+                    color:
+                      selectedColour === colour.name ? "#ffffff" : "#111827",
+                    opacity: canReserve ? 1 : 0.7,
+                    cursor: canReserve ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {renderColourLabel(colour)}
+                </button>
+              ))
+            )}
+          </div>
+
+          <h2 style={styles.heading}>Choose numbers</h2>
+
+          {selectedColour ? (
+            <div style={styles.numberGrid}>
+              {visibleNumbers.map((number) => {
+                const key = makeTicketKey(selectedColour, number);
+                const isSold = availability.sold.has(key);
+                const isReserved = availability.reserved.has(key);
+                const isSelected = basketKeys.has(key);
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleTicket(number)}
+                    disabled={isSold || isReserved || !canReserve}
+                    style={{
+                      ...styles.numberButton,
+                      background: isSelected
+                        ? "#2563eb"
+                        : isSold
+                          ? "#111827"
+                          : isReserved
+                            ? "#f59e0b"
+                            : "#ffffff",
+                      color:
+                        isSelected || isSold || isReserved
+                          ? "#ffffff"
+                          : "#111827",
+                      opacity: canReserve ? 1 : 0.7,
+                      cursor:
+                        isSold || isReserved || !canReserve
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    {number}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={styles.notice}>
+              Select a colour to view available numbers.
+            </div>
+          )}
+
+          <h2 style={styles.heading}>Basket</h2>
+
+          {basket.length === 0 ? (
+            <div style={styles.notice}>No tickets selected yet.</div>
+          ) : (
+            <div style={styles.basket}>
+              {basket.map((ticket) => (
+                <div
+                  key={makeTicketKey(ticket.colour, ticket.number)}
+                  style={styles.basketRow}
+                >
+                  <span>
+                    {ticket.colour} #{ticket.number}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => removeFromBasket(ticket)}
+                    style={styles.removeButton}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={styles.totalBox}>
+            <div>Tickets: {pricing.quantity}</div>
+
+            <div>
+              Standard total:{" "}
+              {formatCurrency(pricing.standardTotal, raffle.currency)}
+            </div>
+
+            <div>
+              Ticket total: {formatCurrency(pricing.total, raffle.currency)}
+            </div>
+
+            {pricing.appliedOffers.length > 0 ? (
+              <div style={{ color: "#166534" }}>
+                Best value applied:{" "}
+                {pricing.appliedOffers
+                  .map((offer) => {
+                    return (
+                      offer.label +
+                      (offer.times > 1 ? " × " + offer.times : "")
+                    );
+                  })
+                  .join(", ")}
+              </div>
+            ) : null}
+
+            {pricing.savings > 0 ? (
+              <div style={{ color: "#166534" }}>
+                You save {formatCurrency(pricing.savings, raffle.currency)}
+              </div>
+            ) : null}
+
+            <label style={styles.coverFeesBox}>
+              <input
+                type="checkbox"
+                checked={coverFees}
+                onChange={(event) => setCoverFees(event.target.checked)}
+                disabled={!canReserve || basket.length === 0}
+              />
+
+              <span>
+                <strong>I’d like to cover platform fees</strong>
+                <br />
+                <span style={{ color: "#64748b", fontSize: 13 }}>
+                  Adds approximately{" "}
+                  {formatCurrency(estimatedFee, raffle.currency)} so the
+                  organiser receives the full ticket value.
+                </span>
+              </span>
+            </label>
+
+            <div>
+              Total today: {formatCurrency(displayTotal, raffle.currency)}
+            </div>
+          </div>
+
+          <h2 style={styles.heading}>Your details</h2>
+
+          <div style={styles.form}>
             <input
-              type="checkbox"
-              checked={termsAccepted}
-              onChange={(event) => setTermsAccepted(event.target.checked)}
+              value={buyerName}
+              onChange={(event) => setBuyerName(event.target.value)}
+              placeholder="Your name"
+              style={styles.input}
               disabled={!canReserve}
             />
 
-            <span>
-              I confirm I have read and accept the{" "}
-              <Link href="/terms" style={styles.inlineLink}>
-                terms
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" style={styles.inlineLink}>
-                privacy policy
-              </Link>
-              .
-            </span>
-          </label>
+            <input
+              value={buyerEmail}
+              onChange={(event) => setBuyerEmail(event.target.value)}
+              placeholder="Your email"
+              type="email"
+              style={styles.input}
+              disabled={!canReserve}
+            />
 
-          <button
-            type="button"
-            onClick={reserveTickets}
-            disabled={saving || basket.length === 0 || !canReserve}
-            style={{
-              ...styles.primaryButton,
-              opacity:
-                saving || basket.length === 0 || !canReserve ? 0.6 : 1,
-              cursor:
-                saving || basket.length === 0 || !canReserve
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {saving ? "Redirecting to checkout..." : "Reserve and pay"}
-          </button>
+            {raffle.legalQuestion ? (
+              <div style={styles.legalQuestionBox}>
+                <div style={styles.legalQuestionTitle}>Entry question</div>
+
+                <div style={styles.legalQuestionText}>
+                  {raffle.legalQuestion}
+                </div>
+
+                <input
+                  value={entryAnswer}
+                  onChange={(event) => setEntryAnswer(event.target.value)}
+                  placeholder="Your answer"
+                  style={styles.input}
+                  disabled={!canReserve}
+                />
+              </div>
+            ) : null}
+
+            {raffle.freeEntry.address ? (
+              <details style={styles.freeEntryBox}>
+                <summary style={styles.freeEntrySummary}>
+                  No purchase necessary — free postal entry available
+                </summary>
+
+                <div style={styles.freeEntryContent}>
+                  <p style={styles.freeEntryText}>
+                    To enter for free by post, send your full name, email
+                    address, phone number, raffle/campaign name, answer to the
+                    entry question, and preferred ticket number and colour if
+                    applicable to:
+                  </p>
+
+                  <pre style={styles.freeEntryAddress}>
+                    {raffle.freeEntry.address}
+                  </pre>
+
+                  {raffle.freeEntry.instructions ? (
+                    <p style={styles.freeEntryText}>
+                      {raffle.freeEntry.instructions}
+                    </p>
+                  ) : null}
+
+                  {raffle.freeEntry.closesAt ? (
+                    <p style={styles.freeEntryText}>
+                      Postal entries must be received before{" "}
+                      <strong>
+                        {formatDateTime(raffle.freeEntry.closesAt)}
+                      </strong>
+                      .
+                    </p>
+                  ) : null}
+
+                  <p style={styles.freeEntryText}>
+                    Your email address is required so the organiser can contact
+                    you if you win and include your entry in the automatic or
+                    live draw. One entry per postcard/envelope. Paid and postal
+                    entries have equal chance of winning.
+                  </p>
+                </div>
+              </details>
+            ) : null}
+
+            <label style={styles.termsBox}>
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+                disabled={!canReserve}
+              />
+
+              <span>
+                I confirm I have read and accept the{" "}
+                <Link href="/terms" style={styles.inlineLink}>
+                  terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" style={styles.inlineLink}>
+                  privacy policy
+                </Link>
+                .
+              </span>
+            </label>
+
+            <button
+              type="button"
+              onClick={reserveTickets}
+              disabled={saving || basket.length === 0 || !canReserve}
+              style={{
+                ...styles.primaryButton,
+                opacity:
+                  saving || basket.length === 0 || !canReserve ? 0.6 : 1,
+                cursor:
+                  saving || basket.length === 0 || !canReserve
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {saving ? "Redirecting to checkout..." : "Reserve and pay"}
+            </button>
+          </div>
+
+          {reservationMessage ? (
+            <div style={styles.success}>{reservationMessage}</div>
+          ) : null}
+
+          {error ? <div style={styles.error}>{error}</div> : null}
         </div>
-
-        {reservationMessage ? (
-          <div style={styles.success}>{reservationMessage}</div>
-        ) : null}
-
-        {error ? <div style={styles.error}>{error}</div> : null}
-      </div>
+      </main>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 30%), #f8fafc",
-    padding: 18,
-  },
-
-  container: {
-    maxWidth: 1120,
-    margin: "0 auto",
-    background: "#ffffff",
-    borderRadius: 28,
-    padding: 22,
-    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
-    border: "1px solid #e2e8f0",
-  },
-
-  wrap: {
-    padding: 24,
-  },
-
-  navBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 18,
-  },
-
-  navLink: {
-    display: "inline-flex",
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-
-  adminNavLink: {
-    display: "inline-flex",
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-
-  imageWrap: {
-    width: "100%",
-    height: 420,
-    overflow: "hidden",
-    borderRadius: 24,
-    marginBottom: 24,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
-  },
-
-  title: {
-    margin: "0 0 10px",
-    fontSize: "clamp(34px, 7vw, 56px)",
-    lineHeight: 1,
-    color: "#0f172a",
-    letterSpacing: "-0.05em",
-    fontWeight: 950,
-  },
-
-  description: {
-    margin: "0 0 18px",
-    color: "#475569",
-    lineHeight: 1.7,
-    fontSize: 16,
-  },
-
-  heading: {
-    marginTop: 28,
-    marginBottom: 14,
-    fontSize: "clamp(22px, 5vw, 30px)",
-    lineHeight: 1.1,
-    color: "#0f172a",
-    fontWeight: 950,
-    letterSpacing: "-0.03em",
-  },
-
-  totalBox: {
-    marginTop: 18,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 8,
-    fontWeight: 800,
-    color: "#0f172a",
-  },
-
-  disclaimerBox: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 16,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-    color: "#9a3412",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.6,
-  },
-
-  freeEntryBox: {
-    marginTop: 4,
-    padding: 14,
-    borderRadius: 16,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    color: "#1e3a8a",
-  },
-
-  freeEntrySummary: {
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: 900,
-    color: "#1e3a8a",
-    listStyle: "none",
-  },
-
-  freeEntryContent: {
-    marginTop: 10,
-  },
-
-  freeEntryText: {
-    margin: "8px 0",
-    color: "#1e40af",
-    fontSize: 14,
-    fontWeight: 700,
-    lineHeight: 1.55,
-  },
-
-  freeEntryAddress: {
-    margin: "10px 0",
-    padding: 12,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #bfdbfe",
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 800,
-    whiteSpace: "pre-wrap",
-    fontFamily: "inherit",
-  },
-};
