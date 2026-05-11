@@ -33,6 +33,8 @@ type SoldTicketRow = {
   colour: string | null;
 };
 
+const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
+
 const PRESET_COLOURS = [
   "Red",
   "Blue",
@@ -282,21 +284,22 @@ export default async function AdminRafflePage({ params }: PageProps) {
         </div>
 
         <div style={styles.heroImageWrap}>
-          {raffle.image_url ? (
-            <img
-              src={raffle.image_url}
-              alt={raffle.title}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: imageObjectPosition,
-                display: "block",
-              }}
-            />
-          ) : (
-            <div style={styles.heroImageEmpty}>🎟️</div>
-          )}
+          <img
+            src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
+            alt={raffle.title || "SO Raffles"}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: raffle.image_url ? "cover" : "contain",
+              objectPosition: raffle.image_url ? imageObjectPosition : "center",
+              display: "block",
+              padding: raffle.image_url ? 0 : 22,
+              boxSizing: "border-box",
+              background: raffle.image_url
+                ? "#1e293b"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+            }}
+          />
         </div>
       </section>
 
@@ -391,6 +394,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <h3 style={styles.subTitle}>Raffle image</h3>
               <p style={styles.sectionDescription}>
                 Upload or replace the public image, then choose the crop focus.
+                If no image is uploaded, the SO default raffle image is shown.
               </p>
 
               <ImageFocusUploadField
@@ -403,21 +407,22 @@ export default async function AdminRafflePage({ params }: PageProps) {
             </div>
 
             <div style={styles.previewBox}>
-              {raffle.image_url ? (
-                <img
-                  src={raffle.image_url}
-                  alt={raffle.title}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: imageObjectPosition,
-                    display: "block",
-                  }}
-                />
-              ) : (
-                <div style={styles.emptyPreview}>🎟️</div>
-              )}
+              <img
+                src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
+                alt={raffle.title || "SO Raffles"}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: raffle.image_url ? "cover" : "contain",
+                  objectPosition: raffle.image_url ? imageObjectPosition : "center",
+                  display: "block",
+                  padding: raffle.image_url ? 0 : 22,
+                  boxSizing: "border-box",
+                  background: raffle.image_url
+                    ? "#ffffff"
+                    : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+                }}
+              />
             </div>
           </div>
 
