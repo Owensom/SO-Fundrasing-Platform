@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -78,7 +79,7 @@ function formatCurrency(value: number, currency: string) {
   }
 }
 
-function getStatusStyle(status: string): React.CSSProperties {
+function getStatusStyle(status: string): CSSProperties {
   const clean = status.toLowerCase();
 
   if (clean === "published") {
@@ -114,6 +115,7 @@ function getStatusStyle(status: string): React.CSSProperties {
 
 function getProgressPercent(raffle: RaffleItem) {
   if (!raffle.total_tickets || raffle.total_tickets <= 0) return 0;
+
   return Math.min(
     100,
     Math.max(0, Math.round((raffle.sold_tickets / raffle.total_tickets) * 100)),
@@ -215,6 +217,10 @@ export default async function AdminRafflesPage() {
 
           <Link href="/admin/events" style={styles.topSecondaryLink}>
             Events
+          </Link>
+
+          <Link href="/admin/auctions" style={styles.topSecondaryLink}>
+            Auctions
           </Link>
 
           <Link
@@ -420,12 +426,16 @@ export default async function AdminRafflesPage() {
                           raffle.currency,
                         )}
                       />
+
                       <InfoBlock
                         label="Draw date"
                         value={formatDrawDate(raffle.draw_at)}
                       />
+
                       <InfoBlock label="Total" value={raffle.total_tickets} />
+
                       <InfoBlock label="Sold" value={raffle.sold_tickets} />
+
                       <InfoBlock
                         label="Remaining"
                         value={raffle.remaining_tickets}
@@ -515,6 +525,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <div style={{ color: "#64748b", fontSize: 13, fontWeight: 800 }}>
         {label}
       </div>
+
       <div
         style={{
           color: "#0f172a",
@@ -529,7 +540,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: React.ReactNode }) {
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div
       style={{
@@ -543,6 +554,7 @@ function InfoBlock({ label, value }: { label: string; value: React.ReactNode }) 
       <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
         {label}
       </div>
+
       <div
         style={{
           marginTop: 4,
@@ -557,7 +569,7 @@ function InfoBlock({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   createLink: {
     display: "inline-flex",
     alignItems: "center",
