@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Cinzel, Poppins } from "next/font/google";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
 import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
@@ -8,6 +9,16 @@ import PublicReservedSeatSelector from "@/components/events/PublicReservedSeatSe
 import PublicTableSelector from "@/components/events/PublicTableSelector";
 
 export const dynamic = "force-dynamic";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+});
+
+const cinzel = Cinzel({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+});
 
 type PageProps = {
   params: Promise<{
@@ -102,7 +113,7 @@ export default async function EventSlugPage({
   const availableSeats = seats.filter((seat) => seat.status === "available").length;
 
   return (
-    <main style={styles.page}>
+    <main className={poppins.className} style={styles.page}>
       <div style={styles.wrap}>
         <div style={styles.topBar}>
           <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
@@ -120,51 +131,111 @@ export default async function EventSlugPage({
         </div>
 
         <Card>
-          <img
-            src={event.image_url || DEFAULT_EVENTS_IMAGE}
-            alt={event.title || "SO Events"}
-            style={{
-              ...styles.heroImage,
-              objectFit: hasCustomImage ? "cover" : "contain",
-              objectPosition: hasCustomImage
-                ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
-                : "center",
-              padding: hasCustomImage ? 0 : 40,
-              background: hasCustomImage
-                ? "#f8fafc"
-                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-              boxSizing: "border-box",
-            }}
-          />
-
-          <h1 className="so-brand-heading" style={styles.title}>
-            {event.title}
-          </h1>
-
-          <div style={styles.infoBox}>
-            <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
-
-            {lowestTicketPrice > 0 && (
-              <InfoRow
-                label="Tickets from"
-                value={`${event.currency} ${moneyFromCents(lowestTicketPrice)}`}
-              />
-            )}
-
-            <InfoRow label="Date" value={formatDate(event.starts_at)} />
-
-            <InfoRow
-              label="Location"
-              value={event.location || "Location to be confirmed"}
+          <section style={styles.heroShell}>
+            <img
+              src={event.image_url || DEFAULT_EVENTS_IMAGE}
+              alt={event.title || "SO Events"}
+              style={{
+                ...styles.heroImage,
+                objectFit: hasCustomImage ? "cover" : "contain",
+                objectPosition: hasCustomImage
+                  ? `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`
+                  : "center",
+                padding: hasCustomImage ? 0 : 54,
+                boxSizing: "border-box",
+              }}
             />
 
-            {event.event_type !== "general_admission" && (
-              <InfoRow label="Available now" value={availableSeats} />
-            )}
+            <div style={styles.heroShade} />
 
-            {event.description && (
-              <p style={styles.description}>{event.description}</p>
-            )}
+            <div style={styles.heroContent}>
+              <div style={styles.heroPills}>
+                <span style={styles.goldPill}>{eventTypeLabel(event.event_type)}</span>
+                <span style={styles.lightPill}>
+                  {lowestTicketPrice > 0
+                    ? `From ${event.currency} ${moneyFromCents(lowestTicketPrice)}`
+                    : "Tickets"}
+                </span>
+              </div>
+
+              <h1 style={styles.title}>{event.title}</h1>
+
+              <div className={cinzel.className} style={styles.heroTagline}>
+                Book. Attend. Make an impact.
+              </div>
+
+              <div style={styles.heroStats}>
+                <HeroStat label="Date" value={formatDate(event.starts_at)} />
+                <HeroStat
+                  label="Location"
+                  value={event.location || "Location to be confirmed"}
+                />
+                {event.event_type !== "general_admission" && (
+                  <HeroStat label="Available" value={availableSeats} />
+                )}
+              </div>
+            </div>
+          </section>
+
+          <div style={styles.contentGrid}>
+            <section style={styles.infoBox}>
+              <h2 className={cinzel.className} style={styles.sectionKicker}>
+                Event details
+              </h2>
+
+              <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
+
+              {lowestTicketPrice > 0 && (
+                <InfoRow
+                  label="Tickets from"
+                  value={`${event.currency} ${moneyFromCents(lowestTicketPrice)}`}
+                />
+              )}
+
+              <InfoRow label="Date" value={formatDate(event.starts_at)} />
+
+              <InfoRow
+                label="Location"
+                value={event.location || "Location to be confirmed"}
+              />
+
+              {event.event_type !== "general_admission" && (
+                <InfoRow label="Available now" value={availableSeats} />
+              )}
+
+              {event.description && (
+                <p style={styles.description}>{event.description}</p>
+              )}
+            </section>
+
+            <section style={styles.orangePanel}>
+              <h2 className={cinzel.className} style={styles.panelTitle}>
+                Tickets
+              </h2>
+
+              <div style={styles.stack}>
+                {ticketTypes.length === 0 ? (
+                  <div style={styles.emptyBox}>
+                    Ticket options have not been added yet.
+                  </div>
+                ) : (
+                  ticketTypes.map((ticketType) => (
+                    <div key={ticketType.id} style={styles.listItem}>
+                      <div>
+                        <strong>{ticketType.name}</strong>
+                        {ticketType.description && (
+                          <p style={styles.muted}>{ticketType.description}</p>
+                        )}
+                      </div>
+
+                      <strong style={styles.pricePill}>
+                        {event.currency} {moneyFromCents(ticketType.price)}
+                      </strong>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
           </div>
 
           {resolvedSearchParams.checkout === "success" && (
@@ -183,39 +254,10 @@ export default async function EventSlugPage({
             </div>
           )}
 
-          <section style={styles.orangePanel}>
-            <h2 className="so-brand-card-title" style={styles.panelTitle}>
-              Tickets
-            </h2>
-
-            <div style={styles.stack}>
-              {ticketTypes.length === 0 ? (
-                <div style={styles.emptyBox}>
-                  Ticket options have not been added yet.
-                </div>
-              ) : (
-                ticketTypes.map((ticketType) => (
-                  <div key={ticketType.id} style={styles.listItem}>
-                    <div>
-                      <strong>{ticketType.name}</strong>
-                      {ticketType.description && (
-                        <p style={styles.muted}>{ticketType.description}</p>
-                      )}
-                    </div>
-
-                    <strong style={styles.pricePill}>
-                      {event.currency} {moneyFromCents(ticketType.price)}
-                    </strong>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
           <section id="book" style={styles.bookSection}>
             <div style={styles.bookHeader}>
               <div>
-                <h2 className="so-brand-card-title" style={styles.bookTitle}>
+                <h2 style={styles.bookTitle}>
                   {event.event_type === "tables"
                     ? "Choose your table seats"
                     : event.event_type === "reserved_seating"
@@ -290,15 +332,25 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.heroStat}>
+      <span style={styles.heroStatLabel}>{label}</span>
+      <strong style={styles.heroStatValue}>{value}</strong>
+    </div>
+  );
+}
+
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#ffffff",
+    background:
+      "linear-gradient(180deg, #f8fafc 0%, #f3f5f7 45%, #ffffff 100%)",
     color: "#111827",
     padding: 24,
   },
   wrap: {
-    maxWidth: 1040,
+    maxWidth: 1160,
     margin: "0 auto",
   },
   topBar: {
@@ -321,11 +373,11 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    color: "#111827",
+    border: "1px solid rgba(13,27,61,0.12)",
+    color: "#0d1b3d",
     textDecoration: "none",
     fontWeight: 900,
-    boxShadow: "0 1px 4px rgba(15,23,42,0.08)",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.08)",
   },
   smallLink: {
     display: "inline-flex",
@@ -334,38 +386,148 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
-    border: "1px solid #e5e7eb",
+    border: "1px solid rgba(13,27,61,0.12)",
     color: "#334155",
     textDecoration: "none",
     fontWeight: 800,
   },
   card: {
     padding: 18,
-    borderRadius: 22,
+    borderRadius: 30,
     background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.08)",
+    border: "1px solid rgba(13,27,61,0.10)",
+    boxShadow: "0 24px 70px rgba(15,23,42,0.14)",
+    overflow: "hidden",
+  },
+  heroShell: {
+    position: "relative",
+    minHeight: 520,
+    borderRadius: 24,
+    overflow: "hidden",
+    background: "#0d1b3d",
+    boxShadow: "0 20px 60px rgba(13,27,61,0.28)",
   },
   heroImage: {
+    position: "absolute",
+    inset: 0,
     width: "100%",
-    height: 340,
-    borderRadius: 18,
+    height: "100%",
     display: "block",
+    background:
+      "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.12), rgba(13,27,61,0.95) 72%)",
+  },
+  heroShade: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(90deg, rgba(13,27,61,0.96) 0%, rgba(13,27,61,0.78) 38%, rgba(13,27,61,0.38) 70%, rgba(13,27,61,0.72) 100%), linear-gradient(180deg, rgba(13,27,61,0.30) 0%, rgba(13,27,61,0.92) 100%)",
+  },
+  heroContent: {
+    position: "relative",
+    zIndex: 2,
+    minHeight: 520,
+    padding: "44px 42px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end",
+    maxWidth: 940,
+  },
+  heroPills: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 18,
+  },
+  goldPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "9px 13px",
+    background: "rgba(200,162,74,0.18)",
+    border: "1px solid rgba(200,162,74,0.55)",
+    color: "#f7d98a",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  lightPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "9px 13px",
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.24)",
+    color: "#ffffff",
+    fontWeight: 900,
+    fontSize: 13,
   },
   title: {
-    margin: "22px 0 14px",
-    fontSize: 42,
-    lineHeight: 1.05,
-    letterSpacing: "-0.04em",
-    fontWeight: 950,
-    color: "#111827",
+    margin: 0,
+    fontSize: "clamp(54px, 9vw, 116px)",
+    lineHeight: 0.88,
+    letterSpacing: "-0.075em",
+    fontWeight: 900,
+    color: "#ffffff",
+    textTransform: "lowercase",
+    textShadow:
+      "-1px -1px 0 #c8a24a, 1px -1px 0 #c8a24a, -1px 1px 0 #c8a24a, 1px 1px 0 #c8a24a, 0 20px 40px rgba(0,0,0,0.38)",
+  },
+  heroTagline: {
+    marginTop: 18,
+    color: "#f7d98a",
+    letterSpacing: "0.32em",
+    textTransform: "uppercase",
+    fontSize: "clamp(13px, 1.7vw, 20px)",
+    fontWeight: 800,
+  },
+  heroStats: {
+    marginTop: 28,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gap: 12,
+    maxWidth: 820,
+  },
+  heroStat: {
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.22)",
+    backdropFilter: "blur(12px)",
+  },
+  heroStatLabel: {
+    display: "block",
+    marginBottom: 6,
+    color: "rgba(255,255,255,0.66)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 900,
+    fontSize: 11,
+  },
+  heroStatValue: {
+    display: "block",
+    color: "#ffffff",
+    fontSize: 14,
+    lineHeight: 1.35,
+  },
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
+    gap: 18,
+    marginTop: 18,
   },
   infoBox: {
-    padding: 18,
-    borderRadius: 16,
-    background: "#f8fafc",
+    padding: 22,
+    borderRadius: 22,
+    background:
+      "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
     border: "1px solid #e2e8f0",
-    marginBottom: 14,
+  },
+  sectionKicker: {
+    margin: "0 0 14px",
+    color: "#0d1b3d",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    fontSize: 18,
+    fontWeight: 900,
   },
   infoRow: {
     margin: "0 0 8px",
@@ -373,43 +535,48 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
   },
   description: {
-    margin: "14px 0 0",
+    margin: "16px 0 0",
     color: "#475569",
     whiteSpace: "pre-line",
     fontSize: 15,
-    lineHeight: 1.6,
+    lineHeight: 1.7,
     fontWeight: 600,
   },
   successBox: {
-    padding: 14,
-    borderRadius: 14,
+    padding: 16,
+    borderRadius: 18,
     background: "#ecfdf5",
     border: "1px solid #a7f3d0",
     color: "#065f46",
-    marginBottom: 16,
+    marginTop: 18,
+    marginBottom: 18,
     lineHeight: 1.5,
   },
   cancelBox: {
-    padding: 14,
-    borderRadius: 14,
+    padding: 16,
+    borderRadius: 18,
     background: "#fffbeb",
     border: "1px solid #fde68a",
     color: "#92400e",
-    marginBottom: 16,
+    marginTop: 18,
+    marginBottom: 18,
     lineHeight: 1.5,
   },
   orangePanel: {
-    padding: 16,
-    borderRadius: 16,
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-    marginBottom: 18,
+    padding: 22,
+    borderRadius: 22,
+    background:
+      "linear-gradient(180deg, #0d1b3d 0%, #132957 100%)",
+    border: "1px solid rgba(200,162,74,0.42)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
   },
   panelTitle: {
-    margin: "0 0 12px",
-    color: "#9a3412",
-    fontSize: 22,
-    fontWeight: 950,
+    margin: "0 0 14px",
+    color: "#f7d98a",
+    letterSpacing: "0.14em",
+    textTransform: "uppercase",
+    fontSize: 18,
+    fontWeight: 900,
   },
   stack: {
     display: "grid",
@@ -420,18 +587,19 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
-    padding: 13,
-    borderRadius: 13,
-    background: "#ffffff",
-    border: "1px solid #fed7aa",
-    color: "#111827",
+    padding: 14,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
   },
   pricePill: {
     whiteSpace: "nowrap",
     borderRadius: 999,
-    padding: "6px 10px",
-    background: "#ffedd5",
-    color: "#9a3412",
+    padding: "7px 11px",
+    background: "rgba(200,162,74,0.18)",
+    border: "1px solid rgba(200,162,74,0.42)",
+    color: "#f7d98a",
     fontSize: 13,
   },
   muted: {
@@ -442,19 +610,20 @@ const styles: Record<string, CSSProperties> = {
   },
   emptyBox: {
     padding: 14,
-    borderRadius: 13,
-    background: "#ffffff",
-    border: "1px dashed #fdba74",
-    color: "#64748b",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px dashed rgba(255,255,255,0.24)",
+    color: "#ffffff",
     fontWeight: 800,
     fontSize: 14,
   },
   bookSection: {
-    padding: 18,
-    borderRadius: 20,
+    marginTop: 18,
+    padding: 22,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
+    boxShadow: "0 8px 28px rgba(15,23,42,0.08)",
   },
   bookHeader: {
     display: "flex",
@@ -466,11 +635,13 @@ const styles: Record<string, CSSProperties> = {
   },
   bookTitle: {
     margin: 0,
-    color: "#111827",
-    fontSize: 34,
-    lineHeight: 1.1,
-    letterSpacing: "-0.03em",
-    fontWeight: 950,
+    color: "#0d1b3d",
+    fontSize: 38,
+    lineHeight: 1.05,
+    letterSpacing: "-0.055em",
+    fontWeight: 900,
+    textShadow:
+      "-1px -1px 0 rgba(200,162,74,0.32), 1px -1px 0 rgba(200,162,74,0.32), -1px 1px 0 rgba(200,162,74,0.32), 1px 1px 0 rgba(200,162,74,0.32)",
   },
   bookText: {
     margin: "8px 0 0",
@@ -482,10 +653,11 @@ const styles: Record<string, CSSProperties> = {
   checkoutBadge: {
     padding: "10px 14px",
     borderRadius: 999,
-    background: "#111827",
+    background: "#0d1b3d",
     color: "#ffffff",
     fontWeight: 950,
     fontSize: 13,
+    border: "1px solid rgba(200,162,74,0.45)",
   },
   emptyLarge: {
     padding: 26,
