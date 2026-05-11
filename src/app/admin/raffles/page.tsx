@@ -5,6 +5,8 @@ import { auth } from "@/auth";
 import { headers, cookies } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
+const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
+
 type RaffleItem = {
   id: string;
   tenant_slug: string;
@@ -152,98 +154,51 @@ export default async function AdminRafflesPage() {
   );
 
   return (
-    <main
-      style={{
-        maxWidth: 1180,
-        margin: "0 auto",
-        padding: "32px 16px 56px",
-        background: "#f8fafc",
-        minHeight: "100vh",
-      }}
-    >
-      <section
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 22,
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
+    <main style={styles.page}>
+      <section style={styles.header}>
         <div>
-          <div
-            style={{
-              display: "inline-flex",
-              padding: "6px 10px",
-              borderRadius: 999,
-              background: "#e0f2fe",
-              color: "#0369a1",
-              fontSize: 13,
-              fontWeight: 800,
-              marginBottom: 10,
-            }}
-          >
-            Admin dashboard
-          </div>
+          <div style={styles.badge}>Admin dashboard</div>
 
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 34,
-              lineHeight: 1.1,
-              letterSpacing: "-0.04em",
-              color: "#0f172a",
-            }}
-          >
-            Manage raffles
-          </h1>
+          <h1 style={styles.title}>Manage raffles</h1>
 
-          <p style={{ margin: "10px 0 0", color: "#64748b", fontSize: 15 }}>
+          <p style={styles.subtitle}>
             Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href="/admin" style={styles.topSecondaryLink}>
+        <div style={styles.nav}>
+          <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
 
-          <div style={styles.activeNav}>Raffles</div>
+          <div style={styles.navButtonActive}>Raffles</div>
 
-          <Link href="/admin/squares" style={styles.topSecondaryLink}>
+          <Link href="/admin/squares" style={styles.navButton}>
             Squares
           </Link>
 
-          <Link href="/admin/events" style={styles.topSecondaryLink}>
+          <Link href="/admin/events" style={styles.navButton}>
             Events
           </Link>
 
-          <Link href="/admin/auctions" style={styles.topSecondaryLink}>
+          <Link href="/admin/auctions" style={styles.navButton}>
             Auctions
           </Link>
 
           <Link
             href={`/c/${tenantSlug}?adminReturn=/admin/raffles`}
-            style={styles.secondaryLink}
+            style={styles.navButton}
           >
             Public campaigns page
           </Link>
 
-          <Link href="/admin/raffles/new" style={styles.createLink}>
+          <Link href="/admin/raffles/new" style={styles.createButton}>
             + Create raffle
           </Link>
         </div>
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 12,
-          marginBottom: 22,
-        }}
-      >
+      <section style={styles.statsGrid}>
         <StatCard label="Total raffles" value={totalRaffles} />
         <StatCard label="Published" value={publishedCount} />
         <StatCard label="Tickets sold" value={totalSold} />
@@ -251,143 +206,53 @@ export default async function AdminRafflesPage() {
       </section>
 
       {raffles.length === 0 ? (
-        <section
-          style={{
-            padding: 28,
-            border: "1px solid #e2e8f0",
-            borderRadius: 22,
-            background: "#fff",
-            boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-          }}
-        >
+        <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>No raffles yet</h2>
 
-          <p style={{ color: "#64748b", margin: "8px 0 18px" }}>
+          <p style={styles.muted}>
             Create your first raffle and publish it when ready.
           </p>
 
-          <Link
-            href="/admin/raffles/new"
-            style={{
-              display: "inline-flex",
-              padding: "11px 16px",
-              borderRadius: 999,
-              background: "#1683f8",
-              color: "#fff",
-              textDecoration: "none",
-              fontWeight: 800,
-            }}
-          >
+          <Link href="/admin/raffles/new" style={styles.createButton}>
             Create raffle
           </Link>
         </section>
       ) : (
-        <section style={{ display: "grid", gap: 16 }}>
+        <section style={styles.list}>
           {raffles.map((raffle) => {
             const progress = getProgressPercent(raffle);
             const statusStyle = getStatusStyle(raffle.status);
 
             return (
-              <article
-                key={raffle.id}
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 22,
-                  padding: 18,
-                  background: "#fff",
-                  boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "96px 1fr",
-                    gap: 16,
-                    alignItems: "start",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 96,
-                      height: 96,
-                      borderRadius: 18,
-                      overflow: "hidden",
-                      background: "#f1f5f9",
-                      border: "1px solid #e2e8f0",
-                    }}
-                  >
-                    {raffle.image_url ? (
-                      <img
-                        src={raffle.image_url}
-                        alt={raffle.title}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#94a3b8",
-                          fontWeight: 900,
-                          fontSize: 24,
-                        }}
-                      >
-                        🎟️
-                      </div>
-                    )}
+              <article key={raffle.id} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div style={styles.imageWrap}>
+                    <img
+                      src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
+                      alt={raffle.title || "Raffle"}
+                      style={{
+                        ...styles.image,
+                        objectFit: raffle.image_url ? "cover" : "contain",
+                        padding: raffle.image_url ? 0 : 10,
+                        background: raffle.image_url
+                          ? "#f1f5f9"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+                        boxSizing: "border-box",
+                      }}
+                    />
                   </div>
 
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        alignItems: "flex-start",
-                        flexWrap: "wrap",
-                      }}
-                    >
+                  <div style={styles.cardMain}>
+                    <div style={styles.cardHeader}>
                       <div style={{ minWidth: 0 }}>
-                        <h2
-                          style={{
-                            margin: 0,
-                            fontSize: 22,
-                            color: "#0f172a",
-                            letterSpacing: "-0.02em",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {raffle.title}
-                        </h2>
+                        <h2 style={styles.cardTitle}>{raffle.title}</h2>
 
-                        <p
-                          style={{
-                            margin: "6px 0 0",
-                            color: "#64748b",
-                            fontSize: 14,
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          /r/{raffle.slug}
-                        </p>
+                        <p style={styles.slug}>/r/{raffle.slug}</p>
                       </div>
 
                       <div
                         style={{
-                          padding: "7px 11px",
-                          borderRadius: 9999,
-                          border: "1px solid",
-                          fontSize: 13,
-                          textTransform: "capitalize",
-                          fontWeight: 800,
+                          ...styles.status,
                           ...statusStyle,
                         }}
                       >
@@ -396,29 +261,14 @@ export default async function AdminRafflesPage() {
                     </div>
 
                     {raffle.description ? (
-                      <p
-                        style={{
-                          color: "#475569",
-                          fontSize: 14,
-                          lineHeight: 1.5,
-                          margin: "10px 0 0",
-                        }}
-                      >
+                      <p style={styles.description}>
                         {raffle.description.length > 130
                           ? `${raffle.description.slice(0, 130)}…`
                           : raffle.description}
                       </p>
                     ) : null}
 
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(130px, 1fr))",
-                        gap: 10,
-                        marginTop: 16,
-                      }}
-                    >
+                    <div style={styles.detailGrid}>
                       <InfoBlock
                         label="Price"
                         value={formatCurrency(
@@ -442,49 +292,23 @@ export default async function AdminRafflesPage() {
                       />
                     </div>
 
-                    <div style={{ marginTop: 16 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          color: "#64748b",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          marginBottom: 6,
-                        }}
-                      >
+                    <div style={styles.progressSection}>
+                      <div style={styles.progressHeader}>
                         <span>Sales progress</span>
                         <span>{progress}%</span>
                       </div>
 
-                      <div
-                        style={{
-                          height: 10,
-                          borderRadius: 999,
-                          background: "#e2e8f0",
-                          overflow: "hidden",
-                        }}
-                      >
+                      <div style={styles.progressTrack}>
                         <div
                           style={{
-                            height: "100%",
+                            ...styles.progressFill,
                             width: `${progress}%`,
-                            background: "#16a34a",
-                            borderRadius: 999,
                           }}
                         />
                       </div>
                     </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        marginTop: 18,
-                        flexWrap: "wrap",
-                      }}
-                    >
+                    <div style={styles.actions}>
                       <Link
                         href={`/admin/raffles/${raffle.id}`}
                         style={styles.primaryLink}
@@ -513,76 +337,67 @@ export default async function AdminRafflesPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div
-      style={{
-        padding: 16,
-        borderRadius: 18,
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
-        boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-      }}
-    >
-      <div style={{ color: "#64748b", fontSize: 13, fontWeight: 800 }}>
-        {label}
-      </div>
-
-      <div
-        style={{
-          color: "#0f172a",
-          fontSize: 28,
-          fontWeight: 900,
-          marginTop: 4,
-        }}
-      >
-        {value}
-      </div>
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
     </div>
   );
 }
 
 function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div
-      style={{
-        padding: 12,
-        borderRadius: 14,
-        background: "#f8fafc",
-        border: "1px solid #e2e8f0",
-        minWidth: 0,
-      }}
-    >
-      <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-        {label}
-      </div>
-
-      <div
-        style={{
-          marginTop: 4,
-          color: "#0f172a",
-          fontWeight: 900,
-          wordBreak: "break-word",
-        }}
-      >
-        {value}
-      </div>
+    <div style={styles.detail}>
+      <div style={styles.detailLabel}>{label}</div>
+      <div style={styles.detailValue}>{value}</div>
     </div>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  createLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
-    background: "#1683f8",
-    color: "#fff",
-    textDecoration: "none",
-    fontWeight: 800,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  page: {
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "32px 16px 56px",
+    background: "#f8fafc",
+    minHeight: "100vh",
   },
-  topSecondaryLink: {
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 22,
+    gap: 16,
+    flexWrap: "wrap",
+  },
+  badge: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#e0f2fe",
+    color: "#0369a1",
+    fontSize: 13,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
+  title: {
+    margin: 0,
+    fontSize: 34,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    color: "#0f172a",
+  },
+  subtitle: {
+    margin: "10px 0 0",
+    color: "#64748b",
+    fontSize: 15,
+  },
+  nav: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  navButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -593,6 +408,183 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 800,
+  },
+  navButtonActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#0f172a",
+    color: "#ffffff",
+    fontWeight: 900,
+  },
+  createButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+    marginBottom: 22,
+  },
+  statCard: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  statLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  statValue: {
+    color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 900,
+    marginTop: 4,
+  },
+  emptyCard: {
+    padding: 28,
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  muted: {
+    color: "#64748b",
+    margin: "8px 0 18px",
+  },
+  list: {
+    display: "grid",
+    gap: 16,
+  },
+  card: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    padding: 18,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  cardTop: {
+    display: "grid",
+    gridTemplateColumns: "96px 1fr",
+    gap: 16,
+    alignItems: "start",
+  },
+  imageWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+  },
+  cardMain: {
+    minWidth: 0,
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: 22,
+    color: "#0f172a",
+    letterSpacing: "-0.02em",
+    wordBreak: "break-word",
+  },
+  slug: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    wordBreak: "break-word",
+  },
+  status: {
+    padding: "7px 11px",
+    borderRadius: 9999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 800,
+  },
+  description: {
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.5,
+    margin: "10px 0 0",
+  },
+  detailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+    wordBreak: "break-word",
+  },
+  progressSection: {
+    marginTop: 16,
+  },
+  progressHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 700,
+    marginBottom: 6,
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 999,
+    background: "#e2e8f0",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    background: "#16a34a",
+    borderRadius: 999,
+  },
+  actions: {
+    display: "flex",
+    gap: 10,
+    marginTop: 18,
+    flexWrap: "wrap",
   },
   primaryLink: {
     display: "inline-flex",
@@ -618,15 +610,5 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 800,
     fontSize: 14,
-  },
-  activeNav: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
-    background: "#0f172a",
-    color: "#ffffff",
-    fontWeight: 900,
   },
 };
