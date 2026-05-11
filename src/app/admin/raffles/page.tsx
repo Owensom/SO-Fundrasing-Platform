@@ -32,8 +32,8 @@ type ApiResponse = {
 };
 
 async function getAdminRaffles(): Promise<RaffleItem[]> {
-  const headerStore = headers();
-  const cookieStore = cookies();
+  const headerStore = await headers();
+  const cookieStore = await cookies();
 
   const host = headerStore.get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
@@ -124,6 +124,10 @@ function getProgressPercent(raffle: RaffleItem) {
   );
 }
 
+function getRaisedTotal(raffle: RaffleItem) {
+  return Number(raffle.sold_tickets || 0) * Number(raffle.ticket_price || 0);
+}
+
 export default async function AdminRafflesPage() {
   const session = await auth();
 
@@ -152,6 +156,8 @@ export default async function AdminRafflesPage() {
     (sum, r) => sum + Number(r.remaining_tickets || 0),
     0,
   );
+  const totalRaised = raffles.reduce((sum, r) => sum + getRaisedTotal(r), 0);
+  const dashboardCurrency = raffles[0]?.currency || "GBP";
 
   return (
     <main style={styles.page}>
@@ -189,7 +195,7 @@ export default async function AdminRafflesPage() {
             href={`/c/${tenantSlug}?adminReturn=/admin/raffles`}
             style={styles.navButton}
           >
-            Public campaigns page
+            Public site
           </Link>
 
           <Link href="/admin/raffles/new" style={styles.createButton}>
@@ -199,10 +205,45 @@ export default async function AdminRafflesPage() {
       </section>
 
       <section style={styles.statsGrid}>
-        <StatCard label="Total raffles" value={totalRaffles} />
-        <StatCard label="Published" value={publishedCount} />
-        <StatCard label="Tickets sold" value={totalSold} />
-        <StatCard label="Remaining" value={totalRemaining} />
+        <StatCard
+          label="Total raffles"
+          value={totalRaffles}
+          icon="🎟️"
+          accent="#1683f8"
+          tint="#eff6ff"
+        />
+
+        <StatCard
+          label="Published"
+          value={publishedCount}
+          icon="✓"
+          accent="#16a34a"
+          tint="#ecfdf5"
+        />
+
+        <StatCard
+          label="Tickets sold"
+          value={totalSold}
+          icon="↗"
+          accent="#7c3aed"
+          tint="#f5f3ff"
+        />
+
+        <StatCard
+          label="Raised"
+          value={formatCurrency(totalRaised, dashboardCurrency)}
+          icon="£"
+          accent="#d97706"
+          tint="#fffbeb"
+        />
+
+        <StatCard
+          label="Remaining"
+          value={totalRemaining}
+          icon="•"
+          accent="#64748b"
+          tint="#f8fafc"
+        />
       </section>
 
       {raffles.length === 0 ? (
@@ -222,6 +263,7 @@ export default async function AdminRafflesPage() {
           {raffles.map((raffle) => {
             const progress = getProgressPercent(raffle);
             const statusStyle = getStatusStyle(raffle.status);
+            const raised = getRaisedTotal(raffle);
 
             return (
               <article key={raffle.id} style={styles.card}>
@@ -257,6 +299,20 @@ export default async function AdminRafflesPage() {
                         }}
                       >
                         {raffle.status}
+                      </div>
+                    </div>
+
+                    <div style={styles.headlineGrid}>
+                      <div style={styles.headlineBox}>
+                        <div style={styles.headlineLabel}>Sales progress</div>
+                        <div style={styles.headlineValue}>{progress}% sold</div>
+                      </div>
+
+                      <div style={styles.headlineBox}>
+                        <div style={styles.headlineLabel}>Raised so far</div>
+                        <div style={styles.headlineValue}>
+                          {formatCurrency(raised, raffle.currency)}
+                        </div>
                       </div>
                     </div>
 
@@ -321,7 +377,7 @@ export default async function AdminRafflesPage() {
                         target="_blank"
                         style={styles.secondaryLink}
                       >
-                        View campaign page
+                        View campaign
                       </Link>
                     </div>
                   </div>
@@ -335,11 +391,43 @@ export default async function AdminRafflesPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  accent,
+  tint,
+}: {
+  label: string;
+  value: ReactNode;
+  icon: string;
+  accent: string;
+  tint: string;
+}) {
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
-      <div style={styles.statValue}>{value}</div>
+    <div
+      style={{
+        ...styles.statCard,
+        borderTopColor: accent,
+      }}
+    >
+      <div style={styles.statTop}>
+        <div>
+          <div style={styles.statLabel}>{label}</div>
+          <div style={styles.statValue}>{value}</div>
+        </div>
+
+        <div
+          style={{
+            ...styles.statIcon,
+            background: tint,
+            color: accent,
+            borderColor: accent,
+          }}
+        >
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
@@ -442,7 +530,26 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    borderTop: "4px solid #1683f8",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  statTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+  statIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    border: "1px solid",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 15,
+    fontWeight: 900,
+    flexShrink: 0,
   },
   statLabel: {
     color: "#64748b",
@@ -454,6 +561,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 28,
     fontWeight: 900,
     marginTop: 4,
+    letterSpacing: "-0.03em",
   },
   emptyCard: {
     padding: 28,
@@ -479,22 +587,24 @@ const styles: Record<string, CSSProperties> = {
   },
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "96px 1fr",
+    gridTemplateColumns: "104px 1fr",
     gap: 16,
     alignItems: "start",
   },
   imageWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 18,
+    width: 104,
+    height: 104,
+    borderRadius: 20,
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
   },
   image: {
     width: "100%",
     height: "100%",
     display: "block",
+    objectPosition: "center center",
   },
   cardMain: {
     minWidth: 0,
@@ -526,6 +636,30 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     textTransform: "capitalize",
     fontWeight: 800,
+  },
+  headlineGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  headlineBox: {
+    padding: "13px 14px",
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+    border: "1px solid #e2e8f0",
+  },
+  headlineLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  headlineValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontSize: 19,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
   },
   description: {
     color: "#475569",
@@ -577,7 +711,7 @@ const styles: Record<string, CSSProperties> = {
   },
   progressFill: {
     height: "100%",
-    background: "#16a34a",
+    background: "linear-gradient(90deg, #16a34a 0%, #22c55e 100%)",
     borderRadius: 999,
   },
   actions: {
@@ -604,11 +738,12 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "10px 14px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
     textDecoration: "none",
     fontWeight: 800,
     fontSize: 14,
+    boxShadow: "none",
   },
 };
