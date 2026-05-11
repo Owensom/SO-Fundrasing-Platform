@@ -8,6 +8,8 @@ import {
   listAuctions,
 } from "../../../../api/_lib/auctions-repo";
 
+const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
@@ -18,6 +20,14 @@ function formatDate(value: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function focusValue(value: number | null | undefined) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return 50;
+
+  return Math.max(0, Math.min(100, Math.round(number)));
 }
 
 function getStatusStyle(status: string | null | undefined): CSSProperties {
@@ -88,7 +98,9 @@ export default async function AdminAuctionsPage() {
         <div>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 style={styles.title}>Manage auctions</h1>
+          <h1 className="so-brand-heading" style={styles.title}>
+            Manage auctions
+          </h1>
 
           <p style={styles.subtitle}>
             Tenant: <strong>{tenantSlug}</strong>
@@ -135,10 +147,11 @@ export default async function AdminAuctionsPage() {
 
       {auctions.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0 }}>No auctions yet</h2>
-          <p style={styles.muted}>
-            Create your first auction campaign.
-          </p>
+          <h2 className="so-brand-card-title" style={{ margin: 0 }}>
+            No auctions yet
+          </h2>
+
+          <p style={styles.muted}>Create your first auction campaign.</p>
 
           <Link href="/admin/auctions/new" style={styles.createButton}>
             + Create auction
@@ -146,83 +159,96 @@ export default async function AdminAuctionsPage() {
         </section>
       ) : (
         <section style={styles.list}>
-          {auctions.map((auction) => (
-            <article key={auction.id} style={styles.card}>
-              <div style={styles.cardTop}>
-                <div style={styles.imageWrap}>
-                  {auction.image_url ? (
+          {auctions.map((auction) => {
+            const hasCustomImage = Boolean(auction.image_url);
+
+            return (
+              <article key={auction.id} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div style={styles.imageWrap}>
                     <img
-                      src={auction.image_url}
-                      alt={auction.title}
-                      style={styles.image}
+                      src={auction.image_url || DEFAULT_AUCTION_IMAGE}
+                      alt={auction.title || "SO Auctions"}
+                      style={{
+                        ...styles.image,
+                        objectFit: hasCustomImage ? "cover" : "contain",
+                        objectPosition: hasCustomImage
+                          ? `${focusValue(auction.image_focus_x)}% ${focusValue(
+                              auction.image_focus_y,
+                            )}%`
+                          : "center",
+                        padding: hasCustomImage ? 0 : 12,
+                        background: hasCustomImage
+                          ? "#f1f5f9"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+                        boxSizing: "border-box",
+                      }}
                     />
-                  ) : (
-                    <div style={styles.imageEmpty}>🔨</div>
-                  )}
-                </div>
+                  </div>
 
-                <div style={styles.cardMain}>
-                  <div style={styles.cardHeader}>
-                    <div>
-                      <h2 style={styles.cardTitle}>
-                        {auction.title || "Untitled auction"}
-                      </h2>
+                  <div style={styles.cardMain}>
+                    <div style={styles.cardHeader}>
+                      <div>
+                        <h2 className="so-brand-card-title" style={styles.cardTitle}>
+                          {auction.title || "Untitled auction"}
+                        </h2>
 
-                      <p style={styles.slug}>/a/{auction.slug}</p>
+                        <p style={styles.slug}>/a/{auction.slug}</p>
+                      </div>
+
+                      <span
+                        style={{
+                          ...styles.status,
+                          ...getStatusStyle(auction.status),
+                        }}
+                      >
+                        {auction.status}
+                      </span>
                     </div>
 
-                    <span
-                      style={{
-                        ...styles.status,
-                        ...getStatusStyle(auction.status),
-                      }}
-                    >
-                      {auction.status}
-                    </span>
-                  </div>
+                    <div style={styles.detailGrid}>
+                      <Detail label="Opens" value={formatDate(auction.opens_at)} />
+                      <Detail label="Closes" value={formatDate(auction.closes_at)} />
+                      <Detail label="Currency" value={auction.currency || "GBP"} />
+                      <Detail
+                        label="Public page"
+                        value={
+                          auction.status === "published"
+                            ? "Visible"
+                            : "Not published"
+                        }
+                      />
+                    </div>
 
-                  <div style={styles.detailGrid}>
-                    <Detail label="Opens" value={formatDate(auction.opens_at)} />
-                    <Detail label="Closes" value={formatDate(auction.closes_at)} />
-                    <Detail label="Currency" value={auction.currency || "GBP"} />
-                    <Detail
-                      label="Public page"
-                      value={
-                        auction.status === "published"
-                          ? "Visible"
-                          : "Not published"
-                      }
-                    />
-                  </div>
+                    <div style={styles.actions}>
+                      <Link
+                        href={`/admin/auctions/${auction.id}`}
+                        style={styles.openButton}
+                      >
+                        Manage
+                      </Link>
 
-                  <div style={styles.actions}>
-                    <Link
-                      href={`/admin/auctions/${auction.id}`}
-                      style={styles.openButton}
-                    >
-                      Manage
-                    </Link>
+                      <a
+                        href={`/a/${auction.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.viewButton}
+                      >
+                        View auction page
+                      </a>
 
-                    <a
-                      href={`/a/${auction.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.viewButton}
-                    >
-                      View auction page
-                    </a>
-
-                    <form action={deleteAuctionAction} style={styles.deleteForm}>
-                      <input type="hidden" name="id" value={auction.id} />
-                      <button type="submit" style={styles.deleteButton}>
-                        Delete
-                      </button>
-                    </form>
+                      <form action={deleteAuctionAction} style={styles.deleteForm}>
+                        <input type="hidden" name="id" value={auction.id} />
+                        <button type="submit" style={styles.deleteButton}>
+                          Delete
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </section>
       )}
     </main>
@@ -368,17 +394,7 @@ const styles: Record<string, CSSProperties> = {
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
-  },
-  imageEmpty: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 32,
-    color: "#94a3b8",
   },
   cardMain: {
     minWidth: 0,
