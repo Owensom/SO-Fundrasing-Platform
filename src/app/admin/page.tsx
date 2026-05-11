@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers, cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listSquaresGames } from "../../../api/_lib/squares-repo";
@@ -25,8 +26,22 @@ type ApiResponse = {
 
 async function getAdminRaffles(): Promise<RaffleItem[]> {
   try {
-    const res = await fetch(`${process.env.NEXTAUTH_URL || ""}/api/admin/raffles`, {
+    const headerStore = await headers();
+    const cookieStore = await cookies();
+
+    const host = headerStore.get("host") || "";
+    const protocol = host.includes("localhost") ? "http" : "https";
+
+    const cookieHeader = cookieStore
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+
+    const res = await fetch(`${protocol}://${host}/api/admin/raffles`, {
       cache: "no-store",
+      headers: {
+        cookie: cookieHeader,
+      },
     });
 
     if (!res.ok) return [];
@@ -76,10 +91,18 @@ export default async function AdminDashboardPage() {
     listAuctions(tenantSlug),
   ]);
 
-  const publishedRaffles = raffles.filter((item) => item.status === "published");
-  const publishedSquares = squares.filter((item) => item.status === "published");
-  const publishedEvents = events.filter((item) => item.status === "published");
-  const publishedAuctions = auctions.filter((item) => item.status === "published");
+  const publishedRaffles = raffles.filter(
+    (item) => item.status === "published",
+  );
+  const publishedSquares = squares.filter(
+    (item) => item.status === "published",
+  );
+  const publishedEvents = events.filter(
+    (item) => item.status === "published",
+  );
+  const publishedAuctions = auctions.filter(
+    (item) => item.status === "published",
+  );
 
   const raffleRevenueCents = raffles.reduce(
     (sum, raffle) =>
@@ -140,11 +163,30 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section style={styles.statsGrid}>
-        <StatCard label="Total campaigns" value={raffles.length + squares.length + events.length + auctions.length} />
-        <StatCard label="Published campaigns" value={publishedRaffles.length + publishedSquares.length + publishedEvents.length + publishedAuctions.length} />
-        <StatCard label="Stripe tracked estimate" value={formatMoney(combinedEstimatedRevenueCents)} />
+        <StatCard
+          label="Total campaigns"
+          value={raffles.length + squares.length + events.length + auctions.length}
+        />
+
+        <StatCard
+          label="Published campaigns"
+          value={
+            publishedRaffles.length +
+            publishedSquares.length +
+            publishedEvents.length +
+            publishedAuctions.length
+          }
+        />
+
+        <StatCard
+          label="Stripe tracked estimate"
+          value={formatMoney(combinedEstimatedRevenueCents)}
+        />
+
         <StatCard label="Raffle tickets sold" value={totalRaffleTicketsSold} />
+
         <StatCard label="Squares sold" value={squaresSold} />
+
         <StatCard label="Tickets remaining" value={totalRaffleTicketsRemaining} />
       </section>
 
@@ -153,23 +195,43 @@ export default async function AdminDashboardPage() {
           <h2 className="so-brand-card-title" style={styles.sectionTitle}>
             Platform data overview
           </h2>
+
           <p style={styles.sectionText}>
             Summary of live campaign data currently available to this tenant.
           </p>
         </div>
 
         <div style={styles.dataGrid}>
-          <DataBlock label="Raffles" total={raffles.length} published={publishedRaffles.length} />
-          <DataBlock label="Squares" total={squares.length} published={publishedSquares.length} />
-          <DataBlock label="Events" total={events.length} published={publishedEvents.length} />
-          <DataBlock label="Auctions" total={auctions.length} published={publishedAuctions.length} />
+          <DataBlock
+            label="Raffles"
+            total={raffles.length}
+            published={publishedRaffles.length}
+          />
+
+          <DataBlock
+            label="Squares"
+            total={squares.length}
+            published={publishedSquares.length}
+          />
+
+          <DataBlock
+            label="Events"
+            total={events.length}
+            published={publishedEvents.length}
+          />
+
+          <DataBlock
+            label="Auctions"
+            total={auctions.length}
+            published={publishedAuctions.length}
+          />
         </div>
       </section>
 
       <section style={styles.cardsGrid}>
         <DashboardCard
           href="/admin/raffles"
-          emoji="🎟️"
+          image="/brand/so-default-raffles.png"
           title="Raffles"
           description="Create, manage and draw fundraising raffles."
           stats={`${raffles.length} total · ${publishedRaffles.length} published`}
@@ -177,7 +239,7 @@ export default async function AdminDashboardPage() {
 
         <DashboardCard
           href="/admin/squares"
-          emoji="🔲"
+          image="/brand/so-default-squares.png"
           title="Squares"
           description="Run football cards and live squares competitions."
           stats={`${squares.length} total · ${publishedSquares.length} published`}
@@ -185,7 +247,7 @@ export default async function AdminDashboardPage() {
 
         <DashboardCard
           href="/admin/events"
-          emoji="🎫"
+          image="/brand/so-default-events.png"
           title="Events"
           description="Manage seating plans, ticketing and guest experiences."
           stats={`${events.length} total · ${publishedEvents.length} published`}
@@ -193,7 +255,7 @@ export default async function AdminDashboardPage() {
 
         <DashboardCard
           href="/admin/auctions"
-          emoji="🔨"
+          image="/brand/so-default-auctions.png"
           title="Auctions"
           description="Run premium auction fundraising campaigns."
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
@@ -232,13 +294,13 @@ function DataBlock({
 
 function DashboardCard({
   href,
-  emoji,
+  image,
   title,
   description,
   stats,
 }: {
   href: string;
-  emoji: string;
+  image: string;
   title: string;
   description: string;
   stats: string;
@@ -246,7 +308,9 @@ function DashboardCard({
   return (
     <Link href={href} style={styles.cardLink}>
       <article style={styles.card}>
-        <div style={styles.iconBox}>{emoji}</div>
+        <div style={styles.logoBox}>
+          <img src={image} alt={title} style={styles.logoImage} />
+        </div>
 
         <h2 className="so-brand-card-title" style={styles.cardTitle}>
           {title}
@@ -408,9 +472,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
   },
-  iconBox: {
-    width: 68,
-    height: 68,
+  logoBox: {
+    width: 78,
+    height: 78,
     borderRadius: 22,
     background:
       "linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f8fafc 100%)",
@@ -418,8 +482,14 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 32,
     marginBottom: 18,
+    overflow: "hidden",
+  },
+  logoImage: {
+    width: "88%",
+    height: "88%",
+    objectFit: "contain",
+    display: "block",
   },
   cardTitle: {
     margin: 0,
