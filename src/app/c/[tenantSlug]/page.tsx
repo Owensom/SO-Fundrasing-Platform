@@ -31,15 +31,32 @@ function normaliseFocus(value: number | null | undefined) {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
+function getDefaultImage(type: Campaign["type"]) {
+  if (type === "raffle") return "/brand/so-default-raffles.png";
+  if (type === "squares") return "/brand/so-default-squares.png";
+  if (type === "event") return "/brand/so-default-events.png";
+  if (type === "auction") return "/brand/so-default-auctions.png";
+  return "/brand/so-logo-default-full.png";
+}
+
 function getImageStyle(campaign: Campaign): CSSProperties {
+  const hasImage = Boolean(campaign.imageUrl);
+
   return {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
-    objectPosition: `${normaliseFocus(campaign.image_focus_x)}% ${normaliseFocus(
-      campaign.image_focus_y,
-    )}%`,
+    objectFit: hasImage ? "cover" : "contain",
+    objectPosition: hasImage
+      ? `${normaliseFocus(campaign.image_focus_x)}% ${normaliseFocus(
+          campaign.image_focus_y,
+        )}%`
+      : "center",
     display: "block",
+    padding: hasImage ? 0 : 22,
+    boxSizing: "border-box",
+    background: hasImage
+      ? "#f1f5f9"
+      : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
   };
 }
 
@@ -55,14 +72,7 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
-  return "Silent Auction";
-}
-
-function getTypeIcon(type: Campaign["type"]) {
-  if (type === "squares") return "🔲";
-  if (type === "event") return "🎫";
-  if (type === "auction") return "🔨";
-  return "🎟️";
+  return "Auction";
 }
 
 function getSafeAdminReturn(value?: string) {
@@ -97,10 +107,12 @@ export default async function TenantCampaignsPage({
 
         <div style={styles.badge}>Fundraising campaigns</div>
 
-        <h1 style={styles.title}>Active Campaigns</h1>
+        <h1 className="so-brand-heading" style={styles.title}>
+          Active Campaigns
+        </h1>
 
         <p style={styles.subtitle}>
-          Choose an active raffle, squares campaign, event, or silent auction to
+          Choose an active raffle, squares campaign, event, or auction to
           support.
         </p>
 
@@ -117,7 +129,9 @@ export default async function TenantCampaignsPage({
 
       {publicCampaigns.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0 }}>No active campaigns found</h2>
+          <h2 className="so-brand-card-title" style={{ margin: 0 }}>
+            No active campaigns found
+          </h2>
           <p style={styles.muted}>
             This organiser has no published campaigns at the moment.
           </p>
@@ -131,23 +145,19 @@ export default async function TenantCampaignsPage({
               style={styles.card}
             >
               <div style={styles.imageWrap}>
-                {campaign.imageUrl ? (
-                  <img
-                    src={campaign.imageUrl}
-                    alt={campaign.title}
-                    style={getImageStyle(campaign)}
-                  />
-                ) : (
-                  <div style={styles.imageEmpty}>
-                    {getTypeIcon(campaign.type)}
-                  </div>
-                )}
+                <img
+                  src={campaign.imageUrl || getDefaultImage(campaign.type)}
+                  alt={campaign.title}
+                  style={getImageStyle(campaign)}
+                />
               </div>
 
               <div style={styles.cardBody}>
                 <div style={styles.typePill}>{getTypeLabel(campaign.type)}</div>
 
-                <h2 style={styles.cardTitle}>{campaign.title}</h2>
+                <h2 className="so-brand-card-title" style={styles.cardTitle}>
+                  {campaign.title}
+                </h2>
 
                 {campaign.description ? (
                   <p style={styles.description}>
@@ -260,14 +270,6 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
-  },
-  imageEmpty: {
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 42,
-    color: "#94a3b8",
   },
   cardBody: {
     minWidth: 0,
