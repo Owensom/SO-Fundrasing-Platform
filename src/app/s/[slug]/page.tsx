@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
+
 type Prize = {
   title?: string;
   name?: string;
@@ -221,6 +223,7 @@ export default function PublicSquaresPage({ params }: Props) {
   );
 
   const imageObjectPosition = `${imageFocusX}% ${imageFocusY}%`;
+  const hasCustomImage = Boolean(game?.imageUrl);
 
   const subtotalCents =
     selectedSquares.length * Number(game?.pricePerSquareCents || 0);
@@ -435,18 +438,22 @@ export default function PublicSquaresPage({ params }: Props) {
           </Link>
         </nav>
 
-        {game.imageUrl ? (
-          <div style={styles.imageWrap}>
-            <img
-              src={game.imageUrl}
-              alt={game.title}
-              style={{
-                ...styles.image,
-                objectPosition: imageObjectPosition,
-              }}
-            />
-          </div>
-        ) : null}
+        <div style={styles.imageWrap}>
+          <img
+            src={game.imageUrl || DEFAULT_SQUARES_IMAGE}
+            alt={game.title}
+            style={{
+              ...styles.image,
+              objectFit: hasCustomImage ? "cover" : "contain",
+              objectPosition: hasCustomImage ? imageObjectPosition : "center",
+              padding: hasCustomImage ? 0 : 34,
+              background: hasCustomImage
+                ? "#f8fafc"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
 
         <h1 style={styles.title}>{game.title}</h1>
 
@@ -880,8 +887,6 @@ const styles: Record<string, React.CSSProperties> = {
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
-    objectPosition: "center",
     display: "block",
   },
   title: {
