@@ -39,6 +39,8 @@ const PRESET_COLOURS = [
   "Silver",
 ];
 
+const DEFAULT_TICKET_IMAGE = "/brand/so-ticket-placeholder.png";
+
 function safeId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -308,7 +310,11 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               }}
             />
           ) : (
-            <div style={styles.heroImageEmpty}>🎟️</div>
+            <img
+              src={DEFAULT_TICKET_IMAGE}
+              alt="Ticket placeholder"
+              style={styles.placeholderImage}
+            />
           )}
         </div>
       </section>
@@ -369,7 +375,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           </Field>
 
           <div style={styles.mediaBox}>
-            <div>
+            <div style={styles.mediaControls}>
               <h3 style={styles.subTitle}>Raffle image</h3>
               <p style={styles.sectionDescription}>
                 Upload or replace the public image, then choose the crop focus.
@@ -401,7 +407,11 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                   }}
                 />
               ) : (
-                <div style={styles.emptyPreview}>🎟️</div>
+                <img
+                  src={DEFAULT_TICKET_IMAGE}
+                  alt="Ticket placeholder"
+                  style={styles.previewPlaceholderImage}
+                />
               )}
             </div>
           </div>
@@ -549,7 +559,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                     addCustomColour();
                   }
                 }}
-                style={{ ...styles.input, flex: 1 }}
+                style={{ ...styles.input, flex: "1 1 240px" }}
                 placeholder="Gold, Silver, #00ff00"
               />
 
@@ -624,31 +634,33 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                     />
                   </Field>
 
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={offer.is_active}
-                      onChange={(event) =>
-                        updateOffer(offer.id, {
-                          is_active: event.target.checked,
-                        })
-                      }
-                    />
-                    Use
-                  </label>
+                  <div style={styles.offerActions}>
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={offer.is_active}
+                        onChange={(event) =>
+                          updateOffer(offer.id, {
+                            is_active: event.target.checked,
+                          })
+                        }
+                      />
+                      Use
+                    </label>
 
-                  <button
-                    type="button"
-                    onClick={() => removeOffer(offer.id)}
-                    disabled={offers.length <= 1}
-                    style={{
-                      ...styles.dangerButton,
-                      cursor: offers.length <= 1 ? "not-allowed" : "pointer",
-                      opacity: offers.length <= 1 ? 0.55 : 1,
-                    }}
-                  >
-                    Remove
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => removeOffer(offer.id)}
+                      disabled={offers.length <= 1}
+                      style={{
+                        ...styles.dangerButton,
+                        cursor: offers.length <= 1 ? "not-allowed" : "pointer",
+                        opacity: offers.length <= 1 ? 0.55 : 1,
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -751,7 +763,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           </section>
 
           <section style={styles.submitBar}>
-            <div>
+            <div style={styles.submitText}>
               <strong style={{ color: "#0f172a" }}>Create raffle</strong>
               <div style={styles.mutedSmall}>
                 Save as draft first if you want to review before publishing.
@@ -797,17 +809,20 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 16,
     marginTop: 0,
+    width: "100%",
+    maxWidth: "100%",
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 260px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 18,
     alignItems: "stretch",
-    padding: 22,
+    padding: "clamp(18px, 4vw, 22px)",
     borderRadius: 24,
     background: "#0f172a",
     color: "#ffffff",
     marginBottom: 0,
+    overflow: "hidden",
   },
   heroContent: {
     minWidth: 0,
@@ -832,10 +847,11 @@ const styles: Record<string, CSSProperties> = {
   },
   heroTitle: {
     margin: 0,
-    fontSize: 34,
+    fontSize: "clamp(30px, 8vw, 34px)",
     lineHeight: 1.08,
     letterSpacing: "-0.04em",
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   statusPill: {
     padding: "7px 11px",
@@ -859,6 +875,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#e2e8f0",
     lineHeight: 1.55,
     maxWidth: 720,
+    overflowWrap: "anywhere",
   },
   heroImageWrap: {
     borderRadius: 18,
@@ -866,19 +883,19 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.12)",
     overflow: "hidden",
     minHeight: 180,
-  },
-  heroImageEmpty: {
-    height: "100%",
-    minHeight: 180,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 46,
-    color: "#94a3b8",
+  },
+  placeholderImage: {
+    width: "min(78%, 220px)",
+    height: "min(78%, 220px)",
+    objectFit: "contain",
+    display: "block",
   },
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
   },
   summaryCard: {
@@ -887,6 +904,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   summaryLabel: {
     color: "#64748b",
@@ -901,11 +919,13 @@ const styles: Record<string, CSSProperties> = {
     wordBreak: "break-word",
   },
   section: {
-    padding: 18,
+    padding: "clamp(14px, 4vw, 18px)",
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflow: "hidden",
   },
   sectionHeader: {
     display: "flex",
@@ -926,19 +946,20 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
   formInner: {
     display: "grid",
-    gap: 14,
+    gap: 16,
   },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
   threeColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
   field: {
@@ -953,34 +974,40 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
+    minHeight: 46,
+    padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
-    padding: "10px 12px",
+    padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
     gap: 16,
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
   },
   subTitle: {
     margin: 0,
@@ -994,22 +1021,25 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     background: "#ffffff",
     overflow: "hidden",
-  },
-  emptyPreview: {
-    height: "100%",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#94a3b8",
-    fontSize: 42,
+  },
+  previewPlaceholderImage: {
+    width: "min(78%, 190px)",
+    height: "min(78%, 190px)",
+    objectFit: "contain",
+    display: "block",
   },
   innerPanel: {
     display: "grid",
     gap: 14,
-    padding: 16,
+    padding: "clamp(14px, 4vw, 16px)",
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
   innerHeader: {
     display: "flex",
@@ -1036,6 +1066,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
+    alignItems: "stretch",
   },
   lightButton: {
     padding: "10px 14px",
@@ -1053,14 +1084,21 @@ const styles: Record<string, CSSProperties> = {
   },
   offerRow: {
     display: "grid",
-    gridTemplateColumns:
-      "minmax(160px, 1.1fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) auto auto",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
     gap: 10,
     alignItems: "end",
     padding: 12,
     border: "1px solid #e2e8f0",
     borderRadius: 14,
     background: "#ffffff",
+    minWidth: 0,
+  },
+  offerActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
   checkboxLabel: {
     display: "inline-flex",
@@ -1091,6 +1129,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#ffffff",
+    minWidth: 0,
   },
   rowHeader: {
     display: "flex",
@@ -1102,13 +1141,14 @@ const styles: Record<string, CSSProperties> = {
   },
   prizeGrid: {
     display: "grid",
-    gridTemplateColumns: "110px minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(96px, 120px) minmax(0, 1fr)",
     gap: 12,
   },
   helpText: {
     color: "#64748b",
     fontSize: 13,
     margin: 0,
+    overflowWrap: "anywhere",
   },
   mutedSmall: {
     color: "#64748b",
@@ -1125,6 +1165,10 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+  },
+  submitText: {
+    minWidth: 0,
+    flex: "1 1 240px",
   },
   submitButton: {
     padding: "13px 20px",
