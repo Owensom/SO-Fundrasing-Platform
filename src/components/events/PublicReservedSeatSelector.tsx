@@ -32,6 +32,8 @@ type GuestData = {
   tableName: string;
 };
 
+const TICKET_PLACEHOLDER_IMAGE = "/brand/so-ticket-placeholder.png";
+
 const specialColours = [
   { background: "#facc15", text: "#422006" },
   { background: "#a78bfa", text: "#2e1065" },
@@ -304,7 +306,8 @@ export default function PublicReservedSeatSelector({
   function removeSeat(seatId: string) {
     setCartItems((current) => current.filter((item) => item.seatId !== seatId));
   }
-    async function startCheckout() {
+
+  async function startCheckout() {
     if (isCheckingOut) return;
 
     if (!buyerName.trim() || !buyerEmail.trim()) {
@@ -585,7 +588,12 @@ export default function PublicReservedSeatSelector({
 
               {cartSeats.length === 0 ? (
                 <div style={styles.emptyBox}>
-                  <div style={styles.emptyIcon}>🎟️</div>
+                  <img
+                    src={TICKET_PLACEHOLDER_IMAGE}
+                    alt="SO ticket"
+                    style={styles.emptyTicketImage}
+                  />
+
                   <p style={styles.emptyTitle}>Select seats to begin</p>
                   <p style={styles.emptyText}>
                     Your selected seats and guest details will appear here.
@@ -1010,9 +1018,14 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
     textAlign: "center",
   },
-  emptyIcon: {
-    fontSize: 32,
-  },
+emptyTicketImage: {
+  width: 150,
+  height: 96,
+  objectFit: "contain",
+  display: "block",
+  margin: "0 auto 12px",
+  filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.32))",
+},
   emptyTitle: {
     margin: "8px 0 0",
     color: "#ffffff",
