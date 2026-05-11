@@ -141,6 +141,7 @@ export default async function EventSlugPage({
               <Link href={`/c/${tenantSlug}/terms`} style={styles.smallLink}>
                 Terms
               </Link>
+
               <Link href={`/c/${tenantSlug}/privacy`} style={styles.smallLink}>
                 Privacy
               </Link>
@@ -149,7 +150,9 @@ export default async function EventSlugPage({
 
           <div style={styles.heroContent}>
             <div style={styles.heroPills}>
-              <span style={styles.goldPill}>{eventTypeLabel(event.event_type)}</span>
+              <span style={styles.goldPill}>
+                {eventTypeLabel(event.event_type)}
+              </span>
 
               {lowestTicketPrice > 0 && (
                 <span style={styles.lightPill}>
@@ -166,10 +169,12 @@ export default async function EventSlugPage({
 
             <div style={styles.heroStats}>
               <HeroStat label="Date" value={formatDate(event.starts_at)} />
+
               <HeroStat
                 label="Location"
                 value={event.location || "Location to be confirmed"}
               />
+
               {event.event_type !== "general_admission" && (
                 <HeroStat label="Available" value={availableSeats} />
               )}
@@ -241,8 +246,11 @@ export default async function EventSlugPage({
                   <div key={ticketType.id} style={styles.listItem}>
                     <div>
                       <strong>{ticketType.name}</strong>
+
                       {ticketType.description && (
-                        <p style={styles.mutedLight}>{ticketType.description}</p>
+                        <p style={styles.mutedLight}>
+                          {ticketType.description}
+                        </p>
                       )}
                     </div>
 
@@ -274,7 +282,9 @@ export default async function EventSlugPage({
               </p>
             </div>
 
-            <div style={styles.checkoutBadge}>Secure Stripe checkout</div>
+            <div style={styles.checkoutBadge}>
+              Secure Stripe checkout
+            </div>
           </div>
 
           {event.event_type === "general_admission" ? (
@@ -287,7 +297,10 @@ export default async function EventSlugPage({
             seats.length === 0 ? (
               <div style={styles.emptyLarge}>
                 <strong>No table seats available yet</strong>
-                <p style={styles.muted}>Tables may not have been released yet.</p>
+
+                <p style={styles.muted}>
+                  Tables may not have been released yet.
+                </p>
               </div>
             ) : (
               <PublicTableSelector
@@ -306,7 +319,10 @@ export default async function EventSlugPage({
           ) : seats.length === 0 ? (
             <div style={styles.emptyLarge}>
               <strong>No seats available yet</strong>
-              <p style={styles.muted}>Seats may not have been released yet.</p>
+
+              <p style={styles.muted}>
+                Seats may not have been released yet.
+              </p>
             </div>
           ) : (
             <PublicReservedSeatSelector
@@ -325,7 +341,13 @@ export default async function EventSlugPage({
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <p style={styles.infoRow}>
       <strong>{label}:</strong> {value}
@@ -333,10 +355,17 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: ReactNode }) {
+function HeroStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <div style={styles.heroStat}>
       <span style={styles.heroStatLabel}>{label}</span>
+
       <strong style={styles.heroStatValue}>{value}</strong>
     </div>
   );
@@ -348,6 +377,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     color: "#111827",
   },
+
   hero: {
     position: "relative",
     minHeight: "620px",
@@ -355,6 +385,7 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at 50% 38%, #1d315c 0%, #0d1b3d 42%, #071227 100%)",
   },
+
   heroImage: {
     position: "absolute",
     inset: 0,
@@ -364,12 +395,14 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     filter: "saturate(0.98) contrast(1.03)",
   },
+
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
       "radial-gradient(circle at 50% 34%, rgba(255,255,255,0.10) 0%, rgba(13,27,61,0.42) 30%, rgba(13,27,61,0.92) 78%), linear-gradient(180deg, rgba(13,27,61,0.28) 0%, rgba(13,27,61,0.98) 100%)",
   },
+
   heroInner: {
     position: "relative",
     zIndex: 2,
@@ -380,6 +413,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
   },
+
   topBar: {
     display: "flex",
     justifyContent: "space-between",
@@ -387,11 +421,13 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     flexWrap: "wrap",
   },
+
   topLinks: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
   },
+
   backLink: {
     display: "inline-flex",
     alignItems: "center",
@@ -406,6 +442,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 8px 22px rgba(0,0,0,0.12)",
     backdropFilter: "blur(12px)",
   },
+
   smallLink: {
     display: "inline-flex",
     alignItems: "center",
@@ -419,12 +456,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     backdropFilter: "blur(12px)",
   },
+
   heroContent: {
     margin: "auto auto 0",
     maxWidth: 900,
     width: "100%",
     textAlign: "center",
   },
+
   heroPills: {
     display: "flex",
     gap: 10,
@@ -432,6 +471,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     marginBottom: 18,
   },
+
   goldPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -443,6 +483,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 13,
   },
+
   lightPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -454,15 +495,18 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 13,
   },
+
   title: {
     margin: 0,
-    fontSize: "clamp(44px, 7vw, 88px)",
-    lineHeight: 0.96,
-    letterSpacing: "-0.058em",
+    fontSize: "clamp(52px, 8vw, 96px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.065em",
     fontWeight: 900,
     color: "#ffffff",
-    textShadow: "0 18px 45px rgba(0,0,0,0.45)",
+    textShadow:
+      "0 2px 0 rgba(200,162,74,0.55), 0 18px 45px rgba(0,0,0,0.45)",
   },
+
   heroTagline: {
     marginTop: 18,
     color: "#f7d98a",
@@ -471,6 +515,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(12px, 1.45vw, 18px)",
     fontWeight: 800,
   },
+
   heroStats: {
     margin: "30px auto 0",
     display: "grid",
@@ -478,6 +523,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     maxWidth: 820,
   },
+
   heroStat: {
     padding: 14,
     borderRadius: 16,
@@ -486,6 +532,7 @@ const styles: Record<string, CSSProperties> = {
     backdropFilter: "blur(14px)",
     textAlign: "left",
   },
+
   heroStatLabel: {
     display: "block",
     marginBottom: 6,
@@ -495,12 +542,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 11,
   },
+
   heroStatValue: {
     display: "block",
     color: "#ffffff",
     fontSize: 14,
     lineHeight: 1.35,
   },
+
   wrap: {
     maxWidth: 1120,
     margin: "-54px auto 0",
@@ -508,12 +557,14 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     zIndex: 3,
   },
+
   contentGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
     gap: 18,
     marginBottom: 18,
   },
+
   card: {
     padding: 22,
     borderRadius: 24,
@@ -521,6 +572,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(13,27,61,0.10)",
     boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
   },
+
   sectionKicker: {
     margin: "0 0 14px",
     color: "#0d1b3d",
@@ -529,11 +581,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     fontWeight: 900,
   },
+
   infoRow: {
     margin: "0 0 8px",
     fontSize: 16,
     lineHeight: 1.45,
   },
+
   description: {
     margin: "16px 0 0",
     color: "#475569",
@@ -542,6 +596,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.7,
     fontWeight: 600,
   },
+
   ticketPanel: {
     padding: 22,
     borderRadius: 24,
@@ -549,6 +604,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(200,162,74,0.42)",
     boxShadow: "0 24px 70px rgba(15,23,42,0.16)",
   },
+
   panelTitle: {
     margin: "0 0 14px",
     color: "#f7d98a",
@@ -557,10 +613,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     fontWeight: 900,
   },
+
   stack: {
     display: "grid",
     gap: 10,
   },
+
   listItem: {
     display: "flex",
     justifyContent: "space-between",
@@ -572,6 +630,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
   },
+
   pricePill: {
     whiteSpace: "nowrap",
     borderRadius: 999,
@@ -581,18 +640,21 @@ const styles: Record<string, CSSProperties> = {
     color: "#f7d98a",
     fontSize: 13,
   },
+
   muted: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
   },
+
   mutedLight: {
     margin: "5px 0 0",
     color: "rgba(255,255,255,0.72)",
     fontSize: 14,
     lineHeight: 1.45,
   },
+
   emptyBox: {
     padding: 14,
     borderRadius: 14,
@@ -602,6 +664,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
   },
+
   successBox: {
     padding: 16,
     borderRadius: 18,
@@ -612,6 +675,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
   },
+
   cancelBox: {
     padding: 16,
     borderRadius: 18,
@@ -622,6 +686,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
   },
+
   bookSection: {
     padding: 22,
     borderRadius: 26,
@@ -629,6 +694,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 24px 70px rgba(15,23,42,0.12)",
   },
+
   bookHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -637,6 +703,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 18,
   },
+
   bookTitle: {
     margin: 0,
     color: "#0d1b3d",
@@ -645,6 +712,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.045em",
     fontWeight: 900,
   },
+
   bookText: {
     margin: "8px 0 0",
     color: "#64748b",
@@ -652,6 +720,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 700,
   },
+
   checkoutBadge: {
     padding: "10px 14px",
     borderRadius: 999,
@@ -661,6 +730,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     border: "1px solid rgba(200,162,74,0.45)",
   },
+
   emptyLarge: {
     padding: 26,
     borderRadius: 16,
