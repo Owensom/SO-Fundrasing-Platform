@@ -1602,3 +1602,608 @@ export default function PublicRafflePage({ slug }: Props) {
     </div>
   );
 }
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "linear-gradient(180deg, #020617 0px, #0f172a 760px, #f8fafc 760px, #f8fafc 100%)",
+  },
+
+  hero: {
+    position: "relative",
+    minHeight: 760,
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "flex-end",
+  },
+
+  heroBackgroundImage: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    display: "block",
+  },
+
+  heroOverlay: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(180deg, rgba(2,6,23,0.16) 0%, rgba(2,6,23,0.34) 34%, rgba(2,6,23,0.82) 72%, rgba(2,6,23,0.96) 100%)",
+  },
+
+  heroInner: {
+    position: "relative",
+    zIndex: 2,
+    width: "100%",
+    maxWidth: 1240,
+    margin: "0 auto",
+    padding: "34px 20px 54px",
+    color: "#ffffff",
+  },
+
+  heroNav: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 48,
+  },
+
+  heroBackLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    backdropFilter: "blur(12px)",
+  },
+
+  heroAdminLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+
+  badgeRow: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 22,
+  },
+
+  typeBadge: {
+    display: "inline-flex",
+    padding: "8px 14px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#ffffff",
+    fontWeight: 900,
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    backdropFilter: "blur(12px)",
+  },
+
+  statusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 14px",
+    borderRadius: 999,
+    fontWeight: 900,
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  heroTitle: {
+    margin: 0,
+    maxWidth: 860,
+    fontSize: "clamp(44px, 8vw, 88px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.07em",
+    fontWeight: 950,
+    textShadow: "0 8px 32px rgba(0,0,0,0.45)",
+  },
+
+  heroDescription: {
+    margin: "24px 0 0",
+    maxWidth: 760,
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 18,
+    lineHeight: 1.75,
+    textShadow: "0 4px 18px rgba(0,0,0,0.34)",
+  },
+
+  heroMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 14,
+    marginTop: 34,
+  },
+
+  metaCard: {
+    padding: 18,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    backdropFilter: "blur(14px)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.22)",
+    display: "grid",
+    gap: 8,
+  },
+
+  metaLabel: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 12,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  heroFooter: {
+    marginTop: 24,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: 700,
+  },
+
+  contentWrap: {
+    position: "relative",
+    zIndex: 5,
+    marginTop: -80,
+    paddingBottom: 80,
+  },
+
+  container: {
+    maxWidth: 1240,
+    margin: "0 auto",
+    padding: "0 20px",
+    display: "grid",
+    gap: 22,
+  },
+
+  wrap: {
+    padding: 30,
+    color: "#ffffff",
+  },
+
+  heading: {
+    margin: "10px 0 14px",
+    fontSize: "clamp(24px, 5vw, 34px)",
+    lineHeight: 1,
+    letterSpacing: "-0.05em",
+    color: "#0f172a",
+    fontWeight: 950,
+  },
+
+  disclaimerBox: {
+    padding: 18,
+    borderRadius: 24,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    color: "#9a3412",
+    fontWeight: 700,
+    lineHeight: 1.65,
+    boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
+  },
+
+  prizesBox: {
+    padding: 24,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+  },
+
+  prizesTitle: {
+    marginBottom: 16,
+    fontSize: 28,
+    color: "#0f172a",
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+
+  prizeCard: {
+    display: "flex",
+    gap: 18,
+    padding: 18,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    alignItems: "flex-start",
+  },
+
+  prizePosition: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ea580c 100%)",
+    color: "#ffffff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 24,
+    fontWeight: 950,
+    flexShrink: 0,
+    boxShadow: "0 10px 24px rgba(249,115,22,0.25)",
+  },
+
+  prizeContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  prizeTitle: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: "#0f172a",
+    lineHeight: 1.15,
+  },
+
+  prizeDescription: {
+    marginTop: 8,
+    color: "#64748b",
+    lineHeight: 1.7,
+  },
+
+  winnersBox: {
+    padding: 24,
+    borderRadius: 28,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+  },
+
+  winnersTitle: {
+    marginBottom: 16,
+    fontSize: 28,
+    color: "#065f46",
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+
+  winnerCard: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 18,
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #bbf7d0",
+  },
+
+  winnerBlock: {
+    display: "grid",
+    gap: 6,
+  },
+
+  winnerLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  winnerPrize: {
+    fontSize: 24,
+    fontWeight: 950,
+    color: "#065f46",
+  },
+
+  winnerTicket: {
+    fontSize: 24,
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+
+  winnerColour: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 18,
+    fontWeight: 900,
+    color: "#0f172a",
+  },
+
+  quickSelect: {
+    padding: 24,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 18,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+  },
+
+  quickControls: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "end",
+  },
+
+  quantityInput: {
+    width: 140,
+    height: 50,
+    padding: "0 14px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    fontSize: 16,
+    fontWeight: 800,
+  },
+
+  autoButton: {
+    height: 50,
+    padding: "0 18px",
+    borderRadius: 14,
+    border: "none",
+    background: "#2563eb",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  clearButton: {
+    height: 50,
+    padding: "0 18px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#334155",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  offerBox: {
+    padding: 20,
+    borderRadius: 24,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+  },
+
+  offerGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  offerPill: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  colourRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  colourButton: {
+    border: "none",
+    borderRadius: 999,
+    padding: "12px 18px",
+    fontWeight: 800,
+  },
+
+  numberGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(62px, 1fr))",
+    gap: 10,
+  },
+
+  numberButton: {
+    height: 56,
+    borderRadius: 16,
+    border: "1px solid #cbd5e1",
+    fontWeight: 900,
+    fontSize: 15,
+  },
+
+  basket: {
+    display: "grid",
+    gap: 10,
+  },
+
+  basketRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    border: "1px solid #e2e8f0",
+    borderRadius: 18,
+    background: "#ffffff",
+    fontWeight: 800,
+  },
+
+  removeButton: {
+    border: "none",
+    background: "transparent",
+    color: "#dc2626",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  totalBox: {
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 10,
+    fontWeight: 800,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+  },
+
+  coverFeesBox: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    padding: 16,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+
+  form: {
+    display: "grid",
+    gap: 14,
+  },
+
+  input: {
+    height: 52,
+    padding: "0 14px",
+    borderRadius: 16,
+    border: "1px solid #cbd5e1",
+    fontSize: 16,
+  },
+
+  legalQuestionBox: {
+    padding: 20,
+    borderRadius: 22,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    display: "grid",
+    gap: 12,
+  },
+
+  legalQuestionTitle: {
+    color: "#1d4ed8",
+    fontWeight: 950,
+  },
+
+  legalQuestionText: {
+    color: "#1e40af",
+    fontWeight: 700,
+    lineHeight: 1.65,
+  },
+
+  freeEntryBox: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+  },
+
+  freeEntrySummary: {
+    cursor: "pointer",
+    fontWeight: 900,
+    color: "#1d4ed8",
+  },
+
+  freeEntryContent: {
+    marginTop: 12,
+  },
+
+  freeEntryText: {
+    lineHeight: 1.7,
+    color: "#1e3a8a",
+  },
+
+  freeEntryAddress: {
+    margin: "14px 0",
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #bfdbfe",
+    whiteSpace: "pre-wrap",
+    fontFamily: "inherit",
+    lineHeight: 1.6,
+  },
+
+  termsBox: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    padding: 16,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    lineHeight: 1.6,
+  },
+
+  inlineLink: {
+    color: "#2563eb",
+    fontWeight: 900,
+  },
+
+  primaryButton: {
+    height: 56,
+    border: "none",
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%)",
+    color: "#ffffff",
+    fontWeight: 900,
+    fontSize: 16,
+    boxShadow: "0 14px 30px rgba(37,99,235,0.25)",
+  },
+
+  notice: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontWeight: 700,
+  },
+
+  noticeDark: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#0f172a",
+    border: "1px solid #1e293b",
+    color: "#e2e8f0",
+    fontWeight: 700,
+  },
+
+  success: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontWeight: 800,
+  },
+
+  error: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+    fontWeight: 800,
+  },
+
+  showMoreButton: {
+    marginTop: 14,
+    padding: "12px 16px",
+    borderRadius: 14,
+    border: "1px solid #fdba74",
+    background: "#fff7ed",
+    color: "#9a3412",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+};
