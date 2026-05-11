@@ -90,7 +90,7 @@ export default async function NewAuctionPage() {
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
-        <div style={styles.heroContent}>
+        <div style={styles.heroCopy}>
           <div style={styles.eyebrow}>Silent auction builder</div>
           <h1 style={styles.title}>Create a premium silent auction</h1>
           <p style={styles.subtitle}>
@@ -114,14 +114,16 @@ export default async function NewAuctionPage() {
           </div>
         </div>
 
-        <aside style={styles.heroPanel}>
-          <div style={styles.panelIcon}>🏷️</div>
-          <h2 style={styles.panelTitle}>Auction setup</h2>
-          <p style={styles.panelText}>
-            Use a clear title, strong image and closing time. Items are added
-            after creation so the edit page stays the source of truth.
-          </p>
-        </aside>
+        <div style={styles.heroImageWrap}>
+          <div
+            aria-label="Default auction campaign image"
+            role="img"
+            style={{
+              ...styles.heroImage,
+              backgroundImage: `url(${DEFAULT_AUCTION_IMAGE_URL})`,
+            }}
+          />
+        </div>
       </section>
 
       <section style={styles.topActions}>
@@ -230,7 +232,9 @@ export default async function NewAuctionPage() {
               <h2 style={styles.sectionTitle}>Public auction image</h2>
               <p style={styles.sectionText}>
                 A branded auction image is already selected. Upload a custom
-                campaign image only if you want to replace it.
+                campaign image only if you want to replace it. The focus controls
+                help the public page crop the image cleanly on desktop and
+                mobile.
               </p>
             </div>
           </div>
@@ -303,19 +307,39 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
   },
   hero: {
+    position: "relative",
+    overflow: "hidden",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
-    gap: 18,
-    alignItems: "stretch",
-    marginBottom: 18,
-  },
-  heroContent: {
+    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 360px)",
+    gap: 24,
+    alignItems: "center",
     padding: 30,
-    borderRadius: 30,
+    borderRadius: 32,
+    marginBottom: 18,
     background:
-      "linear-gradient(135deg, #0f172a 0%, #1e293b 52%, #78350f 130%)",
+      "linear-gradient(135deg, #0f172a 0%, #172554 48%, #78350f 122%)",
     color: "#ffffff",
     boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+  },
+  heroCopy: {
+    position: "relative",
+    zIndex: 2,
+  },
+  heroImageWrap: {
+    position: "relative",
+    zIndex: 2,
+    borderRadius: 26,
+    overflow: "hidden",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.24)",
+  },
+  heroImage: {
+    width: "100%",
+    height: 250,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
   },
   eyebrow: {
     display: "inline-flex",
@@ -330,16 +354,17 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: "clamp(34px, 7vw, 56px)",
+    fontSize: "clamp(34px, 7vw, 58px)",
     lineHeight: 1,
     letterSpacing: "-0.055em",
+    maxWidth: 760,
   },
   subtitle: {
     margin: "14px 0 0",
     color: "#cbd5e1",
     fontSize: 17,
     lineHeight: 1.65,
-    maxWidth: 780,
+    maxWidth: 760,
   },
   heroStats: {
     display: "grid",
@@ -354,39 +379,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.13)",
-  },
-  heroPanel: {
-    padding: 24,
-    borderRadius: 30,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 44px rgba(15,23,42,0.09)",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-  },
-  panelIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    background: "#fef3c7",
-    color: "#92400e",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 28,
-    marginBottom: 16,
-  },
-  panelTitle: {
-    margin: 0,
-    fontSize: 24,
-    color: "#0f172a",
-    letterSpacing: "-0.03em",
-  },
-  panelText: {
-    margin: "10px 0 0",
-    color: "#64748b",
-    lineHeight: 1.6,
   },
   topActions: {
     display: "flex",
