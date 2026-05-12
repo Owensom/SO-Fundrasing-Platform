@@ -73,15 +73,27 @@ function getAutoDrawTo(config: any, prizeCount: number) {
 }
 
 function getPrizeTitle(prize: any, prizeNumber: number) {
+  const actualPrizeName = String(
+    prize?.description ||
+      prize?.name ||
+      prize?.prizeName ||
+      prize?.prize_name ||
+      prize?.prizeTitle ||
+      prize?.prize_title ||
+      prize?.label ||
+      "",
+  ).trim();
+
+  const positionLabel = String(prize?.title || "").trim();
+
+  if (actualPrizeName && positionLabel) {
+    return `${positionLabel} — ${actualPrizeName}`;
+  }
+
   return (
-    String(
-      prize?.title ||
-        prize?.name ||
-        prize?.prizeTitle ||
-        prize?.prize_title ||
-        prize?.label ||
-        "",
-    ).trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`
+    actualPrizeName ||
+    positionLabel ||
+    `${prizeNumber}${ordinal(prizeNumber)} Prize`
   );
 }
 
@@ -115,11 +127,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
 
     const existingWinners = await listSquaresWinners(game.id);
+
     const alreadyDrawnPrizeNumbers = new Set(
       existingWinners
         .map((winner) => Number(winner.prize_index))
         .filter((value) => Number.isFinite(value) && value > 0),
     );
+
     const alreadyWinningSquares = new Set(
       existingWinners
         .map((winner) => Number(winner.square_number))
