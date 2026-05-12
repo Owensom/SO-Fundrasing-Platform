@@ -33,6 +33,12 @@ type ConfettiPiece = {
 
 const DRAW_DURATION_MS = 3600;
 
+const SOUND_PATHS = {
+  roll: "/sounds/draw-roll.wav",
+  riser: "/sounds/draw-riser.wav",
+  winner: "/sounds/draw-winner.wav",
+};
+
 function getTicketNumber(item: SoldTicketOption) {
   return Number(item.ticketNumber ?? item.ticket_number);
 }
@@ -63,7 +69,7 @@ function createAudioContext() {
   return AudioContextClass ? new AudioContextClass() : null;
 }
 
-function playTick(audioCtx: AudioContext) {
+function playTickFallback(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
@@ -89,7 +95,7 @@ function playTick(audioCtx: AudioContext) {
   osc.stop(now + 0.075);
 }
 
-function playRiser(audioCtx: AudioContext) {
+function playRiserFallback(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
@@ -115,7 +121,7 @@ function playRiser(audioCtx: AudioContext) {
   osc.stop(now + 0.32);
 }
 
-function playWinner(audioCtx: AudioContext) {
+function playWinnerFallback(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
   const master = audioCtx.createGain();
@@ -186,6 +192,11 @@ export default function DramaticRaffleDraw({
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+  const rollAudioRef = useRef<HTMLAudioElement | null>(null);
+  const riserAudioRef = useRef<HTMLAudioElement | null>(null);
+  const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const soldNumbers = useMemo(
     () =>
@@ -216,11 +227,51 @@ export default function DramaticRaffleDraw({
     return audioCtxRef.current;
   }
 
+  function getAudioElements() {
+    if (typeof window === "undefined") return null;
+
+    if (!rollAudioRef.current) {
+      rollAudioRef.current = new Audio(SOUND_PATHS.roll);
+      rollAudioRef.current.preload = "auto";
+      rollAudioRef.current.volume = 0.55;
+      rollAudioRef.current.loop = true;
+    }
+
+    if (!riserAudioRef.current) {
+      riserAudioRef.current = new Audio(SOUND_PATHS.riser);
+      riserAudioRef.current.preload = "auto";
+      riserAudioRef.current.volume = 0.75;
+      riserAudioRef.current.loop = false;
+    }
+
+    if (!winnerAudioRef.current) {
+      winnerAudioRef.current = new Audio(SOUND_PATHS.winner);
+      winnerAudioRef.current.preload = "auto";
+      winnerAudioRef.current.volume = 0.9;
+      winnerAudioRef.current.loop = false;
+    }
+
+    return {
+      roll: rollAudioRef.current,
+      riser: riserAudioRef.current,
+      winner: winnerAudioRef.current,
+    };
+  }
+
   async function unlockAudio() {
     const audioCtx = getAudioContext();
+    const audio = getAudioElements();
 
     if (audioCtx?.state === "suspended") {
       await audioCtx.resume();
+    }
+
+    if (audio && soundEnabled) {
+      await Promise.allSettled([
+        audio.roll.load(),
+        audio.riser.load(),
+        audio.winner.load(),
+      ]);
     }
 
     return audioCtx;
@@ -231,6 +282,38 @@ export default function DramaticRaffleDraw({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }
+
+  function stopRealAudio() {
+    const audio = getAudioElements();
+    if (!audio) return;
+
+    [audio.roll, audio.riser, audio.winner].forEach((item) => {
+      item.pause();
+      item.currentTime = 0;
+    });
+  }
+
+  async function playRealSound(kind: "roll" | "riser" | "winner") {
+    if (!soundEnabled) return false;
+
+    const audio = getAudioElements();
+    if (!audio) return false;
+
+    try {
+      const sound = audio[kind];
+      sound.pause();
+      sound.currentTime = 0;
+      await sound.play();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function openDraw() {
@@ -240,10 +323,13 @@ export default function DramaticRaffleDraw({
     setDisplayTicket(null);
     setConfetti([]);
     setPrizePosition(String(nextPrizeNumber));
+
+    getAudioElements();
   }
 
   function closeDraw() {
     stopTimer();
+    stopRealAudio();
     setIsOpen(false);
     setDrawing(false);
     setSaving(false);
@@ -272,6 +358,16 @@ export default function DramaticRaffleDraw({
 
     const audioCtx = await unlockAudio();
 
+    const rollStarted = await playRealSound("roll");
+
+    if (!rollStarted && audioCtx) {
+      playRiserFallback(audioCtx);
+    }
+
+    timeoutRef.current = window.setTimeout(() => {
+      void playRealSound("riser");
+    }, Math.max(400, DRAW_DURATION_MS - 1500));
+
     let ticks = 0;
     let intervalMs = 62;
 
@@ -283,18 +379,22 @@ export default function DramaticRaffleDraw({
 
       setDisplayTicket(randomTicket);
 
-      if (audioCtx) {
-        playTick(audioCtx);
+      if (!rollStarted && audioCtx) {
+        playTickFallback(audioCtx);
 
         if (ticks % 5 === 0) {
-          playRiser(audioCtx);
+          playRiserFallback(audioCtx);
         }
       }
 
       ticks += 1;
 
       if (ticks === 28) {
-        stopTimer();
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+
         intervalMs = 115;
 
         timerRef.current = setInterval(() => {
@@ -303,15 +403,29 @@ export default function DramaticRaffleDraw({
 
           setDisplayTicket(randomTicket);
 
-          if (audioCtx) playTick(audioCtx);
+          if (!rollStarted && audioCtx) {
+            playTickFallback(audioCtx);
+          }
 
           ticks += 1;
         }, intervalMs);
       }
     }, intervalMs);
 
-    window.setTimeout(async () => {
+    timeoutRef.current = window.setTimeout(async () => {
       stopTimer();
+
+      const audio = getAudioElements();
+
+      if (audio?.roll) {
+        audio.roll.pause();
+        audio.roll.currentTime = 0;
+      }
+
+      if (audio?.riser) {
+        audio.riser.pause();
+        audio.riser.currentTime = 0;
+      }
 
       const winningTicketNumber =
         soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
@@ -326,8 +440,10 @@ export default function DramaticRaffleDraw({
       setDrawing(false);
       setSaving(true);
 
-      if (audioCtx) {
-        playWinner(audioCtx);
+      const winnerStarted = await playRealSound("winner");
+
+      if (!winnerStarted && audioCtx) {
+        playWinnerFallback(audioCtx);
       }
 
       setConfetti(makeConfetti());
@@ -372,8 +488,8 @@ export default function DramaticRaffleDraw({
             <div style={styles.eyebrow}>Live event mode</div>
             <h2 style={styles.title}>Dramatic draw</h2>
             <p style={styles.description}>
-              Open a cinematic full-screen draw with sound, suspense, automatic
-              winner saving and confetti.
+              Open a cinematic full-screen draw with WAV sound, suspense,
+              automatic winner saving and confetti.
             </p>
           </div>
 
@@ -494,7 +610,14 @@ export default function DramaticRaffleDraw({
           <div style={styles.topControls}>
             <button
               type="button"
-              onClick={() => setSoundEnabled((current) => !current)}
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabled(next);
+
+                if (!next) {
+                  stopRealAudio();
+                }
+              }}
               style={styles.secondaryControl}
             >
               {soundEnabled ? "Sound on" : "Sound off"}
