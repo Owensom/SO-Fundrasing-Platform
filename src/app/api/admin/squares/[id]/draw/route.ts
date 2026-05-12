@@ -110,12 +110,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const prizes = game.config_json?.prizes ?? [];
-    const prize = prizes[prizeNumber - 1];
+    const prizes = Array.isArray(game.config_json?.prizes)
+  ? game.config_json.prizes
+  : [];
 
-    const prizeTitle =
-      String(prize?.title ?? "").trim() ||
-      `${prizeNumber}${ordinal(prizeNumber)} Prize`;
+const prize = prizes.find(
+  (item: any, index: number) =>
+    Number(item?.position ?? index + 1) === prizeNumber,
+);
+
+const prizeTitle =
+  String(prize?.title || prize?.name || "").trim() ||
+  `${prizeNumber}${ordinal(prizeNumber)} Prize`;
 
     const winnerName = cleanName(matchingSale.customer_name);
     const winnerEmail = cleanEmail(matchingSale.customer_email);
