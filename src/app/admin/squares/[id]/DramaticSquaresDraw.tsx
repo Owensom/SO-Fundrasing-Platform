@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 type SoldSquareOption = {
   squareNumber?: number;
@@ -36,6 +42,14 @@ type ConfettiPiece = {
   drift: number;
 };
 
+type RecentDraw = {
+  prizeNumber: number;
+  prizeTitle: string;
+  squareNumber: number;
+  customerName: string;
+  customerEmail: string;
+};
+
 type SoundMode = "roll" | "riser";
 
 const DRAW_DURATION_MS = 3600;
@@ -45,6 +59,16 @@ const SOUND_PATHS = {
   riser: "/brand/draw-riser.mp3",
   winner: "/brand/draw-winner.mp3",
 };
+
+function uniqueNumbers(values: number[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0),
+    ),
+  );
+}
 
 function getSquareNumber(item: SoldSquareOption) {
   return Number(item.squareNumber ?? item.square_number);
@@ -69,13 +93,9 @@ function ordinal(value: number) {
   return "th";
 }
 
-function getPrizeTitle(
-  prizes: PrizeOption[],
-  prizeNumber: number,
-) {
+function getPrizeTitle(prizes: PrizeOption[], prizeNumber: number) {
   const matchingPrize = prizes.find(
-    (prize, index) =>
-      Number(prize.position ?? index + 1) === prizeNumber,
+    (prize, index) => Number(prize.position ?? index + 1) === prizeNumber,
   );
 
   return (
@@ -226,20 +246,33 @@ export default function DramaticSquaresDraw({
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [soundMode, setSoundMode] =
-    useState<SoundMode>("roll");
+  const [soundMode, setSoundMode] = useState<SoundMode>("roll");
+  const [localDrawnPrizeNumbers, setLocalDrawnPrizeNumbers] = useState<number[]>(
+    () => uniqueNumbers(drawnPrizeNumbers),
+  );
+  const [localDrawnSquareNumbers, setLocalDrawnSquareNumbers] =
+    useState<number[]>(() => uniqueNumbers(drawnSquareNumbers));
+  const [recentDraws, setRecentDraws] = useState<RecentDraw[]>([]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
-
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishTimeoutRef = useRef<number | null>(null);
 
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
   const riserAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    setLocalDrawnPrizeNumbers((current) =>
+      uniqueNumbers([...current, ...drawnPrizeNumbers]),
+    );
+  }, [drawnPrizeNumbers]);
+
+  useEffect(() => {
+    setLocalDrawnSquareNumbers((current) =>
+      uniqueNumbers([...current, ...drawnSquareNumbers]),
+    );
+  }, [drawnSquareNumbers]);
 
   const soldNumbers = useMemo(
     () =>
@@ -249,31 +282,41 @@ export default function DramaticSquaresDraw({
           (number) =>
             Number.isFinite(number) &&
             number > 0 &&
-            !drawnSquareNumbers.includes(number),
+            !localDrawnSquareNumbers.includes(number),
         ),
-    [soldSquareOptions, drawnSquareNumbers],
+    [soldSquareOptions, localDrawnSquareNumbers],
   );
 
   const nextPrizeNumber = useMemo(() => {
     let position = 1;
 
-    while (drawnPrizeNumbers.includes(position)) {
+    while (localDrawnPrizeNumbers.includes(position)) {
       position += 1;
     }
 
     return position;
-  }, [drawnPrizeNumbers]);
+  }, [localDrawnPrizeNumbers]);
 
   const currentPrizeTitle = useMemo(() => {
     const parsed = Number(prizeNumber || nextPrizeNumber);
-
     return getPrizeTitle(prizes, parsed);
   }, [prizes, prizeNumber, nextPrizeNumber]);
 
-  const nextPrizeTitle = useMemo(() => {
-    return getPrizeTitle(prizes, nextPrizeNumber);
-  }, [prizes, nextPrizeNumber]);
-    function getAudioContext() {
+  const nextPrizeTitle = useMemo(
+    () => getPrizeTitle(prizes, nextPrizeNumber),
+    [prizes, nextPrizeNumber],
+  );
+
+  const selectedPrizeAlreadyDrawn = useMemo(() => {
+    const parsed = Number(prizeNumber);
+    return (
+      Number.isFinite(parsed) &&
+      parsed > 0 &&
+      localDrawnPrizeNumbers.includes(parsed)
+    );
+  }, [localDrawnPrizeNumbers, prizeNumber]);
+
+  function getAudioContext() {
     if (typeof window === "undefined" || !soundEnabled) return null;
 
     if (!audioCtxRef.current) {
@@ -356,9 +399,7 @@ export default function DramaticSquaresDraw({
     });
   }
 
-  async function playRealSound(
-    kind: "roll" | "riser" | "winner",
-  ) {
+  async function playRealSound(kind: "roll" | "riser" | "winner") {
     if (!soundEnabled) return false;
 
     const audio = getAudioElements();
@@ -386,7 +427,6 @@ export default function DramaticSquaresDraw({
     setDisplaySquare(null);
     setConfetti([]);
     setPrizeNumber(String(nextPrizeNumber));
-
     getAudioElements();
   }
 
@@ -398,19 +438,40 @@ export default function DramaticSquaresDraw({
     setSaving(false);
   }
 
+  async function saveDrawBeforeAnimation(
+    parsedPrizeNumber: number,
+    winningSquareNumber: number,
+  ) {
+    const formData = new FormData();
+
+    formData.append("prize_number", String(parsedPrizeNumber));
+    formData.append("square_number", String(winningSquareNumber));
+
+    const response = await fetch(`/api/admin/squares/${gameId}/draw`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Draw failed");
+    }
+
+    return data;
+  }
+
   async function startDraw() {
     const parsedPrizeNumber = Number(prizeNumber);
 
-    if (
-      !Number.isFinite(parsedPrizeNumber) ||
-      parsedPrizeNumber <= 0
-    ) {
+    if (!Number.isFinite(parsedPrizeNumber) || parsedPrizeNumber <= 0) {
       setError("Enter a valid prize number.");
       return;
     }
 
-    if (drawnPrizeNumbers.includes(parsedPrizeNumber)) {
+    if (localDrawnPrizeNumbers.includes(parsedPrizeNumber)) {
       setError(`${currentPrizeTitle} has already been drawn.`);
+      setPrizeNumber(String(nextPrizeNumber));
       return;
     }
 
@@ -424,14 +485,42 @@ export default function DramaticSquaresDraw({
     setError("");
     setWinner(null);
     setConfetti([]);
-    setDrawing(true);
+    setDrawing(false);
+    setSaving(true);
+
+    const winningSquareNumber =
+      soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
+
+    const matchedWinner =
+      soldSquareOptions.find(
+        (item) => getSquareNumber(item) === winningSquareNumber,
+      ) || null;
+
+    try {
+      await saveDrawBeforeAnimation(parsedPrizeNumber, winningSquareNumber);
+    } catch (err) {
+      setSaving(false);
+      setDrawing(false);
+
+      const message = err instanceof Error ? err.message : "Draw failed";
+
+      setError(message);
+
+      if (message.toLowerCase().includes("already")) {
+        setLocalDrawnPrizeNumbers((current) =>
+          uniqueNumbers([...current, parsedPrizeNumber]),
+        );
+        setPrizeNumber(String(nextPrizeNumber));
+      }
+
+      return;
+    }
+
     setSaving(false);
+    setDrawing(true);
 
     const audioCtx = await unlockAudio();
-
-    const selectedSound =
-      soundMode === "roll" ? "roll" : "riser";
-
+    const selectedSound = soundMode === "roll" ? "roll" : "riser";
     const introStarted = await playRealSound(selectedSound);
 
     if (!introStarted && audioCtx) {
@@ -447,9 +536,7 @@ export default function DramaticSquaresDraw({
 
     timerRef.current = setInterval(() => {
       const randomSquare =
-        soldNumbers[
-          Math.floor(Math.random() * soldNumbers.length)
-        ];
+        soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
       setDisplaySquare(randomSquare);
 
@@ -473,9 +560,7 @@ export default function DramaticSquaresDraw({
 
         timerRef.current = setInterval(() => {
           const randomSquare =
-            soldNumbers[
-              Math.floor(Math.random() * soldNumbers.length)
-            ];
+            soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
           setDisplaySquare(randomSquare);
 
@@ -491,73 +576,67 @@ export default function DramaticSquaresDraw({
     finishTimeoutRef.current = window.setTimeout(async () => {
       clearAllTimers();
 
-      const winningSquareNumber =
-        soldNumbers[
-          Math.floor(Math.random() * soldNumbers.length)
-        ];
-
-      const matchedWinner =
-        soldSquareOptions.find(
-          (item) =>
-            getSquareNumber(item) === winningSquareNumber,
-        ) || null;
-
       setDisplaySquare(winningSquareNumber);
       setWinner(matchedWinner);
       setDrawing(false);
-      setSaving(true);
+      setSaving(false);
+      setConfetti(makeConfetti());
+
+      setLocalDrawnPrizeNumbers((current) =>
+        uniqueNumbers([...current, parsedPrizeNumber]),
+      );
+      setLocalDrawnSquareNumbers((current) =>
+        uniqueNumbers([...current, winningSquareNumber]),
+      );
+
+      setRecentDraws((current) => [
+        {
+          prizeNumber: parsedPrizeNumber,
+          prizeTitle: currentPrizeTitle,
+          squareNumber: winningSquareNumber,
+          customerName: getCustomerName(matchedWinner),
+          customerEmail: getCustomerEmail(matchedWinner),
+        },
+        ...current,
+      ]);
+
+      setPrizeNumber(String(parsedPrizeNumber + 1));
 
       const winnerStarted = await playRealSound("winner");
 
       if (!winnerStarted && audioCtx) {
         playWinnerFallback(audioCtx);
       }
-
-      setConfetti(makeConfetti());
-
-      try {
-        const formData = new FormData();
-
-        formData.append(
-          "prize_number",
-          String(parsedPrizeNumber),
-        );
-
-        formData.append(
-          "square_number",
-          String(winningSquareNumber),
-        );
-
-        const response = await fetch(
-          `/api/admin/squares/${gameId}/draw`,
-          {
-            method: "POST",
-            body: formData,
-          },
-        );
-
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok || data?.ok === false) {
-          throw new Error(data?.error || "Draw failed");
-        }
-
-        setSaving(false);
-
-        window.setTimeout(() => {
-          window.location.reload();
-        }, 1900);
-      } catch (err) {
-        setSaving(false);
-
-        setError(
-          err instanceof Error ? err.message : "Draw failed",
-        );
-      }
     }, DRAW_DURATION_MS);
   }
-    return (
+
+  return (
     <>
+      <style jsx global>{`
+        @keyframes confettiFall {
+          0% {
+            transform: translate3d(0, -12vh, 0) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translate3d(var(--drift), 112vh, 0) rotate(720deg);
+            opacity: 0;
+          }
+        }
+
+        @keyframes glowPulse {
+          0%,
+          100% {
+            box-shadow: 0 0 24px rgba(250, 204, 21, 0.32);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 64px rgba(250, 204, 21, 0.68);
+            transform: scale(1.015);
+          }
+        }
+      `}</style>
+
       <section style={styles.launchCard}>
         <div style={styles.launchTop}>
           <div>
@@ -566,10 +645,9 @@ export default function DramaticSquaresDraw({
             <h2 style={styles.title}>Dramatic draw</h2>
 
             <p style={styles.description}>
-              Choose Classic Roll or Cinematic Riser,
-              then open a full-screen squares draw
-              with winner reveal, prize display,
-              saving and confetti.
+              Choose Classic Roll or Cinematic Riser, then open a full-screen
+              squares draw with winner reveal, prize display, saving and
+              confetti.
             </p>
           </div>
 
@@ -586,9 +664,7 @@ export default function DramaticSquaresDraw({
             disabled={!soldNumbers.length}
             style={{
               ...styles.primaryButton,
-              cursor: soldNumbers.length
-                ? "pointer"
-                : "not-allowed",
+              cursor: soldNumbers.length ? "pointer" : "not-allowed",
               background: soldNumbers.length
                 ? "linear-gradient(135deg, #0f172a, #1e293b)"
                 : "#9ca3af",
@@ -597,15 +673,28 @@ export default function DramaticSquaresDraw({
             Open full-screen draw
           </button>
 
-          <span style={styles.miniNote}>
-            Next prize: {nextPrizeTitle}
-          </span>
+          <span style={styles.miniNote}>Next prize: {nextPrizeTitle}</span>
         </div>
 
         {!soldNumbers.length ? (
-          <p style={styles.warning}>
-            No eligible sold squares available.
-          </p>
+          <p style={styles.warning}>No eligible sold squares available.</p>
+        ) : null}
+
+        {recentDraws.length ? (
+          <div style={styles.recentPanel}>
+            <strong>Drawn in this live session</strong>
+            {recentDraws.map((draw) => (
+              <div
+                key={`${draw.prizeNumber}-${draw.squareNumber}`}
+                style={styles.recentItem}
+              >
+                <span>
+                  {draw.prizeTitle}: square #{draw.squareNumber}
+                </span>
+                <span>{draw.customerName}</span>
+              </div>
+            ))}
+          </div>
         ) : null}
       </section>
 
@@ -656,28 +745,18 @@ export default function DramaticSquaresDraw({
               {soundEnabled ? "Sound on" : "Sound off"}
             </button>
 
-            <button
-              type="button"
-              onClick={closeDraw}
-              style={styles.closeButton}
-            >
+            <button type="button" onClick={closeDraw} style={styles.closeButton}>
               Close
             </button>
           </div>
 
           <div style={styles.stage}>
-            <p style={styles.stageEyebrow}>
-              SO Foundation Platform
-            </p>
+            <p style={styles.stageEyebrow}>SO Foundation Platform</p>
 
-            <h1 style={styles.stageTitle}>
-              Squares Winner Draw
-            </h1>
+            <h1 style={styles.stageTitle}>Squares Winner Draw</h1>
 
             <div style={styles.prizeBanner}>
-              <span style={styles.prizeBannerLabel}>
-                Current prize
-              </span>
+              <span style={styles.prizeBannerLabel}>Current prize</span>
 
               <strong style={styles.prizeBannerTitle}>
                 {currentPrizeTitle}
@@ -687,9 +766,7 @@ export default function DramaticSquaresDraw({
             <div style={styles.stageSubGrid}>
               <div style={styles.stageSubCard}>
                 <span>Prize</span>
-                <strong>
-                  #{prizeNumber || nextPrizeNumber}
-                </strong>
+                <strong>#{prizeNumber || nextPrizeNumber}</strong>
               </div>
 
               <div style={styles.stageSubCard}>
@@ -699,7 +776,7 @@ export default function DramaticSquaresDraw({
 
               <div style={styles.stageSubCard}>
                 <span>Already drawn</span>
-                <strong>{drawnPrizeNumbers.length}</strong>
+                <strong>{localDrawnPrizeNumbers.length}</strong>
               </div>
             </div>
 
@@ -750,28 +827,36 @@ export default function DramaticSquaresDraw({
 
               <input
                 value={prizeNumber}
-                onChange={(event) =>
-                  setPrizeNumber(event.target.value)
-                }
+                onChange={(event) => {
+                  setPrizeNumber(event.target.value);
+                  setError("");
+                }}
                 disabled={drawing || saving}
                 inputMode="numeric"
-                style={styles.prizeInput}
+                style={{
+                  ...styles.prizeInput,
+                  borderColor: selectedPrizeAlreadyDrawn
+                    ? "#fecaca"
+                    : "rgba(255,255,255,0.25)",
+                }}
               />
             </label>
+
+            {selectedPrizeAlreadyDrawn ? (
+              <p style={styles.alreadyDrawnNotice}>
+                {currentPrizeTitle} has already been drawn. The next available
+                prize is {nextPrizeTitle}.
+              </p>
+            ) : null}
 
             <div
               style={{
                 ...styles.ticketReveal,
-                animation:
-                  drawing || winner
-                    ? "glowPulse 900ms infinite"
-                    : "",
+                animation: drawing || winner ? "glowPulse 900ms infinite" : "",
               }}
             >
               <div style={styles.ticketNumber}>
-                {displaySquare
-                  ? `#${displaySquare}`
-                  : "—"}
+                {displaySquare ? `#${displaySquare}` : "—"}
               </div>
 
               <div style={styles.ticketLabel}>
@@ -779,58 +864,71 @@ export default function DramaticSquaresDraw({
                   ? "Drawing..."
                   : winner
                     ? currentPrizeTitle
-                    : "Ready to draw"}
+                    : saving
+                      ? "Checking draw..."
+                      : "Ready to draw"}
               </div>
             </div>
 
             <div style={styles.resultPanel}>
               {winner ? (
                 <>
-                  <div style={styles.colourBadge}>
-                    {currentPrizeTitle}
-                  </div>
+                  <div style={styles.colourBadge}>{currentPrizeTitle}</div>
 
-                  <h2 style={styles.winnerName}>
-                    {getCustomerName(winner)}
-                  </h2>
+                  <h2 style={styles.winnerName}>{getCustomerName(winner)}</h2>
 
                   {getCustomerEmail(winner) ? (
-                    <p style={styles.winnerEmail}>
-                      {getCustomerEmail(winner)}
-                    </p>
+                    <p style={styles.winnerEmail}>{getCustomerEmail(winner)}</p>
                   ) : null}
                 </>
               ) : (
                 <>
-                  <div style={styles.colourBadgeMuted}>
-                    Awaiting draw
-                  </div>
+                  <div style={styles.colourBadgeMuted}>Awaiting draw</div>
 
-                  <h2 style={styles.winnerName}>
-                    {currentPrizeTitle}
-                  </h2>
+                  <h2 style={styles.winnerName}>{currentPrizeTitle}</h2>
                 </>
               )}
             </div>
 
-            {error ? (
-              <p style={styles.error}>{error}</p>
+            {recentDraws.length ? (
+              <div style={styles.liveHistoryPanel}>
+                <strong>Live draw results</strong>
+                {recentDraws.slice(0, 5).map((draw) => (
+                  <div
+                    key={`live-${draw.prizeNumber}-${draw.squareNumber}`}
+                    style={styles.liveHistoryItem}
+                  >
+                    <span>{draw.prizeTitle}</span>
+                    <span>
+                      #{draw.squareNumber} · {draw.customerName}
+                    </span>
+                  </div>
+                ))}
+              </div>
             ) : null}
+
+            {error ? <p style={styles.error}>{error}</p> : null}
 
             <button
               type="button"
               onClick={startDraw}
               disabled={
-                drawing ||
-                saving ||
-                !soldNumbers.length
+                drawing || saving || !soldNumbers.length || selectedPrizeAlreadyDrawn
               }
               style={{
                 ...styles.startButton,
+                opacity:
+                  drawing ||
+                  saving ||
+                  !soldNumbers.length ||
+                  selectedPrizeAlreadyDrawn
+                    ? 0.62
+                    : 1,
                 cursor:
                   drawing ||
                   saving ||
-                  !soldNumbers.length
+                  !soldNumbers.length ||
+                  selectedPrizeAlreadyDrawn
                     ? "not-allowed"
                     : "pointer",
               }}
@@ -838,8 +936,10 @@ export default function DramaticSquaresDraw({
               {drawing
                 ? "Drawing..."
                 : saving
-                  ? "Saving..."
-                  : `Draw ${currentPrizeTitle}`}
+                  ? "Checking..."
+                  : selectedPrizeAlreadyDrawn
+                    ? "Prize already drawn"
+                    : `Draw ${currentPrizeTitle}`}
             </button>
           </div>
         </div>
@@ -889,6 +989,9 @@ const styles: Record<string, CSSProperties> = {
 
   ticketCount: {
     textAlign: "center",
+    display: "grid",
+    gap: 2,
+    color: "#0f172a",
   },
 
   launchActions: {
@@ -917,6 +1020,26 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
   },
 
+  recentPanel: {
+    borderTop: "1px solid #e2e8f0",
+    paddingTop: 12,
+    display: "grid",
+    gap: 8,
+    color: "#0f172a",
+  },
+
+  recentItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "8px 10px",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.72)",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+
   overlay: {
     position: "fixed",
     inset: 0,
@@ -926,7 +1049,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     display: "grid",
     placeItems: "center",
-    overflow: "hidden",
+    overflow: "auto",
     padding: 24,
   },
 
@@ -967,11 +1090,12 @@ const styles: Record<string, CSSProperties> = {
   },
 
   topControls: {
-    position: "absolute",
+    position: "fixed",
     top: 18,
     right: 18,
     display: "flex",
     gap: 10,
+    zIndex: 5,
   },
 
   secondaryControl: {
@@ -997,6 +1121,8 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     position: "relative",
     zIndex: 2,
+    paddingTop: 58,
+    paddingBottom: 32,
   },
 
   stageEyebrow: {
@@ -1065,6 +1191,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     gap: 10,
     marginBottom: 18,
+    flexWrap: "wrap",
   },
 
   soundModeButton: {
@@ -1078,7 +1205,7 @@ const styles: Record<string, CSSProperties> = {
   prizeInputWrap: {
     display: "grid",
     gap: 8,
-    margin: "0 auto 22px",
+    margin: "0 auto 10px",
     maxWidth: 260,
     textAlign: "left",
     fontWeight: 900,
@@ -1091,6 +1218,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     fontWeight: 950,
     color: "#0f172a",
+  },
+
+  alreadyDrawnNotice: {
+    margin: "0 auto 16px",
+    maxWidth: 560,
+    color: "#fecaca",
+    fontWeight: 900,
   },
 
   ticketReveal: {
@@ -1156,6 +1290,27 @@ const styles: Record<string, CSSProperties> = {
     color: "#cbd5e1",
   },
 
+  liveHistoryPanel: {
+    margin: "18px auto 0",
+    maxWidth: 560,
+    display: "grid",
+    gap: 8,
+    padding: 12,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    textAlign: "left",
+  },
+
+  liveHistoryItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    color: "#e2e8f0",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+
   error: {
     marginTop: 14,
     color: "#fecaca",
@@ -1170,7 +1325,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     fontWeight: 950,
     color: "#111827",
-    background:
-      "linear-gradient(135deg, #facc15, #f97316)",
+    background: "linear-gradient(135deg, #facc15, #f97316)",
   },
 };
