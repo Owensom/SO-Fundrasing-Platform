@@ -39,15 +39,27 @@ function ordinal(value: number) {
 }
 
 function getPrizeTitle(prize: any, prizeNumber: number) {
+  const actualPrizeName = String(
+    prize?.description ||
+      prize?.name ||
+      prize?.prizeName ||
+      prize?.prize_name ||
+      prize?.prizeTitle ||
+      prize?.prize_title ||
+      prize?.label ||
+      "",
+  ).trim();
+
+  const positionLabel = String(prize?.title || "").trim();
+
+  if (actualPrizeName && positionLabel) {
+    return `${positionLabel} — ${actualPrizeName}`;
+  }
+
   return (
-    String(
-      prize?.title ||
-        prize?.name ||
-        prize?.prizeTitle ||
-        prize?.prize_title ||
-        prize?.label ||
-        "",
-    ).trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`
+    actualPrizeName ||
+    positionLabel ||
+    `${prizeNumber}${ordinal(prizeNumber)} Prize`
   );
 }
 
