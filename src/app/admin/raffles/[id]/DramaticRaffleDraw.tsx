@@ -173,7 +173,6 @@ function makeConfetti(): ConfettiPiece[] {
     drift: Math.random() * 260 - 130,
   }));
 }
-
 export default function DramaticRaffleDraw({
   raffleId,
   soldTickets,
@@ -192,7 +191,8 @@ export default function DramaticRaffleDraw({
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const riserTimeoutRef = useRef<number | null>(null);
+  const finishTimeoutRef = useRef<number | null>(null);
 
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
   const riserAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -277,15 +277,20 @@ export default function DramaticRaffleDraw({
     return audioCtx;
   }
 
-  function stopTimer() {
+  function clearAllTimers() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
+    if (riserTimeoutRef.current) {
+      window.clearTimeout(riserTimeoutRef.current);
+      riserTimeoutRef.current = null;
+    }
+
+    if (finishTimeoutRef.current) {
+      window.clearTimeout(finishTimeoutRef.current);
+      finishTimeoutRef.current = null;
     }
   }
 
@@ -328,7 +333,7 @@ export default function DramaticRaffleDraw({
   }
 
   function closeDraw() {
-    stopTimer();
+    clearAllTimers();
     stopRealAudio();
     setIsOpen(false);
     setDrawing(false);
@@ -364,14 +369,12 @@ export default function DramaticRaffleDraw({
       playRiserFallback(audioCtx);
     }
 
-    timeoutRef.current = window.setTimeout(() => {
+    riserTimeoutRef.current = window.setTimeout(() => {
       void playRealSound("riser");
     }, Math.max(400, DRAW_DURATION_MS - 1500));
 
     let ticks = 0;
     let intervalMs = 62;
-
-    stopTimer();
 
     timerRef.current = setInterval(() => {
       const randomTicket =
@@ -412,8 +415,8 @@ export default function DramaticRaffleDraw({
       }
     }, intervalMs);
 
-    timeoutRef.current = window.setTimeout(async () => {
-      stopTimer();
+    finishTimeoutRef.current = window.setTimeout(async () => {
+      clearAllTimers();
 
       const audio = getAudioElements();
 
@@ -479,8 +482,7 @@ export default function DramaticRaffleDraw({
       }
     }, DRAW_DURATION_MS);
   }
-
-  return (
+    return (
     <>
       <section style={styles.launchCard}>
         <div style={styles.launchTop}>
@@ -668,6 +670,7 @@ export default function DramaticRaffleDraw({
               }}
             >
               <div style={styles.ticketRevealShimmer} />
+
               <div
                 style={{
                   ...styles.ticketNumber,
@@ -700,6 +703,7 @@ export default function DramaticRaffleDraw({
               ) : (
                 <>
                   <div style={styles.colourBadgeMuted}>Awaiting draw</div>
+
                   <h2 style={styles.winnerName}>
                     {drawing
                       ? "Drawing..."
@@ -741,7 +745,6 @@ export default function DramaticRaffleDraw({
     </>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   launchCard: {
     border: "1px solid #e2e8f0",
