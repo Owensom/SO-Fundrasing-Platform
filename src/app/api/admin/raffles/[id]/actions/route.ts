@@ -17,6 +17,14 @@ type SoldTicketRow = {
   buyer_email: string | null;
 };
 
+type PrizeRow = {
+  title?: string | null;
+  name?: string | null;
+  position?: number | string | null;
+  isPublic?: boolean;
+  is_public?: boolean;
+};
+
 function shuffle<T>(items: T[]) {
   const copy = items.slice();
 
@@ -36,6 +44,15 @@ function cleanEmail(value: string | null | undefined) {
 
 function cleanName(value: string | null | undefined) {
   return String(value || "").trim() || "Supporter";
+}
+
+function getPrizeTitle(prizes: PrizeRow[], index: number) {
+  const prize = prizes[index];
+  const title = String(prize?.title || prize?.name || "").trim();
+
+  if (title) return title;
+
+  return `Prize ${index + 1}`;
 }
 
 export async function POST(
@@ -134,8 +151,8 @@ export async function POST(
       }
 
       const config = (raffle.config_json as any) ?? {};
-      const prizes = Array.isArray(config.prizes)
-        ? config.prizes.filter((prize: any) => {
+      const prizes: PrizeRow[] = Array.isArray(config.prizes)
+        ? config.prizes.filter((prize: PrizeRow) => {
             const title = String(prize?.title ?? prize?.name ?? "").trim();
             const isPublic =
               prize?.isPublic !== false && prize?.is_public !== false;
@@ -213,8 +230,10 @@ export async function POST(
       let skippedWinnerEmails = 0;
       let failedWinnerEmails = 0;
 
-      for (const winner of winners) {
+      for (let index = 0; index < winners.length; index += 1) {
+        const winner = winners[index];
         const winnerEmail = cleanEmail(winner.buyer_email);
+        const prizeTitle = getPrizeTitle(prizes, index);
 
         if (!winnerEmail) {
           skippedWinnerEmails += 1;
@@ -223,6 +242,7 @@ export async function POST(
             ticketNumber: winner.ticket_number,
             colour: winner.colour,
             saleId: winner.sale_id,
+            prizeTitle,
           });
           continue;
         }
@@ -232,27 +252,27 @@ export async function POST(
             to: winnerEmail,
             raffleId: raffle.id,
             raffleTitle: raffle.title,
+            prizeTitle,
             ticketNumber: winner.ticket_number,
             colour: winner.colour,
             saleId: winner.sale_id,
           });
 
-        await sendWinnerEmail({
-  to: winnerEmail,
-  name: cleanName(winner.buyer_name),
-  raffleTitle: raffle.title,
-  prizeTitle:
-    winner.prize_title ||
-    winner.prize_name ||
-    `Prize ${winner.prize_position || ""}`.trim(),
-  ticketNumber: Number(winner.ticket_number),
-  colour: winner.colour || null,
-});
+          await sendWinnerEmail({
+            to: winnerEmail,
+            name: cleanName(winner.buyer_name),
+            raffleTitle: raffle.title,
+            prizeTitle,
+            ticketNumber: Number(winner.ticket_number),
+            colour: winner.colour || null,
+          });
+
           sentWinnerEmails += 1;
 
           console.log("Raffle winner email sent", {
             to: winnerEmail,
             raffleId: raffle.id,
+            prizeTitle,
             ticketNumber: winner.ticket_number,
           });
         } catch (emailError: any) {
@@ -261,6 +281,7 @@ export async function POST(
           console.error("Raffle winner email failed", {
             to: winnerEmail,
             raffleId: raffle.id,
+            prizeTitle,
             ticketNumber: winner.ticket_number,
             saleId: winner.sale_id,
             error: emailError?.message || emailError,
