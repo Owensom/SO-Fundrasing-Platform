@@ -39,6 +39,19 @@ function ordinal(value: number) {
   return "th";
 }
 
+function getPrizeTitle(prize: any, prizeNumber: number) {
+  return (
+    String(
+      prize?.title ||
+        prize?.name ||
+        prize?.prizeTitle ||
+        prize?.prize_title ||
+        prize?.label ||
+        "",
+    ).trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`
+  );
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const gameId = context.params.id;
@@ -55,8 +68,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const prizeNumber = parsePositiveInteger(formData.get("prize_number"));
     const squareNumber = parsePositiveInteger(formData.get("square_number"));
-
-    if (!prizeNumber || !squareNumber) {
+        if (!prizeNumber || !squareNumber) {
       return NextResponse.json(
         { ok: false, error: "Prize number and square number are required" },
         { status: 400 },
@@ -111,17 +123,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const prizes = Array.isArray(game.config_json?.prizes)
-  ? game.config_json.prizes
-  : [];
+      ? game.config_json.prizes
+      : [];
 
-const prize = prizes.find(
-  (item: any, index: number) =>
-    Number(item?.position ?? index + 1) === prizeNumber,
-);
+    const prize = prizes.find(
+      (item: any, index: number) =>
+        Number(item?.position ?? item?.prize_index ?? index + 1) ===
+        prizeNumber,
+    );
 
-const prizeTitle =
-  String(prize?.title || "").trim() ||
-  `${prizeNumber}${ordinal(prizeNumber)} Prize`;
+    const prizeTitle = getPrizeTitle(prize, prizeNumber);
 
     const winnerName = cleanName(matchingSale.customer_name);
     const winnerEmail = cleanEmail(matchingSale.customer_email);
@@ -135,8 +146,7 @@ const prizeTitle =
       customer_name: winnerName,
       customer_email: winnerEmail || null,
     });
-
-    if (!winnerEmail) {
+        if (!winnerEmail) {
       console.warn("Squares draw winner email skipped - missing email", {
         gameId: game.id,
         prizeNumber,
@@ -145,13 +155,13 @@ const prizeTitle =
       });
     } else {
       try {
-       await sendSquaresWinnerEmail({
-  to: winnerEmail,
-  name: winnerName,
-  gameTitle: game.title,
-  squareNumber,
-  prizeTitle,
-});
+        await sendSquaresWinnerEmail({
+          to: winnerEmail,
+          name: winnerName,
+          gameTitle: game.title,
+          squareNumber,
+          prizeTitle,
+        });
 
         console.log("Squares draw winner email sent", {
           to: winnerEmail,
