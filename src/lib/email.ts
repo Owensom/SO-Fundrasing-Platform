@@ -777,6 +777,76 @@ export async function sendEventReceiptEmail({
   }
 }
 
+export async function sendEventWinnerEmail({
+  to,
+  name,
+  eventTitle,
+  prizeTitle,
+  winningEntry,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  eventTitle: string;
+  prizeTitle: string;
+  winningEntry?: string | null;
+  branding?: EmailBranding;
+}) {
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Event winner",
+    heading: "You won!",
+    showWinnerTrophy: true,
+    showTicketImage: false,
+    winnerTrophyLabel: "Winning event trophy",
+    intro: `Hi ${name || "there"}, congratulations — you have been selected as a winner.`,
+    body: `
+      <div style="
+        border:1px solid #bbf7d0;
+        border-radius:20px;
+        padding:22px;
+        margin:20px 0;
+        background:#ecfdf5;
+      ">
+        <p style="
+          margin:0 0 14px;
+          font-size:20px;
+          font-weight:900;
+          color:#14532d;
+        ">
+          ${escapeHtml(eventTitle)}
+        </p>
+
+        <div style="
+          border-radius:16px;
+          background:#ffffff;
+          border:1px solid #bbf7d0;
+          padding:16px;
+          margin-top:12px;
+        ">
+          ${renderInfoRow("Prize", prizeTitle)}
+          ${renderInfoRow("Winning entry", winningEntry)}
+        </div>
+      </div>
+
+      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
+        The organiser will be in touch soon with the next steps.
+      </p>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `You won ${prizeTitle}`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("event winner email failed", err);
+  }
+}
+
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
