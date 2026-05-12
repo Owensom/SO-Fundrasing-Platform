@@ -650,112 +650,7 @@ export default function EventWinnerDrawPanel({
     }
   }
 
-  async function runDramaticDraw() {
-    if (drawing || saving || autoDrawing) return;
-
-    try {
-      setError("");
-      validateDraw();
-      await checkEligibility();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No eligible winner found.");
-      return;
-    }
-
-    clearDrawTimers();
-    stopRealAudio();
-
-    setDrawOverlayOpen(true);
-    setDrawing(true);
-    setSaving(false);
-    setRevealedWinner(null);
-    setConfetti([]);
-    setDisplayText("—");
-    setDisplayPrize(selectedPrizeLabel);
-
-    const audioCtx = await unlockAudio();
-    const selectedSound = soundMode === "roll" ? "roll" : "riser";
-    const introStarted = await playRealSound(selectedSound);
-
-    if (!introStarted && audioCtx) {
-      if (soundMode === "riser") {
-        playRiserFallback(audioCtx);
-      } else {
-        playTickFallback(audioCtx);
-      }
-    }
-
-    let ticks = 0;
-    let intervalMs = 62;
-
-    timerRef.current = setInterval(() => {
-      setDisplayText(randomDisplayValue());
-      setDisplayPrize(randomPrizeText());
-
-      if (!introStarted && audioCtx) {
-        playTickFallback(audioCtx);
-
-        if (soundMode === "riser" && ticks % 5 === 0) {
-          playRiserFallback(audioCtx);
-        }
-      }
-
-      ticks += 1;
-
-      if (ticks === 28) {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-
-        intervalMs = 115;
-
-        timerRef.current = setInterval(() => {
-          setDisplayText(randomDisplayValue());
-          setDisplayPrize(randomPrizeText());
-
-          if (!introStarted && audioCtx) {
-            playTickFallback(audioCtx);
-          }
-
-          ticks += 1;
-        }, intervalMs);
-      }
-    }, intervalMs);
-
-    finishTimeoutRef.current = window.setTimeout(async () => {
-      clearDrawTimers();
-
-      const audio = getAudioElements();
-
-      if (audio?.roll) {
-        audio.roll.pause();
-        audio.roll.currentTime = 0;
-        audio.roll.volume = 0.65;
-      }
-
-      if (audio?.riser) {
-        audio.riser.pause();
-        audio.riser.currentTime = 0;
-        audio.riser.volume = 1;
-      }
-
-      setDrawing(false);
-      setSaving(true);
-      setDisplayText("SAVING");
-      setDisplayPrize(selectedPrizeLabel);
-
-      try {
-        const winnerPayload = await saveWinnerFromApi();
-
-        setRevealedWinner(winnerPayload);
-        setDisplayText("WINNER");
-        setDisplayPrize(
-          winnerPayload.prize_position
-            ? `${winnerPayload.prize_position}. ${
-                winnerPayload.prize_title || "Prize"
-              }`
-            : winnerPayload.prize_title || selectedPrizeLabel,
+| selectedPrizeLabel,
         );
         setSaving(false);
         setConfetti(makeConfetti());
@@ -851,7 +746,7 @@ export default function EventWinnerDrawPanel({
           action="#"
           onSubmit={(event) => {
             event.preventDefault();
-            void runDramaticDraw();
+            void openDramaticDraw();
           }}
           style={styles.panel}
         >
@@ -1108,11 +1003,7 @@ export default function EventWinnerDrawPanel({
                         : 1,
                   }}
                 >
-                  {drawing
-                    ? "Drawing..."
-                    : saving
-                      ? "Saving..."
-                      : "Open dramatic draw"}
+                  Open dramatic draw
                 </button>
               </div>
             </>
@@ -1202,11 +1093,7 @@ export default function EventWinnerDrawPanel({
           <div style={styles.backgroundOrbTwo} />
           <div style={styles.ring} />
 
-          {confetti.length ? (
-            <div style={styles.confettiLayer}>
-              {confetti.map((piece) => (
-                <span
-                  key={piece.id}
+          piece.id}
                   style={
                     {
                       position: "absolute",
@@ -1359,8 +1246,7 @@ export default function EventWinnerDrawPanel({
             <div style={styles.resultPanel}>
               {revealedWinner ? (
                 <>
-                  <div style={styles.colourBadge}>Winner</div>
-                  <h2 style={styles.revealedWinnerName}>
+                  <div style={styles.colourBadge}>WiledWinnerName}>
                     {revealedWinner.winner_name || "Winner"}
                   </h2>
 
@@ -1387,6 +1273,21 @@ export default function EventWinnerDrawPanel({
             </div>
 
             {error ? <p style={styles.overlayError}>{error}</p> : null}
+
+            {!revealedWinner ? (
+              <button
+                type="button"
+                onClick={() => void runDramaticDraw()}
+                disabled={drawing || saving}
+                style={{
+                  ...styles.startButton,
+                  opacity: drawing || saving ? 0.45 : 1,
+                  cursor: drawing || saving ? "not-allowed" : "pointer",
+                }}
+              >
+                {drawing ? "Drawing..." : saving ? "Saving..." : "Start draw"}
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -1525,12 +1426,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
   input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+  ,
     color: "#0f172a",
     fontSize: 15,
     boxSizing: "border-box",
@@ -1881,8 +1777,19 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 520,
     fontWeight: 900,
   },
-  overlaySecondaryButton: {
+  startButton: {
     marginTop: 24,
+    border: 0,
+    borderRadius: 18,
+    padding: "17px 28px",
+    fontSize: 18,
+    fontWeight: 950,
+    background: "linear-gradient(135deg, #facc15, #f97316)",
+    color: "#111827",
+    boxShadow: "0 20px 42px rgba(249,115,22,0.38)",
+  },
+  overlaySecondaryButton: {
+    marginTop: 12,
     border: "1px solid rgba(255,255,255,0.3)",
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
