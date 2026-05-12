@@ -95,6 +95,22 @@ function renderInfoRow(label: string, value: unknown) {
   `;
 }
 
+function cleanPrizeTitle(value: unknown) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return "Prize";
+
+  return (
+    raw
+      .replace(/^you\s+(have\s+)?won\s+/i, "")
+      .replace(/^winner\s*[:\-]\s*/i, "")
+      .replace(/^prize\s*[:\-]?\s+/i, "")
+      .replace(/^won\s+prize\s+/i, "")
+      .replace(/\s+/g, " ")
+      .trim() || "Prize"
+  );
+}
+
 function renderTicketHero(label = "SO Fundraising Ticket") {
   return `
     <div style="
@@ -455,7 +471,7 @@ export async function sendWinnerEmail({
   branding?: EmailBranding;
 }) {
   const safeColour = colour || "Default";
-  const safePrizeTitle = String(prizeTitle || "").trim();
+  const safePrizeTitle = cleanPrizeTitle(prizeTitle);
 
   const html = renderEmailShell({
     branding,
@@ -631,7 +647,7 @@ export async function sendSquaresWinnerEmail({
   prizeTitle: string;
   branding?: EmailBranding;
 }) {
-  const safePrizeTitle = String(prizeTitle || "").trim() || "Prize";
+  const safePrizeTitle = cleanPrizeTitle(prizeTitle);
 
   const html = renderEmailShell({
     branding,
@@ -686,7 +702,7 @@ export async function sendSquaresWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: `You won ${safePrizeTitle}`,
+      subject: `You won ${safePrizeTitle}!`,
       html,
       branding,
     });
@@ -826,6 +842,8 @@ export async function sendEventWinnerEmail({
   winningEntry?: string | null;
   branding?: EmailBranding;
 }) {
+  const safePrizeTitle = cleanPrizeTitle(prizeTitle);
+
   const html = renderEmailShell({
     branding,
     eyebrow: "Event winner",
@@ -833,7 +851,7 @@ export async function sendEventWinnerEmail({
     showWinnerTrophy: true,
     showTicketImage: false,
     winnerTrophyLabel: "Winning event trophy",
-    intro: `Hi ${name || "there"}, congratulations — you have been selected as a winner.`,
+    intro: `Hi ${name || "there"}, congratulations — you have won ${safePrizeTitle}.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
@@ -858,7 +876,7 @@ export async function sendEventWinnerEmail({
           padding:16px;
           margin-top:12px;
         ">
-          ${renderInfoRow("Prize", prizeTitle)}
+          ${renderInfoRow("Prize won", safePrizeTitle)}
           ${renderInfoRow("Winning entry", winningEntry)}
         </div>
       </div>
@@ -872,7 +890,7 @@ export async function sendEventWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: `You won ${prizeTitle}`,
+      subject: `You won ${safePrizeTitle}!`,
       html,
       branding,
     });
@@ -1037,7 +1055,7 @@ export async function sendAuctionWinnerEmail({
   branding?: EmailBranding;
 }) {
   const winningAmount = formatCurrency(winningAmountCents, currency);
-  const prizeName = String(itemTitle || "").trim() || "Auction prize";
+  const prizeName = cleanPrizeTitle(itemTitle);
 
   const html = renderEmailShell({
     branding,
@@ -1096,7 +1114,7 @@ export async function sendAuctionWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: `You won ${prizeName}`,
+      subject: `You won ${prizeName}!`,
       html,
       branding,
     });
