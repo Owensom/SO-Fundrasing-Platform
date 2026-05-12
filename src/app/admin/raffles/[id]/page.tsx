@@ -1,4 +1,4 @@
-import type { ReactNode, CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
@@ -387,7 +387,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
           />
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
           value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
@@ -724,7 +725,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   ))}
                 </div>
               </section>
-                            <section style={styles.innerPanel}>
+
+              <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <h3 style={styles.subTitle}>Legal & postal entry</h3>
@@ -851,10 +853,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
       </section>
 
       <section style={styles.section}>
-        <details
-          open={!prizesConfigured}
-          style={styles.adminDetails}
-        >
+        <details open={!prizesConfigured} style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
               <h2 style={styles.sectionTitle}>Prize management</h2>
@@ -1133,6 +1132,7 @@ function Field({
     </label>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
