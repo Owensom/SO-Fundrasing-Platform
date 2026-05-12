@@ -455,13 +455,6 @@ export async function sendWinnerEmail({
   colour?: string | null;
   branding?: EmailBranding;
 }) {
-  to: string;
-  name?: string | null;
-  raffleTitle: string;
-  ticketNumber: number;
-  colour?: string | null;
-  branding?: EmailBranding;
-}) {
   const safeColour = colour || "Default";
 
   const html = renderEmailShell({
@@ -496,6 +489,17 @@ export async function sendWinnerEmail({
           padding:16px;
           margin-top:12px;
         ">
+          ${
+            prizeTitle
+              ? `
+                <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
+                  <strong>Prize won:</strong>
+                  ${escapeHtml(prizeTitle)}
+                </p>
+              `
+              : ""
+          }
+
           <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
             <strong>Winning ticket:</strong>
             #${escapeHtml(ticketNumber)}
@@ -517,7 +521,9 @@ export async function sendWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: `You won ${raffleTitle}!`,
+      subject: prizeTitle
+        ? `You won ${prizeTitle}!`
+        : `You won ${raffleTitle}!`,
       html,
       branding,
     });
