@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendWinnerEmail } from "@/lib/email";
+import { sendSquaresWinnerEmail } from "@/lib/email";
 import {
   createSquaresWinner,
   getSquaresGameById,
@@ -139,13 +139,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     } else {
       try {
-        await sendWinnerEmail({
-          to: winnerEmail,
-          name: winnerName,
-          raffleTitle: game.title,
-          ticketNumber: squareNumber,
-          colour: `Square ${squareNumber} — ${prizeTitle}`,
-        });
+       await sendSquaresWinnerEmail({
+  to: winnerEmail,
+  name: winnerName,
+  gameTitle: game.title,
+  squareNumber,
+  prizeTitle,
+});
 
         console.log("Squares draw winner email sent", {
           to: winnerEmail,
