@@ -55,6 +55,16 @@ type ConfettiPiece = {
   drift: number;
 };
 
+type SoundMode = "roll" | "riser";
+
+const DRAW_DURATION_MS = 3600;
+
+const SOUND_PATHS = {
+  roll: "/brand/draw-roll.wav",
+  riser: "/brand/draw-riser.mp3",
+  winner: "/brand/draw-winner.mp3",
+};
+
 function prizeTitle(prize: EventPrize) {
   return String(prize.title || prize.name || "").trim();
 }
@@ -123,59 +133,108 @@ function createAudioContext() {
   return AudioContextClass ? new AudioContextClass() : null;
 }
 
-function playTick(audioCtx: AudioContext) {
+function playTickFallback(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "square";
-  osc.frequency.setValueAtTime(1100, now);
-  osc.frequency.exponentialRampToValueAtTime(320, now + 0.06);
+  osc.frequency.setValueAtTime(1320, now);
+  osc.frequency.exponentialRampToValueAtTime(380, now + 0.055);
+
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(1320, now);
+  filter.Q.setValueAtTime(8, now);
 
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+  gain.gain.exponentialRampToValueAtTime(0.14, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
 
-  osc.connect(gain);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 0.08);
+  osc.stop(now + 0.075);
 }
 
-function playWinner(audioCtx: AudioContext) {
+function playRiserFallback(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
-
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
 
   osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(240, now);
-  osc.frequency.exponentialRampToValueAtTime(820, now + 0.7);
+  osc.frequency.setValueAtTime(70, now);
+  osc.frequency.linearRampToValueAtTime(165, now + 0.28);
+
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(520, now);
+  filter.frequency.linearRampToValueAtTime(1450, now + 0.28);
 
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.22, now + 0.04);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 1);
+  gain.gain.exponentialRampToValueAtTime(0.045, now + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
 
-  osc.connect(gain);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 1);
+  osc.stop(now + 0.32);
+}
+
+function playWinnerFallback(audioCtx: AudioContext) {
+  const now = audioCtx.currentTime;
+
+  const master = audioCtx.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.28, now + 0.025);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+  master.connect(audioCtx.destination);
+
+  const notes = [392, 494, 587, 784];
+
+  notes.forEach((frequency, index) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const start = now + index * 0.08;
+
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(frequency, start);
+
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.12, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.55);
+
+    osc.connect(gain);
+    gain.connect(master);
+
+    osc.start(start);
+    osc.stop(start + 0.6);
+  });
+
+  const impact = audioCtx.createOscillator();
+  impact.type = "square";
+  impact.frequency.setValueAtTime(110, now);
+  impact.frequency.exponentialRampToValueAtTime(48, now + 0.75);
+  impact.connect(master);
+  impact.start(now);
+  impact.stop(now + 0.95);
 }
 
 function makeConfetti(): ConfettiPiece[] {
-  return Array.from({ length: 120 }).map((_, index) => ({
+  return Array.from({ length: 150 }).map((_, index) => ({
     id: index,
     left: Math.random() * 100,
-    delay: Math.random() * 0.5,
-    duration: 1.8 + Math.random() * 1.8,
-    width: 7 + Math.random() * 8,
-    height: 10 + Math.random() * 14,
+    delay: Math.random() * 0.55,
+    duration: 1.8 + Math.random() * 2,
+    width: 7 + Math.random() * 9,
+    height: 10 + Math.random() * 16,
     rotate: Math.random() * 360,
     hue: Math.random() * 360,
-    drift: Math.random() * 240 - 120,
+    drift: Math.random() * 260 - 130,
   }));
 }
 
@@ -204,8 +263,12 @@ export default function EventWinnerDrawPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const finishTimeoutRef = useRef<number | null>(null);
+  const reloadTimeoutRef = useRef<number | null>(null);
+
+  const rollAudioRef = useRef<HTMLAudioElement | null>(null);
+  const riserAudioRef = useRef<HTMLAudioElement | null>(null);
+  const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [selectedPrizeKey, setSelectedPrizeKey] = useState("");
   const [drawMode, setDrawMode] = useState<"single" | "all_remaining">("single");
@@ -219,9 +282,9 @@ export default function EventWinnerDrawPanel({
   const [displayPrize, setDisplayPrize] = useState("Ready");
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
-  const [revealedWinner, setRevealedWinner] = useState<WinnerPayload | null>(
-    null,
-  );
+  const [revealedWinner, setRevealedWinner] = useState<WinnerPayload | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundMode, setSoundMode] = useState<SoundMode>("roll");
 
   const validPrizes = useMemo(
     () => prizes.filter((prize) => prizeTitle(prize)),
@@ -292,8 +355,9 @@ export default function EventWinnerDrawPanel({
   const hasPrizes = validPrizes.length > 0;
   const hasRemainingPrizes = remainingPrizes.length > 0;
   const hasAutomatedRangePrizes = automatedRangePrizes.length > 0;
-    function getAudioContext() {
-    if (typeof window === "undefined") return null;
+
+  function getAudioContext() {
+    if (typeof window === "undefined" || !soundEnabled) return null;
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = createAudioContext();
@@ -302,11 +366,51 @@ export default function EventWinnerDrawPanel({
     return audioCtxRef.current;
   }
 
+  function getAudioElements() {
+    if (typeof window === "undefined") return null;
+
+    if (!rollAudioRef.current) {
+      rollAudioRef.current = new Audio(SOUND_PATHS.roll);
+      rollAudioRef.current.preload = "auto";
+      rollAudioRef.current.volume = 0.65;
+      rollAudioRef.current.loop = true;
+    }
+
+    if (!riserAudioRef.current) {
+      riserAudioRef.current = new Audio(SOUND_PATHS.riser);
+      riserAudioRef.current.preload = "auto";
+      riserAudioRef.current.volume = 1;
+      riserAudioRef.current.loop = false;
+    }
+
+    if (!winnerAudioRef.current) {
+      winnerAudioRef.current = new Audio(SOUND_PATHS.winner);
+      winnerAudioRef.current.preload = "auto";
+      winnerAudioRef.current.volume = 1;
+      winnerAudioRef.current.loop = false;
+    }
+
+    return {
+      roll: rollAudioRef.current,
+      riser: riserAudioRef.current,
+      winner: winnerAudioRef.current,
+    };
+  }
+
   async function unlockAudio() {
     const audioCtx = getAudioContext();
+    const audio = getAudioElements();
 
     if (audioCtx?.state === "suspended") {
       await audioCtx.resume();
+    }
+
+    if (audio && soundEnabled) {
+      await Promise.allSettled([
+        audio.roll.load(),
+        audio.riser.load(),
+        audio.winner.load(),
+      ]);
     }
 
     return audioCtx;
@@ -318,19 +422,51 @@ export default function EventWinnerDrawPanel({
       timerRef.current = null;
     }
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
+    if (finishTimeoutRef.current) {
+      window.clearTimeout(finishTimeoutRef.current);
+      finishTimeoutRef.current = null;
     }
 
     if (reloadTimeoutRef.current) {
-      clearTimeout(reloadTimeoutRef.current);
+      window.clearTimeout(reloadTimeoutRef.current);
       reloadTimeoutRef.current = null;
+    }
+  }
+
+  function stopRealAudio() {
+    const audio = getAudioElements();
+    if (!audio) return;
+
+    [audio.roll, audio.riser, audio.winner].forEach((item) => {
+      item.pause();
+      item.currentTime = 0;
+    });
+
+    audio.roll.volume = 0.65;
+    audio.riser.volume = 1;
+    audio.winner.volume = 1;
+  }
+
+  async function playRealSound(kind: "roll" | "riser" | "winner") {
+    if (!soundEnabled) return false;
+
+    const audio = getAudioElements();
+    if (!audio) return false;
+
+    try {
+      const sound = audio[kind];
+      sound.pause();
+      sound.currentTime = 0;
+      await sound.play();
+      return true;
+    } catch {
+      return false;
     }
   }
 
   function closeDraw() {
     clearDrawTimers();
+    stopRealAudio();
     setDrawOverlayOpen(false);
     setDrawing(false);
     setSaving(false);
@@ -454,7 +590,9 @@ export default function EventWinnerDrawPanel({
     }
 
     const winner =
-      drawMode === "all_remaining" ? data?.winners?.[0] || null : data?.winner || null;
+      drawMode === "all_remaining"
+        ? data?.winners?.[0] || null
+        : data?.winner || null;
 
     if (!winner) {
       throw new Error("Draw completed but no winner was returned.");
@@ -496,9 +634,13 @@ export default function EventWinnerDrawPanel({
       setConfetti(makeConfetti());
 
       const audioCtx = await unlockAudio();
-      if (audioCtx) playWinner(audioCtx);
+      const winnerStarted = await playRealSound("winner");
 
-      reloadTimeoutRef.current = setTimeout(() => {
+      if (!winnerStarted && audioCtx) {
+        playWinnerFallback(audioCtx);
+      }
+
+      reloadTimeoutRef.current = window.setTimeout(() => {
         window.location.reload();
       }, 1600);
     } catch (err) {
@@ -520,6 +662,9 @@ export default function EventWinnerDrawPanel({
       return;
     }
 
+    clearDrawTimers();
+    stopRealAudio();
+
     setDrawOverlayOpen(true);
     setDrawing(true);
     setSaving(false);
@@ -529,20 +674,70 @@ export default function EventWinnerDrawPanel({
     setDisplayPrize(selectedPrizeLabel);
 
     const audioCtx = await unlockAudio();
+    const selectedSound = soundMode === "roll" ? "roll" : "riser";
+    const introStarted = await playRealSound(selectedSound);
 
-    clearDrawTimers();
+    if (!introStarted && audioCtx) {
+      if (soundMode === "riser") {
+        playRiserFallback(audioCtx);
+      } else {
+        playTickFallback(audioCtx);
+      }
+    }
+
+    let ticks = 0;
+    let intervalMs = 62;
 
     timerRef.current = setInterval(() => {
       setDisplayText(randomDisplayValue());
       setDisplayPrize(randomPrizeText());
 
-      if (audioCtx) playTick(audioCtx);
-    }, 72);
+      if (!introStarted && audioCtx) {
+        playTickFallback(audioCtx);
 
-    timeoutRef.current = setTimeout(async () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+        if (soundMode === "riser" && ticks % 5 === 0) {
+          playRiserFallback(audioCtx);
+        }
+      }
+
+      ticks += 1;
+
+      if (ticks === 28) {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+
+        intervalMs = 115;
+
+        timerRef.current = setInterval(() => {
+          setDisplayText(randomDisplayValue());
+          setDisplayPrize(randomPrizeText());
+
+          if (!introStarted && audioCtx) {
+            playTickFallback(audioCtx);
+          }
+
+          ticks += 1;
+        }, intervalMs);
+      }
+    }, intervalMs);
+
+    finishTimeoutRef.current = window.setTimeout(async () => {
+      clearDrawTimers();
+
+      const audio = getAudioElements();
+
+      if (audio?.roll) {
+        audio.roll.pause();
+        audio.roll.currentTime = 0;
+        audio.roll.volume = 0.65;
+      }
+
+      if (audio?.riser) {
+        audio.riser.pause();
+        audio.riser.currentTime = 0;
+        audio.riser.volume = 1;
       }
 
       setDrawing(false);
@@ -565,9 +760,13 @@ export default function EventWinnerDrawPanel({
         setSaving(false);
         setConfetti(makeConfetti());
 
-        if (audioCtx) playWinner(audioCtx);
+        const winnerStarted = await playRealSound("winner");
 
-        reloadTimeoutRef.current = setTimeout(() => {
+        if (!winnerStarted && audioCtx) {
+          playWinnerFallback(audioCtx);
+        }
+
+        reloadTimeoutRef.current = window.setTimeout(() => {
           window.location.reload();
         }, 2600);
       } catch (err) {
@@ -575,23 +774,24 @@ export default function EventWinnerDrawPanel({
         setError(err instanceof Error ? err.message : "Draw failed.");
         setDisplayText("ERROR");
       }
-    }, 3200);
+    }, DRAW_DURATION_MS);
   }
 
   useEffect(() => {
     return () => {
       clearDrawTimers();
+      stopRealAudio();
     };
   }, []);
 
   return (
     <section style={styles.section}>
       <div style={styles.sectionHeader}>
-        <p style={styles.sectionEyebrow}>Winner draw</p>
+        <p style={styles.sectionEyebrow}>Draw centre</p>
         <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
         <p style={styles.sectionText}>
-          Draw winners from eligible paid event entries only. Use a prize range
-          for automated draws so you can leave top prizes for a live draw.
+          Draw winners from eligible paid event entries only. Use Classic Roll or
+          Cinematic Riser for a full-screen live draw.
         </p>
       </div>
 
@@ -640,8 +840,7 @@ export default function EventWinnerDrawPanel({
             {revealedWinner.prize_position
               ? `${revealedWinner.prize_position}. `
               : ""}
-            {revealedWinner.prize_title || "Prize"} ·{" "}
-            {formatWinnerSeat(revealedWinner)}
+            {revealedWinner.prize_title || "Prize"} · {formatWinnerSeat(revealedWinner)}
           </p>
         </div>
       ) : null}
@@ -701,7 +900,8 @@ export default function EventWinnerDrawPanel({
                   })}
                 </select>
               </label>
-                            <label style={styles.field}>
+
+              <label style={styles.field}>
                 <span style={styles.label}>Draw type</span>
                 <select
                   value={drawMode}
@@ -733,9 +933,7 @@ export default function EventWinnerDrawPanel({
                         type="number"
                         min="1"
                         value={autoFromPosition}
-                        onChange={(event) =>
-                          setAutoFromPosition(event.target.value)
-                        }
+                        onChange={(event) => setAutoFromPosition(event.target.value)}
                         placeholder="6"
                         style={styles.input}
                       />
@@ -819,6 +1017,44 @@ export default function EventWinnerDrawPanel({
                 </label>
               </div>
 
+              <div style={styles.soundModeRowLight}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!drawing && !saving) {
+                      stopRealAudio();
+                      setSoundMode("roll");
+                    }
+                  }}
+                  disabled={drawing || saving}
+                  style={{
+                    ...styles.soundModeLightButton,
+                    background: soundMode === "roll" ? "#0f172a" : "#ffffff",
+                    color: soundMode === "roll" ? "#ffffff" : "#0f172a",
+                  }}
+                >
+                  Classic Roll
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!drawing && !saving) {
+                      stopRealAudio();
+                      setSoundMode("riser");
+                    }
+                  }}
+                  disabled={drawing || saving}
+                  style={{
+                    ...styles.soundModeLightButton,
+                    background: soundMode === "riser" ? "#0f172a" : "#ffffff",
+                    color: soundMode === "riser" ? "#ffffff" : "#0f172a",
+                  }}
+                >
+                  Cinematic Riser
+                </button>
+              </div>
+
               {error ? <div style={styles.errorBox}>{error}</div> : null}
 
               <div style={styles.drawButtonGrid}>
@@ -887,9 +1123,7 @@ export default function EventWinnerDrawPanel({
           <div style={styles.panelHeader}>
             <div>
               <h3 style={styles.panelTitle}>Winner history</h3>
-              <p style={styles.sectionText}>
-                Winners are stored against this event only.
-              </p>
+              <p style={styles.sectionText}>Winners are stored against this event only.</p>
             </div>
 
             {winners.length > 0 && (
@@ -917,8 +1151,7 @@ export default function EventWinnerDrawPanel({
                       {winner.winner_name || "Unnamed winner"}
                     </p>
                     <p style={styles.winnerMeta}>
-                      {winner.winner_email || "No email"} ·{" "}
-                      {formatWinnerSeat(winner)}
+                      {winner.winner_email || "No email"} · {formatWinnerSeat(winner)}
                     </p>
                   </div>
 
@@ -940,34 +1173,34 @@ export default function EventWinnerDrawPanel({
         <div style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
-              0% {
-                transform: translate3d(0, -20vh, 0) rotate(0deg);
-                opacity: 1;
-              }
-              100% {
-                transform: translate3d(var(--drift), 115vh, 0) rotate(900deg);
-                opacity: 0;
-              }
+              0% { transform: translate3d(0, -20vh, 0) rotate(0deg); opacity: 1; }
+              100% { transform: translate3d(var(--drift), 115vh, 0) rotate(900deg); opacity: 0; }
             }
 
             @keyframes winnerPulse {
-              0%, 100% {
-                transform: scale(1);
-              }
-              50% {
-                transform: scale(1.06);
-              }
+              0%, 100% { transform: scale(1); }
+              50% { transform: scale(1.055); }
             }
 
             @keyframes glowPulse {
-              0%, 100% {
-                box-shadow: 0 0 38px rgba(250,204,21,0.25);
-              }
-              50% {
-                box-shadow: 0 0 85px rgba(250,204,21,0.85);
-              }
+              0%, 100% { box-shadow: 0 0 42px rgba(250,204,21,0.28), inset 0 0 28px rgba(255,255,255,0.08); }
+              50% { box-shadow: 0 0 95px rgba(250,204,21,0.92), inset 0 0 44px rgba(255,255,255,0.14); }
+            }
+
+            @keyframes slowSpin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+
+            @keyframes shimmer {
+              0% { transform: translateX(-120%); }
+              100% { transform: translateX(120%); }
             }
           `}</style>
+
+          <div style={styles.backgroundOrbOne} />
+          <div style={styles.backgroundOrbTwo} />
+          <div style={styles.ring} />
 
           {confetti.length ? (
             <div style={styles.confettiLayer}>
@@ -993,72 +1226,167 @@ export default function EventWinnerDrawPanel({
             </div>
           ) : null}
 
-          <button
-            type="button"
-            onClick={closeDraw}
-            disabled={saving}
-            style={{
-              ...styles.closeOverlayButton,
-              opacity: saving ? 0.45 : 1,
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
-            Close
-          </button>
+          <div style={styles.topControls}>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabled(next);
 
-          <div style={styles.overlayContent}>
-            <p style={styles.overlayEyebrow}>Event prize draw</p>
+                if (!next) {
+                  stopRealAudio();
+                }
+              }}
+              style={styles.secondaryControl}
+            >
+              {soundEnabled ? "Sound on" : "Sound off"}
+            </button>
 
-            <h1 style={styles.overlayTitle}>
-              {drawing ? "Drawing..." : saving ? "Saving winner..." : "Winner!"}
-            </h1>
+            <button
+              type="button"
+              onClick={closeDraw}
+              disabled={saving}
+              style={{
+                ...styles.closeButton,
+                opacity: saving ? 0.45 : 1,
+                cursor: saving ? "not-allowed" : "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
 
-            <p style={styles.overlayPrize}>{displayPrize}</p>
+          <div style={styles.stage}>
+            <p style={styles.stageEyebrow}>SO Foundation Platform</p>
+            <h1 style={styles.stageTitle}>Event Winner Draw</h1>
+
+            <div style={styles.stageSubGrid}>
+              <div style={styles.stageSubCard}>
+                <span>Prize</span>
+                <strong>{displayPrize}</strong>
+              </div>
+
+              <div style={styles.stageSubCard}>
+                <span>Mode</span>
+                <strong>{drawMode === "all_remaining" ? "Range" : "Single"}</strong>
+              </div>
+
+              <div style={styles.stageSubCard}>
+                <span>Sound</span>
+                <strong>{soundMode === "roll" ? "Roll" : "Riser"}</strong>
+              </div>
+            </div>
+
+            <div style={styles.soundModeRow}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!drawing && !saving) {
+                    stopRealAudio();
+                    setSoundMode("roll");
+                  }
+                }}
+                disabled={drawing || saving}
+                style={{
+                  ...styles.soundModeButton,
+                  background:
+                    soundMode === "roll"
+                      ? "rgba(250,204,21,0.24)"
+                      : "rgba(255,255,255,0.08)",
+                  borderColor:
+                    soundMode === "roll"
+                      ? "rgba(250,204,21,0.78)"
+                      : "rgba(255,255,255,0.14)",
+                }}
+              >
+                Classic Roll
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!drawing && !saving) {
+                    stopRealAudio();
+                    setSoundMode("riser");
+                  }
+                }}
+                disabled={drawing || saving}
+                style={{
+                  ...styles.soundModeButton,
+                  background:
+                    soundMode === "riser"
+                      ? "rgba(250,204,21,0.24)"
+                      : "rgba(255,255,255,0.08)",
+                  borderColor:
+                    soundMode === "riser"
+                      ? "rgba(250,204,21,0.78)"
+                      : "rgba(255,255,255,0.14)",
+                }}
+              >
+                Cinematic Riser
+              </button>
+            </div>
 
             <div
               style={{
-                ...styles.drawOrb,
-                animation: drawing || saving ? "glowPulse 900ms infinite" : "",
+                ...styles.ticketReveal,
+                animation: drawing || saving || revealedWinner ? "glowPulse 900ms infinite" : "",
               }}
             >
+              <div style={styles.ticketRevealShimmer} />
               <div
                 style={{
-                  ...styles.drawNumber,
-                  animation: drawing ? "winnerPulse 180ms infinite" : "",
+                  ...styles.ticketNumber,
+                  animation: drawing ? "winnerPulse 160ms infinite" : "",
                 }}
               >
                 {displayText}
               </div>
+
+              <div style={styles.ticketLabel}>
+                {drawing
+                  ? soundMode === "roll"
+                    ? "Classic roll"
+                    : "Cinematic riser"
+                  : saving
+                    ? "Saving winner"
+                    : revealedWinner
+                      ? "Winner saved"
+                      : "Ready to draw"}
+              </div>
             </div>
 
-            {revealedWinner ? (
-              <div style={styles.revealedWinnerCard}>
-                <p style={styles.revealedWinnerLabel}>Winner</p>
-                <h2 style={styles.revealedWinnerName}>
-                  {revealedWinner.winner_name || "Winner"}
-                </h2>
+            <div style={styles.resultPanel}>
+              {revealedWinner ? (
+                <>
+                  <div style={styles.colourBadge}>Winner</div>
+                  <h2 style={styles.revealedWinnerName}>
+                    {revealedWinner.winner_name || "Winner"}
+                  </h2>
 
-                {revealedWinner.winner_email ? (
+                  {revealedWinner.winner_email ? (
+                    <p style={styles.revealedWinnerMeta}>
+                      {revealedWinner.winner_email}
+                    </p>
+                  ) : null}
+
                   <p style={styles.revealedWinnerMeta}>
-                    {revealedWinner.winner_email}
+                    {formatWinnerSeat(revealedWinner)}
                   </p>
-                ) : null}
+                </>
+              ) : (
+                <>
+                  <div style={styles.colourBadgeMuted}>
+                    {drawing ? "Selecting entry" : saving ? "Saving" : "Awaiting draw"}
+                  </div>
+                  <h2 style={styles.revealedWinnerName}>
+                    {drawing ? "Drawing..." : saving ? "Saving winner..." : "Ready"}
+                  </h2>
+                </>
+              )}
+            </div>
 
-                <p style={styles.revealedWinnerMeta}>
-                  {formatWinnerSeat(revealedWinner)}
-                </p>
-              </div>
-            ) : null}
-
-            <p style={styles.overlaySubtext}>
-              {drawing
-                ? "Selecting from eligible event entries..."
-                : saving
-                  ? "Winner chosen — saving to event history..."
-                  : revealedWinner
-                    ? "Winner saved. Refreshing history..."
-                    : "Ready."}
-            </p>
+            {error ? <p style={styles.overlayError}>{error}</p> : null}
 
             <button
               type="button"
@@ -1242,6 +1570,18 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
   },
+  soundModeRowLight: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  soundModeLightButton: {
+    border: "1px solid #cbd5e1",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
   drawButtonGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
@@ -1344,12 +1684,40 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     zIndex: 9999,
     background:
-      "radial-gradient(circle at top, #374151, #111827 55%, #030712)",
+      "radial-gradient(circle at top, #334155, #111827 52%, #020617)",
     color: "#ffffff",
     display: "grid",
     placeItems: "center",
     padding: 24,
     overflow: "hidden",
+  },
+  backgroundOrbOne: {
+    position: "absolute",
+    width: "52vw",
+    height: "52vw",
+    left: "-18vw",
+    top: "-22vw",
+    borderRadius: "50%",
+    background: "rgba(22,131,248,0.22)",
+    filter: "blur(10px)",
+  },
+  backgroundOrbTwo: {
+    position: "absolute",
+    width: "48vw",
+    height: "48vw",
+    right: "-18vw",
+    bottom: "-18vw",
+    borderRadius: "50%",
+    background: "rgba(250,204,21,0.14)",
+    filter: "blur(12px)",
+  },
+  ring: {
+    position: "absolute",
+    width: "min(760px, 82vw)",
+    height: "min(760px, 82vw)",
+    borderRadius: "50%",
+    border: "1px solid rgba(255,255,255,0.08)",
+    animation: "slowSpin 24s linear infinite",
   },
   confettiLayer: {
     position: "absolute",
@@ -1357,99 +1725,164 @@ const styles: Record<string, CSSProperties> = {
     pointerEvents: "none",
     overflow: "hidden",
   },
-  closeOverlayButton: {
+  topControls: {
     position: "absolute",
     top: 18,
     right: 18,
-    border: "1px solid rgba(255,255,255,0.3)",
+    display: "flex",
+    gap: 10,
+    zIndex: 3,
+  },
+  secondaryControl: {
+    border: "1px solid rgba(255,255,255,0.24)",
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
     borderRadius: 999,
     padding: "10px 14px",
-    fontWeight: 800,
-    zIndex: 2,
+    cursor: "pointer",
+    fontWeight: 900,
   },
-  overlayContent: {
-    width: "min(780px, 100%)",
+  closeButton: {
+    border: "1px solid rgba(255,255,255,0.3)",
+    background: "rgba(255,255,255,0.12)",
+    color: "#ffffff",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
+  stage: {
+    width: "min(900px, 100%)",
     textAlign: "center",
     position: "relative",
-    zIndex: 1,
+    zIndex: 2,
   },
-  overlayEyebrow: {
+  stageEyebrow: {
     margin: 0,
     color: "#facc15",
-    fontSize: 14,
-    fontWeight: 900,
-    letterSpacing: "0.18em",
+    fontSize: 13,
+    fontWeight: 950,
+    letterSpacing: "0.2em",
     textTransform: "uppercase",
   },
-  overlayTitle: {
-    margin: "12px 0 10px",
-    fontSize: "clamp(34px, 6vw, 60px)",
-    lineHeight: 1,
+  stageTitle: {
+    margin: "12px 0 18px",
+    fontSize: "clamp(36px, 6vw, 72px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.065em",
   },
-  overlayPrize: {
-    margin: "0 auto 24px",
-    color: "#d1d5db",
-    fontSize: "clamp(17px, 3vw, 24px)",
-    fontWeight: 900,
+  stageSubGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+    margin: "0 auto 18px",
+    maxWidth: 720,
   },
-  drawOrb: {
-    margin: "0 auto 22px",
+  stageSubCard: {
+    display: "grid",
+    gap: 3,
+    padding: "10px 12px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+  },
+  soundModeRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    margin: "0 auto 18px",
+  },
+  soundModeButton: {
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
+  ticketReveal: {
+    position: "relative",
+    margin: "0 auto 18px",
     display: "grid",
     placeItems: "center",
-    width: "min(360px, 74vw)",
-    height: "min(360px, 74vw)",
+    width: "min(360px, 72vw)",
+    height: "min(360px, 72vw)",
     borderRadius: "50%",
     background:
-      "radial-gradient(circle, rgba(250,204,21,0.38), rgba(249,115,22,0.2), rgba(255,255,255,0.06))",
-    border: "2px solid rgba(250,204,21,0.6)",
+      "radial-gradient(circle, rgba(250,204,21,0.42), rgba(249,115,22,0.18), rgba(255,255,255,0.07))",
+    border: "2px solid rgba(250,204,21,0.65)",
+    overflow: "hidden",
   },
-  drawNumber: {
-    fontSize: "clamp(48px, 12vw, 96px)",
+  ticketRevealShimmer: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
+    animation: "shimmer 2s ease-in-out infinite",
+  },
+  ticketNumber: {
+    position: "relative",
+    fontSize: "clamp(48px, 10vw, 96px)",
     lineHeight: 1,
     fontWeight: 950,
-    letterSpacing: "-0.06em",
-    textShadow: "0 0 28px rgba(250,204,21,0.85)",
+    letterSpacing: "-0.065em",
+    textShadow: "0 0 32px rgba(250,204,21,0.9)",
   },
-  revealedWinnerCard: {
-    width: "min(520px, 100%)",
-    margin: "0 auto 16px",
-    padding: 18,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(250,204,21,0.4)",
-    boxShadow: "0 18px 50px rgba(0,0,0,0.24)",
-  },
-  revealedWinnerLabel: {
-    margin: 0,
-    color: "#facc15",
-    fontSize: 12,
+  ticketLabel: {
+    position: "absolute",
+    bottom: 42,
+    left: 0,
+    right: 0,
+    color: "#fde68a",
+    fontSize: 13,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.12em",
+    letterSpacing: "0.14em",
+  },
+  resultPanel: {
+    minHeight: 108,
+    display: "grid",
+    placeItems: "center",
+    gap: 6,
+  },
+  colourBadge: {
+    display: "inline-flex",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#111827",
+    fontWeight: 950,
+  },
+  colourBadgeMuted: {
+    display: "inline-flex",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.1)",
+    color: "#cbd5e1",
+    fontWeight: 950,
   },
   revealedWinnerName: {
-    margin: "8px 0 0",
+    margin: 0,
     color: "#ffffff",
     fontSize: "clamp(28px, 5vw, 44px)",
     fontWeight: 950,
     lineHeight: 1.05,
   },
   revealedWinnerMeta: {
-    margin: "8px 0 0",
+    margin: "5px 0 0",
     color: "#d1d5db",
     fontSize: 16,
     fontWeight: 800,
   },
-  overlaySubtext: {
-    margin: "0 auto",
-    color: "#d1d5db",
-    fontSize: 16,
-    fontWeight: 800,
+  overlayError: {
+    margin: "14px auto 0",
+    color: "#fecaca",
+    maxWidth: 520,
+    fontWeight: 900,
   },
   overlaySecondaryButton: {
-    marginTop: 28,
+    marginTop: 24,
     border: "1px solid rgba(255,255,255,0.3)",
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
