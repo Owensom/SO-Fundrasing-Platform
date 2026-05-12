@@ -5,6 +5,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const DEFAULT_TICKET_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/so-ticket-placeholder.png";
 
+const WINNER_TROPHY_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/icons/winner-trophy-gold.png";
+
 type EmailBranding = {
   name?: string | null;
   logoUrl?: string | null;
@@ -123,6 +126,37 @@ function renderTicketHero(label = "SO Fundraising Ticket") {
   `;
 }
 
+function renderWinnerTrophyHero(label = "Winner trophy") {
+  return `
+    <div style="
+      margin:0 auto 26px;
+      max-width:300px;
+      border-radius:28px;
+      background:linear-gradient(135deg,#0f172a 0%,#111827 48%,#312e81 100%);
+      border:1px solid rgba(250,204,21,0.42);
+      box-shadow:0 20px 46px rgba(15,23,42,0.18);
+      padding:20px;
+      text-align:center;
+    ">
+      <img
+        src="${WINNER_TROPHY_IMAGE_URL}"
+        alt="${escapeHtml(label)}"
+        width="220"
+        style="
+          display:block;
+          width:100%;
+          max-width:220px;
+          height:auto;
+          margin:0 auto;
+          border:0;
+          outline:none;
+          text-decoration:none;
+        "
+      />
+    </div>
+  `;
+}
+
 function renderEmailShell(params: {
   branding?: EmailBranding;
   heading: string;
@@ -131,7 +165,9 @@ function renderEmailShell(params: {
   body: string;
   footer?: string;
   ticketImageLabel?: string;
+  winnerTrophyLabel?: string;
   showTicketImage?: boolean;
+  showWinnerTrophy?: boolean;
 }) {
   const brand = getBranding(params.branding);
   const showTicketImage = params.showTicketImage !== false;
@@ -171,7 +207,13 @@ function renderEmailShell(params: {
                 />
               </div>
 
-              ${showTicketImage ? renderTicketHero(params.ticketImageLabel) : ""}
+              ${
+                params.showWinnerTrophy
+                  ? renderWinnerTrophyHero(params.winnerTrophyLabel)
+                  : showTicketImage
+                    ? renderTicketHero(params.ticketImageLabel)
+                    : ""
+              }
 
               ${
                 params.eyebrow
@@ -377,6 +419,7 @@ export async function sendReceiptEmail({
     console.error("receipt email failed", err);
   }
 }
+
 export async function sendWinnerEmail({
   to,
   name,
@@ -398,7 +441,9 @@ export async function sendWinnerEmail({
     branding,
     eyebrow: "Winner notification",
     heading: "You won!",
-    ticketImageLabel: "Winning raffle ticket",
+    showWinnerTrophy: true,
+    showTicketImage: false,
+    winnerTrophyLabel: "Winning raffle trophy",
     intro: `Hi ${name || "there"}, congratulations — your ticket has been selected as a winner.`,
     body: `
       <div style="
@@ -557,7 +602,9 @@ export async function sendSquaresWinnerEmail({
     branding,
     eyebrow: "Winner notification",
     heading: "You won!",
-    ticketImageLabel: "Winning squares entry",
+    showWinnerTrophy: true,
+    showTicketImage: false,
+    winnerTrophyLabel: "Winning squares trophy",
     intro: `Hi ${name || "there"}, congratulations — your square has been selected as a winner.`,
     body: `
       <div style="
@@ -729,6 +776,7 @@ export async function sendEventReceiptEmail({
     console.error("event receipt email failed", err);
   }
 }
+
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
@@ -890,7 +938,9 @@ export async function sendAuctionWinnerEmail({
     branding,
     eyebrow: "Auction winner",
     heading: "You are the winning bidder",
-    ticketImageLabel: "Winning auction notification",
+    showWinnerTrophy: true,
+    showTicketImage: false,
+    winnerTrophyLabel: "Winning auction trophy",
     intro: `Hi ${name || "there"}, congratulations — you placed the winning bid in the silent auction.`,
     body: `
       <div style="
