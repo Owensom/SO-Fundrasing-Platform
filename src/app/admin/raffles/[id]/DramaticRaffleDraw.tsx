@@ -34,9 +34,9 @@ type ConfettiPiece = {
 const DRAW_DURATION_MS = 3600;
 
 const SOUND_PATHS = {
-  roll: "/sounds/draw-roll.wav",
-  riser: "/sounds/draw-riser.wav",
-  winner: "/sounds/draw-winner.wav",
+  roll: "/brand/draw-roll.wav",
+  riser: "/brand/draw-riser.mp3",
+  winner: "/brand/draw-winner.mp3",
 };
 
 function getTicketNumber(item: SoldTicketOption) {
