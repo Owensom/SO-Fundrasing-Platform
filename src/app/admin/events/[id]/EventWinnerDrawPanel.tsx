@@ -263,13 +263,8 @@ export default function EventWinnerDrawPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
- const finishTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(
-  null,
-);
-const reloadTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(
-  null,
-);
-
+ const finishTimeoutRef = useRef<number | null>(null);
+const reloadTimeoutRef = useRef<number | null>(null);
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
   const riserAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
