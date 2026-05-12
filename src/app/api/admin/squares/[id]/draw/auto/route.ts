@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendWinnerEmail } from "@/lib/email";
+import { sendSquaresWinnerEmail } from "@/lib/email";
 import {
   createSquaresWinner,
   getSquaresGameById,
@@ -41,6 +41,17 @@ function cleanName(value: string | null | undefined) {
   return String(value || "").trim() || "Supporter";
 }
 
+function ordinal(value: number) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return "st";
+  if (mod10 === 2 && mod100 !== 12) return "nd";
+  if (mod10 === 3 && mod100 !== 13) return "rd";
+
+  return "th";
+}
+
 function getAutoDrawFrom(config: any) {
   return parseRangeValue(
     config?.auto_draw_from_prize ??
@@ -61,6 +72,19 @@ function getAutoDrawTo(config: any, prizeCount: number) {
   );
 }
 
+function getPrizeTitle(prize: any, prizeNumber: number) {
+  return (
+    String(
+      prize?.title ||
+        prize?.name ||
+        prize?.prizeTitle ||
+        prize?.prize_title ||
+        prize?.label ||
+        "",
+    ).trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`
+  );
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const id = context.params.id;
 
@@ -71,15 +95,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { ok: false, error: "Squares game not found" },
         { status: 404 },
-      );
-    }
-
-    const existingWinners = await listSquaresWinners(game.id);
-
-    if (existingWinners.length > 0) {
-      return NextResponse.redirect(
-        new URL(`/admin/squares/${game.id}`, request.url),
-        { status: 303 },
       );
     }
 
@@ -99,22 +114,35 @@ export async function POST(request: NextRequest, context: RouteContext) {
       Math.min(getAutoDrawTo(config, prizes.length), prizes.length),
     );
 
+    const existingWinners = await listSquaresWinners(game.id);
+    const alreadyDrawnPrizeNumbers = new Set(
+      existingWinners
+        .map((winner) => Number(winner.prize_index))
+        .filter((value) => Number.isFinite(value) && value > 0),
+    );
+    const alreadyWinningSquares = new Set(
+      existingWinners
+        .map((winner) => Number(winner.square_number))
+        .filter((value) => Number.isFinite(value) && value > 0),
+    );
+
     const prizesToDraw = prizes
       .map((prize: any, index: number) => ({
         prize,
-        prizeIndex: index,
-        prizeNumber: index + 1,
+        prizeNumber: Number(prize?.position ?? prize?.prize_index ?? index + 1),
       }))
       .filter(
         (item) =>
-          item.prizeNumber >= autoDrawFrom && item.prizeNumber <= autoDrawTo,
+          item.prizeNumber >= autoDrawFrom &&
+          item.prizeNumber <= autoDrawTo &&
+          !alreadyDrawnPrizeNumbers.has(item.prizeNumber),
       );
 
     if (prizesToDraw.length === 0) {
       return NextResponse.json(
         {
           ok: false,
-          error: `No prizes found within auto draw range ${autoDrawFrom}-${autoDrawTo}`,
+          error: `No undrawn prizes found within auto draw range ${autoDrawFrom}-${autoDrawTo}`,
         },
         { status: 400 },
       );
@@ -136,33 +164,42 @@ export async function POST(request: NextRequest, context: RouteContext) {
       (entry) =>
         Number.isInteger(entry.squareNumber) &&
         entry.squareNumber >= 1 &&
-        entry.squareNumber <= Number(game.total_squares || 0),
+        entry.squareNumber <= Number(game.total_squares || 0) &&
+        !alreadyWinningSquares.has(entry.squareNumber),
     );
 
     if (validSoldEntries.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "No sold squares to draw from" },
+        { ok: false, error: "No eligible sold squares to draw from" },
         { status: 400 },
       );
     }
 
     const shuffledSquares = shuffle(validSoldEntries);
+    const usedSquaresThisRun = new Set<number>();
 
     for (let index = 0; index < prizesToDraw.length; index += 1) {
-      const entry = shuffledSquares[index % shuffledSquares.length];
       const prizeItem = prizesToDraw[index];
 
-      const prizeTitle =
-        String(prizeItem.prize?.title ?? prizeItem.prize?.name ?? "").trim() ||
-        `Prize ${prizeItem.prizeNumber}`;
+      const entry =
+        shuffledSquares.find(
+          (candidate) => !usedSquaresThisRun.has(candidate.squareNumber),
+        ) || shuffledSquares[index % shuffledSquares.length];
 
+      if (!entry) {
+        break;
+      }
+
+      usedSquaresThisRun.add(entry.squareNumber);
+
+      const prizeTitle = getPrizeTitle(prizeItem.prize, prizeItem.prizeNumber);
       const winnerName = cleanName(entry.customerName);
       const winnerEmail = cleanEmail(entry.customerEmail);
 
       await createSquaresWinner({
         tenant_slug: game.tenant_slug,
         game_id: game.id,
-        prize_index: prizeItem.prizeIndex,
+        prize_index: prizeItem.prizeNumber,
         prize_title: prizeTitle,
         square_number: entry.squareNumber,
         customer_name: winnerName,
@@ -180,12 +217,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
 
       try {
-        await sendWinnerEmail({
+        await sendSquaresWinnerEmail({
           to: winnerEmail,
           name: winnerName,
-          raffleTitle: game.title,
-          ticketNumber: entry.squareNumber,
-          colour: `Square ${entry.squareNumber} — ${prizeTitle}`,
+          gameTitle: game.title,
+          squareNumber: entry.squareNumber,
+          prizeTitle,
         });
 
         console.log("Squares auto draw winner email sent", {
