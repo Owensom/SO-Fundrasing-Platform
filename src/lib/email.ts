@@ -333,7 +333,6 @@ async function sendEmail(params: {
     id: result.data?.id,
   });
 }
-
 export async function sendReceiptEmail({
   to,
   name,
@@ -532,6 +531,7 @@ export async function sendWinnerEmail({
     console.error("winner email failed", err);
   }
 }
+
 export async function sendSquaresReceiptEmail({
   to,
   name,
@@ -631,14 +631,16 @@ export async function sendSquaresWinnerEmail({
   prizeTitle: string;
   branding?: EmailBranding;
 }) {
+  const safePrizeTitle = String(prizeTitle || "").trim() || "Prize";
+
   const html = renderEmailShell({
     branding,
-    eyebrow: "Winner notification",
+    eyebrow: "Squares winner",
     heading: "You won!",
     showWinnerTrophy: true,
     showTicketImage: false,
     winnerTrophyLabel: "Winning squares trophy",
-    intro: `Hi ${name || "there"}, congratulations — your square has been selected as a winner.`,
+    intro: `Hi ${name || "there"}, congratulations — you have won ${safePrizeTitle}.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
@@ -664,8 +666,8 @@ export async function sendSquaresWinnerEmail({
           margin-top:12px;
         ">
           <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
-            <strong>Prize:</strong>
-            ${escapeHtml(prizeTitle)}
+            <strong>Prize won:</strong>
+            ${escapeHtml(safePrizeTitle)}
           </p>
 
           <p style="margin:0;font-size:17px;color:#0f172a;">
@@ -684,7 +686,7 @@ export async function sendSquaresWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: `You won ${gameTitle}!`,
+      subject: `You won ${safePrizeTitle}`,
       html,
       branding,
     });
@@ -692,7 +694,6 @@ export async function sendSquaresWinnerEmail({
     console.error("squares winner email failed", err);
   }
 }
-
 export async function sendEventReceiptEmail({
   to,
   name,
@@ -879,6 +880,7 @@ export async function sendEventWinnerEmail({
     console.error("event winner email failed", err);
   }
 }
+
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
