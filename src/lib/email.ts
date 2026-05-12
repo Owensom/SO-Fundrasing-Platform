@@ -1039,7 +1039,7 @@ export async function sendAuctionWinnerEmail({
         background:#ecfdf5;
       ">
         ${renderInfoRow("Auction", auctionTitle)}
-        ${renderInfoRow("Winning item", itemTitle)}
+        ${renderInfoRow("Prize won", itemTitle)}
         ${renderInfoRow("Winning bid", winningAmount)}
       </div>
 
