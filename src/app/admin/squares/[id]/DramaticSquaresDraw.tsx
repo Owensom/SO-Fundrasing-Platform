@@ -20,6 +20,13 @@ type SoldSquareOption = {
 type PrizeOption = {
   position?: number;
   title?: string;
+  description?: string;
+  name?: string;
+  prizeName?: string;
+  prize_name?: string;
+  prizeTitle?: string;
+  prize_title?: string;
+  label?: string;
 };
 
 type DramaticSquaresDrawProps = {
@@ -95,11 +102,30 @@ function ordinal(value: number) {
 
 function getPrizeTitle(prizes: PrizeOption[], prizeNumber: number) {
   const matchingPrize = prizes.find(
-    (prize, index) => Number(prize.position ?? index + 1) === prizeNumber,
+    (prize, index) =>
+      Number(prize.position ?? index + 1) === prizeNumber,
   );
 
+  const actualPrizeName = String(
+    matchingPrize?.description ||
+      matchingPrize?.name ||
+      matchingPrize?.prizeName ||
+      matchingPrize?.prize_name ||
+      matchingPrize?.prizeTitle ||
+      matchingPrize?.prize_title ||
+      matchingPrize?.label ||
+      "",
+  ).trim();
+
+  const positionLabel = String(matchingPrize?.title || "").trim();
+
+  if (actualPrizeName && positionLabel) {
+    return `${positionLabel} — ${actualPrizeName}`;
+  }
+
   return (
-    String(matchingPrize?.title || "").trim() ||
+    actualPrizeName ||
+    positionLabel ||
     `${prizeNumber}${ordinal(prizeNumber)} Prize`
   );
 }
@@ -215,7 +241,6 @@ function playWinnerFallback(audioCtx: AudioContext) {
   impact.start(now);
   impact.stop(now + 0.95);
 }
-
 function makeConfetti(): ConfettiPiece[] {
   return Array.from({ length: 150 }).map((_, index) => ({
     id: index,
@@ -247,15 +272,19 @@ export default function DramaticSquaresDraw({
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundMode, setSoundMode] = useState<SoundMode>("roll");
-  const [localDrawnPrizeNumbers, setLocalDrawnPrizeNumbers] = useState<number[]>(
-    () => uniqueNumbers(drawnPrizeNumbers),
-  );
+
+  const [localDrawnPrizeNumbers, setLocalDrawnPrizeNumbers] =
+    useState<number[]>(() => uniqueNumbers(drawnPrizeNumbers));
+
   const [localDrawnSquareNumbers, setLocalDrawnSquareNumbers] =
     useState<number[]>(() => uniqueNumbers(drawnSquareNumbers));
+
   const [recentDraws, setRecentDraws] = useState<RecentDraw[]>([]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const finishTimeoutRef = useRef<number | null>(null);
 
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -299,6 +328,7 @@ export default function DramaticSquaresDraw({
 
   const currentPrizeTitle = useMemo(() => {
     const parsed = Number(prizeNumber || nextPrizeNumber);
+
     return getPrizeTitle(prizes, parsed);
   }, [prizes, prizeNumber, nextPrizeNumber]);
 
@@ -309,6 +339,7 @@ export default function DramaticSquaresDraw({
 
   const selectedPrizeAlreadyDrawn = useMemo(() => {
     const parsed = Number(prizeNumber);
+
     return (
       Number.isFinite(parsed) &&
       parsed > 0 &&
@@ -317,7 +348,9 @@ export default function DramaticSquaresDraw({
   }, [localDrawnPrizeNumbers, prizeNumber]);
 
   function getAudioContext() {
-    if (typeof window === "undefined" || !soundEnabled) return null;
+    if (typeof window === "undefined" || !soundEnabled) {
+      return null;
+    }
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = createAudioContext();
@@ -427,12 +460,14 @@ export default function DramaticSquaresDraw({
     setDisplaySquare(null);
     setConfetti([]);
     setPrizeNumber(String(nextPrizeNumber));
+
     getAudioElements();
   }
 
   function closeDraw() {
     clearAllTimers();
     stopRealAudio();
+
     setIsOpen(false);
     setDrawing(false);
     setSaving(false);
@@ -497,12 +532,16 @@ export default function DramaticSquaresDraw({
       ) || null;
 
     try {
-      await saveDrawBeforeAnimation(parsedPrizeNumber, winningSquareNumber);
+      await saveDrawBeforeAnimation(
+        parsedPrizeNumber,
+        winningSquareNumber,
+      );
     } catch (err) {
       setSaving(false);
       setDrawing(false);
 
-      const message = err instanceof Error ? err.message : "Draw failed";
+      const message =
+        err instanceof Error ? err.message : "Draw failed";
 
       setError(message);
 
@@ -510,6 +549,7 @@ export default function DramaticSquaresDraw({
         setLocalDrawnPrizeNumbers((current) =>
           uniqueNumbers([...current, parsedPrizeNumber]),
         );
+
         setPrizeNumber(String(nextPrizeNumber));
       }
 
@@ -520,8 +560,12 @@ export default function DramaticSquaresDraw({
     setDrawing(true);
 
     const audioCtx = await unlockAudio();
-    const selectedSound = soundMode === "roll" ? "roll" : "riser";
-    const introStarted = await playRealSound(selectedSound);
+
+    const selectedSound =
+      soundMode === "roll" ? "roll" : "riser";
+
+    const introStarted =
+      await playRealSound(selectedSound);
 
     if (!introStarted && audioCtx) {
       if (soundMode === "riser") {
@@ -536,7 +580,9 @@ export default function DramaticSquaresDraw({
 
     timerRef.current = setInterval(() => {
       const randomSquare =
-        soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
+        soldNumbers[
+          Math.floor(Math.random() * soldNumbers.length)
+        ];
 
       setDisplaySquare(randomSquare);
 
@@ -560,7 +606,9 @@ export default function DramaticSquaresDraw({
 
         timerRef.current = setInterval(() => {
           const randomSquare =
-            soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
+            soldNumbers[
+              Math.floor(Math.random() * soldNumbers.length)
+            ];
 
           setDisplaySquare(randomSquare);
 
@@ -572,8 +620,7 @@ export default function DramaticSquaresDraw({
         }, intervalMs);
       }
     }, intervalMs);
-
-    finishTimeoutRef.current = window.setTimeout(async () => {
+        finishTimeoutRef.current = window.setTimeout(async () => {
       clearAllTimers();
 
       setDisplaySquare(winningSquareNumber);
@@ -585,6 +632,7 @@ export default function DramaticSquaresDraw({
       setLocalDrawnPrizeNumbers((current) =>
         uniqueNumbers([...current, parsedPrizeNumber]),
       );
+
       setLocalDrawnSquareNumbers((current) =>
         uniqueNumbers([...current, winningSquareNumber]),
       );
@@ -602,9 +650,9 @@ export default function DramaticSquaresDraw({
 
       setPrizeNumber(String(parsedPrizeNumber + 1));
 
-     stopRealAudio();
+      stopRealAudio();
 
-const winnerStarted = await playRealSound("winner");
+      const winnerStarted = await playRealSound("winner");
 
       if (!winnerStarted && audioCtx) {
         playWinnerFallback(audioCtx);
@@ -915,7 +963,10 @@ const winnerStarted = await playRealSound("winner");
               type="button"
               onClick={startDraw}
               disabled={
-                drawing || saving || !soldNumbers.length || selectedPrizeAlreadyDrawn
+                drawing ||
+                saving ||
+                !soldNumbers.length ||
+                selectedPrizeAlreadyDrawn
               }
               style={{
                 ...styles.startButton,
