@@ -442,10 +442,19 @@ export async function sendWinnerEmail({
   to,
   name,
   raffleTitle,
+  prizeTitle,
   ticketNumber,
   colour,
   branding,
 }: {
+  to: string;
+  name?: string | null;
+  raffleTitle: string;
+  prizeTitle?: string | null;
+  ticketNumber: number;
+  colour?: string | null;
+  branding?: EmailBranding;
+}) {
   to: string;
   name?: string | null;
   raffleTitle: string;
@@ -563,21 +572,23 @@ export async function sendSquaresReceiptEmail({
     ticketImageLabel: "Squares entry confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
     body: `
-      <div style="
-        border:1px solid #e2e8f0;
-        border-radius:18px;
-        padding:18px;
-        margin:20px 0;
-        background:#f8fafc;
-      ">
-        ${renderInfoRow("Game", gameTitle)}
-        ${renderInfoRow("Amount paid", formattedAmount)}
+     <div style="
+  border-radius:16px;
+  background:#ffffff;
+  border:1px solid #bbf7d0;
+  padding:16px;
+  margin-top:12px;
+">
+  <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
+    <strong>Winning ticket:</strong>
+    #${escapeHtml(ticketNumber)}
+  </p>
 
-        <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
-          <strong style="color:#0f172a;">Reference:</strong>
-          ${escapeHtml(reservationToken)}
-        </p>
-      </div>
+  <p style="margin:0;font-size:17px;color:#0f172a;">
+    <strong>Colour:</strong>
+    ${colourDot(colour)}${escapeHtml(safeColour)}
+  </p>
+</div>
 
       <h2 style="font-size:20px;margin:24px 0 12px;color:#0f172a;">
         Your squares
