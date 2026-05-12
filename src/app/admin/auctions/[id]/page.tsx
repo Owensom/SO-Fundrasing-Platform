@@ -108,19 +108,6 @@ function defaultAuctionImageStyle(padding = 22): CSSProperties {
   };
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "Not set";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "Not set";
-
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
 function toDateTimeLocalValue(value: string | null | undefined) {
   if (!value) return "";
 
@@ -453,70 +440,96 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
   return (
     <main style={styles.page}>
-      <section style={styles.topBar}>
-        <Link href="/admin/auctions" style={styles.backLink}>
-          ← Back to auctions
-        </Link>
-
-        <div style={styles.topActions}>
-          <a
-            href={`/a/${auction.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            style={styles.navButton}
-          >
-            View public page
-          </a>
-
-          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
-            Campaigns page
-          </Link>
-        </div>
-      </section>
-
       <section style={styles.hero}>
-        <div style={styles.heroText}>
+        <div style={styles.heroCopy}>
           <div style={styles.badge}>Auction editor</div>
 
           <h1 className="so-brand-heading" style={styles.title}>
             {auction.title || "Untitled auction"}
           </h1>
 
-          <p style={styles.subtitle}>/a/{auction.slug}</p>
+          <div style={styles.metaRow}>
+            <span
+              style={{
+                ...styles.statusPill,
+                ...getStatusStyle(auction.status),
+              }}
+            >
+              {auction.status}
+            </span>
+
+            <span style={styles.currencyPill}>{auction.currency || "GBP"}</span>
+          </div>
+
+          <p style={styles.subtitle}>Public page: /a/{auction.slug}</p>
 
           <p style={styles.description}>
             {auction.description || "No description added yet."}
           </p>
         </div>
 
-        <span
-          style={{
-            ...styles.heroStatus,
-            ...getStatusStyle(auction.status),
-          }}
-        >
-          {auction.status}
-        </span>
+        <div style={styles.heroRight}>
+          <div style={styles.heroActions}>
+            <Link href="/admin/auctions" style={styles.heroButtonDark}>
+              Back to auctions
+            </Link>
 
-        <div style={styles.heroImageWrap}>
-          {auction.image_url ? (
-            <img
-              src={auction.image_url}
-              alt={auction.title}
-              style={focusedImageStyle(
-                auction.image_focus_x,
-                auction.image_focus_y,
-              )}
-            />
-          ) : (
-            <img
-              src={DEFAULT_AUCTION_IMAGE}
-              alt="SO Auctions"
-              style={defaultAuctionImageStyle(34)}
-            />
-          )}
+            <a
+              href={`/a/${auction.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              style={styles.heroButtonLight}
+            >
+              View public page
+            </a>
+
+            <Link
+              href={`/c/${tenantSlug}`}
+              target="_blank"
+              style={styles.heroButtonLight}
+            >
+              Campaigns page
+            </Link>
+          </div>
+
+          <div style={styles.heroImageWrap}>
+            {auction.image_url ? (
+              <img
+                src={auction.image_url}
+                alt={auction.title}
+                style={focusedImageStyle(
+                  auction.image_focus_x,
+                  auction.image_focus_y,
+                )}
+              />
+            ) : (
+              <img
+                src={DEFAULT_AUCTION_IMAGE}
+                alt="SO Auctions"
+                style={defaultAuctionImageStyle(28)}
+              />
+            )}
+          </div>
         </div>
       </section>
+
+      <nav style={styles.tabBar} aria-label="Auction admin sections">
+        <a href="#auction-overview" style={styles.tabButton}>
+          Overview
+        </a>
+        <a href="#winner-tools" style={styles.tabButton}>
+          Winner Tools
+        </a>
+        <a href="#auction-settings" style={styles.tabButton}>
+          Settings
+        </a>
+        <a href="#items" style={styles.tabButton}>
+          Auction Items
+        </a>
+        <a href="#danger-zone" style={styles.dangerTabButton}>
+          Danger Zone
+        </a>
+      </nav>
 
       <CollapsibleSection
         id="auction-overview"
@@ -1057,7 +1070,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                           label="Item image"
                           previewAlt={item.title}
                         />
-                      </div>
+                                              </div>
 
                       <label style={styles.label}>
                         Description
@@ -1142,6 +1155,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         <div style={styles.dangerPanel}>
           <div>
             <h3 style={styles.dangerTitle}>Delete after close</h3>
+
             <p style={styles.sectionText}>
               Close the auction first. Once closed, you can permanently remove
               the auction from the admin dashboard.
@@ -1151,6 +1165,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           {auction.status === "closed" ? (
             <form action={deleteClosedAuctionAction}>
               <input type="hidden" name="auction_id" value={auction.id} />
+
               <button type="submit" style={styles.deleteAuctionButton}>
                 Delete closed auction
               </button>
@@ -1191,7 +1206,9 @@ function CollapsibleSection({
             {title}
           </h2>
 
-          {description ? <p style={styles.sectionText}>{description}</p> : null}
+          {description ? (
+            <p style={styles.sectionText}>{description}</p>
+          ) : null}
         </div>
 
         <span style={styles.collapsibleToggle}>Open / close</span>
@@ -1202,7 +1219,13 @@ function CollapsibleSection({
   );
 }
 
-function StatCard({ label, value }: { label: string; value: ReactNode }) {
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statLabel}>{label}</div>
@@ -1211,7 +1234,13 @@ function StatCard({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: ReactNode }) {
+function Detail({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -1224,67 +1253,69 @@ const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
     margin: "0 auto",
-    padding: "28px 16px 56px",
+    padding: "26px 16px 64px",
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.13), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 34%), #f8fafc",
     minHeight: "100vh",
   },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
+
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 300px",
+    gap: 28,
     alignItems: "center",
+    padding: 28,
+    borderRadius: 30,
+    background:
+      "linear-gradient(135deg, #020617 0%, #081028 45%, #0f172a 100%)",
+    color: "#ffffff",
     marginBottom: 16,
+    boxShadow: "0 24px 64px rgba(15,23,42,0.20)",
   },
-  topActions: {
+
+  heroCopy: {
+    minWidth: 0,
+  },
+
+  heroRight: {
+    display: "grid",
+    gap: 18,
+    justifyItems: "end",
+  },
+
+  heroActions: {
     display: "flex",
-    justifyContent: "flex-end",
     gap: 10,
     flexWrap: "wrap",
+    justifyContent: "flex-end",
   },
-  backLink: {
-    color: "#334155",
+
+  heroButtonDark: {
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.16)",
     textDecoration: "none",
-    fontWeight: 950,
-    fontSize: 16,
+    fontWeight: 900,
+    backdropFilter: "blur(10px)",
   },
-  navButton: {
-    padding: "11px 15px",
+
+  heroButtonLight: {
+    padding: "12px 16px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
-    border: "1px solid #cbd5e1",
+    border: "1px solid rgba(255,255,255,0.18)",
     textDecoration: "none",
     fontWeight: 900,
-    boxShadow: "0 1px 4px rgba(15,23,42,0.04)",
   },
-  hero: {
-    position: "relative",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 290px",
-    gap: 24,
-    alignItems: "center",
-    minHeight: 350,
-    padding: 28,
-    borderRadius: 26,
-    overflow: "hidden",
-    marginBottom: 18,
-    background:
-      "linear-gradient(135deg, #020617 0%, #0f172a 50%, #111827 100%)",
-    color: "#ffffff",
-    boxShadow: "0 20px 52px rgba(15,23,42,0.18)",
-  },
-  heroText: {
-    minWidth: 0,
-    position: "relative",
-    zIndex: 2,
-  },
+
   badge: {
     display: "inline-flex",
     padding: "7px 11px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.10)",
     color: "#e2e8f0",
     border: "1px solid rgba(255,255,255,0.14)",
     fontSize: 12,
@@ -1293,86 +1324,148 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   title: {
     margin: 0,
-    fontSize: "clamp(32px, 6vw, 52px)",
-    lineHeight: 1,
-    letterSpacing: "-0.055em",
+    fontSize: "clamp(36px, 5vw, 54px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.06em",
   },
-  subtitle: {
-    margin: "10px 0 0",
-    color: "#cbd5e1",
-    fontSize: 15,
-    lineHeight: 1.5,
-    fontWeight: 850,
+
+  metaRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginTop: 16,
   },
-  description: {
-    margin: "16px 0 0",
-    color: "#94a3b8",
-    fontSize: 16,
-    lineHeight: 1.65,
-    maxWidth: 680,
-  },
-  heroStatus: {
-    position: "absolute",
-    right: 300,
-    top: "50%",
-    transform: "translateY(-50%)",
-    zIndex: 3,
+
+  statusPill: {
     display: "inline-flex",
-    padding: "9px 14px",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 12px",
     borderRadius: 999,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     textTransform: "capitalize",
-    whiteSpace: "nowrap",
   },
+
+  currencyPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  subtitle: {
+    margin: "14px 0 0",
+    color: "#cbd5e1",
+    fontWeight: 850,
+    fontSize: 15,
+  },
+
+  description: {
+    margin: "18px 0 0",
+    color: "#94a3b8",
+    fontSize: 16,
+    lineHeight: 1.7,
+    maxWidth: 720,
+  },
+
   heroImageWrap: {
-    position: "relative",
-    zIndex: 2,
     width: "100%",
-    height: 230,
-    borderRadius: 18,
+    maxWidth: 240,
+    aspectRatio: "1 / 1",
+    borderRadius: 22,
     overflow: "hidden",
-    background: "#e2e8f0",
-    border: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "0 16px 36px rgba(2,6,23,0.28)",
+    background: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.16)",
+    boxShadow: "0 16px 42px rgba(2,6,23,0.34)",
   },
+
+  tabBar: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #dbe4ee",
+    marginBottom: 20,
+  },
+
+  tabButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    border: "1px solid #dbe4ee",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 850,
+    fontSize: 14,
+  },
+
+  dangerTabButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+
   form: {
     display: "grid",
     gap: 18,
   },
+
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 14,
   },
+
   statCard: {
     padding: 18,
-    borderRadius: 20,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
+
   statLabel: {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 900,
   },
+
   statValue: {
     marginTop: 6,
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 950,
     color: "#0f172a",
+    letterSpacing: "-0.03em",
   },
+
   card: {
     padding: 24,
-    borderRadius: 28,
+    borderRadius: 30,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     marginBottom: 18,
     boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
   },
+
   collapsibleSummary: {
     display: "flex",
     justifyContent: "space-between",
@@ -1381,9 +1474,11 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     listStyle: "none",
   },
+
   collapsibleHeading: {
     minWidth: 0,
   },
+
   collapsibleToggle: {
     flexShrink: 0,
     padding: "8px 12px",
@@ -1396,9 +1491,11 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
+
   collapsibleBody: {
     marginTop: 18,
   },
+
   sectionHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1406,6 +1503,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 18,
   },
+
   kicker: {
     margin: "0 0 7px",
     color: "#b45309",
@@ -1414,28 +1512,33 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     fontWeight: 950,
   },
+
   sectionTitle: {
     margin: 0,
     fontSize: 26,
     color: "#0f172a",
     letterSpacing: "-0.035em",
   },
+
   innerTitle: {
     margin: 0,
     fontSize: 21,
     color: "#0f172a",
     letterSpacing: "-0.025em",
   },
+
   sectionText: {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.55,
   },
+
   subTitle: {
     margin: 0,
     fontSize: 20,
     color: "#0f172a",
   },
+
   status: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -1445,11 +1548,13 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "capitalize",
     whiteSpace: "nowrap",
   },
+
   winnerGrid: {
     display: "grid",
     gap: 10,
     marginTop: 16,
   },
+
   winnerRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -1460,22 +1565,26 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
+
   winnerTitle: {
     color: "#0f172a",
     fontWeight: 950,
   },
+
   winnerMeta: {
     marginTop: 4,
     color: "#64748b",
     fontWeight: 750,
     fontSize: 13,
   },
+
   winnerAmount: {
     color: "#0f172a",
     fontWeight: 950,
     textAlign: "right",
     whiteSpace: "nowrap",
   },
+
   reserveWarning: {
     display: "block",
     marginTop: 5,
@@ -1483,11 +1592,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   closeForm: {
     marginTop: 18,
     display: "flex",
     justifyContent: "flex-end",
   },
+
   closeButton: {
     padding: "13px 18px",
     borderRadius: 999,
@@ -1497,11 +1608,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     boxShadow: "0 10px 20px rgba(15,23,42,0.18)",
   },
+
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
     gap: 14,
   },
+
   label: {
     display: "grid",
     gap: 7,
@@ -1509,6 +1622,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontWeight: 900,
   },
+
   input: {
     width: "100%",
     boxSizing: "border-box",
@@ -1519,6 +1633,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#0f172a",
   },
+
   textarea: {
     width: "100%",
     boxSizing: "border-box",
@@ -1531,6 +1646,7 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     fontFamily: "inherit",
   },
+
   imageFocusPanel: {
     marginTop: 18,
     padding: 18,
@@ -1538,6 +1654,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
+
   uploadBox: {
     marginTop: 14,
     padding: 14,
@@ -1545,11 +1662,13 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
+
   actionsRight: {
     display: "flex",
     justifyContent: "flex-end",
     marginTop: 18,
   },
+
   saveButton: {
     padding: "12px 18px",
     borderRadius: 999,
@@ -1559,237 +1678,5 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-  createDetails: {
-    borderRadius: 22,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    marginBottom: 18,
-    overflow: "hidden",
-  },
-  createSummary: {
-    listStyle: "none",
-    cursor: "pointer",
-    padding: 18,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "center",
-    color: "#0f172a",
-  },
-  summarySmall: {
-    display: "block",
-    marginTop: 4,
-    color: "#64748b",
-    fontWeight: 750,
-  },
-  summaryChevron: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#475569",
-    fontWeight: 950,
-    flexShrink: 0,
-  },
-  itemCreateCard: {
-    padding: "0 18px 18px",
-    background: "#f8fafc",
-  },
-  itemsList: {
-    display: "grid",
-    gap: 14,
-  },
-  itemDetails: {
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  itemSummary: {
-    listStyle: "none",
-    cursor: "pointer",
-    padding: 16,
-    display: "grid",
-    gridTemplateColumns: "110px minmax(0, 1fr) 38px",
-    gap: 16,
-    alignItems: "center",
-  },
-  summaryImageWrap: {
-    width: 110,
-    height: 110,
-    borderRadius: 18,
-    overflow: "hidden",
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
-  },
-  summaryMain: {
-    minWidth: 0,
-  },
-  summaryTitleRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-  },
-  itemTitle: {
-    margin: 0,
-    fontSize: 23,
-    color: "#0f172a",
-    letterSpacing: "-0.025em",
-  },
-  itemSub: {
-    marginTop: 4,
-    color: "#64748b",
-    fontWeight: 700,
-  },
-  bidGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-    gap: 10,
-    marginTop: 14,
-  },
-  detail: {
-    padding: 12,
-    borderRadius: 14,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  detailLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-  detailValue: {
-    marginTop: 4,
-    color: "#0f172a",
-    fontWeight: 900,
-  },
-  itemExpanded: {
-    padding: "0 18px 18px",
-    borderTop: "1px solid #e2e8f0",
-    background: "#ffffff",
-  },
-  itemEditForm: {
-    marginTop: 18,
-  },
-  itemActions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    marginTop: 18,
-  },
-  deleteForm: {
-    marginTop: 10,
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  deleteButton: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#dc2626",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  bidHistory: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  bidHistoryTitle: {
-    margin: "0 0 14px",
-    fontSize: 18,
-    color: "#0f172a",
-  },
-  bidList: {
-    display: "grid",
-    gap: 10,
-  },
-  bidRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 14,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  bidName: {
-    fontWeight: 900,
-    color: "#0f172a",
-  },
-  bidEmail: {
-    marginTop: 2,
-    fontSize: 13,
-    color: "#64748b",
-  },
-  bidAmount: {
-    fontWeight: 900,
-    color: "#0f172a",
-    whiteSpace: "nowrap",
-  },
-  noBidsBox: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 800,
-  },
-  emptyState: {
-    padding: 20,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 800,
-    textAlign: "center",
-  },
-  dangerPanel: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "center",
-    flexWrap: "wrap",
-    padding: 18,
-    borderRadius: 22,
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-  },
-  dangerTitle: {
-    margin: 0,
-    color: "#991b1b",
-    fontSize: 20,
-    letterSpacing: "-0.02em",
-  },
-  deleteAuctionButton: {
-    padding: "13px 18px",
-    borderRadius: 999,
-    background: "#dc2626",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(220,38,38,0.18)",
-  },
-  disabledDangerButton: {
-    padding: "13px 18px",
-    borderRadius: 999,
-    background: "#e5e7eb",
-    color: "#64748b",
-    border: "none",
-    fontWeight: 950,
-    cursor: "not-allowed",
   },
 };
