@@ -326,7 +326,6 @@ async function deleteClosedAuctionAction(formData: FormData) {
 
   redirect("/admin/auctions");
 }
-
 async function createAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -400,12 +399,18 @@ async function deleteAuctionItemAction(formData: FormData) {
 
 export default async function AdminAuctionDetailPage({ params }: PageProps) {
   const resolvedParams = await params;
-  const { auction, tenantSlug } = await requireAuctionAccess(resolvedParams.id);
+
+  const { auction, tenantSlug } = await requireAuctionAccess(
+    resolvedParams.id,
+  );
+
   const items = await listAuctionItems(auction.id);
   const bids = await listAuctionBids(auction.id);
 
   const activeItems = items.filter((item) => item.status === "active").length;
+
   const totalBids = bids.length;
+
   const highestBid =
     bids.length > 0
       ? Math.max(...bids.map((bid) => Number(bid.amount_cents || 0)))
@@ -413,6 +418,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
   const winnerRows = items.map((item, index) => {
     const itemBids = bids.filter((bid) => bid.item_id === item.id);
+
     const topBid =
       itemBids.length > 0
         ? itemBids.reduce((highest, bid) =>
@@ -458,7 +464,9 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
               {auction.status}
             </span>
 
-            <span style={styles.currencyPill}>{auction.currency || "GBP"}</span>
+            <span style={styles.currencyPill}>
+              {auction.currency || "GBP"}
+            </span>
           </div>
 
           <p style={styles.subtitle}>Public page: /a/{auction.slug}</p>
@@ -468,48 +476,46 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </p>
         </div>
 
-        <div style={styles.heroRight}>
-          <div style={styles.heroActions}>
-            <Link href="/admin/auctions" style={styles.heroButtonDark}>
-              Back to auctions
-            </Link>
+        <div style={styles.heroImageWrap}>
+          {auction.image_url ? (
+            <img
+              src={auction.image_url}
+              alt={auction.title}
+              style={focusedImageStyle(
+                auction.image_focus_x,
+                auction.image_focus_y,
+              )}
+            />
+          ) : (
+            <img
+              src={DEFAULT_AUCTION_IMAGE}
+              alt="SO Auctions"
+              style={defaultAuctionImageStyle(24)}
+            />
+          )}
+        </div>
 
-            <a
-              href={`/a/${auction.slug}`}
-              target="_blank"
-              rel="noreferrer"
-              style={styles.heroButtonLight}
-            >
-              View public page
-            </a>
+        <div style={styles.heroActions}>
+          <Link href="/admin/auctions" style={styles.heroButtonDark}>
+            Back to auctions
+          </Link>
 
-            <Link
-              href={`/c/${tenantSlug}`}
-              target="_blank"
-              style={styles.heroButtonLight}
-            >
-              Campaigns page
-            </Link>
-          </div>
+          <a
+            href={`/a/${auction.slug}`}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.heroButtonLight}
+          >
+            View public page
+          </a>
 
-          <div style={styles.heroImageWrap}>
-            {auction.image_url ? (
-              <img
-                src={auction.image_url}
-                alt={auction.title}
-                style={focusedImageStyle(
-                  auction.image_focus_x,
-                  auction.image_focus_y,
-                )}
-              />
-            ) : (
-              <img
-                src={DEFAULT_AUCTION_IMAGE}
-                alt="SO Auctions"
-                style={defaultAuctionImageStyle(28)}
-              />
-            )}
-          </div>
+          <Link
+            href={`/c/${tenantSlug}`}
+            target="_blank"
+            style={styles.heroButtonLight}
+          >
+            Campaigns page
+          </Link>
         </div>
       </section>
 
@@ -517,15 +523,19 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         <a href="#auction-overview" style={styles.tabButton}>
           Overview
         </a>
+
         <a href="#winner-tools" style={styles.tabButton}>
           Winner Tools
         </a>
+
         <a href="#auction-settings" style={styles.tabButton}>
           Settings
         </a>
+
         <a href="#items" style={styles.tabButton}>
           Auction Items
         </a>
+
         <a href="#danger-zone" style={styles.dangerTabButton}>
           Danger Zone
         </a>
@@ -540,8 +550,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
       >
         <section style={styles.statsGrid}>
           <StatCard label="Items" value={items.length} />
+
           <StatCard label="Active items" value={activeItems} />
+
           <StatCard label="Total bids" value={totalBids} />
+
           <StatCard
             label="Highest bid"
             value={moneyFromCents(highestBid, auction.currency)}
@@ -558,9 +571,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Close and notify</p>
+
             <h3 className="so-brand-card-title" style={styles.innerTitle}>
               Winner notification centre
             </h3>
+
             <p style={styles.sectionText}>
               Lots with a reserve price are only notified if the reserve has
               been met.
@@ -587,9 +602,13 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                   <div style={styles.winnerTitle}>
                     Lot {item.sort_order || index + 1}: {item.title}
                   </div>
+
                   <div style={styles.winnerMeta}>
                     {topBid?.bidder_name || "No bidder"}
-                    {topBid?.bidder_email ? ` · ${topBid.bidder_email}` : ""}
+
+                    {topBid?.bidder_email
+                      ? ` · ${topBid.bidder_email}`
+                      : ""}
                   </div>
                 </div>
 
@@ -597,8 +616,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                   {topBid
                     ? moneyFromCents(topBid.amount_cents, auction.currency)
                     : "No bids"}
+
                   {topBid && !reserveMet ? (
-                    <span style={styles.reserveWarning}>Reserve not met</span>
+                    <span style={styles.reserveWarning}>
+                      Reserve not met
+                    </span>
                   ) : null}
                 </div>
               </div>
@@ -606,7 +628,10 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           )}
         </div>
 
-        <form action={closeAuctionAndNotifyWinnersAction} style={styles.closeForm}>
+        <form
+          action={closeAuctionAndNotifyWinnersAction}
+          style={styles.closeForm}
+        >
           <input type="hidden" name="auction_id" value={auction.id} />
 
           <button
@@ -624,8 +649,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </button>
         </form>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="auction-settings"
         eyebrow="Section 3"
         title="Auction settings"
@@ -638,6 +662,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           <div style={styles.sectionHeader}>
             <div>
               <p style={styles.kicker}>Auction controls</p>
+
               <h3 className="so-brand-card-title" style={styles.innerTitle}>
                 Campaign details
               </h3>
@@ -730,6 +755,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           <section style={styles.imageFocusPanel}>
             <div>
               <h3 style={styles.subTitle}>Main auction image</h3>
+
               <p style={styles.sectionText}>
                 Upload or replace the main public image. If no custom image is
                 uploaded, the SO Auctions default image will be used.
@@ -780,6 +806,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                 Open this section to add another lot.
               </small>
             </span>
+
             <span style={styles.summaryChevron}>⌄</span>
           </summary>
 
@@ -848,7 +875,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
               <label style={styles.label}>
                 Status
-                <select name="status" defaultValue="active" style={styles.input}>
+                <select
+                  name="status"
+                  defaultValue="active"
+                  style={styles.input}
+                >
                   <option value="active">Active</option>
                   <option value="closed">Closed</option>
                   <option value="withdrawn">Withdrawn</option>
@@ -890,6 +921,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           ) : (
             items.map((item, index) => {
               const itemBids = bids.filter((bid) => bid.item_id === item.id);
+
               const highestBidAmount =
                 itemBids.length > 0
                   ? Math.max(
@@ -929,6 +961,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                           <h3 style={styles.itemTitle}>
                             Lot {item.sort_order || index + 1}: {item.title}
                           </h3>
+
                           <div style={styles.itemSub}>
                             Donor: {item.donor_name || "Not set"}
                           </div>
@@ -952,6 +985,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                             auction.currency,
                           )}
                         />
+
                         <Detail
                           label="Highest bid"
                           value={moneyFromCents(
@@ -959,7 +993,9 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                             auction.currency,
                           )}
                         />
+
                         <Detail label="Bid count" value={itemBids.length} />
+
                         <Detail
                           label="Increment"
                           value={moneyFromCents(
@@ -1070,7 +1106,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                           label="Item image"
                           previewAlt={item.title}
                         />
-                                              </div>
+                      </div>
 
                       <label style={styles.label}>
                         Description
@@ -1219,13 +1255,7 @@ function CollapsibleSection({
   );
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statLabel}>{label}</div>
@@ -1234,13 +1264,7 @@ function StatCard({
   );
 }
 
-function Detail({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -1261,92 +1285,88 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 300px",
-    gap: 28,
+    gridTemplateColumns: "minmax(0, 1fr) 160px 130px",
+    gap: 24,
     alignItems: "center",
-    padding: 28,
-    borderRadius: 30,
+    padding: 18,
+    borderRadius: 22,
     background:
       "linear-gradient(135deg, #020617 0%, #081028 45%, #0f172a 100%)",
     color: "#ffffff",
-    marginBottom: 16,
-    boxShadow: "0 24px 64px rgba(15,23,42,0.20)",
+    marginBottom: 12,
+    minHeight: 222,
   },
 
   heroCopy: {
     minWidth: 0,
   },
 
-  heroRight: {
-    display: "grid",
-    gap: 18,
-    justifyItems: "end",
-  },
-
   heroActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
+    display: "grid",
+    gap: 8,
+    alignContent: "start",
   },
 
   heroButtonDark: {
-    padding: "12px 16px",
+    padding: "10px 14px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
     border: "1px solid rgba(255,255,255,0.16)",
     textDecoration: "none",
     fontWeight: 900,
-    backdropFilter: "blur(10px)",
+    textAlign: "center",
+    fontSize: 13,
   },
 
   heroButtonLight: {
-    padding: "12px 16px",
+    padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid rgba(255,255,255,0.18)",
     textDecoration: "none",
     fontWeight: 900,
+    textAlign: "center",
+    fontSize: 13,
   },
 
   badge: {
     display: "inline-flex",
-    padding: "7px 11px",
+    padding: "5px 9px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.12)",
     color: "#e2e8f0",
     border: "1px solid rgba(255,255,255,0.14)",
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 950,
-    marginBottom: 16,
+    marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(36px, 5vw, 54px)",
-    lineHeight: 0.95,
-    letterSpacing: "-0.06em",
+    fontSize: "clamp(26px, 4vw, 34px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
   },
 
   metaRow: {
     display: "flex",
-    gap: 8,
+    gap: 7,
     flexWrap: "wrap",
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 10,
   },
 
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "7px 12px",
+    padding: "5px 10px",
     borderRadius: 999,
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 950,
     textTransform: "capitalize",
   },
@@ -1355,73 +1375,71 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "7px 12px",
+    padding: "5px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.14)",
     color: "#ffffff",
     border: "1px solid rgba(255,255,255,0.12)",
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 950,
   },
 
   subtitle: {
-    margin: "14px 0 0",
+    margin: "9px 0 0",
     color: "#cbd5e1",
     fontWeight: 850,
-    fontSize: 15,
+    fontSize: 12,
   },
 
   description: {
-    margin: "18px 0 0",
-    color: "#94a3b8",
-    fontSize: 16,
-    lineHeight: 1.7,
-    maxWidth: 720,
+    margin: "10px 0 0",
+    color: "#93c5fd",
+    fontSize: 13,
+    lineHeight: 1.5,
+    maxWidth: 620,
   },
 
   heroImageWrap: {
-    width: "100%",
-    maxWidth: 240,
-    aspectRatio: "1 / 1",
-    borderRadius: 22,
+    width: 160,
+    height: 160,
+    borderRadius: 14,
     overflow: "hidden",
     background: "#ffffff",
     border: "1px solid rgba(255,255,255,0.16)",
-    boxShadow: "0 16px 42px rgba(2,6,23,0.34)",
   },
 
   tabBar: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     flexWrap: "wrap",
     alignItems: "center",
-    padding: 10,
-    borderRadius: 22,
+    padding: 8,
+    borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #dbe4ee",
     marginBottom: 20,
   },
 
   tabButton: {
-    padding: "10px 14px",
+    padding: "9px 13px",
     borderRadius: 999,
     background: "#f8fafc",
     border: "1px solid #dbe4ee",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 850,
-    fontSize: 14,
+    fontSize: 13,
   },
 
   dangerTabButton: {
-    padding: "10px 14px",
+    padding: "9px 13px",
     borderRadius: 999,
     background: "#fef2f2",
     border: "1px solid #fecaca",
     color: "#b91c1c",
     textDecoration: "none",
     fontWeight: 900,
-    fontSize: 14,
+    fontSize: 13,
   },
 
   form: {
@@ -1459,7 +1477,7 @@ const styles: Record<string, CSSProperties> = {
 
   card: {
     padding: 24,
-    borderRadius: 30,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     marginBottom: 18,
@@ -1678,5 +1696,272 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+
+  createDetails: {
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    marginBottom: 18,
+    overflow: "hidden",
+  },
+
+  createSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    color: "#0f172a",
+  },
+
+  summarySmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#64748b",
+    fontWeight: 750,
+  },
+
+  summaryChevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#475569",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  itemCreateCard: {
+    padding: "0 18px 18px",
+    background: "#f8fafc",
+  },
+
+  itemsList: {
+    display: "grid",
+    gap: 14,
+  },
+
+  itemDetails: {
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  itemSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: 16,
+    display: "grid",
+    gridTemplateColumns: "110px minmax(0, 1fr) 38px",
+    gap: 16,
+    alignItems: "center",
+  },
+
+  summaryImageWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+
+  summaryMain: {
+    minWidth: 0,
+  },
+
+  summaryTitleRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+  },
+
+  itemTitle: {
+    margin: 0,
+    fontSize: 23,
+    color: "#0f172a",
+    letterSpacing: "-0.025em",
+  },
+
+  itemSub: {
+    marginTop: 4,
+    color: "#64748b",
+    fontWeight: 700,
+  },
+
+  bidGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  detailLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+  },
+
+  itemExpanded: {
+    padding: "0 18px 18px",
+    borderTop: "1px solid #e2e8f0",
+    background: "#ffffff",
+  },
+
+  itemEditForm: {
+    marginTop: 18,
+  },
+
+  itemActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    marginTop: 18,
+  },
+
+  deleteForm: {
+    marginTop: 10,
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+
+  deleteButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  bidHistory: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  bidHistoryTitle: {
+    margin: "0 0 14px",
+    fontSize: 18,
+    color: "#0f172a",
+  },
+
+  bidList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  bidRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  bidName: {
+    fontWeight: 900,
+    color: "#0f172a",
+  },
+
+  bidEmail: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#64748b",
+  },
+
+  bidAmount: {
+    fontWeight: 900,
+    color: "#0f172a",
+    whiteSpace: "nowrap",
+  },
+
+  noBidsBox: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+  },
+
+  emptyState: {
+    padding: 20,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+    textAlign: "center",
+  },
+
+  dangerPanel: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    flexWrap: "wrap",
+    padding: 18,
+    borderRadius: 22,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+  },
+
+  dangerTitle: {
+    margin: 0,
+    color: "#991b1b",
+    fontSize: 20,
+    letterSpacing: "-0.02em",
+  },
+
+  deleteAuctionButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(220,38,38,0.18)",
+  },
+
+  disabledDangerButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#e5e7eb",
+    color: "#64748b",
+    border: "none",
+    fontWeight: 950,
+    cursor: "not-allowed",
   },
 };
