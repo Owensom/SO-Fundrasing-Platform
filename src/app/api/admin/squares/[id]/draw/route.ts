@@ -120,7 +120,7 @@ const prize = prizes.find(
 );
 
 const prizeTitle =
-  String(prize?.title || prize?.name || "").trim() ||
+  String(prize?.title || "").trim() ||
   `${prizeNumber}${ordinal(prizeNumber)} Prize`;
 
     const winnerName = cleanName(matchingSale.customer_name);
