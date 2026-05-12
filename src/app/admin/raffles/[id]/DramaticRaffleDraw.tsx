@@ -31,6 +31,8 @@ type ConfettiPiece = {
   drift: number;
 };
 
+type SoundMode = "roll" | "riser";
+
 const DRAW_DURATION_MS = 3600;
 
 const SOUND_PATHS = {
@@ -189,10 +191,10 @@ export default function DramaticRaffleDraw({
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundMode, setSoundMode] = useState<SoundMode>("roll");
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const riserTimeoutRef = useRef<number | null>(null);
   const finishTimeoutRef = useRef<number | null>(null);
 
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -234,7 +236,7 @@ export default function DramaticRaffleDraw({
     if (!rollAudioRef.current) {
       rollAudioRef.current = new Audio(SOUND_PATHS.roll);
       rollAudioRef.current.preload = "auto";
-      rollAudioRef.current.volume = 0.55;
+      rollAudioRef.current.volume = 0.65;
       rollAudioRef.current.loop = true;
     }
 
@@ -284,11 +286,6 @@ export default function DramaticRaffleDraw({
       timerRef.current = null;
     }
 
-    if (riserTimeoutRef.current) {
-      window.clearTimeout(riserTimeoutRef.current);
-      riserTimeoutRef.current = null;
-    }
-
     if (finishTimeoutRef.current) {
       window.clearTimeout(finishTimeoutRef.current);
       finishTimeoutRef.current = null;
@@ -304,7 +301,9 @@ export default function DramaticRaffleDraw({
       item.currentTime = 0;
     });
 
-    audio.roll.volume = 0.55;
+    audio.roll.volume = 0.65;
+    audio.riser.volume = 1;
+    audio.winner.volume = 1;
   }
 
   async function playRealSound(kind: "roll" | "riser" | "winner") {
@@ -368,25 +367,16 @@ export default function DramaticRaffleDraw({
     setSaving(false);
 
     const audioCtx = await unlockAudio();
-    const rollStarted = await playRealSound("roll");
+    const selectedSound = soundMode === "roll" ? "roll" : "riser";
+    const introStarted = await playRealSound(selectedSound);
 
-    if (!rollStarted && audioCtx) {
-      playRiserFallback(audioCtx);
-    }
-
-    riserTimeoutRef.current = window.setTimeout(async () => {
-      const audio = getAudioElements();
-
-      if (audio?.roll) {
-        audio.roll.volume = 0.16;
-      }
-
-      const riserStarted = await playRealSound("riser");
-
-      if (!riserStarted && audioCtx) {
+    if (!introStarted && audioCtx) {
+      if (soundMode === "riser") {
         playRiserFallback(audioCtx);
+      } else {
+        playTickFallback(audioCtx);
       }
-    }, Math.max(400, DRAW_DURATION_MS - 1500));
+    }
 
     let ticks = 0;
     let intervalMs = 62;
@@ -397,10 +387,10 @@ export default function DramaticRaffleDraw({
 
       setDisplayTicket(randomTicket);
 
-      if (!rollStarted && audioCtx) {
+      if (!introStarted && audioCtx) {
         playTickFallback(audioCtx);
 
-        if (ticks % 5 === 0) {
+        if (soundMode === "riser" && ticks % 5 === 0) {
           playRiserFallback(audioCtx);
         }
       }
@@ -421,7 +411,7 @@ export default function DramaticRaffleDraw({
 
           setDisplayTicket(randomTicket);
 
-          if (!rollStarted && audioCtx) {
+          if (!introStarted && audioCtx) {
             playTickFallback(audioCtx);
           }
 
@@ -438,12 +428,13 @@ export default function DramaticRaffleDraw({
       if (audio?.roll) {
         audio.roll.pause();
         audio.roll.currentTime = 0;
-        audio.roll.volume = 0.55;
+        audio.roll.volume = 0.65;
       }
 
       if (audio?.riser) {
         audio.riser.pause();
         audio.riser.currentTime = 0;
+        audio.riser.volume = 1;
       }
 
       const winningTicketNumber =
@@ -507,8 +498,8 @@ export default function DramaticRaffleDraw({
             <div style={styles.eyebrow}>Live event mode</div>
             <h2 style={styles.title}>Dramatic draw</h2>
             <p style={styles.description}>
-              Open a cinematic full-screen draw with event sound, suspense,
-              automatic winner saving and confetti.
+              Choose Classic Roll or Cinematic Riser, then open a full-screen
+              draw with winner reveal, saving and confetti.
             </p>
           </div>
 
@@ -669,6 +660,56 @@ export default function DramaticRaffleDraw({
               </div>
             </div>
 
+            <div style={styles.soundModeRow}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!drawing && !saving) {
+                    stopRealAudio();
+                    setSoundMode("roll");
+                  }
+                }}
+                disabled={drawing || saving}
+                style={{
+                  ...styles.soundModeButton,
+                  background:
+                    soundMode === "roll"
+                      ? "rgba(250,204,21,0.24)"
+                      : "rgba(255,255,255,0.08)",
+                  borderColor:
+                    soundMode === "roll"
+                      ? "rgba(250,204,21,0.78)"
+                      : "rgba(255,255,255,0.14)",
+                }}
+              >
+                Classic Roll
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!drawing && !saving) {
+                    stopRealAudio();
+                    setSoundMode("riser");
+                  }
+                }}
+                disabled={drawing || saving}
+                style={{
+                  ...styles.soundModeButton,
+                  background:
+                    soundMode === "riser"
+                      ? "rgba(250,204,21,0.24)"
+                      : "rgba(255,255,255,0.08)",
+                  borderColor:
+                    soundMode === "riser"
+                      ? "rgba(250,204,21,0.78)"
+                      : "rgba(255,255,255,0.14)",
+                }}
+              >
+                Cinematic Riser
+              </button>
+            </div>
+
             <label style={styles.prizeInputWrap}>
               <span>Prize number</span>
               <input
@@ -687,6 +728,7 @@ export default function DramaticRaffleDraw({
               }}
             >
               <div style={styles.ticketRevealShimmer} />
+
               <div
                 style={{
                   ...styles.ticketNumber,
@@ -698,7 +740,9 @@ export default function DramaticRaffleDraw({
 
               <div style={styles.ticketLabel}>
                 {drawing
-                  ? "Selecting ticket"
+                  ? soundMode === "roll"
+                    ? "Classic roll"
+                    : "Cinematic riser"
                   : winner
                     ? "Winning ticket"
                     : "Ready to draw"}
@@ -944,6 +988,21 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.12)",
+  },
+  soundModeRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    margin: "0 auto 18px",
+  },
+  soundModeButton: {
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 950,
   },
   prizeInputWrap: {
     display: "grid",
