@@ -7,6 +7,7 @@ import { sendAuctionWinnerEmail } from "@/lib/email";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import {
   createAuctionItem,
+  deleteAuction,
   deleteAuctionItem,
   getAuctionById,
   listAuctionBids,
@@ -226,7 +227,7 @@ async function updateAuctionAction(formData: FormData) {
     termsText: String(formData.get("terms_text") || "").trim() || null,
   });
 
-  redirect(`/admin/auctions/${auction.id}`);
+  redirect(`/admin/auctions/${auction.id}#auction-settings`);
 }
 
 async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
@@ -319,6 +320,24 @@ async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
   });
 
   redirect(`/admin/auctions/${auction.id}#winner-tools`);
+}
+
+async function deleteClosedAuctionAction(formData: FormData) {
+  "use server";
+
+  const auctionId = String(formData.get("auction_id") || "").trim();
+
+  if (!auctionId) redirect("/admin/auctions");
+
+  const { auction } = await requireAuctionAccess(auctionId);
+
+  if (auction.status !== "closed") {
+    redirect(`/admin/auctions/${auction.id}#danger-zone`);
+  }
+
+  await deleteAuction(auction.id);
+
+  redirect("/admin/auctions");
 }
 
 async function createAuctionItemAction(formData: FormData) {
@@ -493,33 +512,45 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             <img
               src={DEFAULT_AUCTION_IMAGE}
               alt="SO Auctions"
-              style={defaultAuctionImageStyle(28)}
+              style={defaultAuctionImageStyle(34)}
             />
           )}
         </div>
       </section>
 
-      <section style={styles.statsGrid}>
-        <StatCard label="Items" value={items.length} />
-        <StatCard label="Active items" value={activeItems} />
-        <StatCard label="Total bids" value={totalBids} />
-        <StatCard
-          label="Highest bid"
-          value={moneyFromCents(highestBid, auction.currency)}
-        />
-      </section>
+      <CollapsibleSection
+        id="auction-overview"
+        eyebrow="Section 1"
+        title="Auction overview"
+        description="Headline status, items and bidding summary."
+        defaultOpen
+      >
+        <section style={styles.statsGrid}>
+          <StatCard label="Items" value={items.length} />
+          <StatCard label="Active items" value={activeItems} />
+          <StatCard label="Total bids" value={totalBids} />
+          <StatCard
+            label="Highest bid"
+            value={moneyFromCents(highestBid, auction.currency)}
+          />
+        </section>
+      </CollapsibleSection>
 
-      <section id="winner-tools" style={styles.card}>
+      <CollapsibleSection
+        id="winner-tools"
+        eyebrow="Section 2"
+        title="Auction winner tools"
+        description="Close this auction, close all active lots and email the highest valid bidder for each lot."
+      >
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Close and notify</p>
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-              Auction winner tools
-            </h2>
+            <h3 className="so-brand-card-title" style={styles.innerTitle}>
+              Winner notification centre
+            </h3>
             <p style={styles.sectionText}>
-              Close this auction, close all active lots and email the highest
-              valid bidder for each lot. Lots with a reserve price are only
-              notified if the reserve has been met.
+              Lots with a reserve price are only notified if the reserve has
+              been met.
             </p>
           </div>
 
@@ -579,22 +610,24 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
               : "Close auction and email winners"}
           </button>
         </form>
-      </section>
+      </CollapsibleSection>
 
-      <form action={updateAuctionAction} style={styles.form}>
-        <input type="hidden" name="id" value={auction.id} />
+      <CollapsibleSection
+        id="auction-settings"
+        eyebrow="Section 3"
+        title="Auction settings"
+        description="Control public visibility, timing, rules and the main campaign details."
+        defaultOpen
+      >
+        <form action={updateAuctionAction} style={styles.form}>
+          <input type="hidden" name="id" value={auction.id} />
 
-        <section style={styles.card}>
           <div style={styles.sectionHeader}>
             <div>
               <p style={styles.kicker}>Auction controls</p>
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Auction settings
-              </h2>
-              <p style={styles.sectionText}>
-                Control public visibility, timing, rules and the main campaign
-                details.
-              </p>
+              <h3 className="so-brand-card-title" style={styles.innerTitle}>
+                Campaign details
+              </h3>
             </div>
 
             <span
@@ -716,24 +749,16 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
               Save auction settings
             </button>
           </div>
-        </section>
-      </form>
+        </form>
+      </CollapsibleSection>
 
-      <section id="items" style={styles.card}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.kicker}>Lots and prizes</p>
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-              Auction items
-            </h2>
-            <p style={styles.sectionText}>
-              Add prizes, experiences, donated items or sponsor lots. Existing
-              items are collapsible to keep the page manageable as the auction
-              grows.
-            </p>
-          </div>
-        </div>
-
+      <CollapsibleSection
+        id="items"
+        eyebrow="Section 4"
+        title="Auction items"
+        description="Add prizes, experiences, donated items or sponsor lots. Existing items are collapsible to keep the page manageable as the auction grows."
+        defaultOpen
+      >
         <details style={styles.createDetails}>
           <summary style={styles.createSummary}>
             <span>
@@ -880,7 +905,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                         <img
                           src={DEFAULT_AUCTION_IMAGE}
                           alt="SO Auctions item"
-                          style={defaultAuctionImageStyle(12)}
+                          style={defaultAuctionImageStyle(18)}
                         />
                       )}
                     </div>
@@ -1106,8 +1131,74 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             })
           )}
         </div>
-      </section>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="danger-zone"
+        eyebrow="Final section"
+        title="Delete auction"
+        description="For safety, an auction can only be deleted after it has been closed."
+      >
+        <div style={styles.dangerPanel}>
+          <div>
+            <h3 style={styles.dangerTitle}>Delete after close</h3>
+            <p style={styles.sectionText}>
+              Close the auction first. Once closed, you can permanently remove
+              the auction from the admin dashboard.
+            </p>
+          </div>
+
+          {auction.status === "closed" ? (
+            <form action={deleteClosedAuctionAction}>
+              <input type="hidden" name="auction_id" value={auction.id} />
+              <button type="submit" style={styles.deleteAuctionButton}>
+                Delete closed auction
+              </button>
+            </form>
+          ) : (
+            <button type="button" disabled style={styles.disabledDangerButton}>
+              Close auction before deleting
+            </button>
+          )}
+        </div>
+      </CollapsibleSection>
     </main>
+  );
+}
+
+function CollapsibleSection({
+  id,
+  title,
+  eyebrow,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  description?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} open={defaultOpen} style={styles.card}>
+      <summary style={styles.collapsibleSummary}>
+        <div style={styles.collapsibleHeading}>
+          {eyebrow ? <p style={styles.kicker}>{eyebrow}</p> : null}
+
+          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            {title}
+          </h2>
+
+          {description ? <p style={styles.sectionText}>{description}</p> : null}
+        </div>
+
+        <span style={styles.collapsibleToggle}>Open / close</span>
+      </summary>
+
+      <div style={styles.collapsibleBody}>{children}</div>
+    </details>
   );
 }
 
@@ -1255,7 +1346,6 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 14,
-    marginBottom: 22,
   },
   statCard: {
     padding: 18,
@@ -1283,6 +1373,32 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 18,
     boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
   },
+  collapsibleSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  collapsibleHeading: {
+    minWidth: 0,
+  },
+  collapsibleToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  collapsibleBody: {
+    marginTop: 18,
+  },
   sectionHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1303,6 +1419,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 26,
     color: "#0f172a",
     letterSpacing: "-0.035em",
+  },
+  innerTitle: {
+    margin: 0,
+    fontSize: 21,
+    color: "#0f172a",
+    letterSpacing: "-0.025em",
   },
   sectionText: {
     margin: "8px 0 0",
@@ -1633,5 +1755,41 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontWeight: 800,
     textAlign: "center",
+  },
+  dangerPanel: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    flexWrap: "wrap",
+    padding: 18,
+    borderRadius: 22,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+  },
+  dangerTitle: {
+    margin: 0,
+    color: "#991b1b",
+    fontSize: 20,
+    letterSpacing: "-0.02em",
+  },
+  deleteAuctionButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(220,38,38,0.18)",
+  },
+  disabledDangerButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#e5e7eb",
+    color: "#64748b",
+    border: "none",
+    fontWeight: 950,
+    cursor: "not-allowed",
   },
 };
