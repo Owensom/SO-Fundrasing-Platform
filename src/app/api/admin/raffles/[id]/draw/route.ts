@@ -205,12 +205,13 @@ export async function POST(
     if (winnerEmail) {
       try {
         await sendWinnerEmail({
-          to: winnerEmail,
-          name: winnerName,
-          raffleTitle: raffle.title,
-          ticketNumber: soldTicket.ticket_number,
-          colour: soldTicket.colour,
-        });
+  to: winnerEmail,
+  name: winnerName,
+  raffleTitle: raffle.title,
+  prizeTitle,
+  ticketNumber: soldTicket.ticket_number,
+  colour: soldTicket.colour,
+});
 
         winnerEmailStatus = "sent";
 
