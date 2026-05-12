@@ -107,9 +107,18 @@ async function updateAuctionStatusAction(formData: FormData) {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  await updateAuction(id, {
-    status,
-  });
+ await updateAuction(id, {
+  title: auction.title,
+  slug: auction.slug,
+  description: auction.description ?? null,
+  imageUrl: auction.image_url ?? null,
+  imageFocusX: focusValue(auction.image_focus_x),
+  imageFocusY: focusValue(auction.image_focus_y),
+  status,
+  currency: auction.currency || "GBP",
+  opensAt: auction.opens_at ?? null,
+  closesAt: auction.closes_at ?? null,
+});
 
   redirect("/admin/auctions?saved=status");
 }
