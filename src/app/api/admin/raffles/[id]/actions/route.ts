@@ -237,14 +237,17 @@ export async function POST(
             saleId: winner.sale_id,
           });
 
-          await sendWinnerEmail({
-            to: winnerEmail,
-            name: cleanName(winner.buyer_name),
-            raffleTitle: raffle.title,
-            ticketNumber: Number(winner.ticket_number),
-            colour: winner.colour,
-          });
-
+        await sendWinnerEmail({
+  to: winnerEmail,
+  name: cleanName(winner.buyer_name),
+  raffleTitle: raffle.title,
+  prizeTitle:
+    winner.prize_title ||
+    winner.prize_name ||
+    `Prize ${winner.prize_position || ""}`.trim(),
+  ticketNumber: Number(winner.ticket_number),
+  colour: winner.colour || null,
+});
           sentWinnerEmails += 1;
 
           console.log("Raffle winner email sent", {
