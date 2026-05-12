@@ -58,6 +58,7 @@ type ConfettiPiece = {
 type SoundMode = "roll" | "riser";
 
 const DRAW_DURATION_MS = 3600;
+const SAVE_PRELOAD_DELAY_MS = 900;
 
 const SOUND_PATHS = {
   roll: "/brand/draw-roll.wav",
@@ -263,8 +264,11 @@ export default function EventWinnerDrawPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
- const finishTimeoutRef = useRef<number | null>(null);
-const reloadTimeoutRef = useRef<number | null>(null);
+  const savePreloadTimeoutRef = useRef<number | null>(null);
+  const finishTimeoutRef = useRef<number | null>(null);
+  const reloadTimeoutRef = useRef<number | null>(null);
+  const pendingWinnerRef = useRef<Promise<WinnerPayload> | null>(null);
+
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
   const riserAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -313,7 +317,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
     [validPrizes, drawnPrizeIds],
   );
 
-  const automatedRangePrizes = useMemo(() => {
+  const rangeFilteredPrizes = useMemo(() => {
     const from = numberOrZero(autoFromPosition);
     const to = numberOrZero(autoToPosition);
 
@@ -328,7 +332,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
     });
   }, [autoFromPosition, autoToPosition, remainingPrizes, validPrizes]);
 
-  const firstRemainingPrize = remainingPrizes[0];
+  const firstRemainingPrize = rangeFilteredPrizes[0] || remainingPrizes[0];
   const firstRemainingIndex = firstRemainingPrize
     ? validPrizes.findIndex((prize) => prize === firstRemainingPrize)
     : -1;
@@ -357,7 +361,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
   const latestWinner = winners[0] || null;
   const hasPrizes = validPrizes.length > 0;
   const hasRemainingPrizes = remainingPrizes.length > 0;
-  const hasAutomatedRangePrizes = automatedRangePrizes.length > 0;
+  const hasRangeFilteredPrizes = rangeFilteredPrizes.length > 0;
 
   function getAudioContext() {
     if (typeof window === "undefined" || !soundEnabled) return null;
@@ -425,6 +429,11 @@ const reloadTimeoutRef = useRef<number | null>(null);
       timerRef.current = null;
     }
 
+    if (savePreloadTimeoutRef.current) {
+      window.clearTimeout(savePreloadTimeoutRef.current);
+      savePreloadTimeoutRef.current = null;
+    }
+
     if (finishTimeoutRef.current) {
       window.clearTimeout(finishTimeoutRef.current);
       finishTimeoutRef.current = null;
@@ -470,6 +479,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
   function closeDraw() {
     clearDrawTimers();
     stopRealAudio();
+    pendingWinnerRef.current = null;
     setDrawOverlayOpen(false);
     setDrawing(false);
     setSaving(false);
@@ -494,9 +504,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
   function randomPrizeText() {
     if (drawMode === "all_remaining") {
       const prize =
-        automatedRangePrizes[
-          Math.floor(Math.random() * automatedRangePrizes.length)
-        ];
+        rangeFilteredPrizes[Math.floor(Math.random() * rangeFilteredPrizes.length)];
 
       if (!prize) return "Automated prize range";
 
@@ -560,21 +568,19 @@ const reloadTimeoutRef = useRef<number | null>(null);
       throw new Error("There are no remaining prizes to draw.");
     }
 
-    if (drawMode === "single" && !activePrizeKey) {
-      throw new Error("Choose a prize before running the draw.");
+    const from = numberOrZero(autoFromPosition);
+    const to = numberOrZero(autoToPosition);
+
+    if (from > 0 && to > 0 && from > to) {
+      throw new Error("Draw from cannot be higher than draw to.");
     }
 
-    if (drawMode === "all_remaining") {
-      const from = numberOrZero(autoFromPosition);
-      const to = numberOrZero(autoToPosition);
+    if ((from > 0 || to > 0) && !hasRangeFilteredPrizes) {
+      throw new Error("No remaining prizes found in this draw range.");
+    }
 
-      if (from > 0 && to > 0 && from > to) {
-        throw new Error("Automated prize range cannot start after it ends.");
-      }
-
-      if (!hasAutomatedRangePrizes) {
-        throw new Error("No remaining prizes found in this automated range.");
-      }
+    if (drawMode === "single" && !activePrizeKey) {
+      throw new Error("Choose a prize before running the draw.");
     }
   }
 
@@ -614,6 +620,24 @@ const reloadTimeoutRef = useRef<number | null>(null);
     } satisfies WinnerPayload;
   }
 
+  function revealWinner(winnerPayload: WinnerPayload, audioCtx: AudioContext | null) {
+    setRevealedWinner(winnerPayload);
+    setDisplayText("WINNER");
+    setDisplayPrize(
+      winnerPayload.prize_position
+        ? `${winnerPayload.prize_position}. ${winnerPayload.prize_title || "Prize"}`
+        : winnerPayload.prize_title || selectedPrizeLabel,
+    );
+    setSaving(false);
+    setConfetti(makeConfetti());
+
+    void playRealSound("winner").then((winnerStarted) => {
+      if (!winnerStarted && audioCtx) {
+        playWinnerFallback(audioCtx);
+      }
+    });
+  }
+
   async function runAutomaticDraw() {
     if (drawing || saving || autoDrawing) return;
 
@@ -623,25 +647,11 @@ const reloadTimeoutRef = useRef<number | null>(null);
       validateDraw();
       await checkEligibility();
 
+      const audioCtx = await unlockAudio();
       const winnerPayload = await saveWinnerFromApi();
 
-      setRevealedWinner(winnerPayload);
       setDisplayText("WINNER");
-      setDisplayPrize(
-        winnerPayload.prize_position
-          ? `${winnerPayload.prize_position}. ${
-              winnerPayload.prize_title || "Prize"
-            }`
-          : winnerPayload.prize_title || selectedPrizeLabel,
-      );
-      setConfetti(makeConfetti());
-
-      const audioCtx = await unlockAudio();
-      const winnerStarted = await playRealSound("winner");
-
-      if (!winnerStarted && audioCtx) {
-        playWinnerFallback(audioCtx);
-      }
+      revealWinner(winnerPayload, audioCtx);
 
       reloadTimeoutRef.current = window.setTimeout(() => {
         window.location.reload();
@@ -663,6 +673,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
 
       clearDrawTimers();
       stopRealAudio();
+      pendingWinnerRef.current = null;
 
       setDrawOverlayOpen(true);
       setDrawing(false);
@@ -693,6 +704,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
 
     clearDrawTimers();
     stopRealAudio();
+    pendingWinnerRef.current = null;
 
     setDrawing(true);
     setSaving(false);
@@ -712,6 +724,10 @@ const reloadTimeoutRef = useRef<number | null>(null);
         playTickFallback(audioCtx);
       }
     }
+
+    savePreloadTimeoutRef.current = window.setTimeout(() => {
+      pendingWinnerRef.current = saveWinnerFromApi();
+    }, SAVE_PRELOAD_DELAY_MS);
 
     let ticks = 0;
     let intervalMs = 62;
@@ -757,48 +773,25 @@ const reloadTimeoutRef = useRef<number | null>(null);
         timerRef.current = null;
       }
 
-      const audio = getAudioElements();
-
-      if (audio?.roll) {
-        audio.roll.pause();
-        audio.roll.currentTime = 0;
-        audio.roll.volume = 0.65;
+      if (savePreloadTimeoutRef.current) {
+        window.clearTimeout(savePreloadTimeoutRef.current);
+        savePreloadTimeoutRef.current = null;
       }
 
-      if (audio?.riser) {
-        audio.riser.pause();
-        audio.riser.currentTime = 0;
-        audio.riser.volume = 1;
-      }
-
+      stopRealAudio();
       setDrawing(false);
       setSaving(true);
 
       try {
-        const winnerPayload = await saveWinnerFromApi();
-
-        setRevealedWinner(winnerPayload);
-        setDisplayText("WINNER");
-        setDisplayPrize(
-          winnerPayload.prize_position
-            ? `${winnerPayload.prize_position}. ${
-                winnerPayload.prize_title || "Prize"
-              }`
-            : winnerPayload.prize_title || selectedPrizeLabel,
-        );
-        setSaving(false);
-        setConfetti(makeConfetti());
-
-        const winnerStarted = await playRealSound("winner");
-
-        if (!winnerStarted && audioCtx) {
-          playWinnerFallback(audioCtx);
-        }
+        const winnerPayload = await (pendingWinnerRef.current || saveWinnerFromApi());
+        pendingWinnerRef.current = null;
+        revealWinner(winnerPayload, audioCtx);
 
         reloadTimeoutRef.current = window.setTimeout(() => {
           window.location.reload();
         }, 2600);
       } catch (err) {
+        pendingWinnerRef.current = null;
         setSaving(false);
         setError(err instanceof Error ? err.message : "Draw failed.");
         setDisplayText("ERROR");
@@ -810,6 +803,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
     return () => {
       clearDrawTimers();
       stopRealAudio();
+      pendingWinnerRef.current = null;
     };
   }, []);
 
@@ -819,8 +813,8 @@ const reloadTimeoutRef = useRef<number | null>(null);
         <p style={styles.sectionEyebrow}>Draw centre</p>
         <h2 style={styles.sectionTitle}>Event Winner Draw</h2>
         <p style={styles.sectionText}>
-          Draw winners from eligible paid event entries only. Use Classic Roll or
-          Cinematic Riser for a full-screen live draw.
+          Draw winners from eligible paid event entries only. Use the draw range
+          to keep headline prizes for a live draw, or to auto-draw lower prizes.
         </p>
       </div>
 
@@ -836,8 +830,8 @@ const reloadTimeoutRef = useRef<number | null>(null);
         </div>
 
         <div style={styles.statBox}>
-          <p style={styles.statLabel}>Automated range</p>
-          <p style={styles.statValue}>{automatedRangePrizes.length}</p>
+          <p style={styles.statLabel}>In draw range</p>
+          <p style={styles.statValue}>{rangeFilteredPrizes.length}</p>
         </div>
 
         <div style={styles.statBox}>
@@ -869,8 +863,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
             {revealedWinner.prize_position
               ? `${revealedWinner.prize_position}. `
               : ""}
-            {revealedWinner.prize_title || "Prize"} ·{" "}
-            {formatWinnerSeat(revealedWinner)}
+            {revealedWinner.prize_title || "Prize"} · {formatWinnerSeat(revealedWinner)}
           </p>
         </div>
       ) : null}
@@ -891,8 +884,8 @@ const reloadTimeoutRef = useRef<number | null>(null);
           <div>
             <h3 style={styles.panelTitle}>Draw controls</h3>
             <p style={styles.sectionText}>
-              Choose one prize, or draw all remaining prizes within a selected
-              position range.
+              Choose one prize for a live draw, or draw all remaining prizes
+              inside the selected from/to range.
             </p>
           </div>
 
@@ -902,6 +895,51 @@ const reloadTimeoutRef = useRef<number | null>(null);
             </div>
           ) : (
             <>
+              <div style={styles.rangeBox}>
+                <div>
+                  <h3 style={styles.panelTitle}>Draw range</h3>
+                  <p style={styles.sectionText}>
+                    Optional. Example: from 6 to 999 keeps prizes 1–5 for a live draw.
+                  </p>
+                </div>
+
+                <div style={styles.twoCol}>
+                  <label style={styles.field}>
+                    <span style={styles.label}>Draw from prize position</span>
+                    <input
+                      name="auto_from_position"
+                      type="number"
+                      min="1"
+                      value={autoFromPosition}
+                      onChange={(event) => setAutoFromPosition(event.target.value)}
+                      placeholder="6"
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Draw to prize position</span>
+                    <input
+                      name="auto_to_position"
+                      type="number"
+                      min="1"
+                      value={autoToPosition}
+                      onChange={(event) => setAutoToPosition(event.target.value)}
+                      placeholder="999"
+                      style={styles.input}
+                    />
+                  </label>
+                </div>
+
+                <div style={styles.rangeSummary}>
+                  {rangeFilteredPrizes.length
+                    ? `${rangeFilteredPrizes.length} remaining prize${
+                        rangeFilteredPrizes.length === 1 ? "" : "s"
+                      } currently inside this draw range.`
+                    : "No remaining prizes currently inside this draw range."}
+                </div>
+              </div>
+
               <label style={styles.field}>
                 <span style={styles.label}>Prize to draw</span>
                 <select
@@ -916,15 +954,24 @@ const reloadTimeoutRef = useRef<number | null>(null);
                   {validPrizes.map((prize, index) => {
                     const id = prizeId(prize, index);
                     const alreadyDrawn = drawnPrizeIds.has(id);
+                    const position = prizePosition(prize, index);
+                    const from = numberOrZero(autoFromPosition);
+                    const to = numberOrZero(autoToPosition);
+                    const outsideRange =
+                      (from > 0 && position < from) || (to > 0 && position > to);
 
                     return (
                       <option
                         key={id}
                         value={prizePayload(prize, index)}
-                        disabled={alreadyDrawn}
+                        disabled={alreadyDrawn || outsideRange}
                       >
-                        {prizePosition(prize, index)}. {prizeTitle(prize)}
-                        {alreadyDrawn ? " — already drawn" : ""}
+                        {position}. {prizeTitle(prize)}
+                        {alreadyDrawn
+                          ? " — already drawn"
+                          : outsideRange
+                            ? " — outside draw range"
+                            : ""}
                       </option>
                     );
                   })}
@@ -941,59 +988,9 @@ const reloadTimeoutRef = useRef<number | null>(null);
                   style={styles.input}
                 >
                   <option value="single">Draw selected prize</option>
-                  <option value="all_remaining">Draw automated prize range</option>
+                  <option value="all_remaining">Draw all remaining in range</option>
                 </select>
               </label>
-
-              {drawMode === "all_remaining" && (
-                <div style={styles.rangeBox}>
-                  <div>
-                    <h3 style={styles.panelTitle}>Automated prize range</h3>
-                    <p style={styles.sectionText}>
-                      Choose which prize positions should be drawn automatically.
-                      Example: from 6 to 999 leaves prizes 1–5 for a live draw.
-                    </p>
-                  </div>
-
-                  <div style={styles.twoCol}>
-                    <label style={styles.field}>
-                      <span style={styles.label}>Draw prizes from position</span>
-                      <input
-                        name="auto_from_position"
-                        type="number"
-                        min="1"
-                        value={autoFromPosition}
-                        onChange={(event) =>
-                          setAutoFromPosition(event.target.value)
-                        }
-                        placeholder="6"
-                        style={styles.input}
-                      />
-                    </label>
-
-                    <label style={styles.field}>
-                      <span style={styles.label}>Draw prizes to position</span>
-                      <input
-                        name="auto_to_position"
-                        type="number"
-                        min="1"
-                        value={autoToPosition}
-                        onChange={(event) => setAutoToPosition(event.target.value)}
-                        placeholder="999"
-                        style={styles.input}
-                      />
-                    </label>
-                  </div>
-
-                  <div style={styles.rangeSummary}>
-                    {hasAutomatedRangePrizes
-                      ? `${automatedRangePrizes.length} remaining prize${
-                          automatedRangePrizes.length === 1 ? "" : "s"
-                        } in this automated range.`
-                      : "No remaining prizes in this automated range."}
-                  </div>
-                </div>
-              )}
 
               <label style={styles.field}>
                 <span style={styles.label}>Draw scope</span>
@@ -1095,21 +1092,21 @@ const reloadTimeoutRef = useRef<number | null>(null);
                   onClick={() => void runAutomaticDraw()}
                   disabled={
                     !hasRemainingPrizes ||
+                    !hasRangeFilteredPrizes ||
                     drawing ||
                     saving ||
                     autoDrawing ||
-                    (drawMode === "single" && !activePrizeKey) ||
-                    (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
+                    (drawMode === "single" && !activePrizeKey)
                   }
                   style={{
                     ...styles.automaticButton,
                     opacity:
                       !hasRemainingPrizes ||
+                      !hasRangeFilteredPrizes ||
                       drawing ||
                       saving ||
                       autoDrawing ||
-                      (drawMode === "single" && !activePrizeKey) ||
-                      (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
+                      (drawMode === "single" && !activePrizeKey)
                         ? 0.45
                         : 1,
                   }}
@@ -1121,21 +1118,21 @@ const reloadTimeoutRef = useRef<number | null>(null);
                   type="submit"
                   disabled={
                     !hasRemainingPrizes ||
+                    !hasRangeFilteredPrizes ||
                     drawing ||
                     saving ||
                     autoDrawing ||
-                    (drawMode === "single" && !activePrizeKey) ||
-                    (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
+                    (drawMode === "single" && !activePrizeKey)
                   }
                   style={{
                     ...styles.primaryButton,
                     opacity:
                       !hasRemainingPrizes ||
+                      !hasRangeFilteredPrizes ||
                       drawing ||
                       saving ||
                       autoDrawing ||
-                      (drawMode === "single" && !activePrizeKey) ||
-                      (drawMode === "all_remaining" && !hasAutomatedRangePrizes)
+                      (drawMode === "single" && !activePrizeKey)
                         ? 0.45
                         : 1,
                   }}
@@ -1151,9 +1148,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
           <div style={styles.panelHeader}>
             <div>
               <h3 style={styles.panelTitle}>Winner history</h3>
-              <p style={styles.sectionText}>
-                Winners are stored against this event only.
-              </p>
+              <p style={styles.sectionText}>Winners are stored against this event only.</p>
             </div>
 
             {winners.length > 0 && (
@@ -1181,8 +1176,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
                       {winner.winner_name || "Unnamed winner"}
                     </p>
                     <p style={styles.winnerMeta}>
-                      {winner.winner_email || "No email"} ·{" "}
-                      {formatWinnerSeat(winner)}
+                      {winner.winner_email || "No email"} · {formatWinnerSeat(winner)}
                     </p>
                   </div>
 
@@ -1383,7 +1377,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
                     ? "Classic roll"
                     : "Cinematic riser"
                   : saving
-                    ? "Saving winner"
+                    ? "Confirming winner"
                     : revealedWinner
                       ? "Winner saved"
                       : "Ready to draw"}
@@ -1411,10 +1405,14 @@ const reloadTimeoutRef = useRef<number | null>(null);
               ) : (
                 <>
                   <div style={styles.colourBadgeMuted}>
-                    {drawing ? "Selecting entry" : saving ? "Saving" : "Awaiting draw"}
+                    {drawing
+                      ? "Selecting entry"
+                      : saving
+                        ? "Confirming"
+                        : "Awaiting draw"}
                   </div>
                   <h2 style={styles.revealedWinnerName}>
-                    {drawing ? "Drawing..." : saving ? "Saving winner..." : "Ready"}
+                    {drawing ? "Drawing..." : saving ? "Confirming winner..." : "Ready"}
                   </h2>
                 </>
               )}
@@ -1433,7 +1431,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
                   cursor: drawing || saving ? "not-allowed" : "pointer",
                 }}
               >
-                {drawing ? "Drawing..." : saving ? "Saving..." : "Start draw"}
+                {drawing ? "Drawing..." : saving ? "Confirming..." : "Start draw"}
               </button>
             ) : null}
 
@@ -1447,7 +1445,7 @@ const reloadTimeoutRef = useRef<number | null>(null);
                 cursor: saving ? "not-allowed" : "pointer",
               }}
             >
-              {saving ? "Saving..." : "Close"}
+              {saving ? "Confirming..." : "Close"}
             </button>
           </div>
         </div>
