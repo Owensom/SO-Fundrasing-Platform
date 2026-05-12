@@ -263,15 +263,21 @@ export default function EventWinnerDrawPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const finishTimeoutRef = useRef<number | null>(null);
-  const reloadTimeoutRef = useRef<number | null>(null);
+  const finishTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(
+    null,
+  );
+  const reloadTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(
+    null,
+  );
 
   const rollAudioRef = useRef<HTMLAudioElement | null>(null);
   const riserAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [selectedPrizeKey, setSelectedPrizeKey] = useState("");
-  const [drawMode, setDrawMode] = useState<"single" | "all_remaining">("single");
+  const [drawMode, setDrawMode] = useState<"single" | "all_remaining">(
+    "single",
+  );
   const [autoFromPosition, setAutoFromPosition] = useState("");
   const [autoToPosition, setAutoToPosition] = useState("");
   const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
@@ -282,7 +288,9 @@ export default function EventWinnerDrawPanel({
   const [displayPrize, setDisplayPrize] = useState("Ready");
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
-  const [revealedWinner, setRevealedWinner] = useState<WinnerPayload | null>(null);
+  const [revealedWinner, setRevealedWinner] = useState<WinnerPayload | null>(
+    null,
+  );
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundMode, setSoundMode] = useState<SoundMode>("roll");
 
@@ -650,7 +658,138 @@ export default function EventWinnerDrawPanel({
     }
   }
 
-| selectedPrizeLabel,
+  async function openDramaticDraw() {
+    if (drawing || saving || autoDrawing) return;
+
+    try {
+      setError("");
+      validateDraw();
+      await checkEligibility();
+
+      clearDrawTimers();
+      stopRealAudio();
+
+      setDrawOverlayOpen(true);
+      setDrawing(false);
+      setSaving(false);
+      setRevealedWinner(null);
+      setConfetti([]);
+      setDisplayText("—");
+      setDisplayPrize(selectedPrizeLabel);
+
+      getAudioElements();
+      await unlockAudio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No eligible winner found.");
+    }
+  }
+
+  async function runDramaticDraw() {
+    if (drawing || saving || autoDrawing) return;
+
+    try {
+      setError("");
+      validateDraw();
+      await checkEligibility();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No eligible winner found.");
+      return;
+    }
+
+    clearDrawTimers();
+    stopRealAudio();
+
+    setDrawing(true);
+    setSaving(false);
+    setRevealedWinner(null);
+    setConfetti([]);
+    setDisplayText("—");
+    setDisplayPrize(selectedPrizeLabel);
+
+    const audioCtx = await unlockAudio();
+    const selectedSound = soundMode === "roll" ? "roll" : "riser";
+    const introStarted = await playRealSound(selectedSound);
+
+    if (!introStarted && audioCtx) {
+      if (soundMode === "riser") {
+        playRiserFallback(audioCtx);
+      } else {
+        playTickFallback(audioCtx);
+      }
+    }
+
+    let ticks = 0;
+    let intervalMs = 62;
+
+    timerRef.current = setInterval(() => {
+      setDisplayText(randomDisplayValue());
+      setDisplayPrize(randomPrizeText());
+
+      if (!introStarted && audioCtx) {
+        playTickFallback(audioCtx);
+
+        if (soundMode === "riser" && ticks % 5 === 0) {
+          playRiserFallback(audioCtx);
+        }
+      }
+
+      ticks += 1;
+
+      if (ticks === 28) {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+
+        intervalMs = 115;
+
+        timerRef.current = setInterval(() => {
+          setDisplayText(randomDisplayValue());
+          setDisplayPrize(randomPrizeText());
+
+          if (!introStarted && audioCtx) {
+            playTickFallback(audioCtx);
+          }
+
+          ticks += 1;
+        }, intervalMs);
+      }
+    }, intervalMs);
+
+    finishTimeoutRef.current = window.setTimeout(async () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      const audio = getAudioElements();
+
+      if (audio?.roll) {
+        audio.roll.pause();
+        audio.roll.currentTime = 0;
+        audio.roll.volume = 0.65;
+      }
+
+      if (audio?.riser) {
+        audio.riser.pause();
+        audio.riser.currentTime = 0;
+        audio.riser.volume = 1;
+      }
+
+      setDrawing(false);
+      setSaving(true);
+
+      try {
+        const winnerPayload = await saveWinnerFromApi();
+
+        setRevealedWinner(winnerPayload);
+        setDisplayText("WINNER");
+        setDisplayPrize(
+          winnerPayload.prize_position
+            ? `${winnerPayload.prize_position}. ${
+                winnerPayload.prize_title || "Prize"
+              }`
+            : winnerPayload.prize_title || selectedPrizeLabel,
         );
         setSaving(false);
         setConfetti(makeConfetti());
@@ -735,7 +874,8 @@ export default function EventWinnerDrawPanel({
             {revealedWinner.prize_position
               ? `${revealedWinner.prize_position}. `
               : ""}
-            {revealedWinner.prize_title || "Prize"} · {formatWinnerSeat(revealedWinner)}
+            {revealedWinner.prize_title || "Prize"} ·{" "}
+            {formatWinnerSeat(revealedWinner)}
           </p>
         </div>
       ) : null}
@@ -828,7 +968,9 @@ export default function EventWinnerDrawPanel({
                         type="number"
                         min="1"
                         value={autoFromPosition}
-                        onChange={(event) => setAutoFromPosition(event.target.value)}
+                        onChange={(event) =>
+                          setAutoFromPosition(event.target.value)
+                        }
                         placeholder="6"
                         style={styles.input}
                       />
@@ -1014,7 +1156,9 @@ export default function EventWinnerDrawPanel({
           <div style={styles.panelHeader}>
             <div>
               <h3 style={styles.panelTitle}>Winner history</h3>
-              <p style={styles.sectionText}>Winners are stored against this event only.</p>
+              <p style={styles.sectionText}>
+                Winners are stored against this event only.
+              </p>
             </div>
 
             {winners.length > 0 && (
@@ -1042,7 +1186,8 @@ export default function EventWinnerDrawPanel({
                       {winner.winner_name || "Unnamed winner"}
                     </p>
                     <p style={styles.winnerMeta}>
-                      {winner.winner_email || "No email"} · {formatWinnerSeat(winner)}
+                      {winner.winner_email || "No email"} ·{" "}
+                      {formatWinnerSeat(winner)}
                     </p>
                   </div>
 
@@ -1093,7 +1238,11 @@ export default function EventWinnerDrawPanel({
           <div style={styles.backgroundOrbTwo} />
           <div style={styles.ring} />
 
-          piece.id}
+          {confetti.length ? (
+            <div style={styles.confettiLayer}>
+              {confetti.map((piece) => (
+                <span
+                  key={piece.id}
                   style={
                     {
                       position: "absolute",
@@ -1217,7 +1366,10 @@ export default function EventWinnerDrawPanel({
             <div
               style={{
                 ...styles.ticketReveal,
-                animation: drawing || saving || revealedWinner ? "glowPulse 900ms infinite" : "",
+                animation:
+                  drawing || saving || revealedWinner
+                    ? "glowPulse 900ms infinite"
+                    : "",
               }}
             >
               <div style={styles.ticketRevealShimmer} />
@@ -1246,7 +1398,8 @@ export default function EventWinnerDrawPanel({
             <div style={styles.resultPanel}>
               {revealedWinner ? (
                 <>
-                  <div style={styles.colourBadge}>WiledWinnerName}>
+                  <div style={styles.colourBadge}>Winner</div>
+                  <h2 style={styles.revealedWinnerName}>
                     {revealedWinner.winner_name || "Winner"}
                   </h2>
 
@@ -1426,7 +1579,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
   input: {
-  ,
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
     color: "#0f172a",
     fontSize: 15,
     boxSizing: "border-box",
