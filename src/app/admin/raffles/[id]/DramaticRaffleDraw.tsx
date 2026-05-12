@@ -283,10 +283,15 @@ export default function DramaticRaffleDraw({
       timerRef.current = null;
     }
 
-    if (riserTimeoutRef.current) {
-      window.clearTimeout(riserTimeoutRef.current);
-      riserTimeoutRef.current = null;
-    }
+    riserTimeoutRef.current = window.setTimeout(async () => {
+  const audio = getAudioElements();
+
+  if (audio?.roll) {
+    audio.roll.volume = 0.18;
+  }
+
+  await playRealSound("riser");
+}, Math.max(400, DRAW_DURATION_MS - 1500));
 
     if (finishTimeoutRef.current) {
       window.clearTimeout(finishTimeoutRef.current);
@@ -420,10 +425,11 @@ export default function DramaticRaffleDraw({
 
       const audio = getAudioElements();
 
-      if (audio?.roll) {
-        audio.roll.pause();
-        audio.roll.currentTime = 0;
-      }
+     if (audio?.roll) {
+  audio.roll.pause();
+  audio.roll.currentTime = 0;
+  audio.roll.volume = 0.55;
+}
 
       if (audio?.riser) {
         audio.riser.pause();
