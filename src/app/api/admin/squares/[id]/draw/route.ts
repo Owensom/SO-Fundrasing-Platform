@@ -40,15 +40,27 @@ function ordinal(value: number) {
 }
 
 function getPrizeTitle(prize: any, prizeNumber: number) {
+  const actualPrizeName = String(
+    prize?.description ||
+      prize?.name ||
+      prize?.prizeName ||
+      prize?.prize_name ||
+      prize?.prizeTitle ||
+      prize?.prize_title ||
+      prize?.label ||
+      "",
+  ).trim();
+
+  const positionLabel = String(prize?.title || "").trim();
+
+  if (actualPrizeName && positionLabel) {
+    return `${positionLabel} — ${actualPrizeName}`;
+  }
+
   return (
-    String(
-      prize?.title ||
-        prize?.name ||
-        prize?.prizeTitle ||
-        prize?.prize_title ||
-        prize?.label ||
-        "",
-    ).trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`
+    actualPrizeName ||
+    positionLabel ||
+    `${prizeNumber}${ordinal(prizeNumber)} Prize`
   );
 }
 
@@ -68,7 +80,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const prizeNumber = parsePositiveInteger(formData.get("prize_number"));
     const squareNumber = parsePositiveInteger(formData.get("square_number"));
-        if (!prizeNumber || !squareNumber) {
+
+    if (!prizeNumber || !squareNumber) {
       return NextResponse.json(
         { ok: false, error: "Prize number and square number are required" },
         { status: 400 },
@@ -146,7 +159,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       customer_name: winnerName,
       customer_email: winnerEmail || null,
     });
-        if (!winnerEmail) {
+
+    if (!winnerEmail) {
       console.warn("Squares draw winner email skipped - missing email", {
         gameId: game.id,
         prizeNumber,
