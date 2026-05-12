@@ -11,11 +11,16 @@ type SoldSquareOption = {
   customer_email?: string;
 };
 
+type SquarePrize = {
+  title?: string;
+};
+
 type DramaticSquaresDrawProps = {
   gameId: string;
   soldSquareOptions: SoldSquareOption[];
   drawnPrizeNumbers?: number[];
   drawnSquareNumbers?: number[];
+  prizes?: SquarePrize[];
 };
 
 type ConfettiPiece = {
@@ -176,6 +181,7 @@ export default function DramaticSquaresDraw({
   soldSquareOptions,
   drawnPrizeNumbers = [],
   drawnSquareNumbers = [],
+  prizes = [],
 }: DramaticSquaresDrawProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState("1");
@@ -215,7 +221,12 @@ export default function DramaticSquaresDraw({
     return position;
   }, [drawnPrizeNumbers]);
 
-  function getAudioContext() {
+  const currentPrizeTitle =
+    String(
+      prizes[Number(prizeNumber || nextPrizeNumber) - 1]?.title || "",
+    ).trim() ||
+    `Prize #${prizeNumber || nextPrizeNumber}`;
+    function getAudioContext() {
     if (typeof window === "undefined" || !soundEnabled) return null;
 
     if (!audioCtxRef.current) {
@@ -346,7 +357,7 @@ export default function DramaticSquaresDraw({
     }
 
     if (drawnPrizeNumbers.includes(parsedPrizeNumber)) {
-      setError(`Prize ${parsedPrizeNumber} has already been drawn.`);
+      setError(`${currentPrizeTitle} has already been drawn.`);
       return;
     }
 
@@ -377,7 +388,8 @@ export default function DramaticSquaresDraw({
     let intervalMs = 62;
 
     timerRef.current = setInterval(() => {
-      const randomSquare = soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
+      const randomSquare =
+        soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
 
       setDisplaySquare(randomSquare);
 
@@ -422,13 +434,11 @@ export default function DramaticSquaresDraw({
       if (audio?.roll) {
         audio.roll.pause();
         audio.roll.currentTime = 0;
-        audio.roll.volume = 0.65;
       }
 
       if (audio?.riser) {
         audio.riser.pause();
         audio.riser.currentTime = 0;
-        audio.riser.volume = 1;
       }
 
       const winningSquareNumber =
@@ -479,17 +489,18 @@ export default function DramaticSquaresDraw({
       }
     }, DRAW_DURATION_MS);
   }
-
-  return (
+    return (
     <>
       <section style={styles.launchCard}>
         <div style={styles.launchTop}>
           <div>
             <div style={styles.eyebrow}>Live event mode</div>
             <h2 style={styles.title}>Dramatic draw</h2>
+
             <p style={styles.description}>
               Choose Classic Roll or Cinematic Riser, then open a full-screen
-              squares draw with winner reveal, saving and confetti.
+              squares draw with winner reveal, prize display, saving and
+              confetti.
             </p>
           </div>
 
@@ -515,12 +526,15 @@ export default function DramaticSquaresDraw({
             Open full-screen draw
           </button>
 
-          <span style={styles.miniNote}>Next available prize: #{nextPrizeNumber}</span>
+          <span style={styles.miniNote}>
+            Next prize: {nextPrizeTitle}
+          </span>
         </div>
 
         {!soldNumbers.length ? (
           <p style={styles.warning}>
-            No eligible sold squares available. Squares that have already won are excluded.
+            No eligible sold squares available. Squares that have already won
+            are excluded.
           </p>
         ) : null}
       </section>
@@ -529,8 +543,15 @@ export default function DramaticSquaresDraw({
         <div style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
-              0% { transform: translate3d(0, -20vh, 0) rotate(0deg); opacity: 1; }
-              100% { transform: translate3d(var(--drift), 115vh, 0) rotate(900deg); opacity: 0; }
+              0% {
+                transform: translate3d(0, -20vh, 0) rotate(0deg);
+                opacity: 1;
+              }
+
+              100% {
+                transform: translate3d(var(--drift), 115vh, 0) rotate(900deg);
+                opacity: 0;
+              }
             }
 
             @keyframes winnerPulse {
@@ -539,8 +560,17 @@ export default function DramaticSquaresDraw({
             }
 
             @keyframes glowPulse {
-              0%, 100% { box-shadow: 0 0 42px rgba(250,204,21,0.28), inset 0 0 28px rgba(255,255,255,0.08); }
-              50% { box-shadow: 0 0 95px rgba(250,204,21,0.92), inset 0 0 44px rgba(255,255,255,0.14); }
+              0%, 100% {
+                box-shadow:
+                  0 0 42px rgba(250,204,21,0.28),
+                  inset 0 0 28px rgba(255,255,255,0.08);
+              }
+
+              50% {
+                box-shadow:
+                  0 0 95px rgba(250,204,21,0.92),
+                  inset 0 0 44px rgba(255,255,255,0.14);
+              }
             }
 
             @keyframes slowSpin {
@@ -598,14 +628,27 @@ export default function DramaticSquaresDraw({
               {soundEnabled ? "Sound on" : "Sound off"}
             </button>
 
-            <button type="button" onClick={closeDraw} style={styles.closeButton}>
+            <button
+              type="button"
+              onClick={closeDraw}
+              style={styles.closeButton}
+            >
               Close
             </button>
           </div>
 
           <div style={styles.stage}>
             <p style={styles.stageEyebrow}>SO Foundation Platform</p>
+
             <h1 style={styles.stageTitle}>Squares Winner Draw</h1>
+
+            <div style={styles.prizeBanner}>
+              <span style={styles.prizeBannerLabel}>Current prize</span>
+
+              <strong style={styles.prizeBannerTitle}>
+                {currentPrizeTitle}
+              </strong>
+            </div>
 
             <div style={styles.stageSubGrid}>
               <div style={styles.stageSubCard}>
@@ -676,6 +719,7 @@ export default function DramaticSquaresDraw({
 
             <label style={styles.prizeInputWrap}>
               <span>Prize number</span>
+
               <input
                 value={prizeNumber}
                 onChange={(event) => setPrizeNumber(event.target.value)}
@@ -688,14 +732,18 @@ export default function DramaticSquaresDraw({
             <div
               style={{
                 ...styles.ticketReveal,
-                animation: drawing || winner ? "glowPulse 900ms infinite" : "",
+                animation:
+                  drawing || winner ? "glowPulse 900ms infinite" : "",
               }}
             >
               <div style={styles.ticketRevealShimmer} />
+
               <div
                 style={{
                   ...styles.ticketNumber,
-                  animation: drawing ? "winnerPulse 160ms infinite" : "",
+                  animation: drawing
+                    ? "winnerPulse 160ms infinite"
+                    : "",
                 }}
               >
                 {displaySquare ? `#${displaySquare}` : "—"}
@@ -707,7 +755,7 @@ export default function DramaticSquaresDraw({
                     ? "Classic roll"
                     : "Cinematic riser"
                   : winner
-                    ? "Winning square"
+                    ? currentPrizeTitle
                     : "Ready to draw"}
               </div>
             </div>
@@ -715,24 +763,40 @@ export default function DramaticSquaresDraw({
             <div style={styles.resultPanel}>
               {winner ? (
                 <>
-                  <div style={styles.colourBadge}>Winning square</div>
-                  <h2 style={styles.winnerName}>{getCustomerName(winner)}</h2>
+                  <div style={styles.colourBadge}>
+                    {currentPrizeTitle}
+                  </div>
+
+                  <h2 style={styles.winnerName}>
+                    {getCustomerName(winner)}
+                  </h2>
 
                   {getCustomerEmail(winner) ? (
-                    <p style={styles.winnerEmail}>{getCustomerEmail(winner)}</p>
+                    <p style={styles.winnerEmail}>
+                      {getCustomerEmail(winner)}
+                    </p>
                   ) : null}
                 </>
               ) : (
                 <>
-                  <div style={styles.colourBadgeMuted}>Awaiting draw</div>
+                  <div style={styles.colourBadgeMuted}>
+                    Awaiting draw
+                  </div>
+
                   <h2 style={styles.winnerName}>
-                    {drawing ? "Drawing..." : saving ? "Saving winner..." : "Ready"}
+                    {drawing
+                      ? "Drawing..."
+                      : saving
+                        ? "Saving winner..."
+                        : currentPrizeTitle}
                   </h2>
                 </>
               )}
             </div>
 
-            {error ? <p style={styles.error}>{error}</p> : null}
+            {error ? (
+              <p style={styles.error}>{error}</p>
+            ) : null}
 
             <button
               type="button"
@@ -741,7 +805,9 @@ export default function DramaticSquaresDraw({
               style={{
                 ...styles.startButton,
                 cursor:
-                  drawing || saving || !soldNumbers.length ? "not-allowed" : "pointer",
+                  drawing || saving || !soldNumbers.length
+                    ? "not-allowed"
+                    : "pointer",
                 background:
                   drawing || saving || !soldNumbers.length
                     ? "#9ca3af"
@@ -752,7 +818,11 @@ export default function DramaticSquaresDraw({
                     : "0 20px 42px rgba(249,115,22,0.38)",
               }}
             >
-              {drawing ? "Drawing..." : saving ? "Saving..." : "Start draw"}
+              {drawing
+                ? "Drawing..."
+                : saving
+                  ? "Saving..."
+                  : `Draw ${currentPrizeTitle}`}
             </button>
           </div>
         </div>
@@ -760,306 +830,3 @@ export default function DramaticSquaresDraw({
     </>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  launchCard: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 18,
-    padding: 18,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-    display: "grid",
-    gap: 14,
-  },
-  launchTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  eyebrow: {
-    display: "inline-flex",
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 11,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  title: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.03em",
-  },
-  description: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-    maxWidth: 620,
-  },
-  ticketCount: {
-    minWidth: 104,
-    padding: "12px 14px",
-    borderRadius: 18,
-    background: "#0f172a",
-    color: "#ffffff",
-    display: "grid",
-    gap: 3,
-    textAlign: "center",
-  },
-  launchActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  primaryButton: {
-    border: 0,
-    borderRadius: 999,
-    padding: "13px 18px",
-    fontWeight: 950,
-    color: "#ffffff",
-    boxShadow: "0 12px 24px rgba(15,23,42,0.18)",
-  },
-  miniNote: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  warning: {
-    margin: 0,
-    color: "#b91c1c",
-    fontWeight: 800,
-  },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 9999,
-    background:
-      "radial-gradient(circle at top, #334155, #111827 52%, #020617)",
-    color: "#ffffff",
-    display: "grid",
-    placeItems: "center",
-    padding: 24,
-    overflow: "hidden",
-  },
-  backgroundOrbOne: {
-    position: "absolute",
-    width: "52vw",
-    height: "52vw",
-    left: "-18vw",
-    top: "-22vw",
-    borderRadius: "50%",
-    background: "rgba(22,131,248,0.22)",
-    filter: "blur(10px)",
-  },
-  backgroundOrbTwo: {
-    position: "absolute",
-    width: "48vw",
-    height: "48vw",
-    right: "-18vw",
-    bottom: "-18vw",
-    borderRadius: "50%",
-    background: "rgba(250,204,21,0.14)",
-    filter: "blur(12px)",
-  },
-  ring: {
-    position: "absolute",
-    width: "min(760px, 82vw)",
-    height: "min(760px, 82vw)",
-    borderRadius: "50%",
-    border: "1px solid rgba(255,255,255,0.08)",
-    animation: "slowSpin 24s linear infinite",
-  },
-  confettiLayer: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-    overflow: "hidden",
-  },
-  topControls: {
-    position: "absolute",
-    top: 18,
-    right: 18,
-    display: "flex",
-    gap: 10,
-    zIndex: 3,
-  },
-  secondaryControl: {
-    border: "1px solid rgba(255,255,255,0.24)",
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    borderRadius: 999,
-    padding: "10px 14px",
-    cursor: "pointer",
-    fontWeight: 900,
-  },
-  closeButton: {
-    border: "1px solid rgba(255,255,255,0.3)",
-    background: "rgba(255,255,255,0.12)",
-    color: "#ffffff",
-    borderRadius: 999,
-    padding: "10px 14px",
-    cursor: "pointer",
-    fontWeight: 950,
-  },
-  stage: {
-    width: "min(860px, 100%)",
-    textAlign: "center",
-    position: "relative",
-    zIndex: 2,
-  },
-  stageEyebrow: {
-    margin: 0,
-    color: "#facc15",
-    fontSize: 13,
-    fontWeight: 950,
-    letterSpacing: "0.2em",
-    textTransform: "uppercase",
-  },
-  stageTitle: {
-    margin: "12px 0 18px",
-    fontSize: "clamp(36px, 6vw, 72px)",
-    lineHeight: 0.95,
-    letterSpacing: "-0.065em",
-  },
-  stageSubGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
-    margin: "0 auto 18px",
-    maxWidth: 560,
-  },
-  stageSubCard: {
-    display: "grid",
-    gap: 3,
-    padding: "10px 12px",
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
-  },
-  soundModeRow: {
-    display: "flex",
-    justifyContent: "center",
-    gap: 10,
-    flexWrap: "wrap",
-    margin: "0 auto 18px",
-  },
-  soundModeButton: {
-    border: "1px solid rgba(255,255,255,0.14)",
-    color: "#ffffff",
-    borderRadius: 999,
-    padding: "10px 14px",
-    cursor: "pointer",
-    fontWeight: 950,
-  },
-  prizeInputWrap: {
-    display: "grid",
-    gap: 8,
-    margin: "0 auto 22px",
-    maxWidth: 260,
-    textAlign: "left",
-    fontWeight: 900,
-  },
-  prizeInput: {
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.25)",
-    padding: "12px 14px",
-    fontSize: 18,
-    fontWeight: 950,
-    color: "#0f172a",
-  },
-  ticketReveal: {
-    position: "relative",
-    margin: "0 auto 18px",
-    display: "grid",
-    placeItems: "center",
-    width: "min(360px, 72vw)",
-    height: "min(360px, 72vw)",
-    borderRadius: "50%",
-    background:
-      "radial-gradient(circle, rgba(250,204,21,0.42), rgba(249,115,22,0.18), rgba(255,255,255,0.07))",
-    border: "2px solid rgba(250,204,21,0.65)",
-    overflow: "hidden",
-  },
-  ticketRevealShimmer: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
-    animation: "shimmer 2s ease-in-out infinite",
-  },
-  ticketNumber: {
-    position: "relative",
-    fontSize: "clamp(76px, 15vw, 130px)",
-    lineHeight: 1,
-    fontWeight: 950,
-    letterSpacing: "-0.085em",
-    textShadow: "0 0 32px rgba(250,204,21,0.9)",
-  },
-  ticketLabel: {
-    position: "absolute",
-    bottom: 42,
-    left: 0,
-    right: 0,
-    color: "#fde68a",
-    fontSize: 13,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.14em",
-  },
-  resultPanel: {
-    minHeight: 88,
-    display: "grid",
-    placeItems: "center",
-    gap: 6,
-  },
-  colourBadge: {
-    display: "inline-flex",
-    padding: "7px 12px",
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#111827",
-    fontWeight: 950,
-  },
-  colourBadgeMuted: {
-    display: "inline-flex",
-    padding: "7px 12px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.1)",
-    color: "#cbd5e1",
-    fontWeight: 950,
-  },
-  winnerName: {
-    margin: 0,
-    fontSize: "clamp(28px, 4vw, 44px)",
-    lineHeight: 1.05,
-    letterSpacing: "-0.03em",
-  },
-  winnerEmail: {
-    margin: 0,
-    color: "#cbd5e1",
-  },
-  error: {
-    margin: "14px auto 0",
-    color: "#fecaca",
-    maxWidth: 520,
-    fontWeight: 900,
-  },
-  startButton: {
-    marginTop: 24,
-    border: 0,
-    borderRadius: 18,
-    padding: "17px 28px",
-    fontSize: 18,
-    fontWeight: 950,
-    color: "#111827",
-  },
-};
