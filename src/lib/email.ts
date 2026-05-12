@@ -8,6 +8,9 @@ const DEFAULT_TICKET_IMAGE_URL =
 const WINNER_TROPHY_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/winner-trophy-gold.png";
 
+const AUCTION_GAVEL_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/auction-gavel-gold.png";
+
 type EmailBranding = {
   name?: string | null;
   logoUrl?: string | null;
@@ -142,6 +145,37 @@ function renderTicketHero(label = "SO Fundraising Ticket") {
   `;
 }
 
+function renderAuctionGavelHero(label = "Auction bid confirmation") {
+  return `
+    <div style="
+      margin:0 auto 26px;
+      max-width:320px;
+      border-radius:24px;
+      background:linear-gradient(135deg,#ffffff 0%,#f8fafc 52%,#eff6ff 100%);
+      border:1px solid #dbeafe;
+      box-shadow:0 14px 34px rgba(15,23,42,0.08);
+      padding:18px;
+      text-align:center;
+    ">
+      <img
+        src="${AUCTION_GAVEL_IMAGE_URL}"
+        alt="${escapeHtml(label)}"
+        width="260"
+        style="
+          display:block;
+          width:100%;
+          max-width:260px;
+          height:auto;
+          margin:0 auto;
+          border:0;
+          outline:none;
+          text-decoration:none;
+        "
+      />
+    </div>
+  `;
+}
+
 function renderWinnerTrophyHero(label = "Winner trophy") {
   return `
     <div style="
@@ -200,8 +234,10 @@ function renderEmailShell(params: {
   footer?: string;
   ticketImageLabel?: string;
   winnerTrophyLabel?: string;
+  auctionGavelLabel?: string;
   showTicketImage?: boolean;
   showWinnerTrophy?: boolean;
+  showAuctionGavel?: boolean;
 }) {
   const brand = getBranding(params.branding);
   const showTicketImage = params.showTicketImage !== false;
@@ -244,9 +280,11 @@ function renderEmailShell(params: {
               ${
                 params.showWinnerTrophy
                   ? renderWinnerTrophyHero(params.winnerTrophyLabel)
-                  : showTicketImage
-                    ? renderTicketHero(params.ticketImageLabel)
-                    : ""
+                  : params.showAuctionGavel
+                    ? renderAuctionGavelHero(params.auctionGavelLabel)
+                    : showTicketImage
+                      ? renderTicketHero(params.ticketImageLabel)
+                      : ""
               }
 
               ${
@@ -349,6 +387,7 @@ async function sendEmail(params: {
     id: result.data?.id,
   });
 }
+
 export async function sendReceiptEmail({
   to,
   name,
@@ -710,6 +749,7 @@ export async function sendSquaresWinnerEmail({
     console.error("squares winner email failed", err);
   }
 }
+
 export async function sendEventReceiptEmail({
   to,
   name,
@@ -925,7 +965,9 @@ export async function sendAuctionBidConfirmationEmail({
     branding,
     eyebrow: "Bid confirmation",
     heading: "Your bid has been placed",
-    ticketImageLabel: "Auction bid confirmation",
+    showAuctionGavel: true,
+    showTicketImage: false,
+    auctionGavelLabel: "Auction bid confirmation",
     intro: `Hi ${name || "there"}, thank you — your silent auction bid has been received.`,
     body: `
       <div style="
