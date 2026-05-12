@@ -602,7 +602,9 @@ export default function DramaticSquaresDraw({
 
       setPrizeNumber(String(parsedPrizeNumber + 1));
 
-      const winnerStarted = await playRealSound("winner");
+     stopRealAudio();
+
+const winnerStarted = await playRealSound("winner");
 
       if (!winnerStarted && audioCtx) {
         playWinnerFallback(audioCtx);
