@@ -129,30 +129,48 @@ function renderTicketHero(label = "SO Fundraising Ticket") {
 function renderWinnerTrophyHero(label = "Winner trophy") {
   return `
     <div style="
-      margin:0 auto 26px;
-      max-width:300px;
-      border-radius:28px;
-      background:linear-gradient(135deg,#0f172a 0%,#111827 48%,#312e81 100%);
-      border:1px solid rgba(250,204,21,0.42);
-      box-shadow:0 20px 46px rgba(15,23,42,0.18);
-      padding:20px;
+      margin:0 auto 30px;
+      max-width:420px;
+      border-radius:34px;
+      background:
+        radial-gradient(circle at top, rgba(250,204,21,0.18), transparent 52%),
+        linear-gradient(135deg,#020617 0%,#0f172a 50%,#312e81 100%);
+      border:1px solid rgba(250,204,21,0.45);
+      box-shadow:
+        0 28px 60px rgba(15,23,42,0.24),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      padding:28px 22px;
       text-align:center;
     ">
       <img
         src="${WINNER_TROPHY_IMAGE_URL}"
         alt="${escapeHtml(label)}"
-        width="220"
+        width="320"
         style="
           display:block;
           width:100%;
-          max-width:220px;
+          max-width:320px;
           height:auto;
           margin:0 auto;
           border:0;
           outline:none;
           text-decoration:none;
+          filter:
+            drop-shadow(0 12px 30px rgba(250,204,21,0.35))
+            drop-shadow(0 0 20px rgba(250,204,21,0.18));
         "
       />
+
+      <div style="
+        margin-top:14px;
+        color:#facc15;
+        font-size:13px;
+        font-weight:900;
+        letter-spacing:0.18em;
+        text-transform:uppercase;
+      ">
+        Winner Confirmed
+      </div>
     </div>
   `;
 }
