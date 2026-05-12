@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
@@ -12,6 +12,9 @@ import SquaresPrizeSettings from "./SquaresPrizeSettings";
 import DramaticSquaresDraw from "./DramaticSquaresDraw";
 
 const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type PageProps = {
   params: {
@@ -111,6 +114,10 @@ function statusStyle(status: string): CSSProperties {
   };
 }
 
+function isConfigured(value: unknown) {
+  return String(value ?? "").trim().length > 0;
+}
+
 async function safeListSquaresWinners(gameId: string) {
   try {
     return await listSquaresWinners(gameId);
@@ -148,6 +155,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   const freeEntry = config.free_entry ?? {};
   const hasCustomImage = Boolean(game.image_url);
 
+  const imageFocusX = Number(config.image_focus_x ?? 50);
+  const imageFocusY = Number(config.image_focus_y ?? 50);
+  const imageObjectPosition = `${imageFocusX}% ${imageFocusY}%`;
+
   const savedPrizes = Array.isArray(config.prizes)
     ? (config.prizes as Prize[])
     : [];
@@ -183,6 +194,14 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   const remainingSquares = Math.max(totalSquares - soldSquares, 0);
   const progress = getProgressPercent(soldSquares, totalSquares);
 
+  const legalQuestionEnabled =
+    isConfigured(question.text) && isConfigured(question.answer);
+
+  const postalEntryEnabled =
+    isConfigured(freeEntry.address) || isConfigured(freeEntry.instructions);
+
+  const prizesConfigured = savedPrizes.length > 0;
+
   return (
     <main style={styles.page}>
       <section style={styles.topBar}>
@@ -216,6 +235,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           ) : (
             <p style={styles.heroDescriptionMuted}>No description added yet.</p>
           )}
+
+          <div style={styles.heroMetaGrid}>
+            <HeroMeta label="Draw" value={formatDrawDate(game.draw_at)} />
+            <HeroMeta label="Squares sold" value={`${soldSquares}/${totalSquares}`} />
+            <HeroMeta label="Progress" value={`${progress}% sold`} />
+          </div>
         </div>
 
         <div style={styles.heroImageWrap}>
@@ -225,6 +250,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
             style={{
               ...styles.heroImage,
               objectFit: hasCustomImage ? "cover" : "contain",
+              objectPosition: hasCustomImage ? imageObjectPosition : "center",
               padding: hasCustomImage ? 0 : 28,
               background: hasCustomImage
                 ? "#1e293b"
@@ -269,273 +295,318 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         style={styles.form}
       >
         <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Edit squares game
-              </h2>
-              <p style={styles.sectionDescription}>
-                Update the public details, image, pricing and draw settings.
-              </p>
+          <details open style={styles.adminDetails}>
+            <summary style={styles.adminSummary}>
+              <div>
+                <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                  Edit squares game
+                </h2>
+                <p style={styles.sectionDescription}>
+                  Update the public details, image, pricing and draw settings.
+                </p>
+              </div>
+
+              <div style={styles.summaryPillRow}>
+                <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
+                <StatusMiniPill label="Postal" active={postalEntryEnabled} />
+                <span style={styles.adminSummaryToggle}>Open / close</span>
+              </div>
+            </summary>
+
+            <div style={styles.adminDetailsBody}>
+              <section style={styles.innerPanel}>
+                <div style={styles.innerHeader}>
+                  <div>
+                    <h3 style={styles.subTitle}>Public overview</h3>
+                    <p style={styles.sectionDescription}>
+                      These details are shown on the public squares page.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.twoColumnNoMargin}>
+                  <Field label="Title">
+                    <input
+                      name="title"
+                      defaultValue={game.title}
+                      required
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Slug">
+                    <input
+                      name="slug"
+                      defaultValue={game.slug}
+                      required
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Description">
+                  <textarea
+                    name="description"
+                    rows={4}
+                    defaultValue={game.description ?? ""}
+                    style={styles.textarea}
+                  />
+                </Field>
+
+                <div style={styles.mediaBox}>
+                  <div>
+                    <h3 style={styles.subTitle}>Squares image</h3>
+                    <p style={styles.sectionDescription}>
+                      Upload or replace the public image for this squares game.
+                    </p>
+                    <ImageFocusUploadField
+                      currentImageUrl={game.image_url || ""}
+                      currentFocusX={imageFocusX}
+                      currentFocusY={imageFocusY}
+                      label="Squares image"
+                      previewAlt={game.title}
+                    />
+                  </div>
+
+                  <div style={styles.previewBox}>
+                    <img
+                      src={game.image_url || DEFAULT_SQUARES_IMAGE}
+                      alt={game.title || "SO Squares"}
+                      style={{
+                        ...styles.previewImage,
+                        objectFit: hasCustomImage ? "cover" : "contain",
+                        objectPosition: hasCustomImage
+                          ? imageObjectPosition
+                          : "center",
+                        padding: hasCustomImage ? 0 : 22,
+                        background: hasCustomImage
+                          ? "#ffffff"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section style={styles.innerPanel}>
+                <div style={styles.innerHeader}>
+                  <div>
+                    <h3 style={styles.subTitle}>Squares setup</h3>
+                    <p style={styles.sectionDescription}>
+                      Configure board size, pricing, draw date and status.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.threeColumn}>
+                  <Field label="Draw date">
+                    <input
+                      name="draw_at"
+                      type="datetime-local"
+                      defaultValue={formatDateTimeLocal(game.draw_at)}
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Total squares">
+                    <input
+                      name="total_squares"
+                      type="number"
+                      min={1}
+                      max={500}
+                      defaultValue={game.total_squares}
+                      required
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Price per square">
+                    <input
+                      name="price_per_square"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      defaultValue={moneyFromCents(game.price_per_square_cents)}
+                      required
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Currency">
+                    <select
+                      name="currency"
+                      defaultValue={currency}
+                      style={styles.input}
+                    >
+                      <option value="GBP">GBP</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Status">
+                    <select
+                      name="status"
+                      defaultValue={game.status}
+                      style={styles.input}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="closed">Closed</option>
+                      <option value="drawn">Drawn</option>
+                    </select>
+                  </Field>
+                </div>
+              </section>
+
+              <section style={styles.innerPanel}>
+                <div style={styles.innerHeader}>
+                  <div>
+                    <h3 style={styles.subTitle}>Legal & postal entry</h3>
+                    <p style={styles.sectionDescription}>
+                      Add a skill-based question and the free postal entry route
+                      shown on the public squares page.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.twoColumnNoMargin}>
+                  <Field label="Entry question">
+                    <input
+                      name="question_text"
+                      defaultValue={String(question.text ?? "")}
+                      placeholder="e.g. What colour is a London taxi?"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Correct answer">
+                    <input
+                      name="question_answer"
+                      defaultValue={String(question.answer ?? "")}
+                      placeholder="e.g. black"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Postal address">
+                  <textarea
+                    name="free_entry_address"
+                    rows={3}
+                    defaultValue={String(freeEntry.address ?? "")}
+                    placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
+                    style={styles.textarea}
+                  />
+                </Field>
+
+                <Field label="Postal instructions">
+                  <textarea
+                    name="free_entry_instructions"
+                    rows={4}
+                    defaultValue={String(freeEntry.instructions ?? "")}
+                    placeholder="Include your full name, email address, phone number, squares game name, answer to the entry question and preferred square number if applicable."
+                    style={styles.textarea}
+                  />
+                </Field>
+
+                <Field label="Postal entry closing date">
+                  <input
+                    name="free_entry_closes_at"
+                    type="datetime-local"
+                    defaultValue={formatDateTimeLocal(freeEntry.closes_at)}
+                    style={styles.input}
+                  />
+                </Field>
+
+                <p style={styles.helpText}>
+                  Postal entries should include an email address so the entrant
+                  can be contacted if they win and included in the automatic or
+                  dramatic draw.
+                </p>
+              </section>
+
+              <section style={styles.innerPanel}>
+                <div style={styles.innerHeader}>
+                  <div>
+                    <h3 style={styles.subTitle}>Auto draw range</h3>
+                    <p style={styles.sectionDescription}>
+                      Choose which prize numbers the randomizer should draw.
+                      Example: set from 6 to 999 to keep the top 5 prizes for a
+                      live draw.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.twoColumnNoMargin}>
+                  <Field label="Auto draw from prize number">
+                    <input
+                      name="auto_draw_from_prize"
+                      type="number"
+                      min={1}
+                      defaultValue={Number(config.auto_draw_from_prize || 1)}
+                      placeholder="6"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Auto draw to prize number">
+                    <input
+                      name="auto_draw_to_prize"
+                      type="number"
+                      min={1}
+                      defaultValue={Number(config.auto_draw_to_prize || 999)}
+                      placeholder="999"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+              </section>
+
+              <section style={styles.submitBarInner}>
+                <div>
+                  <strong style={{ color: "#0f172a" }}>Save changes</strong>
+                  <div style={styles.mutedSmall}>
+                    This updates the public squares page and admin values.
+                  </div>
+                </div>
+
+                <button type="submit" style={styles.submitButton}>
+                  Save squares
+                </button>
+              </section>
             </div>
-
-            <button type="submit" style={styles.submitButton}>
-              Save squares
-            </button>
-          </div>
-
-          <div style={styles.twoColumn}>
-            <Field label="Title">
-              <input
-                name="title"
-                defaultValue={game.title}
-                required
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Slug">
-              <input
-                name="slug"
-                defaultValue={game.slug}
-                required
-                style={styles.input}
-              />
-            </Field>
-          </div>
-
-          <Field label="Description">
-            <textarea
-              name="description"
-              rows={4}
-              defaultValue={game.description ?? ""}
-              style={styles.textarea}
-            />
-          </Field>
-
-          <div style={styles.mediaBox}>
-            <div>
-              <h3 style={styles.subTitle}>Squares image</h3>
-              <p style={styles.sectionDescription}>
-                Upload or replace the public image for this squares game.
-              </p>
-              <ImageFocusUploadField
-                currentImageUrl={game.image_url || ""}
-                currentFocusX={Number(config.image_focus_x ?? 50)}
-                currentFocusY={Number(config.image_focus_y ?? 50)}
-              />
-            </div>
-
-            <div style={styles.previewBox}>
-              <img
-                src={game.image_url || DEFAULT_SQUARES_IMAGE}
-                alt={game.title || "SO Squares"}
-                style={{
-                  ...styles.previewImage,
-                  objectFit: hasCustomImage ? "cover" : "contain",
-                  padding: hasCustomImage ? 0 : 22,
-                  background: hasCustomImage
-                    ? "#ffffff"
-                    : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-          </div>
+          </details>
         </section>
 
         <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Squares setup
-              </h2>
-              <p style={styles.sectionDescription}>
-                Configure board size, pricing, draw date and status.
-              </p>
+          <details open={!prizesConfigured} style={styles.adminDetails}>
+            <summary style={styles.adminSummary}>
+              <div>
+                <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                  Prize management
+                </h2>
+                <p style={styles.sectionDescription}>
+                  Manage prize names, descriptions and public visibility.
+                </p>
+              </div>
+
+              <span style={styles.adminSummaryToggle}>Open / close</span>
+            </summary>
+
+            <div style={styles.adminDetailsBody}>
+              <SquaresPrizeSettings initialPrizes={savedPrizes} />
             </div>
-          </div>
-
-          <div style={styles.threeColumn}>
-            <Field label="Draw date">
-              <input
-                name="draw_at"
-                type="datetime-local"
-                defaultValue={formatDateTimeLocal(game.draw_at)}
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Total squares">
-              <input
-                name="total_squares"
-                type="number"
-                min={1}
-                max={500}
-                defaultValue={game.total_squares}
-                required
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Price per square">
-              <input
-                name="price_per_square"
-                type="number"
-                min={0}
-                step="0.01"
-                defaultValue={moneyFromCents(game.price_per_square_cents)}
-                required
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Currency">
-              <select name="currency" defaultValue={currency} style={styles.input}>
-                <option value="GBP">GBP</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </Field>
-
-            <Field label="Status">
-              <select name="status" defaultValue={game.status} style={styles.input}>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed</option>
-                <option value="drawn">Drawn</option>
-              </select>
-            </Field>
-          </div>
-        </section>
-
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Entry question (legal)
-              </h2>
-              <p style={styles.sectionDescription}>
-                Add a skill-based question for the public squares checkout flow.
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.twoColumn}>
-            <Field label="Question">
-              <input
-                name="question_text"
-                defaultValue={String(question.text ?? "")}
-                placeholder="e.g. What colour is a London taxi?"
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Correct answer">
-              <input
-                name="question_answer"
-                defaultValue={String(question.answer ?? "")}
-                placeholder="e.g. black"
-                style={styles.input}
-              />
-            </Field>
-          </div>
-
-          <p style={styles.sectionDescription}>
-            The public squares page can require this answer before checkout when
-            a question is set.
-          </p>
-        </section>
-
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Free postal entry
-              </h2>
-              <p style={styles.sectionDescription}>
-                Add the postal entry route shown on the public squares page.
-              </p>
-            </div>
-          </div>
-
-          <Field label="Postal address">
-            <textarea
-              name="free_entry_address"
-              rows={3}
-              defaultValue={String(freeEntry.address ?? "")}
-              placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
-              style={styles.textarea}
-            />
-          </Field>
-
-          <Field label="Postal instructions">
-            <textarea
-              name="free_entry_instructions"
-              rows={4}
-              defaultValue={String(freeEntry.instructions ?? "")}
-              placeholder="Include your full name, email address, phone number, squares game name, answer to the entry question and preferred square number if applicable."
-              style={styles.textarea}
-            />
-          </Field>
-
-          <Field label="Postal entry closing date">
-            <input
-              name="free_entry_closes_at"
-              type="datetime-local"
-              defaultValue={formatDateTimeLocal(freeEntry.closes_at)}
-              style={styles.input}
-            />
-          </Field>
-        </section>
-
-        <section style={styles.section}>
-          <SquaresPrizeSettings initialPrizes={savedPrizes} />
-        </section>
-
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Auto draw range
-              </h2>
-              <p style={styles.sectionDescription}>
-                Choose which prize numbers the randomizer should draw. Example:
-                set from 6 to 999 to keep the top 5 prizes for a live draw.
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.twoColumn}>
-            <Field label="Auto draw from prize number">
-              <input
-                name="auto_draw_from_prize"
-                type="number"
-                min={1}
-                defaultValue={Number(config.auto_draw_from_prize || 1)}
-                placeholder="6"
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Auto draw to prize number">
-              <input
-                name="auto_draw_to_prize"
-                type="number"
-                min={1}
-                defaultValue={Number(config.auto_draw_to_prize || 999)}
-                placeholder="999"
-                style={styles.input}
-              />
-            </Field>
-          </div>
+          </details>
         </section>
 
         <section style={styles.submitBar}>
           <div>
-            <strong style={{ color: "#0f172a" }}>Save changes</strong>
+            <strong style={{ color: "#0f172a" }}>Save all squares settings</strong>
             <div style={styles.mutedSmall}>
-              This updates the public squares page and admin values.
+              Use this after changing details, legal settings, prizes or draw
+              ranges.
             </div>
           </div>
 
@@ -546,79 +617,95 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
       </form>
 
       <section style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-              Winners
-            </h2>
-            <p style={styles.sectionDescription}>
-              View winners, auto draw remaining prizes, or manually add a live
-              draw winner.
-            </p>
-          </div>
-        </div>
-
-        {winners.length ? (
-          <div style={styles.winnerList}>
-            {winners.map((winner: any) => (
-              <div key={winner.id} style={styles.winnerCard}>
-                <div>
-                  <div style={styles.winnerLabel}>Prize</div>
-                  <div style={styles.winnerValue}>{winner.prize_title}</div>
-                </div>
-
-                <div>
-                  <div style={styles.winnerLabel}>Square</div>
-                  <div style={styles.winnerValue}>#{winner.square_number}</div>
-                </div>
-
-                <div>
-                  <div style={styles.winnerLabel}>Winner</div>
-                  <div style={styles.winnerValue}>
-                    {firstNameOnly(winner.customer_name)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={styles.noWinnersBox}>No winners have been drawn yet.</div>
-        )}
-
-        <details open style={styles.drawDetails}>
-          <summary style={styles.drawSummary}>
+        <details style={styles.adminDetails}>
+          <summary style={styles.adminSummary}>
             <div>
-              <h3 style={styles.subTitle}>Draw tools</h3>
+              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+                Draw centre
+              </h2>
               <p style={styles.sectionDescription}>
-                Automatic draw and full-screen dramatic draw controls.
+                View winners, auto draw remaining prizes, or open the dramatic
+                live draw.
               </p>
             </div>
-            <span style={styles.drawToggle}>Open / close</span>
+
+            <div style={styles.summaryPillRow}>
+              <span style={styles.neutralPill}>{winners.length} winners</span>
+              <span style={styles.neutralPill}>
+                {soldSquareOptions.length} eligible squares
+              </span>
+              <span style={styles.adminSummaryToggle}>Open / close</span>
+            </div>
           </summary>
 
-          <div style={styles.drawGrid}>
-            <form
-              action={`/api/admin/squares/${game.id}/draw/auto`}
-              method="post"
-              style={styles.drawPanel}
-            >
-              <h3 style={styles.subTitle}>Automatic random draw</h3>
-              <p style={styles.sectionDescription}>
-                Randomly draw remaining undrawn prizes using the saved auto draw
-                range.
-              </p>
+          <div style={styles.adminDetailsBody}>
+            {winners.length ? (
+              <div style={styles.winnerList}>
+                {winners.map((winner: any) => (
+                  <div key={winner.id} style={styles.winnerCard}>
+                    <div style={styles.winnerPrizeIcon}>
+                      {winner.prize_number}
+                    </div>
 
-              <button type="submit" style={styles.drawButton}>
-                Auto draw remaining winners
-              </button>
-            </form>
+                    <div>
+                      <div style={styles.winnerLabel}>Prize</div>
+                      <div style={styles.winnerValue}>{winner.prize_title}</div>
+                    </div>
 
-            <DramaticSquaresDraw
-              gameId={game.id}
-              soldSquareOptions={soldSquareOptions}
-              drawnPrizeNumbers={drawnPrizeNumbers}
-              drawnSquareNumbers={drawnSquareNumbers}
-            />
+                    <div>
+                      <div style={styles.winnerLabel}>Square</div>
+                      <div style={styles.winnerValue}>#{winner.square_number}</div>
+                    </div>
+
+                    <div>
+                      <div style={styles.winnerLabel}>Winner</div>
+                      <div style={styles.winnerValue}>
+                        {firstNameOnly(winner.customer_name)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={styles.noWinnersBox}>No winners have been drawn yet.</div>
+            )}
+
+            <details open style={styles.drawDetails}>
+              <summary style={styles.drawSummary}>
+                <div>
+                  <h3 style={styles.subTitle}>Live draw tools</h3>
+                  <p style={styles.sectionDescription}>
+                    Automatic draw and full-screen dramatic draw controls.
+                  </p>
+                </div>
+                <span style={styles.drawToggle}>Open / close</span>
+              </summary>
+
+              <div style={styles.drawGrid}>
+                <form
+                  action={`/api/admin/squares/${game.id}/draw/auto`}
+                  method="post"
+                  style={styles.drawPanel}
+                >
+                  <h3 style={styles.subTitle}>Automatic random draw</h3>
+                  <p style={styles.sectionDescription}>
+                    Randomly draw remaining undrawn prizes using the saved auto
+                    draw range.
+                  </p>
+
+                  <button type="submit" style={styles.drawButton}>
+                    Auto draw remaining winners
+                  </button>
+                </form>
+
+                <DramaticSquaresDraw
+                  gameId={game.id}
+                  soldSquareOptions={soldSquareOptions}
+                  drawnPrizeNumbers={drawnPrizeNumbers}
+                  drawnSquareNumbers={drawnSquareNumbers}
+                />
+              </div>
+            </details>
           </div>
         </details>
       </section>
@@ -626,7 +713,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.summaryCard}>
       <div style={styles.summaryLabel}>{label}</div>
@@ -635,12 +722,36 @@ function SummaryCard({ label, value }: { label: string; value: React.ReactNode }
   );
 }
 
+function HeroMeta({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.heroMetaCard}>
+      <div style={styles.heroMetaLabel}>{label}</div>
+      <div style={styles.heroMetaValue}>{value}</div>
+    </div>
+  );
+}
+
+function StatusMiniPill({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span
+      style={{
+        ...styles.statusMiniPill,
+        background: active ? "#ecfdf5" : "#f8fafc",
+        borderColor: active ? "#bbf7d0" : "#e2e8f0",
+        color: active ? "#166534" : "#64748b",
+      }}
+    >
+      {active ? "✓" : "•"} {label}
+    </span>
+  );
+}
+
 function Field({
   label,
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label style={styles.field}>
@@ -669,7 +780,7 @@ const styles: Record<string, CSSProperties> = {
   backLink: {
     color: "#334155",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
   },
   publicLink: {
     display: "inline-flex",
@@ -681,30 +792,33 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
     fontSize: 14,
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 260px",
-    gap: 18,
+    gridTemplateColumns: "minmax(0, 1fr) 280px",
+    gap: 20,
     alignItems: "center",
-    padding: 22,
-    borderRadius: 24,
-    background: "#0f172a",
+    padding: 24,
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.26), transparent 32%), linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%)",
     color: "#ffffff",
     marginBottom: 16,
+    minHeight: 330,
+    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
   },
   heroContent: {
     minWidth: 0,
   },
   eyebrow: {
     display: "inline-flex",
-    padding: "5px 9px",
+    padding: "6px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 10,
@@ -718,50 +832,76 @@ const styles: Record<string, CSSProperties> = {
   },
   heroTitle: {
     margin: 0,
-    fontSize: 34,
-    lineHeight: 1.08,
-    letterSpacing: "-0.04em",
+    fontSize: 38,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
     wordBreak: "break-word",
   },
   statusPill: {
-    padding: "7px 11px",
+    padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 13,
     textTransform: "capitalize",
-    fontWeight: 900,
+    fontWeight: 950,
   },
   heroSlug: {
-    margin: "8px 0 0",
+    margin: "9px 0 0",
     color: "#cbd5e1",
     fontSize: 14,
-    fontWeight: 700,
+    fontWeight: 800,
     wordBreak: "break-word",
   },
   heroDescription: {
-    margin: "12px 0 0",
+    margin: "14px 0 0",
     color: "#e2e8f0",
     lineHeight: 1.55,
-    maxWidth: 720,
+    maxWidth: 760,
   },
   heroDescriptionMuted: {
-    margin: "12px 0 0",
+    margin: "14px 0 0",
     color: "#94a3b8",
     lineHeight: 1.55,
   },
-  heroImageWrap: {
-    width: "100%",
-    height: 220,
-    maxHeight: 220,
-    borderRadius: 18,
-    background: "#1e293b",
+  heroMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 22,
+    maxWidth: 700,
+  },
+  heroMetaCard: {
+    padding: "12px 14px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.12)",
+  },
+  heroMetaLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  heroMetaValue: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: 950,
+    marginTop: 4,
+  },
+  heroImageWrap: {
+    width: 280,
+    height: 280,
+    maxHeight: 280,
+    borderRadius: 22,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.14)",
     overflow: "hidden",
+    alignSelf: "center",
+    boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
   },
   heroImage: {
     width: "100%",
     height: "100%",
-    maxHeight: 220,
+    maxHeight: 280,
     display: "block",
   },
   summaryGrid: {
@@ -771,8 +911,8 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
   summaryCard: {
-    padding: 15,
-    borderRadius: 18,
+    padding: 16,
+    borderRadius: 20,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
@@ -780,18 +920,18 @@ const styles: Record<string, CSSProperties> = {
   summaryLabel: {
     color: "#64748b",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
   },
   summaryValue: {
     color: "#0f172a",
     fontSize: 22,
-    fontWeight: 900,
+    fontWeight: 950,
     marginTop: 5,
     wordBreak: "break-word",
   },
   progressCard: {
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
@@ -806,18 +946,18 @@ const styles: Record<string, CSSProperties> = {
   },
   progressPercent: {
     color: "#166534",
-    fontWeight: 900,
+    fontWeight: 950,
     fontSize: 18,
   },
   progressTrack: {
-    height: 10,
+    height: 11,
     background: "#e2e8f0",
     borderRadius: 999,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    background: "#16a34a",
+    background: "linear-gradient(90deg, #16a34a, #22c55e)",
     borderRadius: 999,
   },
   form: {
@@ -826,25 +966,17 @@ const styles: Record<string, CSSProperties> = {
   },
   section: {
     padding: 18,
-    borderRadius: 22,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
   },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 16,
-  },
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.02em",
+    fontSize: 24,
+    letterSpacing: "-0.03em",
   },
   sectionDescription: {
     margin: "5px 0 0",
@@ -852,11 +984,88 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
   },
+  adminDetails: {
+    display: "grid",
+    gap: 0,
+  },
+  adminSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    flexWrap: "wrap",
+  },
+  adminSummaryToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  adminDetailsBody: {
+    display: "grid",
+    gap: 14,
+    marginTop: 16,
+  },
+  summaryPillRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+  },
+  statusMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  neutralPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  innerPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  innerHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
   twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: 12,
     marginBottom: 12,
+  },
+  twoColumnNoMargin: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
   },
   threeColumn: {
     display: "grid",
@@ -871,8 +1080,7 @@ const styles: Record<string, CSSProperties> = {
   label: {
     color: "#334155",
     fontSize: 13,
-    fontWeight: 900,
-    marginBottom: 6,
+    fontWeight: 950,
   },
   input: {
     width: "100%",
@@ -901,8 +1109,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
     gap: 16,
     padding: 14,
-    borderRadius: 18,
-    background: "#f8fafc",
+    borderRadius: 20,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
   subTitle: {
@@ -930,10 +1138,21 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     flexWrap: "wrap",
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 20,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     marginBottom: 16,
+  },
+  submitBarInner: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
   },
   submitButton: {
     padding: "13px 20px",
@@ -941,7 +1160,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
@@ -950,6 +1169,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     marginTop: 3,
   },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    margin: 0,
+  },
   winnerList: {
     display: "grid",
     gap: 10,
@@ -957,33 +1181,44 @@ const styles: Record<string, CSSProperties> = {
   },
   winnerCard: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.4fr) 120px minmax(0, 1fr)",
+    gridTemplateColumns: "46px minmax(0, 1.4fr) 120px minmax(0, 1fr)",
     gap: 12,
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    alignItems: "start",
+    alignItems: "center",
+  },
+  winnerPrizeIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
   },
   winnerLabel: {
     color: "#64748b",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
     marginBottom: 4,
   },
   winnerValue: {
     color: "#0f172a",
     fontSize: 16,
-    fontWeight: 900,
+    fontWeight: 950,
     wordBreak: "break-word",
   },
   noWinnersBox: {
-    padding: 14,
+    padding: 16,
     borderRadius: 16,
     background: "#f8fafc",
     border: "1px dashed #cbd5e1",
     color: "#64748b",
-    fontWeight: 800,
+    fontWeight: 900,
     marginBottom: 14,
   },
   drawButton: {
@@ -992,7 +1227,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#16a34a",
     color: "#ffffff",
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
   },
   drawGrid: {
@@ -1009,10 +1244,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   drawDetails: {
-    padding: 16,
-    borderRadius: 18,
+    padding: 0,
+    borderRadius: 20,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    marginTop: 14,
   },
   drawSummary: {
     display: "flex",
@@ -1021,7 +1258,10 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     cursor: "pointer",
     listStyle: "none",
-    marginBottom: 14,
+    padding: 16,
+    background: "#ffffff",
+    borderBottom: "1px solid #e2e8f0",
+    flexWrap: "wrap",
   },
   drawToggle: {
     flexShrink: 0,
@@ -1031,7 +1271,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#1d4ed8",
     border: "1px solid #bfdbfe",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
