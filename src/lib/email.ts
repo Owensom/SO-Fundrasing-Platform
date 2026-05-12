@@ -456,6 +456,7 @@ export async function sendWinnerEmail({
   branding?: EmailBranding;
 }) {
   const safeColour = colour || "Default";
+  const safePrizeTitle = String(prizeTitle || "").trim();
 
   const html = renderEmailShell({
     branding,
@@ -490,11 +491,11 @@ export async function sendWinnerEmail({
           margin-top:12px;
         ">
           ${
-            prizeTitle
+            safePrizeTitle
               ? `
                 <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
                   <strong>Prize won:</strong>
-                  ${escapeHtml(prizeTitle)}
+                  ${escapeHtml(safePrizeTitle)}
                 </p>
               `
               : ""
@@ -521,8 +522,8 @@ export async function sendWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: prizeTitle
-        ? `You won ${prizeTitle}!`
+      subject: safePrizeTitle
+        ? `You won ${safePrizeTitle}!`
         : `You won ${raffleTitle}!`,
       html,
       branding,
@@ -531,7 +532,6 @@ export async function sendWinnerEmail({
     console.error("winner email failed", err);
   }
 }
-
 export async function sendSquaresReceiptEmail({
   to,
   name,
@@ -578,23 +578,21 @@ export async function sendSquaresReceiptEmail({
     ticketImageLabel: "Squares entry confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
     body: `
-     <div style="
-  border-radius:16px;
-  background:#ffffff;
-  border:1px solid #bbf7d0;
-  padding:16px;
-  margin-top:12px;
-">
-  <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
-    <strong>Winning ticket:</strong>
-    #${escapeHtml(ticketNumber)}
-  </p>
+      <div style="
+        border:1px solid #e2e8f0;
+        border-radius:18px;
+        padding:18px;
+        margin:20px 0;
+        background:#f8fafc;
+      ">
+        ${renderInfoRow("Game", gameTitle)}
+        ${renderInfoRow("Amount paid", formattedAmount)}
 
-  <p style="margin:0;font-size:17px;color:#0f172a;">
-    <strong>Colour:</strong>
-    ${colourDot(colour)}${escapeHtml(safeColour)}
-  </p>
-</div>
+        <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
+          <strong style="color:#0f172a;">Reference:</strong>
+          ${escapeHtml(reservationToken)}
+        </p>
+      </div>
 
       <h2 style="font-size:20px;margin:24px 0 12px;color:#0f172a;">
         Your squares
@@ -881,7 +879,6 @@ export async function sendEventWinnerEmail({
     console.error("event winner email failed", err);
   }
 }
-
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
@@ -1038,6 +1035,7 @@ export async function sendAuctionWinnerEmail({
   branding?: EmailBranding;
 }) {
   const winningAmount = formatCurrency(winningAmountCents, currency);
+  const prizeName = String(itemTitle || "").trim() || "Auction prize";
 
   const html = renderEmailShell({
     branding,
@@ -1055,9 +1053,36 @@ export async function sendAuctionWinnerEmail({
         margin:20px 0;
         background:#ecfdf5;
       ">
-        ${renderInfoRow("Auction", auctionTitle)}
-        ${renderInfoRow("Prize won", itemTitle)}
-        ${renderInfoRow("Winning bid", winningAmount)}
+        <p style="
+          margin:0 0 8px;
+          color:#166534;
+          font-size:13px;
+          font-weight:900;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        ">
+          Prize won
+        </p>
+
+        <h2 style="
+          margin:0 0 18px;
+          color:#0f172a;
+          font-size:26px;
+          line-height:1.2;
+          font-weight:900;
+        ">
+          ${escapeHtml(prizeName)}
+        </h2>
+
+        <div style="
+          border-radius:16px;
+          background:#ffffff;
+          border:1px solid #bbf7d0;
+          padding:16px;
+        ">
+          ${renderInfoRow("Auction", auctionTitle)}
+          ${renderInfoRow("Winning bid", winningAmount)}
+        </div>
       </div>
 
       <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
@@ -1069,7 +1094,7 @@ export async function sendAuctionWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: `You won ${itemTitle}`,
+      subject: `You won ${prizeName}`,
       html,
       branding,
     });
