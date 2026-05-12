@@ -6,6 +6,8 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   deleteAuction,
   listAuctions,
+  updateAuction,
+  type AuctionStatus,
 } from "../../../../api/_lib/auctions-repo";
 
 const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
@@ -36,7 +38,7 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
 
   if (clean === "published") {
     return {
-      background: "#ecfdf5",
+      background: "#dcfce7",
       color: "#166534",
       borderColor: "#bbf7d0",
     };
@@ -51,25 +53,23 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   }
 
   return {
-    background: "#f8fafc",
+    background: "#f1f5f9",
     color: "#475569",
     borderColor: "#e2e8f0",
   };
 }
 
-async function deleteAuctionAction(formData: FormData) {
-  "use server";
+function cleanAuctionStatus(value: FormDataEntryValue | null): AuctionStatus {
+  const clean = String(value || "").trim().toLowerCase();
 
-  const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+  if (clean === "published" || clean === "closed" || clean === "draft") {
+    return clean as AuctionStatus;
+  }
 
-  const id = String(formData.get("id") || "").trim();
-  if (id) await deleteAuction(id);
-
-  redirect("/admin/auctions");
+  return "draft" as AuctionStatus;
 }
 
-export default async function AdminAuctionsPage() {
+async function requireAuctionDashboardAccess() {
   const session = await auth();
 
   if (!session?.user) {
@@ -78,13 +78,78 @@ export default async function AdminAuctionsPage() {
 
   const tenantSlug = await getTenantSlugFromHeaders();
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((v) => String(v))
+    ? session.user.tenantSlugs.map((value) => String(value))
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
+  return tenantSlug;
+}
+
+async function updateAuctionStatusAction(formData: FormData) {
+  "use server";
+
+  const tenantSlug = await requireAuctionDashboardAccess();
+
+  const id = String(formData.get("id") || "").trim();
+  const status = cleanAuctionStatus(formData.get("status"));
+
+  if (!id) {
+    redirect("/admin/auctions?error=missing-auction");
+  }
+
+  const auctions = await listAuctions(tenantSlug);
+  const auction = auctions.find((item) => item.id === id);
+
+  if (!auction || auction.tenant_slug !== tenantSlug) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  await updateAuction(id, {
+    status,
+  });
+
+  redirect("/admin/auctions?saved=status");
+}
+
+async function deleteAuctionAction(formData: FormData) {
+  "use server";
+
+  const tenantSlug = await requireAuctionDashboardAccess();
+
+  const id = String(formData.get("id") || "").trim();
+
+  if (!id) {
+    redirect("/admin/auctions?error=missing-auction");
+  }
+
+  const auctions = await listAuctions(tenantSlug);
+  const auction = auctions.find((item) => item.id === id);
+
+  if (!auction || auction.tenant_slug !== tenantSlug) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  if (auction.status !== "closed") {
+    redirect("/admin/auctions?error=close-before-delete");
+  }
+
+  await deleteAuction(id);
+
+  redirect("/admin/auctions?saved=deleted");
+}
+
+export default async function AdminAuctionsPage({
+  searchParams,
+}: {
+  searchParams?: {
+    saved?: string;
+    error?: string;
+  };
+}) {
+  const tenantSlug = await requireAuctionDashboardAccess();
   const auctions = await listAuctions(tenantSlug);
 
   const published = auctions.filter(
@@ -93,205 +158,409 @@ export default async function AdminAuctionsPage() {
   const draft = auctions.filter((auction) => auction.status === "draft").length;
   const closed = auctions.filter((auction) => auction.status === "closed").length;
 
+  const liveAuctions = auctions.filter((auction) => auction.status !== "closed");
+  const closedAuctions = auctions.filter((auction) => auction.status === "closed");
+
   return (
     <main style={styles.page}>
-      <section style={styles.header}>
-        <div>
-          <div style={styles.badge}>Admin dashboard</div>
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <p style={styles.eyebrow}>Auctions admin</p>
 
-          <h1 className="so-brand-heading" style={styles.title}>
+          <h1 className="so-brand-heading" style={styles.heroTitle}>
             Manage auctions
           </h1>
 
-          <p style={styles.subtitle}>
-            Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
+          <p style={styles.heroText}>
+            Create, publish, close and manage silent auction campaigns for{" "}
+            <strong>{tenantSlug}</strong>.
           </p>
+
+          <div style={styles.heroActions}>
+            <Link href="/admin" style={styles.secondaryButton}>
+              ← Dashboard
+            </Link>
+
+            <Link href="/admin/auctions/new" style={styles.primaryButton}>
+              + Create auction
+            </Link>
+
+            <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.whiteButton}>
+              Public site
+            </Link>
+          </div>
         </div>
 
-        <div style={styles.nav}>
-          <Link href="/admin" style={styles.navButton}>
-            ← Dashboard
-          </Link>
-
-          <Link href="/admin/raffles" style={styles.navButton}>
-            Raffles
-          </Link>
-
-          <Link href="/admin/squares" style={styles.navButton}>
-            Squares
-          </Link>
-
-          <Link href="/admin/events" style={styles.navButton}>
-            Events
-          </Link>
-
-          <div style={styles.navButtonActive}>Auctions</div>
-
-          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
-            Public site
-          </Link>
-
-          <Link href="/admin/auctions/new" style={styles.createButton}>
-            + Create auction
-          </Link>
+        <div style={styles.heroImageWrap}>
+          <img
+            src={AUCTION_LOGO_IMAGE}
+            alt="SO Auctions"
+            style={styles.heroImage}
+          />
         </div>
       </section>
 
-      <section style={styles.statsGrid}>
-        <StatCard
-          label="Total auctions"
-          value={auctions.length}
-          image={AUCTION_LOGO_IMAGE}
-          accent="#1683f8"
-          tint="#eff6ff"
-        />
+      <nav style={styles.tabs}>
+        <Link href="/admin/raffles" style={styles.tab}>
+          Raffles
+        </Link>
 
-        <StatCard
-          label="Published"
-          value={published}
-          icon="✓"
-          accent="#16a34a"
-          tint="#ecfdf5"
-        />
+        <Link href="/admin/squares" style={styles.tab}>
+          Squares
+        </Link>
 
-        <StatCard
-          label="Draft"
-          value={draft}
-          icon="•"
-          accent="#64748b"
-          tint="#f8fafc"
-        />
+        <Link href="/admin/events" style={styles.tab}>
+          Events
+        </Link>
 
-        <StatCard
-          label="Closed"
-          value={closed}
-          icon="×"
-          accent="#d97706"
-          tint="#fffbeb"
-        />
-      </section>
+        <span style={styles.tabActive}>Auctions</span>
+      </nav>
 
-      {auctions.length === 0 ? (
-        <section style={styles.emptyCard}>
-          <h2 className="so-brand-card-title" style={{ margin: 0 }}>
-            No auctions yet
+      {searchParams?.saved ? (
+        <div style={styles.successBox}>Saved successfully.</div>
+      ) : null}
+
+      {searchParams?.error ? (
+        <div style={styles.errorBox}>
+          {searchParams.error === "close-before-delete"
+            ? "Close the auction before deleting it."
+            : "Please check the auction and try again."}
+        </div>
+      ) : null}
+
+      <CollapsibleSection
+        id="auction-overview"
+        eyebrow="Section 1"
+        title="Auction overview"
+        description="Headline totals and current campaign status."
+        defaultOpen
+      >
+        <section style={styles.statsGrid}>
+          <StatCard
+            label="Total auctions"
+            value={auctions.length}
+            image={AUCTION_LOGO_IMAGE}
+            accent="#1683f8"
+            tint="#eff6ff"
+          />
+
+          <StatCard
+            label="Published"
+            value={published}
+            icon="✓"
+            accent="#16a34a"
+            tint="#ecfdf5"
+          />
+
+          <StatCard
+            label="Draft"
+            value={draft}
+            icon="•"
+            accent="#64748b"
+            tint="#f8fafc"
+          />
+
+          <StatCard
+            label="Closed"
+            value={closed}
+            icon="×"
+            accent="#d97706"
+            tint="#fffbeb"
+          />
+        </section>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="auction-campaigns"
+        eyebrow="Section 2"
+        title="Active auction campaigns"
+        description="Manage draft and published auctions. Delete is only available after an auction is closed."
+        defaultOpen
+      >
+        {auctions.length === 0 ? (
+          <section style={styles.emptyCard}>
+            <h2 className="so-brand-card-title" style={{ margin: 0 }}>
+              No auctions yet
+            </h2>
+
+            <p style={styles.muted}>Create your first auction campaign.</p>
+
+            <Link href="/admin/auctions/new" style={styles.primaryButton}>
+              + Create auction
+            </Link>
+          </section>
+        ) : liveAuctions.length === 0 ? (
+          <section style={styles.emptyCard}>
+            <h2 className="so-brand-card-title" style={{ margin: 0 }}>
+              No active auctions
+            </h2>
+
+            <p style={styles.muted}>
+              Closed auctions are shown in the delete-after-close section below.
+            </p>
+          </section>
+        ) : (
+          <section style={styles.list}>
+            {liveAuctions.map((auction) => (
+              <AuctionCard
+                key={auction.id}
+                auction={auction}
+                statusAction={updateAuctionStatusAction}
+                deleteAction={deleteAuctionAction}
+              />
+            ))}
+          </section>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="closed-auctions"
+        eyebrow="Section 3"
+        title="Closed auctions and delete"
+        description="Delete controls only appear here once an auction has been closed."
+      >
+        {closedAuctions.length === 0 ? (
+          <section style={styles.emptyCard}>
+            <h2 className="so-brand-card-title" style={{ margin: 0 }}>
+              No closed auctions
+            </h2>
+
+            <p style={styles.muted}>
+              Close an auction first before deleting it from the platform.
+            </p>
+          </section>
+        ) : (
+          <section style={styles.list}>
+            {closedAuctions.map((auction) => (
+              <AuctionCard
+                key={auction.id}
+                auction={auction}
+                statusAction={updateAuctionStatusAction}
+                deleteAction={deleteAuctionAction}
+                showDelete
+              />
+            ))}
+          </section>
+        )}
+      </CollapsibleSection>
+    </main>
+  );
+}
+
+function AuctionCard({
+  auction,
+  statusAction,
+  deleteAction,
+  showDelete = false,
+}: {
+  auction: any;
+  statusAction: (formData: FormData) => Promise<void>;
+  deleteAction: (formData: FormData) => Promise<void>;
+  showDelete?: boolean;
+}) {
+  const hasCustomImage = Boolean(auction.image_url);
+  const publicStatus = auction.status === "published" ? "Visible" : "Not published";
+
+  return (
+    <article style={styles.card}>
+      <div style={styles.cardTop}>
+        <div style={styles.imageWrap}>
+          <img
+            src={auction.image_url || DEFAULT_AUCTION_IMAGE}
+            alt={auction.title || "SO Auctions"}
+            style={{
+              ...styles.image,
+              objectFit: hasCustomImage ? "cover" : "contain",
+              objectPosition: hasCustomImage
+                ? `${focusValue(auction.image_focus_x)}% ${focusValue(
+                    auction.image_focus_y,
+                  )}%`
+                : "center",
+              padding: hasCustomImage ? 0 : 18,
+              background: hasCustomImage
+                ? "#f1f5f9"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        <div style={styles.cardMain}>
+          <div style={styles.cardHeader}>
+            <div style={{ minWidth: 0 }}>
+              <h2 className="so-brand-card-title" style={styles.cardTitle}>
+                {auction.title || "Untitled auction"}
+              </h2>
+
+              <p style={styles.slug}>/a/{auction.slug}</p>
+            </div>
+
+            <span style={{ ...styles.status, ...getStatusStyle(auction.status) }}>
+              {auction.status}
+            </span>
+          </div>
+
+          <div style={styles.headlineGrid}>
+            <div style={styles.headlineBox}>
+              <div style={styles.headlineLabel}>Opens</div>
+              <div style={styles.headlineValue}>
+                {formatDate(auction.opens_at)}
+              </div>
+            </div>
+
+            <div style={styles.headlineBox}>
+              <div style={styles.headlineLabel}>Closes</div>
+              <div style={styles.headlineValue}>
+                {formatDate(auction.closes_at)}
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.detailGrid}>
+            <Detail label="Opens" value={formatDate(auction.opens_at)} />
+            <Detail label="Closes" value={formatDate(auction.closes_at)} />
+            <Detail label="Currency" value={auction.currency || "GBP"} />
+            <Detail label="Public page" value={publicStatus} />
+          </div>
+
+          <details style={styles.toolDetails}>
+            <summary style={styles.toolSummary}>
+              <span>Status tools</span>
+              <span style={styles.toolToggle}>Open / close</span>
+            </summary>
+
+            <div style={styles.statusTools}>
+              <StatusButton
+                auctionId={auction.id}
+                status="draft"
+                label="Set draft"
+                action={statusAction}
+                disabled={auction.status === "draft"}
+              />
+
+              <StatusButton
+                auctionId={auction.id}
+                status="published"
+                label="Publish"
+                action={statusAction}
+                disabled={auction.status === "published"}
+              />
+
+              <StatusButton
+                auctionId={auction.id}
+                status="closed"
+                label="Close auction"
+                action={statusAction}
+                disabled={auction.status === "closed"}
+                danger
+              />
+
+              {showDelete ? (
+                <form action={deleteAction} style={styles.deleteForm}>
+                  <input type="hidden" name="id" value={auction.id} />
+                  <button type="submit" style={styles.deleteButton}>
+                    Delete closed auction
+                  </button>
+                </form>
+              ) : (
+                <div style={styles.deleteHint}>
+                  Delete appears after the auction is closed.
+                </div>
+              )}
+            </div>
+          </details>
+
+          <div style={styles.actions}>
+            <Link href={`/admin/auctions/${auction.id}`} style={styles.openButton}>
+              Manage
+            </Link>
+
+            <a
+              href={`/a/${auction.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              style={styles.viewButton}
+            >
+              View auction
+            </a>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function StatusButton({
+  auctionId,
+  status,
+  label,
+  action,
+  disabled,
+  danger = false,
+}: {
+  auctionId: string;
+  status: AuctionStatus;
+  label: string;
+  action: (formData: FormData) => Promise<void>;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <form action={action} style={styles.statusForm}>
+      <input type="hidden" name="id" value={auctionId} />
+      <input type="hidden" name="status" value={status} />
+
+      <button
+        type="submit"
+        disabled={disabled}
+        style={{
+          ...styles.statusToolButton,
+          background: danger ? "#fff7ed" : "#ffffff",
+          color: danger ? "#9a3412" : "#0f172a",
+          borderColor: danger ? "#fed7aa" : "#cbd5e1",
+          opacity: disabled ? 0.45 : 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        {label}
+      </button>
+    </form>
+  );
+}
+
+function CollapsibleSection({
+  id,
+  title,
+  eyebrow,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  description?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} open={defaultOpen} style={styles.section}>
+      <summary style={styles.collapsibleSummary}>
+        <div style={styles.collapsibleHeading}>
+          {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
+
+          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            {title}
           </h2>
 
-          <p style={styles.muted}>Create your first auction campaign.</p>
+          {description ? <p style={styles.sectionText}>{description}</p> : null}
+        </div>
 
-          <Link href="/admin/auctions/new" style={styles.createButton}>
-            + Create auction
-          </Link>
-        </section>
-      ) : (
-        <section style={styles.list}>
-          {auctions.map((auction) => {
-            const hasCustomImage = Boolean(auction.image_url);
-            const publicStatus =
-              auction.status === "published" ? "Visible" : "Not published";
+        <span style={styles.collapsibleToggle}>Open / close</span>
+      </summary>
 
-            return (
-              <article key={auction.id} style={styles.card}>
-                <div style={styles.cardTop}>
-                  <div style={styles.imageWrap}>
-                    <img
-                      src={auction.image_url || DEFAULT_AUCTION_IMAGE}
-                      alt={auction.title || "SO Auctions"}
-                      style={{
-                        ...styles.image,
-                        objectFit: hasCustomImage ? "cover" : "contain",
-                        objectPosition: hasCustomImage
-                          ? `${focusValue(auction.image_focus_x)}% ${focusValue(
-                              auction.image_focus_y,
-                            )}%`
-                          : "center",
-                        padding: hasCustomImage ? 0 : 12,
-                        background: hasCustomImage
-                          ? "#f1f5f9"
-                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-
-                  <div style={styles.cardMain}>
-                    <div style={styles.cardHeader}>
-                      <div style={{ minWidth: 0 }}>
-                        <h2
-                          className="so-brand-card-title"
-                          style={styles.cardTitle}
-                        >
-                          {auction.title || "Untitled auction"}
-                        </h2>
-
-                        <p style={styles.slug}>/a/{auction.slug}</p>
-                      </div>
-
-                      <span
-                        style={{
-                          ...styles.status,
-                          ...getStatusStyle(auction.status),
-                        }}
-                      >
-                        {auction.status}
-                      </span>
-                    </div>
-
-                    <div style={styles.headlineGrid}>
-                      <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>Opens</div>
-                        <div style={styles.headlineValue}>
-                          {formatDate(auction.opens_at)}
-                        </div>
-                      </div>
-
-                      <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>Closes</div>
-                        <div style={styles.headlineValue}>
-                          {formatDate(auction.closes_at)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={styles.detailGrid}>
-                      <Detail label="Opens" value={formatDate(auction.opens_at)} />
-                      <Detail label="Closes" value={formatDate(auction.closes_at)} />
-                      <Detail label="Currency" value={auction.currency || "GBP"} />
-                      <Detail label="Public page" value={publicStatus} />
-                    </div>
-
-                    <div style={styles.actions}>
-                      <Link
-                        href={`/admin/auctions/${auction.id}`}
-                        style={styles.openButton}
-                      >
-                        Manage
-                      </Link>
-
-                      <a
-                        href={`/a/${auction.slug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={styles.viewButton}
-                      >
-                        View auction
-                      </a>
-
-                      <form action={deleteAuctionAction} style={styles.deleteForm}>
-                        <input type="hidden" name="id" value={auction.id} />
-                        <button type="submit" style={styles.deleteButton}>
-                          Delete
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      )}
-    </main>
+      <div style={styles.collapsibleBody}>{children}</div>
+    </details>
   );
 }
 
@@ -329,21 +598,12 @@ function StatCard({
             background: tint,
             color: accent,
             borderColor: accent,
-            padding: image ? 4 : 0,
+            padding: image ? 5 : 0,
             overflow: "hidden",
           }}
         >
           {image ? (
-            <img
-              src={image}
-              alt={label}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
+            <img src={image} alt={label} style={styles.statIconImage} />
           ) : (
             icon
           )}
@@ -366,87 +626,212 @@ const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
     margin: "0 auto",
-    padding: "32px 16px 56px",
+    padding: "28px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 22,
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 260px",
+    gap: 18,
+    alignItems: "center",
+    padding: 22,
+    borderRadius: 24,
+    background: "#0f172a",
+    color: "#ffffff",
+    marginBottom: 16,
   },
-  badge: {
+  heroContent: {
+    minWidth: 0,
+  },
+  eyebrow: {
     display: "inline-flex",
-    padding: "6px 10px",
+    padding: "5px 9px",
     borderRadius: 999,
-    background: "#e0f2fe",
-    color: "#0369a1",
-    fontSize: 13,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
     fontWeight: 900,
-    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    margin: "0 0 10px",
   },
-  title: {
+  heroTitle: {
     margin: 0,
-    fontSize: 34,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-    color: "#0f172a",
+    fontSize: 38,
+    lineHeight: 1.02,
+    letterSpacing: "-0.055em",
+    color: "#ffffff",
+    wordBreak: "break-word",
   },
-  subtitle: {
-    margin: "10px 0 0",
-    color: "#64748b",
-    fontSize: 15,
+  heroText: {
+    margin: "12px 0 0",
+    color: "#cbd5e1",
+    lineHeight: 1.55,
+    maxWidth: 720,
   },
-  nav: {
+  heroActions: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    justifyContent: "flex-end",
+    marginTop: 18,
   },
-  navButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
+  heroImageWrap: {
+    width: "100%",
+    height: 220,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 28,
+    boxSizing: "border-box",
+    display: "block",
+  },
+  tabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 18,
     background: "#ffffff",
-    color: "#0f172a",
+    border: "1px solid #e2e8f0",
+  },
+  tab: {
+    padding: "10px 12px",
     border: "1px solid #cbd5e1",
+    borderRadius: 999,
+    color: "#0f172a",
     textDecoration: "none",
     fontWeight: 900,
+    fontSize: 14,
   },
-  navButtonActive: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 9999,
-    background: "#0f172a",
-    color: "#ffffff",
+  tabActive: {
+    padding: "10px 12px",
     border: "1px solid #0f172a",
-    textDecoration: "none",
+    borderRadius: 999,
+    color: "#ffffff",
+    background: "#0f172a",
     fontWeight: 900,
+    fontSize: 14,
   },
-  createButton: {
+  primaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "13px 18px",
-    borderRadius: 9999,
+    borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 900,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.24)",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  whiteButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+  },
+  successBox: {
+    padding: 12,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  errorBox: {
+    padding: 12,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  section: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  collapsibleSummary: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  collapsibleHeading: {
+    minWidth: 0,
+  },
+  collapsibleToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  collapsibleBody: {
+    marginTop: 16,
+  },
+  sectionEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontWeight: 900,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.02em",
+  },
+  sectionText: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 12,
-    marginBottom: 22,
   },
   statCard: {
     padding: 16,
@@ -463,8 +848,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
   },
   statIcon: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     border: "1px solid",
     display: "inline-flex",
@@ -473,6 +858,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     fontWeight: 900,
     flexShrink: 0,
+  },
+  statIconImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    display: "block",
   },
   statLabel: {
     color: "#64748b",
@@ -499,13 +890,13 @@ const styles: Record<string, CSSProperties> = {
   },
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "104px 1fr",
+    gridTemplateColumns: "132px 1fr",
     gap: 16,
     alignItems: "start",
   },
   imageWrap: {
-    width: 104,
-    height: 104,
+    width: 132,
+    height: 132,
     borderRadius: 20,
     overflow: "hidden",
     background: "#f1f5f9",
@@ -545,7 +936,7 @@ const styles: Record<string, CSSProperties> = {
   status: {
     display: "inline-flex",
     padding: "7px 11px",
-    borderRadius: 9999,
+    borderRadius: 999,
     border: "1px solid",
     fontSize: 13,
     fontWeight: 900,
@@ -599,6 +990,60 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontWeight: 900,
     wordBreak: "break-word",
+  },
+  toolDetails: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  toolSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+  toolToggle: {
+    flexShrink: 0,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  statusTools: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 14,
+    alignItems: "center",
+  },
+  statusForm: {
+    margin: 0,
+  },
+  statusToolButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+  deleteHint: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
   },
   actions: {
     display: "flex",
