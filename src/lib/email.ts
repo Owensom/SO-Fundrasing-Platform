@@ -6,7 +6,7 @@ const DEFAULT_TICKET_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/so-ticket-placeholder.png";
 
 const WINNER_TROPHY_IMAGE_URL =
-  "https://so-fundraising-platform.vercel.app/brand/icons/winner-trophy-gold.png";
+  "https://so-fundraising-platform.vercel.app/brand/winner-trophy-gold.png";
 
 type EmailBranding = {
   name?: string | null;
