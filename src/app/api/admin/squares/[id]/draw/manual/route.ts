@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendWinnerEmail } from "@/lib/email";
+import { sendSquaresWinnerEmail } from "@/lib/email";
 import {
   createSquaresWinner,
   getSquaresGameById,
@@ -25,6 +25,30 @@ function cleanEmail(value: string | null | undefined) {
 
 function cleanName(value: string | null | undefined) {
   return String(value || "").trim() || "Supporter";
+}
+
+function ordinal(value: number) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return "st";
+  if (mod10 === 2 && mod100 !== 12) return "nd";
+  if (mod10 === 3 && mod100 !== 13) return "rd";
+
+  return "th";
+}
+
+function getPrizeTitle(prize: any, prizeNumber: number) {
+  return (
+    String(
+      prize?.title ||
+        prize?.name ||
+        prize?.prizeTitle ||
+        prize?.prize_title ||
+        prize?.label ||
+        "",
+    ).trim() || `${prizeNumber}${ordinal(prizeNumber)} Prize`
+  );
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -71,7 +95,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    if (prizeNumber < 1 || prizeNumber > prizes.length) {
+    const prize =
+      prizes.find(
+        (item, index) =>
+          Number(item?.position ?? item?.prize_index ?? index + 1) ===
+          prizeNumber,
+      ) || prizes[prizeNumber - 1];
+
+    if (!prize) {
       return NextResponse.json(
         { ok: false, error: "Prize number does not exist" },
         { status: 400 },
@@ -81,12 +112,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const existingWinners = await listSquaresWinners(game.id);
 
     const prizeAlreadyWon = existingWinners.some(
-      (winner) => Number(winner.prize_index) === prizeNumber - 1,
+      (winner) => Number(winner.prize_index) === prizeNumber,
     );
 
     if (prizeAlreadyWon) {
       return NextResponse.json(
         { ok: false, error: "This prize already has a winner" },
+        { status: 400 },
+      );
+    }
+
+    const squareAlreadyWon = existingWinners.some(
+      (winner) => Number(winner.square_number) === squareNumber,
+    );
+
+    if (squareAlreadyWon) {
+      return NextResponse.json(
+        { ok: false, error: `Square #${squareNumber} has already won a prize` },
         { status: 400 },
       );
     }
@@ -114,19 +156,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const prize = prizes[prizeNumber - 1];
-
-    const prizeTitle =
-      String(prize?.title ?? prize?.name ?? "").trim() ||
-      `Prize ${prizeNumber}`;
-
+    const prizeTitle = getPrizeTitle(prize, prizeNumber);
     const winnerName = cleanName(winningEntry.customerName);
     const winnerEmail = cleanEmail(winningEntry.customerEmail);
 
     await createSquaresWinner({
       tenant_slug: game.tenant_slug,
       game_id: game.id,
-      prize_index: prizeNumber - 1,
+      prize_index: prizeNumber,
       prize_title: prizeTitle,
       square_number: winningEntry.squareNumber,
       customer_name: winnerName,
@@ -142,12 +179,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     } else {
       try {
-        await sendWinnerEmail({
+        await sendSquaresWinnerEmail({
           to: winnerEmail,
           name: winnerName,
-          raffleTitle: game.title,
-          ticketNumber: winningEntry.squareNumber,
-          colour: `Square ${winningEntry.squareNumber} — ${prizeTitle}`,
+          gameTitle: game.title,
+          squareNumber: winningEntry.squareNumber,
+          prizeTitle,
         });
 
         console.log("Squares manual draw winner email sent", {
