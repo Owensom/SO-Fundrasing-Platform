@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 
 type SoldTicketOption = {
   ticketNumber?: number;
@@ -30,6 +30,8 @@ type ConfettiPiece = {
   hue: number;
   drift: number;
 };
+
+const DRAW_DURATION_MS = 3600;
 
 function getTicketNumber(item: SoldTicketOption) {
   return Number(item.ticketNumber ?? item.ticket_number);
@@ -68,15 +70,15 @@ function playTick(audioCtx: AudioContext) {
   const filter = audioCtx.createBiquadFilter();
 
   osc.type = "square";
-  osc.frequency.setValueAtTime(1250, now);
-  osc.frequency.exponentialRampToValueAtTime(360, now + 0.055);
+  osc.frequency.setValueAtTime(1320, now);
+  osc.frequency.exponentialRampToValueAtTime(380, now + 0.055);
 
   filter.type = "bandpass";
-  filter.frequency.setValueAtTime(1300, now);
+  filter.frequency.setValueAtTime(1320, now);
   filter.Q.setValueAtTime(8, now);
 
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.14, now + 0.006);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
 
   osc.connect(filter);
@@ -94,78 +96,75 @@ function playRiser(audioCtx: AudioContext) {
   const filter = audioCtx.createBiquadFilter();
 
   osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(72, now);
-  osc.frequency.linearRampToValueAtTime(145, now + 0.26);
+  osc.frequency.setValueAtTime(70, now);
+  osc.frequency.linearRampToValueAtTime(165, now + 0.28);
 
   filter.type = "lowpass";
   filter.frequency.setValueAtTime(520, now);
-  filter.frequency.linearRampToValueAtTime(1250, now + 0.26);
+  filter.frequency.linearRampToValueAtTime(1450, now + 0.28);
 
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(0.045, now + 0.025);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
 
   osc.connect(filter);
   filter.connect(gain);
   gain.connect(audioCtx.destination);
 
   osc.start(now);
-  osc.stop(now + 0.3);
+  osc.stop(now + 0.32);
 }
+
 function playWinner(audioCtx: AudioContext) {
   const now = audioCtx.currentTime;
 
   const master = audioCtx.createGain();
   master.gain.setValueAtTime(0.0001, now);
-  master.gain.exponentialRampToValueAtTime(0.3, now + 0.025);
-  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
+  master.gain.exponentialRampToValueAtTime(0.28, now + 0.025);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
   master.connect(audioCtx.destination);
 
-  const bass = audioCtx.createOscillator();
-  bass.type = "triangle";
-  bass.frequency.setValueAtTime(210, now);
-  bass.frequency.exponentialRampToValueAtTime(58, now + 0.75);
-  bass.connect(master);
-  bass.start(now);
-  bass.stop(now + 1.1);
+  const notes = [392, 494, 587, 784];
 
-  const hit = audioCtx.createOscillator();
-  hit.type = "square";
-  hit.frequency.setValueAtTime(920, now);
-  hit.frequency.exponentialRampToValueAtTime(300, now + 0.42);
-  hit.connect(master);
-  hit.start(now);
-  hit.stop(now + 0.45);
+  notes.forEach((frequency, index) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const start = now + index * 0.08;
 
-  const sparkle = audioCtx.createOscillator();
-  const sparkleGain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(frequency, start);
 
-  sparkle.type = "sine";
-  sparkle.frequency.setValueAtTime(1320, now + 0.18);
-  sparkle.frequency.exponentialRampToValueAtTime(1780, now + 0.55);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.12, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.55);
 
-  sparkleGain.gain.setValueAtTime(0.0001, now + 0.18);
-  sparkleGain.gain.exponentialRampToValueAtTime(0.09, now + 0.24);
-  sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+    osc.connect(gain);
+    gain.connect(master);
 
-  sparkle.connect(sparkleGain);
-  sparkleGain.connect(master);
+    osc.start(start);
+    osc.stop(start + 0.6);
+  });
 
-  sparkle.start(now + 0.18);
-  sparkle.stop(now + 0.65);
+  const impact = audioCtx.createOscillator();
+  impact.type = "square";
+  impact.frequency.setValueAtTime(110, now);
+  impact.frequency.exponentialRampToValueAtTime(48, now + 0.75);
+  impact.connect(master);
+  impact.start(now);
+  impact.stop(now + 0.95);
 }
 
 function makeConfetti(): ConfettiPiece[] {
-  return Array.from({ length: 120 }).map((_, index) => ({
+  return Array.from({ length: 150 }).map((_, index) => ({
     id: index,
     left: Math.random() * 100,
-    delay: Math.random() * 0.5,
-    duration: 1.8 + Math.random() * 1.8,
-    width: 7 + Math.random() * 8,
-    height: 10 + Math.random() * 14,
+    delay: Math.random() * 0.55,
+    duration: 1.8 + Math.random() * 2,
+    width: 7 + Math.random() * 9,
+    height: 10 + Math.random() * 16,
     rotate: Math.random() * 360,
     hue: Math.random() * 360,
-    drift: Math.random() * 240 - 120,
+    drift: Math.random() * 260 - 130,
   }));
 }
 
@@ -183,6 +182,7 @@ export default function DramaticRaffleDraw({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -196,8 +196,18 @@ export default function DramaticRaffleDraw({
     [soldTickets, drawnTicketNumbers],
   );
 
+  const nextPrizeNumber = useMemo(() => {
+    let position = 1;
+
+    while (drawnPrizePositions.includes(position)) {
+      position += 1;
+    }
+
+    return position;
+  }, [drawnPrizePositions]);
+
   function getAudioContext() {
-    if (typeof window === "undefined") return null;
+    if (typeof window === "undefined" || !soundEnabled) return null;
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = createAudioContext();
@@ -221,6 +231,15 @@ export default function DramaticRaffleDraw({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }
+
+  function openDraw() {
+    setIsOpen(true);
+    setError("");
+    setWinner(null);
+    setDisplayTicket(null);
+    setConfetti([]);
+    setPrizePosition(String(nextPrizeNumber));
   }
 
   function closeDraw() {
@@ -254,6 +273,7 @@ export default function DramaticRaffleDraw({
     const audioCtx = await unlockAudio();
 
     let ticks = 0;
+    let intervalMs = 62;
 
     stopTimer();
 
@@ -266,14 +286,31 @@ export default function DramaticRaffleDraw({
       if (audioCtx) {
         playTick(audioCtx);
 
-        if (ticks % 4 === 0) {
+        if (ticks % 5 === 0) {
           playRiser(audioCtx);
         }
       }
 
       ticks += 1;
-    }, 72);
-        window.setTimeout(async () => {
+
+      if (ticks === 28) {
+        stopTimer();
+        intervalMs = 115;
+
+        timerRef.current = setInterval(() => {
+          const randomTicket =
+            soldNumbers[Math.floor(Math.random() * soldNumbers.length)];
+
+          setDisplayTicket(randomTicket);
+
+          if (audioCtx) playTick(audioCtx);
+
+          ticks += 1;
+        }, intervalMs);
+      }
+    }, intervalMs);
+
+    window.setTimeout(async () => {
       stopTimer();
 
       const winningTicketNumber =
@@ -319,77 +356,64 @@ export default function DramaticRaffleDraw({
 
         window.setTimeout(() => {
           window.location.reload();
-        }, 1800);
+        }, 1900);
       } catch (err) {
         setSaving(false);
         setError(err instanceof Error ? err.message : "Draw failed");
       }
-    }, 3200);
+    }, DRAW_DURATION_MS);
   }
 
   return (
     <>
-      <section
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          padding: 20,
-          background: "white",
-        }}
-      >
-        <h2 style={{ margin: "0 0 8px", fontSize: 22 }}>Dramatic draw</h2>
+      <section style={styles.launchCard}>
+        <div style={styles.launchTop}>
+          <div>
+            <div style={styles.eyebrow}>Live event mode</div>
+            <h2 style={styles.title}>Dramatic draw</h2>
+            <p style={styles.description}>
+              Open a cinematic full-screen draw with sound, suspense, automatic
+              winner saving and confetti.
+            </p>
+          </div>
 
-        <p style={{ margin: "0 0 16px", color: "#6b7280" }}>
-          Open a full-screen winner draw with sound, suspense, saving, and
-          confetti.
-        </p>
+          <div style={styles.ticketCount}>
+            <strong>{soldNumbers.length}</strong>
+            <span>eligible tickets</span>
+          </div>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setIsOpen(true);
-            setError("");
-            setWinner(null);
-            setDisplayTicket(null);
-            setConfetti([]);
-          }}
-          disabled={!soldNumbers.length}
-          style={{
-            border: 0,
-            borderRadius: 12,
-            padding: "12px 18px",
-            fontWeight: 900,
-            cursor: soldNumbers.length ? "pointer" : "not-allowed",
-            background: soldNumbers.length ? "#111827" : "#9ca3af",
-            color: "white",
-          }}
-        >
-          Open full-screen draw
-        </button>
+        <div style={styles.launchActions}>
+          <button
+            type="button"
+            onClick={openDraw}
+            disabled={!soldNumbers.length}
+            style={{
+              ...styles.primaryButton,
+              cursor: soldNumbers.length ? "pointer" : "not-allowed",
+              background: soldNumbers.length
+                ? "linear-gradient(135deg, #0f172a, #1e293b)"
+                : "#9ca3af",
+            }}
+          >
+            Open full-screen draw
+          </button>
+
+          <span style={styles.miniNote}>
+            Next available prize: #{nextPrizeNumber}
+          </span>
+        </div>
 
         {!soldNumbers.length ? (
-          <p style={{ margin: "12px 0 0", color: "#b91c1c" }}>
-            No eligible sold tickets available. Tickets that have already won are
-            excluded.
+          <p style={styles.warning}>
+            No eligible sold tickets available. Tickets that have already won
+            are excluded.
           </p>
         ) : null}
       </section>
 
       {isOpen ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background:
-              "radial-gradient(circle at top, #374151, #111827 55%, #030712)",
-            color: "white",
-            display: "grid",
-            placeItems: "center",
-            padding: 24,
-            overflow: "hidden",
-          }}
-        >
+        <div style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
               0% {
@@ -407,29 +431,44 @@ export default function DramaticRaffleDraw({
                 transform: scale(1);
               }
               50% {
-                transform: scale(1.06);
+                transform: scale(1.055);
               }
             }
 
             @keyframes glowPulse {
               0%, 100% {
-                box-shadow: 0 0 38px rgba(250,204,21,0.25);
+                box-shadow: 0 0 42px rgba(250,204,21,0.28), inset 0 0 28px rgba(255,255,255,0.08);
               }
               50% {
-                box-shadow: 0 0 85px rgba(250,204,21,0.85);
+                box-shadow: 0 0 95px rgba(250,204,21,0.92), inset 0 0 44px rgba(255,255,255,0.14);
+              }
+            }
+
+            @keyframes slowSpin {
+              from {
+                transform: rotate(0deg);
+              }
+              to {
+                transform: rotate(360deg);
+              }
+            }
+
+            @keyframes shimmer {
+              0% {
+                transform: translateX(-120%);
+              }
+              100% {
+                transform: translateX(120%);
               }
             }
           `}</style>
 
+          <div style={styles.backgroundOrbOne} />
+          <div style={styles.backgroundOrbTwo} />
+          <div style={styles.ring} />
+
           {confetti.length ? (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                pointerEvents: "none",
-                overflow: "hidden",
-              }}
-            >
+            <div style={styles.confettiLayer}>
               {confetti.map((piece) => (
                 <span
                   key={piece.id}
@@ -445,171 +484,118 @@ export default function DramaticRaffleDraw({
                       transform: `rotate(${piece.rotate}deg)`,
                       animation: `confettiFall ${piece.duration}s linear ${piece.delay}s forwards`,
                       "--drift": `${piece.drift}px`,
-                    } as React.CSSProperties
+                    } as CSSProperties
                   }
                 />
               ))}
             </div>
           ) : null}
 
-          <button
-            type="button"
-            onClick={closeDraw}
-            style={{
-              position: "absolute",
-              top: 18,
-              right: 18,
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "rgba(255,255,255,0.08)",
-              color: "white",
-              borderRadius: 999,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 800,
-              zIndex: 2,
-            }}
-          >
-            Close
-          </button>
-
-          <div
-            style={{
-              width: "min(780px, 100%)",
-              textAlign: "center",
-              position: "relative",
-              zIndex: 1,
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#facc15",
-                fontSize: 14,
-                fontWeight: 900,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-              }}
+          <div style={styles.topControls}>
+            <button
+              type="button"
+              onClick={() => setSoundEnabled((current) => !current)}
+              style={styles.secondaryControl}
             >
-              Raffle draw
-            </p>
+              {soundEnabled ? "Sound on" : "Sound off"}
+            </button>
 
-            <h1
-              style={{
-                margin: "12px 0 24px",
-                fontSize: "clamp(34px, 6vw, 60px)",
-                lineHeight: 1,
-              }}
-            >
-              Pick a winner
-            </h1>
+            <button type="button" onClick={closeDraw} style={styles.closeButton}>
+              Close
+            </button>
+          </div>
 
-            <label
-              style={{
-                display: "grid",
-                gap: 8,
-                margin: "0 auto 24px",
-                maxWidth: 260,
-                textAlign: "left",
-                fontWeight: 800,
-              }}
-            >
-              Prize number
+          <div style={styles.stage}>
+            <p style={styles.stageEyebrow}>SO Foundation Platform</p>
+
+            <h1 style={styles.stageTitle}>Raffle Winner Draw</h1>
+
+            <div style={styles.stageSubGrid}>
+              <div style={styles.stageSubCard}>
+                <span>Prize</span>
+                <strong>#{prizePosition || nextPrizeNumber}</strong>
+              </div>
+
+              <div style={styles.stageSubCard}>
+                <span>Eligible</span>
+                <strong>{soldNumbers.length}</strong>
+              </div>
+
+              <div style={styles.stageSubCard}>
+                <span>Already drawn</span>
+                <strong>{drawnPrizePositions.length}</strong>
+              </div>
+            </div>
+
+            <label style={styles.prizeInputWrap}>
+              <span>Prize number</span>
               <input
                 value={prizePosition}
                 onChange={(event) => setPrizePosition(event.target.value)}
                 disabled={drawing || saving}
                 inputMode="numeric"
-                style={{
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,255,255,0.25)",
-                  padding: "12px 14px",
-                  fontSize: 18,
-                  fontWeight: 900,
-                }}
+                style={styles.prizeInput}
               />
             </label>
 
             <div
               style={{
-                margin: "0 auto 22px",
-                display: "grid",
-                placeItems: "center",
-                width: "min(320px, 70vw)",
-                height: "min(320px, 70vw)",
-                borderRadius: "50%",
-                background:
-                  "radial-gradient(circle, rgba(250,204,21,0.38), rgba(249,115,22,0.2), rgba(255,255,255,0.06))",
-                border: "2px solid rgba(250,204,21,0.6)",
+                ...styles.ticketReveal,
                 animation: drawing || winner ? "glowPulse 900ms infinite" : "",
               }}
             >
+              <div style={styles.ticketRevealShimmer} />
               <div
                 style={{
-                  fontSize: "clamp(72px, 15vw, 118px)",
-                  lineHeight: 1,
-                  fontWeight: 950,
-                  letterSpacing: "-0.08em",
-                  textShadow: "0 0 28px rgba(250,204,21,0.85)",
-                  animation: drawing ? "winnerPulse 180ms infinite" : "",
+                  ...styles.ticketNumber,
+                  animation: drawing ? "winnerPulse 160ms infinite" : "",
                 }}
               >
                 {displayTicket ? `#${displayTicket}` : "—"}
               </div>
+
+              <div style={styles.ticketLabel}>
+                {drawing
+                  ? "Selecting ticket"
+                  : winner
+                    ? "Winning ticket"
+                    : "Ready to draw"}
+              </div>
             </div>
 
-            {winner ? (
-              <p
-                style={{
-                  margin: "0 0 10px",
-                  color: "#facc15",
-                  fontWeight: 900,
-                  fontSize: 18,
-                }}
-              >
-                {getTicketColour(winner)}
-              </p>
-            ) : null}
+            <div style={styles.resultPanel}>
+              {winner ? (
+                <>
+                  <div style={styles.colourBadge}>{getTicketColour(winner)}</div>
 
-            <h2 style={{ margin: 0, fontSize: "clamp(26px, 4vw, 38px)" }}>
-              {drawing
-                ? "Drawing..."
-                : saving
-                  ? "Saving winner..."
-                  : winner
-                    ? getBuyerName(winner)
-                    : "Ready"}
-            </h2>
+                  <h2 style={styles.winnerName}>{getBuyerName(winner)}</h2>
 
-            {winner && getBuyerEmail(winner) ? (
-              <p style={{ margin: "8px 0 0", color: "#d1d5db" }}>
-                {getBuyerEmail(winner)}
-              </p>
-            ) : null}
+                  {getBuyerEmail(winner) ? (
+                    <p style={styles.winnerEmail}>{getBuyerEmail(winner)}</p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <div style={styles.colourBadgeMuted}>Awaiting draw</div>
+                  <h2 style={styles.winnerName}>
+                    {drawing
+                      ? "Drawing..."
+                      : saving
+                        ? "Saving winner..."
+                        : "Ready"}
+                  </h2>
+                </>
+              )}
+            </div>
 
-            {error ? (
-              <p
-                style={{
-                  margin: "18px auto 0",
-                  color: "#fecaca",
-                  maxWidth: 520,
-                  fontWeight: 800,
-                }}
-              >
-                {error}
-              </p>
-            ) : null}
+            {error ? <p style={styles.error}>{error}</p> : null}
 
             <button
               type="button"
               onClick={startDraw}
               disabled={drawing || saving || !soldNumbers.length}
               style={{
-                marginTop: 28,
-                border: 0,
-                borderRadius: 16,
-                padding: "16px 26px",
-                fontSize: 18,
-                fontWeight: 950,
+                ...styles.startButton,
                 cursor:
                   drawing || saving || !soldNumbers.length
                     ? "not-allowed"
@@ -618,11 +604,10 @@ export default function DramaticRaffleDraw({
                   drawing || saving || !soldNumbers.length
                     ? "#9ca3af"
                     : "linear-gradient(135deg, #facc15, #f97316)",
-                color: "#111827",
                 boxShadow:
                   drawing || saving || !soldNumbers.length
                     ? "none"
-                    : "0 18px 38px rgba(249,115,22,0.35)",
+                    : "0 20px 42px rgba(249,115,22,0.38)",
               }}
             >
               {drawing ? "Drawing..." : saving ? "Saving..." : "Start draw"}
@@ -633,3 +618,291 @@ export default function DramaticRaffleDraw({
     </>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  launchCard: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 18,
+    padding: 18,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+    display: "grid",
+    gap: 14,
+  },
+  launchTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  title: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.03em",
+  },
+  description: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    maxWidth: 620,
+  },
+  ticketCount: {
+    minWidth: 104,
+    padding: "12px 14px",
+    borderRadius: 18,
+    background: "#0f172a",
+    color: "#ffffff",
+    display: "grid",
+    gap: 3,
+    textAlign: "center",
+  },
+  launchActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  primaryButton: {
+    border: 0,
+    borderRadius: 999,
+    padding: "13px 18px",
+    fontWeight: 950,
+    color: "#ffffff",
+    boxShadow: "0 12px 24px rgba(15,23,42,0.18)",
+  },
+  miniNote: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  warning: {
+    margin: 0,
+    color: "#b91c1c",
+    fontWeight: 800,
+  },
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background:
+      "radial-gradient(circle at top, #334155, #111827 52%, #020617)",
+    color: "#ffffff",
+    display: "grid",
+    placeItems: "center",
+    padding: 24,
+    overflow: "hidden",
+  },
+  backgroundOrbOne: {
+    position: "absolute",
+    width: "52vw",
+    height: "52vw",
+    left: "-18vw",
+    top: "-22vw",
+    borderRadius: "50%",
+    background: "rgba(22,131,248,0.22)",
+    filter: "blur(10px)",
+  },
+  backgroundOrbTwo: {
+    position: "absolute",
+    width: "48vw",
+    height: "48vw",
+    right: "-18vw",
+    bottom: "-18vw",
+    borderRadius: "50%",
+    background: "rgba(250,204,21,0.14)",
+    filter: "blur(12px)",
+  },
+  ring: {
+    position: "absolute",
+    width: "min(760px, 82vw)",
+    height: "min(760px, 82vw)",
+    borderRadius: "50%",
+    border: "1px solid rgba(255,255,255,0.08)",
+    animation: "slowSpin 24s linear infinite",
+  },
+  confettiLayer: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    overflow: "hidden",
+  },
+  topControls: {
+    position: "absolute",
+    top: 18,
+    right: 18,
+    display: "flex",
+    gap: 10,
+    zIndex: 3,
+  },
+  secondaryControl: {
+    border: "1px solid rgba(255,255,255,0.24)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 900,
+  },
+  closeButton: {
+    border: "1px solid rgba(255,255,255,0.3)",
+    background: "rgba(255,255,255,0.12)",
+    color: "#ffffff",
+    borderRadius: 999,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
+  stage: {
+    width: "min(860px, 100%)",
+    textAlign: "center",
+    position: "relative",
+    zIndex: 2,
+  },
+  stageEyebrow: {
+    margin: 0,
+    color: "#facc15",
+    fontSize: 13,
+    fontWeight: 950,
+    letterSpacing: "0.2em",
+    textTransform: "uppercase",
+  },
+  stageTitle: {
+    margin: "12px 0 18px",
+    fontSize: "clamp(36px, 6vw, 72px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.065em",
+  },
+  stageSubGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+    margin: "0 auto 18px",
+    maxWidth: 560,
+  },
+  stageSubCard: {
+    display: "grid",
+    gap: 3,
+    padding: "10px 12px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+  },
+  prizeInputWrap: {
+    display: "grid",
+    gap: 8,
+    margin: "0 auto 22px",
+    maxWidth: 260,
+    textAlign: "left",
+    fontWeight: 900,
+  },
+  prizeInput: {
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.25)",
+    padding: "12px 14px",
+    fontSize: 18,
+    fontWeight: 950,
+    color: "#0f172a",
+  },
+  ticketReveal: {
+    position: "relative",
+    margin: "0 auto 18px",
+    display: "grid",
+    placeItems: "center",
+    width: "min(360px, 72vw)",
+    height: "min(360px, 72vw)",
+    borderRadius: "50%",
+    background:
+      "radial-gradient(circle, rgba(250,204,21,0.42), rgba(249,115,22,0.18), rgba(255,255,255,0.07))",
+    border: "2px solid rgba(250,204,21,0.65)",
+    overflow: "hidden",
+  },
+  ticketRevealShimmer: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
+    animation: "shimmer 2s ease-in-out infinite",
+  },
+  ticketNumber: {
+    position: "relative",
+    fontSize: "clamp(76px, 15vw, 130px)",
+    lineHeight: 1,
+    fontWeight: 950,
+    letterSpacing: "-0.085em",
+    textShadow: "0 0 32px rgba(250,204,21,0.9)",
+  },
+  ticketLabel: {
+    position: "absolute",
+    bottom: 42,
+    left: 0,
+    right: 0,
+    color: "#fde68a",
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+  },
+  resultPanel: {
+    minHeight: 88,
+    display: "grid",
+    placeItems: "center",
+    gap: 6,
+  },
+  colourBadge: {
+    display: "inline-flex",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#111827",
+    fontWeight: 950,
+  },
+  colourBadgeMuted: {
+    display: "inline-flex",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.1)",
+    color: "#cbd5e1",
+    fontWeight: 950,
+  },
+  winnerName: {
+    margin: 0,
+    fontSize: "clamp(28px, 4vw, 44px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.03em",
+  },
+  winnerEmail: {
+    margin: 0,
+    color: "#cbd5e1",
+  },
+  error: {
+    margin: "14px auto 0",
+    color: "#fecaca",
+    maxWidth: 520,
+    fontWeight: 900,
+  },
+  startButton: {
+    marginTop: 24,
+    border: 0,
+    borderRadius: 18,
+    padding: "17px 28px",
+    fontSize: 18,
+    fontWeight: 950,
+    color: "#111827",
+  },
+};
