@@ -180,6 +180,7 @@ function getSectionToneStyle(tone: SectionTone): CSSProperties {
 }
 
 function prizeText(count: number) {
+  if (count <= 0) return "No prizes yet";
   return `${count} prize${count === 1 ? "" : "s"}`;
 }
 
@@ -447,8 +448,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
     objectPosition: `${imageFocusX}% ${imageFocusY}%`,
     display: "block",
   };
-
-  return (
+    return (
     <form action="/api/admin/events" method="post" style={styles.form}>
       <div style={styles.topBar}>
         <Link href="/admin/events" style={styles.backLink}>
@@ -494,10 +494,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
           <div style={styles.heroMetricGrid}>
             <HeroMetric label="Event type" value={formatEventType(eventType)} />
-            <HeroMetric
-              label="Tickets"
-              value={`${activeTicketCount} active`}
-            />
+            <HeroMetric label="Tickets" value={`${activeTicketCount} active`} />
             <HeroMetric
               label="From"
               value={
@@ -563,13 +560,11 @@ export default function NewEventForm({ tenantSlug }: Props) {
           </div>
         </div>
       </section>
+
       <section style={styles.summaryGrid}>
         <SummaryCard label="Event type" value={formatEventType(eventType)} />
 
-        <SummaryCard
-          label="Ticket types"
-          value={`${activeTicketCount} active`}
-        />
+        <SummaryCard label="Ticket types" value={`${activeTicketCount} active`} />
 
         <SummaryCard
           label="Starting price"
@@ -626,14 +621,8 @@ export default function NewEventForm({ tenantSlug }: Props) {
             label="Capacity"
             value={seatingPreview > 0 ? seatingPreview : "Not set"}
           />
-          <PreviewLine
-            label="Starts"
-            value={formatDatePreview(startsAt)}
-          />
-          <PreviewLine
-            label="Prizes"
-            value={prizeText(publicPrizesCount)}
-          />
+          <PreviewLine label="Starts" value={formatDatePreview(startsAt)} />
+          <PreviewLine label="Prizes" value={prizeText(publicPrizesCount)} />
         </ReadinessCard>
       </section>
 
@@ -1440,11 +1429,11 @@ const styles: Record<string, CSSProperties> = {
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
-    gap: 20,
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.9fr)",
+    gap: 24,
     alignItems: "stretch",
-    padding: "clamp(20px, 4vw, 26px)",
-    borderRadius: 28,
+    padding: "clamp(24px, 4vw, 34px)",
+    borderRadius: 30,
     background:
       "radial-gradient(circle at top left, rgba(59,130,246,0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
@@ -1464,7 +1453,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
-    marginBottom: 12,
+    marginBottom: 14,
   },
   heroTitleRow: {
     display: "flex",
@@ -1475,12 +1464,12 @@ const styles: Record<string, CSSProperties> = {
   },
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(34px, 5vw, 48px)",
+    fontSize: "clamp(34px, 5vw, 50px)",
     lineHeight: 1.02,
     letterSpacing: "-0.06em",
     wordBreak: "break-word",
     overflowWrap: "anywhere",
-    maxWidth: 680,
+    maxWidth: 720,
   },
   statusPill: {
     padding: "8px 12px",
@@ -1493,23 +1482,23 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
   },
   heroSlug: {
-    margin: "10px 0 0",
+    margin: "12px 0 0",
     color: "#bfdbfe",
     fontSize: 14,
     fontWeight: 800,
     wordBreak: "break-word",
   },
   heroDescription: {
-    margin: "14px 0 0",
+    margin: "16px 0 0",
     color: "#dbeafe",
-    lineHeight: 1.65,
-    maxWidth: 720,
+    lineHeight: 1.7,
+    maxWidth: 760,
     overflowWrap: "anywhere",
     fontSize: 16,
   },
   heroUseCase: {
-    margin: "12px 0 0",
-    padding: "10px 12px",
+    margin: "14px 0 0",
+    padding: "11px 13px",
     borderRadius: 16,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.14)",
@@ -1522,7 +1511,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
-    marginTop: 22,
+    marginTop: 24,
   },
   heroMetric: {
     padding: "13px 14px",
@@ -1564,7 +1553,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
   previewImageWrap: {
-    height: 240,
+    height: 278,
     borderRadius: 20,
     background: "#ffffff",
     border: "1px solid rgba(255,255,255,0.18)",
@@ -1574,8 +1563,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
   },
   placeholderImage: {
-    width: "min(82%, 218px)",
-    height: "min(82%, 218px)",
+    width: "min(92%, 254px)",
+    height: "min(92%, 254px)",
     objectFit: "contain",
     display: "block",
   },
@@ -1838,9 +1827,9 @@ const styles: Record<string, CSSProperties> = {
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 16,
-    padding: 14,
+    gridTemplateColumns: "minmax(0, 0.95fr) minmax(280px, 1.05fr)",
+    gap: 18,
+    padding: 16,
     borderRadius: 20,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
@@ -1850,7 +1839,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   previewBox: {
-    height: 230,
+    height: 260,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
     background: "#ffffff",
@@ -1860,8 +1849,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
   },
   previewPlaceholderImage: {
-    width: "min(82%, 205px)",
-    height: "min(82%, 205px)",
+    width: "min(92%, 238px)",
+    height: "min(92%, 238px)",
     objectFit: "contain",
     display: "block",
   },
