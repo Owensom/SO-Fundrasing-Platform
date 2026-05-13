@@ -256,8 +256,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
       0,
     );
   }, [ticketTypes]);
-
-  const reservedSeatsPreview = useMemo(() => {
+    const reservedSeatsPreview = useMemo(() => {
     const rowsText = rowRows.trim();
     const seats = toPositiveNumber(rowSeatsPerRow);
 
@@ -448,8 +447,16 @@ export default function NewEventForm({ tenantSlug }: Props) {
     objectPosition: `${imageFocusX}% ${imageFocusY}%`,
     display: "block",
   };
-    return (
-    <form action="/api/admin/events" method="post" style={styles.form}>
+
+  return (
+    <form
+      className="new-event-form"
+      action="/api/admin/events"
+      method="post"
+      style={styles.form}
+    >
+      <style>{responsiveStyles}</style>
+
       <div style={styles.topBar}>
         <Link href="/admin/events" style={styles.backLink}>
           ← Back to events
@@ -625,8 +632,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
           <PreviewLine label="Prizes" value={prizeText(publicPrizesCount)} />
         </ReadinessCard>
       </section>
-
-      <SectionCard
+            <SectionCard
         number="01"
         title="Event details"
         description="Set the public title, URL, description, image, location and timing."
@@ -674,6 +680,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
         <div style={styles.mediaBox}>
           <div style={styles.mediaControls}>
             <h3 style={styles.panelTitle}>Event image</h3>
+
             <p style={styles.sectionText}>
               Upload or replace the public event image, then choose the focal
               point for wide banners and cards.
@@ -756,6 +763,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
         <div style={styles.previewInfoCard}>
           <div style={styles.previewInfoLabel}>Event preview</div>
+
           <div style={styles.previewInfoValue}>
             {formatDatePreview(startsAt)}
             {location.trim() ? ` • ${location.trim()}` : ""}
@@ -814,6 +822,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
         <div style={styles.sectionHeaderInner}>
           <div>
             <h3 style={styles.panelTitle}>Ticket types</h3>
+
             <p style={styles.sectionText}>
               Create ticket names, prices, limits and public descriptions.
             </p>
@@ -935,7 +944,8 @@ export default function NewEventForm({ tenantSlug }: Props) {
           ))}
         </div>
       </SectionCard>
-            {eventType === "reserved_seating" ? (
+
+      {eventType === "reserved_seating" ? (
         <SectionCard
           number="03"
           title="Row seating"
@@ -1011,6 +1021,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
             <div style={styles.panel}>
               <h3 style={styles.panelTitle}>Row seating summary</h3>
+
               <p style={styles.sectionText}>
                 Leave these blank if you want to create the event first and
                 generate row seats later.
@@ -1018,6 +1029,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
               <div style={styles.previewInfoCard}>
                 <div style={styles.previewInfoLabel}>Seat preview</div>
+
                 <div style={styles.previewInfoValue}>
                   {reservedSeatsPreview
                     ? `${reservedSeatsPreview} seats estimated`
@@ -1091,6 +1103,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
             <div style={styles.panel}>
               <h3 style={styles.panelTitle}>Table seating summary</h3>
+
               <p style={styles.sectionText}>
                 Leave these blank if you want to create the event first and
                 generate table seats later.
@@ -1098,6 +1111,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
               <div style={styles.previewInfoCard}>
                 <div style={styles.previewInfoLabel}>Table preview</div>
+
                 <div style={styles.previewInfoValue}>
                   {tableSeatsPreview
                     ? `${tableCount || 0} tables • ${tableSeatsPreview} places`
@@ -1109,6 +1123,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
           <div style={{ ...styles.panel, marginTop: 16 }}>
             <h3 style={styles.panelTitle}>Table names optional</h3>
+
             <p style={styles.sectionText}>
               Add friendly names for tables before they go public. These save as
               table names automatically.
@@ -1123,6 +1138,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
                 {tableNumbers.map((tableNumber) => (
                   <label key={tableNumber} style={styles.tableNameRow}>
                     <span style={styles.tableNameLabel}>Table {tableNumber}</span>
+
                     <input
                       value={tableNames[tableNumber] || ""}
                       onChange={(event) =>
@@ -1138,8 +1154,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
           </div>
         </SectionCard>
       ) : null}
-
-      <SectionCard
+            <SectionCard
         number={eventType === "general_admission" ? "03" : "04"}
         title="Prize settings"
         description="Choose which prizes are visible on the public event page."
@@ -1390,12 +1405,117 @@ function CheckItem({
   );
 }
 
+const responsiveStyles = `
+  .new-event-form,
+  .new-event-form * {
+    box-sizing: border-box;
+  }
+
+  .new-event-form {
+    overflow-x: hidden;
+  }
+
+  .new-event-form img,
+  .new-event-form input,
+  .new-event-form textarea,
+  .new-event-form select,
+  .new-event-form button {
+    max-width: 100%;
+  }
+
+  @media (max-width: 760px) {
+    .new-event-form {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+
+    .new-event-form [style*="grid-template-columns"] {
+      grid-template-columns: 1fr !important;
+    }
+
+    .new-event-form section,
+    .new-event-form details,
+    .new-event-form div,
+    .new-event-form label {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    .new-event-form h1 {
+      font-size: clamp(34px, 12vw, 46px) !important;
+      line-height: 1.02 !important;
+      letter-spacing: -0.055em !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-event-form h2 {
+      font-size: clamp(28px, 9vw, 36px) !important;
+      line-height: 1.05 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-event-form p,
+    .new-event-form span,
+    .new-event-form strong {
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-event-form [style*="height: 278px"],
+    .new-event-form [style*="height: 260px"] {
+      height: auto !important;
+      min-height: 190px !important;
+      aspect-ratio: 16 / 10 !important;
+    }
+
+    .new-event-form [style*="display: flex"] {
+      flex-wrap: wrap !important;
+    }
+
+    .new-event-form button,
+    .new-event-form a {
+      min-height: 46px !important;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .new-event-form > div:first-child {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .new-event-form > div:first-child a {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+
+    .new-event-form section,
+    .new-event-form details {
+      border-radius: 22px !important;
+    }
+
+    .new-event-form input,
+    .new-event-form textarea,
+    .new-event-form select {
+      font-size: 16px !important;
+    }
+
+    .new-event-form button {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+  }
+`;
+
 const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
     gap: 16,
     width: "100%",
     maxWidth: "100%",
+    overflowX: "hidden",
   },
   topBar: {
     display: "flex",
