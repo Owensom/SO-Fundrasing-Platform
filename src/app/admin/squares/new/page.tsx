@@ -17,7 +17,7 @@ type PrizeRow = {
   is_public: boolean;
 };
 
-type SectionTone = "default" | "media" | "prize" | "legal";
+type SectionTone = "default" | "setup" | "media" | "prize" | "legal";
 
 const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
 
@@ -101,11 +101,19 @@ function getBoardShape(total: number) {
 }
 
 function getSectionToneStyle(tone: SectionTone): CSSProperties {
+  if (tone === "setup") {
+    return {
+      background:
+        "linear-gradient(135deg, #eff6ff 0%, #ffffff 48%, #f8fafc 100%)",
+      borderColor: "#bfdbfe",
+    };
+  }
+
   if (tone === "media") {
     return {
       background:
-        "linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #eff6ff 100%)",
-      borderColor: "#dbeafe",
+        "linear-gradient(135deg, #f8fafc 0%, #ffffff 48%, #eef2ff 100%)",
+      borderColor: "#c7d2fe",
     };
   }
 
@@ -120,8 +128,8 @@ function getSectionToneStyle(tone: SectionTone): CSSProperties {
   if (tone === "legal") {
     return {
       background:
-        "linear-gradient(135deg, #eff6ff 0%, #ffffff 52%, #f8fafc 100%)",
-      borderColor: "#bfdbfe",
+        "linear-gradient(135deg, #f5f3ff 0%, #ffffff 52%, #eff6ff 100%)",
+      borderColor: "#ddd6fe",
     };
   }
 
@@ -330,9 +338,11 @@ export default function NewSquaresGamePage() {
               {description.trim().length > 92 ? "…" : ""}
             </div>
 
-            <div style={styles.previewBottom}>
+            <div style={styles.previewMetaGrid}>
               <span>{formatPreviewMoney(price, currency)} each</span>
               <span>{boardSize} squares</span>
+              <span>{formatDatePreview(drawAt)}</span>
+              <span>{publicPrizesCount} prize{publicPrizesCount === 1 ? "" : "s"}</span>
             </div>
           </div>
         </div>
@@ -354,185 +364,186 @@ export default function NewSquaresGamePage() {
         />
         <SummaryCard label="Public prizes" value={publicPrizesCount} />
       </section>
-            <section style={styles.section}>
-        <SectionHeader
-          eyebrow="Section 1"
-          title="Campaign details"
-          description="Set the public title, URL, description and draw date."
-        />
-
-        <div style={styles.formInner}>
-          <div style={styles.twoColumn}>
-            <Field label="Squares game title">
-              <input
-                name="title"
-                required
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                style={styles.input}
-                placeholder="Summer fundraiser squares"
-              />
-            </Field>
-
-            <Field label="Public URL slug">
-              <input
-                name="slug"
-                required
-                value={slug}
-                onChange={(event) => {
-                  setSlugEdited(true);
-                  setSlug(slugify(event.target.value));
-                }}
-                style={styles.input}
-                placeholder="summer-fundraiser-squares"
-              />
-            </Field>
-          </div>
-
-          <Field label="Public description">
-            <textarea
-              name="description"
-              rows={5}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              style={styles.textarea}
-              placeholder="Describe the game, prizes, event details and draw information."
+            <SectionCard
+        sectionNumber="SECTION 1"
+        title="Campaign details"
+        description="Set the public title, URL, description and draw date."
+        defaultOpen
+        tone="default"
+      >
+        <div style={styles.formGrid}>
+          <Field label="Squares game title">
+            <input
+              name="title"
+              required
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              style={styles.input}
+              placeholder="Summer fundraiser squares"
             />
           </Field>
 
-          <div style={styles.twoColumn}>
-            <Field label="Draw date">
-              <input
-                name="draw_at"
-                type="datetime-local"
-                value={drawAt}
-                onChange={(event) => setDrawAt(event.target.value)}
-                style={styles.input}
-              />
-            </Field>
+          <Field label="Public URL slug">
+            <input
+              name="slug"
+              value={slug}
+              onChange={(event) => {
+                setSlugEdited(true);
+                setSlug(slugify(event.target.value));
+              }}
+              style={styles.input}
+              placeholder="summer-fundraiser-squares"
+            />
+          </Field>
+        </div>
 
-            <div style={styles.datePreview}>
-              <span style={styles.datePreviewLabel}>Draw preview</span>
-              <strong>{formatDatePreview(drawAt)}</strong>
+        <Field label="Public description">
+          <textarea
+            name="description"
+            rows={4}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            style={styles.textarea}
+            placeholder="Describe the game, prizes, event details and draw information."
+          />
+        </Field>
+
+        <div style={styles.drawGrid}>
+          <Field label="Draw date">
+            <input
+              name="draw_at"
+              type="datetime-local"
+              value={drawAt}
+              onChange={(event) => setDrawAt(event.target.value)}
+              style={styles.input}
+            />
+          </Field>
+
+          <div style={styles.previewInfoCard}>
+            <div style={styles.previewInfoEyebrow}>Draw preview</div>
+
+            <div style={styles.previewInfoValue}>
+              {formatDatePreview(drawAt)}
             </div>
           </div>
         </div>
-      </section>
+      </SectionCard>
 
-      <CollapsedSection
-        eyebrow="Section 2"
+      <SectionCard
+        sectionNumber="SECTION 2"
         title="Squares setup"
-        description="Configure board size, square price, currency and publication status."
-        summary={`${boardSize} squares · ${formatPreviewMoney(
+        description="Configure board size, square pricing, currency and publication status."
+        tone="setup"
+        collapsedSummary={`${boardSize} squares • ${formatPreviewMoney(
           price,
           currency,
-        )} each · ${status}`}
+        )} each`}
       >
-        <div style={styles.formInner}>
-          <div style={styles.fourColumn}>
-            <Field label="Number of squares">
-              <input
-                name="total_squares"
-                type="number"
-                min={1}
-                max={500}
-                required
-                value={totalSquares}
-                onChange={(event) => setTotalSquares(event.target.value)}
-                style={styles.input}
-              />
-            </Field>
+        <div style={styles.fourColumn}>
+          <Field label="Number of squares">
+            <input
+              name="total_squares"
+              type="number"
+              min={1}
+              max={500}
+              required
+              value={totalSquares}
+              onChange={(event) => setTotalSquares(event.target.value)}
+              style={styles.input}
+            />
+          </Field>
 
-            <Field label="Price per square">
-              <input
-                name="price_per_square"
-                type="number"
-                min={0}
-                step="0.01"
-                required
-                value={pricePerSquare}
-                onChange={(event) => setPricePerSquare(event.target.value)}
-                style={styles.input}
-              />
-            </Field>
+          <Field label="Price per square">
+            <input
+              name="price_per_square"
+              type="number"
+              min={0}
+              step="0.01"
+              required
+              value={pricePerSquare}
+              onChange={(event) => setPricePerSquare(event.target.value)}
+              style={styles.input}
+            />
+          </Field>
 
-            <Field label="Currency">
-              <select
-                name="currency"
-                value={currency}
-                onChange={(event) => setCurrency(event.target.value)}
-                style={styles.input}
-              >
-                <option value="GBP">GBP</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </Field>
+          <Field label="Currency">
+            <select
+              name="currency"
+              value={currency}
+              onChange={(event) => setCurrency(event.target.value)}
+              style={styles.input}
+            >
+              <option value="GBP">GBP</option>
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+            </select>
+          </Field>
 
-            <Field label="Status">
-              <select
-                name="status"
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
-                style={styles.input}
-              >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed</option>
-              </select>
-            </Field>
+          <Field label="Status">
+            <select
+              name="status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              style={styles.input}
+            >
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="closed">Closed</option>
+            </select>
+          </Field>
+        </div>
+
+        <div style={styles.boardPreviewCard}>
+          <div style={styles.boardPreviewHeader}>
+            <div>
+              <div style={styles.boardPreviewEyebrow}>Board preview</div>
+
+              <div style={styles.boardPreviewTitle}>
+                {boardShape.columns} × {boardShape.columns}
+              </div>
+            </div>
+
+            <div style={styles.boardPreviewBadge}>
+              {boardSize} squares
+            </div>
           </div>
 
-          <div style={styles.boardPreviewCard}>
-            <div style={styles.boardPreviewTop}>
-              <div>
-                <div style={styles.boardPreviewLabel}>Board preview</div>
-
-                <div style={styles.boardPreviewValue}>
-                  {boardShape.columns} × {boardShape.rows}
-                </div>
+          <div
+            style={{
+              ...styles.boardPreviewGrid,
+              gridTemplateColumns: `repeat(${Math.min(
+                boardShape.columns,
+                5,
+              )}, minmax(0, 1fr))`,
+            }}
+          >
+            {Array.from({
+              length: Math.min(boardSize, 25),
+            }).map((_, index) => (
+              <div key={index} style={styles.previewSquare}>
+                {index + 1}
               </div>
+            ))}
+          </div>
 
-              <div style={styles.boardPreviewStats}>{boardSize} squares</div>
-            </div>
-
-            <div
-              style={{
-                ...styles.boardGrid,
-                gridTemplateColumns: `repeat(${Math.min(
-                  boardShape.columns,
-                  10,
-                )}, minmax(0, 1fr))`,
-              }}
-            >
-              {Array.from({
-                length: Math.min(boardSize, 50),
-              }).map((_, index) => (
-                <div key={index} style={styles.boardCell}>
-                  {index + 1}
-                </div>
-              ))}
-            </div>
-
-            {boardSize > 50 ? (
-              <p style={styles.helpText}>
-                Showing first 50 squares as a preview. The public board will use
-                the full {boardSize} squares.
-              </p>
-            ) : null}
+          <div style={styles.boardPreviewFootnote}>
+            Premium simplified preview. The public board will use the full{" "}
+            {boardSize} square layout.
           </div>
         </div>
-      </CollapsedSection>
+      </SectionCard>
 
-      <CollapsedSection
-        eyebrow="Section 3"
+      <SectionCard
+        sectionNumber="SECTION 3"
         title="Squares image"
         description="Upload a strong public image and choose the crop focus."
-        summary={imageUrl ? "Custom image selected" : "Using default image"}
         tone="media"
+        collapsedSummary={imageUrl ? "Image uploaded" : "Using default image"}
       >
         <div style={styles.mediaBox}>
           <div style={styles.mediaControls}>
+            <h3 style={styles.subTitle}>Squares image</h3>
+
             <ImageFocusUploadField
               currentImageUrl={imageUrl}
               currentFocusX={imageFocusX}
@@ -567,28 +578,32 @@ export default function NewSquaresGamePage() {
             )}
           </div>
         </div>
-      </CollapsedSection>
+      </SectionCard>
 
-      <CollapsedSection
-        eyebrow="Section 4"
+      <SectionCard
+        sectionNumber="SECTION 4"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
-        summary={`${publicPrizesCount} public prize${
+        tone="prize"
+        collapsedSummary={`${publicPrizesCount} public prize${
           publicPrizesCount === 1 ? "" : "s"
         }`}
-        tone="prize"
       >
         <div style={styles.prizePanel}>
-          <div style={styles.innerHeader}>
+          <div style={styles.prizePanelHeader}>
             <div>
-              <h3 style={styles.subTitle}>Public prize list</h3>
+              <div style={styles.prizePanelTitle}>Public prize list</div>
 
-              <p style={styles.sectionDescription}>
+              <div style={styles.prizePanelDescription}>
                 These prizes can also be used later during winner draws.
-              </p>
+              </div>
             </div>
 
-            <button type="button" onClick={addPrize} style={styles.goldButton}>
+            <button
+              type="button"
+              onClick={addPrize}
+              style={styles.goldButton}
+            >
               + Add prize
             </button>
           </div>
@@ -631,12 +646,13 @@ export default function NewSquaresGamePage() {
 
                   <Field label="Prize title">
                     <input
-                      name="prize_title"
                       value={prize.title}
                       onChange={(event) =>
-                        updatePrize(prize.id, { title: event.target.value })
+                        updatePrize(prize.id, {
+                          title: event.target.value,
+                        })
                       }
-                      placeholder="Prize title"
+                      placeholder="1st Prize"
                       style={styles.input}
                     />
                   </Field>
@@ -644,15 +660,15 @@ export default function NewSquaresGamePage() {
 
                 <Field label="Description optional">
                   <textarea
-                    name="prize_description"
                     value={prize.description}
                     onChange={(event) =>
                       updatePrize(prize.id, {
                         description: event.target.value,
                       })
                     }
-                    rows={2}
+                    rows={3}
                     style={styles.textarea}
+                    placeholder="Optional public prize description"
                   />
                 </Field>
 
@@ -662,7 +678,8 @@ export default function NewSquaresGamePage() {
                   disabled={prizes.length <= 1}
                   style={{
                     ...styles.dangerButton,
-                    cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                    cursor:
+                      prizes.length <= 1 ? "not-allowed" : "pointer",
                     opacity: prizes.length <= 1 ? 0.55 : 1,
                   }}
                 >
@@ -672,16 +689,16 @@ export default function NewSquaresGamePage() {
             ))}
           </div>
         </div>
-      </CollapsedSection>
-            <CollapsedSection
-        eyebrow="Section 5"
+      </SectionCard>
+            <SectionCard
+        sectionNumber="SECTION 5"
         title="Entry question"
         description="Optional skill-based question for the public checkout flow."
-        summary={hasLegalQuestion ? "Configured" : "Not configured"}
         tone="legal"
+        collapsedSummary={hasLegalQuestion ? "Configured" : "Not configured"}
       >
         <div style={styles.legalBody}>
-          <div style={styles.twoColumn}>
+          <div style={styles.formGrid}>
             <Field label="Question">
               <input
                 value={questionText}
@@ -706,14 +723,14 @@ export default function NewSquaresGamePage() {
             question is set.
           </p>
         </div>
-      </CollapsedSection>
+      </SectionCard>
 
-      <CollapsedSection
-        eyebrow="Section 6"
+      <SectionCard
+        sectionNumber="SECTION 6"
         title="Free postal entry"
         description="Add no-purchase entry instructions shown on the public squares page."
-        summary={hasFreeEntry ? "Configured" : "Not configured"}
         tone="legal"
+        collapsedSummary={hasFreeEntry ? "Configured" : "Not configured"}
       >
         <div style={styles.legalBody}>
           <Field label="Postal address">
@@ -750,7 +767,7 @@ export default function NewSquaresGamePage() {
             <CheckItem done={hasFreeEntry}>Free entry details configured</CheckItem>
           </div>
         </div>
-      </CollapsedSection>
+      </SectionCard>
 
       <section style={styles.submitBar}>
         <div style={styles.submitText}>
@@ -787,58 +804,64 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function SectionHeader({
-  eyebrow,
+function SectionCard({
+  sectionNumber,
   title,
   description,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div style={styles.sectionHeader}>
-      <div>
-        <div style={styles.sectionEyebrow}>{eyebrow}</div>
-        <h2 style={styles.sectionTitle}>{title}</h2>
-        <p style={styles.sectionDescription}>{description}</p>
-      </div>
-    </div>
-  );
-}
-
-function CollapsedSection({
-  eyebrow,
-  title,
-  description,
-  summary,
+  collapsedSummary,
+  defaultOpen = false,
   tone = "default",
   children,
 }: {
-  eyebrow: string;
+  sectionNumber: string;
   title: string;
   description: string;
-  summary: string;
+  collapsedSummary?: string;
+  defaultOpen?: boolean;
   tone?: SectionTone;
   children: ReactNode;
 }) {
+  if (defaultOpen) {
+    return (
+      <section
+        style={{
+          ...styles.section,
+          ...getSectionToneStyle(tone),
+        }}
+      >
+        <div style={styles.sectionHeader}>
+          <div>
+            <div style={styles.sectionEyebrow}>{sectionNumber}</div>
+            <h2 style={styles.sectionTitle}>{title}</h2>
+            <p style={styles.sectionDescription}>{description}</p>
+          </div>
+        </div>
+
+        <div style={styles.sectionBody}>{children}</div>
+      </section>
+    );
+  }
+
   return (
     <details
       style={{
-        ...styles.collapsedSection,
+        ...styles.section,
         ...getSectionToneStyle(tone),
       }}
     >
       <summary style={styles.collapsedSummary}>
         <div style={styles.collapsedHeading}>
-          <div style={styles.sectionEyebrow}>{eyebrow}</div>
+          <div style={styles.sectionEyebrow}>{sectionNumber}</div>
           <h2 style={styles.sectionTitle}>{title}</h2>
           <p style={styles.sectionDescription}>{description}</p>
         </div>
 
         <div style={styles.collapsedControls}>
-          <span style={styles.summaryPill}>{summary}</span>
-          <span style={styles.configureButton}>Configure</span>
+          {collapsedSummary ? (
+            <span style={styles.summaryPill}>{collapsedSummary}</span>
+          ) : null}
+
+          <span style={styles.openButton}>OPEN</span>
         </div>
       </summary>
 
@@ -1048,14 +1071,19 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
   },
-  previewBottom: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
+  previewMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
     marginTop: 12,
-    color: "#0f172a",
-    fontSize: 13,
+  },
+  previewMetaItem: {
+    padding: "8px 10px",
+    borderRadius: 12,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#334155",
+    fontSize: 12,
     fontWeight: 900,
   },
   summaryGrid: {
@@ -1086,19 +1114,22 @@ const styles: Record<string, CSSProperties> = {
   section: {
     padding: "clamp(16px, 4vw, 20px)",
     borderRadius: 24,
-    background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflow: "hidden",
   },
-  collapsedSection: {
-    padding: "clamp(16px, 4vw, 20px)",
-    borderRadius: 24,
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
-    overflow: "hidden",
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  sectionBody: {
+    display: "grid",
+    gap: 16,
   },
   collapsedSummary: {
     display: "flex",
@@ -1121,6 +1152,8 @@ const styles: Record<string, CSSProperties> = {
   },
   collapsedBody: {
     marginTop: 16,
+    display: "grid",
+    gap: 16,
   },
   summaryPill: {
     padding: "8px 12px",
@@ -1132,7 +1165,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
-  configureButton: {
+  openButton: {
     padding: "8px 12px",
     borderRadius: 999,
     background: "#eff6ff",
@@ -1144,14 +1177,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.04em",
     flexShrink: 0,
     whiteSpace: "nowrap",
-  },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 16,
   },
   sectionEyebrow: {
     color: "#2563eb",
@@ -1174,14 +1199,16 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
-  formInner: {
-    display: "grid",
-    gap: 16,
-  },
-  twoColumn: {
+  formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
+  },
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 0.9fr)",
+    gap: 12,
+    alignItems: "end",
   },
   fourColumn: {
     display: "grid",
@@ -1222,7 +1249,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     minWidth: 0,
   },
-  datePreview: {
+  previewInfoCard: {
     display: "grid",
     alignContent: "center",
     minHeight: 46,
@@ -1234,8 +1261,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 900,
   },
-  datePreviewLabel: {
-    display: "block",
+  previewInfoEyebrow: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -1243,13 +1269,18 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.06em",
     marginBottom: 2,
   },
+  previewInfoValue: {
+    color: "#1e3a8a",
+    fontSize: 14,
+    fontWeight: 950,
+  },
   boardPreviewCard: {
     padding: 16,
     borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
   },
-  boardPreviewTop: {
+  boardPreviewHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
@@ -1257,45 +1288,55 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 14,
   },
-  boardPreviewLabel: {
-    color: "#64748b",
+  boardPreviewEyebrow: {
+    color: "#2563eb",
     fontSize: 12,
-    fontWeight: 900,
-  },
-  boardPreviewValue: {
-    color: "#0f172a",
-    fontSize: 22,
     fontWeight: 950,
-    letterSpacing: "-0.03em",
-    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
-  boardPreviewStats: {
+  boardPreviewTitle: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontSize: 26,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+  boardPreviewBadge: {
     padding: "8px 12px",
     borderRadius: 999,
-    background: "#ffffff",
-    border: "1px solid #dbe3ef",
-    color: "#334155",
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1d4ed8",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 950,
   },
-  boardGrid: {
+  boardPreviewGrid: {
     display: "grid",
-    gap: 6,
+    gap: 8,
+    maxWidth: 360,
   },
-  boardCell: {
+  previewSquare: {
     aspectRatio: "1 / 1",
-    minHeight: 28,
-    borderRadius: 9,
+    minHeight: 42,
+    borderRadius: 12,
     background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-    border: "1px solid #dbe3ef",
-    color: "#334155",
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    color: "#1e3a8a",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     fontSize: 12,
-    fontWeight: 900,
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
+    fontWeight: 950,
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.9), 0 6px 14px rgba(15,23,42,0.04)",
+  },
+  boardPreviewFootnote: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    margin: "12px 0 0",
   },
   mediaBox: {
     display: "grid",
@@ -1303,12 +1344,18 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
     padding: 14,
     borderRadius: 20,
-    background: "#f8fafc",
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
   mediaControls: {
     minWidth: 0,
+  },
+  subTitle: {
+    margin: "0 0 10px",
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
   },
   previewBox: {
     height: 220,
@@ -1331,24 +1378,29 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     padding: "clamp(14px, 4vw, 16px)",
     borderRadius: 22,
-    background:
-      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
+    background: "#ffffff",
     border: "1px solid #fde68a",
     minWidth: 0,
     overflow: "hidden",
   },
-  innerHeader: {
+  prizePanelHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
-  subTitle: {
-    margin: 0,
+  prizePanelTitle: {
     color: "#0f172a",
     fontSize: 18,
-    letterSpacing: "-0.01em",
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  prizePanelDescription: {
+    marginTop: 4,
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
   },
   goldButton: {
     padding: "10px 14px",
@@ -1370,7 +1422,8 @@ const styles: Record<string, CSSProperties> = {
     padding: 14,
     border: "1px solid #fde68a",
     borderRadius: 18,
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 55%, #f8fafc 100%)",
     minWidth: 0,
   },
   rowHeader: {
@@ -1413,7 +1466,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     padding: 14,
     borderRadius: 18,
-    background: "#f8fafc",
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
   checkItem: {
