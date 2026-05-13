@@ -6,7 +6,7 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listEvents } from "../../../../api/_lib/events-repo";
 
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
-const EVENTS_LOGO_IMAGE = "/brand/so-default-events.png";
+const EVENTS_LOGO_IMAGE = "/brand/event-champagne-gold.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -46,6 +46,14 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
     };
   }
 
+  if (clean === "drawn") {
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
+  }
+
   return {
     background: "#f8fafc",
     color: "#475569",
@@ -72,6 +80,8 @@ export default async function AdminEventsPage() {
 
   const events = await listEvents(tenantSlug);
 
+  const totalEvents = events.length;
+
   const publishedCount = events.filter(
     (event) => event.status === "published",
   ).length;
@@ -90,9 +100,7 @@ export default async function AdminEventsPage() {
         <div>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 className="so-brand-heading" style={styles.title}>
-            Manage events
-          </h1>
+          <h1 style={styles.title}>Manage events</h1>
 
           <p style={styles.subtitle}>
             Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
@@ -118,7 +126,10 @@ export default async function AdminEventsPage() {
             Auctions
           </Link>
 
-          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.navButton}>
+          <Link
+            href={`/c/${tenantSlug}?adminReturn=/admin/events`}
+            style={styles.navButton}
+          >
             Public site
           </Link>
 
@@ -131,7 +142,7 @@ export default async function AdminEventsPage() {
       <section style={styles.statsGrid}>
         <StatCard
           label="Total events"
-          value={events.length}
+          value={totalEvents}
           image={EVENTS_LOGO_IMAGE}
           accent="#1683f8"
           tint="#eff6ff"
@@ -164,9 +175,7 @@ export default async function AdminEventsPage() {
 
       {events.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 className="so-brand-card-title" style={{ margin: 0 }}>
-            No events yet
-          </h2>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>No events yet</h2>
 
           <p style={styles.muted}>Create your first fundraising event.</p>
 
@@ -179,6 +188,7 @@ export default async function AdminEventsPage() {
           {events.map((event) => {
             const hasCustomImage = Boolean(event.image_url);
             const capacity = Number(event.capacity || 0);
+            const statusStyle = getStatusStyle(event.status);
 
             return (
               <article key={event.id} style={styles.card}>
@@ -186,11 +196,11 @@ export default async function AdminEventsPage() {
                   <div style={styles.imageWrap}>
                     <img
                       src={event.image_url || DEFAULT_EVENTS_IMAGE}
-                      alt={event.title || "SO Events"}
+                      alt={event.title || "Event"}
                       style={{
                         ...styles.image,
                         objectFit: hasCustomImage ? "cover" : "contain",
-                        padding: hasCustomImage ? 0 : 12,
+                        padding: hasCustomImage ? 0 : 10,
                         background: hasCustomImage
                           ? "#f1f5f9"
                           : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
@@ -202,21 +212,21 @@ export default async function AdminEventsPage() {
                   <div style={styles.cardMain}>
                     <div style={styles.cardHeader}>
                       <div style={{ minWidth: 0 }}>
-                        <h2 className="so-brand-card-title" style={styles.cardTitle}>
+                        <h2 style={styles.cardTitle}>
                           {event.title || "Untitled event"}
                         </h2>
 
                         <p style={styles.slug}>/e/{event.slug}</p>
                       </div>
 
-                      <span
+                      <div
                         style={{
                           ...styles.status,
-                          ...getStatusStyle(event.status),
+                          ...statusStyle,
                         }}
                       >
                         {event.status}
-                      </span>
+                      </div>
                     </div>
 
                     <div style={styles.headlineGrid}>
@@ -235,22 +245,22 @@ export default async function AdminEventsPage() {
 
                     {event.description ? (
                       <p style={styles.description}>
-                        {event.description.length > 150
-                          ? `${event.description.slice(0, 150)}…`
+                        {event.description.length > 130
+                          ? `${event.description.slice(0, 130)}…`
                           : event.description}
                       </p>
                     ) : null}
 
                     <div style={styles.detailGrid}>
-                      <Detail label="Starts" value={formatDate(event.starts_at)} />
+                      <InfoBlock label="Starts" value={formatDate(event.starts_at)} />
 
-                      <Detail label="Ends" value={formatDate(event.ends_at)} />
+                      <InfoBlock label="Ends" value={formatDate(event.ends_at)} />
 
-                      <Detail label="Capacity" value={capacity} />
+                      <InfoBlock label="Capacity" value={capacity} />
 
-                      <Detail label="Currency" value={event.currency || "GBP"} />
+                      <InfoBlock label="Currency" value={event.currency || "GBP"} />
 
-                      <Detail
+                      <InfoBlock
                         label="Type"
                         value={formatEventType(event.event_type)}
                       />
@@ -259,19 +269,18 @@ export default async function AdminEventsPage() {
                     <div style={styles.actions}>
                       <Link
                         href={`/admin/events/${event.id}`}
-                        style={styles.openButton}
+                        style={styles.primaryLink}
                       >
                         Open details
                       </Link>
 
-                      <a
-                        href={`/e/${event.slug}`}
+                      <Link
+                        href={`/e/${event.slug}?adminReturn=/admin/events/${event.id}`}
                         target="_blank"
-                        rel="noreferrer"
-                        style={styles.viewButton}
+                        style={styles.secondaryLink}
                       >
                         View campaign
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -342,7 +351,7 @@ function StatCard({
   );
 }
 
-function Detail({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -362,10 +371,10 @@ const styles: Record<string, CSSProperties> = {
   header: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 16,
     alignItems: "flex-start",
-    flexWrap: "wrap",
     marginBottom: 22,
+    gap: 16,
+    flexWrap: "wrap",
   },
   badge: {
     display: "inline-flex",
@@ -374,7 +383,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#e0f2fe",
     color: "#0369a1",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 800,
     marginBottom: 10,
   },
   title: {
@@ -405,7 +414,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
   },
   navButtonActive: {
     display: "inline-flex",
@@ -415,8 +424,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
-    border: "1px solid #0f172a",
-    textDecoration: "none",
     fontWeight: 900,
   },
   createButton: {
@@ -428,7 +435,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
   statsGrid: {
@@ -466,24 +473,35 @@ const styles: Record<string, CSSProperties> = {
   statLabel: {
     color: "#64748b",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 800,
   },
   statValue: {
-    marginTop: 4,
-    fontSize: 28,
-    fontWeight: 950,
     color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 900,
+    marginTop: 4,
     letterSpacing: "-0.03em",
+  },
+  emptyCard: {
+    padding: 28,
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  muted: {
+    color: "#64748b",
+    margin: "8px 0 18px",
   },
   list: {
     display: "grid",
     gap: 16,
   },
   card: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
     border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    padding: 18,
+    background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   cardTop: {
@@ -520,7 +538,6 @@ const styles: Record<string, CSSProperties> = {
   cardTitle: {
     margin: 0,
     fontSize: 22,
-    lineHeight: 1.15,
     color: "#0f172a",
     letterSpacing: "-0.02em",
     wordBreak: "break-word",
@@ -529,17 +546,15 @@ const styles: Record<string, CSSProperties> = {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: 14,
-    fontWeight: 700,
     wordBreak: "break-word",
   },
   status: {
-    display: "inline-flex",
     padding: "7px 11px",
     borderRadius: 9999,
     border: "1px solid",
     fontSize: 13,
-    fontWeight: 900,
     textTransform: "capitalize",
+    fontWeight: 800,
   },
   headlineGrid: {
     display: "grid",
@@ -556,7 +571,7 @@ const styles: Record<string, CSSProperties> = {
   headlineLabel: {
     fontSize: 12,
     color: "#64748b",
-    fontWeight: 900,
+    fontWeight: 800,
   },
   headlineValue: {
     marginTop: 4,
@@ -567,10 +582,10 @@ const styles: Record<string, CSSProperties> = {
     wordBreak: "break-word",
   },
   description: {
-    marginTop: 12,
     color: "#475569",
     fontSize: 14,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
+    margin: "10px 0 0",
   },
   detailGrid: {
     display: "grid",
@@ -586,9 +601,9 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   detailLabel: {
-    color: "#64748b",
     fontSize: 12,
-    fontWeight: 900,
+    color: "#64748b",
+    fontWeight: 800,
   },
   detailValue: {
     marginTop: 4,
@@ -599,10 +614,10 @@ const styles: Record<string, CSSProperties> = {
   actions: {
     display: "flex",
     gap: 10,
-    flexWrap: "wrap",
     marginTop: 18,
+    flexWrap: "wrap",
   },
-  openButton: {
+  primaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -611,10 +626,10 @@ const styles: Record<string, CSSProperties> = {
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
   },
-  viewButton: {
+  secondaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -624,19 +639,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     border: "1px solid #dbe3ef",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
     boxShadow: "none",
-  },
-  emptyCard: {
-    padding: 28,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  muted: {
-    color: "#64748b",
-    margin: "8px 0 18px",
   },
 };
