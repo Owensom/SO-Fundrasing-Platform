@@ -140,7 +140,7 @@ export default function PublicGeneralAdmissionSelector({
 
             return (
               <div key={ticketType.id} style={styles.ticketRow}>
-                <div>
+                <div style={styles.ticketInfo}>
                   <h4 style={styles.ticketName}>{ticketType.name}</h4>
 
                   {ticketType.description ? (
@@ -163,7 +163,8 @@ export default function PublicGeneralAdmissionSelector({
                   >
                     −
                   </button>
-                                    <input
+
+                  <input
                     type="number"
                     min="0"
                     value={quantity}
@@ -227,7 +228,9 @@ export default function PublicGeneralAdmissionSelector({
         )}
 
         <div style={styles.totalBox}>
-          <span>{totalQuantity} ticket{totalQuantity === 1 ? "" : "s"}</span>
+          <span>
+            {totalQuantity} ticket{totalQuantity === 1 ? "" : "s"}
+          </span>
           <strong>
             {currency} {moneyFromCents(ticketTotal)}
           </strong>
@@ -242,7 +245,7 @@ export default function PublicGeneralAdmissionSelector({
           />
           <span>
             <strong>I’d like to cover platform fees</strong>
-            <small>
+            <small style={styles.feeSmall}>
               Adds approximately {currency}{" "}
               {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so the
               organiser receives the full ticket value.
@@ -278,23 +281,27 @@ export default function PublicGeneralAdmissionSelector({
     </div>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 380px)",
-    gap: 22,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 18,
     alignItems: "start",
+    width: "100%",
+    minWidth: 0,
   },
   ticketPanel: {
-    padding: 18,
+    padding: "clamp(14px, 4vw, 18px)",
     borderRadius: 24,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   panelTitle: {
     margin: "0 0 14px",
     color: "#111827",
-    fontSize: 24,
+    fontSize: "clamp(21px, 5vw, 24px)",
     fontWeight: 950,
   },
   ticketList: {
@@ -305,23 +312,32 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 16,
-    padding: 16,
+    gap: 14,
+    flexWrap: "wrap",
+    padding: "clamp(14px, 4vw, 16px)",
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  ticketInfo: {
+    flex: "1 1 220px",
+    minWidth: 0,
   },
   ticketName: {
     margin: 0,
     color: "#111827",
     fontSize: 18,
     fontWeight: 950,
+    lineHeight: 1.15,
+    overflowWrap: "anywhere",
   },
   ticketDescription: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
   ticketPrice: {
     margin: "8px 0 0",
@@ -329,9 +345,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
   },
   quantityControls: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "42px minmax(62px, 72px) 42px",
     alignItems: "center",
     gap: 8,
+    flex: "0 0 auto",
   },
   quantityButton: {
     width: 42,
@@ -345,22 +363,26 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   quantityInput: {
-    width: 64,
+    width: "100%",
     height: 42,
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     textAlign: "center",
     fontSize: 16,
     fontWeight: 900,
+    color: "#111827",
+    background: "#ffffff",
+    boxSizing: "border-box",
   },
   summaryPanel: {
     position: "sticky",
     top: 18,
-    padding: 18,
+    padding: "clamp(14px, 4vw, 18px)",
     borderRadius: 24,
     background: "#111827",
     color: "#ffffff",
     boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
+    minWidth: 0,
   },
   summarySpacer: {
     height: 16,
@@ -375,7 +397,7 @@ const styles: Record<string, CSSProperties> = {
   },
   summaryTitle: {
     margin: "5px 0 14px",
-    fontSize: 26,
+    fontSize: "clamp(23px, 5vw, 26px)",
     fontWeight: 950,
   },
   emptyBox: {
@@ -402,6 +424,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     padding: 12,
     borderRadius: 14,
     background: "rgba(255,255,255,0.06)",
@@ -411,6 +434,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 14,
     padding: 15,
     borderRadius: 18,
@@ -423,6 +447,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 10,
     padding: 15,
     borderRadius: 18,
@@ -443,6 +468,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
     cursor: "pointer",
+    lineHeight: 1.35,
+  },
+  feeSmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#cbd5e1",
+    lineHeight: 1.4,
   },
   checkoutButton: {
     marginTop: 14,
