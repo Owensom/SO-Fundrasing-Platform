@@ -381,13 +381,15 @@ export default function NewSquaresGamePage() {
         </div>
       </section>
 
-      <section style={styles.section}>
-        <SectionHeader
-          eyebrow="Section 2"
-          title="Squares setup"
-          description="Configure board size, square price, currency and publication status."
-        />
-
+      <CollapsedSection
+        eyebrow="Section 2"
+        title="Squares setup"
+        description="Configure board size, square price, currency and publication status."
+        summary={`${boardSize} squares · ${formatPreviewMoney(
+          price,
+          currency,
+        )} each · ${status}`}
+      >
         <div style={styles.formInner}>
           <div style={styles.fourColumn}>
             <Field label="Number of squares">
@@ -482,15 +484,14 @@ export default function NewSquaresGamePage() {
             ) : null}
           </div>
         </div>
-      </section>
+      </CollapsedSection>
 
-      <section style={styles.section}>
-        <SectionHeader
-          eyebrow="Section 3"
-          title="Squares image"
-          description="Upload a strong public image and choose the crop focus."
-        />
-
+      <CollapsedSection
+        eyebrow="Section 3"
+        title="Squares image"
+        description="Upload a strong public image and choose the crop focus."
+        summary={imageUrl ? "Custom image selected" : "Using default image"}
+      >
         <div style={styles.mediaBox}>
           <div style={styles.mediaControls}>
             <ImageFocusUploadField
@@ -527,15 +528,16 @@ export default function NewSquaresGamePage() {
             )}
           </div>
         </div>
-      </section>
+      </CollapsedSection>
 
-      <section style={styles.section}>
-        <SectionHeader
-          eyebrow="Section 4"
-          title="Prize settings"
-          description="Add prizes and choose which ones appear publicly on the campaign page."
-        />
-
+      <CollapsedSection
+        eyebrow="Section 4"
+        title="Prize settings"
+        description="Add prizes and choose which ones appear publicly on the campaign page."
+        summary={`${publicPrizesCount} public prize${
+          publicPrizesCount === 1 ? "" : "s"
+        }`}
+      >
         <div style={styles.prizePanel}>
           <div style={styles.innerHeader}>
             <div>
@@ -630,20 +632,13 @@ export default function NewSquaresGamePage() {
             ))}
           </div>
         </div>
-      </section>
-            <details style={styles.legalDetails}>
-        <summary style={styles.legalSummary}>
-          <div>
-            <div style={styles.legalEyebrow}>Section 5</div>
-            <h2 style={styles.legalTitle}>Entry question</h2>
-            <p style={styles.legalText}>
-              Optional skill-based question for the public checkout flow.
-            </p>
-          </div>
-
-          <span style={styles.legalToggle}>Open / close</span>
-        </summary>
-
+      </CollapsedSection>
+            <CollapsedSection
+        eyebrow="Section 5"
+        title="Entry question"
+        description="Optional skill-based question for the public checkout flow."
+        summary={hasLegalQuestion ? "Configured" : "Not configured"}
+      >
         <div style={styles.legalBody}>
           <div style={styles.twoColumn}>
             <Field label="Question">
@@ -670,22 +665,14 @@ export default function NewSquaresGamePage() {
             question is set.
           </p>
         </div>
-      </details>
+      </CollapsedSection>
 
-      <details style={styles.legalDetails}>
-        <summary style={styles.legalSummary}>
-          <div>
-            <div style={styles.legalEyebrow}>Section 6</div>
-            <h2 style={styles.legalTitle}>Free postal entry</h2>
-            <p style={styles.legalText}>
-              Add no-purchase entry instructions shown on the public squares
-              page.
-            </p>
-          </div>
-
-          <span style={styles.legalToggle}>Open / close</span>
-        </summary>
-
+      <CollapsedSection
+        eyebrow="Section 6"
+        title="Free postal entry"
+        description="Add no-purchase entry instructions shown on the public squares page."
+        summary={hasFreeEntry ? "Configured" : "Not configured"}
+      >
         <div style={styles.legalBody}>
           <Field label="Postal address">
             <textarea
@@ -700,9 +687,7 @@ export default function NewSquaresGamePage() {
           <Field label="Instructions">
             <textarea
               value={freeEntryInstructions}
-              onChange={(event) =>
-                setFreeEntryInstructions(event.target.value)
-              }
+              onChange={(event) => setFreeEntryInstructions(event.target.value)}
               rows={3}
               placeholder="Include name, email, game name, answer and preferred square number..."
               style={styles.textarea}
@@ -723,7 +708,7 @@ export default function NewSquaresGamePage() {
             <CheckItem done={hasFreeEntry}>Free entry details configured</CheckItem>
           </div>
         </div>
-      </details>
+      </CollapsedSection>
 
       <section style={styles.submitBar}>
         <div style={styles.submitText}>
@@ -777,6 +762,39 @@ function SectionHeader({
         <p style={styles.sectionDescription}>{description}</p>
       </div>
     </div>
+  );
+}
+
+function CollapsedSection({
+  eyebrow,
+  title,
+  description,
+  summary,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  summary: string;
+  children: ReactNode;
+}) {
+  return (
+    <details style={styles.collapsedSection}>
+      <summary style={styles.collapsedSummary}>
+        <div style={styles.collapsedHeading}>
+          <div style={styles.sectionEyebrow}>{eyebrow}</div>
+          <h2 style={styles.sectionTitle}>{title}</h2>
+          <p style={styles.sectionDescription}>{description}</p>
+        </div>
+
+        <div style={styles.collapsedControls}>
+          <span style={styles.summaryPill}>{summary}</span>
+          <span style={styles.legalToggle}>Open / close</span>
+        </div>
+      </summary>
+
+      <div style={styles.collapsedBody}>{children}</div>
+    </details>
   );
 }
 
@@ -1013,6 +1031,47 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflow: "hidden",
+  },
+  collapsedSection: {
+    padding: "clamp(16px, 4vw, 20px)",
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  collapsedSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  collapsedHeading: {
+    minWidth: 0,
+  },
+  collapsedControls: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    flexShrink: 0,
+  },
+  collapsedBody: {
+    marginTop: 16,
+  },
+  summaryPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
   sectionHeader: {
     display: "flex",
@@ -1271,41 +1330,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#b91c1c",
     fontWeight: 900,
   },
-  legalDetails: {
-    padding: "clamp(16px, 4vw, 20px)",
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  legalSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-  legalEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-  legalTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.03em",
-  },
-  legalText: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
   legalToggle: {
     padding: "8px 12px",
     borderRadius: 999,
@@ -1317,9 +1341,9 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     flexShrink: 0,
+    whiteSpace: "nowrap",
   },
   legalBody: {
-    marginTop: 16,
     display: "grid",
     gap: 12,
   },
