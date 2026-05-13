@@ -17,6 +17,8 @@ type PrizeRow = {
   is_public: boolean;
 };
 
+type SectionTone = "default" | "media" | "prize" | "legal";
+
 const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
 
 function safeId(prefix: string) {
@@ -96,6 +98,37 @@ function getBoardShape(total: number) {
   if (total <= 225) return { columns: 15, rows: Math.ceil(total / 15) };
 
   return { columns: 20, rows: Math.ceil(total / 20) };
+}
+
+function getSectionToneStyle(tone: SectionTone): CSSProperties {
+  if (tone === "media") {
+    return {
+      background:
+        "linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #eff6ff 100%)",
+      borderColor: "#dbeafe",
+    };
+  }
+
+  if (tone === "prize") {
+    return {
+      background:
+        "linear-gradient(135deg, #fffbeb 0%, #ffffff 52%, #f8fafc 100%)",
+      borderColor: "#fde68a",
+    };
+  }
+
+  if (tone === "legal") {
+    return {
+      background:
+        "linear-gradient(135deg, #eff6ff 0%, #ffffff 52%, #f8fafc 100%)",
+      borderColor: "#bfdbfe",
+    };
+  }
+
+  return {
+    background: "#ffffff",
+    borderColor: "#e2e8f0",
+  };
 }
 
 export default function NewSquaresGamePage() {
@@ -241,6 +274,11 @@ export default function NewSquaresGamePage() {
             prizes and keep legal entry requirements in one polished setup flow.
           </p>
 
+          <p style={styles.heroUseCase}>
+            Perfect for football cards, race nights, finals, ceilidhs and live
+            fundraising events.
+          </p>
+
           <div style={styles.heroMetricGrid}>
             <HeroMetric label="Total squares" value={boardSize} />
             <HeroMetric
@@ -301,18 +339,18 @@ export default function NewSquaresGamePage() {
       </section>
 
       <section style={styles.summaryGrid}>
-        <SummaryCard label="Total squares" value={boardSize} />
         <SummaryCard
-          label="Price / square"
-          value={formatPreviewMoney(price, currency)}
-        />
-        <SummaryCard
-          label="Max sales"
+          label="Estimated revenue"
           value={formatPreviewMoney(estimatedTotal, currency)}
         />
+        <SummaryCard label="Board size" value={`${boardSize} squares`} />
         <SummaryCard
-          label="Board shape"
-          value={`${boardShape.columns} columns`}
+          label="Draw status"
+          value={drawAt ? "Scheduled" : "Not scheduled"}
+        />
+        <SummaryCard
+          label="Legal readiness"
+          value={hasLegalQuestion || hasFreeEntry ? "In progress" : "Not set"}
         />
         <SummaryCard label="Public prizes" value={publicPrizesCount} />
       </section>
@@ -491,6 +529,7 @@ export default function NewSquaresGamePage() {
         title="Squares image"
         description="Upload a strong public image and choose the crop focus."
         summary={imageUrl ? "Custom image selected" : "Using default image"}
+        tone="media"
       >
         <div style={styles.mediaBox}>
           <div style={styles.mediaControls}>
@@ -537,6 +576,7 @@ export default function NewSquaresGamePage() {
         summary={`${publicPrizesCount} public prize${
           publicPrizesCount === 1 ? "" : "s"
         }`}
+        tone="prize"
       >
         <div style={styles.prizePanel}>
           <div style={styles.innerHeader}>
@@ -638,6 +678,7 @@ export default function NewSquaresGamePage() {
         title="Entry question"
         description="Optional skill-based question for the public checkout flow."
         summary={hasLegalQuestion ? "Configured" : "Not configured"}
+        tone="legal"
       >
         <div style={styles.legalBody}>
           <div style={styles.twoColumn}>
@@ -672,6 +713,7 @@ export default function NewSquaresGamePage() {
         title="Free postal entry"
         description="Add no-purchase entry instructions shown on the public squares page."
         summary={hasFreeEntry ? "Configured" : "Not configured"}
+        tone="legal"
       >
         <div style={styles.legalBody}>
           <Field label="Postal address">
@@ -770,16 +812,23 @@ function CollapsedSection({
   title,
   description,
   summary,
+  tone = "default",
   children,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   summary: string;
+  tone?: SectionTone;
   children: ReactNode;
 }) {
   return (
-    <details style={styles.collapsedSection}>
+    <details
+      style={{
+        ...styles.collapsedSection,
+        ...getSectionToneStyle(tone),
+      }}
+    >
       <summary style={styles.collapsedSummary}>
         <div style={styles.collapsedHeading}>
           <div style={styles.sectionEyebrow}>{eyebrow}</div>
@@ -789,7 +838,7 @@ function CollapsedSection({
 
         <div style={styles.collapsedControls}>
           <span style={styles.summaryPill}>{summary}</span>
-          <span style={styles.legalToggle}>Open / close</span>
+          <span style={styles.configureButton}>Configure</span>
         </div>
       </summary>
 
@@ -909,6 +958,17 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 720,
     overflowWrap: "anywhere",
     fontSize: 16,
+  },
+  heroUseCase: {
+    margin: "12px 0 0",
+    padding: "10px 12px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#bfdbfe",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 800,
   },
   heroMetricGrid: {
     display: "grid",
@@ -1035,7 +1095,6 @@ const styles: Record<string, CSSProperties> = {
   collapsedSection: {
     padding: "clamp(16px, 4vw, 20px)",
     borderRadius: 24,
-    background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
@@ -1066,11 +1125,24 @@ const styles: Record<string, CSSProperties> = {
   summaryPill: {
     padding: "8px 12px",
     borderRadius: 999,
-    background: "#f8fafc",
+    background: "#ffffff",
     color: "#334155",
     border: "1px solid #dbe3ef",
     fontSize: 12,
     fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  configureButton: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    flexShrink: 0,
     whiteSpace: "nowrap",
   },
   sectionHeader: {
@@ -1214,7 +1286,8 @@ const styles: Record<string, CSSProperties> = {
     aspectRatio: "1 / 1",
     minHeight: 28,
     borderRadius: 9,
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
     border: "1px solid #dbe3ef",
     color: "#334155",
     display: "inline-flex",
@@ -1222,6 +1295,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     fontSize: 12,
     fontWeight: 900,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
   },
   mediaBox: {
     display: "grid",
@@ -1329,19 +1403,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#b91c1c",
     fontWeight: 900,
-  },
-  legalToggle: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    flexShrink: 0,
-    whiteSpace: "nowrap",
   },
   legalBody: {
     display: "grid",
