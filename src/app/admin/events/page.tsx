@@ -6,7 +6,7 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listEvents } from "../../../../api/_lib/events-repo";
 
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
-const EVENTS_LOGO_IMAGE = "/brand/event-champagne-gold.png";
+const EVENTS_LOGO_IMAGE = "/brand/events-gold-champagne.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -46,14 +46,6 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
     };
   }
 
-  if (clean === "drawn") {
-    return {
-      background: "#eff6ff",
-      color: "#1d4ed8",
-      borderColor: "#bfdbfe",
-    };
-  }
-
   return {
     background: "#f8fafc",
     color: "#475569",
@@ -86,8 +78,9 @@ export default async function AdminEventsPage() {
     (event) => event.status === "published",
   ).length;
 
-  const draftCount = events.filter((event) => event.status !== "published")
-    .length;
+  const draftCount = events.filter(
+    (event) => event.status !== "published",
+  ).length;
 
   const totalCapacity = events.reduce(
     (sum, event) => sum + Number(event.capacity || 0),
@@ -187,8 +180,6 @@ export default async function AdminEventsPage() {
         <section style={styles.list}>
           {events.map((event) => {
             const hasCustomImage = Boolean(event.image_url);
-            const capacity = Number(event.capacity || 0);
-            const statusStyle = getStatusStyle(event.status);
 
             return (
               <article key={event.id} style={styles.card}>
@@ -196,7 +187,7 @@ export default async function AdminEventsPage() {
                   <div style={styles.imageWrap}>
                     <img
                       src={event.image_url || DEFAULT_EVENTS_IMAGE}
-                      alt={event.title || "Event"}
+                      alt={event.title || "SO Events"}
                       style={{
                         ...styles.image,
                         objectFit: hasCustomImage ? "cover" : "contain",
@@ -222,7 +213,7 @@ export default async function AdminEventsPage() {
                       <div
                         style={{
                           ...styles.status,
-                          ...statusStyle,
+                          ...getStatusStyle(event.status),
                         }}
                       >
                         {event.status}
@@ -232,6 +223,7 @@ export default async function AdminEventsPage() {
                     <div style={styles.headlineGrid}>
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Starts</div>
+
                         <div style={styles.headlineValue}>
                           {formatDate(event.starts_at)}
                         </div>
@@ -239,26 +231,41 @@ export default async function AdminEventsPage() {
 
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Capacity</div>
-                        <div style={styles.headlineValue}>{capacity}</div>
+
+                        <div style={styles.headlineValue}>
+                          {Number(event.capacity || 0)}
+                        </div>
                       </div>
                     </div>
 
                     {event.description ? (
                       <p style={styles.description}>
-                        {event.description.length > 130
-                          ? `${event.description.slice(0, 130)}…`
+                        {event.description.length > 140
+                          ? `${event.description.slice(0, 140)}…`
                           : event.description}
                       </p>
                     ) : null}
 
                     <div style={styles.detailGrid}>
-                      <InfoBlock label="Starts" value={formatDate(event.starts_at)} />
+                      <InfoBlock
+                        label="Starts"
+                        value={formatDate(event.starts_at)}
+                      />
 
-                      <InfoBlock label="Ends" value={formatDate(event.ends_at)} />
+                      <InfoBlock
+                        label="Ends"
+                        value={formatDate(event.ends_at)}
+                      />
 
-                      <InfoBlock label="Capacity" value={capacity} />
+                      <InfoBlock
+                        label="Capacity"
+                        value={Number(event.capacity || 0)}
+                      />
 
-                      <InfoBlock label="Currency" value={event.currency || "GBP"} />
+                      <InfoBlock
+                        label="Currency"
+                        value={event.currency || "GBP"}
+                      />
 
                       <InfoBlock
                         label="Type"
@@ -369,12 +376,11 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    display: "grid",
+    gridTemplateColumns: "240px minmax(0, 1fr)",
+    alignItems: "start",
     marginBottom: 22,
     gap: 16,
-    flexWrap: "wrap",
   },
   badge: {
     display: "inline-flex",
@@ -408,35 +414,38 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 18px",
+    padding: "13px 15px",
     borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 800,
+    whiteSpace: "nowrap",
   },
   navButtonActive: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 18px",
+    padding: "13px 15px",
     borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
     fontWeight: 900,
+    whiteSpace: "nowrap",
   },
   createButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 18px",
+    padding: "13px 15px",
     borderRadius: 9999,
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    whiteSpace: "nowrap",
   },
   statsGrid: {
     display: "grid",
@@ -579,7 +588,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 19,
     fontWeight: 950,
     letterSpacing: "-0.03em",
-    wordBreak: "break-word",
   },
   description: {
     color: "#475569",
