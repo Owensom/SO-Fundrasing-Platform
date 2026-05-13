@@ -11,7 +11,7 @@ import {
 } from "../../../../api/_lib/auctions-repo";
 
 const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
-const AUCTION_LOGO_IMAGE = "/brand/so-default-auctions.png";
+const AUCTION_LOGO_IMAGE = "/brand/auction-gavel-gold.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
