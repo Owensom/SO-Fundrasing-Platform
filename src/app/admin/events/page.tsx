@@ -46,6 +46,14 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
     };
   }
 
+  if (clean === "drawn") {
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
+  }
+
   return {
     background: "#f8fafc",
     color: "#475569",
@@ -71,6 +79,8 @@ export default async function AdminEventsPage() {
   }
 
   const events = await listEvents(tenantSlug);
+
+  const totalEvents = events.length;
 
   const publishedCount = events.filter(
     (event) => event.status === "published",
@@ -132,7 +142,7 @@ export default async function AdminEventsPage() {
       <section style={styles.statsGrid}>
         <StatCard
           label="Total events"
-          value={events.length}
+          value={totalEvents}
           image={EVENTS_LOGO_IMAGE}
           accent="#1683f8"
           tint="#eff6ff"
@@ -165,9 +175,7 @@ export default async function AdminEventsPage() {
 
       {events.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>
-            No events yet
-          </h2>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>No events yet</h2>
 
           <p style={styles.muted}>Create your first fundraising event.</p>
 
@@ -180,6 +188,7 @@ export default async function AdminEventsPage() {
           {events.map((event) => {
             const hasCustomImage = Boolean(event.image_url);
             const capacity = Number(event.capacity || 0);
+            const statusStyle = getStatusStyle(event.status);
 
             return (
               <article key={event.id} style={styles.card}>
@@ -187,11 +196,11 @@ export default async function AdminEventsPage() {
                   <div style={styles.imageWrap}>
                     <img
                       src={event.image_url || DEFAULT_EVENTS_IMAGE}
-                      alt={event.title || "SO Events"}
+                      alt={event.title || "Event"}
                       style={{
                         ...styles.image,
                         objectFit: hasCustomImage ? "cover" : "contain",
-                        padding: hasCustomImage ? 0 : 12,
+                        padding: hasCustomImage ? 0 : 10,
                         background: hasCustomImage
                           ? "#f1f5f9"
                           : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
@@ -210,14 +219,14 @@ export default async function AdminEventsPage() {
                         <p style={styles.slug}>/e/{event.slug}</p>
                       </div>
 
-                      <span
+                      <div
                         style={{
                           ...styles.status,
-                          ...getStatusStyle(event.status),
+                          ...statusStyle,
                         }}
                       >
                         {event.status}
-                      </span>
+                      </div>
                     </div>
 
                     <div style={styles.headlineGrid}>
@@ -236,8 +245,8 @@ export default async function AdminEventsPage() {
 
                     {event.description ? (
                       <p style={styles.description}>
-                        {event.description.length > 150
-                          ? `${event.description.slice(0, 150)}…`
+                        {event.description.length > 130
+                          ? `${event.description.slice(0, 130)}…`
                           : event.description}
                       </p>
                     ) : null}
@@ -255,10 +264,7 @@ export default async function AdminEventsPage() {
 
                       <InfoBlock label="Capacity" value={capacity} />
 
-                      <InfoBlock
-                        label="Currency"
-                        value={event.currency || "GBP"}
-                      />
+                      <InfoBlock label="Currency" value={event.currency || "GBP"} />
 
                       <InfoBlock
                         label="Type"
@@ -448,6 +454,209 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
     whiteSpace: "nowrap",
   },
-
-  /* KEEP REMAINDER IDENTICAL TO RAFFLES FILE */
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+    marginBottom: 22,
+  },
+  statCard: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderTop: "4px solid #1683f8",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  statTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+  statIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    border: "1px solid",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 15,
+    fontWeight: 900,
+    flexShrink: 0,
+  },
+  statLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  statValue: {
+    color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 900,
+    marginTop: 4,
+    letterSpacing: "-0.03em",
+  },
+  emptyCard: {
+    padding: 28,
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  muted: {
+    color: "#64748b",
+    margin: "8px 0 18px",
+  },
+  list: {
+    display: "grid",
+    gap: 16,
+  },
+  card: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    padding: 18,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  cardTop: {
+    display: "grid",
+    gridTemplateColumns: "104px 1fr",
+    gap: 16,
+    alignItems: "start",
+  },
+  imageWrap: {
+    width: 104,
+    height: 104,
+    borderRadius: 20,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+    objectPosition: "center center",
+  },
+  cardMain: {
+    minWidth: 0,
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: 22,
+    color: "#0f172a",
+    letterSpacing: "-0.02em",
+    wordBreak: "break-word",
+  },
+  slug: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    wordBreak: "break-word",
+  },
+  status: {
+    padding: "7px 11px",
+    borderRadius: 9999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 800,
+  },
+  headlineGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  headlineBox: {
+    padding: "13px 14px",
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+    border: "1px solid #e2e8f0",
+  },
+  headlineLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  headlineValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontSize: 19,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+    wordBreak: "break-word",
+  },
+  description: {
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.5,
+    margin: "10px 0 0",
+  },
+  detailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+    wordBreak: "break-word",
+  },
+  actions: {
+    display: "flex",
+    gap: 10,
+    marginTop: 18,
+    flexWrap: "wrap",
+  },
+  primaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  secondaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+    boxShadow: "none",
+  },
 };
