@@ -142,25 +142,27 @@ export default async function AdminDashboardPage() {
   const combinedEstimatedRevenueCents = raffleRevenueCents + squaresRevenueCents;
 
   return (
-    <main style={styles.page}>
-      <section style={styles.commandCentre}>
+    <main className="admin-dashboard-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="admin-command-centre" style={styles.commandCentre}>
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
-          <h1 className="so-brand-heading" style={styles.title}>
+          <h1 className="so-brand-heading admin-dashboard-title" style={styles.title}>
             Admin command centre
           </h1>
 
-          <p style={styles.subtitle}>
+          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
             Manage raffles, squares, events and auctions across your tenant from
             one premium fundraising workspace.
           </p>
 
-          <p style={styles.tenant}>
+          <p className="admin-dashboard-tenant" style={styles.tenant}>
             Tenant: <strong>{tenantSlug}</strong>
           </p>
 
-          <div style={styles.commandActions}>
+          <div className="admin-command-actions" style={styles.commandActions}>
             <Link
               href={`/c/${tenantSlug}`}
               target="_blank"
@@ -175,7 +177,7 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
 
-        <div style={styles.commandStats}>
+        <div className="admin-command-stats" style={styles.commandStats}>
           <StatCard label="Total campaigns" value={totalCampaigns} dark />
           <StatCard label="Published" value={totalPublishedCampaigns} dark />
           <StatCard
@@ -186,7 +188,7 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      <section style={styles.focusGrid}>
+      <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -209,7 +211,7 @@ export default async function AdminDashboardPage() {
       <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
-          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+          <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
             Open a fundraising area
           </h2>
           <p style={styles.sectionText}>
@@ -219,7 +221,7 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      <section style={styles.cardsGrid}>
+      <section className="admin-cards-grid" style={styles.cardsGrid}>
         <DashboardCard
           href="/admin/raffles"
           image="/brand/so-default-raffles.png"
@@ -253,12 +255,12 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section style={styles.operationsGrid}>
-        <section style={styles.financePanel}>
+      <section className="admin-operations-grid" style={styles.operationsGrid}>
+        <section className="admin-finance-panel" style={styles.financePanel}>
           <div>
             <p style={styles.financeKicker}>Finance & transactions</p>
 
-            <h2 className="so-brand-card-title" style={styles.financeTitle}>
+            <h2 className="so-brand-card-title admin-section-title" style={styles.financeTitle}>
               Transaction centre
             </h2>
 
@@ -274,11 +276,11 @@ export default async function AdminDashboardPage() {
           </Link>
         </section>
 
-        <section style={styles.dataPanel}>
+        <section className="admin-data-panel" style={styles.dataPanel}>
           <div>
             <p style={styles.kicker}>Live platform overview</p>
 
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
               Campaign summary
             </h2>
 
@@ -288,7 +290,7 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
 
-          <div style={styles.dataGrid}>
+          <div className="admin-data-grid" style={styles.dataGrid}>
             <DataBlock
               label="Raffles"
               total={raffles.length}
@@ -329,9 +331,11 @@ function StatCard({
   dark?: boolean;
 }) {
   return (
-    <div style={dark ? styles.darkStatCard : styles.statCard}>
+    <div className="admin-stat-card" style={dark ? styles.darkStatCard : styles.statCard}>
       <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
-      <div style={dark ? styles.darkStatValue : styles.statValue}>{value}</div>
+      <div className="admin-stat-value" style={dark ? styles.darkStatValue : styles.statValue}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -346,7 +350,7 @@ function FocusCard({
   text: string;
 }) {
   return (
-    <article style={styles.focusCard}>
+    <article className="admin-focus-card" style={styles.focusCard}>
       <div style={styles.focusLabel}>{label}</div>
       <div style={styles.focusValue}>{value}</div>
       <p style={styles.focusText}>{text}</p>
@@ -364,7 +368,7 @@ function DataBlock({
   published: number;
 }) {
   return (
-    <div style={styles.dataBlock}>
+    <div className="admin-data-block" style={styles.dataBlock}>
       <div style={styles.dataLabel}>{label}</div>
       <div style={styles.dataValue}>{total}</div>
       <div style={styles.dataSub}>{published} published</div>
@@ -387,13 +391,13 @@ function DashboardCard({
 }) {
   return (
     <Link href={href} style={styles.cardLink}>
-      <article style={styles.card}>
+      <article className="admin-dashboard-card" style={styles.card}>
         <div style={styles.cardTop}>
           <div style={styles.logoBox}>
             <img src={image} alt={title} style={styles.logoImage} />
           </div>
 
-          <h2 className="so-brand-card-title" style={styles.cardTitle}>
+          <h2 className="so-brand-card-title admin-card-title" style={styles.cardTitle}>
             {title}
           </h2>
 
@@ -410,14 +414,162 @@ function DashboardCard({
   );
 }
 
+const responsiveStyles = `
+  .admin-dashboard-page,
+  .admin-dashboard-page * {
+    box-sizing: border-box;
+  }
+
+  .admin-dashboard-page {
+    overflow-x: hidden;
+  }
+
+  @media (max-width: 900px) {
+    .admin-command-centre {
+      grid-template-columns: 1fr !important;
+      padding: 22px !important;
+      border-radius: 30px !important;
+    }
+
+    .admin-command-stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      align-content: stretch !important;
+    }
+
+    .admin-operations-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .admin-dashboard-page {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 14px 12px 42px !important;
+    }
+
+    .admin-command-centre {
+      display: block !important;
+      padding: 20px !important;
+      border-radius: 28px !important;
+      margin-bottom: 14px !important;
+    }
+
+    .admin-dashboard-title {
+      font-size: clamp(38px, 13vw, 52px) !important;
+      line-height: 0.98 !important;
+      letter-spacing: -0.065em !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .admin-dashboard-subtitle {
+      font-size: 16px !important;
+      line-height: 1.55 !important;
+      max-width: 100% !important;
+    }
+
+    .admin-dashboard-tenant {
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+    }
+
+    .admin-command-actions {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      width: 100% !important;
+    }
+
+    .admin-command-actions a {
+      width: 100% !important;
+      min-height: 50px !important;
+      text-align: center !important;
+      padding: 14px 16px !important;
+    }
+
+    .admin-command-stats {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      margin-top: 18px !important;
+    }
+
+    .admin-stat-card {
+      width: 100% !important;
+      padding: 16px !important;
+      border-radius: 20px !important;
+    }
+
+    .admin-stat-value {
+      font-size: 28px !important;
+      line-height: 1.05 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .admin-focus-grid,
+    .admin-cards-grid,
+    .admin-data-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .admin-focus-card,
+    .admin-dashboard-card,
+    .admin-finance-panel,
+    .admin-data-panel {
+      border-radius: 24px !important;
+      padding: 18px !important;
+    }
+
+    .admin-dashboard-card {
+      min-height: auto !important;
+    }
+
+    .admin-section-title {
+      font-size: 25px !important;
+      line-height: 1.05 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .admin-card-title {
+      font-size: 27px !important;
+    }
+
+    .admin-data-block {
+      padding: 15px !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .admin-dashboard-page {
+      padding-left: 10px !important;
+      padding-right: 10px !important;
+    }
+
+    .admin-command-centre {
+      padding: 18px !important;
+      border-radius: 24px !important;
+    }
+
+    .admin-dashboard-title {
+      font-size: 40px !important;
+    }
+
+    .admin-stat-value {
+      font-size: 26px !important;
+    }
+  }
+`;
+
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1220,
     margin: "0 auto",
     padding: "28px 16px 70px",
     background:
       "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 30%), radial-gradient(circle at top right, rgba(200,162,74,0.10), transparent 28%), #f8fafc",
     minHeight: "100vh",
+    overflowX: "hidden",
   },
   commandCentre: {
     display: "grid",
@@ -505,6 +657,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "1fr",
     gap: 12,
     alignContent: "center",
+    minWidth: 0,
   },
   darkStatCard: {
     padding: 18,
@@ -513,6 +666,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.12)",
     boxShadow: "0 12px 24px rgba(0,0,0,0.14)",
     backdropFilter: "blur(12px)",
+    minWidth: 0,
   },
   darkStatLabel: {
     color: "rgba(255,255,255,0.68)",
@@ -540,6 +694,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 10px 28px rgba(15,23,42,0.055)",
+    minWidth: 0,
   },
   focusLabel: {
     color: "#64748b",
@@ -596,6 +751,7 @@ const styles: Record<string, CSSProperties> = {
     color: "inherit",
     display: "block",
     height: "100%",
+    minWidth: 0,
   },
   card: {
     height: "100%",
@@ -608,6 +764,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
+    minWidth: 0,
   },
   cardTop: {
     display: "flex",
@@ -694,6 +851,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     border: "1px solid rgba(255,255,255,0.12)",
     boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
+    minWidth: 0,
   },
   financeKicker: {
     margin: "0 0 10px",
@@ -733,6 +891,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 12px 30px rgba(15,23,42,0.055)",
+    minWidth: 0,
   },
   dataGrid: {
     display: "grid",
@@ -745,6 +904,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 20,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   dataLabel: {
     color: "#64748b",
@@ -769,6 +929,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   statLabel: {
     color: "#64748b",
