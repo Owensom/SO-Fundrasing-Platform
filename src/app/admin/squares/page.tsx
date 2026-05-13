@@ -433,7 +433,7 @@ const styles: Record<string, CSSProperties> = {
   },
   header: {
     display: "grid",
-    gridTemplateColumns: "240px minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(260px, 1fr) auto"
     alignItems: "start",
     marginBottom: 22,
     gap: 16,
