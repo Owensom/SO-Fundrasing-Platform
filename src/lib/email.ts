@@ -11,6 +11,12 @@ const WINNER_TROPHY_IMAGE_URL =
 const AUCTION_GAVEL_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/auction-gavel-gold.png";
 
+const SQUARES_SQUARE_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/squares-square-gold.png";
+
+const EVENT_CHAMPAGNE_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/event-champagne-gold.png";
+
 type EmailBranding = {
   name?: string | null;
   logoUrl?: string | null;
@@ -114,7 +120,13 @@ function cleanPrizeTitle(value: unknown) {
   );
 }
 
-function renderTicketHero(label = "SO Fundraising Ticket") {
+function renderStandardHero({
+  imageUrl,
+  label,
+}: {
+  imageUrl: string;
+  label: string;
+}) {
   return `
     <div style="
       margin:0 auto 26px;
@@ -127,7 +139,7 @@ function renderTicketHero(label = "SO Fundraising Ticket") {
       text-align:center;
     ">
       <img
-        src="${DEFAULT_TICKET_IMAGE_URL}"
+        src="${imageUrl}"
         alt="${escapeHtml(label)}"
         width="260"
         style="
@@ -145,35 +157,32 @@ function renderTicketHero(label = "SO Fundraising Ticket") {
   `;
 }
 
+function renderTicketHero(label = "SO Fundraising Ticket") {
+  return renderStandardHero({
+    imageUrl: DEFAULT_TICKET_IMAGE_URL,
+    label,
+  });
+}
+
 function renderAuctionGavelHero(label = "Auction bid confirmation") {
-  return `
-    <div style="
-      margin:0 auto 26px;
-      max-width:320px;
-      border-radius:24px;
-      background:linear-gradient(135deg,#ffffff 0%,#f8fafc 52%,#eff6ff 100%);
-      border:1px solid #dbeafe;
-      box-shadow:0 14px 34px rgba(15,23,42,0.08);
-      padding:18px;
-      text-align:center;
-    ">
-      <img
-        src="${AUCTION_GAVEL_IMAGE_URL}"
-        alt="${escapeHtml(label)}"
-        width="260"
-        style="
-          display:block;
-          width:100%;
-          max-width:260px;
-          height:auto;
-          margin:0 auto;
-          border:0;
-          outline:none;
-          text-decoration:none;
-        "
-      />
-    </div>
-  `;
+  return renderStandardHero({
+    imageUrl: AUCTION_GAVEL_IMAGE_URL,
+    label,
+  });
+}
+
+function renderSquaresSquareHero(label = "Squares entry confirmation") {
+  return renderStandardHero({
+    imageUrl: SQUARES_SQUARE_IMAGE_URL,
+    label,
+  });
+}
+
+function renderEventChampagneHero(label = "Event ticket confirmation") {
+  return renderStandardHero({
+    imageUrl: EVENT_CHAMPAGNE_IMAGE_URL,
+    label,
+  });
 }
 
 function renderWinnerTrophyHero(label = "Winner trophy") {
@@ -235,9 +244,13 @@ function renderEmailShell(params: {
   ticketImageLabel?: string;
   winnerTrophyLabel?: string;
   auctionGavelLabel?: string;
+  squaresSquareLabel?: string;
+  eventChampagneLabel?: string;
   showTicketImage?: boolean;
   showWinnerTrophy?: boolean;
   showAuctionGavel?: boolean;
+  showSquaresSquare?: boolean;
+  showEventChampagne?: boolean;
 }) {
   const brand = getBranding(params.branding);
   const showTicketImage = params.showTicketImage !== false;
@@ -282,9 +295,13 @@ function renderEmailShell(params: {
                   ? renderWinnerTrophyHero(params.winnerTrophyLabel)
                   : params.showAuctionGavel
                     ? renderAuctionGavelHero(params.auctionGavelLabel)
-                    : showTicketImage
-                      ? renderTicketHero(params.ticketImageLabel)
-                      : ""
+                    : params.showSquaresSquare
+                      ? renderSquaresSquareHero(params.squaresSquareLabel)
+                      : params.showEventChampagne
+                        ? renderEventChampagneHero(params.eventChampagneLabel)
+                        : showTicketImage
+                          ? renderTicketHero(params.ticketImageLabel)
+                          : ""
               }
 
               ${
@@ -387,7 +404,6 @@ async function sendEmail(params: {
     id: result.data?.id,
   });
 }
-
 export async function sendReceiptEmail({
   to,
   name,
@@ -630,7 +646,9 @@ export async function sendSquaresReceiptEmail({
     branding,
     eyebrow: "Squares confirmation",
     heading: "Payment successful",
-    ticketImageLabel: "Squares entry confirmation",
+    showSquaresSquare: true,
+    showTicketImage: false,
+    squaresSquareLabel: "Squares entry confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
     body: `
       <div style="
@@ -749,7 +767,6 @@ export async function sendSquaresWinnerEmail({
     console.error("squares winner email failed", err);
   }
 }
-
 export async function sendEventReceiptEmail({
   to,
   name,
@@ -813,7 +830,9 @@ export async function sendEventReceiptEmail({
     branding,
     eyebrow: "Event ticket confirmation",
     heading: "Payment successful",
-    ticketImageLabel: "Event ticket confirmation",
+    showEventChampagne: true,
+    showTicketImage: false,
+    eventChampagneLabel: "Event ticket confirmation",
     intro: `Hi ${name || "there"}, thank you for your purchase. Your event tickets are confirmed below.`,
     body: `
       <div style="
@@ -1037,7 +1056,9 @@ export async function sendAuctionOutbidEmail({
     branding,
     eyebrow: "Auction update",
     heading: "You have been outbid",
-    ticketImageLabel: "Auction update",
+    showAuctionGavel: true,
+    showTicketImage: false,
+    auctionGavelLabel: "Auction update",
     intro: `Hi ${name || "there"}, another bidder has placed a higher bid on an item you were leading.`,
     body: `
       <div style="
