@@ -260,7 +260,14 @@ export default function NewSquaresGamePage() {
   }
 
   return (
-    <form action="/api/admin/squares" method="post" style={styles.form}>
+    <form
+      className="new-squares-form"
+      action="/api/admin/squares"
+      method="post"
+      style={styles.form}
+    >
+      <style>{responsiveStyles}</style>
+
       <input type="hidden" name="image_position" value="center" />
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="question" value={questionValue} />
@@ -302,14 +309,17 @@ export default function NewSquaresGamePage() {
 
           <div style={styles.heroMetricGrid}>
             <HeroMetric label="Total squares" value={boardSize} />
+
             <HeroMetric
               label="Price / square"
               value={formatPreviewMoney(price, currency)}
             />
+
             <HeroMetric
               label="Max sales"
               value={formatPreviewMoney(estimatedTotal, currency)}
             />
+
             <HeroMetric
               label="Public prizes"
               value={prizeText(publicPrizesCount)}
@@ -358,10 +368,13 @@ export default function NewSquaresGamePage() {
               <span style={styles.previewMetaItem}>
                 {formatPreviewMoney(price, currency)} each
               </span>
+
               <span style={styles.previewMetaItem}>{boardSize} squares</span>
+
               <span style={styles.previewMetaItem}>
                 {formatDatePreview(drawAt)}
               </span>
+
               <span style={styles.previewMetaItem}>
                 {prizeText(publicPrizesCount)}
               </span>
@@ -369,24 +382,28 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard
           label="Estimated revenue"
           value={formatPreviewMoney(estimatedTotal, currency)}
         />
+
         <SummaryCard label="Board size" value={`${boardSize} squares`} />
+
         <SummaryCard
           label="Draw status"
           value={drawAt ? "Scheduled" : "Not scheduled"}
         />
+
         <SummaryCard
           label="Legal readiness"
           value={hasLegalQuestion || hasFreeEntry ? "In progress" : "Not set"}
         />
+
         <SummaryCard label="Public prizes" value={prizeText(publicPrizesCount)} />
       </section>
-
-      <section style={styles.readinessGrid}>
+            <section style={styles.readinessGrid}>
         <ReadinessCard eyebrow="Campaign readiness" title="Before publishing">
           <CheckItem done={Boolean(title.trim())}>Add campaign title</CheckItem>
           <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
@@ -627,8 +644,7 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </SectionCard>
-
-      <SectionCard
+            <SectionCard
         number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
@@ -733,7 +749,8 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </SectionCard>
-            <SectionCard
+
+      <SectionCard
         number="05"
         title="Entry question"
         description="Optional skill-based question for the public checkout flow."
@@ -964,6 +981,109 @@ function CheckItem({
     </div>
   );
 }
+const responsiveStyles = `
+  .new-squares-form,
+  .new-squares-form * {
+    box-sizing: border-box;
+  }
+
+  .new-squares-form {
+    overflow-x: hidden;
+  }
+
+  .new-squares-form img,
+  .new-squares-form input,
+  .new-squares-form textarea,
+  .new-squares-form select,
+  .new-squares-form button {
+    max-width: 100%;
+  }
+
+  @media (max-width: 760px) {
+    .new-squares-form {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 auto !important;
+      padding: 18px 12px 44px !important;
+    }
+
+    .new-squares-form [style*="grid-template-columns"] {
+      grid-template-columns: 1fr !important;
+    }
+
+    .new-squares-form section,
+    .new-squares-form details,
+    .new-squares-form div,
+    .new-squares-form label {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    .new-squares-form h1 {
+      font-size: clamp(34px, 12vw, 46px) !important;
+      line-height: 1.02 !important;
+      letter-spacing: -0.055em !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-squares-form h2 {
+      font-size: clamp(28px, 9vw, 36px) !important;
+      line-height: 1.05 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-squares-form p,
+    .new-squares-form span,
+    .new-squares-form strong {
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-squares-form [style*="height: 240px"],
+    .new-squares-form [style*="height: 230px"] {
+      height: auto !important;
+      min-height: 190px !important;
+      aspect-ratio: 16 / 10 !important;
+    }
+
+    .new-squares-form [style*="display: flex"] {
+      flex-wrap: wrap !important;
+    }
+
+    .new-squares-form button,
+    .new-squares-form a {
+      min-height: 46px !important;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .new-squares-form section:first-of-type {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .new-squares-form section:first-of-type a {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+
+    .new-squares-form section,
+    .new-squares-form details {
+      border-radius: 22px !important;
+    }
+
+    .new-squares-form input,
+    .new-squares-form textarea,
+    .new-squares-form select {
+      font-size: 16px !important;
+    }
+
+    .new-squares-form button {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+  }
+`;
 
 const styles: Record<string, CSSProperties> = {
   form: {
@@ -974,6 +1094,7 @@ const styles: Record<string, CSSProperties> = {
     margin: "40px auto",
     padding: "0 16px 64px",
     boxSizing: "border-box",
+    overflowX: "hidden",
   },
   topActions: {
     display: "flex",
