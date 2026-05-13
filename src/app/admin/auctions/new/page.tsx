@@ -88,7 +88,9 @@ export default async function NewAuctionPage() {
   }
 
   return (
-    <main style={styles.page}>
+    <main className="new-auction-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
       <section style={styles.topActions}>
         <Link href="/admin/auctions" style={styles.backButton}>
           ← Back to auctions
@@ -190,8 +192,7 @@ export default async function NewAuctionPage() {
           <strong>Next step</strong>
         </div>
       </section>
-
-      <form action={createAuctionAction} style={styles.form}>
+            <form action={createAuctionAction} style={styles.form}>
         <section style={styles.layoutGrid}>
           <div style={styles.mainColumn}>
             <section style={styles.card}>
@@ -388,8 +389,93 @@ export default async function NewAuctionPage() {
   );
 }
 
+const responsiveStyles = `
+@media (max-width: 1100px) {
+  .new-auction-page .hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .new-auction-page .layoutGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .new-auction-page .sideColumn {
+    position: static !important;
+  }
+
+  .new-auction-page .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .new-auction-page .heroStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .new-auction-page {
+    overflow-x: hidden;
+  }
+
+  .new-auction-page .hero {
+    padding: 22px !important;
+    border-radius: 24px !important;
+    gap: 18px !important;
+  }
+
+  .new-auction-page .title {
+    font-size: clamp(34px, 11vw, 52px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .new-auction-page .fieldGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .new-auction-page .summaryGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .new-auction-page .heroStats {
+    grid-template-columns: 1fr !important;
+  }
+
+  .new-auction-page .nextCard {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .new-auction-page .actionRow {
+    width: 100% !important;
+    flex-direction: column !important;
+  }
+
+  .new-auction-page .saveButton,
+  .new-auction-page .cancelButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+  }
+
+  .new-auction-page .previewMetaGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .new-auction-page .card,
+  .new-auction-page .readinessCard,
+  .new-auction-page .helpCard {
+    padding: 18px !important;
+  }
+
+  .new-auction-page .previewImageCard {
+    min-height: 220px !important;
+  }
+}
+`;
+
 const styles: Record<string, CSSProperties> = {
-  page: {
+    page: {
     maxWidth: 1280,
     margin: "0 auto",
     padding: "28px 16px 64px",
@@ -475,6 +561,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 0.95,
     letterSpacing: "-0.065em",
     maxWidth: 760,
+    wordBreak: "break-word",
   },
   statusPill: {
     display: "inline-flex",
@@ -493,6 +580,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 16,
     fontWeight: 950,
     fontStyle: "italic",
+    wordBreak: "break-word",
   },
   subtitle: {
     margin: "18px 0 0",
@@ -534,6 +622,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.1)",
     border: "1px solid rgba(255,255,255,0.18)",
     boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+    minWidth: 0,
   },
   previewKicker: {
     display: "inline-flex",
@@ -629,6 +718,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+    overflow: "hidden",
   },
   cardHeader: {
     marginBottom: 18,
@@ -646,6 +736,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 28,
     color: "#0f172a",
     letterSpacing: "-0.04em",
+    wordBreak: "break-word",
   },
   sectionText: {
     margin: "8px 0 0",
@@ -699,6 +790,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     background: "#ffffff",
     outlineColor: "#2563eb",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
@@ -712,6 +804,7 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     fontFamily: "inherit",
     outlineColor: "#2563eb",
+    minWidth: 0,
   },
   helpText: {
     color: "#64748b",
@@ -724,6 +817,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    overflow: "hidden",
   },
   readinessCard: {
     padding: 22,
@@ -813,6 +907,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.18)",
     textDecoration: "none",
     fontWeight: 950,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   saveButton: {
     padding: "12px 18px",
