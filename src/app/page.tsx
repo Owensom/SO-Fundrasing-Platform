@@ -19,184 +19,34 @@ const features = [
 
 export default function HomePage() {
   return (
-    <main
-      style={{
-        minHeight: "calc(100vh - 220px)",
-        background:
-          "linear-gradient(180deg, #0d1b3d 0%, #132957 45%, #f3f5f7 100%)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "60px 24px",
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "1280px",
-          textAlign: "center",
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontSize: "clamp(56px, 9vw, 110px)",
-            lineHeight: 0.95,
-            fontWeight: 900,
-            letterSpacing: "-0.04em",
-            color: "#ffffff",
-            textTransform: "uppercase",
-            textShadow: `
-              -1px -1px 0 #c8a24a,
-               1px -1px 0 #c8a24a,
-              -1px  1px 0 #c8a24a,
-               1px  1px 0 #c8a24a,
-               0 0 18px rgba(200,162,74,0.15)
-            `,
-          }}
-        >
-          SO Fundraising
-        </h1>
+    <main style={styles.page}>
+      <section style={styles.shell}>
+        <h1 style={styles.title}>SO Fundraising</h1>
 
-        <div
-          style={{
-            marginTop: "12px",
-            fontSize: "clamp(22px, 4vw, 42px)",
-            letterSpacing: "0.45em",
-            color: "#c8a24a",
-            textTransform: "uppercase",
-            fontWeight: 600,
-          }}
-        >
-          Platform
-        </div>
+        <div style={styles.subtitle}>Platform</div>
 
-        <div
-          style={{
-            width: "220px",
-            height: "2px",
-            margin: "28px auto",
-            background:
-              "linear-gradient(90deg, transparent 0%, #c8a24a 20%, #c8a24a 80%, transparent 100%)",
-          }}
-        />
+        <div style={styles.divider} />
 
-        <p
-          style={{
-            maxWidth: "780px",
-            margin: "0 auto",
-            color: "rgba(255,255,255,0.92)",
-            fontSize: "clamp(18px, 2vw, 28px)",
-            lineHeight: 1.6,
-            fontWeight: 500,
-          }}
-        >
-          Create and run premium multi-tenant raffles, squares, silent
-          auctions, and fundraising events.
+        <p style={styles.intro}>
+          Create and run premium multi-tenant raffles, squares, silent auctions,
+          and fundraising events.
         </p>
 
-        <div
-          style={{
-            marginTop: "42px",
-            display: "flex",
-            gap: "18px",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <a
-            href="/admin/login"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px 28px",
-              background:
-                "linear-gradient(180deg, #d4af57 0%, #c8a24a 100%)",
-              color: "#0d1b3d",
-              textDecoration: "none",
-              borderRadius: "999px",
-              fontWeight: 800,
-              fontSize: "16px",
-              letterSpacing: "0.03em",
-              boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
-              border: "1px solid rgba(255,255,255,0.2)",
-            }}
-          >
+        <div style={styles.actions}>
+          <a href="/admin/login" style={styles.primaryButton}>
             Admin Login
           </a>
 
-          <a
-            href="/c/demo-a"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px 28px",
-              background: "rgba(255,255,255,0.08)",
-              backdropFilter: "blur(10px)",
-              color: "#ffffff",
-              textDecoration: "none",
-              borderRadius: "999px",
-              fontWeight: 700,
-              fontSize: "16px",
-              letterSpacing: "0.03em",
-              border: "1px solid rgba(255,255,255,0.18)",
-            }}
-          >
+          <a href="/c/demo-a" style={styles.secondaryButton}>
             View Campaigns
           </a>
         </div>
 
-        <div
-          style={{
-            marginTop: "80px",
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: "24px",
-          }}
-        >
+        <div style={styles.featureGrid}>
           {features.map((item) => (
-            <div
-              key={item.title}
-              style={{
-                background: "rgba(255,255,255,0.08)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: "24px",
-                padding: "28px",
-                backdropFilter: "blur(12px)",
-                textAlign: "left",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-                minHeight: "150px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "clamp(26px, 2.2vw, 34px)",
-                  fontWeight: 900,
-                  color: "#ffffff",
-                  marginBottom: "12px",
-                  textShadow: `
-                    -1px -1px 0 #c8a24a,
-                     1px -1px 0 #c8a24a,
-                    -1px  1px 0 #c8a24a,
-                     1px  1px 0 #c8a24a
-                  `,
-                }}
-              >
-                {item.title}
-              </div>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "rgba(255,255,255,0.82)",
-                  lineHeight: 1.7,
-                  fontSize: "15px",
-                }}
-              >
-                {item.text}
-              </p>
+            <div key={item.title} style={styles.featureCard}>
+              <div style={styles.featureTitle}>{item.title}</div>
+              <p style={styles.featureText}>{item.text}</p>
             </div>
           ))}
         </div>
@@ -204,3 +54,148 @@ export default function HomePage() {
     </main>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "calc(100vh - 220px)",
+    background:
+      "linear-gradient(180deg, #0d1b3d 0%, #132957 45%, #f3f5f7 100%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "clamp(32px, 8vw, 60px) 16px",
+    overflowX: "hidden" as const,
+    boxSizing: "border-box" as const,
+  },
+  shell: {
+    width: "100%",
+    maxWidth: 1280,
+    textAlign: "center" as const,
+    minWidth: 0,
+    boxSizing: "border-box" as const,
+  },
+  title: {
+    margin: 0,
+    fontSize: "clamp(42px, 13vw, 110px)",
+    lineHeight: 0.95,
+    fontWeight: 900,
+    letterSpacing: "-0.055em",
+    color: "#ffffff",
+    textTransform: "uppercase" as const,
+    overflowWrap: "anywhere" as const,
+    textShadow: `
+      -1px -1px 0 #c8a24a,
+       1px -1px 0 #c8a24a,
+      -1px  1px 0 #c8a24a,
+       1px  1px 0 #c8a24a,
+       0 0 18px rgba(200,162,74,0.15)
+    `,
+  },
+  subtitle: {
+    marginTop: 12,
+    fontSize: "clamp(18px, 6vw, 42px)",
+    letterSpacing: "clamp(0.18em, 4vw, 0.45em)",
+    color: "#c8a24a",
+    textTransform: "uppercase" as const,
+    fontWeight: 600,
+    overflowWrap: "anywhere" as const,
+  },
+  divider: {
+    width: "min(220px, 70vw)",
+    height: 2,
+    margin: "28px auto",
+    background:
+      "linear-gradient(90deg, transparent 0%, #c8a24a 20%, #c8a24a 80%, transparent 100%)",
+  },
+  intro: {
+    maxWidth: 780,
+    margin: "0 auto",
+    color: "rgba(255,255,255,0.92)",
+    fontSize: "clamp(17px, 4.5vw, 28px)",
+    lineHeight: 1.55,
+    fontWeight: 500,
+    overflowWrap: "anywhere" as const,
+  },
+  actions: {
+    marginTop: 38,
+    display: "flex",
+    gap: 14,
+    justifyContent: "center",
+    flexWrap: "wrap" as const,
+  },
+  primaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "min(100%, 270px)",
+    padding: "16px 24px",
+    background: "linear-gradient(180deg, #d4af57 0%, #c8a24a 100%)",
+    color: "#0d1b3d",
+    textDecoration: "none",
+    borderRadius: 999,
+    fontWeight: 800,
+    fontSize: 16,
+    letterSpacing: "0.03em",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    boxSizing: "border-box" as const,
+  },
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "min(100%, 270px)",
+    padding: "16px 24px",
+    background: "rgba(255,255,255,0.08)",
+    backdropFilter: "blur(10px)",
+    color: "#ffffff",
+    textDecoration: "none",
+    borderRadius: 999,
+    fontWeight: 700,
+    fontSize: 16,
+    letterSpacing: "0.03em",
+    border: "1px solid rgba(255,255,255,0.18)",
+    boxSizing: "border-box" as const,
+  },
+  featureGrid: {
+    marginTop: 64,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gap: 18,
+    width: "100%",
+    minWidth: 0,
+  },
+  featureCard: {
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 24,
+    padding: "24px 20px",
+    backdropFilter: "blur(12px)",
+    textAlign: "left" as const,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+    minHeight: 150,
+    minWidth: 0,
+    boxSizing: "border-box" as const,
+  },
+  featureTitle: {
+    fontSize: "clamp(24px, 7vw, 34px)",
+    fontWeight: 900,
+    color: "#ffffff",
+    marginBottom: 12,
+    lineHeight: 1.05,
+    overflowWrap: "anywhere" as const,
+    textShadow: `
+      -1px -1px 0 #c8a24a,
+       1px -1px 0 #c8a24a,
+      -1px  1px 0 #c8a24a,
+       1px  1px 0 #c8a24a
+    `,
+  },
+  featureText: {
+    margin: 0,
+    color: "rgba(255,255,255,0.82)",
+    lineHeight: 1.6,
+    fontSize: 15,
+    overflowWrap: "anywhere" as const,
+  },
+};
