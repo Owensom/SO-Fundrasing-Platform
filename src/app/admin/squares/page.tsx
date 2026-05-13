@@ -127,19 +127,23 @@ export default async function AdminSquaresListPage() {
   const dashboardCurrency = games[0]?.currency || "GBP";
 
   return (
-    <main style={styles.page}>
-      <section style={styles.header}>
+    <main className="squares-admin-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="squares-admin-header" style={styles.header}>
         <div style={styles.headerText}>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 style={styles.title}>Manage squares</h1>
+          <h1 className="squares-admin-title" style={styles.title}>
+            Manage squares
+          </h1>
 
-          <p style={styles.subtitle}>
+          <p className="squares-admin-subtitle" style={styles.subtitle}>
             Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
           </p>
         </div>
 
-        <div style={styles.nav}>
+        <div className="squares-admin-nav" style={styles.nav}>
           <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
@@ -171,7 +175,7 @@ export default async function AdminSquaresListPage() {
         </div>
       </section>
 
-      <section style={styles.statsGrid}>
+      <section className="squares-stats-grid" style={styles.statsGrid}>
         <StatCard
           label="Total square games"
           value={totalGames}
@@ -236,9 +240,9 @@ export default async function AdminSquaresListPage() {
             const statusStyle = getStatusStyle(game.status);
 
             return (
-              <article key={game.id} style={styles.card}>
-                <div style={styles.cardTop}>
-                  <div style={styles.imageWrap}>
+              <article key={game.id} className="squares-card" style={styles.card}>
+                <div className="squares-card-top" style={styles.cardTop}>
+                  <div className="squares-image-wrap" style={styles.imageWrap}>
                     <img
                       src={game.image_url || DEFAULT_SQUARES_IMAGE}
                       alt={game.title || "Squares"}
@@ -255,26 +259,21 @@ export default async function AdminSquaresListPage() {
                   </div>
 
                   <div style={styles.cardMain}>
-                    <div style={styles.cardHeader}>
+                    <div className="squares-card-header" style={styles.cardHeader}>
                       <div style={{ minWidth: 0 }}>
-                        <h2 style={styles.cardTitle}>
+                        <h2 className="squares-card-title" style={styles.cardTitle}>
                           {game.title || "Untitled squares game"}
                         </h2>
 
                         <p style={styles.slug}>/s/{game.slug}</p>
                       </div>
 
-                      <div
-                        style={{
-                          ...styles.status,
-                          ...statusStyle,
-                        }}
-                      >
+                      <div style={{ ...styles.status, ...statusStyle }}>
                         {game.status}
                       </div>
                     </div>
 
-                    <div style={styles.headlineGrid}>
+                    <div className="squares-headline-grid" style={styles.headlineGrid}>
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Sales progress</div>
                         <div style={styles.headlineValue}>{progress}% sold</div>
@@ -288,7 +287,7 @@ export default async function AdminSquaresListPage() {
                       </div>
                     </div>
 
-                    <div style={styles.detailGrid}>
+                    <div className="squares-detail-grid" style={styles.detailGrid}>
                       <InfoBlock
                         label="Price"
                         value={formatMoney(
@@ -323,7 +322,7 @@ export default async function AdminSquaresListPage() {
                       </div>
                     </div>
 
-                    <div style={styles.actions}>
+                    <div className="squares-card-actions" style={styles.actions}>
                       <Link
                         href={`/admin/squares/${game.id}`}
                         style={styles.primaryLink}
@@ -377,15 +376,18 @@ function StatCard({
 }) {
   return (
     <div
+      className="squares-stat-card"
       style={{
         ...styles.statCard,
         borderTopColor: accent,
       }}
     >
       <div style={styles.statTop}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
-          <div style={styles.statValue}>{value}</div>
+          <div className="squares-stat-value" style={styles.statValue}>
+            {value}
+          </div>
         </div>
 
         <div
@@ -427,13 +429,183 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+const responsiveStyles = `
+  .squares-admin-page,
+  .squares-admin-page * {
+    box-sizing: border-box;
+  }
+
+  .squares-admin-page {
+    overflow-x: hidden;
+  }
+
+  @media (max-width: 980px) {
+    .squares-admin-header {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 18px !important;
+    }
+
+    .squares-admin-nav {
+      justify-content: flex-start !important;
+      flex-wrap: wrap !important;
+      width: 100% !important;
+    }
+
+    .squares-card-top {
+      grid-template-columns: 160px minmax(0, 1fr) !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .squares-admin-page {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 22px 12px 46px !important;
+    }
+
+    .squares-admin-title {
+      font-size: clamp(42px, 13vw, 58px) !important;
+      line-height: 0.98 !important;
+      letter-spacing: -0.065em !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .squares-admin-subtitle {
+      font-size: 17px !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .squares-admin-nav {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 10px !important;
+    }
+
+    .squares-admin-nav a,
+    .squares-admin-nav div {
+      width: 100% !important;
+      min-height: 50px !important;
+      padding: 12px 14px !important;
+      text-align: center !important;
+      font-size: 15px !important;
+      white-space: normal !important;
+    }
+
+    .squares-admin-nav a:first-child {
+      grid-column: 1 / -1 !important;
+    }
+
+    .squares-admin-nav a:last-child {
+      grid-column: 1 / -1 !important;
+    }
+
+    .squares-stats-grid {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .squares-stat-card {
+      min-height: 112px !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+    }
+
+    .squares-stat-value {
+      font-size: clamp(36px, 12vw, 52px) !important;
+      line-height: 1 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .squares-card {
+      padding: 16px !important;
+      border-radius: 26px !important;
+    }
+
+    .squares-card-top {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+    }
+
+    .squares-image-wrap {
+      width: 100% !important;
+      height: auto !important;
+      aspect-ratio: 16 / 9 !important;
+      border-radius: 22px !important;
+    }
+
+    .squares-card-header {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .squares-card-title {
+      font-size: clamp(30px, 10vw, 42px) !important;
+      line-height: 1.05 !important;
+      letter-spacing: -0.055em !important;
+    }
+
+    .squares-headline-grid,
+    .squares-detail-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .squares-card-actions {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .squares-card-actions a,
+    .squares-card-actions form,
+    .squares-card-actions button {
+      width: 100% !important;
+    }
+
+    .squares-card-actions a,
+    .squares-card-actions button {
+      min-height: 50px !important;
+      font-size: 16px !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .squares-admin-page {
+      padding-left: 10px !important;
+      padding-right: 10px !important;
+    }
+
+    .squares-admin-title {
+      font-size: 40px !important;
+    }
+
+    .squares-admin-nav {
+      grid-template-columns: 1fr !important;
+    }
+
+    .squares-admin-nav a,
+    .squares-admin-nav div {
+      grid-column: auto !important;
+    }
+
+    .squares-stat-value {
+      font-size: 36px !important;
+    }
+  }
+`;
+
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: "32px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
+    overflowX: "hidden",
   },
   header: {
     display: "flex",
@@ -444,8 +616,8 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "nowrap",
   },
   headerText: {
-    flex: "0 0 auto",
-    minWidth: 240,
+    flex: "0 1 auto",
+    minWidth: 0,
   },
   badge: {
     display: "inline-flex",
@@ -528,6 +700,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderTop: "4px solid #1683f8",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   statTop: {
     display: "flex",
@@ -536,14 +709,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
   },
   statIcon: {
-    width: 34,
-    height: 34,
+    width: 46,
+    height: 46,
     borderRadius: 999,
     border: "1px solid",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 15,
+    fontSize: 21,
     fontWeight: 900,
     flexShrink: 0,
   },
@@ -580,10 +753,11 @@ const styles: Record<string, CSSProperties> = {
     padding: 18,
     background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "104px 1fr",
+    gridTemplateColumns: "104px minmax(0, 1fr)",
     gap: 16,
     alignItems: "start",
   },
@@ -632,6 +806,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     textTransform: "capitalize",
     fontWeight: 800,
+    width: "fit-content",
   },
   headlineGrid: {
     display: "grid",
@@ -644,6 +819,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   headlineLabel: {
     fontSize: 12,
@@ -656,6 +832,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 19,
     fontWeight: 950,
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
   detailGrid: {
     display: "grid",
