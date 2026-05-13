@@ -52,13 +52,13 @@ function makePrize(
 }
 
 function toInt(value: string, fallback: number) {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.floor(n) : fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.floor(number) : fallback;
 }
 
 function toMoney(value: string, fallback: number) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function formatPreviewMoney(value: number | string, currency: string) {
@@ -292,14 +292,6 @@ export default function NewSquaresGamePage() {
               {description.trim().length > 92 ? "…" : ""}
             </div>
 
-            <div style={styles.previewBoard}>
-              {Array.from({ length: Math.min(boardSize, 36) }).map((_, index) => (
-                <span key={index} style={styles.previewSquare}>
-                  {index + 1}
-                </span>
-              ))}
-            </div>
-
             <div style={styles.previewBottom}>
               <span>{formatPreviewMoney(price, currency)} each</span>
               <span>{boardSize} squares</span>
@@ -318,471 +310,433 @@ export default function NewSquaresGamePage() {
           label="Max sales"
           value={formatPreviewMoney(estimatedTotal, currency)}
         />
-        <SummaryCard label="Board shape" value={`${boardShape.columns} columns`} />
+        <SummaryCard
+          label="Board shape"
+          value={`${boardShape.columns} columns`}
+        />
         <SummaryCard label="Public prizes" value={publicPrizesCount} />
       </section>
-            <section style={styles.builderGrid}>
-        <div style={styles.leftColumn}>
-          <section style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div>
-                <h2 style={styles.sectionTitle}>Campaign details</h2>
-                <p style={styles.sectionDescription}>
-                  Public facing title, URL and campaign description.
-                </p>
-              </div>
+            <section style={styles.section}>
+        <SectionHeader
+          eyebrow="Section 1"
+          title="Campaign details"
+          description="Set the public title, URL, description and draw date."
+        />
+
+        <div style={styles.formInner}>
+          <div style={styles.twoColumn}>
+            <Field label="Squares game title">
+              <input
+                name="title"
+                required
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                style={styles.input}
+                placeholder="Summer fundraiser squares"
+              />
+            </Field>
+
+            <Field label="Public URL slug">
+              <input
+                name="slug"
+                required
+                value={slug}
+                onChange={(event) => {
+                  setSlugEdited(true);
+                  setSlug(slugify(event.target.value));
+                }}
+                style={styles.input}
+                placeholder="summer-fundraiser-squares"
+              />
+            </Field>
+          </div>
+
+          <Field label="Public description">
+            <textarea
+              name="description"
+              rows={5}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              style={styles.textarea}
+              placeholder="Describe the game, prizes, event details and draw information."
+            />
+          </Field>
+
+          <div style={styles.twoColumn}>
+            <Field label="Draw date">
+              <input
+                name="draw_at"
+                type="datetime-local"
+                value={drawAt}
+                onChange={(event) => setDrawAt(event.target.value)}
+                style={styles.input}
+              />
+            </Field>
+
+            <div style={styles.datePreview}>
+              <span style={styles.datePreviewLabel}>Draw preview</span>
+              <strong>{formatDatePreview(drawAt)}</strong>
             </div>
+          </div>
+        </div>
+      </section>
 
-            <div style={styles.formInner}>
-              <div style={styles.twoColumn}>
-                <Field label="Squares game title">
-                  <input
-                    name="title"
-                    required
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    style={styles.input}
-                    placeholder="Summer fundraiser squares"
-                  />
-                </Field>
+      <section style={styles.section}>
+        <SectionHeader
+          eyebrow="Section 2"
+          title="Squares setup"
+          description="Configure board size, square price, currency and publication status."
+        />
 
-                <Field label="Public URL slug">
-                  <input
-                    name="slug"
-                    required
-                    value={slug}
-                    onChange={(event) => {
-                      setSlugEdited(true);
-                      setSlug(slugify(event.target.value));
-                    }}
-                    style={styles.input}
-                    placeholder="summer-fundraiser-squares"
-                  />
-                </Field>
-              </div>
+        <div style={styles.formInner}>
+          <div style={styles.fourColumn}>
+            <Field label="Number of squares">
+              <input
+                name="total_squares"
+                type="number"
+                min={1}
+                max={500}
+                required
+                value={totalSquares}
+                onChange={(event) => setTotalSquares(event.target.value)}
+                style={styles.input}
+              />
+            </Field>
 
-              <Field label="Public description">
-                <textarea
-                  name="description"
-                  rows={5}
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  style={styles.textarea}
-                  placeholder="Describe the game, prizes, event details and draw information."
-                />
-              </Field>
+            <Field label="Price per square">
+              <input
+                name="price_per_square"
+                type="number"
+                min={0}
+                step="0.01"
+                required
+                value={pricePerSquare}
+                onChange={(event) => setPricePerSquare(event.target.value)}
+                style={styles.input}
+              />
+            </Field>
 
-              <Field label="Draw date">
-                <input
-                  name="draw_at"
-                  type="datetime-local"
-                  value={drawAt}
-                  onChange={(event) => setDrawAt(event.target.value)}
-                  style={styles.input}
-                />
-              </Field>
-
-              <div style={styles.datePreview}>
-                Draw preview: {formatDatePreview(drawAt)}
-              </div>
-            </div>
-          </section>
-
-          <section style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div>
-                <h2 style={styles.sectionTitle}>Squares image</h2>
-                <p style={styles.sectionDescription}>
-                  Upload a strong public image and choose the crop focus.
-                </p>
-              </div>
-            </div>
-
-            <div style={styles.mediaBox}>
-              <div style={styles.mediaControls}>
-                <ImageFocusUploadField
-                  currentImageUrl={imageUrl}
-                  currentFocusX={imageFocusX}
-                  currentFocusY={imageFocusY}
-                  label="Squares image"
-                  previewAlt={title.trim() || "Squares preview"}
-                  onImageUrlChange={setImageUrl}
-                  onFocusXChange={setImageFocusX}
-                  onFocusYChange={setImageFocusY}
-                />
-              </div>
-
-              <div style={styles.previewBox}>
-                {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt="Squares preview"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      objectPosition: `${imageFocusX}% ${imageFocusY}%`,
-                      display: "block",
-                    }}
-                  />
-                ) : (
-                  <img
-                    src={DEFAULT_SQUARES_IMAGE}
-                    alt="Squares placeholder"
-                    style={styles.previewPlaceholderImage}
-                  />
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div>
-                <h2 style={styles.sectionTitle}>Board setup</h2>
-                <p style={styles.sectionDescription}>
-                  Configure pricing, board size and publication state.
-                </p>
-              </div>
-            </div>
-
-            <div style={styles.formInner}>
-              <div style={styles.fourColumn}>
-                <Field label="Number of squares">
-                  <input
-                    name="total_squares"
-                    type="number"
-                    min={1}
-                    max={500}
-                    required
-                    value={totalSquares}
-                    onChange={(event) => setTotalSquares(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Price per square">
-                  <input
-                    name="price_per_square"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    required
-                    value={pricePerSquare}
-                    onChange={(event) => setPricePerSquare(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Currency">
-                  <select
-                    name="currency"
-                    value={currency}
-                    onChange={(event) => setCurrency(event.target.value)}
-                    style={styles.input}
-                  >
-                    <option value="GBP">GBP</option>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                  </select>
-                </Field>
-
-                <Field label="Status">
-                  <select
-                    name="status"
-                    value={status}
-                    onChange={(event) => setStatus(event.target.value)}
-                    style={styles.input}
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </Field>
-              </div>
-
-              <div style={styles.boardPreviewCard}>
-                <div style={styles.boardPreviewTop}>
-                  <div>
-                    <div style={styles.boardPreviewLabel}>Board preview</div>
-                    <div style={styles.boardPreviewValue}>
-                      {boardShape.columns} × {boardShape.rows}
-                    </div>
-                  </div>
-
-                  <div style={styles.boardPreviewStats}>
-                    {boardSize} total squares
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    ...styles.boardGrid,
-                    gridTemplateColumns: `repeat(${Math.min(
-                      boardShape.columns,
-                      10,
-                    )}, minmax(0, 1fr))`,
-                  }}
-                >
-                  {Array.from({
-                    length: Math.min(boardSize, 50),
-                  }).map((_, index) => (
-                    <div key={index} style={styles.boardCell}>
-                      {index + 1}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div>
-                <h2 style={styles.sectionTitle}>Prize settings</h2>
-                <p style={styles.sectionDescription}>
-                  Choose which prizes appear publicly before checkout.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={addPrize}
-                style={styles.lightButton}
+            <Field label="Currency">
+              <select
+                name="currency"
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value)}
+                style={styles.input}
               >
-                + Add prize
-              </button>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
+
+            <Field label="Status">
+              <select
+                name="status"
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                style={styles.input}
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed</option>
+              </select>
+            </Field>
+          </div>
+
+          <div style={styles.boardPreviewCard}>
+            <div style={styles.boardPreviewTop}>
+              <div>
+                <div style={styles.boardPreviewLabel}>Board preview</div>
+
+                <div style={styles.boardPreviewValue}>
+                  {boardShape.columns} × {boardShape.rows}
+                </div>
+              </div>
+
+              <div style={styles.boardPreviewStats}>{boardSize} squares</div>
             </div>
 
-            <div style={styles.prizeList}>
-              {prizes.map((prize, index) => (
-                <div key={prize.id} style={styles.prizeRow}>
-                  <div style={styles.rowHeader}>
-                    <div style={styles.prizeHeading}>
-                      Prize {index + 1}
-                    </div>
-
-                    <label style={styles.checkboxLabel}>
-                      <input
-                        type="checkbox"
-                        checked={prize.is_public}
-                        onChange={(event) =>
-                          updatePrize(prize.id, {
-                            is_public: event.target.checked,
-                          })
-                        }
-                      />
-                      Show publicly
-                    </label>
-                  </div>
-
-                  <div style={styles.prizeGrid}>
-                    <Field label="Position">
-                      <input
-                        value={prize.position}
-                        onChange={(event) =>
-                          updatePrize(prize.id, {
-                            position: event.target.value,
-                          })
-                        }
-                        type="number"
-                        min="1"
-                        step="1"
-                        style={styles.input}
-                      />
-                    </Field>
-
-                    <Field label="Prize title">
-                      <input
-                        value={prize.title}
-                        onChange={(event) =>
-                          updatePrize(prize.id, {
-                            title: event.target.value,
-                          })
-                        }
-                        placeholder="Luxury hamper"
-                        style={styles.input}
-                      />
-                    </Field>
-                  </div>
-
-                  <Field label="Description">
-                    <textarea
-                      value={prize.description}
-                      onChange={(event) =>
-                        updatePrize(prize.id, {
-                          description: event.target.value,
-                        })
-                      }
-                      rows={3}
-                      style={styles.textarea}
-                      placeholder="Optional public prize description"
-                    />
-                  </Field>
-
-                  <button
-                    type="button"
-                    onClick={() => removePrize(prize.id)}
-                    disabled={prizes.length <= 1}
-                    style={{
-                      ...styles.dangerButton,
-                      cursor:
-                        prizes.length <= 1 ? "not-allowed" : "pointer",
-                      opacity: prizes.length <= 1 ? 0.5 : 1,
-                    }}
-                  >
-                    Remove prize
-                  </button>
+            <div
+              style={{
+                ...styles.boardGrid,
+                gridTemplateColumns: `repeat(${Math.min(
+                  boardShape.columns,
+                  10,
+                )}, minmax(0, 1fr))`,
+              }}
+            >
+              {Array.from({
+                length: Math.min(boardSize, 50),
+              }).map((_, index) => (
+                <div key={index} style={styles.boardCell}>
+                  {index + 1}
                 </div>
               ))}
             </div>
-          </section>
-        </div>
-                      <aside style={styles.sideColumn}>
-          <section style={styles.sideCard}>
-            <div style={styles.sideEyebrow}>Campaign readiness</div>
 
-            <h3 style={styles.sideTitle}>Before publishing</h3>
-
-            <div style={styles.checkList}>
-              <CheckItem done={Boolean(title.trim())}>Add game title</CheckItem>
-              <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
-              <CheckItem done={Boolean(description.trim())}>
-                Add public description
-              </CheckItem>
-              <CheckItem done={boardSize > 0}>Set board size</CheckItem>
-              <CheckItem done={price > 0}>Set price per square</CheckItem>
-              <CheckItem done={publicPrizesCount > 0}>Add public prize</CheckItem>
-            </div>
-          </section>
-
-          <section style={styles.sideCard}>
-            <div style={styles.sideEyebrow}>Revenue preview</div>
-
-            <h3 style={styles.sideTitle}>
-              {formatPreviewMoney(estimatedTotal, currency)}
-            </h3>
-
-            <p style={styles.sideText}>
-              Maximum sales if all {boardSize} squares are sold at{" "}
-              {formatPreviewMoney(price, currency)} each.
-            </p>
-          </section>
-
-          <section style={styles.sideCard}>
-            <div style={styles.sideEyebrow}>Compliance</div>
-
-            <div style={styles.checkList}>
-              <CheckItem done={hasLegalQuestion}>Skill question</CheckItem>
-              <CheckItem done={hasFreeEntry}>Free postal entry</CheckItem>
-            </div>
-          </section>
-        </aside>
-
-        <div style={styles.leftColumn}>
-          <details style={styles.legalDetails}>
-            <summary style={styles.legalSummary}>
-              <div>
-                <div style={styles.legalEyebrow}>Legal framework</div>
-                <h2 style={styles.legalTitle}>Entry question</h2>
-                <p style={styles.legalText}>
-                  Optional skill-based question for the public checkout flow.
-                </p>
-              </div>
-
-              <span style={styles.legalToggle}>Open / close</span>
-            </summary>
-
-            <div style={styles.legalBody}>
-              <div style={styles.twoColumn}>
-                <Field label="Question">
-                  <input
-                    value={questionText}
-                    onChange={(event) => setQuestionText(event.target.value)}
-                    placeholder="e.g. What colour is a London taxi?"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Correct answer">
-                  <input
-                    value={questionAnswer}
-                    onChange={(event) => setQuestionAnswer(event.target.value)}
-                    placeholder="e.g. black"
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
-
+            {boardSize > 50 ? (
               <p style={styles.helpText}>
-                The public squares page requires this answer before checkout when
-                a question is set.
+                Showing first 50 squares as a preview. The public board will use
+                the full {boardSize} squares.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <SectionHeader
+          eyebrow="Section 3"
+          title="Squares image"
+          description="Upload a strong public image and choose the crop focus."
+        />
+
+        <div style={styles.mediaBox}>
+          <div style={styles.mediaControls}>
+            <ImageFocusUploadField
+              currentImageUrl={imageUrl}
+              currentFocusX={imageFocusX}
+              currentFocusY={imageFocusY}
+              label="Squares image"
+              previewAlt={title.trim() || "Squares preview"}
+              onImageUrlChange={setImageUrl}
+              onFocusXChange={setImageFocusX}
+              onFocusYChange={setImageFocusY}
+            />
+          </div>
+
+          <div style={styles.previewBox}>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Squares preview"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: `${imageFocusX}% ${imageFocusY}%`,
+                  display: "block",
+                }}
+              />
+            ) : (
+              <img
+                src={DEFAULT_SQUARES_IMAGE}
+                alt="Squares placeholder"
+                style={styles.previewPlaceholderImage}
+              />
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <SectionHeader
+          eyebrow="Section 4"
+          title="Prize settings"
+          description="Add prizes and choose which ones appear publicly on the campaign page."
+        />
+
+        <div style={styles.prizePanel}>
+          <div style={styles.innerHeader}>
+            <div>
+              <h3 style={styles.subTitle}>Public prize list</h3>
+
+              <p style={styles.sectionDescription}>
+                These prizes can also be used later during winner draws.
               </p>
             </div>
-          </details>
 
-          <details style={styles.legalDetails}>
-            <summary style={styles.legalSummary}>
-              <div>
-                <div style={styles.legalEyebrow}>Postal entry</div>
-                <h2 style={styles.legalTitle}>Free postal entry</h2>
-                <p style={styles.legalText}>
-                  Add no-purchase entry instructions shown on the public squares
-                  page.
-                </p>
-              </div>
-
-              <span style={styles.legalToggle}>Open / close</span>
-            </summary>
-
-            <div style={styles.legalBody}>
-              <Field label="Postal address">
-                <textarea
-                  value={freeEntryAddress}
-                  onChange={(event) => setFreeEntryAddress(event.target.value)}
-                  rows={3}
-                  placeholder="Postal entry address"
-                  style={styles.textarea}
-                />
-              </Field>
-
-              <Field label="Instructions">
-                <textarea
-                  value={freeEntryInstructions}
-                  onChange={(event) =>
-                    setFreeEntryInstructions(event.target.value)
-                  }
-                  rows={3}
-                  placeholder="Include name, email, game name, answer and preferred square number..."
-                  style={styles.textarea}
-                />
-              </Field>
-
-              <Field label="Postal entry closes">
-                <input
-                  type="datetime-local"
-                  value={freeEntryClosesAt}
-                  onChange={(event) => setFreeEntryClosesAt(event.target.value)}
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-          </details>
-
-          <section style={styles.submitBar}>
-            <div style={styles.submitText}>
-              <strong style={{ color: "#0f172a" }}>Create squares game</strong>
-
-              <div style={styles.mutedSmall}>
-                Save as draft first if you want to review before publishing.
-              </div>
-            </div>
-
-            <button type="submit" style={styles.submitButton}>
-              Create squares game
+            <button type="button" onClick={addPrize} style={styles.goldButton}>
+              + Add prize
             </button>
-          </section>
+          </div>
+
+          <div style={styles.prizeList}>
+            {prizes.map((prize, index) => (
+              <div key={prize.id} style={styles.prizeRow}>
+                <div style={styles.rowHeader}>
+                  <strong>Prize {index + 1}</strong>
+
+                  <label style={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={prize.is_public}
+                      onChange={(event) =>
+                        updatePrize(prize.id, {
+                          is_public: event.target.checked,
+                        })
+                      }
+                    />
+                    Show publicly
+                  </label>
+                </div>
+
+                <div style={styles.prizeGrid}>
+                  <Field label="Position">
+                    <input
+                      value={prize.position}
+                      onChange={(event) =>
+                        updatePrize(prize.id, {
+                          position: event.target.value,
+                        })
+                      }
+                      type="number"
+                      min="1"
+                      step="1"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Prize title">
+                    <input
+                      name="prize_title"
+                      value={prize.title}
+                      onChange={(event) =>
+                        updatePrize(prize.id, { title: event.target.value })
+                      }
+                      placeholder="Prize title"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Description optional">
+                  <textarea
+                    name="prize_description"
+                    value={prize.description}
+                    onChange={(event) =>
+                      updatePrize(prize.id, {
+                        description: event.target.value,
+                      })
+                    }
+                    rows={2}
+                    style={styles.textarea}
+                  />
+                </Field>
+
+                <button
+                  type="button"
+                  onClick={() => removePrize(prize.id)}
+                  disabled={prizes.length <= 1}
+                  style={{
+                    ...styles.dangerButton,
+                    cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                    opacity: prizes.length <= 1 ? 0.55 : 1,
+                  }}
+                >
+                  Remove prize
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
+      </section>
+            <details style={styles.legalDetails}>
+        <summary style={styles.legalSummary}>
+          <div>
+            <div style={styles.legalEyebrow}>Section 5</div>
+            <h2 style={styles.legalTitle}>Entry question</h2>
+            <p style={styles.legalText}>
+              Optional skill-based question for the public checkout flow.
+            </p>
+          </div>
+
+          <span style={styles.legalToggle}>Open / close</span>
+        </summary>
+
+        <div style={styles.legalBody}>
+          <div style={styles.twoColumn}>
+            <Field label="Question">
+              <input
+                value={questionText}
+                onChange={(event) => setQuestionText(event.target.value)}
+                placeholder="e.g. What colour is a London taxi?"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Correct answer">
+              <input
+                value={questionAnswer}
+                onChange={(event) => setQuestionAnswer(event.target.value)}
+                placeholder="e.g. black"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+
+          <p style={styles.helpText}>
+            The public squares page requires this answer before checkout when a
+            question is set.
+          </p>
+        </div>
+      </details>
+
+      <details style={styles.legalDetails}>
+        <summary style={styles.legalSummary}>
+          <div>
+            <div style={styles.legalEyebrow}>Section 6</div>
+            <h2 style={styles.legalTitle}>Free postal entry</h2>
+            <p style={styles.legalText}>
+              Add no-purchase entry instructions shown on the public squares
+              page.
+            </p>
+          </div>
+
+          <span style={styles.legalToggle}>Open / close</span>
+        </summary>
+
+        <div style={styles.legalBody}>
+          <Field label="Postal address">
+            <textarea
+              value={freeEntryAddress}
+              onChange={(event) => setFreeEntryAddress(event.target.value)}
+              rows={3}
+              placeholder="Postal entry address"
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Instructions">
+            <textarea
+              value={freeEntryInstructions}
+              onChange={(event) =>
+                setFreeEntryInstructions(event.target.value)
+              }
+              rows={3}
+              placeholder="Include name, email, game name, answer and preferred square number..."
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Postal entry closes">
+            <input
+              type="datetime-local"
+              value={freeEntryClosesAt}
+              onChange={(event) => setFreeEntryClosesAt(event.target.value)}
+              style={styles.input}
+            />
+          </Field>
+
+          <div style={styles.complianceRow}>
+            <CheckItem done={hasLegalQuestion}>Skill question configured</CheckItem>
+            <CheckItem done={hasFreeEntry}>Free entry details configured</CheckItem>
+          </div>
+        </div>
+      </details>
+
+      <section style={styles.submitBar}>
+        <div style={styles.submitText}>
+          <strong style={{ color: "#0f172a" }}>Create squares game</strong>
+
+          <div style={styles.mutedSmall}>
+            Save as draft first if you want to review before publishing.
+          </div>
+        </div>
+
+        <button type="submit" style={styles.submitButton}>
+          Create squares game
+        </button>
       </section>
     </form>
   );
@@ -802,6 +756,26 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
     <div style={styles.summaryCard}>
       <div style={styles.summaryLabel}>{label}</div>
       <div style={styles.summaryValue}>{value}</div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div style={styles.sectionHeader}>
+      <div>
+        <div style={styles.sectionEyebrow}>{eyebrow}</div>
+        <h2 style={styles.sectionTitle}>{title}</h2>
+        <p style={styles.sectionDescription}>{description}</p>
+      </div>
     </div>
   );
 }
@@ -844,14 +818,14 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 16,
     width: "100%",
-    maxWidth: 1180,
+    maxWidth: 1040,
     margin: "40px auto",
     padding: "0 16px 48px",
     boxSizing: "border-box",
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
     gap: 20,
     alignItems: "stretch",
     padding: "clamp(20px, 4vw, 26px)",
@@ -996,23 +970,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
   },
-  previewBoard: {
-    display: "grid",
-    gridTemplateColumns: "repeat(6, 1fr)",
-    gap: 4,
-    marginTop: 12,
-  },
-  previewSquare: {
-    aspectRatio: "1 / 1",
-    borderRadius: 7,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 10,
-    fontWeight: 900,
-  },
   previewBottom: {
     display: "flex",
     justifyContent: "space-between",
@@ -1048,74 +1005,6 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     wordBreak: "break-word",
   },
-  builderGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 300px",
-    gap: 16,
-    alignItems: "start",
-  },
-  leftColumn: {
-    display: "grid",
-    gap: 16,
-    minWidth: 0,
-  },
-  sideColumn: {
-    display: "grid",
-    gap: 16,
-    position: "sticky",
-    top: 16,
-    minWidth: 0,
-  },
-  sideCard: {
-    padding: 16,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  sideEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  sideTitle: {
-    margin: "6px 0 0",
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.02em",
-  },
-  sideText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  checkList: {
-    display: "grid",
-    gap: 10,
-    marginTop: 14,
-  },
-  checkItem: {
-    display: "flex",
-    gap: 9,
-    alignItems: "center",
-    color: "#334155",
-    fontSize: 14,
-    fontWeight: 800,
-  },
-  checkIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 999,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 950,
-    flexShrink: 0,
-  },
   section: {
     padding: "clamp(16px, 4vw, 20px)",
     borderRadius: 24,
@@ -1132,6 +1021,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
     marginBottom: 16,
+  },
+  sectionEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
   },
   sectionTitle: {
     margin: 0,
@@ -1195,7 +1092,10 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   datePreview: {
-    padding: 13,
+    display: "grid",
+    alignContent: "center",
+    minHeight: 46,
+    padding: "11px 12px",
     borderRadius: 16,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
@@ -1203,34 +1103,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 900,
   },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 16,
-    padding: 14,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-  },
-  mediaControls: {
-    minWidth: 0,
-  },
-  previewBox: {
-    height: 220,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  previewPlaceholderImage: {
-    width: "min(82%, 200px)",
-    height: "min(82%, 200px)",
-    objectFit: "contain",
+  datePreviewLabel: {
     display: "block",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 2,
   },
   boardPreviewCard: {
     padding: 16,
@@ -1284,14 +1164,67 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 900,
   },
-  lightButton: {
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 16,
+    padding: 14,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
+  },
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewPlaceholderImage: {
+    width: "min(82%, 200px)",
+    height: "min(82%, 200px)",
+    objectFit: "contain",
+    display: "block",
+  },
+  prizePanel: {
+    display: "grid",
+    gap: 14,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
+    border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  innerHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
+  },
+  goldButton: {
     padding: "10px 14px",
     borderRadius: 999,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
+    border: "1px solid #facc15",
+    background: "#fef3c7",
+    color: "#92400e",
     cursor: "pointer",
-    fontWeight: 900,
+    fontWeight: 950,
     whiteSpace: "nowrap",
   },
   prizeList: {
@@ -1304,8 +1237,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 14,
     border: "1px solid #fde68a",
     borderRadius: 18,
-    background:
-      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
+    background: "#ffffff",
     minWidth: 0,
   },
   rowHeader: {
@@ -1315,10 +1247,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     flexWrap: "wrap",
     color: "#0f172a",
-  },
-  prizeHeading: {
-    fontWeight: 950,
-    color: "#92400e",
   },
   prizeGrid: {
     display: "grid",
@@ -1394,6 +1322,33 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 16,
     display: "grid",
     gap: 12,
+  },
+  complianceRow: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  checkItem: {
+    display: "flex",
+    gap: 9,
+    alignItems: "center",
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: 800,
+  },
+  checkIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 950,
+    flexShrink: 0,
   },
   helpText: {
     color: "#64748b",
