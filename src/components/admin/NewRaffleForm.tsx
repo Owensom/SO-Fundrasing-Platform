@@ -318,14 +318,22 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
   }
 
   return (
-    <form action="/api/admin/raffles" method="post" style={styles.form}>
+    <form
+      className="new-raffle-form"
+      action="/api/admin/raffles"
+      method="post"
+      style={styles.form}
+    >
+      <style>{responsiveStyles}</style>
+
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="question" value={questionValue} />
       <input type="hidden" name="total_tickets" value={String(totalTickets)} />
-            <section style={styles.hero}>
+
+      <section style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Raffle builder</div>
 
@@ -347,7 +355,10 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           </p>
 
           <div style={styles.heroMetricGrid}>
-            <HeroMetric label="Ticket price" value={formatPreviewMoney(ticketPrice, currency)} />
+            <HeroMetric
+              label="Ticket price"
+              value={formatPreviewMoney(ticketPrice, currency)}
+            />
             <HeroMetric label="Total tickets" value={totalTickets} />
             <HeroMetric label="Colours" value={selectedColours.length} />
             <HeroMetric label="Offers" value={validOffersCount} />
@@ -406,8 +417,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
         <SummaryCard label="Offers" value={validOffersCount} />
         <SummaryCard label="Public prizes" value={publicPrizesCount} />
       </section>
-
-      <section style={styles.builderGrid}>
+            <section style={styles.builderGrid}>
         <div style={styles.mainColumn}>
           <section style={styles.section}>
             <SectionHeader
@@ -458,8 +468,10 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               <div style={styles.mediaBox}>
                 <div style={styles.mediaControls}>
                   <h3 style={styles.subTitle}>Campaign image</h3>
+
                   <p style={styles.sectionDescription}>
-                    Upload or replace the public image, then choose the crop focus.
+                    Upload or replace the public image, then choose the crop
+                    focus.
                   </p>
 
                   <ImageFocusUploadField
@@ -597,6 +609,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                 <div style={styles.innerHeader}>
                   <div>
                     <h3 style={styles.subTitle}>Ticket colours</h3>
+
                     <p style={styles.sectionDescription}>
                       Preset colour buttons plus optional custom colours.
                     </p>
@@ -640,6 +653,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                                 : cssColour,
                           }}
                         />
+
                         {active ? "✓ " : ""}
                         {colour}
                       </button>
@@ -672,7 +686,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
 
                 <p style={styles.helpText}>
                   Selected:{" "}
-                  {selectedColours.length ? selectedColours.join(", ") : "None"}
+                  {selectedColours.length
+                    ? selectedColours.join(", ")
+                    : "None"}
                 </p>
               </section>
 
@@ -680,6 +696,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                 <div style={styles.innerHeader}>
                   <div>
                     <h3 style={styles.subTitle}>Offers</h3>
+
                     <p style={styles.sectionDescription}>
                       Optional bundle pricing. Example: 3 tickets for 12.00.
                     </p>
@@ -700,7 +717,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                       <div style={styles.offerCardTop}>
                         <div>
                           <div style={styles.offerBadge}>
-                            {index === 0 ? "Featured offer" : `Offer ${index + 1}`}
+                            {index === 0
+                              ? "Featured offer"
+                              : `Offer ${index + 1}`}
                           </div>
 
                           <div style={styles.offerTitle}>
@@ -727,7 +746,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                           <input
                             value={offer.label}
                             onChange={(event) =>
-                              updateOffer(offer.id, { label: event.target.value })
+                              updateOffer(offer.id, {
+                                label: event.target.value,
+                              })
                             }
                             placeholder="3 for 12"
                             style={styles.input}
@@ -754,7 +775,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                           <input
                             value={offer.price}
                             onChange={(event) =>
-                              updateOffer(offer.id, { price: event.target.value })
+                              updateOffer(offer.id, {
+                                price: event.target.value,
+                              })
                             }
                             type="number"
                             min="0"
@@ -787,8 +810,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                 </p>
               </section>
             </div>
-          </section>     
-          <section style={styles.section}>
+          </section>
+                    <section style={styles.section}>
             <SectionHeader
               eyebrow="Section 4"
               title="Prize setup"
@@ -799,6 +822,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               <div style={styles.innerHeader}>
                 <div>
                   <h3 style={styles.subTitle}>Public prize list</h3>
+
                   <p style={styles.sectionDescription}>
                     These prizes can also be used later during winner draws.
                   </p>
@@ -892,7 +916,9 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             <summary style={styles.legalSummary}>
               <div>
                 <div style={styles.legalEyebrow}>Section 5</div>
+
                 <h2 style={styles.legalTitle}>Legal entry question</h2>
+
                 <p style={styles.legalText}>
                   Optional skill-based question for the public checkout flow.
                 </p>
@@ -923,8 +949,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
               </div>
 
               <p style={styles.helpText}>
-                The public raffle page requires this answer before checkout when a
-                question is set.
+                The public raffle page requires this answer before checkout when
+                a question is set.
               </p>
             </div>
           </details>
@@ -932,6 +958,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
           <section style={styles.submitBar}>
             <div style={styles.submitText}>
               <strong style={{ color: "#0f172a" }}>Create raffle</strong>
+
               <div style={styles.mutedSmall}>
                 Save as draft first if you want to review before publishing.
               </div>
@@ -950,14 +977,29 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
             <h3 style={styles.sideTitle}>Before publishing</h3>
 
             <div style={styles.checkList}>
-              <CheckItem done={Boolean(title.trim())}>Add campaign title</CheckItem>
-              <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
-              <CheckItem done={Boolean(description.trim())}>Add description</CheckItem>
-              <CheckItem done={totalTickets > 0}>Set available tickets</CheckItem>
+              <CheckItem done={Boolean(title.trim())}>
+                Add campaign title
+              </CheckItem>
+
+              <CheckItem done={Boolean(slug.trim())}>
+                Confirm public slug
+              </CheckItem>
+
+              <CheckItem done={Boolean(description.trim())}>
+                Add description
+              </CheckItem>
+
+              <CheckItem done={totalTickets > 0}>
+                Set available tickets
+              </CheckItem>
+
               <CheckItem done={selectedColours.length > 0}>
                 Choose ticket colours
               </CheckItem>
-              <CheckItem done={publicPrizesCount > 0}>Add public prize</CheckItem>
+
+              <CheckItem done={publicPrizesCount > 0}>
+                Add public prize
+              </CheckItem>
             </div>
           </div>
 
@@ -1082,6 +1124,109 @@ function CheckItem({
   );
 }
 
+const responsiveStyles = `
+  .new-raffle-form,
+  .new-raffle-form * {
+    box-sizing: border-box;
+  }
+
+  .new-raffle-form {
+    overflow-x: hidden;
+  }
+
+  .new-raffle-form img,
+  .new-raffle-form input,
+  .new-raffle-form textarea,
+  .new-raffle-form select,
+  .new-raffle-form button {
+    max-width: 100%;
+  }
+
+  @media (max-width: 760px) {
+    .new-raffle-form {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .new-raffle-form [style*="grid-template-columns"] {
+      grid-template-columns: 1fr !important;
+    }
+
+    .new-raffle-form [style*="position: sticky"] {
+      position: static !important;
+      top: auto !important;
+    }
+
+    .new-raffle-form section,
+    .new-raffle-form aside,
+    .new-raffle-form div,
+    .new-raffle-form label {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    .new-raffle-form h1 {
+      font-size: clamp(34px, 12vw, 46px) !important;
+      line-height: 1.02 !important;
+      letter-spacing: -0.055em !important;
+      overflow-wrap: anywhere !important;
+      word-break: normal !important;
+    }
+
+    .new-raffle-form h2 {
+      font-size: clamp(28px, 9vw, 36px) !important;
+      line-height: 1.05 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-raffle-form h3 {
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-raffle-form p,
+    .new-raffle-form span,
+    .new-raffle-form strong {
+      overflow-wrap: anywhere !important;
+    }
+
+    .new-raffle-form [style*="height: 220px"] {
+      height: auto !important;
+      min-height: 190px !important;
+      aspect-ratio: 16 / 10 !important;
+    }
+
+    .new-raffle-form [style*="display: flex"] {
+      flex-wrap: wrap !important;
+    }
+
+    .new-raffle-form button,
+    .new-raffle-form a {
+      min-height: 46px !important;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .new-raffle-form {
+      gap: 14px !important;
+    }
+
+    .new-raffle-form section,
+    .new-raffle-form details {
+      border-radius: 22px !important;
+    }
+
+    .new-raffle-form input,
+    .new-raffle-form textarea,
+    .new-raffle-form select {
+      font-size: 16px !important;
+    }
+
+    .new-raffle-form button {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+  }
+`;
 const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
