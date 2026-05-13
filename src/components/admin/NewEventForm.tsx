@@ -30,7 +30,7 @@ type TicketTypeRow = {
   is_active: boolean;
 };
 
-const DEFAULT_EVENTS_IMAGE = "/brand/event-champagne-gold.png";
+const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
 const DEFAULT_TICKETS: TicketTypeRow[] = [
   {
