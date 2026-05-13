@@ -79,7 +79,9 @@ function progressPercent(sold: number, total: number) {
 }
 
 function getSoldSquares(game: SquaresGame) {
-  return Array.isArray(game.config_json?.sold) ? game.config_json.sold.length : 0;
+  return Array.isArray(game.config_json?.sold)
+    ? game.config_json.sold.length
+    : 0;
 }
 
 function getRaisedCents(game: SquaresGame) {
@@ -105,7 +107,9 @@ export default async function AdminSquaresListPage() {
   const games = await listSquaresGames(tenantSlug);
 
   const totalGames = games.length;
-  const publishedCount = games.filter((game) => game.status === "published").length;
+  const publishedCount = games.filter(
+    (game) => game.status === "published",
+  ).length;
 
   const totalSquares = games.reduce(
     (sum, game) => sum + Number(game.total_squares || 0),
@@ -125,7 +129,7 @@ export default async function AdminSquaresListPage() {
   return (
     <main style={styles.page}>
       <section style={styles.header}>
-        <div>
+        <div style={styles.headerText}>
           <div style={styles.badge}>Admin dashboard</div>
 
           <h1 style={styles.title}>Manage squares</h1>
@@ -211,7 +215,9 @@ export default async function AdminSquaresListPage() {
 
       {games.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>No squares games yet</h2>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>
+            No squares games yet
+          </h2>
 
           <p style={styles.muted}>Create your first squares game.</p>
 
@@ -297,9 +303,7 @@ export default async function AdminSquaresListPage() {
                       />
 
                       <InfoBlock label="Total" value={total} />
-
                       <InfoBlock label="Sold" value={sold} />
-
                       <InfoBlock label="Remaining" value={remaining} />
                     </div>
 
@@ -432,11 +436,16 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
   },
   header: {
-    display: "grid",
-   gridTemplateColumns: "minmax(260px, 1fr) auto",
-alignItems: "start",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 22,
     gap: 16,
+    flexWrap: "nowrap",
+  },
+  headerText: {
+    flex: "0 0 auto",
+    minWidth: 240,
   },
   badge: {
     display: "inline-flex",
@@ -454,6 +463,7 @@ alignItems: "start",
     lineHeight: 1.1,
     letterSpacing: "-0.04em",
     color: "#0f172a",
+    whiteSpace: "nowrap",
   },
   subtitle: {
     margin: "10px 0 0",
@@ -462,15 +472,17 @@ alignItems: "start",
   },
   nav: {
     display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
+    gap: 8,
+    flexWrap: "nowrap",
     justifyContent: "flex-end",
+    alignItems: "flex-start",
+    minWidth: 0,
   },
   navButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 15px",
+    padding: "13px 13px",
     borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
@@ -483,7 +495,7 @@ alignItems: "start",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 15px",
+    padding: "13px 13px",
     borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
@@ -494,7 +506,7 @@ alignItems: "start",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 15px",
+    padding: "13px 14px",
     borderRadius: 9999,
     background: "#1683f8",
     color: "#ffffff",
