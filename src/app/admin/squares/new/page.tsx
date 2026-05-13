@@ -139,6 +139,10 @@ function getSectionToneStyle(tone: SectionTone): CSSProperties {
   };
 }
 
+function prizeText(count: number) {
+  return `${count} prize${count === 1 ? "" : "s"}`;
+}
+
 export default function NewSquaresGamePage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -297,7 +301,7 @@ export default function NewSquaresGamePage() {
               label="Max sales"
               value={formatPreviewMoney(estimatedTotal, currency)}
             />
-            <HeroMetric label="Public prizes" value={publicPrizesCount} />
+            <HeroMetric label="Public prizes" value={prizeText(publicPrizesCount)} />
           </div>
         </div>
 
@@ -339,10 +343,16 @@ export default function NewSquaresGamePage() {
             </div>
 
             <div style={styles.previewMetaGrid}>
-              <span>{formatPreviewMoney(price, currency)} each</span>
-              <span>{boardSize} squares</span>
-              <span>{formatDatePreview(drawAt)}</span>
-              <span>{publicPrizesCount} prize{publicPrizesCount === 1 ? "" : "s"}</span>
+              <span style={styles.previewMetaItem}>
+                {formatPreviewMoney(price, currency)} each
+              </span>
+              <span style={styles.previewMetaItem}>{boardSize} squares</span>
+              <span style={styles.previewMetaItem}>
+                {formatDatePreview(drawAt)}
+              </span>
+              <span style={styles.previewMetaItem}>
+                {prizeText(publicPrizesCount)}
+              </span>
             </div>
           </div>
         </div>
@@ -362,16 +372,16 @@ export default function NewSquaresGamePage() {
           label="Legal readiness"
           value={hasLegalQuestion || hasFreeEntry ? "In progress" : "Not set"}
         />
-        <SummaryCard label="Public prizes" value={publicPrizesCount} />
+        <SummaryCard label="Public prizes" value={prizeText(publicPrizesCount)} />
       </section>
             <SectionCard
-        sectionNumber="SECTION 1"
+        number="01"
         title="Campaign details"
         description="Set the public title, URL, description and draw date."
-        defaultOpen
+        badge={drawAt ? "Draw scheduled" : undefined}
         tone="default"
       >
-        <div style={styles.formGrid}>
+        <div style={styles.twoColumn}>
           <Field label="Squares game title">
             <input
               name="title"
@@ -408,7 +418,7 @@ export default function NewSquaresGamePage() {
           />
         </Field>
 
-        <div style={styles.drawGrid}>
+        <div style={styles.twoColumn}>
           <Field label="Draw date">
             <input
               name="draw_at"
@@ -420,8 +430,7 @@ export default function NewSquaresGamePage() {
           </Field>
 
           <div style={styles.previewInfoCard}>
-            <div style={styles.previewInfoEyebrow}>Draw preview</div>
-
+            <div style={styles.previewInfoLabel}>Draw preview</div>
             <div style={styles.previewInfoValue}>
               {formatDatePreview(drawAt)}
             </div>
@@ -430,14 +439,14 @@ export default function NewSquaresGamePage() {
       </SectionCard>
 
       <SectionCard
-        sectionNumber="SECTION 2"
+        number="02"
         title="Squares setup"
         description="Configure board size, square pricing, currency and publication status."
-        tone="setup"
-        collapsedSummary={`${boardSize} squares • ${formatPreviewMoney(
+        badge={`${boardSize} squares • ${formatPreviewMoney(
           price,
           currency,
         )} each`}
+        tone="setup"
       >
         <div style={styles.fourColumn}>
           <Field label="Number of squares">
@@ -494,12 +503,11 @@ export default function NewSquaresGamePage() {
         </div>
 
         <div style={styles.boardPreviewCard}>
-          <div style={styles.boardPreviewHeader}>
+          <div style={styles.boardPreviewTop}>
             <div>
-              <div style={styles.boardPreviewEyebrow}>Board preview</div>
-
+              <div style={styles.boardPreviewLabel}>Board preview</div>
               <div style={styles.boardPreviewTitle}>
-                {boardShape.columns} × {boardShape.columns}
+                {boardShape.columns} × {boardShape.rows}
               </div>
             </div>
 
@@ -510,35 +518,32 @@ export default function NewSquaresGamePage() {
 
           <div
             style={{
-              ...styles.boardPreviewGrid,
-              gridTemplateColumns: `repeat(${Math.min(
-                boardShape.columns,
-                5,
-              )}, minmax(0, 1fr))`,
+              ...styles.boardGrid,
+              gridTemplateColumns: `repeat(${boardShape.columns}, minmax(0, 1fr))`,
             }}
           >
             {Array.from({
-              length: Math.min(boardSize, 25),
+              length: Math.min(boardSize, 50),
             }).map((_, index) => (
-              <div key={index} style={styles.previewSquare}>
+              <div key={index} style={styles.boardCell}>
                 {index + 1}
               </div>
             ))}
           </div>
 
-          <div style={styles.boardPreviewFootnote}>
-            Premium simplified preview. The public board will use the full{" "}
-            {boardSize} square layout.
-          </div>
+          <p style={styles.boardFootnote}>
+            Showing first {Math.min(boardSize, 50)} squares as a preview. The
+            public board will use the full {boardSize} squares.
+          </p>
         </div>
       </SectionCard>
 
       <SectionCard
-        sectionNumber="SECTION 3"
+        number="03"
         title="Squares image"
         description="Upload a strong public image and choose the crop focus."
+        badge={imageUrl ? "Image selected" : "Using default image"}
         tone="media"
-        collapsedSummary={imageUrl ? "Image uploaded" : "Using default image"}
       >
         <div style={styles.mediaBox}>
           <div style={styles.mediaControls}>
@@ -556,7 +561,7 @@ export default function NewSquaresGamePage() {
             />
           </div>
 
-          <div style={styles.previewBox}>
+          <div style={styles.previewBoxLarge}>
             {imageUrl ? (
               <img
                 src={imageUrl}
@@ -581,20 +586,17 @@ export default function NewSquaresGamePage() {
       </SectionCard>
 
       <SectionCard
-        sectionNumber="SECTION 4"
+        number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
+        badge={prizeText(publicPrizesCount)}
         tone="prize"
-        collapsedSummary={`${publicPrizesCount} public prize${
-          publicPrizesCount === 1 ? "" : "s"
-        }`}
       >
-        <div style={styles.prizePanel}>
-          <div style={styles.prizePanelHeader}>
+        <div style={styles.prizeSectionShell}>
+          <div style={styles.prizeSectionTop}>
             <div>
-              <div style={styles.prizePanelTitle}>Public prize list</div>
-
-              <div style={styles.prizePanelDescription}>
+              <div style={styles.prizeSectionTitle}>Public prize list</div>
+              <div style={styles.prizeSectionText}>
                 These prizes can also be used later during winner draws.
               </div>
             </div>
@@ -602,7 +604,7 @@ export default function NewSquaresGamePage() {
             <button
               type="button"
               onClick={addPrize}
-              style={styles.goldButton}
+              style={styles.prizeAddButton}
             >
               + Add prize
             </button>
@@ -666,9 +668,8 @@ export default function NewSquaresGamePage() {
                         description: event.target.value,
                       })
                     }
-                    rows={3}
+                    rows={2}
                     style={styles.textarea}
-                    placeholder="Optional public prize description"
                   />
                 </Field>
 
@@ -677,7 +678,7 @@ export default function NewSquaresGamePage() {
                   onClick={() => removePrize(prize.id)}
                   disabled={prizes.length <= 1}
                   style={{
-                    ...styles.dangerButton,
+                    ...styles.removePrizeButton,
                     cursor:
                       prizes.length <= 1 ? "not-allowed" : "pointer",
                     opacity: prizes.length <= 1 ? 0.55 : 1,
@@ -691,14 +692,14 @@ export default function NewSquaresGamePage() {
         </div>
       </SectionCard>
             <SectionCard
-        sectionNumber="SECTION 5"
+        number="05"
         title="Entry question"
         description="Optional skill-based question for the public checkout flow."
+        badge={hasLegalQuestion ? "Configured" : "Not configured"}
         tone="legal"
-        collapsedSummary={hasLegalQuestion ? "Configured" : "Not configured"}
       >
         <div style={styles.legalBody}>
-          <div style={styles.formGrid}>
+          <div style={styles.twoColumn}>
             <Field label="Question">
               <input
                 value={questionText}
@@ -726,11 +727,11 @@ export default function NewSquaresGamePage() {
       </SectionCard>
 
       <SectionCard
-        sectionNumber="SECTION 6"
+        number="06"
         title="Free postal entry"
         description="Add no-purchase entry instructions shown on the public squares page."
+        badge={hasFreeEntry ? "Configured" : "Not configured"}
         tone="legal"
-        collapsedSummary={hasFreeEntry ? "Configured" : "Not configured"}
       >
         <div style={styles.legalBody}>
           <Field label="Postal address">
@@ -805,36 +806,34 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function SectionCard({
-  sectionNumber,
+  number,
   title,
   description,
-  collapsedSummary,
-  defaultOpen = false,
+  badge,
   tone = "default",
   children,
 }: {
-  sectionNumber: string;
+  number: string;
   title: string;
   description: string;
-  collapsedSummary?: string;
-  defaultOpen?: boolean;
+  badge?: string;
   tone?: SectionTone;
   children: ReactNode;
 }) {
-  if (defaultOpen) {
+  const toneStyle = getSectionToneStyle(tone);
+  const isOverview = number === "01";
+
+  if (isOverview) {
     return (
-      <section
-        style={{
-          ...styles.section,
-          ...getSectionToneStyle(tone),
-        }}
-      >
-        <div style={styles.sectionHeader}>
+      <section style={{ ...styles.sectionCard, ...toneStyle }}>
+        <div style={styles.sectionTop}>
           <div>
-            <div style={styles.sectionEyebrow}>{sectionNumber}</div>
+            <div style={styles.sectionNumber}>SECTION {number}</div>
             <h2 style={styles.sectionTitle}>{title}</h2>
             <p style={styles.sectionDescription}>{description}</p>
           </div>
+
+          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
         </div>
 
         <div style={styles.sectionBody}>{children}</div>
@@ -843,29 +842,21 @@ function SectionCard({
   }
 
   return (
-    <details
-      style={{
-        ...styles.section,
-        ...getSectionToneStyle(tone),
-      }}
-    >
-      <summary style={styles.collapsedSummary}>
-        <div style={styles.collapsedHeading}>
-          <div style={styles.sectionEyebrow}>{sectionNumber}</div>
+    <details style={{ ...styles.sectionCard, ...toneStyle }}>
+      <summary style={styles.sectionSummary}>
+        <div style={styles.sectionSummaryText}>
+          <div style={styles.sectionNumber}>SECTION {number}</div>
           <h2 style={styles.sectionTitle}>{title}</h2>
           <p style={styles.sectionDescription}>{description}</p>
         </div>
 
-        <div style={styles.collapsedControls}>
-          {collapsedSummary ? (
-            <span style={styles.summaryPill}>{collapsedSummary}</span>
-          ) : null}
-
+        <div style={styles.sectionActions}>
+          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
           <span style={styles.openButton}>OPEN</span>
         </div>
       </summary>
 
-      <div style={styles.collapsedBody}>{children}</div>
+      <div style={styles.sectionBody}>{children}</div>
     </details>
   );
 }
@@ -910,7 +901,7 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     maxWidth: 1040,
     margin: "40px auto",
-    padding: "0 16px 48px",
+    padding: "0 16px 64px",
     boxSizing: "border-box",
   },
   hero: {
@@ -1039,7 +1030,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
   previewImageWrap: {
-    height: 210,
+    height: 240,
     borderRadius: 20,
     background: "#ffffff",
     border: "1px solid rgba(255,255,255,0.18)",
@@ -1049,8 +1040,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
   },
   placeholderImage: {
-    width: "min(82%, 210px)",
-    height: "min(82%, 210px)",
+    width: "min(82%, 218px)",
+    height: "min(82%, 218px)",
     objectFit: "contain",
     display: "block",
   },
@@ -1106,32 +1097,28 @@ const styles: Record<string, CSSProperties> = {
   },
   summaryValue: {
     color: "#0f172a",
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: 950,
     marginTop: 5,
     wordBreak: "break-word",
   },
-  section: {
-    padding: "clamp(16px, 4vw, 20px)",
+  sectionCard: {
+    padding: "clamp(18px, 4vw, 22px)",
     borderRadius: 24,
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflow: "hidden",
   },
-  sectionHeader: {
+  sectionTop: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 16,
+    marginBottom: 18,
   },
-  sectionBody: {
-    display: "grid",
-    gap: 16,
-  },
-  collapsedSummary: {
+  sectionSummary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 14,
@@ -1139,46 +1126,18 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     listStyle: "none",
   },
-  collapsedHeading: {
+  sectionSummaryText: {
     minWidth: 0,
   },
-  collapsedControls: {
+  sectionActions: {
     display: "flex",
-    gap: 8,
+    gap: 7,
     alignItems: "center",
     justifyContent: "flex-end",
     flexWrap: "wrap",
     flexShrink: 0,
   },
-  collapsedBody: {
-    marginTop: 16,
-    display: "grid",
-    gap: 16,
-  },
-  summaryPill: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #dbe3ef",
-    fontSize: 12,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  },
-  openButton: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    flexShrink: 0,
-    whiteSpace: "nowrap",
-  },
-  sectionEyebrow: {
+  sectionNumber: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -1199,25 +1158,47 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
-  formGrid: {
+  sectionBadge: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  openButton: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+  },
+  sectionBody: {
+    display: "grid",
+    gap: 18,
+    marginTop: 18,
+  },
+  twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
-    gap: 12,
-  },
-  drawGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 0.9fr)",
-    gap: 12,
-    alignItems: "end",
+    gap: 14,
   },
   fourColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 12,
+    gap: 14,
   },
   field: {
     display: "grid",
-    gap: 6,
+    gap: 7,
     minWidth: 0,
   },
   label: {
@@ -1227,9 +1208,9 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 46,
-    padding: "11px 12px",
-    borderRadius: 13,
+    minHeight: 48,
+    padding: "12px 13px",
+    borderRadius: 14,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
@@ -1239,8 +1220,8 @@ const styles: Record<string, CSSProperties> = {
   },
   textarea: {
     width: "100%",
-    padding: "11px 12px",
-    borderRadius: 13,
+    padding: "12px 13px",
+    borderRadius: 14,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
@@ -1252,8 +1233,8 @@ const styles: Record<string, CSSProperties> = {
   previewInfoCard: {
     display: "grid",
     alignContent: "center",
-    minHeight: 46,
-    padding: "11px 12px",
+    minHeight: 48,
+    padding: "12px 13px",
     borderRadius: 16,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
@@ -1261,7 +1242,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 900,
   },
-  previewInfoEyebrow: {
+  previewInfoLabel: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -1280,7 +1261,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #dbeafe",
   },
-  boardPreviewHeader: {
+  boardPreviewTop: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
@@ -1288,7 +1269,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 14,
   },
-  boardPreviewEyebrow: {
+  boardPreviewLabel: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -1311,15 +1292,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
   },
-  boardPreviewGrid: {
+  boardGrid: {
     display: "grid",
-    gap: 8,
-    maxWidth: 360,
+    gap: 7,
   },
-  previewSquare: {
+  boardCell: {
     aspectRatio: "1 / 1",
-    minHeight: 42,
-    borderRadius: 12,
+    minHeight: 34,
+    borderRadius: 11,
     background:
       "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #eff6ff 100%)",
     border: "1px solid #dbeafe",
@@ -1332,7 +1312,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow:
       "inset 0 1px 0 rgba(255,255,255,0.9), 0 6px 14px rgba(15,23,42,0.04)",
   },
-  boardPreviewFootnote: {
+  boardFootnote: {
     color: "#64748b",
     fontSize: 13,
     lineHeight: 1.5,
@@ -1357,8 +1337,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     letterSpacing: "-0.01em",
   },
-  previewBox: {
-    height: 220,
+  previewBoxLarge: {
+    height: 230,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
     background: "#ffffff",
@@ -1368,12 +1348,12 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
   },
   previewPlaceholderImage: {
-    width: "min(82%, 200px)",
-    height: "min(82%, 200px)",
+    width: "min(82%, 205px)",
+    height: "min(82%, 205px)",
     objectFit: "contain",
     display: "block",
   },
-  prizePanel: {
+  prizeSectionShell: {
     display: "grid",
     gap: 14,
     padding: "clamp(14px, 4vw, 16px)",
@@ -1383,26 +1363,26 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
   },
-  prizePanelHeader: {
+  prizeSectionTop: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
-  prizePanelTitle: {
+  prizeSectionTitle: {
     color: "#0f172a",
     fontSize: 18,
     fontWeight: 950,
     letterSpacing: "-0.02em",
   },
-  prizePanelDescription: {
+  prizeSectionText: {
     marginTop: 4,
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
   },
-  goldButton: {
+  prizeAddButton: {
     padding: "10px 14px",
     borderRadius: 999,
     border: "1px solid #facc15",
@@ -1448,7 +1428,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     cursor: "pointer",
   },
-  dangerButton: {
+  removePrizeButton: {
     width: "fit-content",
     padding: "10px 12px",
     borderRadius: 999,
@@ -1459,7 +1439,7 @@ const styles: Record<string, CSSProperties> = {
   },
   legalBody: {
     display: "grid",
-    gap: 12,
+    gap: 14,
   },
   complianceRow: {
     display: "grid",
@@ -1505,10 +1485,11 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 14,
     flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 20,
+    padding: 18,
+    borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    marginTop: 8,
   },
   submitText: {
     minWidth: 0,
