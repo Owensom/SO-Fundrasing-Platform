@@ -11,7 +11,7 @@ import {
 } from "../../../../api/_lib/auctions-repo";
 
 const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
-const AUCTION_LOGO_IMAGE = "/brand/auction-gavel-gold.png";
+const AUCTION_LOGO_IMAGE = "/brand/so-default-auctions.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -103,7 +103,6 @@ async function updateAuctionStatusAction(formData: FormData) {
   }
 
   const auctions = await listAuctions(tenantSlug);
-
   const auction = auctions.find((item) => item.id === id);
 
   if (!auction || auction.tenant_slug !== tenantSlug) {
@@ -138,7 +137,6 @@ async function deleteAuctionAction(formData: FormData) {
   }
 
   const auctions = await listAuctions(tenantSlug);
-
   const auction = auctions.find((item) => item.id === id);
 
   if (!auction || auction.tenant_slug !== tenantSlug) {
@@ -163,22 +161,14 @@ export default async function AdminAuctionsPage({
   };
 }) {
   const tenantSlug = await requireAuctionDashboardAccess();
-
   const auctions = await listAuctions(tenantSlug);
 
   const totalAuctions = auctions.length;
-
   const published = auctions.filter(
     (auction) => auction.status === "published",
   ).length;
-
-  const draft = auctions.filter(
-    (auction) => auction.status === "draft",
-  ).length;
-
-  const closed = auctions.filter(
-    (auction) => auction.status === "closed",
-  ).length;
+  const draft = auctions.filter((auction) => auction.status === "draft").length;
+  const closed = auctions.filter((auction) => auction.status === "closed").length;
 
   return (
     <main style={styles.page}>
@@ -298,10 +288,10 @@ export default async function AdminAuctionsPage({
                         ...styles.image,
                         objectFit: hasCustomImage ? "cover" : "contain",
                         objectPosition: hasCustomImage
-                          ? `${focusValue(
-                              auction.image_focus_x,
-                            )}% ${focusValue(auction.image_focus_y)}%`
-                          : "center",
+                          ? `${focusValue(auction.image_focus_x)}% ${focusValue(
+                              auction.image_focus_y,
+                            )}%`
+                          : "center center",
                         padding: hasCustomImage ? 0 : 10,
                         background: hasCustomImage
                           ? "#f1f5f9"
@@ -334,6 +324,7 @@ export default async function AdminAuctionsPage({
                     <div style={styles.headlineGrid}>
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Opens</div>
+
                         <div style={styles.headlineValue}>
                           {formatDate(auction.opens_at)}
                         </div>
@@ -341,11 +332,20 @@ export default async function AdminAuctionsPage({
 
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Closes</div>
+
                         <div style={styles.headlineValue}>
                           {formatDate(auction.closes_at)}
                         </div>
                       </div>
                     </div>
+
+                    {auction.description ? (
+                      <p style={styles.description}>
+                        {auction.description.length > 140
+                          ? `${auction.description.slice(0, 140)}…`
+                          : auction.description}
+                      </p>
+                    ) : null}
 
                     <div style={styles.detailGrid}>
                       <InfoBlock
@@ -555,12 +555,11 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    display: "grid",
+    gridTemplateColumns: "240px minmax(0, 1fr)",
+    alignItems: "start",
     marginBottom: 22,
     gap: 16,
-    flexWrap: "wrap",
   },
   badge: {
     display: "inline-flex",
@@ -594,35 +593,38 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 18px",
+    padding: "13px 15px",
     borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 800,
+    whiteSpace: "nowrap",
   },
   navButtonActive: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 18px",
+    padding: "13px 15px",
     borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
     fontWeight: 900,
+    whiteSpace: "nowrap",
   },
   createButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 18px",
+    padding: "13px 15px",
     borderRadius: 9999,
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 800,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    whiteSpace: "nowrap",
   },
   successBox: {
     padding: 12,
@@ -782,6 +784,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 19,
     fontWeight: 950,
     letterSpacing: "-0.03em",
+    wordBreak: "break-word",
+  },
+  description: {
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.5,
+    margin: "10px 0 0",
   },
   detailGrid: {
     display: "grid",
@@ -868,6 +877,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 800,
     fontSize: 14,
+    boxShadow: "none",
   },
   deleteForm: {
     margin: 0,
