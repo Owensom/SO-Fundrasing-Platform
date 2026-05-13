@@ -130,7 +130,7 @@ export default function ImageFocusUploadField({
       {imageUrl ? (
         <>
           <div style={styles.previewGrid}>
-            <div>
+            <div style={styles.previewColumn}>
               <div style={styles.previewLabel}>Wide banner preview</div>
               <div style={styles.bannerPreview}>
                 <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
@@ -144,7 +144,7 @@ export default function ImageFocusUploadField({
               </div>
             </div>
 
-            <div>
+            <div style={styles.previewColumn}>
               <div style={styles.previewLabel}>Card preview</div>
               <div style={styles.cardPreview}>
                 <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
@@ -197,22 +197,49 @@ export default function ImageFocusUploadField({
 }
 
 const styles: Record<string, CSSProperties> = {
-  wrapper: { display: "grid", gap: 14 },
-  label: { display: "grid", gap: 7, color: "#0f172a", fontWeight: 900 },
+  wrapper: {
+    display: "grid",
+    gap: 14,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  label: {
+    display: "grid",
+    gap: 7,
+    color: "#0f172a",
+    fontWeight: 900,
+    minWidth: 0,
+    maxWidth: "100%",
+  },
   fileInput: {
     display: "block",
     width: "100%",
+    maxWidth: "100%",
     boxSizing: "border-box",
     padding: 10,
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
+    minWidth: 0,
   },
-  muted: { margin: 0, color: "#64748b", fontWeight: 800 },
+  muted: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+  },
   previewGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: 14,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+  },
+  previewColumn: {
+    minWidth: 0,
+    maxWidth: "100%",
   },
   previewLabel: {
     marginBottom: 8,
@@ -222,7 +249,9 @@ const styles: Record<string, CSSProperties> = {
   },
   bannerPreview: {
     position: "relative",
-    height: 190,
+    width: "100%",
+    minHeight: 170,
+    aspectRatio: "16 / 9",
     borderRadius: 18,
     overflow: "hidden",
     background: "#e2e8f0",
@@ -230,7 +259,9 @@ const styles: Record<string, CSSProperties> = {
   },
   cardPreview: {
     position: "relative",
-    height: 190,
+    width: "100%",
+    minHeight: 170,
+    aspectRatio: "4 / 3",
     borderRadius: 18,
     overflow: "hidden",
     background: "#e2e8f0",
@@ -248,15 +279,23 @@ const styles: Record<string, CSSProperties> = {
   },
   controls: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: 14,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
   },
-  range: { width: "100%" },
+  range: {
+    width: "100%",
+    maxWidth: "100%",
+  },
   urlText: {
     margin: 0,
     color: "#64748b",
     fontSize: 12,
     wordBreak: "break-all",
+    overflowWrap: "anywhere",
+    maxWidth: "100%",
   },
   emptyPreview: {
     padding: 18,
@@ -265,5 +304,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 };
