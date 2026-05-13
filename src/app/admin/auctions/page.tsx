@@ -11,12 +11,13 @@ import {
 } from "../../../../api/_lib/auctions-repo";
 
 const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
-const AUCTION_LOGO_IMAGE = "/brand/so-default-auctions.png";
+const AUCTION_LOGO_IMAGE = "/brand/auction-gavel-gold.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not set";
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -38,7 +39,7 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
 
   if (clean === "published") {
     return {
-      background: "#dcfce7",
+      background: "#ecfdf5",
       color: "#166534",
       borderColor: "#bbf7d0",
     };
@@ -53,7 +54,7 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   }
 
   return {
-    background: "#f1f5f9",
+    background: "#f8fafc",
     color: "#475569",
     borderColor: "#e2e8f0",
   };
@@ -66,7 +67,7 @@ function cleanAuctionStatus(value: FormDataEntryValue | null): AuctionStatus {
     return clean as AuctionStatus;
   }
 
-  return "draft" as AuctionStatus;
+  return "draft";
 }
 
 async function requireAuctionDashboardAccess() {
@@ -77,6 +78,7 @@ async function requireAuctionDashboardAccess() {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
@@ -101,24 +103,25 @@ async function updateAuctionStatusAction(formData: FormData) {
   }
 
   const auctions = await listAuctions(tenantSlug);
+
   const auction = auctions.find((item) => item.id === id);
 
   if (!auction || auction.tenant_slug !== tenantSlug) {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
- await updateAuction(id, {
-  title: auction.title,
-  slug: auction.slug,
-  description: auction.description ?? null,
-  imageUrl: auction.image_url ?? null,
-  imageFocusX: focusValue(auction.image_focus_x),
-  imageFocusY: focusValue(auction.image_focus_y),
-  status,
-  currency: auction.currency || "GBP",
-  opensAt: auction.opens_at ?? null,
-  closesAt: auction.closes_at ?? null,
-});
+  await updateAuction(id, {
+    title: auction.title,
+    slug: auction.slug,
+    description: auction.description ?? null,
+    imageUrl: auction.image_url ?? null,
+    imageFocusX: focusValue(auction.image_focus_x),
+    imageFocusY: focusValue(auction.image_focus_y),
+    status,
+    currency: auction.currency || "GBP",
+    opensAt: auction.opens_at ?? null,
+    closesAt: auction.closes_at ?? null,
+  });
 
   redirect("/admin/auctions?saved=status");
 }
@@ -135,6 +138,7 @@ async function deleteAuctionAction(formData: FormData) {
   }
 
   const auctions = await listAuctions(tenantSlug);
+
   const auction = auctions.find((item) => item.id === id);
 
   if (!auction || auction.tenant_slug !== tenantSlug) {
@@ -159,71 +163,67 @@ export default async function AdminAuctionsPage({
   };
 }) {
   const tenantSlug = await requireAuctionDashboardAccess();
+
   const auctions = await listAuctions(tenantSlug);
+
+  const totalAuctions = auctions.length;
 
   const published = auctions.filter(
     (auction) => auction.status === "published",
   ).length;
-  const draft = auctions.filter((auction) => auction.status === "draft").length;
-  const closed = auctions.filter((auction) => auction.status === "closed").length;
 
-  const liveAuctions = auctions.filter((auction) => auction.status !== "closed");
-  const closedAuctions = auctions.filter((auction) => auction.status === "closed");
+  const draft = auctions.filter(
+    (auction) => auction.status === "draft",
+  ).length;
+
+  const closed = auctions.filter(
+    (auction) => auction.status === "closed",
+  ).length;
 
   return (
     <main style={styles.page}>
-      <section style={styles.hero}>
-        <div style={styles.heroContent}>
-          <p style={styles.eyebrow}>Auctions admin</p>
+      <section style={styles.header}>
+        <div>
+          <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 className="so-brand-heading" style={styles.heroTitle}>
-            Manage auctions
-          </h1>
+          <h1 style={styles.title}>Manage auctions</h1>
 
-          <p style={styles.heroText}>
-            Create, publish, close and manage silent auction campaigns for{" "}
-            <strong>{tenantSlug}</strong>.
+          <p style={styles.subtitle}>
+            Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
           </p>
-
-          <div style={styles.heroActions}>
-            <Link href="/admin" style={styles.secondaryButton}>
-              ← Dashboard
-            </Link>
-
-            <Link href="/admin/auctions/new" style={styles.primaryButton}>
-              + Create auction
-            </Link>
-
-            <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.whiteButton}>
-              Public site
-            </Link>
-          </div>
         </div>
 
-        <div style={styles.heroImageWrap}>
-          <img
-            src={AUCTION_LOGO_IMAGE}
-            alt="SO Auctions"
-            style={styles.heroImage}
-          />
+        <div style={styles.nav}>
+          <Link href="/admin" style={styles.navButton}>
+            ← Dashboard
+          </Link>
+
+          <Link href="/admin/raffles" style={styles.navButton}>
+            Raffles
+          </Link>
+
+          <Link href="/admin/squares" style={styles.navButton}>
+            Squares
+          </Link>
+
+          <Link href="/admin/events" style={styles.navButton}>
+            Events
+          </Link>
+
+          <div style={styles.navButtonActive}>Auctions</div>
+
+          <Link
+            href={`/c/${tenantSlug}?adminReturn=/admin/auctions`}
+            style={styles.navButton}
+          >
+            Public site
+          </Link>
+
+          <Link href="/admin/auctions/new" style={styles.createButton}>
+            + Create auction
+          </Link>
         </div>
       </section>
-
-      <nav style={styles.tabs}>
-        <Link href="/admin/raffles" style={styles.tab}>
-          Raffles
-        </Link>
-
-        <Link href="/admin/squares" style={styles.tab}>
-          Squares
-        </Link>
-
-        <Link href="/admin/events" style={styles.tab}>
-          Events
-        </Link>
-
-        <span style={styles.tabActive}>Auctions</span>
-      </nav>
 
       {searchParams?.saved ? (
         <div style={styles.successBox}>Saved successfully.</div>
@@ -237,265 +237,207 @@ export default async function AdminAuctionsPage({
         </div>
       ) : null}
 
-      <CollapsibleSection
-        id="auction-overview"
-        eyebrow="Section 1"
-        title="Auction overview"
-        description="Headline totals and current campaign status."
-        defaultOpen
-      >
-        <section style={styles.statsGrid}>
-          <StatCard
-            label="Total auctions"
-            value={auctions.length}
-            image={AUCTION_LOGO_IMAGE}
-            accent="#1683f8"
-            tint="#eff6ff"
-          />
+      <section style={styles.statsGrid}>
+        <StatCard
+          label="Total auctions"
+          value={totalAuctions}
+          image={AUCTION_LOGO_IMAGE}
+          accent="#1683f8"
+          tint="#eff6ff"
+        />
 
-          <StatCard
-            label="Published"
-            value={published}
-            icon="✓"
-            accent="#16a34a"
-            tint="#ecfdf5"
-          />
+        <StatCard
+          label="Published"
+          value={published}
+          icon="✓"
+          accent="#16a34a"
+          tint="#ecfdf5"
+        />
 
-          <StatCard
-            label="Draft"
-            value={draft}
-            icon="•"
-            accent="#64748b"
-            tint="#f8fafc"
-          />
+        <StatCard
+          label="Draft"
+          value={draft}
+          icon="•"
+          accent="#64748b"
+          tint="#f8fafc"
+        />
 
-          <StatCard
-            label="Closed"
-            value={closed}
-            icon="×"
-            accent="#d97706"
-            tint="#fffbeb"
-          />
+        <StatCard
+          label="Closed"
+          value={closed}
+          icon="×"
+          accent="#d97706"
+          tint="#fffbeb"
+        />
+      </section>
+
+      {auctions.length === 0 ? (
+        <section style={styles.emptyCard}>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>No auctions yet</h2>
+
+          <p style={styles.muted}>Create your first auction campaign.</p>
+
+          <Link href="/admin/auctions/new" style={styles.createButton}>
+            + Create auction
+          </Link>
         </section>
-      </CollapsibleSection>
+      ) : (
+        <section style={styles.list}>
+          {auctions.map((auction) => {
+            const hasCustomImage = Boolean(auction.image_url);
+            const statusStyle = getStatusStyle(auction.status);
 
-      <CollapsibleSection
-        id="auction-campaigns"
-        eyebrow="Section 2"
-        title="Active auction campaigns"
-        description="Manage draft and published auctions. Delete is only available after an auction is closed."
-        defaultOpen
-      >
-        {auctions.length === 0 ? (
-          <section style={styles.emptyCard}>
-            <h2 className="so-brand-card-title" style={{ margin: 0 }}>
-              No auctions yet
-            </h2>
+            return (
+              <article key={auction.id} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div style={styles.imageWrap}>
+                    <img
+                      src={auction.image_url || DEFAULT_AUCTION_IMAGE}
+                      alt={auction.title || "Auction"}
+                      style={{
+                        ...styles.image,
+                        objectFit: hasCustomImage ? "cover" : "contain",
+                        objectPosition: hasCustomImage
+                          ? `${focusValue(
+                              auction.image_focus_x,
+                            )}% ${focusValue(auction.image_focus_y)}%`
+                          : "center",
+                        padding: hasCustomImage ? 0 : 10,
+                        background: hasCustomImage
+                          ? "#f1f5f9"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
 
-            <p style={styles.muted}>Create your first auction campaign.</p>
+                  <div style={styles.cardMain}>
+                    <div style={styles.cardHeader}>
+                      <div style={{ minWidth: 0 }}>
+                        <h2 style={styles.cardTitle}>
+                          {auction.title || "Untitled auction"}
+                        </h2>
 
-            <Link href="/admin/auctions/new" style={styles.primaryButton}>
-              + Create auction
-            </Link>
-          </section>
-        ) : liveAuctions.length === 0 ? (
-          <section style={styles.emptyCard}>
-            <h2 className="so-brand-card-title" style={{ margin: 0 }}>
-              No active auctions
-            </h2>
+                        <p style={styles.slug}>/a/{auction.slug}</p>
+                      </div>
 
-            <p style={styles.muted}>
-              Closed auctions are shown in the delete-after-close section below.
-            </p>
-          </section>
-        ) : (
-          <section style={styles.list}>
-            {liveAuctions.map((auction) => (
-              <AuctionCard
-                key={auction.id}
-                auction={auction}
-                statusAction={updateAuctionStatusAction}
-                deleteAction={deleteAuctionAction}
-              />
-            ))}
-          </section>
-        )}
-      </CollapsibleSection>
+                      <div
+                        style={{
+                          ...styles.status,
+                          ...statusStyle,
+                        }}
+                      >
+                        {auction.status}
+                      </div>
+                    </div>
 
-      <CollapsibleSection
-        id="closed-auctions"
-        eyebrow="Section 3"
-        title="Closed auctions and delete"
-        description="Delete controls only appear here once an auction has been closed."
-      >
-        {closedAuctions.length === 0 ? (
-          <section style={styles.emptyCard}>
-            <h2 className="so-brand-card-title" style={{ margin: 0 }}>
-              No closed auctions
-            </h2>
+                    <div style={styles.headlineGrid}>
+                      <div style={styles.headlineBox}>
+                        <div style={styles.headlineLabel}>Opens</div>
+                        <div style={styles.headlineValue}>
+                          {formatDate(auction.opens_at)}
+                        </div>
+                      </div>
 
-            <p style={styles.muted}>
-              Close an auction first before deleting it from the platform.
-            </p>
-          </section>
-        ) : (
-          <section style={styles.list}>
-            {closedAuctions.map((auction) => (
-              <AuctionCard
-                key={auction.id}
-                auction={auction}
-                statusAction={updateAuctionStatusAction}
-                deleteAction={deleteAuctionAction}
-                showDelete
-              />
-            ))}
-          </section>
-        )}
-      </CollapsibleSection>
-    </main>
-  );
-}
+                      <div style={styles.headlineBox}>
+                        <div style={styles.headlineLabel}>Closes</div>
+                        <div style={styles.headlineValue}>
+                          {formatDate(auction.closes_at)}
+                        </div>
+                      </div>
+                    </div>
 
-function AuctionCard({
-  auction,
-  statusAction,
-  deleteAction,
-  showDelete = false,
-}: {
-  auction: any;
-  statusAction: (formData: FormData) => Promise<void>;
-  deleteAction: (formData: FormData) => Promise<void>;
-  showDelete?: boolean;
-}) {
-  const hasCustomImage = Boolean(auction.image_url);
-  const publicStatus = auction.status === "published" ? "Visible" : "Not published";
+                    <div style={styles.detailGrid}>
+                      <InfoBlock
+                        label="Opens"
+                        value={formatDate(auction.opens_at)}
+                      />
 
-  return (
-    <article style={styles.card}>
-      <div style={styles.cardTop}>
-        <div style={styles.imageWrap}>
-          <img
-            src={auction.image_url || DEFAULT_AUCTION_IMAGE}
-            alt={auction.title || "SO Auctions"}
-            style={{
-              ...styles.image,
-              objectFit: hasCustomImage ? "cover" : "contain",
-              objectPosition: hasCustomImage
-                ? `${focusValue(auction.image_focus_x)}% ${focusValue(
-                    auction.image_focus_y,
-                  )}%`
-                : "center",
-              padding: hasCustomImage ? 0 : 18,
-              background: hasCustomImage
-                ? "#f1f5f9"
-                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
+                      <InfoBlock
+                        label="Closes"
+                        value={formatDate(auction.closes_at)}
+                      />
 
-        <div style={styles.cardMain}>
-          <div style={styles.cardHeader}>
-            <div style={{ minWidth: 0 }}>
-              <h2 className="so-brand-card-title" style={styles.cardTitle}>
-                {auction.title || "Untitled auction"}
-              </h2>
+                      <InfoBlock
+                        label="Currency"
+                        value={auction.currency || "GBP"}
+                      />
 
-              <p style={styles.slug}>/a/{auction.slug}</p>
-            </div>
+                      <InfoBlock
+                        label="Public page"
+                        value={
+                          auction.status === "published"
+                            ? "Visible"
+                            : "Not published"
+                        }
+                      />
+                    </div>
 
-            <span style={{ ...styles.status, ...getStatusStyle(auction.status) }}>
-              {auction.status}
-            </span>
-          </div>
+                    <div style={styles.toolSection}>
+                      <div style={styles.toolTitle}>Status tools</div>
 
-          <div style={styles.headlineGrid}>
-            <div style={styles.headlineBox}>
-              <div style={styles.headlineLabel}>Opens</div>
-              <div style={styles.headlineValue}>
-                {formatDate(auction.opens_at)}
-              </div>
-            </div>
+                      <div style={styles.toolActions}>
+                        <StatusButton
+                          auctionId={auction.id}
+                          status="draft"
+                          label="Set draft"
+                          action={updateAuctionStatusAction}
+                          disabled={auction.status === "draft"}
+                        />
 
-            <div style={styles.headlineBox}>
-              <div style={styles.headlineLabel}>Closes</div>
-              <div style={styles.headlineValue}>
-                {formatDate(auction.closes_at)}
-              </div>
-            </div>
-          </div>
+                        <StatusButton
+                          auctionId={auction.id}
+                          status="published"
+                          label="Publish"
+                          action={updateAuctionStatusAction}
+                          disabled={auction.status === "published"}
+                        />
 
-          <div style={styles.detailGrid}>
-            <Detail label="Opens" value={formatDate(auction.opens_at)} />
-            <Detail label="Closes" value={formatDate(auction.closes_at)} />
-            <Detail label="Currency" value={auction.currency || "GBP"} />
-            <Detail label="Public page" value={publicStatus} />
-          </div>
+                        <StatusButton
+                          auctionId={auction.id}
+                          status="closed"
+                          label="Close"
+                          action={updateAuctionStatusAction}
+                          disabled={auction.status === "closed"}
+                          danger
+                        />
 
-          <details style={styles.toolDetails}>
-            <summary style={styles.toolSummary}>
-              <span>Status tools</span>
-              <span style={styles.toolToggle}>Open / close</span>
-            </summary>
+                        {auction.status === "closed" ? (
+                          <form action={deleteAuctionAction} style={styles.deleteForm}>
+                            <input type="hidden" name="id" value={auction.id} />
 
-            <div style={styles.statusTools}>
-              <StatusButton
-                auctionId={auction.id}
-                status="draft"
-                label="Set draft"
-                action={statusAction}
-                disabled={auction.status === "draft"}
-              />
+                            <button type="submit" style={styles.deleteButton}>
+                              Delete
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    </div>
 
-              <StatusButton
-                auctionId={auction.id}
-                status="published"
-                label="Publish"
-                action={statusAction}
-                disabled={auction.status === "published"}
-              />
+                    <div style={styles.actions}>
+                      <Link
+                        href={`/admin/auctions/${auction.id}`}
+                        style={styles.primaryLink}
+                      >
+                        Open details
+                      </Link>
 
-              <StatusButton
-                auctionId={auction.id}
-                status="closed"
-                label="Close auction"
-                action={statusAction}
-                disabled={auction.status === "closed"}
-                danger
-              />
-
-              {showDelete ? (
-                <form action={deleteAction} style={styles.deleteForm}>
-                  <input type="hidden" name="id" value={auction.id} />
-                  <button type="submit" style={styles.deleteButton}>
-                    Delete closed auction
-                  </button>
-                </form>
-              ) : (
-                <div style={styles.deleteHint}>
-                  Delete appears after the auction is closed.
+                      <Link
+                        href={`/a/${auction.slug}?adminReturn=/admin/auctions/${auction.id}`}
+                        target="_blank"
+                        style={styles.secondaryLink}
+                      >
+                        View campaign
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          </details>
-
-          <div style={styles.actions}>
-            <Link href={`/admin/auctions/${auction.id}`} style={styles.openButton}>
-              Manage
-            </Link>
-
-            <a
-              href={`/a/${auction.slug}`}
-              target="_blank"
-              rel="noreferrer"
-              style={styles.viewButton}
-            >
-              View auction
-            </a>
-          </div>
-        </div>
-      </div>
-    </article>
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </main>
   );
 }
 
@@ -537,42 +479,6 @@ function StatusButton({
   );
 }
 
-function CollapsibleSection({
-  id,
-  title,
-  eyebrow,
-  description,
-  defaultOpen = false,
-  children,
-}: {
-  id: string;
-  title: string;
-  eyebrow?: string;
-  description?: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <details id={id} open={defaultOpen} style={styles.section}>
-      <summary style={styles.collapsibleSummary}>
-        <div style={styles.collapsibleHeading}>
-          {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
-
-          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-            {title}
-          </h2>
-
-          {description ? <p style={styles.sectionText}>{description}</p> : null}
-        </div>
-
-        <span style={styles.collapsibleToggle}>Open / close</span>
-      </summary>
-
-      <div style={styles.collapsibleBody}>{children}</div>
-    </details>
-  );
-}
-
 function StatCard({
   label,
   value,
@@ -607,12 +513,21 @@ function StatCard({
             background: tint,
             color: accent,
             borderColor: accent,
-            padding: image ? 5 : 0,
+            padding: image ? 4 : 0,
             overflow: "hidden",
           }}
         >
           {image ? (
-            <img src={image} alt={label} style={styles.statIconImage} />
+            <img
+              src={image}
+              alt={label}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
           ) : (
             icon
           )}
@@ -622,7 +537,7 @@ function StatCard({
   );
 }
 
-function Detail({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -635,135 +550,79 @@ const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: 1180,
     margin: "0 auto",
-    padding: "28px 16px 56px",
+    padding: "32px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
   },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 260px",
-    gap: 18,
-    alignItems: "center",
-    padding: 22,
-    borderRadius: 24,
-    background: "#0f172a",
-    color: "#ffffff",
-    marginBottom: 16,
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 22,
+    gap: 16,
+    flexWrap: "wrap",
   },
-  heroContent: {
-    minWidth: 0,
-  },
-  eyebrow: {
+  badge: {
     display: "inline-flex",
-    padding: "5px 9px",
+    padding: "6px 10px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    margin: "0 0 10px",
+    background: "#e0f2fe",
+    color: "#0369a1",
+    fontSize: 13,
+    fontWeight: 800,
+    marginBottom: 10,
   },
-  heroTitle: {
+  title: {
     margin: 0,
-    fontSize: 38,
-    lineHeight: 1.02,
-    letterSpacing: "-0.055em",
-    color: "#ffffff",
-    wordBreak: "break-word",
+    fontSize: 34,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    color: "#0f172a",
   },
-  heroText: {
-    margin: "12px 0 0",
-    color: "#cbd5e1",
-    lineHeight: 1.55,
-    maxWidth: 720,
+  subtitle: {
+    margin: "10px 0 0",
+    color: "#64748b",
+    fontSize: 15,
   },
-  heroActions: {
+  nav: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    marginTop: 18,
+    justifyContent: "flex-end",
   },
-  heroImageWrap: {
-    width: "100%",
-    height: 220,
-    borderRadius: 18,
-    background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    overflow: "hidden",
-    display: "grid",
-    placeItems: "center",
-  },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 28,
-    boxSizing: "border-box",
-    display: "block",
-  },
-  tabs: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  tab: {
-    padding: "10px 12px",
-    border: "1px solid #cbd5e1",
-    borderRadius: 999,
-    color: "#0f172a",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-  tabActive: {
-    padding: "10px 12px",
-    border: "1px solid #0f172a",
-    borderRadius: 999,
-    color: "#ffffff",
-    background: "#0f172a",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-  primaryButton: {
+  navButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "13px 18px",
-    borderRadius: 999,
+    borderRadius: 9999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+  navButtonActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
+    background: "#0f172a",
+    color: "#ffffff",
+    fontWeight: 900,
+  },
+  createButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 9999,
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.24)",
-    textDecoration: "none",
-    fontWeight: 900,
-  },
-  whiteButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "13px 18px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    textDecoration: "none",
-    fontWeight: 900,
   },
   successBox: {
     padding: 12,
@@ -783,64 +642,11 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 12,
     fontWeight: 900,
   },
-  section: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  collapsibleSummary: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    cursor: "pointer",
-    listStyle: "none",
-  },
-  collapsibleHeading: {
-    minWidth: 0,
-  },
-  collapsibleToggle: {
-    flexShrink: 0,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  collapsibleBody: {
-    marginTop: 16,
-  },
-  sectionEyebrow: {
-    margin: "0 0 6px",
-    color: "#2563eb",
-    fontWeight: 900,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.02em",
-  },
-  sectionText: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 12,
+    marginBottom: 22,
   },
   statCard: {
     padding: 16,
@@ -857,8 +663,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
   },
   statIcon: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
     borderRadius: 999,
     border: "1px solid",
     display: "inline-flex",
@@ -868,44 +674,49 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     flexShrink: 0,
   },
-  statIconImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    display: "block",
-  },
   statLabel: {
     color: "#64748b",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 800,
   },
   statValue: {
-    marginTop: 4,
-    fontSize: 28,
-    fontWeight: 950,
     color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 900,
+    marginTop: 4,
     letterSpacing: "-0.03em",
+  },
+  emptyCard: {
+    padding: 28,
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  muted: {
+    color: "#64748b",
+    margin: "8px 0 18px",
   },
   list: {
     display: "grid",
     gap: 16,
   },
   card: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
     border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    padding: 18,
+    background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "132px 1fr",
+    gridTemplateColumns: "104px 1fr",
     gap: 16,
     alignItems: "start",
   },
   imageWrap: {
-    width: 132,
-    height: 132,
+    width: 104,
+    height: 104,
     borderRadius: 20,
     overflow: "hidden",
     background: "#f1f5f9",
@@ -930,7 +741,6 @@ const styles: Record<string, CSSProperties> = {
   cardTitle: {
     margin: 0,
     fontSize: 22,
-    lineHeight: 1.15,
     color: "#0f172a",
     letterSpacing: "-0.02em",
     wordBreak: "break-word",
@@ -939,17 +749,15 @@ const styles: Record<string, CSSProperties> = {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: 14,
-    fontWeight: 700,
     wordBreak: "break-word",
   },
   status: {
-    display: "inline-flex",
     padding: "7px 11px",
-    borderRadius: 999,
+    borderRadius: 9999,
     border: "1px solid",
     fontSize: 13,
-    fontWeight: 900,
     textTransform: "capitalize",
+    fontWeight: 800,
   },
   headlineGrid: {
     display: "grid",
@@ -966,7 +774,7 @@ const styles: Record<string, CSSProperties> = {
   headlineLabel: {
     fontSize: 12,
     color: "#64748b",
-    fontWeight: 900,
+    fontWeight: 800,
   },
   headlineValue: {
     marginTop: 4,
@@ -974,7 +782,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 19,
     fontWeight: 950,
     letterSpacing: "-0.03em",
-    wordBreak: "break-word",
   },
   detailGrid: {
     display: "grid",
@@ -990,9 +797,9 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   detailLabel: {
-    color: "#64748b",
     fontSize: 12,
-    fontWeight: 900,
+    color: "#64748b",
+    fontWeight: 800,
   },
   detailValue: {
     marginTop: 4,
@@ -1000,41 +807,23 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     wordBreak: "break-word",
   },
-  toolDetails: {
+  toolSection: {
     marginTop: 16,
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
-  toolSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    cursor: "pointer",
-    listStyle: "none",
-    fontWeight: 950,
-    color: "#0f172a",
-  },
-  toolToggle: {
-    flexShrink: 0,
-    padding: "7px 10px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
+  toolTitle: {
     fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
+    color: "#0f172a",
+    fontSize: 14,
   },
-  statusTools: {
+  toolActions: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    marginTop: 14,
-    alignItems: "center",
+    marginTop: 12,
   },
   statusForm: {
     margin: 0,
@@ -1046,21 +835,16 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 14px",
     borderRadius: 999,
     border: "1px solid",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-  deleteHint: {
-    color: "#64748b",
-    fontSize: 13,
     fontWeight: 800,
+    fontSize: 14,
   },
   actions: {
     display: "flex",
     gap: 10,
-    flexWrap: "wrap",
     marginTop: 18,
+    flexWrap: "wrap",
   },
-  openButton: {
+  primaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1069,10 +853,10 @@ const styles: Record<string, CSSProperties> = {
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
   },
-  viewButton: {
+  secondaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1082,9 +866,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     border: "1px solid #dbe3ef",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
-    boxShadow: "none",
   },
   deleteForm: {
     margin: 0,
@@ -1098,19 +881,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#dc2626",
     color: "#ffffff",
     border: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
     cursor: "pointer",
-  },
-  emptyCard: {
-    padding: 28,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  muted: {
-    color: "#64748b",
-    margin: "8px 0 18px",
   },
 };
