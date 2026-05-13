@@ -39,26 +39,38 @@ export default function RootLayout({
           color: "#111111",
           fontFamily:
             '"Sora", Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          overflowX: "hidden",
         }}
       >
         <header
           style={{
             width: "100%",
+            maxWidth: "100vw",
             borderBottom: "1px solid #e5e7eb",
             background: "#ffffff",
+            overflowX: "hidden",
           }}
         >
           <div
             style={{
               maxWidth: "1200px",
+              width: "100%",
               margin: "0 auto",
-              padding: "20px 24px",
+              padding: "16px 16px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              boxSizing: "border-box",
             }}
           >
-            <Link href="/" aria-label="SO Fundraising Platform home">
+            <Link
+              href="/"
+              aria-label="SO Fundraising Platform home"
+              style={{
+                display: "inline-flex",
+                maxWidth: "100%",
+              }}
+            >
               <Image
                 src="/brand/so-logo-full.png"
                 alt="SO Fundraising Platform"
@@ -66,8 +78,9 @@ export default function RootLayout({
                 height={140}
                 priority
                 style={{
-                  height: "72px",
+                  height: "clamp(48px, 12vw, 72px)",
                   width: "auto",
+                  maxWidth: "100%",
                   objectFit: "contain",
                 }}
               />
@@ -78,6 +91,10 @@ export default function RootLayout({
         <main
           style={{
             minHeight: "calc(100vh - 180px)",
+            width: "100%",
+            maxWidth: "100vw",
+            overflowX: "hidden",
+            boxSizing: "border-box",
           }}
         >
           {children}
@@ -88,16 +105,21 @@ export default function RootLayout({
             borderTop: "1px solid #e5e7eb",
             background: "#ffffff",
             marginTop: "40px",
+            width: "100%",
+            maxWidth: "100vw",
+            overflowX: "hidden",
           }}
         >
           <div
             style={{
               maxWidth: "1200px",
+              width: "100%",
               margin: "0 auto",
-              padding: "24px 20px",
+              padding: "24px 16px",
               textAlign: "center",
               fontSize: "12px",
               color: "#607085",
+              boxSizing: "border-box",
             }}
           >
             <Image
