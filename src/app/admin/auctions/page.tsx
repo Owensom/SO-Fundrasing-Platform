@@ -163,17 +163,17 @@ export default async function AdminAuctionsPage({
   const tenantSlug = await requireAuctionDashboardAccess();
   const auctions = await listAuctions(tenantSlug);
 
-  const totalAuctions = auctions.length;
   const published = auctions.filter(
     (auction) => auction.status === "published",
   ).length;
+
   const draft = auctions.filter((auction) => auction.status === "draft").length;
   const closed = auctions.filter((auction) => auction.status === "closed").length;
 
   return (
     <main style={styles.page}>
       <section style={styles.header}>
-        <div>
+        <div style={styles.headerText}>
           <div style={styles.badge}>Admin dashboard</div>
 
           <h1 style={styles.title}>Manage auctions</h1>
@@ -230,7 +230,7 @@ export default async function AdminAuctionsPage({
       <section style={styles.statsGrid}>
         <StatCard
           label="Total auctions"
-          value={totalAuctions}
+          value={auctions.length}
           image={AUCTION_LOGO_IMAGE}
           accent="#1683f8"
           tint="#eff6ff"
@@ -275,7 +275,6 @@ export default async function AdminAuctionsPage({
         <section style={styles.list}>
           {auctions.map((auction) => {
             const hasCustomImage = Boolean(auction.image_url);
-            const statusStyle = getStatusStyle(auction.status);
 
             return (
               <article key={auction.id} style={styles.card}>
@@ -283,7 +282,7 @@ export default async function AdminAuctionsPage({
                   <div style={styles.imageWrap}>
                     <img
                       src={auction.image_url || DEFAULT_AUCTION_IMAGE}
-                      alt={auction.title || "Auction"}
+                      alt={auction.title || "SO Auctions"}
                       style={{
                         ...styles.image,
                         objectFit: hasCustomImage ? "cover" : "contain",
@@ -292,7 +291,7 @@ export default async function AdminAuctionsPage({
                               auction.image_focus_y,
                             )}%`
                           : "center center",
-                        padding: hasCustomImage ? 0 : 10,
+                        padding: hasCustomImage ? 0 : 12,
                         background: hasCustomImage
                           ? "#f1f5f9"
                           : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
@@ -311,14 +310,14 @@ export default async function AdminAuctionsPage({
                         <p style={styles.slug}>/a/{auction.slug}</p>
                       </div>
 
-                      <div
+                      <span
                         style={{
                           ...styles.status,
-                          ...statusStyle,
+                          ...getStatusStyle(auction.status),
                         }}
                       >
                         {auction.status}
-                      </div>
+                      </span>
                     </div>
 
                     <div style={styles.headlineGrid}>
@@ -341,8 +340,8 @@ export default async function AdminAuctionsPage({
 
                     {auction.description ? (
                       <p style={styles.description}>
-                        {auction.description.length > 140
-                          ? `${auction.description.slice(0, 140)}…`
+                        {auction.description.length > 150
+                          ? `${auction.description.slice(0, 150)}…`
                           : auction.description}
                       </p>
                     ) : null}
@@ -555,11 +554,16 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
   },
   header: {
-    display: "grid",
-    gridTemplateColumns: "240px minmax(0, 1fr)",
-    alignItems: "start",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 22,
     gap: 16,
+    flexWrap: "nowrap",
+  },
+  headerText: {
+    flex: "0 0 auto",
+    minWidth: 240,
   },
   badge: {
     display: "inline-flex",
@@ -577,6 +581,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.1,
     letterSpacing: "-0.04em",
     color: "#0f172a",
+    whiteSpace: "nowrap",
   },
   subtitle: {
     margin: "10px 0 0",
@@ -585,15 +590,17 @@ const styles: Record<string, CSSProperties> = {
   },
   nav: {
     display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
+    gap: 8,
+    flexWrap: "nowrap",
     justifyContent: "flex-end",
+    alignItems: "flex-start",
+    minWidth: 0,
   },
   navButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 15px",
+    padding: "13px 13px",
     borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
@@ -606,7 +613,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 15px",
+    padding: "13px 13px",
     borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
@@ -617,7 +624,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 15px",
+    padding: "13px 14px",
     borderRadius: 9999,
     background: "#1683f8",
     color: "#ffffff",
