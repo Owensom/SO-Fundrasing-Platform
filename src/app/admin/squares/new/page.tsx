@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
@@ -264,6 +265,16 @@ export default function NewSquaresGamePage() {
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="question" value={questionValue} />
       <input type="hidden" name="free_entry" value={freeEntryValue} />
+
+      <section style={styles.topActions}>
+        <Link href="/admin/squares" style={styles.backButton}>
+          ← Back to squares
+        </Link>
+
+        <Link href="/admin" style={styles.dashboardButton}>
+          Dashboard
+        </Link>
+      </section>
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
@@ -963,6 +974,40 @@ const styles: Record<string, CSSProperties> = {
     margin: "40px auto",
     padding: "0 16px 64px",
     boxSizing: "border-box",
+  },
+  topActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 2,
+  },
+  backButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+  },
+  dashboardButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
   },
   hero: {
     display: "grid",
