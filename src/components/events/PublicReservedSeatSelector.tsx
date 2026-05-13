@@ -128,77 +128,60 @@ function publicSeatStyle({
 }): CSSProperties {
   const colour = colourForTicketType(ticketType, ticketTypes);
 
+  const base: CSSProperties = {
+    minWidth: 36,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    fontSize: 12,
+    fontWeight: 900,
+    padding: 0,
+    boxSizing: "border-box",
+  };
+
   if (status === "blocked") {
     return {
-      minWidth: 36,
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+      ...base,
       border: selected ? "1px solid #0284c7" : "1px solid #64748b",
       background: selected ? "#bae6fd" : "#334155",
       color: selected ? "#082f49" : "#e2e8f0",
       boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
-      fontSize: 12,
-      fontWeight: 900,
       cursor: "not-allowed",
       opacity: 0.9,
-      padding: 0,
-      boxSizing: "border-box",
     };
   }
 
   if (status === "sold") {
     return {
-      minWidth: 36,
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+      ...base,
       border: selected ? "1px solid #0284c7" : "1px solid #991b1b",
       background: selected ? "#bae6fd" : "#fecaca",
       color: selected ? "#082f49" : "#7f1d1d",
       boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
-      fontSize: 12,
-      fontWeight: 900,
       cursor: "not-allowed",
       opacity: 0.9,
-      padding: 0,
-      boxSizing: "border-box",
     };
   }
 
   if (status === "reserved") {
     return {
-      minWidth: 36,
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+      ...base,
       border: selected ? "1px solid #0284c7" : "1px solid #f59e0b",
       background: selected ? "#bae6fd" : "#fef3c7",
       color: selected ? "#082f49" : "#92400e",
       boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
-      fontSize: 12,
-      fontWeight: 900,
       cursor: "not-allowed",
       opacity: 0.9,
-      padding: 0,
-      boxSizing: "border-box",
     };
   }
 
   return {
-    minWidth: 36,
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    ...base,
     border: selected ? "1px solid #0284c7" : "1px solid #cbd5e1",
     background: selected ? "#bae6fd" : colour.background,
     color: selected ? "#082f49" : colour.text,
     boxShadow: selected ? "0 0 0 3px rgba(14,165,233,0.35)" : "none",
-    fontSize: 12,
-    fontWeight: 900,
     cursor: "pointer",
-    padding: 0,
-    boxSizing: "border-box",
   };
 }
 
@@ -306,8 +289,7 @@ export default function PublicReservedSeatSelector({
   function removeSeat(seatId: string) {
     setCartItems((current) => current.filter((item) => item.seatId !== seatId));
   }
-
-  async function startCheckout() {
+    async function startCheckout() {
     if (isCheckingOut) return;
 
     if (!buyerName.trim() || !buyerEmail.trim()) {
@@ -407,12 +389,17 @@ export default function PublicReservedSeatSelector({
             }
 
             .public-reserved-selector-row-line {
-              grid-template-columns: 64px 1fr !important;
-              gap: 8px !important;
+              grid-template-columns: 58px 1fr !important;
+              gap: 7px !important;
             }
 
             .public-reserved-selector-row-label {
-              font-size: 11px !important;
+              font-size: 10px !important;
+              min-height: 34px !important;
+            }
+
+            .public-reserved-selector-stage {
+              min-width: 620px !important;
             }
           }
         `}
@@ -440,7 +427,9 @@ export default function PublicReservedSeatSelector({
           </div>
 
           <div style={styles.stageWrap}>
-            <div style={styles.stage}>STAGE</div>
+            <div className="public-reserved-selector-stage" style={styles.stage}>
+              STAGE
+            </div>
           </div>
 
           <div className="public-reserved-selector-seat-scroll" style={styles.seatMapScroll}>
@@ -650,8 +639,7 @@ export default function PublicReservedSeatSelector({
                             ))}
                           </select>
                         </label>
-
-                        <label style={styles.field}>
+                                                <label style={styles.field}>
                           <span style={styles.label}>Guest name</span>
                           <input
                             value={data.guestName}
@@ -734,7 +722,7 @@ export default function PublicReservedSeatSelector({
                 />
                 <span>
                   <strong>I’d like to cover platform fees</strong>
-                  <small>
+                  <small style={styles.feeSmall}>
                     Adds approximately {currency}{" "}
                     {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so
                     the organiser receives the full ticket value.
@@ -789,9 +777,10 @@ const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr)",
-    gap: 24,
+    gap: 20,
     alignItems: "stretch",
     width: "100%",
+    minWidth: 0,
   },
   mapPanel: {
     display: "flex",
@@ -874,6 +863,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    WebkitOverflowScrolling: "touch",
   },
   groupBlock: {
     display: "grid",
@@ -1018,14 +1008,14 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
     textAlign: "center",
   },
-emptyTicketImage: {
-  width: 150,
-  height: 96,
-  objectFit: "contain",
-  display: "block",
-  margin: "0 auto 12px",
-  filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.32))",
-},
+  emptyTicketImage: {
+    width: 150,
+    height: 96,
+    objectFit: "contain",
+    display: "block",
+    margin: "0 auto 12px",
+    filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.32))",
+  },
   emptyTitle: {
     margin: "8px 0 0",
     color: "#ffffff",
@@ -1043,6 +1033,7 @@ emptyTicketImage: {
     maxHeight: "58vh",
     overflow: "auto",
     paddingRight: 4,
+    WebkitOverflowScrolling: "touch",
   },
   cartItem: {
     display: "grid",
@@ -1051,18 +1042,21 @@ emptyTicketImage: {
     border: "1px solid rgba(255,255,255,0.12)",
     borderRadius: 20,
     background: "rgba(255,255,255,0.055)",
+    minWidth: 0,
   },
   cartItemHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 10,
     alignItems: "flex-start",
+    flexWrap: "wrap",
   },
   cartSeatLabel: {
     margin: 0,
     color: "#ffffff",
     fontWeight: 950,
     fontSize: 15,
+    overflowWrap: "anywhere",
   },
   cartPrice: {
     margin: "3px 0 0",
@@ -1082,6 +1076,7 @@ emptyTicketImage: {
   field: {
     display: "grid",
     gap: 5,
+    minWidth: 0,
   },
   label: {
     color: "#cbd5e1",
@@ -1098,6 +1093,7 @@ emptyTicketImage: {
     color: "#0f172a",
     fontSize: 14,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
@@ -1109,11 +1105,13 @@ emptyTicketImage: {
     fontSize: 14,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   totalBox: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 14,
     padding: 15,
     borderRadius: 18,
@@ -1126,6 +1124,7 @@ emptyTicketImage: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 10,
     padding: 15,
     borderRadius: 18,
@@ -1146,6 +1145,13 @@ emptyTicketImage: {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
     cursor: "pointer",
+    lineHeight: 1.35,
+  },
+  feeSmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#cbd5e1",
+    lineHeight: 1.4,
   },
   checkout: {
     marginTop: 14,
