@@ -6,7 +6,9 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listSquaresGames } from "../../../../api/_lib/squares-repo";
 
 const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
-const SQUARES_LOGO_IMAGE = "/brand/so-default-squares.png";
+const SQUARES_LOGO_IMAGE = "/brand/squares-square-gold.png";
+
+type SquaresGame = Awaited<ReturnType<typeof listSquaresGames>>[number];
 
 function formatMoney(
   cents: number | null | undefined,
@@ -76,11 +78,11 @@ function progressPercent(sold: number, total: number) {
   return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
 }
 
-function getSoldSquares(game: Awaited<ReturnType<typeof listSquaresGames>>[number]) {
+function getSoldSquares(game: SquaresGame) {
   return Array.isArray(game.config_json?.sold) ? game.config_json.sold.length : 0;
 }
 
-function getRaisedCents(game: Awaited<ReturnType<typeof listSquaresGames>>[number]) {
+function getRaisedCents(game: SquaresGame) {
   return getSoldSquares(game) * Number(game.price_per_square_cents || 0);
 }
 
@@ -93,7 +95,7 @@ export default async function AdminSquaresListPage() {
 
   const tenantSlug = await getTenantSlugFromHeaders();
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((v) => String(v))
+    ? session.user.tenantSlugs.map((value) => String(value))
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
@@ -102,7 +104,8 @@ export default async function AdminSquaresListPage() {
 
   const games = await listSquaresGames(tenantSlug);
 
-  const published = games.filter((game) => game.status === "published").length;
+  const totalGames = games.length;
+  const publishedCount = games.filter((game) => game.status === "published").length;
 
   const totalSquares = games.reduce(
     (sum, game) => sum + Number(game.total_squares || 0),
@@ -111,10 +114,12 @@ export default async function AdminSquaresListPage() {
 
   const soldSquares = games.reduce((sum, game) => sum + getSoldSquares(game), 0);
   const remainingSquares = Math.max(totalSquares - soldSquares, 0);
+
   const totalRaisedCents = games.reduce(
     (sum, game) => sum + getRaisedCents(game),
     0,
   );
+
   const dashboardCurrency = games[0]?.currency || "GBP";
 
   return (
@@ -123,9 +128,7 @@ export default async function AdminSquaresListPage() {
         <div>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 className="so-brand-heading" style={styles.title}>
-            Manage squares
-          </h1>
+          <h1 style={styles.title}>Manage squares</h1>
 
           <p style={styles.subtitle}>
             Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
@@ -152,8 +155,7 @@ export default async function AdminSquaresListPage() {
           </Link>
 
           <Link
-            href={`/c/${tenantSlug}`}
-            target="_blank"
+            href={`/c/${tenantSlug}?adminReturn=/admin/squares`}
             style={styles.navButton}
           >
             Public site
@@ -168,7 +170,7 @@ export default async function AdminSquaresListPage() {
       <section style={styles.statsGrid}>
         <StatCard
           label="Total square games"
-          value={games.length}
+          value={totalGames}
           image={SQUARES_LOGO_IMAGE}
           accent="#1683f8"
           tint="#eff6ff"
@@ -176,7 +178,7 @@ export default async function AdminSquaresListPage() {
 
         <StatCard
           label="Published"
-          value={published}
+          value={publishedCount}
           icon="✓"
           accent="#16a34a"
           tint="#ecfdf5"
@@ -209,9 +211,7 @@ export default async function AdminSquaresListPage() {
 
       {games.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 className="so-brand-card-title" style={{ margin: 0 }}>
-            No squares games yet
-          </h2>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>No squares games yet</h2>
 
           <p style={styles.muted}>Create your first squares game.</p>
 
@@ -227,6 +227,7 @@ export default async function AdminSquaresListPage() {
             const remaining = Math.max(total - sold, 0);
             const progress = progressPercent(sold, total);
             const raisedCents = getRaisedCents(game);
+            const statusStyle = getStatusStyle(game.status);
 
             return (
               <article key={game.id} style={styles.card}>
@@ -234,14 +235,14 @@ export default async function AdminSquaresListPage() {
                   <div style={styles.imageWrap}>
                     <img
                       src={game.image_url || DEFAULT_SQUARES_IMAGE}
-                      alt={game.title || "SO Squares"}
+                      alt={game.title || "Squares"}
                       style={{
                         ...styles.image,
                         objectFit: game.image_url ? "cover" : "contain",
-                        padding: game.image_url ? 0 : 12,
+                        padding: game.image_url ? 0 : 10,
                         background: game.image_url
                           ? "#f1f5f9"
-                          : "linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f8fafc 100%)",
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
                         boxSizing: "border-box",
                       }}
                     />
@@ -250,24 +251,21 @@ export default async function AdminSquaresListPage() {
                   <div style={styles.cardMain}>
                     <div style={styles.cardHeader}>
                       <div style={{ minWidth: 0 }}>
-                        <h2
-                          className="so-brand-card-title"
-                          style={styles.cardTitle}
-                        >
+                        <h2 style={styles.cardTitle}>
                           {game.title || "Untitled squares game"}
                         </h2>
 
                         <p style={styles.slug}>/s/{game.slug}</p>
                       </div>
 
-                      <span
+                      <div
                         style={{
                           ...styles.status,
-                          ...getStatusStyle(game.status),
+                          ...statusStyle,
                         }}
                       >
                         {game.status}
-                      </span>
+                      </div>
                     </div>
 
                     <div style={styles.headlineGrid}>
@@ -285,7 +283,7 @@ export default async function AdminSquaresListPage() {
                     </div>
 
                     <div style={styles.detailGrid}>
-                      <Detail
+                      <InfoBlock
                         label="Price"
                         value={formatMoney(
                           game.price_per_square_cents,
@@ -293,46 +291,49 @@ export default async function AdminSquaresListPage() {
                         )}
                       />
 
-                      <Detail
+                      <InfoBlock
                         label="Draw date"
                         value={formatDrawDate(game.draw_at)}
                       />
 
-                      <Detail label="Total" value={total} />
-                      <Detail label="Sold" value={sold} />
-                      <Detail label="Remaining" value={remaining} />
+                      <InfoBlock label="Total" value={total} />
+
+                      <InfoBlock label="Sold" value={sold} />
+
+                      <InfoBlock label="Remaining" value={remaining} />
                     </div>
 
-                    <div style={styles.progressRow}>
-                      <div style={styles.progressLabel}>Sales progress</div>
-                      <div style={styles.progressPercent}>{progress}%</div>
-                    </div>
+                    <div style={styles.progressSection}>
+                      <div style={styles.progressHeader}>
+                        <span>Sales progress</span>
+                        <span>{progress}%</span>
+                      </div>
 
-                    <div style={styles.progressTrack}>
-                      <div
-                        style={{
-                          ...styles.progressFill,
-                          width: `${progress}%`,
-                        }}
-                      />
+                      <div style={styles.progressTrack}>
+                        <div
+                          style={{
+                            ...styles.progressFill,
+                            width: `${progress}%`,
+                          }}
+                        />
+                      </div>
                     </div>
 
                     <div style={styles.actions}>
                       <Link
                         href={`/admin/squares/${game.id}`}
-                        style={styles.openButton}
+                        style={styles.primaryLink}
                       >
                         Open details
                       </Link>
 
-                      <a
-                        href={`/s/${game.slug}`}
+                      <Link
+                        href={`/s/${game.slug}?adminReturn=/admin/squares/${game.id}`}
                         target="_blank"
-                        rel="noreferrer"
-                        style={styles.viewButton}
+                        style={styles.secondaryLink}
                       >
                         View campaign
-                      </a>
+                      </Link>
 
                       <form
                         action={`/api/admin/squares/${game.id}/delete`}
@@ -413,7 +414,7 @@ function StatCard({
   );
 }
 
-function Detail({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -433,10 +434,10 @@ const styles: Record<string, CSSProperties> = {
   header: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 16,
     alignItems: "flex-start",
-    flexWrap: "wrap",
     marginBottom: 22,
+    gap: 16,
+    flexWrap: "wrap",
   },
   badge: {
     display: "inline-flex",
@@ -445,7 +446,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#e0f2fe",
     color: "#0369a1",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 800,
     marginBottom: 10,
   },
   title: {
@@ -476,7 +477,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
   },
   navButtonActive: {
     display: "inline-flex",
@@ -486,8 +487,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 9999,
     background: "#0f172a",
     color: "#ffffff",
-    border: "1px solid #0f172a",
-    textDecoration: "none",
     fontWeight: 900,
   },
   createButton: {
@@ -499,7 +498,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#1683f8",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
   statsGrid: {
@@ -537,24 +536,35 @@ const styles: Record<string, CSSProperties> = {
   statLabel: {
     color: "#64748b",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 800,
   },
   statValue: {
-    marginTop: 4,
-    fontSize: 28,
-    fontWeight: 950,
     color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 900,
+    marginTop: 4,
     letterSpacing: "-0.03em",
+  },
+  emptyCard: {
+    padding: 28,
+    border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  muted: {
+    color: "#64748b",
+    margin: "8px 0 18px",
   },
   list: {
     display: "grid",
     gap: 16,
   },
   card: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
     border: "1px solid #e2e8f0",
+    borderRadius: 22,
+    padding: 18,
+    background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   cardTop: {
@@ -570,7 +580,6 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
-    position: "relative",
     boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
   },
   image: {
@@ -592,7 +601,6 @@ const styles: Record<string, CSSProperties> = {
   cardTitle: {
     margin: 0,
     fontSize: 22,
-    lineHeight: 1.15,
     color: "#0f172a",
     letterSpacing: "-0.02em",
     wordBreak: "break-word",
@@ -601,17 +609,15 @@ const styles: Record<string, CSSProperties> = {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: 14,
-    fontWeight: 700,
     wordBreak: "break-word",
   },
   status: {
-    display: "inline-flex",
     padding: "7px 11px",
     borderRadius: 9999,
     border: "1px solid",
     fontSize: 13,
-    fontWeight: 900,
     textTransform: "capitalize",
+    fontWeight: 800,
   },
   headlineGrid: {
     display: "grid",
@@ -628,7 +634,7 @@ const styles: Record<string, CSSProperties> = {
   headlineLabel: {
     fontSize: 12,
     color: "#64748b",
-    fontWeight: 900,
+    fontWeight: 800,
   },
   headlineValue: {
     marginTop: 4,
@@ -651,9 +657,9 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   detailLabel: {
-    color: "#64748b",
     fontSize: 12,
-    fontWeight: 900,
+    color: "#64748b",
+    fontWeight: 800,
   },
   detailValue: {
     marginTop: 4,
@@ -661,23 +667,23 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     wordBreak: "break-word",
   },
-  progressRow: {
+  progressSection: {
+    marginTop: 16,
+  },
+  progressHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 10,
-    marginTop: 16,
     color: "#64748b",
-    fontWeight: 900,
     fontSize: 13,
+    fontWeight: 700,
+    marginBottom: 6,
   },
-  progressLabel: {},
-  progressPercent: {},
   progressTrack: {
     height: 10,
-    background: "#e2e8f0",
     borderRadius: 999,
+    background: "#e2e8f0",
     overflow: "hidden",
-    marginTop: 8,
   },
   progressFill: {
     height: "100%",
@@ -687,10 +693,10 @@ const styles: Record<string, CSSProperties> = {
   actions: {
     display: "flex",
     gap: 10,
-    flexWrap: "wrap",
     marginTop: 18,
+    flexWrap: "wrap",
   },
-  openButton: {
+  primaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -699,10 +705,10 @@ const styles: Record<string, CSSProperties> = {
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
   },
-  viewButton: {
+  secondaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -712,7 +718,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     border: "1px solid #dbe3ef",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
     boxShadow: "none",
   },
@@ -728,19 +734,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#dc2626",
     color: "#ffffff",
     border: "none",
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 14,
     cursor: "pointer",
-  },
-  emptyCard: {
-    padding: 28,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  muted: {
-    color: "#64748b",
-    margin: "8px 0 18px",
   },
 };
