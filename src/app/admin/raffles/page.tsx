@@ -161,19 +161,23 @@ export default async function AdminRafflesPage() {
   const dashboardCurrency = raffles[0]?.currency || "GBP";
 
   return (
-    <main style={styles.page}>
-      <section style={styles.header}>
-        <div>
+    <main className="raffles-admin-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="raffles-admin-header" style={styles.header}>
+        <div style={styles.headerCopy}>
           <div style={styles.badge}>Admin dashboard</div>
 
-          <h1 style={styles.title}>Manage raffles</h1>
+          <h1 className="raffles-admin-title" style={styles.title}>
+            Manage raffles
+          </h1>
 
-          <p style={styles.subtitle}>
+          <p className="raffles-admin-subtitle" style={styles.subtitle}>
             Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
           </p>
         </div>
 
-        <div style={styles.nav}>
+        <div className="raffles-admin-nav" style={styles.nav}>
           <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
@@ -205,7 +209,7 @@ export default async function AdminRafflesPage() {
         </div>
       </section>
 
-      <section style={styles.statsGrid}>
+      <section className="raffles-stats-grid" style={styles.statsGrid}>
         <StatCard
           label="Total raffles"
           value={totalRaffles}
@@ -267,9 +271,9 @@ export default async function AdminRafflesPage() {
             const raised = getRaisedTotal(raffle);
 
             return (
-              <article key={raffle.id} style={styles.card}>
-                <div style={styles.cardTop}>
-                  <div style={styles.imageWrap}>
+              <article key={raffle.id} className="raffle-card" style={styles.card}>
+                <div className="raffle-card-top" style={styles.cardTop}>
+                  <div className="raffle-image-wrap" style={styles.imageWrap}>
                     <img
                       src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
                       alt={raffle.title || "Raffle"}
@@ -286,24 +290,21 @@ export default async function AdminRafflesPage() {
                   </div>
 
                   <div style={styles.cardMain}>
-                    <div style={styles.cardHeader}>
+                    <div className="raffle-card-header" style={styles.cardHeader}>
                       <div style={{ minWidth: 0 }}>
-                        <h2 style={styles.cardTitle}>{raffle.title}</h2>
+                        <h2 className="raffle-card-title" style={styles.cardTitle}>
+                          {raffle.title}
+                        </h2>
 
                         <p style={styles.slug}>/r/{raffle.slug}</p>
                       </div>
 
-                      <div
-                        style={{
-                          ...styles.status,
-                          ...statusStyle,
-                        }}
-                      >
+                      <div style={{ ...styles.status, ...statusStyle }}>
                         {raffle.status}
                       </div>
                     </div>
 
-                    <div style={styles.headlineGrid}>
+                    <div className="raffle-headline-grid" style={styles.headlineGrid}>
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Sales progress</div>
                         <div style={styles.headlineValue}>{progress}% sold</div>
@@ -325,7 +326,7 @@ export default async function AdminRafflesPage() {
                       </p>
                     ) : null}
 
-                    <div style={styles.detailGrid}>
+                    <div className="raffle-detail-grid" style={styles.detailGrid}>
                       <InfoBlock
                         label="Price"
                         value={formatCurrency(
@@ -365,7 +366,7 @@ export default async function AdminRafflesPage() {
                       </div>
                     </div>
 
-                    <div style={styles.actions}>
+                    <div className="raffle-card-actions" style={styles.actions}>
                       <Link
                         href={`/admin/raffles/${raffle.id}`}
                         style={styles.primaryLink}
@@ -409,15 +410,18 @@ function StatCard({
 }) {
   return (
     <div
+      className="raffles-stat-card"
       style={{
         ...styles.statCard,
         borderTopColor: accent,
       }}
     >
       <div style={styles.statTop}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
-          <div style={styles.statValue}>{value}</div>
+          <div className="raffles-stat-value" style={styles.statValue}>
+            {value}
+          </div>
         </div>
 
         <div
@@ -459,13 +463,174 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+const responsiveStyles = `
+  .raffles-admin-page,
+  .raffles-admin-page * {
+    box-sizing: border-box;
+  }
+
+  .raffles-admin-page {
+    overflow-x: hidden;
+  }
+
+  @media (max-width: 900px) {
+    .raffles-admin-header {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 18px !important;
+    }
+
+    .raffles-admin-nav {
+      justify-content: flex-start !important;
+      width: 100% !important;
+    }
+
+    .raffle-card-top {
+      grid-template-columns: 160px minmax(0, 1fr) !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .raffles-admin-page {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 22px 12px 46px !important;
+    }
+
+    .raffles-admin-title {
+      font-size: clamp(42px, 13vw, 58px) !important;
+      line-height: 0.98 !important;
+      letter-spacing: -0.065em !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .raffles-admin-subtitle {
+      font-size: 17px !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .raffles-admin-nav {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 10px !important;
+    }
+
+    .raffles-admin-nav a,
+    .raffles-admin-nav div {
+      width: 100% !important;
+      min-height: 50px !important;
+      padding: 12px 14px !important;
+      text-align: center !important;
+      font-size: 15px !important;
+    }
+
+    .raffles-admin-nav a:first-child {
+      grid-column: 1 / -1 !important;
+    }
+
+    .raffles-admin-nav a:last-child {
+      grid-column: 1 / -1 !important;
+    }
+
+    .raffles-stats-grid {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .raffles-stat-card {
+      min-height: 112px !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+    }
+
+    .raffles-stat-value {
+      font-size: clamp(36px, 12vw, 52px) !important;
+      line-height: 1 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .raffle-card {
+      padding: 16px !important;
+      border-radius: 26px !important;
+    }
+
+    .raffle-card-top {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+    }
+
+    .raffle-image-wrap {
+      width: 100% !important;
+      height: auto !important;
+      aspect-ratio: 16 / 9 !important;
+      border-radius: 22px !important;
+    }
+
+    .raffle-card-header {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .raffle-card-title {
+      font-size: clamp(30px, 10vw, 42px) !important;
+      line-height: 1.05 !important;
+      letter-spacing: -0.055em !important;
+    }
+
+    .raffle-headline-grid,
+    .raffle-detail-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .raffle-card-actions {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .raffle-card-actions a {
+      width: 100% !important;
+      min-height: 50px !important;
+      font-size: 16px !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .raffles-admin-page {
+      padding-left: 10px !important;
+      padding-right: 10px !important;
+    }
+
+    .raffles-admin-title {
+      font-size: 40px !important;
+    }
+
+    .raffles-admin-nav {
+      grid-template-columns: 1fr !important;
+    }
+
+    .raffles-admin-nav a,
+    .raffles-admin-nav div {
+      grid-column: auto !important;
+    }
+
+    .raffles-stat-value {
+      font-size: 36px !important;
+    }
+  }
+`;
+
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: "32px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
+    overflowX: "hidden",
   },
   header: {
     display: "flex",
@@ -474,6 +639,9 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 22,
     gap: 16,
     flexWrap: "wrap",
+  },
+  headerCopy: {
+    minWidth: 0,
   },
   badge: {
     display: "inline-flex",
@@ -502,6 +670,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     flexWrap: "wrap",
     justifyContent: "flex-end",
+    minWidth: 0,
   },
   navButton: {
     display: "inline-flex",
@@ -550,6 +719,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderTop: "4px solid #1683f8",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   statTop: {
     display: "flex",
@@ -558,14 +728,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
   },
   statIcon: {
-    width: 34,
-    height: 34,
+    width: 46,
+    height: 46,
     borderRadius: 999,
     border: "1px solid",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 15,
+    fontSize: 21,
     fontWeight: 900,
     flexShrink: 0,
   },
@@ -602,10 +772,11 @@ const styles: Record<string, CSSProperties> = {
     padding: 18,
     background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "104px 1fr",
+    gridTemplateColumns: "104px minmax(0, 1fr)",
     gap: 16,
     alignItems: "start",
   },
@@ -654,6 +825,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     textTransform: "capitalize",
     fontWeight: 800,
+    width: "fit-content",
   },
   headlineGrid: {
     display: "grid",
@@ -666,6 +838,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   headlineLabel: {
     fontSize: 12,
@@ -678,6 +851,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 19,
     fontWeight: 950,
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
   description: {
     color: "#475569",
