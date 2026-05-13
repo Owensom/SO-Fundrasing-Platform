@@ -6,7 +6,7 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { listEvents } from "../../../../api/_lib/events-repo";
 
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
-const EVENTS_LOGO_IMAGE = "/brand/events-gold-champagne.png";
+const EVENTS_LOGO_IMAGE = "/brand/event-gold-champagne.png";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
