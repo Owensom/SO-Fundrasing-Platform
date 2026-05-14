@@ -149,16 +149,13 @@ export default async function AdminDashboardPage() {
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
-          <h1
-            className="so-brand-heading admin-dashboard-title"
-            style={styles.title}
-          >
+          <h1 className="so-brand-heading admin-dashboard-title" style={styles.title}>
             Admin command centre
           </h1>
 
           <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-            Manage raffles, squares, events, auctions and platform operations
-            across your tenant from one premium fundraising workspace.
+            Manage campaigns, payments, supporters and operations across one
+            premium fundraising workspace.
           </p>
 
           <p className="admin-dashboard-tenant" style={styles.tenant}>
@@ -178,8 +175,8 @@ export default async function AdminDashboardPage() {
               Orders dashboard
             </Link>
 
-            <Link href="/admin/metadata" style={styles.secondaryButton}>
-              Finance & transactions
+            <Link href="/admin/customers" style={styles.secondaryButton}>
+              Customers
             </Link>
           </div>
         </div>
@@ -215,44 +212,14 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section className="admin-ops-spotlight" style={styles.opsSpotlight}>
-        <div>
-          <p style={styles.financeKicker}>Platform core</p>
-
-          <h2
-            className="so-brand-card-title admin-section-title"
-            style={styles.opsTitle}
-          >
-            Orders dashboard
-          </h2>
-
-          <p style={styles.opsText}>
-            Review unified activity across raffles, squares, events and
-            auctions. Search supporters, check campaign activity and export the
-            current view as CSV.
-          </p>
-        </div>
-
-        <Link href="/admin/orders" style={styles.opsButton}>
-          Open orders dashboard →
-        </Link>
-      </section>
-
       <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
-
-          <h2
-            className="so-brand-card-title admin-section-title"
-            style={styles.sectionTitle}
-          >
+          <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
             Open a fundraising area
           </h2>
-
           <p style={styles.sectionText}>
-            Choose the campaign type or operational area you want to manage.
-            Campaign dashboards remain separate, while Orders gives you the
-            combined platform view.
+            Choose the campaign type or operational dashboard you want to manage.
           </p>
         </div>
       </section>
@@ -292,45 +259,54 @@ export default async function AdminDashboardPage() {
 
         <DashboardCard
           href="/admin/orders"
-          image="/brand/so-logo-mark.png"
+          badgeText="ORDERS"
           title="Orders"
-          description="View unified orders, ticket sales, bids and customer activity."
-          stats="Unified platform activity"
+          description="Review raffle sales, squares sales, event orders and auction bids."
+          stats="Unified activity dashboard"
+          tone="blue"
+        />
+
+        <DashboardCard
+          href="/admin/customers"
+          badgeText="CRM"
+          title="Customers"
+          description="View supporter profiles grouped from orders and campaign activity."
+          stats="Supporter intelligence"
+          tone="gold"
         />
       </section>
 
       <section className="admin-operations-grid" style={styles.operationsGrid}>
         <section className="admin-finance-panel" style={styles.financePanel}>
           <div>
-            <p style={styles.financeKicker}>Finance & transactions</p>
+            <p style={styles.financeKicker}>Operations</p>
 
-            <h2
-              className="so-brand-card-title admin-section-title"
-              style={styles.financeTitle}
-            >
-              Transaction centre
+            <h2 className="so-brand-card-title admin-section-title" style={styles.financeTitle}>
+              Orders & customers
             </h2>
 
             <p style={styles.financeText}>
-              Open the full metadata view for tracked transactions, campaign
-              types, supporter details, platform contribution, Stripe fees and
-              organiser net estimates.
+              Open the live operational dashboards for transaction activity,
+              campaign orders and supporter profiles.
             </p>
           </div>
 
-          <Link href="/admin/metadata" style={styles.financeButton}>
-            Open transaction centre →
-          </Link>
+          <div className="admin-panel-actions" style={styles.panelActions}>
+            <Link href="/admin/orders" style={styles.financeButton}>
+              Open orders →
+            </Link>
+
+            <Link href="/admin/customers" style={styles.financeButtonSecondary}>
+              Open customers →
+            </Link>
+          </div>
         </section>
 
         <section className="admin-data-panel" style={styles.dataPanel}>
           <div>
             <p style={styles.kicker}>Live platform overview</p>
 
-            <h2
-              className="so-brand-card-title admin-section-title"
-              style={styles.sectionTitle}
-            >
+            <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
               Campaign summary
             </h2>
 
@@ -381,16 +357,9 @@ function StatCard({
   dark?: boolean;
 }) {
   return (
-    <div
-      className="admin-stat-card"
-      style={dark ? styles.darkStatCard : styles.statCard}
-    >
+    <div className="admin-stat-card" style={dark ? styles.darkStatCard : styles.statCard}>
       <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
-
-      <div
-        className="admin-stat-value"
-        style={dark ? styles.darkStatValue : styles.statValue}
-      >
+      <div className="admin-stat-value" style={dark ? styles.darkStatValue : styles.statValue}>
         {value}
       </div>
     </div>
@@ -436,28 +405,40 @@ function DataBlock({
 function DashboardCard({
   href,
   image,
+  badgeText,
   title,
   description,
   stats,
+  tone = "default",
 }: {
   href: string;
-  image: string;
+  image?: string;
+  badgeText?: string;
   title: string;
   description: string;
   stats: string;
+  tone?: "default" | "blue" | "gold";
 }) {
+  const badgeStyle =
+    tone === "gold"
+      ? styles.logoTextGold
+      : tone === "blue"
+        ? styles.logoTextBlue
+        : styles.logoTextDefault;
+
   return (
     <Link href={href} style={styles.cardLink}>
       <article className="admin-dashboard-card" style={styles.card}>
         <div style={styles.cardTop}>
           <div style={styles.logoBox}>
-            <img src={image} alt={title} style={styles.logoImage} />
+            {image ? (
+              <img src={image} alt={title} style={styles.logoImage} />
+            ) : (
+              <span style={badgeStyle}>{badgeText || title}</span>
+            )}
           </div>
 
-          <h2
-            className="so-brand-card-title admin-card-title"
-            style={styles.cardTitle}
-          >
+          <h2 className="so-brand-card-title admin-card-title" style={styles.cardTitle}>
             {title}
           </h2>
 
@@ -482,6 +463,12 @@ const responsiveStyles = `
 
   .admin-dashboard-page {
     overflow-x: hidden;
+  }
+
+  .admin-dashboard-page section,
+  .admin-dashboard-page article,
+  .admin-dashboard-page div {
+    min-width: 0;
   }
 
   @media (max-width: 900px) {
@@ -533,18 +520,21 @@ const responsiveStyles = `
       word-break: break-word !important;
     }
 
-    .admin-command-actions {
+    .admin-command-actions,
+    .admin-panel-actions {
       display: grid !important;
       grid-template-columns: 1fr !important;
       gap: 10px !important;
       width: 100% !important;
     }
 
-    .admin-command-actions a {
+    .admin-command-actions a,
+    .admin-panel-actions a {
       width: 100% !important;
       min-height: 50px !important;
       text-align: center !important;
       padding: 14px 16px !important;
+      justify-content: center !important;
     }
 
     .admin-command-stats {
@@ -575,8 +565,7 @@ const responsiveStyles = `
     .admin-focus-card,
     .admin-dashboard-card,
     .admin-finance-panel,
-    .admin-data-panel,
-    .admin-ops-spotlight {
+    .admin-data-panel {
       border-radius: 24px !important;
       padding: 18px !important;
     }
@@ -747,7 +736,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: 14,
-    marginBottom: 18,
+    marginBottom: 26,
   },
   focusCard: {
     padding: 20,
@@ -776,45 +765,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.55,
-  },
-  opsSpotlight: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 18,
-    flexWrap: "wrap",
-    padding: 24,
-    borderRadius: 30,
-    marginBottom: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #eff6ff 54%, #fef3c7 130%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
-  },
-  opsTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.045em",
-  },
-  opsText: {
-    margin: "8px 0 0",
-    color: "#475569",
-    lineHeight: 1.6,
-    maxWidth: 760,
-  },
-  opsButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    padding: "13px 18px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(15,23,42,0.18)",
   },
   sectionHeader: {
     margin: "8px 0 14px",
@@ -890,6 +840,24 @@ const styles: Record<string, CSSProperties> = {
     objectFit: "contain",
     display: "block",
   },
+  logoTextDefault: {
+    color: "#0f172a",
+    fontSize: 12,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+  },
+  logoTextBlue: {
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+  },
+  logoTextGold: {
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+  },
   cardTitle: {
     margin: 0,
     fontSize: 30,
@@ -955,7 +923,7 @@ const styles: Record<string, CSSProperties> = {
   },
   financeKicker: {
     margin: "0 0 10px",
-    color: "#92400e",
+    color: "#fef3c7",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -972,6 +940,11 @@ const styles: Record<string, CSSProperties> = {
     color: "rgba(255,255,255,0.72)",
     lineHeight: 1.6,
   },
+  panelActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
   financeButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -984,6 +957,19 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     boxShadow: "0 10px 20px rgba(2,6,23,0.22)",
+  },
+  financeButtonSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.20)",
+    textDecoration: "none",
+    fontWeight: 950,
   },
   dataPanel: {
     padding: 24,
