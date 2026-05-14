@@ -149,13 +149,16 @@ export default async function AdminDashboardPage() {
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
-          <h1 className="so-brand-heading admin-dashboard-title" style={styles.title}>
+          <h1
+            className="so-brand-heading admin-dashboard-title"
+            style={styles.title}
+          >
             Admin command centre
           </h1>
 
           <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-            Manage raffles, squares, events and auctions across your tenant from
-            one premium fundraising workspace.
+            Manage raffles, squares, events, auctions and platform operations
+            across your tenant from one premium fundraising workspace.
           </p>
 
           <p className="admin-dashboard-tenant" style={styles.tenant}>
@@ -169,6 +172,10 @@ export default async function AdminDashboardPage() {
               style={styles.primaryButton}
             >
               View public campaigns →
+            </Link>
+
+            <Link href="/admin/orders" style={styles.secondaryButton}>
+              Orders dashboard
             </Link>
 
             <Link href="/admin/metadata" style={styles.secondaryButton}>
@@ -208,15 +215,44 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
+      <section className="admin-ops-spotlight" style={styles.opsSpotlight}>
+        <div>
+          <p style={styles.financeKicker}>Platform core</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.opsTitle}
+          >
+            Orders dashboard
+          </h2>
+
+          <p style={styles.opsText}>
+            Review unified activity across raffles, squares, events and
+            auctions. Search supporters, check campaign activity and export the
+            current view as CSV.
+          </p>
+        </div>
+
+        <Link href="/admin/orders" style={styles.opsButton}>
+          Open orders dashboard →
+        </Link>
+      </section>
+
       <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
-          <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
             Open a fundraising area
           </h2>
+
           <p style={styles.sectionText}>
-            Choose the campaign type you want to manage. All existing tools,
-            dashboards and workflows remain available inside each area.
+            Choose the campaign type or operational area you want to manage.
+            Campaign dashboards remain separate, while Orders gives you the
+            combined platform view.
           </p>
         </div>
       </section>
@@ -253,6 +289,14 @@ export default async function AdminDashboardPage() {
           description="Run premium auction fundraising campaigns."
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
         />
+
+        <DashboardCard
+          href="/admin/orders"
+          image="/brand/so-logo-mark.png"
+          title="Orders"
+          description="View unified orders, ticket sales, bids and customer activity."
+          stats="Unified platform activity"
+        />
       </section>
 
       <section className="admin-operations-grid" style={styles.operationsGrid}>
@@ -260,7 +304,10 @@ export default async function AdminDashboardPage() {
           <div>
             <p style={styles.financeKicker}>Finance & transactions</p>
 
-            <h2 className="so-brand-card-title admin-section-title" style={styles.financeTitle}>
+            <h2
+              className="so-brand-card-title admin-section-title"
+              style={styles.financeTitle}
+            >
               Transaction centre
             </h2>
 
@@ -280,7 +327,10 @@ export default async function AdminDashboardPage() {
           <div>
             <p style={styles.kicker}>Live platform overview</p>
 
-            <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
+            <h2
+              className="so-brand-card-title admin-section-title"
+              style={styles.sectionTitle}
+            >
               Campaign summary
             </h2>
 
@@ -331,9 +381,16 @@ function StatCard({
   dark?: boolean;
 }) {
   return (
-    <div className="admin-stat-card" style={dark ? styles.darkStatCard : styles.statCard}>
+    <div
+      className="admin-stat-card"
+      style={dark ? styles.darkStatCard : styles.statCard}
+    >
       <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
-      <div className="admin-stat-value" style={dark ? styles.darkStatValue : styles.statValue}>
+
+      <div
+        className="admin-stat-value"
+        style={dark ? styles.darkStatValue : styles.statValue}
+      >
         {value}
       </div>
     </div>
@@ -397,7 +454,10 @@ function DashboardCard({
             <img src={image} alt={title} style={styles.logoImage} />
           </div>
 
-          <h2 className="so-brand-card-title admin-card-title" style={styles.cardTitle}>
+          <h2
+            className="so-brand-card-title admin-card-title"
+            style={styles.cardTitle}
+          >
             {title}
           </h2>
 
@@ -515,7 +575,8 @@ const responsiveStyles = `
     .admin-focus-card,
     .admin-dashboard-card,
     .admin-finance-panel,
-    .admin-data-panel {
+    .admin-data-panel,
+    .admin-ops-spotlight {
       border-radius: 24px !important;
       padding: 18px !important;
     }
@@ -686,7 +747,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: 14,
-    marginBottom: 26,
+    marginBottom: 18,
   },
   focusCard: {
     padding: 20,
@@ -715,6 +776,45 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.55,
+  },
+  opsSpotlight: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 18,
+    flexWrap: "wrap",
+    padding: 24,
+    borderRadius: 30,
+    marginBottom: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #eff6ff 54%, #fef3c7 130%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
+  },
+  opsTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
+    letterSpacing: "-0.045em",
+  },
+  opsText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.6,
+    maxWidth: 760,
+  },
+  opsButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(15,23,42,0.18)",
   },
   sectionHeader: {
     margin: "8px 0 14px",
@@ -855,7 +955,7 @@ const styles: Record<string, CSSProperties> = {
   },
   financeKicker: {
     margin: "0 0 10px",
-    color: "#fef3c7",
+    color: "#92400e",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
