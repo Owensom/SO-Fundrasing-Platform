@@ -287,7 +287,6 @@ function chooseRandomCandidate(
   if (candidates.length === 0) return null;
   return candidates[randomInt(candidates.length)] || null;
 }
-
 function expandRows(value: string): string[] {
   const parts = value
     .split(",")
@@ -523,6 +522,7 @@ async function updateSeatingLayoutAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=layout#${returnAnchor}`);
 }
+
 async function updateTableNamesAction(formData: FormData) {
   "use server";
 
@@ -675,7 +675,6 @@ async function applySeatTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-marking#${returnAnchor}`);
 }
-
 async function updateSelectedSeatsMetadataAction(formData: FormData) {
   "use server";
 
@@ -1076,6 +1075,130 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
+
+const responsiveStyles = `
+@media (max-width: 980px) {
+  .event-edit-page {
+    overflow-x: hidden;
+  }
+
+  .event-edit-page * {
+    max-width: 100%;
+  }
+
+  .event-edit-page section,
+  .event-edit-page form,
+  .event-edit-page details,
+  .event-edit-page summary,
+  .event-edit-page div,
+  .event-edit-page label {
+    min-width: 0 !important;
+  }
+
+  .event-edit-page .hero,
+  .event-edit-page .mediaBox,
+  .event-edit-page .ticketLayout,
+  .event-edit-page .twoPanel,
+  .event-edit-page .twoCol,
+  .event-edit-page .threeCol,
+  .event-edit-page .fourCol {
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-edit-page .tabs {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .event-edit-page .tab,
+  .event-edit-page .tabDanger {
+    white-space: nowrap !important;
+    flex: 0 0 auto !important;
+  }
+
+  .event-edit-page .heroImageWrap {
+    height: 220px !important;
+  }
+
+  .event-edit-page .previewBox {
+    height: 190px !important;
+  }
+
+  .event-edit-page .topActions,
+  .event-edit-page .submitBar {
+    align-items: stretch !important;
+  }
+
+  .event-edit-page .primaryButton,
+  .event-edit-page .dangerButton,
+  .event-edit-page .dangerOutlineButton,
+  .event-edit-page .primaryLink,
+  .event-edit-page .secondaryButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+  }
+
+  .event-edit-page .seatManagerShell {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+  }
+
+  .event-edit-page .ticketListScroll {
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .event-edit-page {
+    padding: 18px 12px 44px !important;
+  }
+
+  .event-edit-page .hero {
+    padding: 18px !important;
+    border-radius: 24px !important;
+  }
+
+  .event-edit-page .title {
+    font-size: clamp(31px, 10vw, 42px) !important;
+    line-height: 1.02 !important;
+  }
+
+  .event-edit-page .section,
+  .event-edit-page .panel {
+    padding: 14px !important;
+  }
+
+  .event-edit-page .collapsibleSummary,
+  .event-edit-page .ticketSummary {
+    align-items: flex-start !important;
+  }
+
+  .event-edit-page .collapsibleActions {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .event-edit-page .sectionBadge,
+  .event-edit-page .collapsibleToggle {
+    max-width: none !important;
+  }
+
+  .event-edit-page .statValue {
+    font-size: 20px !important;
+  }
+
+  .event-edit-page .heroImageWrap,
+  .event-edit-page .previewBox {
+    height: 180px !important;
+  }
+}
+`;
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1193,6 +1316,7 @@ export default async function AdminEventManagePage({
   );
 
   const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+
   const capacitySummary = isGeneralAdmission
     ? event.capacity
       ? `${event.capacity} tickets`
@@ -1202,13 +1326,15 @@ export default async function AdminEventManagePage({
       : `${tableSeats.length} table seats`;
 
   return (
-    <main style={styles.page}>
-      <section style={styles.hero}>
+    <main className="event-edit-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Events editor</div>
 
           <div style={styles.heroTitleRow}>
-            <h1 className="so-brand-heading" style={styles.title}>
+            <h1 className="so-brand-heading title" style={styles.title}>
               {event.title}
             </h1>
 
@@ -1244,7 +1370,7 @@ export default async function AdminEventManagePage({
         <div style={styles.heroPreview}>
           <div style={styles.previewKicker}>Public preview</div>
 
-          <div style={styles.heroImageWrap}>
+          <div className="heroImageWrap" style={styles.heroImageWrap}>
             <img
               src={event.image_url || DEFAULT_EVENTS_IMAGE}
               alt={event.title || "SO Events"}
@@ -1257,40 +1383,45 @@ export default async function AdminEventManagePage({
         </div>
       </section>
 
-      <section style={styles.topActions}>
-        <a href="/admin/events" style={styles.secondaryButton}>
+      <section className="topActions" style={styles.topActions}>
+        <a href="/admin/events" className="secondaryButton" style={styles.secondaryButton}>
           ← Back to events
         </a>
 
-        <a href={publicEventHref} target="_blank" style={styles.primaryLink}>
+        <a
+          href={publicEventHref}
+          target="_blank"
+          className="primaryLink"
+          style={styles.primaryLink}
+        >
           View public page
         </a>
       </section>
 
-      <nav style={styles.tabs}>
-        <a href="#overview" style={styles.tab}>
+      <nav className="tabs" style={styles.tabs}>
+        <a href="#overview" className="tab" style={styles.tab}>
           Overview
         </a>
-        <a href="#tickets" style={styles.tab}>
+        <a href="#tickets" className="tab" style={styles.tab}>
           Tickets
         </a>
-        <a href="#prizes-menu" style={styles.tab}>
+        <a href="#prizes-menu" className="tab" style={styles.tab}>
           Prizes & Menu
         </a>
-        <a href="#winner-draw" style={styles.tab}>
+        <a href="#winner-draw" className="tab" style={styles.tab}>
           Winner Draw
         </a>
         {isReservedSeating ? (
-          <a href="#row-seating" style={styles.tab}>
+          <a href="#row-seating" className="tab" style={styles.tab}>
             Row Seating
           </a>
         ) : null}
         {isTables ? (
-          <a href="#table-seating" style={styles.tab}>
+          <a href="#table-seating" className="tab" style={styles.tab}>
             Table Seating
           </a>
         ) : null}
-        <a href="#danger-zone" style={styles.tabDanger}>
+        <a href="#danger-zone" className="tabDanger" style={styles.tabDanger}>
           Danger Zone
         </a>
       </nav>
@@ -1329,7 +1460,7 @@ export default async function AdminEventManagePage({
         badge={formatDisplayDate(event.starts_at)}
         defaultOpen
       >
-        <div style={styles.panel}>
+        <div className="panel" style={styles.panel}>
           <div style={styles.panelHeader}>
             <div>
               <div style={styles.innerEyebrow}>Event setup</div>
@@ -1344,7 +1475,7 @@ export default async function AdminEventManagePage({
           <form action={updateEventAction} style={styles.form}>
             <input type="hidden" name="id" value={event.id} />
 
-            <div style={styles.twoCol}>
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Title">
                 <input
                   name="title"
@@ -1373,7 +1504,7 @@ export default async function AdminEventManagePage({
               />
             </Field>
 
-            <div style={styles.mediaBox}>
+            <div className="mediaBox" style={styles.mediaBox}>
               <div style={styles.mediaControls}>
                 <h3 style={styles.panelTitle}>Event image</h3>
 
@@ -1391,7 +1522,7 @@ export default async function AdminEventManagePage({
                 />
               </div>
 
-              <div style={styles.previewBox}>
+              <div className="previewBox" style={styles.previewBox}>
                 <img
                   src={event.image_url || DEFAULT_EVENTS_IMAGE}
                   alt={event.title || "SO Events"}
@@ -1403,7 +1534,7 @@ export default async function AdminEventManagePage({
               </div>
             </div>
 
-            <div style={styles.twoCol}>
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -1424,7 +1555,7 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
-            <div style={styles.twoCol}>
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Starts at">
                 <input
                   name="starts_at"
@@ -1444,7 +1575,7 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
-            <div style={styles.threeCol}>
+            <div className="threeCol" style={styles.threeCol}>
               <Field label="Currency">
                 <select
                   name="currency"
@@ -1482,7 +1613,7 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
-            <div style={styles.twoCol}>
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Ask for dietary requirements">
                 <select
                   name="ask_dietary_requirements"
@@ -1508,7 +1639,7 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
-            <section style={styles.submitBar}>
+            <section className="submitBar" style={styles.submitBar}>
               <div>
                 <strong style={{ color: "#0f172a" }}>
                   Save event details
@@ -1518,7 +1649,7 @@ export default async function AdminEventManagePage({
                 </div>
               </div>
 
-              <button type="submit" style={styles.primaryButton}>
+              <button type="submit" className="primaryButton" style={styles.primaryButton}>
                 Save event details
               </button>
             </section>
@@ -1533,7 +1664,7 @@ export default async function AdminEventManagePage({
         description="Add public ticket choices, pricing, limits and visibility."
         badge={`${activeTicketTypes.length} active`}
       >
-        <div style={styles.ticketLayout}>
+        <div className="ticketLayout" style={styles.ticketLayout}>
           <CompactPanel title="Add ticket type" eyebrow="New ticket">
             <form action={addTicketTypeAction} style={styles.form}>
               <input type="hidden" name="event_id" value={event.id} />
@@ -1546,7 +1677,7 @@ export default async function AdminEventManagePage({
                 <input name="description" style={styles.input} />
               </Field>
 
-              <div style={styles.threeCol}>
+              <div className="threeCol" style={styles.threeCol}>
                 <Field label="Price">
                   <input
                     name="price"
@@ -1590,20 +1721,20 @@ export default async function AdminEventManagePage({
                 </select>
               </Field>
 
-              <button type="submit" style={styles.primaryButton}>
+              <button type="submit" className="primaryButton" style={styles.primaryButton}>
                 Add ticket type
               </button>
             </form>
           </CompactPanel>
 
           <CompactPanel title="Current ticket types" eyebrow="Existing tickets">
-            <div style={styles.ticketListScroll}>
+            <div className="ticketListScroll" style={styles.ticketListScroll}>
               {ticketTypes.length === 0 ? (
                 <div style={styles.emptyBox}>No ticket types yet.</div>
               ) : (
                 ticketTypes.map((ticketType) => (
                   <details key={ticketType.id} style={styles.ticketDetails}>
-                    <summary style={styles.ticketSummary}>
+                    <summary className="ticketSummary" style={styles.ticketSummary}>
                       <div>
                         <strong>{ticketType.name}</strong>
                         <div style={styles.mutedSmall}>
@@ -1643,7 +1774,7 @@ export default async function AdminEventManagePage({
                           value={ticketType.id}
                         />
 
-                        <div style={styles.twoCol}>
+                        <div className="twoCol" style={styles.twoCol}>
                           <Field label="Name">
                             <input
                               name="name"
@@ -1662,7 +1793,7 @@ export default async function AdminEventManagePage({
                           </Field>
                         </div>
 
-                        <div style={styles.fourCol}>
+                        <div className="fourCol" style={styles.fourCol}>
                           <Field label="Price">
                             <input
                               name="price"
@@ -1712,7 +1843,7 @@ export default async function AdminEventManagePage({
                           </Field>
                         </div>
 
-                        <button type="submit" style={styles.primaryButton}>
+                        <button type="submit" className="primaryButton" style={styles.primaryButton}>
                           Save ticket
                         </button>
                       </form>
@@ -1724,7 +1855,11 @@ export default async function AdminEventManagePage({
                           name="ticket_type_id"
                           value={ticketType.id}
                         />
-                        <button type="submit" style={styles.dangerOutlineButton}>
+                        <button
+                          type="submit"
+                          className="dangerOutlineButton"
+                          style={styles.dangerOutlineButton}
+                        >
                           Delete ticket type
                         </button>
                       </form>
@@ -1736,14 +1871,19 @@ export default async function AdminEventManagePage({
 
             <form action={clearTicketTypesAction}>
               <input type="hidden" name="event_id" value={event.id} />
-              <button type="submit" style={styles.dangerOutlineButton}>
+              <button
+                type="submit"
+                className="dangerOutlineButton"
+                style={styles.dangerOutlineButton}
+              >
                 Clear all ticket types
               </button>
             </form>
           </CompactPanel>
         </div>
       </CollapsibleSection>
-            <CollapsibleSection
+
+      <CollapsibleSection
         id="prizes-menu"
         eyebrow="Section 3"
         title="Prizes & Menu"
@@ -1787,7 +1927,7 @@ export default async function AdminEventManagePage({
           description="Generate seats, block seats, mark VIP/complimentary seats and save row layout nudges."
           badge={`${rowSeats.length} seats`}
         >
-          <div style={styles.twoPanel}>
+          <div className="twoPanel" style={styles.twoPanel}>
             <CompactPanel title="Generate row seating" eyebrow="Seat builder">
               <form action={generateSeatsAction} style={styles.form}>
                 <input type="hidden" name="event_id" value={event.id} />
@@ -1819,7 +1959,7 @@ export default async function AdminEventManagePage({
                   />
                 </Field>
 
-                <div style={styles.twoCol}>
+                <div className="twoCol" style={styles.twoCol}>
                   <Field label="Seats per row">
                     <input
                       name="seats_per_row"
@@ -1844,7 +1984,7 @@ export default async function AdminEventManagePage({
                   Clear existing row seats before generating
                 </label>
 
-                <button type="submit" style={styles.primaryButton}>
+                <button type="submit" className="primaryButton" style={styles.primaryButton}>
                   Generate row seating
                 </button>
               </form>
@@ -1876,7 +2016,11 @@ export default async function AdminEventManagePage({
 
               <form action={clearRowSeatsAction}>
                 <input type="hidden" name="event_id" value={event.id} />
-                <button type="submit" style={styles.dangerOutlineButton}>
+                <button
+                  type="submit"
+                  className="dangerOutlineButton"
+                  style={styles.dangerOutlineButton}
+                >
                   Clear row seats only
                 </button>
               </form>
@@ -1885,7 +2029,7 @@ export default async function AdminEventManagePage({
             {rowSeats.length === 0 ? (
               <div style={styles.emptyBox}>No row seats generated yet.</div>
             ) : (
-              <div style={styles.seatManagerShell}>
+              <div className="seatManagerShell" style={styles.seatManagerShell}>
                 <AdminSeatManager
                   eventId={event.id}
                   seats={rowSeats}
@@ -1918,7 +2062,7 @@ export default async function AdminEventManagePage({
           description="Generate table layouts, choose a table shape, name tables and manage allocations."
           badge={`${tableSeats.length} seats • ${uniqueTableNumbers.length} tables`}
         >
-          <div style={styles.twoPanel}>
+          <div className="twoPanel" style={styles.twoPanel}>
             <CompactPanel title="Generate table seating" eyebrow="Table builder">
               <form action={generateTablesAction} style={styles.form}>
                 <input type="hidden" name="event_id" value={event.id} />
@@ -1934,7 +2078,7 @@ export default async function AdminEventManagePage({
                   </select>
                 </Field>
 
-                <div style={styles.twoCol}>
+                <div className="twoCol" style={styles.twoCol}>
                   <Field label="Number of tables">
                     <input
                       name="table_count"
@@ -1961,7 +2105,7 @@ export default async function AdminEventManagePage({
                   Clear existing table seats before generating
                 </label>
 
-                <button type="submit" style={styles.primaryButton}>
+                <button type="submit" className="primaryButton" style={styles.primaryButton}>
                   Generate table seating
                 </button>
               </form>
@@ -2010,7 +2154,7 @@ export default async function AdminEventManagePage({
                 </select>
               </Field>
 
-              <button type="submit" style={styles.primaryButton}>
+              <button type="submit" className="primaryButton" style={styles.primaryButton}>
                 Save table shape
               </button>
             </form>
@@ -2034,7 +2178,7 @@ export default async function AdminEventManagePage({
                 }
               />
 
-              <button type="submit" style={styles.primaryButton}>
+              <button type="submit" className="primaryButton" style={styles.primaryButton}>
                 Save table names
               </button>
             </form>
@@ -2049,7 +2193,11 @@ export default async function AdminEventManagePage({
 
               <form action={clearTableSeatsAction}>
                 <input type="hidden" name="event_id" value={event.id} />
-                <button type="submit" style={styles.dangerOutlineButton}>
+                <button
+                  type="submit"
+                  className="dangerOutlineButton"
+                  style={styles.dangerOutlineButton}
+                >
                   Clear table seats only
                 </button>
               </form>
@@ -2058,7 +2206,7 @@ export default async function AdminEventManagePage({
             {tableSeats.length === 0 ? (
               <div style={styles.emptyBox}>No table seats generated yet.</div>
             ) : (
-              <div style={styles.seatManagerShell}>
+              <div className="seatManagerShell" style={styles.seatManagerShell}>
                 <AdminSeatManager
                   eventId={event.id}
                   seats={tableSeats}
@@ -2094,7 +2242,7 @@ export default async function AdminEventManagePage({
         <div style={styles.dangerSectionInner}>
           <form action={deleteEventAction}>
             <input type="hidden" name="event_id" value={event.id} />
-            <button type="submit" style={styles.dangerButton}>
+            <button type="submit" className="dangerButton" style={styles.dangerButton}>
               Delete event
             </button>
           </form>
@@ -2122,8 +2270,8 @@ function CollapsibleSection({
   children: ReactNode;
 }) {
   return (
-    <details id={id} open={defaultOpen} style={styles.section}>
-      <summary style={styles.collapsibleSummary}>
+    <details id={id} open={defaultOpen} className="section" style={styles.section}>
+      <summary className="collapsibleSummary" style={styles.collapsibleSummary}>
         <div style={styles.collapsibleHeading}>
           {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
 
@@ -2134,9 +2282,11 @@ function CollapsibleSection({
           {description ? <p style={styles.sectionText}>{description}</p> : null}
         </div>
 
-        <div style={styles.collapsibleActions}>
-          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
-          <span style={styles.collapsibleToggle}>Open / close</span>
+        <div className="collapsibleActions" style={styles.collapsibleActions}>
+          {badge ? <span className="sectionBadge" style={styles.sectionBadge}>{badge}</span> : null}
+          <span className="collapsibleToggle" style={styles.collapsibleToggle}>
+            Open / close
+          </span>
         </div>
       </summary>
 
@@ -2155,7 +2305,7 @@ function CompactPanel({
   children: ReactNode;
 }) {
   return (
-    <section style={styles.panel}>
+    <section className="panel" style={styles.panel}>
       <div>
         <div style={styles.innerEyebrow}>{eyebrow}</div>
         <h3 style={styles.panelTitle}>{title}</h3>
@@ -2176,7 +2326,7 @@ function SummaryCard({
   return (
     <div style={styles.statBox}>
       <p style={styles.statLabel}>{label}</p>
-      <p style={styles.statValue}>{value}</p>
+      <p className="statValue" style={styles.statValue}>{value}</p>
     </div>
   );
 }
@@ -2236,9 +2386,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
     overflow: "hidden",
   },
-  heroContent: {
-    minWidth: 0,
-  },
+  heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -2490,9 +2638,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
-  collapsibleBody: {
-    marginTop: 16,
-  },
+  collapsibleBody: { marginTop: 16 },
   sectionEyebrow: {
     margin: "0 0 6px",
     color: "#2563eb",
@@ -2629,9 +2775,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
-  mediaControls: {
-    minWidth: 0,
-  },
+  mediaControls: { minWidth: 0 },
   previewBox: {
     height: 190,
     borderRadius: 18,
