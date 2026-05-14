@@ -150,6 +150,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   ]);
 
   const currency = game.currency || "GBP";
+  const status = String(game.status || "draft");
   const config = (game.config_json ?? {}) as any;
   const question = config.question ?? {};
   const freeEntry = config.free_entry ?? {};
@@ -202,6 +203,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   const prizesConfigured = savedPrizes.length > 0;
 
+  const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
+  const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
+
   return (
     <main style={styles.page}>
       <section style={styles.topBar}>
@@ -223,8 +227,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               {game.title}
             </h1>
 
-            <span style={{ ...styles.statusPill, ...statusStyle(game.status) }}>
-              {game.status}
+            <span style={{ ...styles.statusPill, ...statusStyle(status) }}>
+              {status}
             </span>
           </div>
 
@@ -238,10 +242,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
           <div style={styles.heroMetaGrid}>
             <HeroMeta label="Draw" value={formatDrawDate(game.draw_at)} />
+
             <HeroMeta
               label="Squares sold"
               value={`${soldSquares}/${totalSquares}`}
             />
+
             <HeroMeta label="Progress" value={`${progress}% sold`} />
           </div>
         </div>
@@ -313,7 +319,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 </h2>
 
                 <p style={styles.sectionDescription}>
-                  Update the public details, image, pricing and draw settings.
+                  Update public details, image, pricing and draw settings.
                 </p>
               </div>
 
@@ -361,7 +367,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 <Field label="Description">
                   <textarea
                     name="description"
-                    rows={4}
+                    rows={3}
                     defaultValue={game.description ?? ""}
                     style={styles.textarea}
                   />
@@ -394,7 +400,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                         objectPosition: hasCustomImage
                           ? imageObjectPosition
                           : "center",
-                        padding: hasCustomImage ? 0 : 22,
+                        padding: hasCustomImage ? 0 : 20,
                         background: hasCustomImage
                           ? "#ffffff"
                           : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
@@ -404,19 +410,16 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                   </div>
                 </div>
               </section>
-                            <section style={styles.innerPanel}>
-                <div style={styles.innerHeader}>
-                  <div>
-                    <div style={styles.innerEyebrow}>Squares setup</div>
 
-                    <h3 style={styles.subTitle}>Board, pricing & status</h3>
-
-                    <p style={styles.sectionDescription}>
-                      Configure board size, pricing, draw date and status.
-                    </p>
-                  </div>
-                </div>
-
+              <CompactDetails
+                eyebrow="Squares setup"
+                title="Board, pricing & status"
+                description="Configure board size, pricing, draw date and publication status."
+                badge={`${totalSquares} squares • ${formatMoney(
+                  game.price_per_square_cents,
+                  currency,
+                )}`}
+              >
                 <div style={styles.threeColumn}>
                   <Field label="Draw date">
                     <input
@@ -466,7 +469,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                   <Field label="Status">
                     <select
                       name="status"
-                      defaultValue={game.status}
+                      defaultValue={status}
                       style={styles.input}
                     >
                       <option value="draft">Draft</option>
@@ -476,22 +479,18 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                     </select>
                   </Field>
                 </div>
-              </section>
+              </CompactDetails>
 
-              <section style={styles.innerPanel}>
-                <div style={styles.innerHeader}>
-                  <div>
-                    <div style={styles.innerEyebrow}>Compliance</div>
-
-                    <h3 style={styles.subTitle}>Legal & postal entry</h3>
-
-                    <p style={styles.sectionDescription}>
-                      Add a skill-based question and the free postal entry route
-                      shown on the public squares page.
-                    </p>
-                  </div>
-                </div>
-
+              <CompactDetails
+                eyebrow="Compliance"
+                title="Legal & postal entry"
+                description="Add a skill-based question and the free postal entry route shown publicly."
+                badge={
+                  legalQuestionEnabled || postalEntryEnabled
+                    ? "Configured"
+                    : "Not configured"
+                }
+              >
                 <div style={styles.twoColumnNoMargin}>
                   <Field label="Entry question">
                     <input
@@ -515,7 +514,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 <Field label="Postal address">
                   <textarea
                     name="free_entry_address"
-                    rows={3}
+                    rows={2}
                     defaultValue={String(freeEntry.address ?? "")}
                     placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
                     style={styles.textarea}
@@ -525,9 +524,9 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 <Field label="Postal instructions">
                   <textarea
                     name="free_entry_instructions"
-                    rows={4}
+                    rows={3}
                     defaultValue={String(freeEntry.instructions ?? "")}
-                    placeholder="Include your full name, email address, phone number, squares game name, answer to the entry question and preferred square number if applicable."
+                    placeholder="Include your full name, email address, game name, answer and preferred square number if applicable."
                     style={styles.textarea}
                   />
                 </Field>
@@ -543,33 +542,23 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
                 <p style={styles.helpText}>
                   Postal entries should include an email address so the entrant
-                  can be contacted if they win and included in the automatic or
-                  dramatic draw.
+                  can be contacted if they win and included in the draw.
                 </p>
-              </section>
+              </CompactDetails>
 
-              <section style={styles.innerPanel}>
-                <div style={styles.innerHeader}>
-                  <div>
-                    <div style={styles.innerEyebrow}>Draw system</div>
-
-                    <h3 style={styles.subTitle}>Auto draw range</h3>
-
-                    <p style={styles.sectionDescription}>
-                      Choose which prize numbers the randomizer should draw.
-                      Example: set from 6 to 999 to keep the top 5 prizes for a
-                      live draw.
-                    </p>
-                  </div>
-                </div>
-
+              <CompactDetails
+                eyebrow="Draw system"
+                title="Auto draw range"
+                description="Choose which prize numbers the randomizer should draw."
+                badge={`${autoDrawFromPrize} → ${autoDrawToPrize}`}
+              >
                 <div style={styles.twoColumnNoMargin}>
                   <Field label="Auto draw from prize number">
                     <input
                       name="auto_draw_from_prize"
                       type="number"
                       min={1}
-                      defaultValue={Number(config.auto_draw_from_prize || 1)}
+                      defaultValue={autoDrawFromPrize}
                       placeholder="6"
                       style={styles.input}
                     />
@@ -580,27 +569,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                       name="auto_draw_to_prize"
                       type="number"
                       min={1}
-                      defaultValue={Number(config.auto_draw_to_prize || 999)}
+                      defaultValue={autoDrawToPrize}
                       placeholder="999"
                       style={styles.input}
                     />
                   </Field>
                 </div>
-              </section>
-
-              <section style={styles.submitBarInner}>
-                <div>
-                  <strong style={{ color: "#0f172a" }}>Save changes</strong>
-
-                  <div style={styles.mutedSmall}>
-                    This updates the public squares page and admin values.
-                  </div>
-                </div>
-
-                <button type="submit" style={styles.submitButton}>
-                  Save squares
-                </button>
-              </section>
+              </CompactDetails>
             </div>
           </details>
         </section>
@@ -761,6 +736,41 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   );
 }
 
+function CompactDetails({
+  eyebrow,
+  title,
+  description,
+  badge,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  badge: string;
+  children: ReactNode;
+}) {
+  return (
+    <details style={styles.compactDetails}>
+      <summary style={styles.compactSummary}>
+        <div style={styles.compactSummaryText}>
+          <div style={styles.innerEyebrow}>{eyebrow}</div>
+
+          <h3 style={styles.subTitle}>{title}</h3>
+
+          <p style={styles.sectionDescription}>{description}</p>
+        </div>
+
+        <div style={styles.compactActions}>
+          <span style={styles.compactBadge}>{badge}</span>
+          <span style={styles.adminSummaryToggle}>Open</span>
+        </div>
+      </summary>
+
+      <div style={styles.compactBody}>{children}</div>
+    </details>
+  );
+}
+
 function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.summaryCard}>
@@ -802,6 +812,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1090,7 +1101,7 @@ const styles: Record<string, CSSProperties> = {
   },
   adminDetailsBody: {
     display: "grid",
-    gap: 14,
+    gap: 12,
     marginTop: 16,
     minWidth: 0,
   },
@@ -1123,8 +1134,8 @@ const styles: Record<string, CSSProperties> = {
   },
   innerPanel: {
     display: "grid",
-    gap: 14,
-    padding: "clamp(14px, 4vw, 16px)",
+    gap: 12,
+    padding: 14,
     borderRadius: 20,
     background:
       "linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eff6ff 100%)",
@@ -1146,6 +1157,55 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 5,
+  },
+  compactDetails: {
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    minWidth: 0,
+  },
+  compactSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    cursor: "pointer",
+    listStyle: "none",
+    padding: 14,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%)",
+    flexWrap: "wrap",
+  },
+  compactSummaryText: {
+    minWidth: 0,
+    flex: "1 1 260px",
+  },
+  compactActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+  },
+  compactBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  compactBody: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderTop: "1px solid #e2e8f0",
+    background: "#ffffff",
   },
   twoColumn: {
     display: "grid",
@@ -1175,24 +1235,24 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 46,
-    padding: "11px 12px",
+    minHeight: 44,
+    padding: "10px 12px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 16,
+    fontSize: 15,
     boxSizing: "border-box",
     minWidth: 0,
   },
   textarea: {
     width: "100%",
-    padding: "11px 12px",
+    padding: "10px 12px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 16,
+    fontSize: 15,
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
@@ -1200,9 +1260,9 @@ const styles: Record<string, CSSProperties> = {
   mediaBox: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 16,
-    padding: 14,
-    borderRadius: 20,
+    gap: 14,
+    padding: 12,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
@@ -1217,7 +1277,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.01em",
   },
   previewBox: {
-    height: 220,
+    height: 180,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
     background: "#ffffff",
@@ -1239,17 +1299,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     marginBottom: 16,
-  },
-  submitBarInner: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
   },
   submitButton: {
     padding: "13px 20px",
