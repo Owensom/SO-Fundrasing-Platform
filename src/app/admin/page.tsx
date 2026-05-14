@@ -47,7 +47,6 @@ async function getAdminRaffles(): Promise<RaffleItem[]> {
     if (!res.ok) return [];
 
     const data = (await res.json()) as ApiResponse;
-
     if (!data.ok || !data.items) return [];
 
     return data.items;
@@ -108,7 +107,6 @@ export default async function AdminDashboardPage() {
     const sold = Array.isArray(game.config_json?.sold)
       ? game.config_json.sold.length
       : 0;
-
     return sum + sold;
   }, 0);
 
@@ -116,7 +114,6 @@ export default async function AdminDashboardPage() {
     const sold = Array.isArray(game.config_json?.sold)
       ? game.config_json.sold.length
       : 0;
-
     return sum + sold * Number(game.price_per_square_cents || 0);
   }, 0);
 
@@ -169,20 +166,33 @@ export default async function AdminDashboardPage() {
             <Link
               href={`/c/${tenantSlug}`}
               target="_blank"
+              className="primaryButton"
               style={styles.primaryButton}
             >
               View public campaigns →
             </Link>
 
-            <Link href="/admin/orders" style={styles.secondaryButton}>
+            <Link
+              href="/admin/orders"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
               Orders dashboard
             </Link>
 
-            <Link href="/admin/customers" style={styles.secondaryButton}>
+            <Link
+              href="/admin/customers"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
               Customers
             </Link>
 
-            <Link href="/admin/metadata" style={styles.secondaryButton}>
+            <Link
+              href="/admin/metadata"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
               Finance & fees
             </Link>
           </div>
@@ -315,15 +325,27 @@ export default async function AdminDashboardPage() {
           </div>
 
           <div className="admin-panel-actions" style={styles.panelActions}>
-            <Link href="/admin/metadata" style={styles.financeButton}>
+            <Link
+              href="/admin/metadata"
+              className="financeButton"
+              style={styles.financeButton}
+            >
               Open finance →
             </Link>
 
-            <Link href="/admin/orders" style={styles.financeButtonSecondary}>
+            <Link
+              href="/admin/orders"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
               Open orders →
             </Link>
 
-            <Link href="/admin/customers" style={styles.financeButtonSecondary}>
+            <Link
+              href="/admin/customers"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
               Open customers →
             </Link>
           </div>
@@ -376,7 +398,6 @@ export default async function AdminDashboardPage() {
     </main>
   );
 }
-
 function StatCard({
   label,
   value,
@@ -493,6 +514,7 @@ function DashboardCard({
     </Link>
   );
 }
+
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -539,9 +561,11 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .admin-dashboard-page .admin-command-actions,
+  .admin-dashboard-page .admin-command-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .admin-dashboard-page .admin-panel-actions {
-    display: grid !important;
     grid-template-columns: 1fr !important;
   }
 
@@ -562,6 +586,7 @@ const responsiveStyles = `
 }
 
 @media (max-width: 620px) {
+  .admin-dashboard-page .admin-command-actions,
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
@@ -578,6 +603,11 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-centre {
     gap: 18px !important;
+  }
+
+  .admin-dashboard-page .admin-card-title,
+  .admin-dashboard-page .admin-section-title {
+    font-size: 25px !important;
   }
 }
 `;
@@ -654,18 +684,19 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandActions: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, max-content))",
+    gap: 10,
     marginTop: 24,
+    alignItems: "center",
   },
 
   primaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 46,
-    padding: "12px 18px",
+    minHeight: 44,
+    padding: "11px 16px",
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
@@ -673,14 +704,15 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
+    whiteSpace: "nowrap",
   },
 
   secondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 46,
-    padding: "12px 18px",
+    minHeight: 44,
+    padding: "11px 15px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.10)",
     color: "#ffffff",
@@ -688,6 +720,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
+    whiteSpace: "nowrap",
   },
 
   commandStats: {
@@ -832,21 +865,21 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minHeight: 280,
+    minHeight: 246,
     transition: "transform 0.18s ease",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
   },
 
   cardTop: {
     display: "grid",
-    gap: 14,
+    gap: 12,
     alignContent: "start",
   },
 
   logoBox: {
-    width: 74,
-    height: 74,
-    borderRadius: 22,
+    width: 62,
+    height: 62,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
@@ -863,21 +896,21 @@ const styles: Record<string, CSSProperties> = {
 
   logoTextDefault: {
     color: "#0f172a",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     letterSpacing: "0.08em",
   },
 
   logoTextBlue: {
     color: "#2563eb",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     letterSpacing: "0.08em",
   },
 
   logoTextGold: {
     color: "#b45309",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     letterSpacing: "0.08em",
   },
@@ -885,7 +918,7 @@ const styles: Record<string, CSSProperties> = {
   cardTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 28,
+    fontSize: 27,
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
@@ -893,7 +926,7 @@ const styles: Record<string, CSSProperties> = {
   cardDescription: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.6,
+    lineHeight: 1.55,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
@@ -963,9 +996,10 @@ const styles: Record<string, CSSProperties> = {
   },
 
   panelActions: {
-    display: "flex",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, max-content))",
     gap: 10,
+    alignItems: "center",
   },
 
   financeButton: {
@@ -979,6 +1013,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   financeButtonSecondary: {
@@ -993,6 +1028,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
+    whiteSpace: "nowrap",
   },
 
   dataPanel: {
