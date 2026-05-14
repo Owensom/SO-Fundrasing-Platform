@@ -438,6 +438,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <details open style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
+              <div style={styles.sectionEyebrow}>Section 1</div>
+
               <h2 style={styles.sectionTitle}>Edit raffle</h2>
 
               <p style={styles.sectionDescription}>
@@ -464,7 +466,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <h3 style={styles.subTitle}>Public overview</h3>
+                    <div style={styles.innerEyebrow}>Public overview</div>
+
+                    <h3 style={styles.subTitle}>Campaign details</h3>
 
                     <p style={styles.sectionDescription}>
                       These details are shown on the public raffle page.
@@ -502,7 +506,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 </Field>
 
                 <div style={styles.mediaBox}>
-                  <div>
+                  <div style={styles.mediaControls}>
                     <h3 style={styles.subTitle}>Raffle image</h3>
 
                     <p style={styles.sectionDescription}>
@@ -541,8 +545,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     />
                   </div>
                 </div>
-
-                <div style={styles.threeColumn}>
+                                <div style={styles.threeColumn}>
                   <Field label="Draw date">
                     <input
                       name="draw_at"
@@ -582,7 +585,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <h3 style={styles.subTitle}>Ticket settings</h3>
+                    <div style={styles.innerEyebrow}>Ticket setup</div>
+
+                    <h3 style={styles.subTitle}>Pricing & bundles</h3>
 
                     <p style={styles.sectionDescription}>
                       Configure pricing, number range, colours and bundle
@@ -729,6 +734,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
+                    <div style={styles.innerEyebrow}>Compliance</div>
+
                     <h3 style={styles.subTitle}>Legal & postal entry</h3>
 
                     <p style={styles.sectionDescription}>
@@ -763,7 +770,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     name="free_entry_address"
                     rows={3}
                     defaultValue={String(config.free_entry?.address ?? "")}
-                    placeholder="e.g. SO Foundation, 123 High Street, London, SW1A 1AA"
+                    placeholder="e.g. SO Foundation, 123 High Street, London"
                     style={styles.textarea}
                   />
                 </Field>
@@ -773,7 +780,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     name="free_entry_instructions"
                     rows={4}
                     defaultValue={String(config.free_entry?.instructions ?? "")}
-                    placeholder="Include your full name, email address, phone number, raffle name, answer to the entry question and preferred ticket number/colour if applicable."
+                    placeholder="Include your full name, email address and answer to the question."
                     style={styles.textarea}
                   />
                 </Field>
@@ -791,20 +798,20 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                 <p style={styles.helpText}>
                   Postal entries must include an email address so the entrant can
-                  be contacted if they win and included in the automatic or
-                  dramatic draw. One entry per postcard/envelope.
+                  be contacted if they win.
                 </p>
               </section>
 
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
+                    <div style={styles.innerEyebrow}>Draw system</div>
+
                     <h3 style={styles.subTitle}>Draw settings</h3>
 
                     <p style={styles.sectionDescription}>
                       Choose which prize numbers the automatic randomizer should
-                      draw. For example, set from 6 to 999 to keep the top prizes
-                      for a live draw.
+                      draw.
                     </p>
                   </div>
                 </div>
@@ -816,7 +823,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       type="number"
                       min={1}
                       defaultValue={autoDrawFromPrize}
-                      placeholder="6"
                       style={styles.input}
                     />
                   </Field>
@@ -827,7 +833,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       type="number"
                       min={1}
                       defaultValue={autoDrawToPrize}
-                      placeholder="999"
                       style={styles.input}
                     />
                   </Field>
@@ -856,6 +861,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <details open={!prizesConfigured} style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
+              <div style={styles.sectionEyebrow}>Section 2</div>
+
               <h2 style={styles.sectionTitle}>Prize management</h2>
 
               <p style={styles.sectionDescription}>
@@ -879,6 +886,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
         <details style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
+              <div style={styles.sectionEyebrow}>Section 3</div>
+
               <h2 style={styles.sectionTitle}>Draw centre</h2>
 
               <p style={styles.sectionDescription}>
@@ -889,9 +898,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
             <div style={styles.summaryPillRow}>
               <span style={styles.neutralPill}>{winners.length} winners</span>
+
               <span style={styles.neutralPill}>
                 {soldTicketsForDraw.length} eligible tickets
               </span>
+
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
@@ -907,6 +918,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Prize</div>
+
                       <div style={styles.winnerValue}>
                         {winner.prize_title || `Prize ${winner.prize_position}`}
                       </div>
@@ -914,6 +926,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Ticket</div>
+
                       <div style={styles.winnerValue}>
                         #{winner.ticket_number}
                       </div>
@@ -921,6 +934,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Colour</div>
+
                       <div style={styles.winnerValue}>
                         {winner.colour || "No colour"}
                       </div>
@@ -928,9 +942,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Buyer</div>
+
                       <div style={styles.winnerValue}>
                         {winner.buyer_name || "Supporter"}
                       </div>
+
                       <div style={styles.winnerEmail}>
                         {winner.buyer_email || "—"}
                       </div>
@@ -941,11 +957,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
             ) : (
               <div style={styles.emptyBox}>No winners yet.</div>
             )}
-
-            <details open style={styles.drawDetails}>
+                        <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
+
                   <p style={styles.sectionDescription}>
                     Add a received postal entry into the eligible ticket pool.
                   </p>
@@ -1010,6 +1026,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Live draw tools</h3>
+
                   <p style={styles.sectionDescription}>
                     Automatic draw and full-screen dramatic draw controls.
                   </p>
@@ -1082,13 +1099,7 @@ function SummaryCard({
   );
 }
 
-function HeroMeta({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function HeroMeta({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroMetaCard}>
       <div style={styles.heroMetaLabel}>{label}</div>
@@ -1118,13 +1129,7 @@ function StatusMiniPill({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
@@ -1135,11 +1140,14 @@ function Field({
 
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
+    overflowX: "hidden",
+    boxSizing: "border-box",
   },
   topBar: {
     display: "flex",
@@ -1150,7 +1158,15 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
   backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
     color: "#334155",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
   },
@@ -1158,6 +1174,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 44,
     padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
@@ -1169,10 +1186,10 @@ const styles: Record<string, CSSProperties> = {
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 280px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 20,
     alignItems: "center",
-    padding: 24,
+    padding: "clamp(20px, 5vw, 28px)",
     borderRadius: 28,
     background:
       "radial-gradient(circle at top left, rgba(22,131,248,0.26), transparent 32%), linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%)",
@@ -1180,6 +1197,8 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     minHeight: 330,
     boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
+    overflow: "hidden",
+    minWidth: 0,
   },
   heroContent: {
     minWidth: 0,
@@ -1201,13 +1220,15 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     flexWrap: "wrap",
+    minWidth: 0,
   },
   heroTitle: {
     margin: 0,
-    fontSize: 38,
-    lineHeight: 1.05,
-    letterSpacing: "-0.05em",
-    wordBreak: "break-word",
+    fontSize: "clamp(34px, 8vw, 48px)",
+    lineHeight: 1.03,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+    minWidth: 0,
   },
   statusPill: {
     padding: "8px 12px",
@@ -1216,19 +1237,21 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     textTransform: "capitalize",
     fontWeight: 950,
+    flexShrink: 0,
   },
   heroSlug: {
     margin: "9px 0 0",
     color: "#cbd5e1",
     fontSize: 14,
     fontWeight: 800,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   heroDescription: {
     margin: "14px 0 0",
     color: "#e2e8f0",
     lineHeight: 1.55,
     maxWidth: 760,
+    overflowWrap: "anywhere",
   },
   heroDescriptionMuted: {
     margin: "14px 0 0",
@@ -1237,7 +1260,7 @@ const styles: Record<string, CSSProperties> = {
   },
   heroMetaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
     gap: 10,
     marginTop: 22,
     maxWidth: 700,
@@ -1247,6 +1270,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.12)",
+    minWidth: 0,
   },
   heroMetaLabel: {
     color: "#94a3b8",
@@ -1258,21 +1282,23 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     fontWeight: 950,
     marginTop: 4,
+    overflowWrap: "anywhere",
   },
   heroImageWrap: {
-    width: 280,
+    width: "100%",
+    maxWidth: 280,
     height: 280,
-    maxHeight: 280,
     borderRadius: 22,
     background: "#1e293b",
     border: "1px solid rgba(255,255,255,0.14)",
     overflow: "hidden",
     alignSelf: "center",
+    justifySelf: "center",
     boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
   },
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
     marginBottom: 16,
   },
@@ -1282,6 +1308,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   summaryLabel: {
     color: "#64748b",
@@ -1293,7 +1320,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
     marginTop: 5,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   progressCard: {
     padding: 16,
@@ -1309,6 +1336,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "center",
     marginBottom: 10,
+    flexWrap: "wrap",
   },
   progressPercent: {
     color: "#166534",
@@ -1335,30 +1363,45 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
   },
   section: {
-    padding: 18,
+    padding: "clamp(16px, 4vw, 18px)",
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  sectionEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
   },
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.03em",
+    fontSize: "clamp(22px, 5vw, 26px)",
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
   sectionDescription: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
   adminDetails: {
     display: "grid",
     gap: 0,
+    minWidth: 0,
   },
   adminSummary: {
     display: "flex",
@@ -1368,6 +1411,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     listStyle: "none",
     flexWrap: "wrap",
+    minWidth: 0,
   },
   adminSummaryToggle: {
     flexShrink: 0,
@@ -1385,6 +1429,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 14,
     marginTop: 16,
+    minWidth: 0,
   },
   summaryPillRow: {
     display: "flex",
@@ -1416,15 +1461,16 @@ const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
     gap: 14,
+    minWidth: 0,
   },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
   threeColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
   field: {
@@ -1439,34 +1485,40 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
+    minHeight: 46,
+    padding: "11px 12px",
+    borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
+    padding: "11px 12px",
+    borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
     gap: 16,
     padding: 14,
     borderRadius: 20,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
   },
   subTitle: {
     margin: 0,
@@ -1484,10 +1536,13 @@ const styles: Record<string, CSSProperties> = {
   innerPanel: {
     display: "grid",
     gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eff6ff 100%)",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
   innerHeader: {
     display: "flex",
@@ -1496,9 +1551,17 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
   colourGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 135px), 1fr))",
     gap: 10,
   },
   colourCard: {
@@ -1510,6 +1573,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
     cursor: "pointer",
     fontWeight: 900,
+    minWidth: 0,
   },
   swatch: {
     width: 24,
@@ -1522,6 +1586,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 2,
     color: "#0f172a",
+    minWidth: 0,
   },
   offerList: {
     display: "grid",
@@ -1534,6 +1599,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     borderRadius: 16,
     background: "#ffffff",
+    minWidth: 0,
   },
   offerBadge: {
     justifySelf: "start",
@@ -1547,7 +1613,7 @@ const styles: Record<string, CSSProperties> = {
   },
   offerInputs: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
     gap: 10,
     alignItems: "end",
   },
@@ -1564,6 +1630,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     margin: 0,
+    overflowWrap: "anywhere",
   },
   submitBar: {
     display: "flex",
@@ -1585,6 +1652,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    minHeight: 44,
   },
   mutedSmall: {
     color: "#64748b",
@@ -1598,13 +1666,14 @@ const styles: Record<string, CSSProperties> = {
   },
   winnerCard: {
     display: "grid",
-    gridTemplateColumns: "46px minmax(0, 1.2fr) 110px 150px minmax(0, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
     gap: 12,
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     alignItems: "center",
+    minWidth: 0,
   },
   winnerPrizeIcon: {
     width: 38,
@@ -1627,13 +1696,13 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 16,
     fontWeight: 950,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   winnerEmail: {
     color: "#64748b",
     fontSize: 13,
     marginTop: 3,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   emptyBox: {
     padding: 16,
@@ -1678,8 +1747,9 @@ const styles: Record<string, CSSProperties> = {
   },
   drawGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 14,
+    padding: 16,
   },
   drawPanel: {
     padding: 16,
@@ -1688,6 +1758,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 12,
+    minWidth: 0,
   },
   drawButton: {
     padding: "13px 20px",
@@ -1697,5 +1768,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontWeight: 950,
     cursor: "pointer",
+    minHeight: 44,
   },
 };
