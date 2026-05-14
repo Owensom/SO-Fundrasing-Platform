@@ -966,4 +966,3 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
   },
 };
-};
