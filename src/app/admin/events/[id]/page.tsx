@@ -85,8 +85,36 @@ function formatDateTimeLocal(value: string | null) {
   }
 }
 
+function formatDisplayDate(value: string | null | undefined) {
+  if (!value) return "Not scheduled";
+
+  try {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "Not scheduled";
+
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+  } catch {
+    return "Not scheduled";
+  }
+}
+
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function formatMoney(cents: number | null | undefined, currency = "GBP") {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `${moneyFromCents(cents)} ${currency || "GBP"}`;
+  }
 }
 
 function poundsToCents(value: FormDataEntryValue | null) {
@@ -324,6 +352,30 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
+function statusStyle(status: string): CSSProperties {
+  if (status === "published") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (status === "closed") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
+}
+
 async function requireEventAccess(eventId: string) {
   const session = await auth();
   if (!session?.user) redirect("/admin/login");
@@ -471,7 +523,6 @@ async function updateSeatingLayoutAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=layout#${returnAnchor}`);
 }
-
 async function updateTableNamesAction(formData: FormData) {
   "use server";
 
@@ -1025,16 +1076,21 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
-
 export default async function AdminEventManagePage({
   params,
   searchParams,
 }: PageProps) {
   const session = await auth();
-  if (!session?.user) redirect("/admin/login");
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
 
   const event = await getEventById(params.id);
-  if (!event) notFound();
+
+  if (!event) {
+    notFound();
+  }
 
   const tenantSlug = await getTenantSlugFromHeaders();
 
@@ -1056,7 +1112,10 @@ export default async function AdminEventManagePage({
   const hasCustomImage = Boolean(event.image_url);
 
   const imageFocusStyle: CSSProperties = {
-    objectPosition: `${event.image_focus_x ?? 50}% ${event.image_focus_y ?? 50}%`,
+    objectFit: "cover",
+    objectPosition: `${event.image_focus_x ?? 50}% ${
+      event.image_focus_y ?? 50
+    }%`,
   };
 
   const defaultImageStyle: CSSProperties = {
@@ -1098,6 +1157,15 @@ export default async function AdminEventManagePage({
     (seat) => seat.seat_purpose === "complimentary",
   ).length;
 
+  const activeTicketTypes = ticketTypes.filter(
+    (ticketType) => ticketType.is_active,
+  );
+
+  const lowestTicketPrice =
+    activeTicketTypes.length > 0
+      ? Math.min(...activeTicketTypes.map((ticketType) => ticketType.price || 0))
+      : null;
+
   const uniqueTableNumbers = Array.from(
     new Set(
       tableSeats
@@ -1125,46 +1193,78 @@ export default async function AdminEventManagePage({
   );
 
   const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+  const capacitySummary = isGeneralAdmission
+    ? event.capacity
+      ? `${event.capacity} tickets`
+      : "Unlimited"
+    : isReservedSeating
+      ? `${rowSeats.length} row seats`
+      : `${tableSeats.length} table seats`;
 
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
         <div style={styles.heroContent}>
-          <p style={styles.eyebrow}>Events & Tickets</p>
-          <h1 className="so-brand-heading" style={styles.title}>
-            {event.title}
-          </h1>
+          <div style={styles.eyebrow}>Events editor</div>
 
-          <div style={styles.badgeRow}>
-            <span style={styles.goldBadge}>{eventTypeLabel(event.event_type)}</span>
-            <span style={styles.darkBadge}>{statusLabel(event.status)}</span>
-            <span style={styles.darkBadge}>{event.currency}</span>
+          <div style={styles.heroTitleRow}>
+            <h1 className="so-brand-heading" style={styles.title}>
+              {event.title}
+            </h1>
+
+            <span style={{ ...styles.statusPill, ...statusStyle(event.status) }}>
+              {statusLabel(event.status)}
+            </span>
           </div>
 
-          <p style={styles.subtle}>
-            Public page: <strong>/e/{event.slug}</strong>
+          <p style={styles.heroSlug}>/e/{event.slug}</p>
+
+          <p style={styles.heroDescription}>
+            {event.description || "No description added yet."}
           </p>
+
+          <div style={styles.heroMetricGrid}>
+            <HeroMetric label="Type" value={eventTypeLabel(event.event_type)} />
+            <HeroMetric
+              label="Starts"
+              value={formatDisplayDate(event.starts_at)}
+            />
+            <HeroMetric label="Capacity" value={capacitySummary} />
+            <HeroMetric
+              label="From"
+              value={
+                lowestTicketPrice === null
+                  ? "Not priced"
+                  : formatMoney(lowestTicketPrice, event.currency)
+              }
+            />
+          </div>
         </div>
 
-        <div style={styles.heroImageWrap}>
-          <img
-            src={event.image_url || DEFAULT_EVENTS_IMAGE}
-            alt={event.title || "SO Events"}
-            style={{
-              ...styles.heroImage,
-              ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
-            }}
-          />
-        </div>
+        <div style={styles.heroPreview}>
+          <div style={styles.previewKicker}>Public preview</div>
 
-        <div style={styles.heroActions}>
-          <a href="/admin/events" style={styles.secondaryButton}>
-            Back to events
-          </a>
-          <a href={publicEventHref} style={styles.primaryLink}>
-            View public page
-          </a>
+          <div style={styles.heroImageWrap}>
+            <img
+              src={event.image_url || DEFAULT_EVENTS_IMAGE}
+              alt={event.title || "SO Events"}
+              style={{
+                ...styles.heroImage,
+                ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
+              }}
+            />
+          </div>
         </div>
+      </section>
+
+      <section style={styles.topActions}>
+        <a href="/admin/events" style={styles.secondaryButton}>
+          ← Back to events
+        </a>
+
+        <a href={publicEventHref} target="_blank" style={styles.primaryLink}>
+          View public page
+        </a>
       </section>
 
       <nav style={styles.tabs}>
@@ -1172,7 +1272,7 @@ export default async function AdminEventManagePage({
           Overview
         </a>
         <a href="#tickets" style={styles.tab}>
-          Tickets & Prices
+          Tickets
         </a>
         <a href="#prizes-menu" style={styles.tab}>
           Prizes & Menu
@@ -1180,91 +1280,108 @@ export default async function AdminEventManagePage({
         <a href="#winner-draw" style={styles.tab}>
           Winner Draw
         </a>
-        {isReservedSeating && (
+        {isReservedSeating ? (
           <a href="#row-seating" style={styles.tab}>
             Row Seating
           </a>
-        )}
-        {isTables && (
+        ) : null}
+        {isTables ? (
           <a href="#table-seating" style={styles.tab}>
             Table Seating
           </a>
-        )}
+        ) : null}
         <a href="#danger-zone" style={styles.tabDanger}>
           Danger Zone
         </a>
       </nav>
 
-      {searchParams?.saved && <div style={styles.successBox}>Saved successfully.</div>}
+      {searchParams?.saved ? (
+        <div style={styles.successBox}>Saved successfully.</div>
+      ) : null}
 
-      {searchParams?.error && (
+      {searchParams?.error ? (
         <div style={styles.errorBox}>
           Please check the missing fields and try again.
         </div>
-      )}
+      ) : null}
+
+      <section style={styles.summaryGrid}>
+        <SummaryCard label="Ticket types" value={ticketTypes.length} />
+        <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
+        <SummaryCard
+          label="Menu options"
+          value={(event.menu_options || []).length}
+        />
+        <SummaryCard label="Winners" value={winners.length} />
+        <SummaryCard label="Available" value={availableSeats} />
+        <SummaryCard label="Reserved" value={reservedSeats} />
+        <SummaryCard label="Sold" value={soldSeats} />
+        <SummaryCard label="Blocked" value={blockedSeats} />
+        <SummaryCard label="VIP" value={vipSeats} />
+        <SummaryCard label="Complimentary" value={complimentarySeats} />
+      </section>
 
       <CollapsibleSection
         id="overview"
         eyebrow="Section 1"
         title="Overview"
-        description="Core event details and headline status. This is open by default because it contains the main event save form."
+        description="Core event details and headline setup. This is open by default because it contains the main event save form."
+        badge={formatDisplayDate(event.starts_at)}
         defaultOpen
       >
-        <div style={styles.statsGrid}>
-          <SummaryCard label="Ticket types" value={ticketTypes.length} />
-          <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
-          <SummaryCard label="Menu options" value={(event.menu_options || []).length} />
-          <SummaryCard label="Winners" value={winners.length} />
-          <SummaryCard
-            label="Capacity"
-            value={
-              isGeneralAdmission
-                ? event.capacity
-                  ? `${event.capacity} tickets`
-                  : "Unlimited"
-                : isReservedSeating
-                  ? `${rowSeats.length} row seats`
-                  : `${tableSeats.length} table seats`
-            }
-          />
-          <SummaryCard label="Available" value={availableSeats} />
-          <SummaryCard label="Reserved" value={reservedSeats} />
-          <SummaryCard label="Sold" value={soldSeats} />
-          <SummaryCard label="Blocked" value={blockedSeats} />
-          <SummaryCard label="VIP" value={vipSeats} />
-          <SummaryCard label="Complimentary" value={complimentarySeats} />
-        </div>
-
         <div style={styles.panel}>
-          <h3 style={styles.panelTitle}>Event details</h3>
+          <div style={styles.panelHeader}>
+            <div>
+              <div style={styles.innerEyebrow}>Event setup</div>
+              <h3 style={styles.panelTitle}>Event details</h3>
+              <p style={styles.sectionText}>
+                Update the public event page, timing, capacity, image and guest
+                collection settings.
+              </p>
+            </div>
+          </div>
 
           <form action={updateEventAction} style={styles.form}>
             <input type="hidden" name="id" value={event.id} />
 
-            <Field label="Title">
-              <input name="title" required defaultValue={event.title} style={styles.input} />
-            </Field>
+            <div style={styles.twoCol}>
+              <Field label="Title">
+                <input
+                  name="title"
+                  required
+                  defaultValue={event.title}
+                  style={styles.input}
+                />
+              </Field>
 
-            <Field label="Slug">
-              <input name="slug" required defaultValue={event.slug} style={styles.input} />
-            </Field>
+              <Field label="Slug">
+                <input
+                  name="slug"
+                  required
+                  defaultValue={event.slug}
+                  style={styles.input}
+                />
+              </Field>
+            </div>
 
             <Field label="Description">
               <textarea
                 name="description"
-                rows={5}
+                rows={3}
                 defaultValue={event.description || ""}
                 style={styles.textarea}
               />
             </Field>
 
             <div style={styles.mediaBox}>
-              <div>
+              <div style={styles.mediaControls}>
                 <h3 style={styles.panelTitle}>Event image</h3>
+
                 <p style={styles.sectionText}>
                   Upload or replace the public event image, then choose the focal
                   point for wide banners and cards.
                 </p>
+
                 <ImageFocusUploadField
                   currentImageUrl={event.image_url ?? ""}
                   currentFocusX={event.image_focus_x ?? 50}
@@ -1288,7 +1405,11 @@ export default async function AdminEventManagePage({
 
             <div style={styles.twoCol}>
               <Field label="Location">
-                <input name="location" defaultValue={event.location || ""} style={styles.input} />
+                <input
+                  name="location"
+                  defaultValue={event.location || ""}
+                  style={styles.input}
+                />
               </Field>
 
               <Field label="General admission capacity">
@@ -1325,7 +1446,11 @@ export default async function AdminEventManagePage({
 
             <div style={styles.threeCol}>
               <Field label="Currency">
-                <select name="currency" defaultValue={event.currency} style={styles.input}>
+                <select
+                  name="currency"
+                  defaultValue={event.currency}
+                  style={styles.input}
+                >
                   <option value="GBP">GBP</option>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -1333,7 +1458,11 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Type">
-                <select name="event_type" defaultValue={event.event_type} style={styles.input}>
+                <select
+                  name="event_type"
+                  defaultValue={event.event_type}
+                  style={styles.input}
+                >
                   <option value="general_admission">General admission</option>
                   <option value="reserved_seating">Reserved seating</option>
                   <option value="tables">Tables</option>
@@ -1341,7 +1470,11 @@ export default async function AdminEventManagePage({
               </Field>
 
               <Field label="Status">
-                <select name="status" defaultValue={event.status} style={styles.input}>
+                <select
+                  name="status"
+                  defaultValue={event.status}
+                  style={styles.input}
+                >
                   <option value="draft">Draft</option>
                   <option value="published">Published</option>
                   <option value="closed">Closed</option>
@@ -1353,7 +1486,9 @@ export default async function AdminEventManagePage({
               <Field label="Ask for dietary requirements">
                 <select
                   name="ask_dietary_requirements"
-                  defaultValue={event.ask_dietary_requirements ? "true" : "false"}
+                  defaultValue={
+                    event.ask_dietary_requirements ? "true" : "false"
+                  }
                   style={styles.input}
                 >
                   <option value="true">Yes, ask buyers/guests</option>
@@ -1373,9 +1508,20 @@ export default async function AdminEventManagePage({
               </Field>
             </div>
 
-            <button type="submit" style={styles.primaryButton}>
-              Save event details
-            </button>
+            <section style={styles.submitBar}>
+              <div>
+                <strong style={{ color: "#0f172a" }}>
+                  Save event details
+                </strong>
+                <div style={styles.mutedSmall}>
+                  This updates the public event page and admin values.
+                </div>
+              </div>
+
+              <button type="submit" style={styles.primaryButton}>
+                Save event details
+              </button>
+            </section>
           </form>
         </div>
       </CollapsibleSection>
@@ -1384,12 +1530,11 @@ export default async function AdminEventManagePage({
         id="tickets"
         eyebrow="Section 2"
         title="Tickets & Prices"
-        description="Add public ticket choices, pricing, limits, and visibility."
+        description="Add public ticket choices, pricing, limits and visibility."
+        badge={`${activeTicketTypes.length} active`}
       >
         <div style={styles.ticketLayout}>
-          <div style={styles.panel}>
-            <h3 style={styles.panelTitle}>Add ticket type</h3>
-
+          <CompactPanel title="Add ticket type" eyebrow="New ticket">
             <form action={addTicketTypeAction} style={styles.form}>
               <input type="hidden" name="event_id" value={event.id} />
 
@@ -1403,7 +1548,13 @@ export default async function AdminEventManagePage({
 
               <div style={styles.threeCol}>
                 <Field label="Price">
-                  <input name="price" type="number" step="0.01" min="0" style={styles.input} />
+                  <input
+                    name="price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    style={styles.input}
+                  />
                 </Field>
 
                 <Field label="Ticket limit">
@@ -1429,7 +1580,11 @@ export default async function AdminEventManagePage({
               </div>
 
               <Field label="Visibility">
-                <select name="is_active" defaultValue="true" style={styles.input}>
+                <select
+                  name="is_active"
+                  defaultValue="true"
+                  style={styles.input}
+                >
                   <option value="true">Active</option>
                   <option value="false">Hidden</option>
                 </select>
@@ -1439,99 +1594,142 @@ export default async function AdminEventManagePage({
                 Add ticket type
               </button>
             </form>
-          </div>
+          </CompactPanel>
 
-          <div style={styles.panel}>
-            <h3 style={styles.panelTitle}>Current ticket types</h3>
-
+          <CompactPanel title="Current ticket types" eyebrow="Existing tickets">
             <div style={styles.ticketListScroll}>
               {ticketTypes.length === 0 ? (
                 <div style={styles.emptyBox}>No ticket types yet.</div>
               ) : (
                 ticketTypes.map((ticketType) => (
-                  <div key={ticketType.id} style={styles.editTicketCard}>
-                    <form action={updateTicketTypeAction} style={styles.form}>
-                      <input type="hidden" name="event_id" value={event.id} />
-                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
-
-                      <div style={styles.twoCol}>
-                        <Field label="Name">
-                          <input
-                            name="name"
-                            required
-                            defaultValue={ticketType.name}
-                            style={styles.input}
-                          />
-                        </Field>
-
-                        <Field label="Description">
-                          <input
-                            name="description"
-                            defaultValue={ticketType.description || ""}
-                            style={styles.input}
-                          />
-                        </Field>
+                  <details key={ticketType.id} style={styles.ticketDetails}>
+                    <summary style={styles.ticketSummary}>
+                      <div>
+                        <strong>{ticketType.name}</strong>
+                        <div style={styles.mutedSmall}>
+                          {formatMoney(ticketType.price, event.currency)}
+                          {ticketType.capacity
+                            ? ` • ${ticketType.capacity} limit`
+                            : " • Unlimited"}
+                        </div>
                       </div>
 
-                      <div style={styles.fourCol}>
-                        <Field label="Price">
-                          <input
-                            name="price"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            defaultValue={moneyFromCents(ticketType.price)}
-                            style={styles.input}
-                          />
-                        </Field>
+                      <span
+                        style={{
+                          ...styles.statusMiniPill,
+                          ...(ticketType.is_active
+                            ? {
+                                background: "#dcfce7",
+                                color: "#166534",
+                                borderColor: "#bbf7d0",
+                              }
+                            : {
+                                background: "#f8fafc",
+                                color: "#64748b",
+                                borderColor: "#e2e8f0",
+                              }),
+                        }}
+                      >
+                        {ticketType.is_active ? "Active" : "Hidden"}
+                      </span>
+                    </summary>
 
-                        <Field label="Limit">
-                          <input
-                            name="capacity"
-                            type="number"
-                            min="0"
-                            defaultValue={ticketType.capacity || ""}
-                            placeholder="Unlimited"
-                            style={styles.input}
-                          />
-                        </Field>
+                    <div style={styles.ticketDetailsBody}>
+                      <form action={updateTicketTypeAction} style={styles.form}>
+                        <input type="hidden" name="event_id" value={event.id} />
+                        <input
+                          type="hidden"
+                          name="ticket_type_id"
+                          value={ticketType.id}
+                        />
 
-                        <Field label="Display order">
-                          <input
-                            name="sort_order"
-                            type="number"
-                            min="0"
-                            defaultValue={ticketType.sort_order}
-                            style={styles.input}
-                          />
-                          <p style={styles.helperText}>Lower numbers appear first.</p>
-                        </Field>
+                        <div style={styles.twoCol}>
+                          <Field label="Name">
+                            <input
+                              name="name"
+                              required
+                              defaultValue={ticketType.name}
+                              style={styles.input}
+                            />
+                          </Field>
 
-                        <Field label="Visibility">
-                          <select
-                            name="is_active"
-                            defaultValue={ticketType.is_active ? "true" : "false"}
-                            style={styles.input}
-                          >
-                            <option value="true">Active</option>
-                            <option value="false">Hidden</option>
-                          </select>
-                        </Field>
-                      </div>
+                          <Field label="Description">
+                            <input
+                              name="description"
+                              defaultValue={ticketType.description || ""}
+                              style={styles.input}
+                            />
+                          </Field>
+                        </div>
 
-                      <button type="submit" style={styles.primaryButton}>
-                        Save
-                      </button>
-                    </form>
+                        <div style={styles.fourCol}>
+                          <Field label="Price">
+                            <input
+                              name="price"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              defaultValue={moneyFromCents(ticketType.price)}
+                              style={styles.input}
+                            />
+                          </Field>
 
-                    <form action={deleteTicketTypeAction}>
-                      <input type="hidden" name="event_id" value={event.id} />
-                      <input type="hidden" name="ticket_type_id" value={ticketType.id} />
-                      <button type="submit" style={styles.dangerOutlineButton}>
-                        Delete
-                      </button>
-                    </form>
-                  </div>
+                          <Field label="Limit">
+                            <input
+                              name="capacity"
+                              type="number"
+                              min="0"
+                              defaultValue={ticketType.capacity || ""}
+                              placeholder="Unlimited"
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Display order">
+                            <input
+                              name="sort_order"
+                              type="number"
+                              min="0"
+                              defaultValue={ticketType.sort_order}
+                              style={styles.input}
+                            />
+                            <p style={styles.helperText}>
+                              Lower numbers appear first.
+                            </p>
+                          </Field>
+
+                          <Field label="Visibility">
+                            <select
+                              name="is_active"
+                              defaultValue={
+                                ticketType.is_active ? "true" : "false"
+                              }
+                              style={styles.input}
+                            >
+                              <option value="true">Active</option>
+                              <option value="false">Hidden</option>
+                            </select>
+                          </Field>
+                        </div>
+
+                        <button type="submit" style={styles.primaryButton}>
+                          Save ticket
+                        </button>
+                      </form>
+
+                      <form action={deleteTicketTypeAction}>
+                        <input type="hidden" name="event_id" value={event.id} />
+                        <input
+                          type="hidden"
+                          name="ticket_type_id"
+                          value={ticketType.id}
+                        />
+                        <button type="submit" style={styles.dangerOutlineButton}>
+                          Delete ticket type
+                        </button>
+                      </form>
+                    </div>
+                  </details>
                 ))
               )}
             </div>
@@ -1542,15 +1740,17 @@ export default async function AdminEventManagePage({
                 Clear all ticket types
               </button>
             </form>
-          </div>
+          </CompactPanel>
         </div>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="prizes-menu"
         eyebrow="Section 3"
         title="Prizes & Menu"
         description="Manage optional golden-ticket prizes and event menu choices."
+        badge={`${(event.prizes_json || []).length} prizes • ${
+          (event.menu_options || []).length
+        } menu`}
       >
         <EventPrizeMenuSettings
           eventId={event.id}
@@ -1566,6 +1766,7 @@ export default async function AdminEventManagePage({
         eyebrow="Section 4"
         title="Winner Draw"
         description="Draw event winners from eligible paid event entries and keep winner history."
+        badge={`${winners.length} winners`}
       >
         <EventWinnerDrawPanel
           eventId={event.id}
@@ -1578,77 +1779,78 @@ export default async function AdminEventManagePage({
         />
       </CollapsibleSection>
 
-      {isReservedSeating && (
+      {isReservedSeating ? (
         <CollapsibleSection
           id="row-seating"
           eyebrow="Section 5"
           title="Row Seating"
-          description="Generate seats first, then use Seat Manager to block seats, mark VIP/complimentary seats, and save row layout nudges."
+          description="Generate seats, block seats, mark VIP/complimentary seats and save row layout nudges."
+          badge={`${rowSeats.length} seats`}
         >
           <div style={styles.twoPanel}>
-            <form action={generateSeatsAction} style={styles.panel}>
-              <input type="hidden" name="event_id" value={event.id} />
-              <h3 style={styles.panelTitle}>Generate row seating</h3>
+            <CompactPanel title="Generate row seating" eyebrow="Seat builder">
+              <form action={generateSeatsAction} style={styles.form}>
+                <input type="hidden" name="event_id" value={event.id} />
 
-              <Field label="Initial marking">
-                <select name="ticket_type_id" style={styles.input}>
-                  <option value="">Normal public seats</option>
-                  {ticketTypes.map((ticketType) => (
-                    <option key={ticketType.id} value={ticketType.id}>
-                      {ticketType.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                <Field label="Initial marking">
+                  <select name="ticket_type_id" style={styles.input}>
+                    <option value="">Normal public seats</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-              <Field label="Section">
-                <input
-                  name="section"
-                  placeholder="Main, VIP, Balcony, Left, Centre..."
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Rows">
-                <input
-                  name="rows"
-                  placeholder="1-10 or A-C or 1-3,8-10"
-                  style={styles.input}
-                />
-              </Field>
-
-              <div style={styles.twoCol}>
-                <Field label="Seats per row">
+                <Field label="Section">
                   <input
-                    name="seats_per_row"
-                    type="number"
-                    min="1"
-                    placeholder="40"
+                    name="section"
+                    placeholder="Main, VIP, Balcony, Left, Centre..."
                     style={styles.input}
                   />
                 </Field>
 
-                <Field label="Aisles after seats">
+                <Field label="Rows">
                   <input
-                    name="aisle_after"
-                    placeholder="10,20,30"
+                    name="rows"
+                    placeholder="1-10 or A-C or 1-3,8-10"
                     style={styles.input}
                   />
                 </Field>
-              </div>
 
-              <label style={styles.checkboxLabel}>
-                <input type="checkbox" name="clear_existing" value="yes" />
-                Clear existing row seats before generating
-              </label>
+                <div style={styles.twoCol}>
+                  <Field label="Seats per row">
+                    <input
+                      name="seats_per_row"
+                      type="number"
+                      min="1"
+                      placeholder="40"
+                      style={styles.input}
+                    />
+                  </Field>
 
-              <button type="submit" style={styles.primaryButton}>
-                Generate row seating
-              </button>
-            </form>
+                  <Field label="Aisles after seats">
+                    <input
+                      name="aisle_after"
+                      placeholder="10,20,30"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
 
-            <div style={styles.panel}>
-              <h3 style={styles.panelTitle}>Row seating summary</h3>
+                <label style={styles.checkboxLabel}>
+                  <input type="checkbox" name="clear_existing" value="yes" />
+                  Clear existing row seats before generating
+                </label>
+
+                <button type="submit" style={styles.primaryButton}>
+                  Generate row seating
+                </button>
+              </form>
+            </CompactPanel>
+
+            <CompactPanel title="Row seating summary" eyebrow="Seat status">
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
                 <SummaryCard
@@ -1662,18 +1864,15 @@ export default async function AdminEventManagePage({
                   value={rowSeats.filter((seat) => seat.status === "sold").length}
                 />
               </div>
-            </div>
+            </CompactPanel>
           </div>
 
-          <div style={styles.panel}>
+          <CompactPanel title="Seat Manager" eyebrow="Row tools">
             <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Seat Manager</h3>
-                <p style={styles.sectionText}>
-                  Click seats to select them, then save guest/allocation details
-                  or block/unblock seats.
-                </p>
-              </div>
+              <p style={styles.sectionText}>
+                Click seats to select them, then save guest/allocation details or
+                block/unblock seats.
+              </p>
 
               <form action={clearRowSeatsAction}>
                 <input type="hidden" name="event_id" value={event.id} />
@@ -1686,89 +1885,95 @@ export default async function AdminEventManagePage({
             {rowSeats.length === 0 ? (
               <div style={styles.emptyBox}>No row seats generated yet.</div>
             ) : (
-              <AdminSeatManager
-                eventId={event.id}
-                seats={rowSeats}
-                ticketTypes={ticketTypes}
-                currency={event.currency}
-                mode="rows"
-                applyTicketTypeAction={applySeatTicketTypeAction}
-                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
-                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
-                updateSeatingLayoutAction={updateSeatingLayoutAction}
-                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
-                deleteSelectedRowsAction={deleteSelectedRowsAction}
-                initialSeatingLayout={event.seating_layout_json || {}}
-              />
+              <div style={styles.seatManagerShell}>
+                <AdminSeatManager
+                  eventId={event.id}
+                  seats={rowSeats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                  mode="rows"
+                  applyTicketTypeAction={applySeatTicketTypeAction}
+                  updateSelectedSeatsMetadataAction={
+                    updateSelectedSeatsMetadataAction
+                  }
+                  updateSelectedSeatsStatusAction={
+                    updateSelectedSeatsStatusAction
+                  }
+                  updateSeatingLayoutAction={updateSeatingLayoutAction}
+                  deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                  deleteSelectedRowsAction={deleteSelectedRowsAction}
+                  initialSeatingLayout={event.seating_layout_json || {}}
+                />
+              </div>
             )}
-          </div>
+          </CompactPanel>
         </CollapsibleSection>
-      )}
+      ) : null}
 
-      {isTables && (
+      {isTables ? (
         <CollapsibleSection
           id="table-seating"
           eyebrow="Section 5"
           title="Table Seating"
           description="Generate table layouts, choose a table shape, name tables and manage allocations."
+          badge={`${tableSeats.length} seats • ${uniqueTableNumbers.length} tables`}
         >
           <div style={styles.twoPanel}>
-            <form action={generateTablesAction} style={styles.panel}>
-              <input type="hidden" name="event_id" value={event.id} />
-              <h3 style={styles.panelTitle}>Generate table seating</h3>
+            <CompactPanel title="Generate table seating" eyebrow="Table builder">
+              <form action={generateTablesAction} style={styles.form}>
+                <input type="hidden" name="event_id" value={event.id} />
 
-              <Field label="Initial marking">
-                <select name="ticket_type_id" style={styles.input}>
-                  <option value="">Normal public seats</option>
-                  {ticketTypes.map((ticketType) => (
-                    <option key={ticketType.id} value={ticketType.id}>
-                      {ticketType.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <div style={styles.twoCol}>
-                <Field label="Number of tables">
-                  <input
-                    name="table_count"
-                    type="number"
-                    min="1"
-                    placeholder="10"
-                    style={styles.input}
-                  />
+                <Field label="Initial marking">
+                  <select name="ticket_type_id" style={styles.input}>
+                    <option value="">Normal public seats</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
 
-                <Field label="Seats per table">
-                  <input
-                    name="seats_per_table"
-                    type="number"
-                    min="1"
-                    placeholder="8"
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
+                <div style={styles.twoCol}>
+                  <Field label="Number of tables">
+                    <input
+                      name="table_count"
+                      type="number"
+                      min="1"
+                      placeholder="10"
+                      style={styles.input}
+                    />
+                  </Field>
 
-              <label style={styles.checkboxLabel}>
-                <input type="checkbox" name="clear_existing" value="yes" />
-                Clear existing table seats before generating
-              </label>
+                  <Field label="Seats per table">
+                    <input
+                      name="seats_per_table"
+                      type="number"
+                      min="1"
+                      placeholder="8"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
 
-              <button type="submit" style={styles.primaryButton}>
-                Generate table seating
-              </button>
-            </form>
+                <label style={styles.checkboxLabel}>
+                  <input type="checkbox" name="clear_existing" value="yes" />
+                  Clear existing table seats before generating
+                </label>
 
-            <div style={styles.panel}>
-              <h3 style={styles.panelTitle}>Table seating summary</h3>
+                <button type="submit" style={styles.primaryButton}>
+                  Generate table seating
+                </button>
+              </form>
+            </CompactPanel>
 
+            <CompactPanel title="Table seating summary" eyebrow="Table status">
               <div style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
                 <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
                 <SummaryCard label="Shape" value={tableShape} />
                 <SummaryCard
-                  label="Named tables"
+                  label="Named"
                   value={
                     Object.keys(event.table_names_json || {}).filter(
                       (key) => key !== TABLE_SHAPE_KEY,
@@ -1783,79 +1988,64 @@ export default async function AdminEventManagePage({
                 />
                 <SummaryCard
                   label="Sold"
-                  value={
-                    tableSeats.filter((seat) => seat.status === "sold").length
-                  }
+                  value={tableSeats.filter((seat) => seat.status === "sold").length}
                 />
               </div>
-            </div>
+            </CompactPanel>
           </div>
 
-          <form action={updateTableShapeAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
+          <CompactPanel title="Table shape" eyebrow="Layout">
+            <form action={updateTableShapeAction} style={styles.form}>
+              <input type="hidden" name="event_id" value={event.id} />
 
-            <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Table shape</h3>
-                <p style={styles.sectionText}>
-                  Choose how tables are drawn in admin and public views.
-                </p>
-              </div>
+              <Field label="Shape">
+                <select
+                  name="table_shape"
+                  defaultValue={tableShape}
+                  style={styles.input}
+                >
+                  <option value="round">Round tables</option>
+                  <option value="square">Square tables</option>
+                  <option value="rectangle">Rectangle tables</option>
+                </select>
+              </Field>
 
               <button type="submit" style={styles.primaryButton}>
                 Save table shape
               </button>
-            </div>
+            </form>
+          </CompactPanel>
 
-            <Field label="Shape">
-              <select
-                name="table_shape"
-                defaultValue={tableShape}
-                style={styles.input}
-              >
-                <option value="round">Round tables</option>
-                <option value="square">Square tables</option>
-                <option value="rectangle">Rectangle tables</option>
-              </select>
-            </Field>
-          </form>
+          <CompactPanel title="Table names" eyebrow="Public labels">
+            <form action={updateTableNamesAction} style={styles.form}>
+              <input type="hidden" name="event_id" value={event.id} />
 
-          <form action={updateTableNamesAction} style={styles.panel}>
-            <input type="hidden" name="event_id" value={event.id} />
+              <p style={styles.sectionText}>
+                Add friendly names such as Sponsors, VIP, Smith Family, or
+                Staff.
+              </p>
 
-            <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Table names</h3>
-                <p style={styles.sectionText}>
-                  Add friendly names such as Sponsors, VIP, Smith Family, or
-                  Staff.
-                </p>
-              </div>
+              <TableNamesEditor
+                tableNumbers={uniqueTableNumbers}
+                initialTableNames={
+                  uniqueTableNumbers.length > 0
+                    ? tableNamesFromExistingTables
+                    : event.table_names_json || {}
+                }
+              />
 
               <button type="submit" style={styles.primaryButton}>
                 Save table names
               </button>
-            </div>
+            </form>
+          </CompactPanel>
 
-            <TableNamesEditor
-              tableNumbers={uniqueTableNumbers}
-              initialTableNames={
-                uniqueTableNumbers.length > 0
-                  ? tableNamesFromExistingTables
-                  : event.table_names_json || {}
-              }
-            />
-          </form>
-
-          <div style={styles.panel}>
+          <CompactPanel title="Seat Manager" eyebrow="Table tools">
             <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Seat Manager</h3>
-                <p style={styles.sectionText}>
-                  Select one or more seats, then save allocation details or
-                  block/unblock seats.
-                </p>
-              </div>
+              <p style={styles.sectionText}>
+                Select one or more seats, then save allocation details or
+                block/unblock seats.
+              </p>
 
               <form action={clearTableSeatsAction}>
                 <input type="hidden" name="event_id" value={event.id} />
@@ -1868,31 +2058,38 @@ export default async function AdminEventManagePage({
             {tableSeats.length === 0 ? (
               <div style={styles.emptyBox}>No table seats generated yet.</div>
             ) : (
-              <AdminSeatManager
-                eventId={event.id}
-                seats={tableSeats}
-                ticketTypes={ticketTypes}
-                currency={event.currency}
-                mode="tables"
-                applyTicketTypeAction={applySeatTicketTypeAction}
-                updateSelectedSeatsMetadataAction={updateSelectedSeatsMetadataAction}
-                updateSelectedSeatsStatusAction={updateSelectedSeatsStatusAction}
-                deleteSelectedSeatsAction={deleteSelectedSeatsAction}
-                initialSeatingLayout={{
-                  ...(event.seating_layout_json || {}),
-                  tableShape,
-                }}
-              />
+              <div style={styles.seatManagerShell}>
+                <AdminSeatManager
+                  eventId={event.id}
+                  seats={tableSeats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                  mode="tables"
+                  applyTicketTypeAction={applySeatTicketTypeAction}
+                  updateSelectedSeatsMetadataAction={
+                    updateSelectedSeatsMetadataAction
+                  }
+                  updateSelectedSeatsStatusAction={
+                    updateSelectedSeatsStatusAction
+                  }
+                  deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                  initialSeatingLayout={{
+                    ...(event.seating_layout_json || {}),
+                    tableShape,
+                  }}
+                />
+              </div>
             )}
-          </div>
+          </CompactPanel>
         </CollapsibleSection>
-      )}
+      ) : null}
 
       <CollapsibleSection
         id="danger-zone"
         eyebrow="Final section"
         title="Danger Zone"
         description="Permanent destructive actions for this event."
+        badge="Delete"
       >
         <div style={styles.dangerSectionInner}>
           <form action={deleteEventAction}>
@@ -1912,6 +2109,7 @@ function CollapsibleSection({
   title,
   eyebrow,
   description,
+  badge,
   defaultOpen = false,
   children,
 }: {
@@ -1919,6 +2117,7 @@ function CollapsibleSection({
   title: string;
   eyebrow?: string;
   description?: string;
+  badge?: string;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
@@ -1926,18 +2125,44 @@ function CollapsibleSection({
     <details id={id} open={defaultOpen} style={styles.section}>
       <summary style={styles.collapsibleSummary}>
         <div style={styles.collapsibleHeading}>
-          {eyebrow && <p style={styles.sectionEyebrow}>{eyebrow}</p>}
+          {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
+
           <h2 className="so-brand-card-title" style={styles.sectionTitle}>
             {title}
           </h2>
-          {description && <p style={styles.sectionText}>{description}</p>}
+
+          {description ? <p style={styles.sectionText}>{description}</p> : null}
         </div>
 
-        <span style={styles.collapsibleToggle}>Open / close</span>
+        <div style={styles.collapsibleActions}>
+          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
+          <span style={styles.collapsibleToggle}>Open / close</span>
+        </div>
       </summary>
 
       <div style={styles.collapsibleBody}>{children}</div>
     </details>
+  );
+}
+
+function CompactPanel({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow: string;
+  children: ReactNode;
+}) {
+  return (
+    <section style={styles.panel}>
+      <div>
+        <div style={styles.innerEyebrow}>{eyebrow}</div>
+        <h3 style={styles.panelTitle}>{title}</h3>
+      </div>
+
+      {children}
+    </section>
   );
 }
 
@@ -1952,6 +2177,21 @@ function SummaryCard({
     <div style={styles.statBox}>
       <p style={styles.statLabel}>{label}</p>
       <p style={styles.statValue}>{value}</p>
+    </div>
+  );
+}
+
+function HeroMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div style={styles.heroMetric}>
+      <div style={styles.heroMetricLabel}>{label}</div>
+      <div style={styles.heroMetricValue}>{value}</div>
     </div>
   );
 }
@@ -1973,104 +2213,173 @@ function Field({
 
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
+    overflowX: "hidden",
+    boxSizing: "border-box",
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 240px auto",
-    gap: 18,
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gap: 20,
     alignItems: "stretch",
-    padding: 22,
-    borderRadius: 24,
-    background: "#0f172a",
+    padding: "clamp(20px, 4vw, 28px)",
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top left, rgba(59,130,246,0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 16,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
+    overflow: "hidden",
   },
-  heroContent: { minWidth: 0 },
+  heroContent: {
+    minWidth: 0,
+  },
   eyebrow: {
     display: "inline-flex",
-    padding: "5px 9px",
+    padding: "6px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
+    color: "#bfdbfe",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
+    letterSpacing: "0.1em",
+    marginBottom: 12,
+  },
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
   title: {
     margin: 0,
-    fontSize: 34,
-    lineHeight: 1.08,
-    letterSpacing: "-0.04em",
-    wordBreak: "break-word",
+    fontSize: "clamp(34px, 5vw, 48px)",
+    lineHeight: 1.02,
+    letterSpacing: "-0.06em",
+    overflowWrap: "anywhere",
+    maxWidth: 720,
   },
-  subtle: {
-    margin: "12px 0 0",
-    color: "#cbd5e1",
+  statusPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+  heroSlug: {
+    margin: "10px 0 0",
+    color: "#bfdbfe",
     fontSize: 14,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
   },
-  badgeRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    marginTop: 12,
+  heroDescription: {
+    margin: "14px 0 0",
+    color: "#dbeafe",
+    lineHeight: 1.6,
+    maxWidth: 760,
+    overflowWrap: "anywhere",
   },
-  goldBadge: {
-    background: "#facc15",
-    color: "#111827",
-    padding: "6px 10px",
-    borderRadius: 999,
+  heroMetricGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
+    gap: 10,
+    marginTop: 22,
+  },
+  heroMetric: {
+    padding: "13px 14px",
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    minWidth: 0,
+  },
+  heroMetricLabel: {
+    color: "#bfdbfe",
     fontSize: 12,
     fontWeight: 900,
   },
-  darkBadge: {
-    background: "rgba(255,255,255,0.12)",
+  heroMetricValue: {
+    marginTop: 4,
     color: "#ffffff",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
+  },
+  heroPreview: {
+    display: "grid",
+    gap: 12,
+    alignContent: "start",
+    padding: 14,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.18)",
+  },
+  previewKicker: {
+    justifySelf: "start",
     padding: "6px 10px",
     borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
   heroImageWrap: {
-    borderRadius: 18,
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.12)",
+    height: 240,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
     overflow: "hidden",
-    minHeight: 150,
   },
   heroImage: {
     width: "100%",
     height: "100%",
     display: "block",
   },
-  heroActions: {
-    display: "grid",
-    gap: 10,
-    alignContent: "start",
-    minWidth: 140,
+  topActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 16,
+    flexWrap: "wrap",
   },
   primaryLink: {
-    padding: "11px 14px",
-    background: "#ffffff",
-    color: "#0f172a",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
     borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
     textDecoration: "none",
-    fontWeight: 900,
-    textAlign: "center",
+    fontWeight: 950,
   },
   secondaryButton: {
-    padding: "11px 14px",
-    border: "1px solid rgba(255,255,255,0.24)",
-    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
     borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
-    textAlign: "center",
+    fontWeight: 950,
   },
   tabs: {
     display: "flex",
@@ -2081,6 +2390,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   tab: {
     padding: "10px 12px",
@@ -2090,6 +2400,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
     fontSize: 14,
+    background: "#ffffff",
   },
   tabDanger: {
     padding: "10px 12px",
@@ -2119,23 +2430,42 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 12,
     fontWeight: 900,
   },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
   section: {
-    padding: 18,
-    borderRadius: 22,
+    padding: "clamp(16px, 4vw, 18px)",
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
   },
   collapsibleSummary: {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 16,
+    gap: 14,
     cursor: "pointer",
     listStyle: "none",
+    flexWrap: "wrap",
   },
-  collapsibleHeading: { minWidth: 0 },
+  collapsibleHeading: {
+    minWidth: 0,
+    flex: "1 1 260px",
+  },
+  collapsibleActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+  },
   collapsibleToggle: {
     flexShrink: 0,
     padding: "8px 12px",
@@ -2144,30 +2474,54 @@ const styles: Record<string, CSSProperties> = {
     color: "#1d4ed8",
     border: "1px solid #bfdbfe",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
-  collapsibleBody: { marginTop: 16 },
+  sectionBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  collapsibleBody: {
+    marginTop: 16,
+  },
   sectionEyebrow: {
     margin: "0 0 6px",
     color: "#2563eb",
-    fontWeight: 900,
+    fontWeight: 950,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.02em",
+    fontSize: "clamp(22px, 5vw, 26px)",
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
   sectionText: {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
   helperText: {
     margin: "3px 0 0",
@@ -2175,23 +2529,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.35,
   },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  statsGridCompact: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-    gap: 10,
-    marginBottom: 12,
-  },
   statBox: {
     padding: 15,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   statLabel: {
     margin: 0,
@@ -2202,34 +2545,46 @@ const styles: Record<string, CSSProperties> = {
   statValue: {
     margin: "6px 0 0",
     color: "#0f172a",
-    fontSize: 24,
-    fontWeight: 900,
-    wordBreak: "break-word",
+    fontSize: 22,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  statsGridCompact: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+    gap: 10,
   },
   panel: {
     display: "grid",
     gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%)",
     border: "1px solid #e2e8f0",
-    marginBottom: 16,
+    marginBottom: 14,
+    minWidth: 0,
+    overflow: "hidden",
   },
   panelHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "center",
+    alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 12,
   },
   panelTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 18,
-    fontWeight: 900,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
   },
-  form: { display: "grid", gap: 14 },
+  form: {
+    display: "grid",
+    gap: 12,
+    minWidth: 0,
+  },
   field: {
     display: "grid",
     gap: 6,
@@ -2238,41 +2593,47 @@ const styles: Record<string, CSSProperties> = {
   label: {
     color: "#334155",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 950,
   },
   input: {
     width: "100%",
     minHeight: 44,
     padding: "10px 12px",
-    borderRadius: 12,
+    borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
     fontSize: 15,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
     padding: "10px 12px",
-    borderRadius: 12,
+    borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
     fontSize: 15,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
-    gap: 16,
-    padding: 14,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 14,
+    padding: 12,
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
   },
   previewBox: {
-    height: 220,
+    height: 190,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
     background: "#ffffff",
@@ -2285,28 +2646,28 @@ const styles: Record<string, CSSProperties> = {
   },
   twoCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
   threeCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
     gap: 12,
   },
   fourCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
     gap: 12,
   },
   twoPanel: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 14,
   },
   ticketLayout: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.9fr) minmax(320px, 1.4fr)",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+    gap: 14,
     alignItems: "start",
   },
   ticketListScroll: {
@@ -2316,26 +2677,74 @@ const styles: Record<string, CSSProperties> = {
     overflow: "auto",
     paddingRight: 4,
   },
+  ticketDetails: {
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+  },
+  ticketSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    padding: 14,
+    flexWrap: "wrap",
+  },
+  ticketDetailsBody: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderTop: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  statusMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
   primaryButton: {
     width: "fit-content",
+    minHeight: 44,
     padding: "13px 18px",
     border: "none",
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
   dangerButton: {
+    minHeight: 44,
     padding: "13px 18px",
     border: "none",
     borderRadius: 999,
     background: "#ef4444",
     color: "#ffffff",
-    fontWeight: 900,
+    fontWeight: 950,
     cursor: "pointer",
   },
   dangerOutlineButton: {
+    minHeight: 42,
     padding: "10px 14px",
     borderRadius: 999,
     border: "1px solid #fecaca",
@@ -2344,20 +2753,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  editTicketCard: {
-    display: "grid",
-    gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
-    background: "#ffffff",
-  },
   checkboxLabel: {
     display: "flex",
     gap: 8,
     alignItems: "center",
     fontWeight: 900,
     color: "#334155",
+    minHeight: 42,
   },
   emptyBox: {
     padding: 16,
@@ -2365,12 +2767,23 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px dashed #cbd5e1",
     color: "#64748b",
-    fontWeight: 800,
+    fontWeight: 900,
   },
   dangerSectionInner: {
     padding: 16,
     borderRadius: 18,
     background: "#fef2f2",
     border: "1px solid #fecaca",
+  },
+  seatManagerShell: {
+    width: "100%",
+    maxWidth: "100%",
+    overflowX: "auto",
+    paddingBottom: 4,
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
   },
 };
