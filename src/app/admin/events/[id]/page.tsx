@@ -85,36 +85,8 @@ function formatDateTimeLocal(value: string | null) {
   }
 }
 
-function formatDisplayDate(value: string | null | undefined) {
-  if (!value) return "Not scheduled";
-
-  try {
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) return "Not scheduled";
-
-    return new Intl.DateTimeFormat("en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(date);
-  } catch {
-    return "Not scheduled";
-  }
-}
-
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
-}
-
-function formatMoney(cents: number | null | undefined, currency = "GBP") {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: currency || "GBP",
-    }).format(Number(cents || 0) / 100);
-  } catch {
-    return `${moneyFromCents(cents)} ${currency || "GBP"}`;
-  }
 }
 
 function poundsToCents(value: FormDataEntryValue | null) {
@@ -287,6 +259,7 @@ function chooseRandomCandidate(
   if (candidates.length === 0) return null;
   return candidates[randomInt(candidates.length)] || null;
 }
+
 function expandRows(value: string): string[] {
   const parts = value
     .split(",")
@@ -338,7 +311,6 @@ function expandRows(value: string): string[] {
 
   return Array.from(new Set(rows));
 }
-
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Tables";
@@ -373,6 +345,33 @@ function statusStyle(status: string): CSSProperties {
     color: "#475569",
     borderColor: "#e2e8f0",
   };
+}
+
+function formatDisplayDate(value: string | null | undefined) {
+  if (!value) return "Not scheduled";
+
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Not scheduled";
+
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+  } catch {
+    return "Not scheduled";
+  }
+}
+
+function formatMoney(cents: number | null | undefined, currency = "GBP") {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `${moneyFromCents(cents)} ${currency || "GBP"}`;
+  }
 }
 
 async function requireEventAccess(eventId: string) {
@@ -647,7 +646,6 @@ async function clearTicketTypesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
-
 async function applySeatTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -675,6 +673,7 @@ async function applySeatTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-marking#${returnAnchor}`);
 }
+
 async function updateSelectedSeatsMetadataAction(formData: FormData) {
   "use server";
 
@@ -1122,7 +1121,7 @@ const responsiveStyles = `
   }
 
   .event-edit-page .previewBox {
-    height: 190px !important;
+    height: 170px !important;
   }
 
   .event-edit-page .topActions,
@@ -1193,9 +1192,12 @@ const responsiveStyles = `
     font-size: 20px !important;
   }
 
-  .event-edit-page .heroImageWrap,
+  .event-edit-page .heroImageWrap {
+    height: 190px !important;
+  }
+
   .event-edit-page .previewBox {
-    height: 180px !important;
+    height: 150px !important;
   }
 }
 `;
@@ -1244,7 +1246,7 @@ export default async function AdminEventManagePage({
   const defaultImageStyle: CSSProperties = {
     objectFit: "contain",
     objectPosition: "center",
-    padding: 24,
+    padding: 18,
     background:
       "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
     boxSizing: "border-box",
@@ -1384,7 +1386,11 @@ export default async function AdminEventManagePage({
       </section>
 
       <section className="topActions" style={styles.topActions}>
-        <a href="/admin/events" className="secondaryButton" style={styles.secondaryButton}>
+        <a
+          href="/admin/events"
+          className="secondaryButton"
+          style={styles.secondaryButton}
+        >
           ← Back to events
         </a>
 
@@ -1649,7 +1655,11 @@ export default async function AdminEventManagePage({
                 </div>
               </div>
 
-              <button type="submit" className="primaryButton" style={styles.primaryButton}>
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
                 Save event details
               </button>
             </section>
@@ -1721,7 +1731,11 @@ export default async function AdminEventManagePage({
                 </select>
               </Field>
 
-              <button type="submit" className="primaryButton" style={styles.primaryButton}>
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
                 Add ticket type
               </button>
             </form>
@@ -1734,7 +1748,10 @@ export default async function AdminEventManagePage({
               ) : (
                 ticketTypes.map((ticketType) => (
                   <details key={ticketType.id} style={styles.ticketDetails}>
-                    <summary className="ticketSummary" style={styles.ticketSummary}>
+                    <summary
+                      className="ticketSummary"
+                      style={styles.ticketSummary}
+                    >
                       <div>
                         <strong>{ticketType.name}</strong>
                         <div style={styles.mutedSmall}>
@@ -1843,7 +1860,11 @@ export default async function AdminEventManagePage({
                           </Field>
                         </div>
 
-                        <button type="submit" className="primaryButton" style={styles.primaryButton}>
+                        <button
+                          type="submit"
+                          className="primaryButton"
+                          style={styles.primaryButton}
+                        >
                           Save ticket
                         </button>
                       </form>
@@ -1984,7 +2005,11 @@ export default async function AdminEventManagePage({
                   Clear existing row seats before generating
                 </label>
 
-                <button type="submit" className="primaryButton" style={styles.primaryButton}>
+                <button
+                  type="submit"
+                  className="primaryButton"
+                  style={styles.primaryButton}
+                >
                   Generate row seating
                 </button>
               </form>
@@ -2105,7 +2130,11 @@ export default async function AdminEventManagePage({
                   Clear existing table seats before generating
                 </label>
 
-                <button type="submit" className="primaryButton" style={styles.primaryButton}>
+                <button
+                  type="submit"
+                  className="primaryButton"
+                  style={styles.primaryButton}
+                >
                   Generate table seating
                 </button>
               </form>
@@ -2154,7 +2183,11 @@ export default async function AdminEventManagePage({
                 </select>
               </Field>
 
-              <button type="submit" className="primaryButton" style={styles.primaryButton}>
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
                 Save table shape
               </button>
             </form>
@@ -2178,7 +2211,11 @@ export default async function AdminEventManagePage({
                 }
               />
 
-              <button type="submit" className="primaryButton" style={styles.primaryButton}>
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
                 Save table names
               </button>
             </form>
@@ -2242,7 +2279,11 @@ export default async function AdminEventManagePage({
         <div style={styles.dangerSectionInner}>
           <form action={deleteEventAction}>
             <input type="hidden" name="event_id" value={event.id} />
-            <button type="submit" className="dangerButton" style={styles.dangerButton}>
+            <button
+              type="submit"
+              className="dangerButton"
+              style={styles.dangerButton}
+            >
               Delete event
             </button>
           </form>
@@ -2274,16 +2315,18 @@ function CollapsibleSection({
       <summary className="collapsibleSummary" style={styles.collapsibleSummary}>
         <div style={styles.collapsibleHeading}>
           {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
-
           <h2 className="so-brand-card-title" style={styles.sectionTitle}>
             {title}
           </h2>
-
           {description ? <p style={styles.sectionText}>{description}</p> : null}
         </div>
 
         <div className="collapsibleActions" style={styles.collapsibleActions}>
-          {badge ? <span className="sectionBadge" style={styles.sectionBadge}>{badge}</span> : null}
+          {badge ? (
+            <span className="sectionBadge" style={styles.sectionBadge}>
+              {badge}
+            </span>
+          ) : null}
           <span className="collapsibleToggle" style={styles.collapsibleToggle}>
             Open / close
           </span>
@@ -2310,34 +2353,23 @@ function CompactPanel({
         <div style={styles.innerEyebrow}>{eyebrow}</div>
         <h3 style={styles.panelTitle}>{title}</h3>
       </div>
-
       {children}
     </section>
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.statBox}>
       <p style={styles.statLabel}>{label}</p>
-      <p className="statValue" style={styles.statValue}>{value}</p>
+      <p className="statValue" style={styles.statValue}>
+        {value}
+      </p>
     </div>
   );
 }
 
-function HeroMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroMetric}>
       <div style={styles.heroMetricLabel}>{label}</div>
@@ -2346,13 +2378,7 @@ function HeroMetric({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
@@ -2777,7 +2803,7 @@ const styles: Record<string, CSSProperties> = {
   },
   mediaControls: { minWidth: 0 },
   previewBox: {
-    height: 190,
+    height: 170,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
     background: "#ffffff",
