@@ -238,7 +238,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
           <div style={styles.heroMetaGrid}>
             <HeroMeta label="Draw" value={formatDrawDate(game.draw_at)} />
-            <HeroMeta label="Squares sold" value={`${soldSquares}/${totalSquares}`} />
+            <HeroMeta
+              label="Squares sold"
+              value={`${soldSquares}/${totalSquares}`}
+            />
             <HeroMeta label="Progress" value={`${progress}% sold`} />
           </div>
         </div>
@@ -266,9 +269,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           label="Price"
           value={formatMoney(game.price_per_square_cents, currency)}
         />
+
         <SummaryCard label="Draw date" value={formatDrawDate(game.draw_at)} />
+
         <SummaryCard label="Total squares" value={totalSquares} />
+
         <SummaryCard label="Sold" value={soldSquares} />
+
         <SummaryCard label="Remaining" value={remainingSquares} />
       </section>
 
@@ -276,6 +283,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <div style={styles.progressHeader}>
           <div>
             <strong style={{ color: "#0f172a" }}>Sales progress</strong>
+
             <div style={styles.mutedSmall}>
               {soldSquares} sold from {totalSquares} squares
             </div>
@@ -298,9 +306,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <details open style={styles.adminDetails}>
             <summary style={styles.adminSummary}>
               <div>
+                <div style={styles.sectionEyebrow}>Section 1</div>
+
                 <h2 className="so-brand-card-title" style={styles.sectionTitle}>
                   Edit squares game
                 </h2>
+
                 <p style={styles.sectionDescription}>
                   Update the public details, image, pricing and draw settings.
                 </p>
@@ -317,7 +328,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <h3 style={styles.subTitle}>Public overview</h3>
+                    <div style={styles.innerEyebrow}>Public overview</div>
+
+                    <h3 style={styles.subTitle}>Campaign details</h3>
+
                     <p style={styles.sectionDescription}>
                       These details are shown on the public squares page.
                     </p>
@@ -354,11 +368,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 </Field>
 
                 <div style={styles.mediaBox}>
-                  <div>
+                  <div style={styles.mediaControls}>
                     <h3 style={styles.subTitle}>Squares image</h3>
+
                     <p style={styles.sectionDescription}>
                       Upload or replace the public image for this squares game.
                     </p>
+
                     <ImageFocusUploadField
                       currentImageUrl={game.image_url || ""}
                       currentFocusX={imageFocusX}
@@ -388,11 +404,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                   </div>
                 </div>
               </section>
-
-              <section style={styles.innerPanel}>
+                            <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <h3 style={styles.subTitle}>Squares setup</h3>
+                    <div style={styles.innerEyebrow}>Squares setup</div>
+
+                    <h3 style={styles.subTitle}>Board, pricing & status</h3>
+
                     <p style={styles.sectionDescription}>
                       Configure board size, pricing, draw date and status.
                     </p>
@@ -463,7 +481,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
+                    <div style={styles.innerEyebrow}>Compliance</div>
+
                     <h3 style={styles.subTitle}>Legal & postal entry</h3>
+
                     <p style={styles.sectionDescription}>
                       Add a skill-based question and the free postal entry route
                       shown on the public squares page.
@@ -530,7 +551,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
+                    <div style={styles.innerEyebrow}>Draw system</div>
+
                     <h3 style={styles.subTitle}>Auto draw range</h3>
+
                     <p style={styles.sectionDescription}>
                       Choose which prize numbers the randomizer should draw.
                       Example: set from 6 to 999 to keep the top 5 prizes for a
@@ -567,6 +591,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <section style={styles.submitBarInner}>
                 <div>
                   <strong style={{ color: "#0f172a" }}>Save changes</strong>
+
                   <div style={styles.mutedSmall}>
                     This updates the public squares page and admin values.
                   </div>
@@ -584,9 +609,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           <details open={!prizesConfigured} style={styles.adminDetails}>
             <summary style={styles.adminSummary}>
               <div>
+                <div style={styles.sectionEyebrow}>Section 2</div>
+
                 <h2 className="so-brand-card-title" style={styles.sectionTitle}>
                   Prize management
                 </h2>
+
                 <p style={styles.sectionDescription}>
                   Manage prize names, descriptions and public visibility.
                 </p>
@@ -603,7 +631,10 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
         <section style={styles.submitBar}>
           <div>
-            <strong style={{ color: "#0f172a" }}>Save all squares settings</strong>
+            <strong style={{ color: "#0f172a" }}>
+              Save all squares settings
+            </strong>
+
             <div style={styles.mutedSmall}>
               Use this after changing details, legal settings, prizes or draw
               ranges.
@@ -620,9 +651,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
         <details style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
+              <div style={styles.sectionEyebrow}>Section 3</div>
+
               <h2 className="so-brand-card-title" style={styles.sectionTitle}>
                 Draw centre
               </h2>
+
               <p style={styles.sectionDescription}>
                 View winners, auto draw remaining prizes, or open the dramatic
                 live draw.
@@ -631,9 +665,11 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
             <div style={styles.summaryPillRow}>
               <span style={styles.neutralPill}>{winners.length} winners</span>
+
               <span style={styles.neutralPill}>
                 {soldSquareOptions.length} eligible squares
               </span>
+
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
@@ -649,16 +685,23 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Prize</div>
-                      <div style={styles.winnerValue}>{winner.prize_title}</div>
+
+                      <div style={styles.winnerValue}>
+                        {winner.prize_title}
+                      </div>
                     </div>
 
                     <div>
                       <div style={styles.winnerLabel}>Square</div>
-                      <div style={styles.winnerValue}>#{winner.square_number}</div>
+
+                      <div style={styles.winnerValue}>
+                        #{winner.square_number}
+                      </div>
                     </div>
 
                     <div>
                       <div style={styles.winnerLabel}>Winner</div>
+
                       <div style={styles.winnerValue}>
                         {firstNameOnly(winner.customer_name)}
                       </div>
@@ -667,17 +710,21 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                 ))}
               </div>
             ) : (
-              <div style={styles.noWinnersBox}>No winners have been drawn yet.</div>
+              <div style={styles.noWinnersBox}>
+                No winners have been drawn yet.
+              </div>
             )}
 
             <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Live draw tools</h3>
+
                   <p style={styles.sectionDescription}>
                     Automatic draw and full-screen dramatic draw controls.
                   </p>
                 </div>
+
                 <span style={styles.drawToggle}>Open / close</span>
               </summary>
 
@@ -688,6 +735,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                   style={styles.drawPanel}
                 >
                   <h3 style={styles.subTitle}>Automatic random draw</h3>
+
                   <p style={styles.sectionDescription}>
                     Randomly draw remaining undrawn prizes using the saved auto
                     draw range.
@@ -746,13 +794,7 @@ function StatusMiniPill({ label, active }: { label: string; active: boolean }) {
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
@@ -760,14 +802,16 @@ function Field({
     </label>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
     background: "#f8fafc",
     minHeight: "100vh",
+    overflowX: "hidden",
+    boxSizing: "border-box",
   },
   topBar: {
     display: "flex",
@@ -778,7 +822,15 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
   backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
     color: "#334155",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
   },
@@ -786,6 +838,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 44,
     padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
@@ -797,10 +850,10 @@ const styles: Record<string, CSSProperties> = {
   },
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 280px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 20,
     alignItems: "center",
-    padding: 24,
+    padding: "clamp(20px, 5vw, 28px)",
     borderRadius: 28,
     background:
       "radial-gradient(circle at top left, rgba(22,131,248,0.26), transparent 32%), linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%)",
@@ -808,6 +861,8 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     minHeight: 330,
     boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
+    overflow: "hidden",
+    minWidth: 0,
   },
   heroContent: {
     minWidth: 0,
@@ -829,13 +884,15 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     flexWrap: "wrap",
+    minWidth: 0,
   },
   heroTitle: {
     margin: 0,
-    fontSize: 38,
-    lineHeight: 1.05,
-    letterSpacing: "-0.05em",
-    wordBreak: "break-word",
+    fontSize: "clamp(34px, 8vw, 48px)",
+    lineHeight: 1.03,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+    minWidth: 0,
   },
   statusPill: {
     padding: "8px 12px",
@@ -844,19 +901,21 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     textTransform: "capitalize",
     fontWeight: 950,
+    flexShrink: 0,
   },
   heroSlug: {
     margin: "9px 0 0",
     color: "#cbd5e1",
     fontSize: 14,
     fontWeight: 800,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   heroDescription: {
     margin: "14px 0 0",
     color: "#e2e8f0",
     lineHeight: 1.55,
     maxWidth: 760,
+    overflowWrap: "anywhere",
   },
   heroDescriptionMuted: {
     margin: "14px 0 0",
@@ -865,7 +924,7 @@ const styles: Record<string, CSSProperties> = {
   },
   heroMetaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
     gap: 10,
     marginTop: 22,
     maxWidth: 700,
@@ -875,6 +934,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.12)",
+    minWidth: 0,
   },
   heroMetaLabel: {
     color: "#94a3b8",
@@ -886,16 +946,18 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     fontWeight: 950,
     marginTop: 4,
+    overflowWrap: "anywhere",
   },
   heroImageWrap: {
-    width: 280,
+    width: "100%",
+    maxWidth: 280,
     height: 280,
-    maxHeight: 280,
     borderRadius: 22,
     background: "#1e293b",
     border: "1px solid rgba(255,255,255,0.14)",
     overflow: "hidden",
     alignSelf: "center",
+    justifySelf: "center",
     boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
   },
   heroImage: {
@@ -906,7 +968,7 @@ const styles: Record<string, CSSProperties> = {
   },
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
     marginBottom: 16,
   },
@@ -916,6 +978,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   summaryLabel: {
     color: "#64748b",
@@ -927,7 +990,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
     marginTop: 5,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   progressCard: {
     padding: 16,
@@ -943,6 +1006,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "center",
     marginBottom: 10,
+    flexWrap: "wrap",
   },
   progressPercent: {
     color: "#166534",
@@ -963,30 +1027,44 @@ const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
     gap: 0,
+    minWidth: 0,
   },
   section: {
-    padding: 18,
+    padding: "clamp(16px, 4vw, 18px)",
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  sectionEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
   },
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.03em",
+    fontSize: "clamp(22px, 5vw, 26px)",
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
   sectionDescription: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
   adminDetails: {
     display: "grid",
     gap: 0,
+    minWidth: 0,
   },
   adminSummary: {
     display: "flex",
@@ -996,6 +1074,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     listStyle: "none",
     flexWrap: "wrap",
+    minWidth: 0,
   },
   adminSummaryToggle: {
     flexShrink: 0,
@@ -1013,6 +1092,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 14,
     marginTop: 16,
+    minWidth: 0,
   },
   summaryPillRow: {
     display: "flex",
@@ -1044,10 +1124,13 @@ const styles: Record<string, CSSProperties> = {
   innerPanel: {
     display: "grid",
     gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f8fafc",
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eff6ff 100%)",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
   innerHeader: {
     display: "flex",
@@ -1056,20 +1139,28 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
     marginBottom: 12,
   },
   twoColumnNoMargin: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
   threeColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
   field: {
@@ -1084,34 +1175,40 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 12,
+    minHeight: 46,
+    padding: "11px 12px",
+    borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
+    padding: "11px 12px",
+    borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
+    fontSize: 16,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(180px, 260px)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
     gap: 16,
     padding: 14,
     borderRadius: 20,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
   },
   subTitle: {
     margin: 0,
@@ -1163,6 +1260,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    minHeight: 44,
   },
   mutedSmall: {
     color: "#64748b",
@@ -1173,6 +1271,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     margin: 0,
+    overflowWrap: "anywhere",
   },
   winnerList: {
     display: "grid",
@@ -1181,13 +1280,14 @@ const styles: Record<string, CSSProperties> = {
   },
   winnerCard: {
     display: "grid",
-    gridTemplateColumns: "46px minmax(0, 1.4fr) 120px minmax(0, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
     gap: 12,
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     alignItems: "center",
+    minWidth: 0,
   },
   winnerPrizeIcon: {
     width: 38,
@@ -1210,7 +1310,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 16,
     fontWeight: 950,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   noWinnersBox: {
     padding: 16,
@@ -1220,28 +1320,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontWeight: 900,
     marginBottom: 14,
-  },
-  drawButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-  drawGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 14,
-  },
-  drawPanel: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 12,
   },
   drawDetails: {
     padding: 0,
@@ -1274,5 +1352,30 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
+  },
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 14,
+    padding: 16,
+  },
+  drawPanel: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+    minWidth: 0,
+  },
+  drawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
+    minHeight: 44,
   },
 };
