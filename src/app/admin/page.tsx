@@ -149,7 +149,10 @@ export default async function AdminDashboardPage() {
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
-          <h1 className="so-brand-heading admin-dashboard-title" style={styles.title}>
+          <h1
+            className="so-brand-heading admin-dashboard-title"
+            style={styles.title}
+          >
             Admin command centre
           </h1>
 
@@ -177,6 +180,10 @@ export default async function AdminDashboardPage() {
 
             <Link href="/admin/customers" style={styles.secondaryButton}>
               Customers
+            </Link>
+
+            <Link href="/admin/metadata" style={styles.secondaryButton}>
+              Finance & fees
             </Link>
           </div>
         </div>
@@ -215,7 +222,10 @@ export default async function AdminDashboardPage() {
       <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
-          <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
             Open a fundraising area
           </h2>
           <p style={styles.sectionText}>
@@ -274,25 +284,42 @@ export default async function AdminDashboardPage() {
           stats="Supporter intelligence"
           tone="gold"
         />
+
+        <DashboardCard
+          href="/admin/metadata"
+          badgeText="FEES"
+          title="Finance"
+          description="Review payment metadata, platform fees, Stripe fees, commission and organiser net estimates."
+          stats="Money breakdown"
+          tone="gold"
+        />
       </section>
 
       <section className="admin-operations-grid" style={styles.operationsGrid}>
         <section className="admin-finance-panel" style={styles.financePanel}>
           <div>
-            <p style={styles.financeKicker}>Operations</p>
+            <p style={styles.financeKicker}>Finance & transactions</p>
 
-            <h2 className="so-brand-card-title admin-section-title" style={styles.financeTitle}>
-              Orders & customers
+            <h2
+              className="so-brand-card-title admin-section-title"
+              style={styles.financeTitle}
+            >
+              Money breakdown
             </h2>
 
             <p style={styles.financeText}>
-              Open the live operational dashboards for transaction activity,
-              campaign orders and supporter profiles.
+              Open the full metadata view for tracked transactions, campaign
+              types, supporter details, platform contribution, Stripe fees and
+              organiser net estimates.
             </p>
           </div>
 
           <div className="admin-panel-actions" style={styles.panelActions}>
-            <Link href="/admin/orders" style={styles.financeButton}>
+            <Link href="/admin/metadata" style={styles.financeButton}>
+              Open finance →
+            </Link>
+
+            <Link href="/admin/orders" style={styles.financeButtonSecondary}>
               Open orders →
             </Link>
 
@@ -306,7 +333,10 @@ export default async function AdminDashboardPage() {
           <div>
             <p style={styles.kicker}>Live platform overview</p>
 
-            <h2 className="so-brand-card-title admin-section-title" style={styles.sectionTitle}>
+            <h2
+              className="so-brand-card-title admin-section-title"
+              style={styles.sectionTitle}
+            >
               Campaign summary
             </h2>
 
@@ -357,9 +387,15 @@ function StatCard({
   dark?: boolean;
 }) {
   return (
-    <div className="admin-stat-card" style={dark ? styles.darkStatCard : styles.statCard}>
+    <div
+      className="admin-stat-card"
+      style={dark ? styles.darkStatCard : styles.statCard}
+    >
       <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
-      <div className="admin-stat-value" style={dark ? styles.darkStatValue : styles.statValue}>
+      <div
+        className="admin-stat-value"
+        style={dark ? styles.darkStatValue : styles.statValue}
+      >
         {value}
       </div>
     </div>
@@ -438,7 +474,10 @@ function DashboardCard({
             )}
           </div>
 
-          <h2 className="so-brand-card-title admin-card-title" style={styles.cardTitle}>
+          <h2
+            className="so-brand-card-title admin-card-title"
+            style={styles.cardTitle}
+          >
             {title}
           </h2>
 
@@ -454,578 +493,548 @@ function DashboardCard({
     </Link>
   );
 }
-
 const responsiveStyles = `
-  .admin-dashboard-page,
-  .admin-dashboard-page * {
-    box-sizing: border-box;
+.admin-dashboard-page,
+.admin-dashboard-page * {
+  box-sizing: border-box;
+}
+
+.admin-dashboard-page {
+  overflow-x: hidden;
+}
+
+.admin-dashboard-page section,
+.admin-dashboard-page article,
+.admin-dashboard-page div {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .admin-dashboard-page .admin-command-centre,
+  .admin-dashboard-page .admin-operations-grid {
+    grid-template-columns: 1fr !important;
   }
 
+  .admin-dashboard-page .admin-command-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .admin-dashboard-page .admin-focus-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
   .admin-dashboard-page {
-    overflow-x: hidden;
+    padding: 18px 12px 44px !important;
   }
 
-  .admin-dashboard-page section,
-  .admin-dashboard-page article,
-  .admin-dashboard-page div {
-    min-width: 0;
+  .admin-dashboard-page .admin-command-centre {
+    padding: 22px !important;
+    border-radius: 26px !important;
   }
 
-  @media (max-width: 900px) {
-    .admin-command-centre {
-      grid-template-columns: 1fr !important;
-      padding: 22px !important;
-      border-radius: 30px !important;
-    }
-
-    .admin-command-stats {
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      align-content: stretch !important;
-    }
-
-    .admin-operations-grid {
-      grid-template-columns: 1fr !important;
-    }
+  .admin-dashboard-page .admin-dashboard-title {
+    font-size: clamp(38px, 11vw, 56px) !important;
+    line-height: 0.98 !important;
   }
 
-  @media (max-width: 640px) {
-    .admin-dashboard-page {
-      width: 100% !important;
-      max-width: 100% !important;
-      padding: 14px 12px 42px !important;
-    }
-
-    .admin-command-centre {
-      display: block !important;
-      padding: 20px !important;
-      border-radius: 28px !important;
-      margin-bottom: 14px !important;
-    }
-
-    .admin-dashboard-title {
-      font-size: clamp(38px, 13vw, 52px) !important;
-      line-height: 0.98 !important;
-      letter-spacing: -0.065em !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .admin-dashboard-subtitle {
-      font-size: 16px !important;
-      line-height: 1.55 !important;
-      max-width: 100% !important;
-    }
-
-    .admin-dashboard-tenant {
-      overflow-wrap: anywhere !important;
-      word-break: break-word !important;
-    }
-
-    .admin-command-actions,
-    .admin-panel-actions {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-      width: 100% !important;
-    }
-
-    .admin-command-actions a,
-    .admin-panel-actions a {
-      width: 100% !important;
-      min-height: 50px !important;
-      text-align: center !important;
-      padding: 14px 16px !important;
-      justify-content: center !important;
-    }
-
-    .admin-command-stats {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-      margin-top: 18px !important;
-    }
-
-    .admin-stat-card {
-      width: 100% !important;
-      padding: 16px !important;
-      border-radius: 20px !important;
-    }
-
-    .admin-stat-value {
-      font-size: 28px !important;
-      line-height: 1.05 !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .admin-focus-grid,
-    .admin-cards-grid,
-    .admin-data-grid {
-      grid-template-columns: 1fr !important;
-    }
-
-    .admin-focus-card,
-    .admin-dashboard-card,
-    .admin-finance-panel,
-    .admin-data-panel {
-      border-radius: 24px !important;
-      padding: 18px !important;
-    }
-
-    .admin-dashboard-card {
-      min-height: auto !important;
-    }
-
-    .admin-section-title {
-      font-size: 25px !important;
-      line-height: 1.05 !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .admin-card-title {
-      font-size: 27px !important;
-    }
-
-    .admin-data-block {
-      padding: 15px !important;
-    }
+  .admin-dashboard-page .admin-command-actions,
+  .admin-dashboard-page .admin-panel-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
   }
 
-  @media (max-width: 380px) {
-    .admin-dashboard-page {
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-    }
-
-    .admin-command-centre {
-      padding: 18px !important;
-      border-radius: 24px !important;
-    }
-
-    .admin-dashboard-title {
-      font-size: 40px !important;
-    }
-
-    .admin-stat-value {
-      font-size: 26px !important;
-    }
+  .admin-dashboard-page .primaryButton,
+  .admin-dashboard-page .secondaryButton,
+  .admin-dashboard-page .financeButton,
+  .admin-dashboard-page .financeButtonSecondary {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
+
+  .admin-dashboard-page .admin-command-stats,
+  .admin-dashboard-page .admin-focus-grid,
+  .admin-dashboard-page .admin-data-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-dashboard-page .admin-command-stats,
+  .admin-dashboard-page .admin-focus-grid,
+  .admin-dashboard-page .admin-data-grid,
+  .admin-dashboard-page .admin-cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-dashboard-page .admin-dashboard-card,
+  .admin-dashboard-page .admin-finance-panel,
+  .admin-dashboard-page .admin-data-panel {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .admin-dashboard-page .admin-command-centre {
+    gap: 18px !important;
+  }
+}
 `;
 
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 1220,
+    maxWidth: 1320,
     margin: "0 auto",
-    padding: "28px 16px 70px",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 30%), radial-gradient(circle at top right, rgba(200,162,74,0.10), transparent 28%), #f8fafc",
+    padding: "28px 16px 64px",
     minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
+    boxSizing: "border-box",
     overflowX: "hidden",
   },
+
   commandCentre: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.45fr) minmax(280px, 0.7fr)",
-    gap: 20,
-    alignItems: "stretch",
-    marginBottom: 18,
-    padding: 24,
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+    gap: 22,
+    padding: 30,
     borderRadius: 34,
     background:
-      "linear-gradient(135deg, #08142f 0%, #0f1f46 48%, #1f2937 100%)",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.22), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
-    overflow: "hidden",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
   },
+
   commandContent: {
     minWidth: 0,
   },
+
   badge: {
     display: "inline-flex",
-    padding: "7px 11px",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 13px",
     borderRadius: 999,
-    background: "rgba(212,175,87,0.14)",
-    color: "#f8d878",
+    background: "rgba(255,255,255,0.12)",
+    color: "#bfdbfe",
+    border: "1px solid rgba(255,255,255,0.16)",
+    fontSize: 12,
     fontWeight: 950,
-    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
     marginBottom: 16,
-    border: "1px solid rgba(212,175,87,0.28)",
   },
+
   title: {
     margin: 0,
-    fontSize: "clamp(42px, 7vw, 68px)",
-    lineHeight: 0.95,
-    letterSpacing: "-0.07em",
-    color: "#ffffff",
-    textShadow: "0 16px 38px rgba(0,0,0,0.25)",
+    fontSize: "clamp(52px, 7vw, 82px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.08em",
+    overflowWrap: "anywhere",
   },
+
   subtitle: {
-    margin: "16px 0 0",
-    color: "rgba(255,255,255,0.76)",
-    fontSize: 17,
-    lineHeight: 1.7,
-    maxWidth: 780,
+    margin: "18px 0 0",
+    maxWidth: 760,
+    color: "#dbeafe",
+    fontSize: 18,
+    lineHeight: 1.6,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
+
   tenant: {
-    margin: "12px 0 0",
-    color: "rgba(255,255,255,0.88)",
-    fontWeight: 800,
+    margin: "16px 0 0",
+    color: "#bfdbfe",
+    fontSize: 14,
+    fontWeight: 850,
   },
+
   commandActions: {
     display: "flex",
-    gap: 12,
     flexWrap: "wrap",
+    gap: 12,
     marginTop: 24,
   },
+
   primaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "14px 19px",
+    minHeight: 46,
+    padding: "12px 18px",
     borderRadius: 999,
-    background: "linear-gradient(180deg, #d4af57 0%, #c8a24a 100%)",
-    color: "#08142f",
-    border: "1px solid rgba(255,255,255,0.20)",
+    background: "#1683f8",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    boxShadow: "0 14px 28px rgba(0,0,0,0.25)",
+    border: "1px solid #1683f8",
+    boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
   },
+
   secondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "14px 19px",
+    minHeight: 46,
+    padding: "12px 18px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.10)",
     color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
     textDecoration: "none",
     fontWeight: 900,
+    border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
   },
+
   commandStats: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 12,
-    alignContent: "center",
-    minWidth: 0,
+    alignContent: "start",
   },
+
+  statCard: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
   darkStatCard: {
+    display: "grid",
+    gap: 6,
     padding: 18,
     borderRadius: 22,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.14)",
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(12px)",
-    minWidth: 0,
   },
-  darkStatLabel: {
-    color: "rgba(255,255,255,0.68)",
+
+  statLabel: {
+    color: "#64748b",
     fontSize: 13,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    fontWeight: 850,
   },
+
+  darkStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  statValue: {
+    color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
   darkStatValue: {
-    marginTop: 7,
+    color: "#ffffff",
     fontSize: 30,
     fontWeight: 950,
-    color: "#ffffff",
-    letterSpacing: "-0.04em",
+    letterSpacing: "-0.05em",
   },
+
   focusGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 14,
-    marginBottom: 26,
+    marginBottom: 18,
   },
+
   focusCard: {
-    padding: 20,
+    display: "grid",
+    gap: 8,
+    padding: 18,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 10px 28px rgba(15,23,42,0.055)",
-    minWidth: 0,
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
+
   focusLabel: {
     color: "#64748b",
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 850,
     textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    letterSpacing: "0.06em",
   },
+
   focusValue: {
-    marginTop: 8,
+    color: "#0f172a",
     fontSize: 34,
     fontWeight: 950,
-    color: "#0f172a",
-    letterSpacing: "-0.05em",
+    letterSpacing: "-0.06em",
+    lineHeight: 1,
+    overflowWrap: "anywhere",
   },
+
   focusText: {
-    margin: "7px 0 0",
+    margin: 0,
     color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.55,
+    lineHeight: 1.5,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
+
   sectionHeader: {
-    margin: "8px 0 14px",
+    marginBottom: 16,
   },
+
   kicker: {
-    margin: "0 0 8px",
-    color: "#c8a24a",
+    margin: "0 0 7px",
+    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.1em",
+    letterSpacing: "0.08em",
   },
+
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 28,
-    letterSpacing: "-0.04em",
+    fontSize: 30,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
+
   sectionText: {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.6,
-    maxWidth: 790,
+    maxWidth: 760,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
+
   cardsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))",
-    gap: 18,
-    marginBottom: 22,
-    alignItems: "stretch",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+    gap: 16,
+    marginBottom: 20,
   },
+
   cardLink: {
     textDecoration: "none",
-    color: "inherit",
-    display: "block",
-    height: "100%",
-    minWidth: 0,
   },
+
   card: {
-    height: "100%",
-    minHeight: 282,
-    borderRadius: 30,
-    padding: 24,
-    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+    display: "grid",
+    gap: 16,
+    padding: 18,
+    borderRadius: 28,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    minWidth: 0,
+    minHeight: 280,
+    transition: "transform 0.18s ease",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
   },
+
   cardTop: {
-    display: "flex",
-    flexDirection: "column",
+    display: "grid",
+    gap: 14,
+    alignContent: "start",
   },
+
   logoBox: {
-    width: 78,
-    height: 78,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f8fafc 100%)",
-    border: "1px solid #dbeafe",
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 18,
-    overflow: "hidden",
-    flexShrink: 0,
   },
+
   logoImage: {
-    width: "88%",
-    height: "88%",
-    objectFit: "contain",
-    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
   },
+
   logoTextDefault: {
     color: "#0f172a",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 950,
     letterSpacing: "0.08em",
   },
+
   logoTextBlue: {
-    color: "#1d4ed8",
-    fontSize: 12,
+    color: "#2563eb",
+    fontSize: 13,
     fontWeight: 950,
     letterSpacing: "0.08em",
   },
+
   logoTextGold: {
     color: "#b45309",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 950,
     letterSpacing: "0.08em",
   },
+
   cardTitle: {
     margin: 0,
-    fontSize: 30,
-    lineHeight: 1.05,
     color: "#0f172a",
+    fontSize: 28,
     letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
+
   cardDescription: {
-    margin: "12px 0 0",
+    margin: 0,
     color: "#64748b",
-    lineHeight: 1.65,
-    fontSize: 15,
-    minHeight: 50,
+    lineHeight: 1.6,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
+
   cardBottom: {
-    marginTop: 24,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
+    display: "grid",
+    gap: 10,
+    alignContent: "end",
+    marginTop: "auto",
   },
+
   cardStats: {
-    padding: "9px 11px",
-    borderRadius: 999,
-    background: "#f8fafc",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontWeight: 950,
+    color: "#0f172a",
     fontSize: 13,
-    width: "fit-content",
+    fontWeight: 900,
   },
+
   cardDivider: {
     width: "100%",
     height: 1,
     background: "#e2e8f0",
-    margin: "20px 0 18px",
   },
+
   openLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    color: "#1683f8",
-    fontWeight: 950,
+    color: "#2563eb",
+    fontWeight: 900,
+    fontSize: 14,
   },
+
   operationsGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
-    gap: 18,
-    alignItems: "stretch",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 16,
   },
+
   financePanel: {
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    gap: 20,
-    padding: 24,
-    borderRadius: 30,
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
     background:
-      "linear-gradient(135deg, #0f172a 0%, #1e293b 62%, #78350f 140%)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
-    minWidth: 0,
+      "linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(255,255,255,1) 80%)",
+    border: "1px solid #fde68a",
   },
+
   financeKicker: {
-    margin: "0 0 10px",
-    color: "#fef3c7",
+    margin: "0 0 7px",
+    color: "#b45309",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.1em",
+    letterSpacing: "0.08em",
   },
+
   financeTitle: {
     margin: 0,
-    color: "#ffffff",
-    fontSize: 28,
-    letterSpacing: "-0.04em",
+    color: "#0f172a",
+    fontSize: 30,
+    letterSpacing: "-0.05em",
   },
+
   financeText: {
-    margin: "10px 0 0",
-    color: "rgba(255,255,255,0.72)",
+    margin: "8px 0 0",
+    color: "#78350f",
     lineHeight: 1.6,
+    fontWeight: 700,
   },
+
   panelActions: {
     display: "flex",
-    gap: 10,
     flexWrap: "wrap",
+    gap: 10,
   },
+
   financeButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "fit-content",
-    padding: "13px 18px",
+    minHeight: 44,
+    padding: "11px 16px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
+    background: "#0f172a",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(2,6,23,0.22)",
   },
+
   financeButtonSecondary: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "fit-content",
-    padding: "13px 18px",
+    minHeight: 44,
+    padding: "11px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.20)",
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 950,
+    fontWeight: 900,
   },
+
   dataPanel: {
-    padding: 24,
-    borderRadius: 30,
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 12px 30px rgba(15,23,42,0.055)",
-    minWidth: 0,
   },
+
   dataGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
-    marginTop: 18,
   },
+
   dataBlock: {
+    display: "grid",
+    gap: 6,
     padding: 16,
     borderRadius: 20,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    minWidth: 0,
   },
+
   dataLabel: {
     color: "#64748b",
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 850,
   },
+
   dataValue: {
-    marginTop: 4,
     color: "#0f172a",
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: 950,
+    letterSpacing: "-0.06em",
   },
+
   dataSub: {
-    marginTop: 2,
-    color: "#64748b",
+    color: "#2563eb",
     fontSize: 13,
-    fontWeight: 800,
-  },
-  statCard: {
-    padding: 18,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
-  },
-  statLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-  statValue: {
-    marginTop: 6,
-    fontSize: 28,
-    fontWeight: 950,
-    color: "#0f172a",
+    fontWeight: 850,
   },
 };
