@@ -274,7 +274,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want to manage.
+            Choose the campaign type or operational dashboard you want
+            to manage.
           </p>
         </div>
       </section>
@@ -353,10 +354,18 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section className="admin-operations-grid" style={styles.operationsGrid}>
-        <section className="admin-finance-panel" style={styles.financePanel}>
+      <section
+        className="admin-operations-grid"
+        style={styles.operationsGrid}
+      >
+        <section
+          className="admin-finance-panel"
+          style={styles.financePanel}
+        >
           <div>
-            <p style={styles.financeKicker}>Finance & transactions</p>
+            <p style={styles.financeKicker}>
+              Finance & transactions
+            </p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -372,7 +381,10 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
 
-          <div className="admin-panel-actions" style={styles.panelActions}>
+          <div
+            className="admin-panel-actions"
+            style={styles.panelActions}
+          >
             <Link
               href="/admin/metadata"
               className="financeButton"
@@ -407,9 +419,14 @@ export default async function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="admin-data-panel" style={styles.dataPanel}>
+        <section
+          className="admin-data-panel"
+          style={styles.dataPanel}
+        >
           <div>
-            <p style={styles.kicker}>Live platform overview</p>
+            <p style={styles.kicker}>
+              Live platform overview
+            </p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -419,12 +436,15 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.sectionText}>
-              A simple snapshot of the live campaign data currently available to
-              this tenant.
+              A simple snapshot of the live campaign data currently available
+              to this tenant.
             </p>
           </div>
 
-          <div className="admin-data-grid" style={styles.dataGrid}>
+          <div
+            className="admin-data-grid"
+            style={styles.dataGrid}
+          >
             <DataBlock
               label="Raffles"
               total={raffles.length}
@@ -469,11 +489,23 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
+      <div
+        style={
+          dark
+            ? styles.darkStatLabel
+            : styles.statLabel
+        }
+      >
+        {label}
+      </div>
 
       <div
         className="admin-stat-value"
-        style={dark ? styles.darkStatValue : styles.statValue}
+        style={
+          dark
+            ? styles.darkStatValue
+            : styles.statValue
+        }
       >
         {value}
       </div>
@@ -638,10 +670,6 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
-
-  .admin-dashboard-page .admin-command-actions {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
-  }
 }
 
 @media (max-width: 900px) {
@@ -650,18 +678,31 @@ const responsiveStyles = `
   }
 
   .admin-dashboard-page .admin-command-centre {
-    padding: 22px !important;
-    border-radius: 26px !important;
+    padding: 24px !important;
+    border-radius: 30px !important;
   }
 
   .admin-dashboard-page .admin-dashboard-title {
-    font-size: clamp(38px, 11vw, 56px) !important;
-    line-height: 0.98 !important;
+    font-size: clamp(44px, 10vw, 66px) !important;
+    line-height: 0.95 !important;
+  }
+
+  .admin-dashboard-page .admin-command-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-dashboard-page .primaryButton,
+  .admin-dashboard-page .secondaryButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: normal !important;
   }
 
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid {
+  .admin-dashboard-page .admin-data-grid,
+  .admin-dashboard-page .admin-panel-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -714,7 +755,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.22), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
@@ -730,9 +771,9 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "7px 13px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#bfdbfe",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(251,191,36,0.12)",
+    color: "#facc15",
+    border: "1px solid rgba(251,191,36,0.32)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -768,14 +809,14 @@ const styles: Record<string, CSSProperties> = {
 
   commandActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, max-content))",
     gap: 10,
     marginTop: 24,
-    alignItems: "stretch",
+    alignItems: "center",
   },
 
   primaryButton: {
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
@@ -787,15 +828,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
-    whiteSpace: "normal",
-    overflowWrap: "anywhere",
+    whiteSpace: "nowrap",
     textAlign: "center",
-    lineHeight: 1.2,
-    minWidth: 0,
   },
 
   secondaryButton: {
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
@@ -807,11 +845,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "normal",
-    overflowWrap: "anywhere",
+    whiteSpace: "nowrap",
     textAlign: "center",
-    lineHeight: 1.2,
-    minWidth: 0,
   },
 
   commandStats: {
