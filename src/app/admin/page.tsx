@@ -274,8 +274,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want to
-            manage.
+            Choose the campaign type or operational dashboard you want
+            to manage.
           </p>
         </div>
       </section>
@@ -363,7 +363,9 @@ export default async function AdminDashboardPage() {
           style={styles.financePanel}
         >
           <div>
-            <p style={styles.financeKicker}>Finance & transactions</p>
+            <p style={styles.financeKicker}>
+              Finance & transactions
+            </p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -373,9 +375,10 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.financeText}>
-              Open the full metadata view for tracked transactions, campaign
-              types, supporter details, platform contribution, Stripe fees and
-              organiser net estimates.
+              Open the full metadata view for tracked
+              transactions, campaign types, supporter details,
+              platform contribution, Stripe fees and organiser
+              net estimates.
             </p>
           </div>
 
@@ -422,7 +425,9 @@ export default async function AdminDashboardPage() {
           style={styles.dataPanel}
         >
           <div>
-            <p style={styles.kicker}>Live platform overview</p>
+            <p style={styles.kicker}>
+              Live platform overview
+            </p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -432,8 +437,8 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.sectionText}>
-              A simple snapshot of the live campaign data currently available
-              to this tenant.
+              A simple snapshot of the live campaign data
+              currently available to this tenant.
             </p>
           </div>
 
@@ -485,11 +490,23 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
+      <div
+        style={
+          dark
+            ? styles.darkStatLabel
+            : styles.statLabel
+        }
+      >
+        {label}
+      </div>
 
       <div
         className="admin-stat-value"
-        style={dark ? styles.darkStatValue : styles.statValue}
+        style={
+          dark
+            ? styles.darkStatValue
+            : styles.statValue
+        }
       >
         {value}
       </div>
@@ -640,7 +657,7 @@ const responsiveStyles = `
   min-width: 0;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1180px) {
   .admin-dashboard-page .admin-command-centre,
   .admin-dashboard-page .admin-operations-grid {
     grid-template-columns: 1fr !important;
@@ -656,6 +673,14 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+  }
+
+  .admin-dashboard-page .primaryButton,
+  .admin-dashboard-page .secondaryButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
 }
 
@@ -674,28 +699,25 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid {
+  .admin-dashboard-page .admin-data-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 620px) {
   .admin-dashboard-page .admin-command-actions,
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
   .admin-dashboard-page .admin-cards-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .admin-dashboard-page .admin-panel-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
@@ -1131,8 +1153,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   panelActions: {
-    display: "flex",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, max-content))",
     gap: 10,
     alignItems: "center",
   },
@@ -1142,7 +1164,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "11px 18px",
+    padding: "11px 16px",
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
@@ -1156,7 +1178,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "11px 18px",
+    padding: "11px 16px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
