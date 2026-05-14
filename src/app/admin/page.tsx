@@ -110,8 +110,7 @@ export default async function AdminDashboardPage() {
   const raffleRevenueCents = raffles.reduce(
     (sum, raffle) =>
       sum +
-      Number(raffle.sold_tickets || 0) *
-        Number(raffle.ticket_price || 0),
+      Number(raffle.sold_tickets || 0) * Number(raffle.ticket_price || 0),
     0,
   );
 
@@ -142,10 +141,7 @@ export default async function AdminDashboardPage() {
   );
 
   const totalCampaigns =
-    raffles.length +
-    squares.length +
-    events.length +
-    auctions.length;
+    raffles.length + squares.length + events.length + auctions.length;
 
   const totalPublishedCampaigns =
     publishedRaffles.length +
@@ -153,17 +149,13 @@ export default async function AdminDashboardPage() {
     publishedEvents.length +
     publishedAuctions.length;
 
-  const combinedEstimatedRevenueCents =
-    raffleRevenueCents + squaresRevenueCents;
+  const combinedEstimatedRevenueCents = raffleRevenueCents + squaresRevenueCents;
 
   return (
     <main className="admin-dashboard-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section
-        className="admin-command-centre"
-        style={styles.commandCentre}
-      >
+      <section className="admin-command-centre" style={styles.commandCentre}>
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
@@ -174,25 +166,16 @@ export default async function AdminDashboardPage() {
             Admin command centre
           </h1>
 
-          <p
-            className="admin-dashboard-subtitle"
-            style={styles.subtitle}
-          >
-            Manage campaigns, payments, supporters and operations
-            across one premium fundraising workspace.
+          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
+            Manage campaigns, payments, supporters and operations across one
+            premium fundraising workspace.
           </p>
 
-          <p
-            className="admin-dashboard-tenant"
-            style={styles.tenant}
-          >
+          <p className="admin-dashboard-tenant" style={styles.tenant}>
             Tenant: <strong>{tenantSlug}</strong>
           </p>
 
-          <div
-            className="admin-command-actions"
-            style={styles.commandActions}
-          >
+          <div className="admin-command-actions" style={styles.commandActions}>
             <Link
               href={`/c/${tenantSlug}`}
               target="_blank"
@@ -225,24 +208,21 @@ export default async function AdminDashboardPage() {
             >
               Finance & fees
             </Link>
+
+            <Link
+              href="/admin/settings/billing"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Billing
+            </Link>
           </div>
         </div>
 
-        <div
-          className="admin-command-stats"
-          style={styles.commandStats}
-        >
-          <StatCard
-            label="Total campaigns"
-            value={totalCampaigns}
-            dark
-          />
+        <div className="admin-command-stats" style={styles.commandStats}>
+          <StatCard label="Total campaigns" value={totalCampaigns} dark />
 
-          <StatCard
-            label="Published"
-            value={totalPublishedCampaigns}
-            dark
-          />
+          <StatCard label="Published" value={totalPublishedCampaigns} dark />
 
           <StatCard
             label="Tracked estimate"
@@ -252,10 +232,272 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      <section
-        className="admin-focus-grid"
-        style={styles.focusGrid}
-      >
+      <section className="admin-focus-grid" style={styles.focusGrid}>
+        <FocusCard
+          label="Raffle tickets sold"
+          value={totalRaffleTicketsSold}
+          text={`${totalRaffleTicketsRemaining} raffle tickets remaining`}
+        />
+
+        <FocusCard
+          label="Squares sold"
+          value={squaresSold}
+          text="Across all active squares campaigns"
+        />
+
+        <FocusCard
+          label="Published events"
+          value={publishedEvents.length}
+          text={`${events.length} total events created`}
+        />
+
+        <FocusCard
+          label="Active auctions"
+          value={publishedAuctions.length}
+          text={`${auctions.length} total auctions created`}
+        />
+
+        <FocusCard
+          label="Published campaigns"
+          value={totalPublishedCampaigns}
+          text={`${totalCampaigns} total campaigns created`}
+        />
+      </section>
+      import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { headers, cookies } from "next/headers";
+import { auth } from "@/auth";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { listSquaresGames } from "../../../api/_lib/squares-repo";
+import { listEvents } from "../../../api/_lib/events-repo";
+import { listAuctions } from "../../../api/_lib/auctions-repo";
+
+type RaffleItem = {
+  id: string;
+  status: string;
+  currency: string;
+  ticket_price: number;
+  total_tickets: number;
+  sold_tickets: number;
+  remaining_tickets: number;
+};
+
+type ApiResponse = {
+  ok: boolean;
+  items?: RaffleItem[];
+  error?: string;
+};
+
+async function getAdminRaffles(): Promise<RaffleItem[]> {
+  try {
+    const headerStore = await headers();
+    const cookieStore = await cookies();
+
+    const host = headerStore.get("host") || "";
+    const protocol = host.includes("localhost") ? "http" : "https";
+
+    const cookieHeader = cookieStore
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+
+    const res = await fetch(`${protocol}://${host}/api/admin/raffles`, {
+      cache: "no-store",
+      headers: {
+        cookie: cookieHeader,
+      },
+    });
+
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as ApiResponse;
+
+    if (!data.ok || !data.items) return [];
+
+    return data.items;
+  } catch {
+    return [];
+  }
+}
+
+function formatMoney(cents: number, currency = "GBP") {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `£${(Number(cents || 0) / 100).toFixed(2)}`;
+  }
+}
+
+export default async function AdminDashboardPage() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  const [raffles, squares, events, auctions] = await Promise.all([
+    getAdminRaffles(),
+    listSquaresGames(tenantSlug),
+    listEvents(tenantSlug),
+    listAuctions(tenantSlug),
+  ]);
+
+  const publishedRaffles = raffles.filter(
+    (item) => item.status === "published",
+  );
+
+  const publishedSquares = squares.filter(
+    (item) => item.status === "published",
+  );
+
+  const publishedEvents = events.filter(
+    (item) => item.status === "published",
+  );
+
+  const publishedAuctions = auctions.filter(
+    (item) => item.status === "published",
+  );
+
+  const raffleRevenueCents = raffles.reduce(
+    (sum, raffle) =>
+      sum +
+      Number(raffle.sold_tickets || 0) * Number(raffle.ticket_price || 0),
+    0,
+  );
+
+  const squaresSold = squares.reduce((sum, game) => {
+    const sold = Array.isArray(game.config_json?.sold)
+      ? game.config_json.sold.length
+      : 0;
+
+    return sum + sold;
+  }, 0);
+
+  const squaresRevenueCents = squares.reduce((sum, game) => {
+    const sold = Array.isArray(game.config_json?.sold)
+      ? game.config_json.sold.length
+      : 0;
+
+    return sum + sold * Number(game.price_per_square_cents || 0);
+  }, 0);
+
+  const totalRaffleTicketsSold = raffles.reduce(
+    (sum, raffle) => sum + Number(raffle.sold_tickets || 0),
+    0,
+  );
+
+  const totalRaffleTicketsRemaining = raffles.reduce(
+    (sum, raffle) => sum + Number(raffle.remaining_tickets || 0),
+    0,
+  );
+
+  const totalCampaigns =
+    raffles.length + squares.length + events.length + auctions.length;
+
+  const totalPublishedCampaigns =
+    publishedRaffles.length +
+    publishedSquares.length +
+    publishedEvents.length +
+    publishedAuctions.length;
+
+  const combinedEstimatedRevenueCents = raffleRevenueCents + squaresRevenueCents;
+
+  return (
+    <main className="admin-dashboard-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="admin-command-centre" style={styles.commandCentre}>
+        <div style={styles.commandContent}>
+          <div style={styles.badge}>SO Foundation Platform</div>
+
+          <h1
+            className="so-brand-heading admin-dashboard-title"
+            style={styles.title}
+          >
+            Admin command centre
+          </h1>
+
+          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
+            Manage campaigns, payments, supporters and operations across one
+            premium fundraising workspace.
+          </p>
+
+          <p className="admin-dashboard-tenant" style={styles.tenant}>
+            Tenant: <strong>{tenantSlug}</strong>
+          </p>
+
+          <div className="admin-command-actions" style={styles.commandActions}>
+            <Link
+              href={`/c/${tenantSlug}`}
+              target="_blank"
+              className="primaryButton"
+              style={styles.primaryButton}
+            >
+              View public campaigns →
+            </Link>
+
+            <Link
+              href="/admin/orders"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Orders dashboard
+            </Link>
+
+            <Link
+              href="/admin/customers"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Customers
+            </Link>
+
+            <Link
+              href="/admin/metadata"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Finance & fees
+            </Link>
+
+            <Link
+              href="/admin/settings/billing"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Billing
+            </Link>
+          </div>
+        </div>
+
+        <div className="admin-command-stats" style={styles.commandStats}>
+          <StatCard label="Total campaigns" value={totalCampaigns} dark />
+
+          <StatCard label="Published" value={totalPublishedCampaigns} dark />
+
+          <StatCard
+            label="Tracked estimate"
+            value={formatMoney(combinedEstimatedRevenueCents)}
+            dark
+          />
+        </div>
+      </section>
+
+      <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -369,6 +611,16 @@ export default async function AdminDashboardPage() {
           tone="gold"
           compact
         />
+
+        <DashboardCard
+          href="/admin/settings/billing"
+          badgeText="PLAN"
+          title="Billing"
+          description="View subscription tier, platform commission, enabled capabilities and Stripe billing readiness."
+          stats="Subscription settings"
+          tone="blue"
+          compact
+        />
       </section>
 
       <section
@@ -425,6 +677,14 @@ export default async function AdminDashboardPage() {
               style={styles.financeButtonSecondary}
             >
               Open customers →
+            </Link>
+
+            <Link
+              href="/admin/settings/billing"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
+              Open billing →
             </Link>
           </div>
         </section>
@@ -522,248 +782,7 @@ function StatCard({
     </div>
   );
 }
-
-function FocusCard({
-  label,
-  value,
-  text,
-}: {
-  label: string;
-  value: ReactNode;
-  text: string;
-}) {
-  return (
-    <article
-      className="admin-focus-card"
-      style={styles.focusCard}
-    >
-      <div style={styles.focusLabel}>{label}</div>
-
-      <div style={styles.focusValue}>{value}</div>
-
-      <p style={styles.focusText}>{text}</p>
-    </article>
-  );
-}
-
-function DataBlock({
-  label,
-  total,
-  published,
-}: {
-  label: string;
-  total: number;
-  published: number;
-}) {
-  return (
-    <div
-      className="admin-data-block"
-      style={styles.dataBlock}
-    >
-      <div style={styles.dataLabel}>{label}</div>
-
-      <div style={styles.dataValue}>{total}</div>
-
-      <div style={styles.dataSub}>
-        {published} published
-      </div>
-    </div>
-  );
-}
-
-function DashboardCard({
-  href,
-  image,
-  badgeText,
-  title,
-  description,
-  stats,
-  tone = "default",
-  compact = false,
-}: {
-  href: string;
-  image?: string;
-  badgeText?: string;
-  title: string;
-  description: string;
-  stats: string;
-  tone?: "default" | "blue" | "gold";
-  compact?: boolean;
-}) {
-  const badgeStyle =
-    tone === "gold"
-      ? styles.logoTextGold
-      : tone === "blue"
-        ? styles.logoTextBlue
-        : styles.logoTextDefault;
-
-  return (
-    <Link href={href} style={styles.cardLink}>
-      <article
-        className={`admin-dashboard-card ${
-          compact ? "admin-compact-card" : ""
-        }`}
-        style={
-          compact
-            ? {
-                ...styles.card,
-                ...styles.compactCard,
-              }
-            : styles.card
-        }
-      >
-        <div style={styles.cardTop}>
-          <div
-            style={
-              compact
-                ? {
-                    ...styles.logoBox,
-                    ...styles.compactLogoBox,
-                  }
-                : styles.logoBox
-            }
-          >
-            {image ? (
-              <img
-                src={image}
-                alt={title}
-                style={
-                  image.includes("so-default-auctions")
-                    ? {
-                        ...styles.logoImage,
-                        width: "132%",
-                        height: "132%",
-                        padding: 2,
-                      }
-                    : styles.logoImage
-                }
-              />
-            ) : (
-              <span style={badgeStyle}>
-                {badgeText || title}
-              </span>
-            )}
-          </div>
-
-          <h2
-            className="so-brand-card-title admin-card-title"
-            style={styles.cardTitle}
-          >
-            {title}
-          </h2>
-
-          <p style={styles.cardDescription}>
-            {description}
-          </p>
-        </div>
-                <div style={styles.cardBottom}>
-          <div style={styles.cardStats}>{stats}</div>
-          <div style={styles.cardDivider} />
-          <div style={styles.openLink}>Open dashboard →</div>
-        </div>
-      </article>
-    </Link>
-  );
-}
-
-const responsiveStyles = `
-.admin-dashboard-page,
-.admin-dashboard-page * {
-  box-sizing: border-box;
-}
-
-.admin-dashboard-page {
-  overflow-x: hidden;
-}
-
-.admin-dashboard-page section,
-.admin-dashboard-page article,
-.admin-dashboard-page div {
-  min-width: 0;
-}
-
-@media (max-width: 1180px) {
-  .admin-dashboard-page .admin-command-centre,
-  .admin-dashboard-page .admin-operations-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .admin-dashboard-page .admin-command-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
-
-  .admin-dashboard-page .admin-focus-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 900px) {
-  .admin-dashboard-page {
-    padding: 18px 12px 44px !important;
-  }
-
-  .admin-dashboard-page .admin-command-centre {
-    padding: 22px !important;
-    border-radius: 26px !important;
-  }
-
-  .admin-dashboard-page .admin-dashboard-title {
-    font-size: clamp(38px, 11vw, 56px) !important;
-    line-height: 0.98 !important;
-  }
-
-  .admin-dashboard-page .admin-command-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .admin-dashboard-page .admin-panel-actions {
-    grid-template-columns: 1fr !important;
-  }
-
-  .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton,
-  .admin-dashboard-page .financeButton,
-  .admin-dashboard-page .financeButtonSecondary {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-
-  .admin-dashboard-page .admin-command-stats,
-  .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 620px) {
-  .admin-dashboard-page .admin-command-actions,
-  .admin-dashboard-page .admin-command-stats,
-  .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .admin-dashboard-page .admin-dashboard-card,
-  .admin-dashboard-page .admin-finance-panel,
-  .admin-dashboard-page .admin-data-panel {
-    padding: 16px !important;
-    border-radius: 22px !important;
-  }
-
-  .admin-dashboard-page .admin-command-centre {
-    gap: 18px !important;
-  }
-
-  .admin-dashboard-page .admin-card-title,
-  .admin-dashboard-page .admin-section-title {
-    font-size: 25px !important;
-  }
-}
-`;
-
-const styles: Record<string, CSSProperties> = {
+      const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
     maxWidth: 1320,
@@ -832,11 +851,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#bfdbfe",
     fontSize: 14,
     fontWeight: 850,
+    overflowWrap: "anywhere",
   },
 
   commandActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, max-content))",
+    gridTemplateColumns: "repeat(5, minmax(0, max-content))",
     gap: 10,
     marginTop: 24,
     alignItems: "center",
@@ -924,6 +944,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 30,
     fontWeight: 950,
     letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
   focusGrid: {
@@ -941,6 +962,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
 
   focusLabel: {
@@ -1025,6 +1047,7 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 250,
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     height: "100%",
+    minWidth: 0,
   },
 
   compactCard: {
@@ -1036,6 +1059,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 12,
     alignContent: "start",
+    minWidth: 0,
   },
 
   logoBox: {
@@ -1115,6 +1139,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 13,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   cardDivider: {
@@ -1143,6 +1168,7 @@ const styles: Record<string, CSSProperties> = {
     background:
       "linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(255,255,255,1) 80%)",
     border: "1px solid #fde68a",
+    minWidth: 0,
   },
 
   financeKicker: {
@@ -1159,6 +1185,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 30,
     letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
   financeText: {
@@ -1166,11 +1193,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#78350f",
     lineHeight: 1.6,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   panelActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, max-content))",
+    gridTemplateColumns: "repeat(4, minmax(0, max-content))",
     gap: 10,
     alignItems: "center",
   },
@@ -1211,6 +1239,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   dataGrid: {
@@ -1226,6 +1255,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 20,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   dataLabel: {
@@ -1239,6 +1269,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 32,
     fontWeight: 950,
     letterSpacing: "-0.06em",
+    overflowWrap: "anywhere",
   },
 
   dataSub: {
