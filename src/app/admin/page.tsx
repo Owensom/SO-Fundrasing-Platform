@@ -219,7 +219,8 @@ export default async function AdminDashboardPage() {
             </Link>
           </div>
         </div>
-                <div className="admin-command-stats" style={styles.commandStats}>
+
+        <div className="admin-command-stats" style={styles.commandStats}>
           <StatCard label="Total campaigns" value={totalCampaigns} dark />
           <StatCard label="Published" value={totalPublishedCampaigns} dark />
           <StatCard
@@ -261,8 +262,7 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-
-      <section style={styles.sectionHeader}>
+            <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
 
@@ -274,8 +274,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want
-            to manage.
+            Choose the campaign type or operational dashboard you want to
+            manage.
           </p>
         </div>
       </section>
@@ -363,9 +363,7 @@ export default async function AdminDashboardPage() {
           style={styles.financePanel}
         >
           <div>
-            <p style={styles.financeKicker}>
-              Finance & transactions
-            </p>
+            <p style={styles.financeKicker}>Finance & transactions</p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -375,10 +373,9 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.financeText}>
-              Open the full metadata view for tracked
-              transactions, campaign types, supporter details,
-              platform contribution, Stripe fees and organiser
-              net estimates.
+              Open the full metadata view for tracked transactions, campaign
+              types, supporter details, platform contribution, Stripe fees and
+              organiser net estimates.
             </p>
           </div>
 
@@ -419,14 +416,13 @@ export default async function AdminDashboardPage() {
             </Link>
           </div>
         </section>
-                <section
+
+        <section
           className="admin-data-panel"
           style={styles.dataPanel}
         >
           <div>
-            <p style={styles.kicker}>
-              Live platform overview
-            </p>
+            <p style={styles.kicker}>Live platform overview</p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -436,8 +432,8 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.sectionText}>
-              A simple snapshot of the live campaign data
-              currently available to this tenant.
+              A simple snapshot of the live campaign data currently available
+              to this tenant.
             </p>
           </div>
 
@@ -536,7 +532,6 @@ function DataBlock({
     </div>
   );
 }
-
 function DashboardCard({
   href,
   image,
@@ -680,10 +675,8 @@ const responsiveStyles = `
   }
 
   .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton,
-  .admin-dashboard-page .financeButton,
-  .admin-dashboard-page .financeButtonSecondary {
-    width: auto !important;
+  .admin-dashboard-page .secondaryButton {
+    width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
   }
@@ -797,10 +790,10 @@ const styles: Record<string, CSSProperties> = {
 
   commandActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(5, minmax(0, max-content))",
     gap: 10,
     marginTop: 24,
-    alignItems: "stretch",
+    alignItems: "center",
   },
 
   primaryButton: {
@@ -816,7 +809,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
-    whiteSpace: "normal",
+    whiteSpace: "nowrap",
   },
 
   secondaryButton: {
@@ -832,7 +825,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "normal",
+    whiteSpace: "nowrap",
   },
 
   commandStats: {
