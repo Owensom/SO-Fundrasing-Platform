@@ -156,9 +156,14 @@ export default async function AdminDashboardPage() {
     <main className="admin-dashboard-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section className="admin-command-centre" style={styles.commandCentre}>
+      <section
+        className="admin-command-centre"
+        style={styles.commandCentre}
+      >
         <div style={styles.commandContent}>
-          <div style={styles.badge}>SO Foundation Platform</div>
+          <div style={styles.badge}>
+            SO Foundation Platform
+          </div>
 
           <h1
             className="so-brand-heading admin-dashboard-title"
@@ -167,16 +172,26 @@ export default async function AdminDashboardPage() {
             Admin command centre
           </h1>
 
-          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-            Manage campaigns, payments, supporters and operations across one
-            premium fundraising workspace.
+          <p
+            className="admin-dashboard-subtitle"
+            style={styles.subtitle}
+          >
+            Manage campaigns, payments, supporters and
+            operations across one premium fundraising
+            workspace.
           </p>
 
-          <p className="admin-dashboard-tenant" style={styles.tenant}>
+          <p
+            className="admin-dashboard-tenant"
+            style={styles.tenant}
+          >
             Tenant: <strong>{tenantSlug}</strong>
           </p>
 
-          <div className="admin-command-actions" style={styles.commandActions}>
+          <div
+            className="admin-command-actions"
+            style={styles.commandActions}
+          >
             <Link
               href={`/c/${tenantSlug}`}
               target="_blank"
@@ -220,18 +235,36 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className="admin-command-stats" style={styles.commandStats}>
-          <StatCard label="Total campaigns" value={totalCampaigns} dark />
-          <StatCard label="Published" value={totalPublishedCampaigns} dark />
+        <div
+          className="admin-command-stats"
+          style={styles.commandStats}
+        >
+          <StatCard
+            label="Total campaigns"
+            value={totalCampaigns}
+            dark
+          />
+
+          <StatCard
+            label="Published"
+            value={totalPublishedCampaigns}
+            dark
+          />
+
           <StatCard
             label="Tracked estimate"
-            value={formatMoney(combinedEstimatedRevenueCents)}
+            value={formatMoney(
+              combinedEstimatedRevenueCents,
+            )}
             dark
           />
         </div>
       </section>
 
-      <section className="admin-focus-grid" style={styles.focusGrid}>
+      <section
+        className="admin-focus-grid"
+        style={styles.focusGrid}
+      >
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -262,9 +295,12 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-            <section style={styles.sectionHeader}>
+
+      <section style={styles.sectionHeader}>
         <div>
-          <p style={styles.kicker}>Main workspaces</p>
+          <p style={styles.kicker}>
+            Main workspaces
+          </p>
 
           <h2
             className="so-brand-card-title admin-section-title"
@@ -274,13 +310,16 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want
-            to manage.
+            Choose the campaign type or operational
+            dashboard you want to manage.
           </p>
         </div>
       </section>
 
-      <section className="admin-cards-grid" style={styles.cardsGrid}>
+      <section
+        className="admin-cards-grid"
+        style={styles.cardsGrid}
+      >
         <DashboardCard
           href="/admin/raffles"
           image="/brand/so-default-raffles.png"
@@ -312,8 +351,7 @@ export default async function AdminDashboardPage() {
           description="Run premium auction fundraising campaigns."
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
         />
-
-        <DashboardCard
+                <DashboardCard
           href="/admin/orders"
           badgeText="ORDERS"
           title="Orders"
@@ -375,47 +413,58 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.financeText}>
-              Open the full metadata view for tracked
-              transactions, campaign types, supporter details,
-              platform contribution, Stripe fees and organiser
-              net estimates.
+              Review payment metadata, Stripe fees, platform
+              contribution, supporter details and organiser net
+              estimates from one clean operations panel.
             </p>
           </div>
 
           <div
-            className="admin-panel-actions"
-            style={styles.panelActions}
+            className="admin-finance-actions"
+            style={styles.financeActions}
           >
             <Link
               href="/admin/metadata"
-              className="financeButton"
-              style={styles.financeButton}
+              className="financeActionPrimary"
+              style={styles.financeActionPrimary}
             >
-              Open finance →
+              <span style={styles.financeActionLabel}>
+                Open finance
+              </span>
+              <span style={styles.financeActionArrow}>→</span>
             </Link>
 
             <Link
               href="/admin/orders"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
+              className="financeAction"
+              style={styles.financeAction}
             >
-              Open orders →
+              <span style={styles.financeActionLabel}>
+                Orders
+              </span>
+              <span style={styles.financeActionArrow}>→</span>
             </Link>
 
             <Link
               href="/admin/customers"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
+              className="financeAction"
+              style={styles.financeAction}
             >
-              Open customers →
+              <span style={styles.financeActionLabel}>
+                Customers
+              </span>
+              <span style={styles.financeActionArrow}>→</span>
             </Link>
 
             <Link
               href="/admin/settings/billing"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
+              className="financeAction"
+              style={styles.financeAction}
             >
-              Open billing →
+              <span style={styles.financeActionLabel}>
+                Billing
+              </span>
+              <span style={styles.financeActionArrow}>→</span>
             </Link>
           </div>
         </section>
@@ -524,7 +573,10 @@ function FocusCard({
   text: string;
 }) {
   return (
-    <article className="admin-focus-card" style={styles.focusCard}>
+    <article
+      className="admin-focus-card"
+      style={styles.focusCard}
+    >
       <div style={styles.focusLabel}>{label}</div>
       <div style={styles.focusValue}>{value}</div>
       <p style={styles.focusText}>{text}</p>
@@ -542,13 +594,17 @@ function DataBlock({
   published: number;
 }) {
   return (
-    <div className="admin-data-block" style={styles.dataBlock}>
+    <div
+      className="admin-data-block"
+      style={styles.dataBlock}
+    >
       <div style={styles.dataLabel}>{label}</div>
       <div style={styles.dataValue}>{total}</div>
       <div style={styles.dataSub}>{published} published</div>
     </div>
   );
 }
+
 function DashboardCard({
   href,
   image,
@@ -617,7 +673,9 @@ function DashboardCard({
                 }
               />
             ) : (
-              <span style={badgeStyle}>{badgeText || title}</span>
+              <span style={badgeStyle}>
+                {badgeText || title}
+              </span>
             )}
           </div>
 
@@ -628,19 +686,22 @@ function DashboardCard({
             {title}
           </h2>
 
-          <p style={styles.cardDescription}>{description}</p>
+          <p style={styles.cardDescription}>
+            {description}
+          </p>
         </div>
 
         <div style={styles.cardBottom}>
           <div style={styles.cardStats}>{stats}</div>
           <div style={styles.cardDivider} />
-          <div style={styles.openLink}>Open dashboard →</div>
+          <div style={styles.openLink}>
+            Open dashboard →
+          </div>
         </div>
       </article>
     </Link>
   );
 }
-
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -701,7 +762,8 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid {
+  .admin-dashboard-page .admin-data-grid,
+  .admin-dashboard-page .admin-cards-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -711,13 +773,9 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid {
+  .admin-dashboard-page .admin-cards-grid,
+  .admin-dashboard-page .admin-finance-actions {
     grid-template-columns: 1fr !important;
-  }
-
-  .admin-dashboard-page .admin-panel-actions {
-    display: flex !important;
-    flex-wrap: wrap !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
@@ -1152,40 +1210,53 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  panelActions: {
+  financeActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, max-content))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
-    alignItems: "center",
+    alignItems: "stretch",
   },
 
-  financeButton: {
-    display: "inline-flex",
+  financeActionPrimary: {
+    display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
+    justifyContent: "space-between",
+    gap: 12,
+    minHeight: 54,
+    padding: "14px 16px",
+    borderRadius: 18,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    whiteSpace: "nowrap",
+    border: "1px solid #0f172a",
+    boxShadow: "0 14px 28px rgba(15,23,42,0.16)",
   },
 
-  financeButtonSecondary: {
-    display: "inline-flex",
+  financeAction: {
+    display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
+    justifyContent: "space-between",
+    gap: 12,
+    minHeight: 54,
+    padding: "14px 16px",
+    borderRadius: 18,
     background: "#ffffff",
     color: "#0f172a",
-    border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
-    whiteSpace: "nowrap",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+
+  financeActionLabel: {
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+
+  financeActionArrow: {
+    flexShrink: 0,
+    opacity: 0.9,
   },
 
   dataPanel: {
@@ -1209,7 +1280,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     padding: 16,
     borderRadius: 20,
-    background: "#f8fafc",
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
