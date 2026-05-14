@@ -295,8 +295,7 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-
-      <section style={styles.sectionHeader}>
+            <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>
             Main workspaces
@@ -310,8 +309,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational
-            dashboard you want to manage.
+            Choose the campaign type or operational dashboard
+            you want to manage.
           </p>
         </div>
       </section>
@@ -351,7 +350,8 @@ export default async function AdminDashboardPage() {
           description="Run premium auction fundraising campaigns."
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
         />
-                <DashboardCard
+
+        <DashboardCard
           href="/admin/orders"
           badgeText="ORDERS"
           title="Orders"
@@ -413,58 +413,47 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.financeText}>
-              Review payment metadata, Stripe fees, platform
-              contribution, supporter details and organiser net
-              estimates from one clean operations panel.
+              Open the full metadata view for tracked
+              transactions, campaign types, supporter details,
+              platform contribution, Stripe fees and organiser
+              net estimates.
             </p>
           </div>
 
           <div
-            className="admin-finance-actions"
-            style={styles.financeActions}
+            className="admin-panel-actions"
+            style={styles.panelActions}
           >
             <Link
               href="/admin/metadata"
-              className="financeActionPrimary"
-              style={styles.financeActionPrimary}
+              className="financeButton"
+              style={styles.financeButton}
             >
-              <span style={styles.financeActionLabel}>
-                Open finance
-              </span>
-              <span style={styles.financeActionArrow}>→</span>
+              Open finance →
             </Link>
 
             <Link
               href="/admin/orders"
-              className="financeAction"
-              style={styles.financeAction}
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
             >
-              <span style={styles.financeActionLabel}>
-                Orders
-              </span>
-              <span style={styles.financeActionArrow}>→</span>
+              Open orders →
             </Link>
 
             <Link
               href="/admin/customers"
-              className="financeAction"
-              style={styles.financeAction}
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
             >
-              <span style={styles.financeActionLabel}>
-                Customers
-              </span>
-              <span style={styles.financeActionArrow}>→</span>
+              Open customers →
             </Link>
 
             <Link
               href="/admin/settings/billing"
-              className="financeAction"
-              style={styles.financeAction}
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
             >
-              <span style={styles.financeActionLabel}>
-                Billing
-              </span>
-              <span style={styles.financeActionArrow}>→</span>
+              Open billing →
             </Link>
           </div>
         </section>
@@ -578,7 +567,9 @@ function FocusCard({
       style={styles.focusCard}
     >
       <div style={styles.focusLabel}>{label}</div>
+
       <div style={styles.focusValue}>{value}</div>
+
       <p style={styles.focusText}>{text}</p>
     </article>
   );
@@ -599,12 +590,15 @@ function DataBlock({
       style={styles.dataBlock}
     >
       <div style={styles.dataLabel}>{label}</div>
+
       <div style={styles.dataValue}>{total}</div>
-      <div style={styles.dataSub}>{published} published</div>
+
+      <div style={styles.dataSub}>
+        {published} published
+      </div>
     </div>
   );
 }
-
 function DashboardCard({
   href,
   image,
@@ -673,9 +667,7 @@ function DashboardCard({
                 }
               />
             ) : (
-              <span style={badgeStyle}>
-                {badgeText || title}
-              </span>
+              <span style={badgeStyle}>{badgeText || title}</span>
             )}
           </div>
 
@@ -686,22 +678,19 @@ function DashboardCard({
             {title}
           </h2>
 
-          <p style={styles.cardDescription}>
-            {description}
-          </p>
+          <p style={styles.cardDescription}>{description}</p>
         </div>
 
         <div style={styles.cardBottom}>
           <div style={styles.cardStats}>{stats}</div>
           <div style={styles.cardDivider} />
-          <div style={styles.openLink}>
-            Open dashboard →
-          </div>
+          <div style={styles.openLink}>Open dashboard →</div>
         </div>
       </article>
     </Link>
   );
 }
+
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -731,18 +720,6 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
-
-  .admin-dashboard-page .admin-command-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    align-items: stretch !important;
-  }
-
-  .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
 }
 
 @media (max-width: 900px) {
@@ -760,22 +737,37 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
+  .admin-dashboard-page .primaryButton,
+  .admin-dashboard-page .secondaryButton {
+    flex: 1 1 calc(50% - 10px) !important;
+    width: auto !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid {
+  .admin-dashboard-page .admin-data-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
 @media (max-width: 620px) {
-  .admin-dashboard-page .admin-command-actions,
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid,
-  .admin-dashboard-page .admin-finance-actions {
+  .admin-dashboard-page .admin-cards-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .admin-dashboard-page .primaryButton,
+  .admin-dashboard-page .secondaryButton {
+    flex: 1 1 100% !important;
+  }
+
+  .admin-dashboard-page .admin-panel-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
@@ -869,8 +861,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandActions: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, max-content))",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 10,
     marginTop: 24,
     alignItems: "center",
@@ -890,6 +882,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
     whiteSpace: "nowrap",
+    flex: "0 1 auto",
   },
 
   secondaryButton: {
@@ -906,6 +899,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
     whiteSpace: "nowrap",
+    flex: "0 1 auto",
   },
 
   commandStats: {
@@ -1058,28 +1052,30 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minHeight: 250,
+    minHeight: 180,
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     height: "100%",
     minWidth: 0,
   },
 
   compactCard: {
-    minHeight: 210,
+    minHeight: 180,
     gap: 12,
   },
 
   cardTop: {
     display: "grid",
+    gridTemplateColumns: "56px minmax(0, 1fr)",
     gap: 12,
     alignContent: "start",
+    alignItems: "center",
     minWidth: 0,
   },
 
   logoBox: {
-    width: 66,
-    height: 66,
-    borderRadius: 18,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
@@ -1087,11 +1083,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    gridRow: "1 / span 2",
   },
 
   compactLogoBox: {
-    width: 58,
-    height: 58,
+    width: 54,
+    height: 54,
   },
 
   logoImage: {
@@ -1136,7 +1133,7 @@ const styles: Record<string, CSSProperties> = {
   cardDescription: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.5,
+    lineHeight: 1.45,
     fontSize: 14,
     fontWeight: 700,
     overflowWrap: "anywhere",
@@ -1150,7 +1147,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   cardStats: {
-    color: "#0f172a",
+    color: "#2563eb",
     fontSize: 13,
     fontWeight: 950,
     overflowWrap: "anywhere",
@@ -1210,53 +1207,42 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  financeActions: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  panelActions: {
+    display: "flex",
+    flexWrap: "wrap",
     gap: 10,
-    alignItems: "stretch",
+    alignItems: "center",
   },
 
-  financeActionPrimary: {
-    display: "flex",
+  financeButton: {
+    display: "inline-flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    minHeight: 54,
-    padding: "14px 16px",
-    borderRadius: 18,
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #0f172a",
-    boxShadow: "0 14px 28px rgba(15,23,42,0.16)",
+    whiteSpace: "nowrap",
+    flex: "0 1 auto",
   },
 
-  financeAction: {
-    display: "flex",
+  financeButtonSecondary: {
+    display: "inline-flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    minHeight: 54,
-    padding: "14px 16px",
-    borderRadius: 18,
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
-    textDecoration: "none",
-    fontWeight: 950,
     border: "1px solid #cbd5e1",
-    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
-  },
-
-  financeActionLabel: {
-    minWidth: 0,
-    overflowWrap: "anywhere",
-  },
-
-  financeActionArrow: {
-    flexShrink: 0,
-    opacity: 0.9,
+    textDecoration: "none",
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+    flex: "0 1 auto",
   },
 
   dataPanel: {
@@ -1280,8 +1266,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     padding: 16,
     borderRadius: 20,
-    background:
-      "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+    background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
