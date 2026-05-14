@@ -274,8 +274,7 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want
-            to manage.
+            Choose the campaign type or operational dashboard you want to manage.
           </p>
         </div>
       </section>
@@ -354,18 +353,10 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section
-        className="admin-operations-grid"
-        style={styles.operationsGrid}
-      >
-        <section
-          className="admin-finance-panel"
-          style={styles.financePanel}
-        >
+      <section className="admin-operations-grid" style={styles.operationsGrid}>
+        <section className="admin-finance-panel" style={styles.financePanel}>
           <div>
-            <p style={styles.financeKicker}>
-              Finance & transactions
-            </p>
+            <p style={styles.financeKicker}>Finance & transactions</p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -375,17 +366,13 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.financeText}>
-              Open the full metadata view for tracked
-              transactions, campaign types, supporter details,
-              platform contribution, Stripe fees and organiser
-              net estimates.
+              Review payment metadata, Stripe fees, platform contribution,
+              supporter details and organiser net estimates from one clean
+              operations panel.
             </p>
           </div>
 
-          <div
-            className="admin-panel-actions"
-            style={styles.panelActions}
-          >
+          <div className="admin-panel-actions" style={styles.panelActions}>
             <Link
               href="/admin/metadata"
               className="financeButton"
@@ -399,7 +386,7 @@ export default async function AdminDashboardPage() {
               className="financeButtonSecondary"
               style={styles.financeButtonSecondary}
             >
-              Open orders →
+              Orders →
             </Link>
 
             <Link
@@ -407,7 +394,7 @@ export default async function AdminDashboardPage() {
               className="financeButtonSecondary"
               style={styles.financeButtonSecondary}
             >
-              Open customers →
+              Customers →
             </Link>
 
             <Link
@@ -415,19 +402,14 @@ export default async function AdminDashboardPage() {
               className="financeButtonSecondary"
               style={styles.financeButtonSecondary}
             >
-              Open billing →
+              Billing →
             </Link>
           </div>
         </section>
 
-        <section
-          className="admin-data-panel"
-          style={styles.dataPanel}
-        >
+        <section className="admin-data-panel" style={styles.dataPanel}>
           <div>
-            <p style={styles.kicker}>
-              Live platform overview
-            </p>
+            <p style={styles.kicker}>Live platform overview</p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -437,15 +419,12 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.sectionText}>
-              A simple snapshot of the live campaign data
-              currently available to this tenant.
+              A simple snapshot of the live campaign data currently available to
+              this tenant.
             </p>
           </div>
 
-          <div
-            className="admin-data-grid"
-            style={styles.dataGrid}
-          >
+          <div className="admin-data-grid" style={styles.dataGrid}>
             <DataBlock
               label="Raffles"
               total={raffles.length}
@@ -490,9 +469,7 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div style={dark ? styles.darkStatLabel : styles.statLabel}>
-        {label}
-      </div>
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
 
       <div
         className="admin-stat-value"
@@ -643,7 +620,8 @@ const responsiveStyles = `
 
 .admin-dashboard-page section,
 .admin-dashboard-page article,
-.admin-dashboard-page div {
+.admin-dashboard-page div,
+.admin-dashboard-page a {
   min-width: 0;
 }
 
@@ -662,8 +640,7 @@ const responsiveStyles = `
   }
 
   .admin-dashboard-page .admin-command-actions {
-    display: flex !important;
-    flex-wrap: wrap !important;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
   }
 }
 
@@ -682,47 +659,21 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton {
-    flex: 1 1 calc(50% - 10px) !important;
-    min-width: 220px !important;
-    white-space: normal !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
-
-  .admin-dashboard-page .admin-panel-actions {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .admin-dashboard-page .financeButton,
-  .admin-dashboard-page .financeButtonSecondary {
-    width: 100% !important;
-    white-space: normal !important;
-    text-align: center !important;
-  }
 }
 
 @media (max-width: 620px) {
+  .admin-dashboard-page .admin-command-actions,
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
   .admin-dashboard-page .admin-cards-grid,
   .admin-dashboard-page .admin-panel-actions {
     grid-template-columns: 1fr !important;
-  }
-
-  .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton {
-    flex: 1 1 100% !important;
-    min-width: 0 !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
@@ -816,15 +767,15 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandActions: {
-    display: "flex",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 10,
     marginTop: 24,
-    alignItems: "center",
+    alignItems: "stretch",
   },
 
   primaryButton: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
@@ -836,12 +787,15 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
-    whiteSpace: "nowrap",
-    flex: "0 1 auto",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    textAlign: "center",
+    lineHeight: 1.2,
+    minWidth: 0,
   },
 
   secondaryButton: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
@@ -853,8 +807,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "nowrap",
-    flex: "0 1 auto",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    textAlign: "center",
+    lineHeight: 1.2,
+    minWidth: 0,
   },
 
   commandStats: {
@@ -1160,41 +1117,43 @@ const styles: Record<string, CSSProperties> = {
   },
 
   panelActions: {
-    display: "flex",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
-    alignItems: "center",
+    alignItems: "stretch",
   },
 
   financeButton: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
+    justifyContent: "space-between",
+    minHeight: 54,
+    padding: "14px 16px",
+    borderRadius: 18,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    whiteSpace: "nowrap",
-    flex: "0 1 auto",
+    whiteSpace: "normal",
+    width: "100%",
+    boxShadow: "0 14px 28px rgba(15,23,42,0.16)",
   },
 
   financeButtonSecondary: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
+    justifyContent: "space-between",
+    minHeight: 54,
+    padding: "14px 16px",
+    borderRadius: 18,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-    flex: "0 1 auto",
+    fontWeight: 950,
+    whiteSpace: "normal",
+    width: "100%",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
 
   dataPanel: {
