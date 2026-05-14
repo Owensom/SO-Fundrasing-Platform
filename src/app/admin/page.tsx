@@ -175,59 +175,68 @@ export default async function AdminDashboardPage() {
           <p className="admin-dashboard-tenant" style={styles.tenant}>
             Tenant: <strong>{tenantSlug}</strong>
           </p>
-
-          <div className="admin-command-actions" style={styles.commandActions}>
-            <Link
-              href={`/c/${tenantSlug}`}
-              target="_blank"
-              className="primaryButton"
-              style={styles.primaryButton}
-            >
-              View public campaigns →
-            </Link>
-
-            <Link
-              href="/admin/orders"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Orders dashboard →
-            </Link>
-
-            <Link
-              href="/admin/customers"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Customers →
-            </Link>
-
-            <Link
-              href="/admin/metadata"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Finance & fees →
-            </Link>
-
-            <Link
-              href="/admin/settings/billing"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Billing →
-            </Link>
-          </div>
         </div>
 
         <div className="admin-command-stats" style={styles.commandStats}>
           <StatCard label="Total campaigns" value={totalCampaigns} dark />
-          <StatCard label="Published" value={totalPublishedCampaigns} dark />
+
+          <StatCard
+            label="Published"
+            value={totalPublishedCampaigns}
+            dark
+          />
+
           <StatCard
             label="Tracked estimate"
             value={formatMoney(combinedEstimatedRevenueCents)}
             dark
           />
+        </div>
+
+        <div
+          className="admin-command-actions"
+          style={styles.commandActions}
+        >
+          <Link
+            href={`/c/${tenantSlug}`}
+            target="_blank"
+            className="primaryButton"
+            style={styles.primaryButton}
+          >
+            View public campaigns →
+          </Link>
+
+          <Link
+            href="/admin/orders"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Orders dashboard →
+          </Link>
+
+          <Link
+            href="/admin/customers"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Customers →
+          </Link>
+
+          <Link
+            href="/admin/metadata"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Finance & fees →
+          </Link>
+
+          <Link
+            href="/admin/settings/billing"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Billing →
+          </Link>
         </div>
       </section>
 
@@ -262,8 +271,7 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-
-      <section style={styles.sectionHeader}>
+            <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
 
@@ -471,7 +479,9 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>
+        {label}
+      </div>
 
       <div
         className="admin-stat-value"
@@ -495,7 +505,9 @@ function FocusCard({
   return (
     <article className="admin-focus-card" style={styles.focusCard}>
       <div style={styles.focusLabel}>{label}</div>
+
       <div style={styles.focusValue}>{value}</div>
+
       <p style={styles.focusText}>{text}</p>
     </article>
   );
@@ -513,7 +525,9 @@ function DataBlock({
   return (
     <div className="admin-data-block" style={styles.dataBlock}>
       <div style={styles.dataLabel}>{label}</div>
+
       <div style={styles.dataValue}>{total}</div>
+
       <div style={styles.dataSub}>{published} published</div>
     </div>
   );
@@ -603,14 +617,15 @@ function DashboardCard({
 
         <div style={styles.cardBottom}>
           <div style={styles.cardStats}>{stats}</div>
+
           <div style={styles.cardDivider} />
+
           <div style={styles.openLink}>Open dashboard →</div>
         </div>
       </article>
     </Link>
   );
 }
-
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -632,6 +647,10 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-centre,
   .admin-dashboard-page .admin-operations-grid {
     grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "content"
+      "stats"
+      "actions" !important;
   }
 
   .admin-dashboard-page .admin-command-stats {
@@ -641,10 +660,6 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
-
-  .admin-dashboard-page .admin-command-actions {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  }
 }
 
 @media (max-width: 900px) {
@@ -653,13 +668,13 @@ const responsiveStyles = `
   }
 
   .admin-dashboard-page .admin-command-centre {
-    padding: 24px !important;
-    border-radius: 30px !important;
+    padding: 22px !important;
+    border-radius: 26px !important;
   }
 
   .admin-dashboard-page .admin-dashboard-title {
-    font-size: clamp(44px, 10vw, 66px) !important;
-    line-height: 0.95 !important;
+    font-size: clamp(38px, 11vw, 56px) !important;
+    line-height: 0.98 !important;
   }
 
   .admin-dashboard-page .admin-command-actions {
@@ -671,7 +686,6 @@ const responsiveStyles = `
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
-    white-space: normal !important;
   }
 
   .admin-dashboard-page .admin-command-stats,
@@ -726,7 +740,11 @@ const styles: Record<string, CSSProperties> = {
   commandCentre: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
-    gap: 22,
+    gridTemplateAreas: `
+      "content stats"
+      "actions actions"
+    `,
+    gap: 24,
     padding: 30,
     borderRadius: 34,
     background:
@@ -737,6 +755,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandContent: {
+    gridArea: "content",
     minWidth: 0,
   },
 
@@ -783,19 +802,20 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandActions: {
+    gridArea: "actions",
     display: "grid",
     gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-    gap: 10,
-    marginTop: 24,
+    gap: 12,
     alignItems: "stretch",
+    width: "100%",
   },
 
   primaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
+    minHeight: 48,
+    padding: "12px 16px",
     borderRadius: 999,
     background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
     color: "#111827",
@@ -803,28 +823,33 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid rgba(251,191,36,0.82)",
     boxShadow: "0 14px 28px rgba(251,191,36,0.20)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
     textAlign: "center",
+    lineHeight: 1.2,
   },
 
   secondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 15px",
+    minHeight: 48,
+    padding: "12px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 900,
-    border: "1px solid rgba(255,255,255,0.16)",
+    border: "1px solid rgba(251,191,36,0.42)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
     textAlign: "center",
+    lineHeight: 1.2,
   },
 
   commandStats: {
+    gridArea: "stats",
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 12,
