@@ -152,7 +152,7 @@ export default async function AdminDashboardPage() {
   const combinedEstimatedRevenueCents = raffleRevenueCents + squaresRevenueCents;
 
   return (
-    <main className="admin-dashboard-page" style={styles.page}>
+  <main className="admin-dashboard-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
       <section className="admin-command-centre" style={styles.commandCentre}>
