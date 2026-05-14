@@ -10,24 +10,25 @@ export const revalidate = 0;
 
 type PageProps = {
   searchParams?: Promise<{
-    q?: string;
     type?: string;
+    q?: string;
   }>;
 };
 
 type ActivityType = "raffle" | "squares" | "event" | "auction";
 
-type CustomerActivity = {
+type UnifiedOrder = {
   id: string;
   type: ActivityType;
-  customerName: string;
-  customerEmail: string;
   campaignId: string | null;
   campaignTitle: string;
   campaignSlug: string | null;
+  customerName: string;
+  customerEmail: string;
   detail: string;
   amountCents: number;
   currency: string;
+  status: string;
   createdAt: string | null;
   adminHref: string | null;
   publicHref: string | null;
@@ -35,14 +36,14 @@ type CustomerActivity = {
 
 type CustomerProfile = {
   key: string;
-  email: string;
   name: string;
+  email: string;
   totalSpendCents: number;
   orderCount: number;
   campaignCount: number;
   lastActivity: string | null;
   types: Set<ActivityType>;
-  activities: CustomerActivity[];
+  orders: UnifiedOrder[];
 };
 
 type RawRow = Record<string, any>;
@@ -91,6 +92,12 @@ function formatDate(value: string | null) {
   }
 }
 
+function activityTime(value: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 function typeLabel(type: ActivityType) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
@@ -131,23 +138,19 @@ function typeStyle(type: ActivityType): CSSProperties {
 }
 
 async function safeQuery<T extends RawRow>(
-  label: string,
   sql: string,
   values: unknown[],
 ): Promise<T[]> {
   try {
     return await query<T>(sql, values);
   } catch (error) {
-    console.error(`Admin customers ${label} query failed:`, error);
+    console.error("Admin customers query failed:", error);
     return [];
   }
 }
 
-async function getRaffleActivity(
-  tenantSlug: string,
-): Promise<CustomerActivity[]> {
+async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
-    "raffle",
     `
       select
         sale.id,
@@ -165,7 +168,7 @@ async function getRaffleActivity(
       join raffles raffle on raffle.id = sale.raffle_id
       where raffle.tenant_slug = $1
       order by sale.created_at desc
-      limit 700
+      limit 500
     `,
     [tenantSlug],
   );
@@ -177,16 +180,17 @@ async function getRaffleActivity(
     return {
       id: `raffle-${cleanText(row.id, `${campaignId}-${row.ticket_number}`)}`,
       type: "raffle",
-      customerName: cleanText(row.buyer_name, "Supporter"),
-      customerEmail: cleanText(row.buyer_email, "No email"),
       campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled raffle"),
       campaignSlug: slug || null,
+      customerName: cleanText(row.buyer_name, "Supporter"),
+      customerEmail: cleanText(row.buyer_email, "No email"),
       detail: `Ticket #${cleanText(row.ticket_number, "—")}${
         row.colour ? ` · ${row.colour}` : ""
       }`,
       amountCents: safeNumber(row.ticket_price_cents, 0),
       currency: cleanText(row.currency, "GBP"),
+      status: "Sold",
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/raffles/${campaignId}` : null,
       publicHref: slug ? `/r/${slug}` : null,
@@ -194,11 +198,8 @@ async function getRaffleActivity(
   });
 }
 
-async function getSquaresActivity(
-  tenantSlug: string,
-): Promise<CustomerActivity[]> {
+async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
-    "squares",
     `
       select
         sale.id,
@@ -206,10 +207,9 @@ async function getSquaresActivity(
         sale.customer_name,
         sale.customer_email,
         sale.squares,
+        sale.amount_cents,
+        sale.total_cents,
         sale.created_at,
-        to_jsonb(sale)->>'amount_cents' as amount_cents,
-        to_jsonb(sale)->>'total_cents' as total_cents,
-        to_jsonb(sale)->>'price_cents' as price_cents,
         game.title as campaign_title,
         game.slug as campaign_slug,
         game.currency,
@@ -218,7 +218,7 @@ async function getSquaresActivity(
       join squares_games game on game.id = sale.game_id
       where game.tenant_slug = $1
       order by sale.created_at desc
-      limit 700
+      limit 500
     `,
     [tenantSlug],
   );
@@ -230,30 +230,23 @@ async function getSquaresActivity(
       ? row.squares.join(", ")
       : cleanText(row.squares);
 
-    const squareCount = Array.isArray(row.squares)
-      ? row.squares.length
-      : squares
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean).length;
-
-    const amountCents =
+    const amount =
       safeNumber(row.amount_cents, 0) ||
       safeNumber(row.total_cents, 0) ||
-      safeNumber(row.price_cents, 0) ||
-      safeNumber(row.price_per_square_cents, 0) * Math.max(squareCount, 1);
+      safeNumber(row.price_per_square_cents, 0);
 
     return {
       id: `squares-${cleanText(row.id, `${campaignId}-${squares}`)}`,
       type: "squares",
-      customerName: cleanText(row.customer_name, "Supporter"),
-      customerEmail: cleanText(row.customer_email, "No email"),
       campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled squares game"),
       campaignSlug: slug || null,
+      customerName: cleanText(row.customer_name, "Supporter"),
+      customerEmail: cleanText(row.customer_email, "No email"),
       detail: squares ? `Squares ${squares}` : "Squares order",
-      amountCents,
+      amountCents: amount,
       currency: cleanText(row.currency, "GBP"),
+      status: "Sold",
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/squares/${campaignId}` : null,
       publicHref: slug ? `/s/${slug}` : null,
@@ -261,24 +254,20 @@ async function getSquaresActivity(
   });
 }
 
-async function getEventActivity(
-  tenantSlug: string,
-): Promise<CustomerActivity[]> {
+async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
-    "events",
     `
       select
         event_order.id,
         event_order.event_id,
+        event_order.customer_name,
+        event_order.customer_email,
+        event_order.buyer_name,
+        event_order.buyer_email,
+        event_order.total_amount_cents,
+        event_order.amount_cents,
+        event_order.status,
         event_order.created_at,
-        to_jsonb(event_order)->>'customer_name' as customer_name,
-        to_jsonb(event_order)->>'customer_email' as customer_email,
-        to_jsonb(event_order)->>'buyer_name' as buyer_name,
-        to_jsonb(event_order)->>'buyer_email' as buyer_email,
-        to_jsonb(event_order)->>'total_amount_cents' as total_amount_cents,
-        to_jsonb(event_order)->>'amount_cents' as amount_cents,
-        to_jsonb(event_order)->>'total_cents' as total_cents,
-        to_jsonb(event_order)->>'status' as status,
         event.title as campaign_title,
         event.slug as campaign_slug,
         event.currency
@@ -286,7 +275,7 @@ async function getEventActivity(
       join events event on event.id = event_order.event_id
       where event.tenant_slug = $1
       order by event_order.created_at desc
-      limit 700
+      limit 500
     `,
     [tenantSlug],
   );
@@ -295,12 +284,12 @@ async function getEventActivity(
     const campaignId = cleanText(row.event_id);
     const slug = cleanText(row.campaign_slug);
 
-    const customerName =
+    const name =
       cleanText(row.customer_name) ||
       cleanText(row.buyer_name) ||
       "Ticket buyer";
 
-    const customerEmail =
+    const email =
       cleanText(row.customer_email) ||
       cleanText(row.buyer_email) ||
       "No email";
@@ -308,17 +297,17 @@ async function getEventActivity(
     return {
       id: `event-${cleanText(row.id, campaignId)}`,
       type: "event",
-      customerName,
-      customerEmail,
       campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled event"),
       campaignSlug: slug || null,
-      detail: cleanText(row.status, "Event ticket order"),
+      customerName: name,
+      customerEmail: email,
+      detail: "Event ticket order",
       amountCents:
         safeNumber(row.total_amount_cents, 0) ||
-        safeNumber(row.amount_cents, 0) ||
-        safeNumber(row.total_cents, 0),
+        safeNumber(row.amount_cents, 0),
       currency: cleanText(row.currency, "GBP"),
+      status: cleanText(row.status, "Paid"),
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/events/${campaignId}` : null,
       publicHref: slug ? `/e/${slug}` : null,
@@ -326,21 +315,16 @@ async function getEventActivity(
   });
 }
 
-async function getAuctionActivity(
-  tenantSlug: string,
-): Promise<CustomerActivity[]> {
+async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
-    "auctions",
     `
       select
         bid.id,
         bid.item_id,
+        bid.bidder_name,
+        bid.bidder_email,
         bid.amount_cents,
         bid.created_at,
-        to_jsonb(bid)->>'bidder_name' as bidder_name,
-        to_jsonb(bid)->>'bidder_email' as bidder_email,
-        to_jsonb(bid)->>'customer_name' as customer_name,
-        to_jsonb(bid)->>'customer_email' as customer_email,
         item.auction_id,
         item.title as item_title,
         auction.title as campaign_title,
@@ -351,7 +335,7 @@ async function getAuctionActivity(
       join auctions auction on auction.id = item.auction_id
       where auction.tenant_slug = $1
       order by bid.created_at desc
-      limit 700
+      limit 500
     `,
     [tenantSlug],
   );
@@ -360,27 +344,18 @@ async function getAuctionActivity(
     const campaignId = cleanText(row.auction_id);
     const slug = cleanText(row.campaign_slug);
 
-    const customerName =
-      cleanText(row.bidder_name) ||
-      cleanText(row.customer_name) ||
-      "Bidder";
-
-    const customerEmail =
-      cleanText(row.bidder_email) ||
-      cleanText(row.customer_email) ||
-      "No email";
-
     return {
       id: `auction-${cleanText(row.id, `${campaignId}-${row.item_id}`)}`,
       type: "auction",
-      customerName,
-      customerEmail,
       campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled auction"),
       campaignSlug: slug || null,
+      customerName: cleanText(row.bidder_name, "Bidder"),
+      customerEmail: cleanText(row.bidder_email, "No email"),
       detail: `Bid · ${cleanText(row.item_title, "Auction item")}`,
       amountCents: safeNumber(row.amount_cents, 0),
       currency: cleanText(row.currency, "GBP"),
+      status: "Bid placed",
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/auctions/${campaignId}` : null,
       publicHref: slug ? `/a/${slug}` : null,
@@ -388,58 +363,50 @@ async function getAuctionActivity(
   });
 }
 
-function activityTime(value: string | null) {
-  if (!value) return 0;
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) ? time : 0;
-}
+function buildCustomerProfiles(orders: UnifiedOrder[]) {
+  const map = new Map<string, CustomerProfile>();
 
-function buildCustomerProfiles(activities: CustomerActivity[]) {
-  const profileMap = new Map<string, CustomerProfile>();
+  for (const order of orders) {
+    const email = normaliseEmail(order.customerEmail);
+    const key = email || `${order.type}-${order.id}`;
 
-  for (const activity of activities) {
-    const email = normaliseEmail(activity.customerEmail);
-    const fallbackKey = `${activity.type}-${activity.customerName}-${activity.id}`;
-    const key = email || fallbackKey.toLowerCase();
-
-    const existing = profileMap.get(key);
+    const existing = map.get(key);
 
     if (!existing) {
-      profileMap.set(key, {
+      map.set(key, {
         key,
+        name: cleanText(order.customerName, "Supporter"),
         email: email || "No email",
-        name: cleanText(activity.customerName, "Supporter"),
-        totalSpendCents: Number(activity.amountCents || 0),
+        totalSpendCents: Number(order.amountCents || 0),
         orderCount: 1,
         campaignCount: 1,
-        lastActivity: activity.createdAt,
-        types: new Set([activity.type]),
-        activities: [activity],
+        lastActivity: order.createdAt,
+        types: new Set([order.type]),
+        orders: [order],
       });
-
       continue;
     }
 
-    existing.totalSpendCents += Number(activity.amountCents || 0);
+    existing.totalSpendCents += Number(order.amountCents || 0);
     existing.orderCount += 1;
-    existing.types.add(activity.type);
-    existing.activities.push(activity);
+    existing.types.add(order.type);
+    existing.orders.push(order);
 
     const campaigns = new Set(
-      existing.activities.map(
+      existing.orders.map(
         (item) => `${item.type}:${item.campaignId || item.campaignTitle}`,
       ),
     );
 
     existing.campaignCount = campaigns.size;
 
-    if (activityTime(activity.createdAt) > activityTime(existing.lastActivity)) {
-      existing.lastActivity = activity.createdAt;
-      existing.name = cleanText(activity.customerName, existing.name);
+    if (activityTime(order.createdAt) > activityTime(existing.lastActivity)) {
+      existing.lastActivity = order.createdAt;
+      existing.name = cleanText(order.customerName, existing.name);
     }
   }
 
-  return Array.from(profileMap.values()).sort((a, b) => {
+  return Array.from(map.values()).sort((a, b) => {
     if (b.totalSpendCents !== a.totalSpendCents) {
       return b.totalSpendCents - a.totalSpendCents;
     }
@@ -450,11 +417,11 @@ function buildCustomerProfiles(activities: CustomerActivity[]) {
 
 function filterCustomers(
   customers: CustomerProfile[],
-  searchTerm: string,
   typeFilter: string,
+  searchTerm: string,
 ) {
-  const cleanSearch = searchTerm.trim().toLowerCase();
   const cleanType = typeFilter.trim().toLowerCase();
+  const cleanSearch = searchTerm.trim().toLowerCase();
 
   return customers.filter((customer) => {
     const typeMatch =
@@ -462,17 +429,19 @@ function filterCustomers(
       cleanType === "all" ||
       customer.types.has(cleanType as ActivityType);
 
-    const searchText = [
-      customer.name,
-      customer.email,
-      ...customer.activities.map((activity) => activity.campaignTitle),
-      ...customer.activities.map((activity) => activity.detail),
-      ...customer.activities.map((activity) => activity.customerEmail),
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    const searchMatch = !cleanSearch || searchText.includes(cleanSearch);
+    const searchMatch =
+      !cleanSearch ||
+      [
+        customer.name,
+        customer.email,
+        ...customer.orders.map((order) => order.campaignTitle),
+        ...customer.orders.map((order) => order.customerName),
+        ...customer.orders.map((order) => order.customerEmail),
+        ...customer.orders.map((order) => order.detail),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(cleanSearch);
 
     return typeMatch && searchMatch;
   });
@@ -528,29 +497,29 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const searchTerm = cleanText(resolvedSearchParams.q, "");
   const selectedType = cleanText(resolvedSearchParams.type, "all");
+  const searchTerm = cleanText(resolvedSearchParams.q, "");
 
-  const [raffleActivity, squaresActivity, eventActivity, auctionActivity] =
+  const [raffleOrders, squaresOrders, eventOrders, auctionOrders] =
     await Promise.all([
-      getRaffleActivity(tenantSlug),
-      getSquaresActivity(tenantSlug),
-      getEventActivity(tenantSlug),
-      getAuctionActivity(tenantSlug),
+      getRaffleOrders(tenantSlug),
+      getSquaresOrders(tenantSlug),
+      getEventOrders(tenantSlug),
+      getAuctionOrders(tenantSlug),
     ]);
 
-  const allActivity = [
-    ...raffleActivity,
-    ...squaresActivity,
-    ...eventActivity,
-    ...auctionActivity,
-  ];
+  const allOrders = [
+    ...raffleOrders,
+    ...squaresOrders,
+    ...eventOrders,
+    ...auctionOrders,
+  ].sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt));
 
-  const customers = buildCustomerProfiles(allActivity);
+  const customers = buildCustomerProfiles(allOrders);
   const filteredCustomers = filterCustomers(
     customers,
-    searchTerm,
     selectedType,
+    searchTerm,
   );
 
   const totalSpendCents = filteredCustomers.reduce(
@@ -578,31 +547,31 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           </h1>
 
           <p style={styles.subtitle}>
-            Supporter profiles built from raffles, squares, events and auction
-            activity for this tenant.
+            Supporter profiles grouped from the same working data used by the
+            Orders dashboard.
           </p>
 
           <div className="heroStats" style={styles.heroStats}>
             <HeroStat label="Customers" value={filteredCustomers.length} />
-            <HeroStat label="Activity rows" value={allActivity.length} />
             <HeroStat label="Orders" value={totalOrders} />
             <HeroStat label="Spend" value={formatMoney(totalSpendCents)} />
+            <HeroStat label="Tenant" value={tenantSlug} />
           </div>
         </div>
 
         <div style={styles.heroPanel}>
-          <div style={styles.heroPanelTitle}>Supporter intelligence</div>
+          <div style={styles.heroPanelTitle}>Data included</div>
 
           <p style={styles.heroPanelText}>
-            See who supports multiple campaigns, where they spend, and when they
-            last interacted with the platform.
+            This page uses the exact same module queries as Orders, then groups
+            the results by customer email.
           </p>
 
           <div className="heroPanelGrid" style={styles.heroPanelGrid}>
-            <MiniMetric label="Raffles" value={raffleActivity.length} />
-            <MiniMetric label="Squares" value={squaresActivity.length} />
-            <MiniMetric label="Events" value={eventActivity.length} />
-            <MiniMetric label="Auctions" value={auctionActivity.length} />
+            <MiniMetric label="Raffles" value={raffleOrders.length} />
+            <MiniMetric label="Squares" value={squaresOrders.length} />
+            <MiniMetric label="Events" value={eventOrders.length} />
+            <MiniMetric label="Auctions" value={auctionOrders.length} />
           </div>
         </div>
       </section>
@@ -612,11 +581,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           ← Back to dashboard
         </Link>
 
-        <Link
-          href="/admin/orders"
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
+        <Link href="/admin/orders" className="secondaryButton" style={styles.secondaryButton}>
           Orders dashboard
         </Link>
 
@@ -633,13 +598,20 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
       <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Visible customers" value={filteredCustomers.length} />
         <SummaryCard label="All customers" value={customers.length} />
-        <SummaryCard label="Activity rows" value={allActivity.length} />
         <SummaryCard label="Orders" value={totalOrders} />
         <SummaryCard label="Total spend" value={formatMoney(totalSpendCents)} />
+        <SummaryCard label="Raffle rows" value={raffleOrders.length} />
+        <SummaryCard label="Squares rows" value={squaresOrders.length} />
+        <SummaryCard label="Event rows" value={eventOrders.length} />
+        <SummaryCard label="Auction bids" value={auctionOrders.length} />
       </section>
 
       <section style={styles.filterCard}>
-        <form action="/admin/customers" className="filterForm" style={styles.filterForm}>
+        <form
+          action="/admin/customers"
+          className="filterForm"
+          style={styles.filterForm}
+        >
           <label style={styles.field}>
             <span style={styles.label}>Search</span>
             <input
@@ -652,11 +624,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
 
           <label style={styles.field}>
             <span style={styles.label}>Activity type</span>
-            <select
-              name="type"
-              defaultValue={selectedType}
-              style={styles.input}
-            >
+            <select name="type" defaultValue={selectedType} style={styles.input}>
               <option value="all">All activity</option>
               <option value="raffle">Raffles</option>
               <option value="squares">Squares</option>
@@ -680,13 +648,13 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           <div>
             <p style={styles.kicker}>Customer profiles</p>
 
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            <h2 className="so-brand-card-title sectionTitle" style={styles.sectionTitle}>
               Supporter list
             </h2>
 
             <p style={styles.sectionText}>
-              Grouped by customer email where available. Each profile includes
-              total spend, activity count, campaign count and latest activity.
+              Each profile shows total spend, number of orders, campaigns
+              supported and the latest three activity rows.
             </p>
           </div>
 
@@ -695,13 +663,12 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
 
         {filteredCustomers.length === 0 ? (
           <div style={styles.emptyBox}>
-            No matching customers found yet. Once orders, bids or ticket sales
-            are recorded, customer profiles will appear here.
+            No matching customers found yet.
           </div>
         ) : (
           <div className="customerGrid" style={styles.customerGrid}>
             {filteredCustomers.map((customer) => {
-              const recentActivities = customer.activities
+              const recentOrders = customer.orders
                 .slice()
                 .sort(
                   (a, b) =>
@@ -710,14 +677,21 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                 .slice(0, 3);
 
               return (
-                <article key={customer.key} className="customerCard" style={styles.customerCard}>
+                <article
+                  key={customer.key}
+                  className="customerCard"
+                  style={styles.customerCard}
+                >
                   <div className="customerTop" style={styles.customerTop}>
                     <div style={styles.customerIdentity}>
-                      <h3 style={styles.customerName}>{customer.name}</h3>
+                      <h3 className="customerName" style={styles.customerName}>
+                        {customer.name}
+                      </h3>
+
                       <p style={styles.customerEmail}>{customer.email}</p>
                     </div>
 
-                    <div style={styles.spendBadge}>
+                    <div className="spendBadge" style={styles.spendBadge}>
                       {formatMoney(customer.totalSpendCents)}
                     </div>
                   </div>
@@ -743,33 +717,34 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                   </div>
 
                   <div style={styles.activityList}>
-                    {recentActivities.map((activity) => (
-                      <div key={activity.id} className="activityRow" style={styles.activityRow}>
+                    {recentOrders.map((order) => (
+                      <div
+                        key={order.id}
+                        className="activityRow"
+                        style={styles.activityRow}
+                      >
                         <div>
                           <div style={styles.activityTitle}>
-                            {activity.campaignTitle}
+                            {order.campaignTitle}
                           </div>
 
                           <div style={styles.activityDetail}>
-                            {typeLabel(activity.type)} · {activity.detail}
+                            {typeLabel(order.type)} · {order.detail}
                           </div>
                         </div>
 
                         <div className="activityRight" style={styles.activityRight}>
                           <strong>
-                            {formatMoney(
-                              activity.amountCents,
-                              activity.currency,
-                            )}
+                            {formatMoney(order.amountCents, order.currency)}
                           </strong>
 
-                          <span>{formatDate(activity.createdAt)}</span>
+                          <span>{formatDate(order.createdAt)}</span>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div style={styles.cardActions}>
+                  <div className="cardActions" style={styles.cardActions}>
                     <Link
                       href={`/admin/orders?q=${encodeURIComponent(
                         customer.email,
@@ -780,9 +755,9 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                       View orders
                     </Link>
 
-                    {recentActivities[0]?.adminHref ? (
+                    {recentOrders[0]?.adminHref ? (
                       <Link
-                        href={recentActivities[0].adminHref}
+                        href={recentOrders[0].adminHref}
                         className="smallLinkMuted"
                         style={styles.smallLinkMuted}
                       >
@@ -855,24 +830,9 @@ const responsiveStyles = `
   .customers-page .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
-
-  .customers-page .topActions {
-    align-items: stretch !important;
-  }
-
-  .customers-page .primaryButton,
-  .customers-page .secondaryButton,
-  .customers-page .filterButton,
-  .customers-page .clearButton,
-  .customers-page .smallLink,
-  .customers-page .smallLinkMuted {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 720px) {
   .customers-page {
     width: 100% !important;
     max-width: 100% !important;
@@ -897,6 +857,23 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .customers-page .topActions,
+  .customers-page .cardActions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .customers-page .primaryButton,
+  .customers-page .secondaryButton,
+  .customers-page .filterButton,
+  .customers-page .clearButton,
+  .customers-page .smallLink,
+  .customers-page .smallLinkMuted {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
   .customers-page .customerTop,
   .customers-page .activityRow {
     grid-template-columns: 1fr !important;
@@ -916,30 +893,6 @@ const responsiveStyles = `
   .customers-page .spendBadge {
     width: fit-content !important;
     white-space: normal !important;
-  }
-
-  .customers-page .cardActions {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-  }
-}
-
-@media (max-width: 390px) {
-  .customers-page {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-  }
-
-  .customers-page .hero {
-    padding: 16px !important;
-  }
-
-  .customers-page .customerName {
-    font-size: 20px !important;
-  }
-
-  .customers-page .sectionTitle {
-    font-size: 24px !important;
   }
 }
 `;
@@ -1014,6 +967,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(255,255,255,0.15)",
     minWidth: 0,
+    overflowWrap: "anywhere",
   },
   heroPanel: {
     display: "grid",
@@ -1030,14 +984,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.035em",
-    overflowWrap: "anywhere",
   },
   heroPanelText: {
     margin: 0,
     color: "#dbeafe",
     lineHeight: 1.5,
     fontWeight: 700,
-    overflowWrap: "anywhere",
   },
   heroPanelGrid: {
     display: "grid",
@@ -1075,7 +1027,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #1683f8",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
   secondaryButton: {
     display: "inline-flex",
@@ -1092,7 +1043,7 @@ const styles: Record<string, CSSProperties> = {
   },
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
     gap: 12,
     marginBottom: 16,
   },
@@ -1112,7 +1063,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
   },
   filterForm: {
@@ -1141,7 +1091,6 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 12px",
     fontSize: 15,
     boxSizing: "border-box",
-    minWidth: 0,
   },
   filterButton: {
     minHeight: 44,
@@ -1171,8 +1120,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
   },
   sectionHeader: {
     display: "flex",
@@ -1195,14 +1142,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 27,
     letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
   },
   sectionText: {
     margin: "7px 0 0",
     color: "#64748b",
     lineHeight: 1.5,
     maxWidth: 720,
-    overflowWrap: "anywhere",
   },
   countPill: {
     display: "inline-flex",
@@ -1323,7 +1268,6 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "right",
     color: "#0f172a",
     fontSize: 13,
-    minWidth: 0,
   },
   cardActions: {
     display: "flex",
