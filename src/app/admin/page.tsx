@@ -47,6 +47,7 @@ async function getAdminRaffles(): Promise<RaffleItem[]> {
     if (!res.ok) return [];
 
     const data = (await res.json()) as ApiResponse;
+
     if (!data.ok || !data.items) return [];
 
     return data.items;
@@ -90,16 +91,27 @@ export default async function AdminDashboardPage() {
     listAuctions(tenantSlug),
   ]);
 
-  const publishedRaffles = raffles.filter((item) => item.status === "published");
-  const publishedSquares = squares.filter((item) => item.status === "published");
-  const publishedEvents = events.filter((item) => item.status === "published");
+  const publishedRaffles = raffles.filter(
+    (item) => item.status === "published",
+  );
+
+  const publishedSquares = squares.filter(
+    (item) => item.status === "published",
+  );
+
+  const publishedEvents = events.filter(
+    (item) => item.status === "published",
+  );
+
   const publishedAuctions = auctions.filter(
     (item) => item.status === "published",
   );
 
   const raffleRevenueCents = raffles.reduce(
     (sum, raffle) =>
-      sum + Number(raffle.sold_tickets || 0) * Number(raffle.ticket_price || 0),
+      sum +
+      Number(raffle.sold_tickets || 0) *
+        Number(raffle.ticket_price || 0),
     0,
   );
 
@@ -130,7 +142,10 @@ export default async function AdminDashboardPage() {
   );
 
   const totalCampaigns =
-    raffles.length + squares.length + events.length + auctions.length;
+    raffles.length +
+    squares.length +
+    events.length +
+    auctions.length;
 
   const totalPublishedCampaigns =
     publishedRaffles.length +
@@ -138,13 +153,17 @@ export default async function AdminDashboardPage() {
     publishedEvents.length +
     publishedAuctions.length;
 
-  const combinedEstimatedRevenueCents = raffleRevenueCents + squaresRevenueCents;
+  const combinedEstimatedRevenueCents =
+    raffleRevenueCents + squaresRevenueCents;
 
   return (
     <main className="admin-dashboard-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section className="admin-command-centre" style={styles.commandCentre}>
+      <section
+        className="admin-command-centre"
+        style={styles.commandCentre}
+      >
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
@@ -155,16 +174,25 @@ export default async function AdminDashboardPage() {
             Admin command centre
           </h1>
 
-          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-            Manage campaigns, payments, supporters and operations across one
-            premium fundraising workspace.
+          <p
+            className="admin-dashboard-subtitle"
+            style={styles.subtitle}
+          >
+            Manage campaigns, payments, supporters and operations
+            across one premium fundraising workspace.
           </p>
 
-          <p className="admin-dashboard-tenant" style={styles.tenant}>
+          <p
+            className="admin-dashboard-tenant"
+            style={styles.tenant}
+          >
             Tenant: <strong>{tenantSlug}</strong>
           </p>
 
-          <div className="admin-command-actions" style={styles.commandActions}>
+          <div
+            className="admin-command-actions"
+            style={styles.commandActions}
+          >
             <Link
               href={`/c/${tenantSlug}`}
               target="_blank"
@@ -200,9 +228,22 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className="admin-command-stats" style={styles.commandStats}>
-          <StatCard label="Total campaigns" value={totalCampaigns} dark />
-          <StatCard label="Published" value={totalPublishedCampaigns} dark />
+        <div
+          className="admin-command-stats"
+          style={styles.commandStats}
+        >
+          <StatCard
+            label="Total campaigns"
+            value={totalCampaigns}
+            dark
+          />
+
+          <StatCard
+            label="Published"
+            value={totalPublishedCampaigns}
+            dark
+          />
+
           <StatCard
             label="Tracked estimate"
             value={formatMoney(combinedEstimatedRevenueCents)}
@@ -211,7 +252,10 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="admin-focus-grid" style={styles.focusGrid}>
+      <section
+        className="admin-focus-grid"
+        style={styles.focusGrid}
+      >
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -242,23 +286,28 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-
-      <section style={styles.sectionHeader}>
+            <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
+
           <h2
             className="so-brand-card-title admin-section-title"
             style={styles.sectionTitle}
           >
             Open a fundraising area
           </h2>
+
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want to manage.
+            Choose the campaign type or operational dashboard you want
+            to manage.
           </p>
         </div>
       </section>
 
-      <section className="admin-cards-grid" style={styles.cardsGrid}>
+      <section
+        className="admin-cards-grid"
+        style={styles.cardsGrid}
+      >
         <DashboardCard
           href="/admin/raffles"
           image="/brand/so-default-raffles.png"
@@ -322,10 +371,18 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section className="admin-operations-grid" style={styles.operationsGrid}>
-        <section className="admin-finance-panel" style={styles.financePanel}>
+      <section
+        className="admin-operations-grid"
+        style={styles.operationsGrid}
+      >
+        <section
+          className="admin-finance-panel"
+          style={styles.financePanel}
+        >
           <div>
-            <p style={styles.financeKicker}>Finance & transactions</p>
+            <p style={styles.financeKicker}>
+              Finance & transactions
+            </p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -335,13 +392,17 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.financeText}>
-              Open the full metadata view for tracked transactions, campaign
-              types, supporter details, platform contribution, Stripe fees and
-              organiser net estimates.
+              Open the full metadata view for tracked
+              transactions, campaign types, supporter details,
+              platform contribution, Stripe fees and organiser
+              net estimates.
             </p>
           </div>
 
-          <div className="admin-panel-actions" style={styles.panelActions}>
+          <div
+            className="admin-panel-actions"
+            style={styles.panelActions}
+          >
             <Link
               href="/admin/metadata"
               className="financeButton"
@@ -368,9 +429,14 @@ export default async function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="admin-data-panel" style={styles.dataPanel}>
+        <section
+          className="admin-data-panel"
+          style={styles.dataPanel}
+        >
           <div>
-            <p style={styles.kicker}>Live platform overview</p>
+            <p style={styles.kicker}>
+              Live platform overview
+            </p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -380,12 +446,15 @@ export default async function AdminDashboardPage() {
             </h2>
 
             <p style={styles.sectionText}>
-              A simple snapshot of the live campaign data currently available to
-              this tenant.
+              A simple snapshot of the live campaign data
+              currently available to this tenant.
             </p>
           </div>
 
-          <div className="admin-data-grid" style={styles.dataGrid}>
+          <div
+            className="admin-data-grid"
+            style={styles.dataGrid}
+          >
             <DataBlock
               label="Raffles"
               total={raffles.length}
@@ -415,6 +484,7 @@ export default async function AdminDashboardPage() {
     </main>
   );
 }
+
 function StatCard({
   label,
   value,
@@ -429,10 +499,23 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
+      <div
+        style={
+          dark
+            ? styles.darkStatLabel
+            : styles.statLabel
+        }
+      >
+        {label}
+      </div>
+
       <div
         className="admin-stat-value"
-        style={dark ? styles.darkStatValue : styles.statValue}
+        style={
+          dark
+            ? styles.darkStatValue
+            : styles.statValue
+        }
       >
         {value}
       </div>
@@ -450,9 +533,14 @@ function FocusCard({
   text: string;
 }) {
   return (
-    <article className="admin-focus-card" style={styles.focusCard}>
+    <article
+      className="admin-focus-card"
+      style={styles.focusCard}
+    >
       <div style={styles.focusLabel}>{label}</div>
+
       <div style={styles.focusValue}>{value}</div>
+
       <p style={styles.focusText}>{text}</p>
     </article>
   );
@@ -468,10 +556,17 @@ function DataBlock({
   published: number;
 }) {
   return (
-    <div className="admin-data-block" style={styles.dataBlock}>
+    <div
+      className="admin-data-block"
+      style={styles.dataBlock}
+    >
       <div style={styles.dataLabel}>{label}</div>
+
       <div style={styles.dataValue}>{total}</div>
-      <div style={styles.dataSub}>{published} published</div>
+
+      <div style={styles.dataSub}>
+        {published} published
+      </div>
     </div>
   );
 }
@@ -505,28 +600,48 @@ function DashboardCard({
   return (
     <Link href={href} style={styles.cardLink}>
       <article
-        className={`admin-dashboard-card ${compact ? "admin-compact-card" : ""}`}
-        style={compact ? { ...styles.card, ...styles.compactCard } : styles.card}
+        className={`admin-dashboard-card ${
+          compact ? "admin-compact-card" : ""
+        }`}
+        style={
+          compact
+            ? {
+                ...styles.card,
+                ...styles.compactCard,
+              }
+            : styles.card
+        }
       >
         <div style={styles.cardTop}>
-          <div style={compact ? { ...styles.logoBox, ...styles.compactLogoBox } : styles.logoBox}>
+          <div
+            style={
+              compact
+                ? {
+                    ...styles.logoBox,
+                    ...styles.compactLogoBox,
+                  }
+                : styles.logoBox
+            }
+          >
             {image ? (
-  <img
-    src={image}
-    alt={title}
-    style={
-      image.includes("so-default-auctions")
-        ? {
-            ...styles.logoImage,
-            width: "112%",
-            height: "112%",
-            padding: 6,
-          }
-        : styles.logoImage
-    }
-  />
-) : (
-              <span style={badgeStyle}>{badgeText || title}</span>
+              <img
+                src={image}
+                alt={title}
+                style={
+                  image.includes("so-default-auctions")
+                    ? {
+                        ...styles.logoImage,
+                        width: "132%",
+                        height: "132%",
+                        padding: 2,
+                      }
+                    : styles.logoImage
+                }
+              />
+            ) : (
+              <span style={badgeStyle}>
+                {badgeText || title}
+              </span>
             )}
           </div>
 
@@ -537,10 +652,11 @@ function DashboardCard({
             {title}
           </h2>
 
-          <p style={styles.cardDescription}>{description}</p>
+          <p style={styles.cardDescription}>
+            {description}
+          </p>
         </div>
-
-        <div style={styles.cardBottom}>
+                <div style={styles.cardBottom}>
           <div style={styles.cardStats}>{stats}</div>
           <div style={styles.cardDivider} />
           <div style={styles.openLink}>Open dashboard →</div>
@@ -940,15 +1056,15 @@ const styles: Record<string, CSSProperties> = {
     height: 58,
   },
 
-logoImage: {
-  width: "100%",
-  height: "100%",
-  objectFit: "contain",
-  objectPosition: "center",
-  display: "block",
-  padding: 8,
-  boxSizing: "border-box",
-},
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    objectPosition: "center",
+    display: "block",
+    padding: 8,
+    boxSizing: "border-box",
+  },
 
   logoTextDefault: {
     color: "#0f172a",
