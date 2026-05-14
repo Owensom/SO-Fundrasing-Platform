@@ -72,6 +72,12 @@ function formatDate(value: string | null) {
   }
 }
 
+function activityTime(value: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 function typeLabel(type: UnifiedOrder["type"]) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
@@ -160,19 +166,21 @@ function statusStyle(status: string): CSSProperties {
 }
 
 async function safeQuery<T extends RawRow>(
+  label: string,
   sql: string,
   values: unknown[],
 ): Promise<T[]> {
   try {
     return await query<T>(sql, values);
   } catch (error) {
-    console.error("Admin orders query failed:", error);
+    console.error(`Admin orders ${label} query failed:`, error);
     return [];
   }
 }
 
 async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
+    "raffles",
     `
       select
         sale.id,
@@ -190,19 +198,19 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
       join raffles raffle on raffle.id = sale.raffle_id
       where raffle.tenant_slug = $1
       order by sale.created_at desc
-      limit 300
+      limit 500
     `,
     [tenantSlug],
   );
 
   return rows.map((row) => {
-    const campaignId = cleanText(row.raffle_id, null as any);
-    const slug = cleanText(row.campaign_slug, "");
+    const campaignId = cleanText(row.raffle_id);
+    const slug = cleanText(row.campaign_slug);
 
     return {
       id: `raffle-${cleanText(row.id, `${campaignId}-${row.ticket_number}`)}`,
       type: "raffle",
-      campaignId,
+      campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled raffle"),
       campaignSlug: slug || null,
       customerName: cleanText(row.buyer_name, "Supporter"),
@@ -222,6 +230,7 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
 
 async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
+    "squares",
     `
       select
         sale.id,
@@ -229,45 +238,53 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         sale.customer_name,
         sale.customer_email,
         sale.squares,
-        sale.amount_cents,
-        sale.total_cents,
+        sale.payment_status,
+        sale.currency as sale_currency,
+        sale.gross_amount_cents,
         sale.created_at,
         game.title as campaign_title,
         game.slug as campaign_slug,
-        game.currency,
+        game.currency as game_currency,
         game.price_per_square_cents
       from squares_sales sale
       join squares_games game on game.id = sale.game_id
-      where game.tenant_slug = $1
+      where sale.tenant_slug = $1
       order by sale.created_at desc
-      limit 300
+      limit 500
     `,
     [tenantSlug],
   );
 
   return rows.map((row) => {
-    const campaignId = cleanText(row.game_id, null as any);
-    const slug = cleanText(row.campaign_slug, "");
+    const campaignId = cleanText(row.game_id);
+    const slug = cleanText(row.campaign_slug);
     const squares = Array.isArray(row.squares)
       ? row.squares.join(", ")
-      : cleanText(row.squares, "");
-    const amount =
-      safeNumber(row.amount_cents, 0) ||
-      safeNumber(row.total_cents, 0) ||
-      safeNumber(row.price_per_square_cents, 0);
+      : cleanText(row.squares);
+
+    const squareCount = Array.isArray(row.squares)
+      ? row.squares.length
+      : squares
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean).length;
+
+    const fallbackAmount =
+      safeNumber(row.price_per_square_cents, 0) * Math.max(squareCount, 1);
 
     return {
       id: `squares-${cleanText(row.id, `${campaignId}-${squares}`)}`,
       type: "squares",
-      campaignId,
+      campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled squares game"),
       campaignSlug: slug || null,
       customerName: cleanText(row.customer_name, "Supporter"),
       customerEmail: cleanText(row.customer_email, "No email"),
       detail: squares ? `Squares ${squares}` : "Squares order",
-      amountCents: amount,
-      currency: cleanText(row.currency, "GBP"),
-      status: "Sold",
+      amountCents: safeNumber(row.gross_amount_cents, 0) || fallbackAmount,
+      currency:
+        cleanText(row.sale_currency) || cleanText(row.game_currency, "GBP"),
+      status: cleanText(row.payment_status, "Sold"),
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/squares/${campaignId}` : null,
       publicHref: slug ? `/s/${slug}` : null,
@@ -277,55 +294,45 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
 
 async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
+    "events",
     `
       select
         event_order.id,
         event_order.event_id,
         event_order.customer_name,
         event_order.customer_email,
-        event_order.buyer_name,
-        event_order.buyer_email,
-        event_order.total_amount_cents,
-        event_order.amount_cents,
+        event_order.amount_total,
+        event_order.currency as order_currency,
         event_order.status,
         event_order.created_at,
         event.title as campaign_title,
         event.slug as campaign_slug,
-        event.currency
+        event.currency as event_currency
       from event_orders event_order
       join events event on event.id = event_order.event_id
-      where event.tenant_slug = $1
+      where event_order.tenant_slug = $1
       order by event_order.created_at desc
-      limit 300
+      limit 500
     `,
     [tenantSlug],
   );
 
   return rows.map((row) => {
-    const campaignId = cleanText(row.event_id, null as any);
-    const slug = cleanText(row.campaign_slug, "");
-    const name =
-      cleanText(row.customer_name) ||
-      cleanText(row.buyer_name) ||
-      "Ticket buyer";
-    const email =
-      cleanText(row.customer_email) ||
-      cleanText(row.buyer_email) ||
-      "No email";
+    const campaignId = cleanText(row.event_id);
+    const slug = cleanText(row.campaign_slug);
 
     return {
       id: `event-${cleanText(row.id, campaignId)}`,
       type: "event",
-      campaignId,
+      campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled event"),
       campaignSlug: slug || null,
-      customerName: name,
-      customerEmail: email,
+      customerName: cleanText(row.customer_name, "Ticket buyer"),
+      customerEmail: cleanText(row.customer_email, "No email"),
       detail: "Event ticket order",
-      amountCents:
-        safeNumber(row.total_amount_cents, 0) ||
-        safeNumber(row.amount_cents, 0),
-      currency: cleanText(row.currency, "GBP"),
+      amountCents: safeNumber(row.amount_total, 0),
+      currency:
+        cleanText(row.order_currency) || cleanText(row.event_currency, "GBP"),
       status: cleanText(row.status, "Paid"),
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/events/${campaignId}` : null,
@@ -336,6 +343,7 @@ async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
 
 async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
+    "auctions",
     `
       select
         bid.id,
@@ -349,24 +357,24 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         auction.title as campaign_title,
         auction.slug as campaign_slug,
         auction.currency
-      from auction_bids bid
-      join auction_items item on item.id = bid.item_id
-      join auctions auction on auction.id = item.auction_id
+      from silent_auction_bids bid
+      join silent_auction_items item on item.id = bid.item_id
+      join silent_auctions auction on auction.id = item.auction_id
       where auction.tenant_slug = $1
       order by bid.created_at desc
-      limit 300
+      limit 500
     `,
     [tenantSlug],
   );
 
   return rows.map((row) => {
-    const campaignId = cleanText(row.auction_id, null as any);
-    const slug = cleanText(row.campaign_slug, "");
+    const campaignId = cleanText(row.auction_id);
+    const slug = cleanText(row.campaign_slug);
 
     return {
       id: `auction-${cleanText(row.id, `${campaignId}-${row.item_id}`)}`,
       type: "auction",
-      campaignId,
+      campaignId: campaignId || null,
       campaignTitle: cleanText(row.campaign_title, "Untitled auction"),
       campaignSlug: slug || null,
       customerName: cleanText(row.bidder_name, "Bidder"),
@@ -482,12 +490,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
     ...squaresOrders,
     ...eventOrders,
     ...auctionOrders,
-  ].sort((a, b) => {
-    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-
-    return bTime - aTime;
-  });
+  ].sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt));
 
   const filteredOrders = filterOrders(allOrders, selectedType, searchTerm);
 
@@ -534,12 +537,13 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
         <div style={styles.heroPanel}>
           <div style={styles.heroPanelTitle}>Operational view</div>
+
           <p style={styles.heroPanelText}>
             Search supporters, review campaign activity, open the source
             campaign, and export the current view as CSV.
           </p>
 
-          <div style={styles.heroPanelGrid}>
+          <div className="heroPanelGrid" style={styles.heroPanelGrid}>
             <MiniMetric label="Raffles" value={raffleOrders.length} />
             <MiniMetric label="Squares" value={squaresOrders.length} />
             <MiniMetric label="Events" value={eventOrders.length} />
@@ -549,13 +553,14 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       </section>
 
       <section className="topActions" style={styles.topActions}>
-        <Link href="/admin" style={styles.secondaryButton}>
+        <Link href="/admin" className="secondaryButton" style={styles.secondaryButton}>
           ← Back to dashboard
         </Link>
 
         <a
           href={csvHref}
           download={`orders-${tenantSlug}.csv`}
+          className="primaryButton"
           style={styles.primaryButton}
         >
           Export CSV
@@ -573,7 +578,11 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       </section>
 
       <section style={styles.filterCard}>
-        <form action="/admin/orders" style={styles.filterForm}>
+        <form
+          action="/admin/orders"
+          className="filterForm"
+          style={styles.filterForm}
+        >
           <label style={styles.field}>
             <span style={styles.label}>Search</span>
             <input
@@ -586,11 +595,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
           <label style={styles.field}>
             <span style={styles.label}>Type</span>
-            <select
-              name="type"
-              defaultValue={selectedType}
-              style={styles.input}
-            >
+            <select name="type" defaultValue={selectedType} style={styles.input}>
               <option value="all">All activity</option>
               <option value="raffle">Raffles</option>
               <option value="squares">Squares</option>
@@ -599,11 +604,11 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
             </select>
           </label>
 
-          <button type="submit" style={styles.filterButton}>
+          <button type="submit" className="filterButton" style={styles.filterButton}>
             Apply filters
           </button>
 
-          <Link href="/admin/orders" style={styles.clearButton}>
+          <Link href="/admin/orders" className="clearButton" style={styles.clearButton}>
             Clear
           </Link>
         </form>
@@ -613,12 +618,14 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Unified orders</p>
+
             <h2 className="so-brand-card-title" style={styles.sectionTitle}>
               Latest activity
             </h2>
+
             <p style={styles.sectionText}>
-              This page reads from existing campaign data and safely skips any
-              module tables that are not available yet.
+              This page reads from raffle sales, squares sales, event orders and
+              silent auction bids.
             </p>
           </div>
 
@@ -651,7 +658,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
                   {filteredOrders.map((order) => (
                     <tr key={order.id}>
                       <td style={styles.td}>
-                        <span style={{ ...styles.typePill, ...typeStyle(order.type) }}>
+                        <span
+                          style={{ ...styles.typePill, ...typeStyle(order.type) }}
+                        >
                           {typeLabel(order.type)}
                         </span>
                       </td>
@@ -725,7 +734,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
               {filteredOrders.map((order) => (
                 <article key={order.id} style={styles.mobileOrderCard}>
                   <div style={styles.mobileCardTop}>
-                    <span style={{ ...styles.typePill, ...typeStyle(order.type) }}>
+                    <span
+                      style={{ ...styles.typePill, ...typeStyle(order.type) }}
+                    >
                       {typeLabel(order.type)}
                     </span>
 
@@ -810,11 +821,28 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const responsiveStyles = `
-@media (max-width: 900px) {
-  .orders-page {
-    overflow-x: hidden;
-  }
+.orders-page,
+.orders-page * {
+  box-sizing: border-box;
+}
 
+.orders-page {
+  overflow-x: hidden;
+}
+
+.orders-page section,
+.orders-page form,
+.orders-page div,
+.orders-page label,
+.orders-page article {
+  min-width: 0;
+}
+
+.orders-page .mobileCards {
+  display: none;
+}
+
+@media (max-width: 980px) {
   .orders-page .hero,
   .orders-page .filterForm {
     grid-template-columns: 1fr !important;
@@ -833,38 +861,73 @@ const responsiveStyles = `
     display: grid !important;
   }
 
-  .orders-page .topActions {
+  .orders-page .topActions,
+  .orders-page .mobileActions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
     align-items: stretch !important;
   }
 
   .orders-page .primaryButton,
   .orders-page .secondaryButton,
   .orders-page .filterButton,
-  .orders-page .clearButton {
+  .orders-page .clearButton,
+  .orders-page .smallLink,
+  .orders-page .smallLinkMuted {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
-    box-sizing: border-box !important;
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 620px) {
   .orders-page {
-    padding: 18px 12px 44px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 14px 10px 42px !important;
   }
 
   .orders-page .hero {
-    padding: 20px !important;
+    padding: 18px !important;
     border-radius: 24px !important;
+    gap: 14px !important;
   }
 
   .orders-page .title {
-    font-size: clamp(34px, 11vw, 46px) !important;
+    font-size: clamp(34px, 12vw, 46px) !important;
+    line-height: 0.98 !important;
   }
 
   .orders-page .heroStats,
   .orders-page .summaryGrid,
   .orders-page .heroPanelGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .orders-page .filterCard,
+  .orders-page .ordersCard,
+  .orders-page .mobileOrderCard {
+    padding: 14px !important;
+    border-radius: 20px !important;
+  }
+
+  .orders-page .filterForm {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+  }
+
+  .orders-page .field,
+  .orders-page .input,
+  .orders-page .filterButton,
+  .orders-page .clearButton {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .orders-page .mobileBottom {
+    display: grid !important;
     grid-template-columns: 1fr !important;
   }
 }
@@ -880,6 +943,7 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
     boxSizing: "border-box",
+    overflowX: "hidden",
   },
   hero: {
     display: "grid",
@@ -892,6 +956,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     marginBottom: 16,
     boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
+    overflow: "hidden",
   },
   heroContent: {
     minWidth: 0,
@@ -922,6 +987,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 17,
     lineHeight: 1.55,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
   heroStats: {
     display: "grid",
@@ -936,6 +1002,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(255,255,255,0.15)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   heroPanel: {
     display: "grid",
@@ -945,6 +1013,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 24,
     background: "rgba(255,255,255,0.10)",
     border: "1px solid rgba(255,255,255,0.18)",
+    minWidth: 0,
   },
   heroPanelTitle: {
     color: "#ffffff",
@@ -970,6 +1039,9 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     color: "#0f172a",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   topActions: {
     display: "flex",
@@ -1021,6 +1093,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
+    overflowWrap: "anywhere",
   },
   filterCard: {
     padding: 16,
@@ -1029,12 +1102,14 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+    minWidth: 0,
   },
   filterForm: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.4fr) minmax(180px, 0.6fr) auto auto",
     gap: 12,
     alignItems: "end",
+    minWidth: 0,
   },
   field: {
     display: "grid",
@@ -1056,6 +1131,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 12px",
     fontSize: 15,
     boxSizing: "border-box",
+    minWidth: 0,
   },
   filterButton: {
     minHeight: 44,
@@ -1086,6 +1162,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
   sectionHeader: {
     display: "flex",
@@ -1230,6 +1307,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   mobileCardTop: {
     display: "flex",
@@ -1242,6 +1320,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 19,
     letterSpacing: "-0.025em",
+    overflowWrap: "anywhere",
   },
   mobileMeta: {
     display: "grid",
@@ -1252,6 +1331,7 @@ const styles: Record<string, CSSProperties> = {
   mobileDetail: {
     color: "#64748b",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
   mobileBottom: {
     display: "flex",
