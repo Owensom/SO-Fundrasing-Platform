@@ -512,6 +512,7 @@ function StatCard({
     </div>
   );
 }
+
 function FocusCard({
   label,
   value,
@@ -547,7 +548,6 @@ function DataBlock({
     </div>
   );
 }
-
 function DashboardCard({
   href,
   image,
@@ -656,7 +656,7 @@ const responsiveStyles = `
   min-width: 0;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1280px) {
   .admin-dashboard-page .admin-command-centre,
   .admin-dashboard-page .admin-operations-grid {
     grid-template-columns: 1fr !important;
@@ -668,6 +668,11 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .admin-dashboard-page .admin-command-actions,
+  .admin-dashboard-page .admin-panel-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -686,14 +691,6 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .admin-dashboard-page .admin-command-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .admin-dashboard-page .admin-panel-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
   .admin-dashboard-page .primaryButton,
   .admin-dashboard-page .secondaryButton,
   .admin-dashboard-page .financeButton,
@@ -705,12 +702,13 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid {
+  .admin-dashboard-page .admin-data-grid,
+  .admin-dashboard-page .admin-cards-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 680px) {
   .admin-dashboard-page .admin-command-actions,
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
@@ -737,6 +735,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -811,10 +810,10 @@ const styles: Record<string, CSSProperties> = {
 
   commandActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, max-content))",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 10,
     marginTop: 24,
-    alignItems: "center",
+    alignItems: "stretch",
   },
 
   primaryButton: {
@@ -830,7 +829,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
   },
 
   secondaryButton: {
@@ -846,7 +845,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(255,255,255,0.16)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
   },
 
   commandStats: {
@@ -1153,9 +1152,9 @@ const styles: Record<string, CSSProperties> = {
 
   panelActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, max-content))",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 10,
-    alignItems: "center",
+    alignItems: "stretch",
   },
 
   financeButton: {
@@ -1169,7 +1168,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
   },
 
   financeButtonSecondary: {
@@ -1184,7 +1183,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
   },
 
   dataPanel: {
