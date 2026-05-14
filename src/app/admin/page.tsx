@@ -511,8 +511,21 @@ function DashboardCard({
         <div style={styles.cardTop}>
           <div style={compact ? { ...styles.logoBox, ...styles.compactLogoBox } : styles.logoBox}>
             {image ? (
-              <img src={image} alt={title} style={styles.logoImage} />
-            ) : (
+  <img
+    src={image}
+    alt={title}
+    style={
+      image.includes("so-default-auctions")
+        ? {
+            ...styles.logoImage,
+            width: "112%",
+            height: "112%",
+            padding: 6,
+          }
+        : styles.logoImage
+    }
+  />
+) : (
               <span style={badgeStyle}>{badgeText || title}</span>
             )}
           </div>
@@ -928,12 +941,12 @@ const styles: Record<string, CSSProperties> = {
   },
 
 logoImage: {
-  width: "112%",
-  height: "112%",
+  width: "100%",
+  height: "100%",
   objectFit: "contain",
   objectPosition: "center",
   display: "block",
-  padding: 6,
+  padding: 8,
   boxSizing: "border-box",
 },
 
