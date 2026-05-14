@@ -156,14 +156,9 @@ export default async function AdminDashboardPage() {
     <main className="admin-dashboard-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section
-        className="admin-command-centre"
-        style={styles.commandCentre}
-      >
+      <section className="admin-command-centre" style={styles.commandCentre}>
         <div style={styles.commandContent}>
-          <div style={styles.badge}>
-            SO Foundation Platform
-          </div>
+          <div style={styles.badge}>SO Foundation Platform</div>
 
           <h1
             className="so-brand-heading admin-dashboard-title"
@@ -172,26 +167,16 @@ export default async function AdminDashboardPage() {
             Admin command centre
           </h1>
 
-          <p
-            className="admin-dashboard-subtitle"
-            style={styles.subtitle}
-          >
-            Manage campaigns, payments, supporters and
-            operations across one premium fundraising
-            workspace.
+          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
+            Manage campaigns, payments, supporters and operations across one
+            premium fundraising workspace.
           </p>
 
-          <p
-            className="admin-dashboard-tenant"
-            style={styles.tenant}
-          >
+          <p className="admin-dashboard-tenant" style={styles.tenant}>
             Tenant: <strong>{tenantSlug}</strong>
           </p>
 
-          <div
-            className="admin-command-actions"
-            style={styles.commandActions}
-          >
+          <div className="admin-command-actions" style={styles.commandActions}>
             <Link
               href={`/c/${tenantSlug}`}
               target="_blank"
@@ -235,36 +220,18 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
 
-        <div
-          className="admin-command-stats"
-          style={styles.commandStats}
-        >
-          <StatCard
-            label="Total campaigns"
-            value={totalCampaigns}
-            dark
-          />
-
-          <StatCard
-            label="Published"
-            value={totalPublishedCampaigns}
-            dark
-          />
-
+        <div className="admin-command-stats" style={styles.commandStats}>
+          <StatCard label="Total campaigns" value={totalCampaigns} dark />
+          <StatCard label="Published" value={totalPublishedCampaigns} dark />
           <StatCard
             label="Tracked estimate"
-            value={formatMoney(
-              combinedEstimatedRevenueCents,
-            )}
+            value={formatMoney(combinedEstimatedRevenueCents)}
             dark
           />
         </div>
       </section>
 
-      <section
-        className="admin-focus-grid"
-        style={styles.focusGrid}
-      >
+      <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -297,9 +264,7 @@ export default async function AdminDashboardPage() {
       </section>
             <section style={styles.sectionHeader}>
         <div>
-          <p style={styles.kicker}>
-            Main workspaces
-          </p>
+          <p style={styles.kicker}>Main workspaces</p>
 
           <h2
             className="so-brand-card-title admin-section-title"
@@ -309,16 +274,13 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard
-            you want to manage.
+            Choose the campaign type or operational dashboard you want
+            to manage.
           </p>
         </div>
       </section>
 
-      <section
-        className="admin-cards-grid"
-        style={styles.cardsGrid}
-      >
+      <section className="admin-cards-grid" style={styles.cardsGrid}>
         <DashboardCard
           href="/admin/raffles"
           image="/brand/so-default-raffles.png"
@@ -528,23 +490,13 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div
-        style={
-          dark
-            ? styles.darkStatLabel
-            : styles.statLabel
-        }
-      >
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>
         {label}
       </div>
 
       <div
         className="admin-stat-value"
-        style={
-          dark
-            ? styles.darkStatValue
-            : styles.statValue
-        }
+        style={dark ? styles.darkStatValue : styles.statValue}
       >
         {value}
       </div>
@@ -562,14 +514,9 @@ function FocusCard({
   text: string;
 }) {
   return (
-    <article
-      className="admin-focus-card"
-      style={styles.focusCard}
-    >
+    <article className="admin-focus-card" style={styles.focusCard}>
       <div style={styles.focusLabel}>{label}</div>
-
       <div style={styles.focusValue}>{value}</div>
-
       <p style={styles.focusText}>{text}</p>
     </article>
   );
@@ -585,17 +532,10 @@ function DataBlock({
   published: number;
 }) {
   return (
-    <div
-      className="admin-data-block"
-      style={styles.dataBlock}
-    >
+    <div className="admin-data-block" style={styles.dataBlock}>
       <div style={styles.dataLabel}>{label}</div>
-
       <div style={styles.dataValue}>{total}</div>
-
-      <div style={styles.dataSub}>
-        {published} published
-      </div>
+      <div style={styles.dataSub}>{published} published</div>
     </div>
   );
 }
@@ -720,6 +660,11 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
+
+  .admin-dashboard-page .admin-command-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+  }
 }
 
 @media (max-width: 900px) {
@@ -740,7 +685,8 @@ const responsiveStyles = `
   .admin-dashboard-page .primaryButton,
   .admin-dashboard-page .secondaryButton {
     flex: 1 1 calc(50% - 10px) !important;
-    width: auto !important;
+    min-width: 220px !important;
+    white-space: normal !important;
     justify-content: center !important;
     text-align: center !important;
   }
@@ -750,24 +696,33 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-data-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+
+  .admin-dashboard-page .admin-panel-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-dashboard-page .financeButton,
+  .admin-dashboard-page .financeButtonSecondary {
+    width: 100% !important;
+    white-space: normal !important;
+    text-align: center !important;
+  }
 }
 
 @media (max-width: 620px) {
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid {
+  .admin-dashboard-page .admin-cards-grid,
+  .admin-dashboard-page .admin-panel-actions {
     grid-template-columns: 1fr !important;
   }
 
   .admin-dashboard-page .primaryButton,
   .admin-dashboard-page .secondaryButton {
     flex: 1 1 100% !important;
-  }
-
-  .admin-dashboard-page .admin-panel-actions {
-    display: flex !important;
-    flex-wrap: wrap !important;
+    min-width: 0 !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
@@ -1052,30 +1007,28 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minHeight: 180,
+    minHeight: 250,
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     height: "100%",
     minWidth: 0,
   },
 
   compactCard: {
-    minHeight: 180,
+    minHeight: 210,
     gap: 12,
   },
 
   cardTop: {
     display: "grid",
-    gridTemplateColumns: "56px minmax(0, 1fr)",
     gap: 12,
     alignContent: "start",
-    alignItems: "center",
     minWidth: 0,
   },
 
   logoBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
+    width: 66,
+    height: 66,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
@@ -1083,12 +1036,11 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-    gridRow: "1 / span 2",
   },
 
   compactLogoBox: {
-    width: 54,
-    height: 54,
+    width: 58,
+    height: 58,
   },
 
   logoImage: {
@@ -1133,7 +1085,7 @@ const styles: Record<string, CSSProperties> = {
   cardDescription: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.45,
+    lineHeight: 1.5,
     fontSize: 14,
     fontWeight: 700,
     overflowWrap: "anywhere",
@@ -1147,7 +1099,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   cardStats: {
-    color: "#2563eb",
+    color: "#0f172a",
     fontSize: 13,
     fontWeight: 950,
     overflowWrap: "anywhere",
