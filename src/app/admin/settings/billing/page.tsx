@@ -1,7 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 
@@ -9,6 +11,22 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type TierKey = "community" | "professional" | "foundation";
+
+type TenantSettingsFormState = {
+  subscription_tier: TierKey;
+  platform_fee_percent: number;
+  stripe_customer_id: string;
+  stripe_subscription_id: string;
+  stripe_connect_account_id: string;
+  subscription_status: string;
+  buyer_fee_contributions_enabled: boolean;
+  crm_enabled: boolean;
+  auctions_enabled: boolean;
+  reserved_seating_enabled: boolean;
+  finance_dashboard_enabled: boolean;
+  white_label_enabled: boolean;
+  custom_domain_enabled: boolean;
+};
 
 const TIER_DETAILS: Record<
   TierKey,
@@ -24,7 +42,8 @@ const TIER_DETAILS: Record<
     name: "Community",
     monthly: "Free",
     fee: "7%",
-    description: "Accessible fundraising for smaller organisers and first campaigns.",
+    description:
+      "Accessible fundraising for smaller organisers and first campaigns.",
     features: [
       "Raffles",
       "Squares",
@@ -37,7 +56,8 @@ const TIER_DETAILS: Record<
     name: "Professional",
     monthly: "£25/month",
     fee: "4%",
-    description: "Premium fundraising tools for schools, clubs and growing charities.",
+    description:
+      "Premium fundraising tools for schools, clubs and growing charities.",
     features: [
       "Events",
       "Auctions",
@@ -51,7 +71,8 @@ const TIER_DETAILS: Record<
     name: "Foundation",
     monthly: "£99/month",
     fee: "2%",
-    description: "Advanced operating infrastructure for larger fundraising organisations.",
+    description:
+      "Advanced operating infrastructure for larger fundraising organisations.",
     features: [
       "Lower platform fee",
       "Advanced reporting",
@@ -69,10 +90,29 @@ function safeTier(value: unknown): TierKey {
   return "community";
 }
 
+function defaultFeeForTier(tier: TierKey) {
+  if (tier === "foundation") return 2;
+  if (tier === "professional") return 4;
+  return 7;
+}
+
 function safePercent(value: unknown, fallback: number) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return number;
+
+  if (!Number.isFinite(number) || number < 0) {
+    return fallback;
+  }
+
+  return Math.min(100, Number(number.toFixed(2)));
+}
+
+function cleanText(value: FormDataEntryValue | null, fallback = "") {
+  const clean = String(value ?? "").trim();
+  return clean || fallback;
+}
+
+function checkboxValue(formData: FormData, key: keyof TenantSettingsFormState) {
+  return formData.get(key) === "on";
 }
 
 function enabledLabel(value: boolean) {
@@ -83,7 +123,7 @@ function enabledStyle(value: boolean): CSSProperties {
   return value ? styles.enabledPill : styles.disabledPill;
 }
 
-export default async function AdminBillingSettingsPage() {
+async function requireCurrentTenantAccess() {
   const session = await auth();
 
   if (!session?.user) {
@@ -100,39 +140,154 @@ export default async function AdminBillingSettingsPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
+  return tenantSlug;
+}
+
+async function updateTenantBillingSettings(formData: FormData) {
+  "use server";
+
+  const tenantSlug = await requireCurrentTenantAccess();
+
+  const subscriptionTier = safeTier(formData.get("subscription_tier"));
+  const platformFeePercent = safePercent(
+    formData.get("platform_fee_percent"),
+    defaultFeeForTier(subscriptionTier),
+  );
+
+  const subscriptionStatus = cleanText(
+    formData.get("subscription_status"),
+    "active",
+  );
+
+  const stripeCustomerId = cleanText(formData.get("stripe_customer_id"));
+  const stripeSubscriptionId = cleanText(
+    formData.get("stripe_subscription_id"),
+  );
+  const stripeConnectAccountId = cleanText(
+    formData.get("stripe_connect_account_id"),
+  );
+
+  await query(
+    `
+      insert into tenant_settings (
+        tenant_slug,
+        subscription_tier,
+        platform_fee_percent,
+        stripe_customer_id,
+        stripe_subscription_id,
+        stripe_connect_account_id,
+        subscription_status,
+        buyer_fee_contributions_enabled,
+        crm_enabled,
+        auctions_enabled,
+        reserved_seating_enabled,
+        finance_dashboard_enabled,
+        white_label_enabled,
+        custom_domain_enabled
+      )
+      values (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13, $14
+      )
+      on conflict (tenant_slug)
+      do update set
+        subscription_tier = excluded.subscription_tier,
+        platform_fee_percent = excluded.platform_fee_percent,
+        stripe_customer_id = excluded.stripe_customer_id,
+        stripe_subscription_id = excluded.stripe_subscription_id,
+        stripe_connect_account_id = excluded.stripe_connect_account_id,
+        subscription_status = excluded.subscription_status,
+        buyer_fee_contributions_enabled = excluded.buyer_fee_contributions_enabled,
+        crm_enabled = excluded.crm_enabled,
+        auctions_enabled = excluded.auctions_enabled,
+        reserved_seating_enabled = excluded.reserved_seating_enabled,
+        finance_dashboard_enabled = excluded.finance_dashboard_enabled,
+        white_label_enabled = excluded.white_label_enabled,
+        custom_domain_enabled = excluded.custom_domain_enabled,
+        updated_at = now()
+    `,
+    [
+      tenantSlug,
+      subscriptionTier,
+      platformFeePercent,
+      stripeCustomerId || null,
+      stripeSubscriptionId || null,
+      stripeConnectAccountId || null,
+      subscriptionStatus,
+      checkboxValue(formData, "buyer_fee_contributions_enabled"),
+      checkboxValue(formData, "crm_enabled"),
+      checkboxValue(formData, "auctions_enabled"),
+      checkboxValue(formData, "reserved_seating_enabled"),
+      checkboxValue(formData, "finance_dashboard_enabled"),
+      checkboxValue(formData, "white_label_enabled"),
+      checkboxValue(formData, "custom_domain_enabled"),
+    ],
+  );
+
+  revalidatePath("/admin/settings/billing");
+  revalidatePath("/admin");
+  redirect("/admin/settings/billing?saved=1");
+}
+
+export default async function AdminBillingSettingsPage() {
+  const tenantSlug = await requireCurrentTenantAccess();
   const settings = await getTenantSettings(tenantSlug);
 
   const tier = safeTier(settings?.subscription_tier);
   const currentTier = TIER_DETAILS[tier];
   const platformFeePercent = safePercent(
     settings?.platform_fee_percent,
-    tier === "foundation" ? 2 : tier === "professional" ? 4 : 7,
+    defaultFeeForTier(tier),
   );
 
+  const formState: TenantSettingsFormState = {
+    subscription_tier: tier,
+    platform_fee_percent: platformFeePercent,
+    stripe_customer_id: settings?.stripe_customer_id || "",
+    stripe_subscription_id: settings?.stripe_subscription_id || "",
+    stripe_connect_account_id: settings?.stripe_connect_account_id || "",
+    subscription_status: settings?.subscription_status || "active",
+    buyer_fee_contributions_enabled: Boolean(
+      settings?.buyer_fee_contributions_enabled,
+    ),
+    crm_enabled: Boolean(settings?.crm_enabled),
+    auctions_enabled: Boolean(settings?.auctions_enabled),
+    reserved_seating_enabled: Boolean(settings?.reserved_seating_enabled),
+    finance_dashboard_enabled: Boolean(settings?.finance_dashboard_enabled),
+    white_label_enabled: Boolean(settings?.white_label_enabled),
+    custom_domain_enabled: Boolean(settings?.custom_domain_enabled),
+  };
+
   const capabilities = [
-    { label: "CRM", enabled: Boolean(settings?.crm_enabled) || tier !== "community" },
+    {
+      label: "CRM",
+      key: "crm_enabled" as const,
+      enabled: formState.crm_enabled || tier !== "community",
+    },
     {
       label: "Auctions",
-      enabled: Boolean(settings?.auctions_enabled) || tier !== "community",
+      key: "auctions_enabled" as const,
+      enabled: formState.auctions_enabled || tier !== "community",
     },
     {
       label: "Reserved seating",
-      enabled:
-        Boolean(settings?.reserved_seating_enabled) || tier !== "community",
+      key: "reserved_seating_enabled" as const,
+      enabled: formState.reserved_seating_enabled || tier !== "community",
     },
     {
       label: "Finance dashboard",
-      enabled:
-        Boolean(settings?.finance_dashboard_enabled) || tier !== "community",
+      key: "finance_dashboard_enabled" as const,
+      enabled: formState.finance_dashboard_enabled || tier !== "community",
     },
     {
       label: "White label",
-      enabled: Boolean(settings?.white_label_enabled) || tier === "foundation",
+      key: "white_label_enabled" as const,
+      enabled: formState.white_label_enabled || tier === "foundation",
     },
     {
       label: "Custom domain",
-      enabled:
-        Boolean(settings?.custom_domain_enabled) || tier === "foundation",
+      key: "custom_domain_enabled" as const,
+      enabled: formState.custom_domain_enabled || tier === "foundation",
     },
   ];
 
@@ -149,7 +304,7 @@ export default async function AdminBillingSettingsPage() {
           </h1>
 
           <p style={styles.subtitle}>
-            View this tenant’s plan, platform commission, billing status and
+            Manage this tenant’s plan, platform commission, Stripe readiness and
             commercial feature settings.
           </p>
 
@@ -158,202 +313,304 @@ export default async function AdminBillingSettingsPage() {
           </p>
 
           <div className="heroActions" style={styles.heroActions}>
-            <Link href="/admin" style={styles.heroButton}>
+            <Link href="/admin" className="heroButton" style={styles.heroButton}>
               ← Back to dashboard
             </Link>
 
-            <Link href="/admin/metadata" style={styles.heroButtonLight}>
+            <Link
+              href="/admin/metadata"
+              className="heroButtonLight"
+              style={styles.heroButtonLight}
+            >
               Finance dashboard
             </Link>
           </div>
         </div>
+                <div className="heroSummaryGrid" style={styles.heroSummaryGrid}>
+          <div style={styles.summaryCard}>
+            <div style={styles.summaryLabel}>Current plan</div>
+            <div style={styles.summaryValue}>{currentTier.name}</div>
+            <div style={styles.summarySub}>
+              {currentTier.monthly} · {currentTier.fee} platform fee
+            </div>
+          </div>
 
-        <div style={styles.currentPlanCard}>
-          <span style={styles.planBadge}>Current plan</span>
+          <div style={styles.summaryCard}>
+            <div style={styles.summaryLabel}>Platform commission</div>
+            <div style={styles.summaryValue}>
+              {platformFeePercent.toFixed(1)}%
+            </div>
+            <div style={styles.summarySub}>
+              Applied before Stripe processing fees
+            </div>
+          </div>
 
-          <h2 style={styles.currentPlanTitle}>{currentTier.name}</h2>
+          <div style={styles.summaryCard}>
+            <div style={styles.summaryLabel}>Buyer contributions</div>
 
-          <div style={styles.priceLine}>{currentTier.monthly}</div>
+            <div
+              style={enabledStyle(
+                formState.buyer_fee_contributions_enabled,
+              )}
+            >
+              {enabledLabel(
+                formState.buyer_fee_contributions_enabled,
+              )}
+            </div>
 
-          <p style={styles.planText}>
-            {platformFeePercent.toFixed(2).replace(".00", "")}% platform fee
-          </p>
-
-          <p style={styles.planMuted}>
-            Stripe processing fees are handled separately. Supporter processing
-            contribution remains optional.
-          </p>
+            <div style={styles.summarySub}>
+              Optional supporter processing-cost contribution
+            </div>
+          </div>
         </div>
-      </section>
-
-      <section className="summaryGrid" style={styles.summaryGrid}>
-        <SummaryCard label="Subscription tier" value={currentTier.name} />
-        <SummaryCard
-          label="Platform fee"
-          value={`${platformFeePercent.toFixed(2).replace(".00", "")}%`}
-        />
-        <SummaryCard
-          label="Subscription status"
-          value={settings?.subscription_status || "active"}
-        />
-        <SummaryCard
-          label="Supporter contribution"
-          value={
-            settings?.buyer_fee_contributions_enabled
-              ? "Available"
-              : "Unavailable"
-          }
-        />
       </section>
 
       <section className="contentGrid" style={styles.contentGrid}>
-        <section style={styles.panel}>
-          <div style={styles.sectionHeader}>
+        <form action={updateTenantBillingSettings} style={styles.formCard}>
+          <div style={styles.cardHeader}>
             <div>
-              <p style={styles.kicker}>Commercial setup</p>
+              <div style={styles.cardEyebrow}>Subscription setup</div>
 
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Plan details
+              <h2 style={styles.cardTitle}>
+                Tenant billing configuration
               </h2>
-
-              <p style={styles.sectionText}>
-                These values come from the new tenant settings layer. This page
-                is currently read-only while the billing system is being wired
-                safely.
-              </p>
             </div>
+
+            <div style={styles.liveBadge}>LIVE SETTINGS</div>
           </div>
 
-          <div style={styles.detailList}>
-            <DetailRow label="Tenant slug" value={tenantSlug} />
-            <DetailRow label="Plan" value={currentTier.name} />
-            <DetailRow
-              label="Platform commission"
-              value={`${platformFeePercent.toFixed(2).replace(".00", "")}%`}
-            />
-            <DetailRow
-              label="Stripe customer ID"
-              value={settings?.stripe_customer_id || "Not linked yet"}
-            />
-            <DetailRow
-              label="Stripe subscription ID"
-              value={settings?.stripe_subscription_id || "Not linked yet"}
-            />
-            <DetailRow
-              label="Stripe Connect account"
-              value={settings?.stripe_connect_account_id || "Not connected yet"}
-            />
-          </div>
-        </section>
+          <div className="formGrid" style={styles.formGrid}>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Subscription tier</span>
 
-        <section style={styles.panel}>
-          <div style={styles.sectionHeader}>
+              <select
+                name="subscription_tier"
+                defaultValue={formState.subscription_tier}
+                style={styles.select}
+              >
+                <option value="community">
+                  Community — Free + 7%
+                </option>
+
+                <option value="professional">
+                  Professional — £25/month + 4%
+                </option>
+
+                <option value="foundation">
+                  Foundation — £99/month + 2%
+                </option>
+              </select>
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>
+                Platform fee percentage
+              </span>
+
+              <input
+                type="number"
+                name="platform_fee_percent"
+                min="0"
+                max="100"
+                step="0.1"
+                defaultValue={formState.platform_fee_percent}
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>
+                Subscription status
+              </span>
+
+              <select
+                name="subscription_status"
+                defaultValue={formState.subscription_status}
+                style={styles.select}
+              >
+                <option value="active">Active</option>
+                <option value="trialing">Trialing</option>
+                <option value="past_due">Past due</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>
+                Stripe customer ID
+              </span>
+
+              <input
+                type="text"
+                name="stripe_customer_id"
+                defaultValue={formState.stripe_customer_id}
+                placeholder="cus_xxxxxxxxx"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>
+                Stripe subscription ID
+              </span>
+
+              <input
+                type="text"
+                name="stripe_subscription_id"
+                defaultValue={formState.stripe_subscription_id}
+                placeholder="sub_xxxxxxxxx"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>
+                Stripe Connect account
+              </span>
+
+              <input
+                type="text"
+                name="stripe_connect_account_id"
+                defaultValue={formState.stripe_connect_account_id}
+                placeholder="acct_xxxxxxxxx"
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <div style={styles.toggleSection}>
             <div>
-              <p style={styles.kicker}>Capabilities</p>
-
-              <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-                Feature access
-              </h2>
-
-              <p style={styles.sectionText}>
-                Feature gating is not being enforced yet. This shows how the
-                tenant’s plan will map to platform capabilities.
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.capabilityGrid}>
-            {capabilities.map((capability) => (
-              <div key={capability.label} style={styles.capabilityCard}>
-                <span style={styles.capabilityLabel}>{capability.label}</span>
-
-                <span style={enabledStyle(capability.enabled)}>
-                  {enabledLabel(capability.enabled)}
-                </span>
+              <div style={styles.toggleTitle}>
+                Platform capabilities
               </div>
-            ))}
+
+              <div style={styles.toggleText}>
+                Enable or disable premium operational functionality
+                for this tenant.
+              </div>
+            </div>
+
+            <div className="toggleGrid" style={styles.toggleGrid}>
+              <label style={styles.toggleCard}>
+                <input
+                  type="checkbox"
+                  name="buyer_fee_contributions_enabled"
+                  defaultChecked={
+                    formState.buyer_fee_contributions_enabled
+                  }
+                />
+
+                <div>
+                  <div style={styles.toggleCardTitle}>
+                    Buyer contributions
+                  </div>
+
+                  <div style={styles.toggleCardText}>
+                    Allow optional supporter contribution toward
+                    processing costs.
+                  </div>
+                </div>
+              </label>
+
+              {capabilities.map((item) => (
+                <label key={item.key} style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name={item.key}
+                    defaultChecked={item.enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>
+                      {item.label}
+                    </div>
+
+                    <div style={styles.toggleCardText}>
+                      {enabledLabel(item.enabled)}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
           </div>
-        </section>
-      </section>
 
-      <section style={styles.plansPanel}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <p style={styles.kicker}>Upgrade path</p>
+          <div className="submitRow" style={styles.submitRow}>
+            <button type="submit" style={styles.saveButton}>
+              Save billing settings
+            </button>
+          </div>
+        </form>
 
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
-              Subscription options
+        <section style={styles.sideColumn}>
+          <article style={styles.sideCard}>
+            <div style={styles.cardEyebrow}>
+              Subscription tiers
+            </div>
+
+            <h2 style={styles.cardTitle}>
+              Platform positioning
             </h2>
 
-            <p style={styles.sectionText}>
-              These cards are informational for now. Stripe subscription actions
-              can be connected after the finance and fee logic is confirmed.
-            </p>
-          </div>
-        </div>
+            <div style={styles.tiersList}>
+              {(
+                Object.entries(TIER_DETAILS) as [
+                  TierKey,
+                  (typeof TIER_DETAILS)[TierKey],
+                ][]
+              ).map(([key, value]) => (
+                <div
+                  key={key}
+                  style={
+                    key === tier
+                      ? styles.activeTierCard
+                      : styles.tierCard
+                  }
+                >
+                  <div style={styles.tierTop}>
+                    <div>
+                      <div style={styles.tierName}>
+                        {value.name}
+                      </div>
 
-        <div className="plansGrid" style={styles.plansGrid}>
-          {(Object.keys(TIER_DETAILS) as TierKey[]).map((key) => {
-            const plan = TIER_DETAILS[key];
-            const isCurrent = key === tier;
+                      <div style={styles.tierPrice}>
+                        {value.monthly}
+                      </div>
+                    </div>
 
-            return (
-              <article
-                key={key}
-                style={{
-                  ...styles.planCard,
-                  ...(isCurrent ? styles.currentPlanOutline : {}),
-                }}
-              >
-                <div>
-                  <span style={isCurrent ? styles.currentMiniBadge : styles.miniBadge}>
-                    {isCurrent ? "Current plan" : "Available plan"}
-                  </span>
+                    <div style={styles.tierFee}>
+                      {value.fee}
+                    </div>
+                  </div>
 
-                  <h3 style={styles.planTitle}>{plan.name}</h3>
+                  <p style={styles.tierDescription}>
+                    {value.description}
+                  </p>
 
-                  <div style={styles.planPrice}>{plan.monthly}</div>
-
-                  <p style={styles.planFee}>{plan.fee} platform fee</p>
-
-                  <p style={styles.planDescription}>{plan.description}</p>
+                  <ul style={styles.featureList}>
+                    {value.features.map((feature) => (
+                      <li key={feature} style={styles.featureItem}>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              ))}
+            </div>
+          </article>
+                    <article style={styles.sideCard}>
+            <div style={styles.cardEyebrow}>Important note</div>
 
-                <ul style={styles.featureList}>
-                  {plan.features.map((feature) => (
-                    <li key={feature} style={styles.featureItem}>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
+            <h2 style={styles.cardTitle}>No restrictions yet</h2>
 
-                <button type="button" disabled style={styles.disabledButton}>
-                  {isCurrent ? "Current plan" : "Upgrade coming soon"}
-                </button>
-              </article>
-            );
-          })}
-        </div>
+            <p style={styles.sideText}>
+              These settings are now editable and saved to the tenant settings
+              table. Feature restrictions are not enforced yet, so this remains
+              a safe configuration layer while finance and Stripe are completed.
+            </p>
+          </article>
+        </section>
       </section>
     </main>
-  );
-}
-
-function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={styles.summaryCard}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={styles.detailRow}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -368,8 +625,10 @@ const responsiveStyles = `
 }
 
 .billing-page section,
+.billing-page article,
 .billing-page div,
-.billing-page article {
+.billing-page form,
+.billing-page label {
   min-width: 0;
 }
 
@@ -379,7 +638,9 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .billing-page .summaryGrid {
+  .billing-page .heroSummaryGrid,
+  .billing-page .formGrid,
+  .billing-page .toggleGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -389,9 +650,11 @@ const responsiveStyles = `
     padding: 16px 10px 44px !important;
   }
 
-  .billing-page .hero {
-    padding: 20px !important;
-    border-radius: 26px !important;
+  .billing-page .hero,
+  .billing-page .formCard,
+  .billing-page .sideCard {
+    padding: 18px !important;
+    border-radius: 24px !important;
   }
 
   .billing-page .title {
@@ -400,16 +663,24 @@ const responsiveStyles = `
   }
 
   .billing-page .heroActions,
-  .billing-page .summaryGrid,
-  .billing-page .plansGrid,
-  .billing-page .capabilityGrid {
+  .billing-page .heroSummaryGrid,
+  .billing-page .formGrid,
+  .billing-page .toggleGrid,
+  .billing-page .submitRow {
     grid-template-columns: 1fr !important;
   }
 
   .billing-page .heroButton,
-  .billing-page .heroButtonLight {
+  .billing-page .heroButtonLight,
+  .billing-page .saveButton {
     width: 100% !important;
     justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .billing-page .cardHeader,
+  .billing-page .tierTop {
+    grid-template-columns: 1fr !important;
   }
 }
 `;
@@ -426,9 +697,10 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     overflowX: "hidden",
   },
+
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) minmax(300px, 0.8fr)",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 34,
@@ -439,9 +711,11 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
   },
+
   heroContent: {
     minWidth: 0,
   },
+
   eyebrow: {
     display: "inline-flex",
     padding: "7px 12px",
@@ -455,6 +729,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 16,
   },
+
   title: {
     margin: 0,
     fontSize: "clamp(48px, 7vw, 74px)",
@@ -462,6 +737,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
   },
+
   subtitle: {
     margin: "18px 0 0",
     maxWidth: 780,
@@ -470,18 +746,21 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.6,
     fontWeight: 700,
   },
+
   tenantLine: {
     margin: "14px 0 0",
     color: "#bfdbfe",
     fontWeight: 850,
     overflowWrap: "anywhere",
   },
+
   heroActions: {
     marginTop: 24,
     display: "grid",
     gridTemplateColumns: "repeat(2, max-content)",
     gap: 10,
   },
+
   heroButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -495,6 +774,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
   },
+
   heroButtonLight: {
     display: "inline-flex",
     alignItems: "center",
@@ -508,138 +788,323 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid rgba(255,255,255,0.16)",
   },
-  currentPlanCard: {
+
+  heroSummaryGrid: {
     display: "grid",
-    gap: 10,
-    alignContent: "start",
-    padding: 20,
-    borderRadius: 26,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    backdropFilter: "blur(12px)",
-  },
-  planBadge: {
-    width: "fit-content",
-    padding: "7px 11px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.07em",
-  },
-  currentPlanTitle: {
-    margin: 0,
-    fontSize: 34,
-    lineHeight: 1,
-    letterSpacing: "-0.055em",
-  },
-  priceLine: {
-    fontSize: 30,
-    fontWeight: 950,
-    color: "#fef3c7",
-    letterSpacing: "-0.055em",
-  },
-  planText: {
-    margin: 0,
-    color: "#ffffff",
-    fontWeight: 950,
-  },
-  planMuted: {
-    margin: 0,
-    color: "#dbeafe",
-    lineHeight: 1.55,
-    fontWeight: 700,
-  },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "1fr",
     gap: 12,
-    marginBottom: 18,
+    alignContent: "start",
   },
+
   summaryCard: {
     display: "grid",
-    gap: 5,
+    gap: 7,
     padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    overflowWrap: "anywhere",
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    minWidth: 0,
   },
-  contentGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-    gap: 16,
-    marginBottom: 18,
-  },
-  panel: {
-    padding: 20,
-    borderRadius: 26,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  sectionHeader: {
-    marginBottom: 16,
-  },
-  kicker: {
-    margin: "0 0 7px",
-    color: "#2563eb",
+
+  summaryLabel: {
+    color: "#bfdbfe",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
-  sectionTitle: {
+
+  summaryValue: {
+    color: "#ffffff",
+    fontSize: 28,
+    fontWeight: 950,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+  },
+
+  summarySub: {
+    color: "#dbeafe",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.25fr) minmax(300px, 0.75fr)",
+    gap: 16,
+    alignItems: "start",
+  },
+
+  formCard: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  cardHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  cardEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 7,
+  },
+
+  cardTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 28,
     letterSpacing: "-0.05em",
-  },
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 700,
-  },
-  detailList: {
-    display: "grid",
-    gap: 10,
-  },
-  detailRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 0.7fr) minmax(0, 1.3fr)",
-    gap: 12,
-    padding: 13,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
     overflowWrap: "anywhere",
   },
-  capabilityGrid: {
+
+  liveBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  field: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+  },
+
+  fieldLabel: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 46,
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "10px 12px",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+
+  select: {
+    width: "100%",
+    minHeight: 46,
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "10px 12px",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+
+  toggleSection: {
+    display: "grid",
+    gap: 14,
+    paddingTop: 4,
+  },
+
+  toggleTitle: {
+    color: "#0f172a",
+    fontSize: 20,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+  },
+
+  toggleText: {
+    marginTop: 5,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontWeight: 700,
+  },
+
+  toggleGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
-  capabilityCard: {
-    display: "flex",
-    justifyContent: "space-between",
+
+  toggleCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
     gap: 10,
-    alignItems: "center",
+    alignItems: "start",
     padding: 13,
-    borderRadius: 16,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    flexWrap: "wrap",
+    cursor: "pointer",
   },
-  capabilityLabel: {
-    fontWeight: 950,
+
+  toggleCardTitle: {
     color: "#0f172a",
+    fontWeight: 950,
   },
+
+  toggleCardText: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  submitRow: {
+    display: "grid",
+    gridTemplateColumns: "max-content",
+    justifyContent: "end",
+  },
+
+  saveButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 12px 24px rgba(22,131,248,0.18)",
+  },
+
+  sideColumn: {
+    display: "grid",
+    gap: 16,
+    minWidth: 0,
+  },
+
+  sideCard: {
+    display: "grid",
+    gap: 14,
+    padding: 20,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  tiersList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  tierCard: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  activeTierCard: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background: "#eff6ff",
+    border: "2px solid #1683f8",
+  },
+
+  tierTop: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 10,
+    alignItems: "start",
+  },
+
+  tierName: {
+    color: "#0f172a",
+    fontSize: 20,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+
+  tierPrice: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  tierFee: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#2563eb",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  tierDescription: {
+    margin: 0,
+    color: "#475569",
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  featureList: {
+    display: "grid",
+    gap: 6,
+    margin: 0,
+    paddingLeft: 18,
+    color: "#334155",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  featureItem: {
+    paddingLeft: 2,
+  },
+
+  sideText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.6,
+    fontWeight: 750,
+  },
+
   enabledPill: {
     display: "inline-flex",
+    width: "fit-content",
     padding: "7px 10px",
     borderRadius: 999,
     background: "#dcfce7",
@@ -648,8 +1113,10 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   disabledPill: {
     display: "inline-flex",
+    width: "fit-content",
     padding: "7px 10px",
     borderRadius: 999,
     background: "#f8fafc",
@@ -657,97 +1124,5 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     fontSize: 12,
     fontWeight: 950,
-  },
-  plansPanel: {
-    padding: 20,
-    borderRadius: 26,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  plansGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 14,
-  },
-  planCard: {
-    display: "grid",
-    gap: 14,
-    padding: 18,
-    borderRadius: 22,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    alignContent: "space-between",
-  },
-  currentPlanOutline: {
-    border: "2px solid #1683f8",
-    background: "#eff6ff",
-  },
-  miniBadge: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  currentMiniBadge: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "1px solid #1683f8",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  planTitle: {
-    margin: "12px 0 0",
-    color: "#0f172a",
-    fontSize: 25,
-    letterSpacing: "-0.045em",
-  },
-  planPrice: {
-    marginTop: 8,
-    color: "#0f172a",
-    fontSize: 28,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-  planFee: {
-    margin: "5px 0 0",
-    color: "#2563eb",
-    fontWeight: 950,
-  },
-  planDescription: {
-    margin: "9px 0 0",
-    color: "#64748b",
-    lineHeight: 1.5,
-    fontWeight: 700,
-  },
-  featureList: {
-    display: "grid",
-    gap: 7,
-    margin: 0,
-    paddingLeft: 18,
-    color: "#334155",
-    fontWeight: 750,
-    lineHeight: 1.45,
-  },
-  featureItem: {
-    paddingLeft: 2,
-  },
-  disabledButton: {
-    minHeight: 44,
-    borderRadius: 999,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#64748b",
-    fontWeight: 950,
-    cursor: "not-allowed",
   },
 };
