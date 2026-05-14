@@ -191,7 +191,7 @@ export default async function AdminDashboardPage() {
               className="secondaryButton"
               style={styles.secondaryButton}
             >
-              Orders dashboard
+              Orders dashboard →
             </Link>
 
             <Link
@@ -199,7 +199,7 @@ export default async function AdminDashboardPage() {
               className="secondaryButton"
               style={styles.secondaryButton}
             >
-              Customers
+              Customers →
             </Link>
 
             <Link
@@ -207,7 +207,7 @@ export default async function AdminDashboardPage() {
               className="secondaryButton"
               style={styles.secondaryButton}
             >
-              Finance & fees
+              Finance & fees →
             </Link>
 
             <Link
@@ -215,7 +215,7 @@ export default async function AdminDashboardPage() {
               className="secondaryButton"
               style={styles.secondaryButton}
             >
-              Billing
+              Billing →
             </Link>
           </div>
         </div>
@@ -262,7 +262,8 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-            <section style={styles.sectionHeader}>
+
+      <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
 
@@ -274,8 +275,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want
-            to manage.
+            Choose the campaign type or operational dashboard you want to
+            manage.
           </p>
         </div>
       </section>
@@ -354,18 +355,10 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section
-        className="admin-operations-grid"
-        style={styles.operationsGrid}
-      >
-        <section
-          className="admin-finance-panel"
-          style={styles.financePanel}
-        >
+      <section className="admin-operations-grid" style={styles.operationsGrid}>
+        <section className="admin-finance-panel" style={styles.financePanel}>
           <div>
-            <p style={styles.financeKicker}>
-              Finance & transactions
-            </p>
+            <p style={styles.financeKicker}>Finance & transactions</p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -381,10 +374,7 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
 
-          <div
-            className="admin-panel-actions"
-            style={styles.panelActions}
-          >
+          <div className="admin-panel-actions" style={styles.panelActions}>
             <Link
               href="/admin/metadata"
               className="financeButton"
@@ -419,14 +409,9 @@ export default async function AdminDashboardPage() {
           </div>
         </section>
 
-        <section
-          className="admin-data-panel"
-          style={styles.dataPanel}
-        >
+        <section className="admin-data-panel" style={styles.dataPanel}>
           <div>
-            <p style={styles.kicker}>
-              Live platform overview
-            </p>
+            <p style={styles.kicker}>Live platform overview</p>
 
             <h2
               className="so-brand-card-title admin-section-title"
@@ -441,10 +426,7 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
 
-          <div
-            className="admin-data-grid"
-            style={styles.dataGrid}
-          >
+          <div className="admin-data-grid" style={styles.dataGrid}>
             <DataBlock
               label="Raffles"
               total={raffles.length}
@@ -489,23 +471,11 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div
-        style={
-          dark
-            ? styles.darkStatLabel
-            : styles.statLabel
-        }
-      >
-        {label}
-      </div>
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
 
       <div
         className="admin-stat-value"
-        style={
-          dark
-            ? styles.darkStatValue
-            : styles.statValue
-        }
+        style={dark ? styles.darkStatValue : styles.statValue}
       >
         {value}
       </div>
@@ -548,6 +518,7 @@ function DataBlock({
     </div>
   );
 }
+
 function DashboardCard({
   href,
   image,
@@ -669,6 +640,10 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .admin-dashboard-page .admin-command-actions {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 }
 
@@ -809,10 +784,10 @@ const styles: Record<string, CSSProperties> = {
 
   commandActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, max-content))",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 10,
     marginTop: 24,
-    alignItems: "center",
+    alignItems: "stretch",
   },
 
   primaryButton: {
@@ -822,12 +797,12 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
+    background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
+    color: "#111827",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #1683f8",
-    boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
+    border: "1px solid rgba(251,191,36,0.82)",
+    boxShadow: "0 14px 28px rgba(251,191,36,0.20)",
     whiteSpace: "nowrap",
     textAlign: "center",
   },
