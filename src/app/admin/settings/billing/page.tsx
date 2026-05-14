@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -507,8 +507,11 @@ export default async function AdminBillingSettingsPage() {
             </label>
           </div>
 
-          <div style={styles.stripeConnectPanel}>
-            <div>
+          <div
+            className="stripeConnectPanel"
+            style={styles.stripeConnectPanel}
+          >
+            <div style={styles.stripeConnectCopy}>
               <div style={styles.stripeConnectKicker}>Stripe Connect</div>
 
               <h3 style={styles.stripeConnectTitle}>
@@ -531,6 +534,7 @@ export default async function AdminBillingSettingsPage() {
 
             <Link
               href="/api/admin/stripe/connect/onboard"
+              className="connectStripeButton"
               style={styles.connectStripeButton}
             >
               {formState.stripe_connect_account_id
@@ -667,7 +671,7 @@ export default async function AdminBillingSettingsPage() {
             </h2>
 
             <div style={styles.statusList}>
-              <div style={styles.statusRow}>
+              <div className="statusRow" style={styles.statusRow}>
                 <span>Connected account</span>
                 <strong>
                   {formState.stripe_connect_account_id
@@ -676,14 +680,14 @@ export default async function AdminBillingSettingsPage() {
                 </strong>
               </div>
 
-              <div style={styles.statusRow}>
+              <div className="statusRow" style={styles.statusRow}>
                 <span>Customer ID</span>
                 <strong>
                   {formState.stripe_customer_id ? "Saved" : "Not saved"}
                 </strong>
               </div>
 
-              <div style={styles.statusRow}>
+              <div className="statusRow" style={styles.statusRow}>
                 <span>Subscription ID</span>
                 <strong>
                   {formState.stripe_subscription_id
@@ -740,6 +744,14 @@ const responsiveStyles = `
   .billing-page .toggleGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+
+  .billing-page .stripeConnectPanel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .billing-page .connectStripeButton {
+    width: fit-content !important;
+  }
 }
 
 @media (max-width: 680px) {
@@ -763,7 +775,11 @@ const responsiveStyles = `
   .billing-page .heroSummaryGrid,
   .billing-page .formGrid,
   .billing-page .toggleGrid,
-  .billing-page .submitRow {
+  .billing-page .submitRow,
+  .billing-page .stripeConnectPanel,
+  .billing-page .statusRow,
+  .billing-page .cardHeader,
+  .billing-page .tierTop {
     grid-template-columns: 1fr !important;
   }
 
@@ -774,11 +790,6 @@ const responsiveStyles = `
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
-  }
-
-  .billing-page .cardHeader,
-  .billing-page .tierTop {
-    grid-template-columns: 1fr !important;
   }
 }
 `;
@@ -797,7 +808,7 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 34,
@@ -929,7 +940,7 @@ const styles: Record<string, CSSProperties> = {
 
   contentGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.25fr) minmax(300px, 0.75fr)",
+    gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
     gap: 16,
     alignItems: "start",
   },
@@ -942,6 +953,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
   },
 
   cardHeader: {
@@ -980,6 +992,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
+    width: "fit-content",
   },
 
   formGrid: {
@@ -1002,6 +1015,7 @@ const styles: Record<string, CSSProperties> = {
 
   input: {
     width: "100%",
+    minWidth: 0,
     minHeight: 46,
     borderRadius: 14,
     border: "1px solid #cbd5e1",
@@ -1014,6 +1028,7 @@ const styles: Record<string, CSSProperties> = {
 
   select: {
     width: "100%",
+    minWidth: 0,
     minHeight: 46,
     borderRadius: 14,
     border: "1px solid #cbd5e1",
@@ -1034,6 +1049,11 @@ const styles: Record<string, CSSProperties> = {
     background:
       "linear-gradient(135deg, rgba(99,91,255,0.10), rgba(255,255,255,1))",
     border: "1px solid rgba(99,91,255,0.22)",
+    minWidth: 0,
+  },
+
+  stripeConnectCopy: {
+    minWidth: 0,
   },
 
   stripeConnectKicker: {
@@ -1051,6 +1071,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   stripeConnectText: {
@@ -1058,6 +1079,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     lineHeight: 1.5,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   stripeConnectAccount: {
@@ -1066,6 +1088,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 850,
     overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   connectStripeButton: {
@@ -1119,11 +1142,13 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     cursor: "pointer",
+    minWidth: 0,
   },
 
   toggleCardTitle: {
     color: "#0f172a",
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   toggleCardText: {
@@ -1132,6 +1157,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.4,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   submitRow: {
@@ -1184,6 +1210,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 20,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   activeTierCard: {
@@ -1193,6 +1220,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 20,
     background: "#eff6ff",
     border: "2px solid #1683f8",
+    minWidth: 0,
   },
 
   tierTop: {
@@ -1207,6 +1235,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 20,
     fontWeight: 950,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   tierPrice: {
@@ -1228,6 +1257,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
+    width: "fit-content",
   },
 
   tierDescription: {
@@ -1235,6 +1265,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     lineHeight: 1.45,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   featureList: {
@@ -1257,6 +1288,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.6,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   statusList: {
@@ -1275,6 +1307,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
     fontWeight: 800,
+    minWidth: 0,
   },
 
   enabledPill: {
