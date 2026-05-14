@@ -927,15 +927,15 @@ const styles: Record<string, CSSProperties> = {
     height: 58,
   },
 
-  logoImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    objectPosition: "center",
-    display: "block",
-    padding: 8,
-    boxSizing: "border-box",
-  },
+ logoImage: {
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  objectPosition: "center",
+  display: "block",
+  padding: 8,
+  boxSizing: "border-box",
+},
 
   logoTextDefault: {
     color: "#0f172a",
