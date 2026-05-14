@@ -88,9 +88,7 @@ export default async function NewAuctionPage() {
   }
 
   return (
-    <main className="new-auction-page" style={styles.page}>
-      <style>{responsiveStyles}</style>
-
+    <main style={styles.page}>
       <section style={styles.topActions}>
         <Link href="/admin/auctions" style={styles.backButton}>
           ← Back to auctions
@@ -128,14 +126,17 @@ export default async function NewAuctionPage() {
               <span>Auction type</span>
               <strong>Silent auction</strong>
             </div>
+
             <div style={styles.heroStat}>
               <span>Status</span>
               <strong>Draft</strong>
             </div>
+
             <div style={styles.heroStat}>
               <span>Public path</span>
               <strong>/a/slug</strong>
             </div>
+
             <div style={styles.heroStat}>
               <span>Items</span>
               <strong>Add next</strong>
@@ -156,6 +157,7 @@ export default async function NewAuctionPage() {
 
           <div style={styles.previewInfoCard}>
             <h2 style={styles.previewTitle}>Your auction title</h2>
+
             <p style={styles.previewText}>
               A short public summary of your auction will appear here.
             </p>
@@ -175,30 +177,37 @@ export default async function NewAuctionPage() {
           <span>Auction type</span>
           <strong>Silent auction</strong>
         </div>
+
         <div style={styles.summaryCard}>
           <span>Starting status</span>
           <strong>Draft</strong>
         </div>
+
         <div style={styles.summaryCard}>
           <span>Currency</span>
           <strong>GBP</strong>
         </div>
+
         <div style={styles.summaryCard}>
           <span>Public image</span>
           <strong>Ready</strong>
         </div>
+
         <div style={styles.summaryCard}>
           <span>Items</span>
           <strong>Next step</strong>
         </div>
       </section>
-            <form action={createAuctionAction} style={styles.form}>
+
+      <form action={createAuctionAction} style={styles.form}>
         <section style={styles.layoutGrid}>
           <div style={styles.mainColumn}>
             <section style={styles.card}>
               <div style={styles.cardHeader}>
                 <p style={styles.cardKicker}>Section 1</p>
+
                 <h2 style={styles.sectionTitle}>Auction basics</h2>
+
                 <p style={styles.sectionText}>
                   Set the public title, slug, description, status and dates that
                   supporters see first.
@@ -208,6 +217,7 @@ export default async function NewAuctionPage() {
               <div style={styles.fieldGrid}>
                 <label style={styles.fieldWide}>
                   <span style={styles.fieldLabel}>Auction title</span>
+
                   <input
                     name="title"
                     required
@@ -218,11 +228,13 @@ export default async function NewAuctionPage() {
 
                 <label style={styles.field}>
                   <span style={styles.fieldLabel}>Public slug</span>
+
                   <input
                     name="slug"
                     placeholder="friends-of-anchor"
                     style={styles.input}
                   />
+
                   <span style={styles.helpText}>
                     Leave blank to generate from the title.
                   </span>
@@ -230,6 +242,7 @@ export default async function NewAuctionPage() {
 
                 <label style={styles.field}>
                   <span style={styles.fieldLabel}>Status</span>
+
                   <select
                     name="status"
                     defaultValue="draft"
@@ -249,6 +262,7 @@ export default async function NewAuctionPage() {
 
                 <label style={styles.field}>
                   <span style={styles.fieldLabel}>Currency</span>
+
                   <input
                     name="currency"
                     defaultValue="GBP"
@@ -258,6 +272,7 @@ export default async function NewAuctionPage() {
 
                 <label style={styles.field}>
                   <span style={styles.fieldLabel}>Opens</span>
+
                   <input
                     name="opens_at"
                     type="datetime-local"
@@ -267,6 +282,7 @@ export default async function NewAuctionPage() {
 
                 <label style={styles.field}>
                   <span style={styles.fieldLabel}>Closes</span>
+
                   <input
                     name="closes_at"
                     type="datetime-local"
@@ -276,6 +292,7 @@ export default async function NewAuctionPage() {
 
                 <label style={styles.fieldFull}>
                   <span style={styles.fieldLabel}>Description</span>
+
                   <textarea
                     name="description"
                     placeholder="Tell supporters what this auction is supporting and why their bids matter."
@@ -289,7 +306,9 @@ export default async function NewAuctionPage() {
             <section style={styles.card}>
               <div style={styles.cardHeader}>
                 <p style={styles.cardKicker}>Section 2</p>
+
                 <h2 style={styles.sectionTitle}>Public auction image</h2>
+
                 <p style={styles.sectionText}>
                   A branded auction image is already selected. Upload a custom
                   campaign image only if you want to replace it.
@@ -310,7 +329,9 @@ export default async function NewAuctionPage() {
             <section style={styles.card}>
               <div style={styles.cardHeader}>
                 <p style={styles.cardKicker}>Section 3</p>
+
                 <h2 style={styles.sectionTitle}>Auction rules</h2>
+
                 <p style={styles.sectionText}>
                   Optional public terms shown underneath the auction. Keep this
                   short and clear.
@@ -319,6 +340,7 @@ export default async function NewAuctionPage() {
 
               <label style={styles.fieldFull}>
                 <span style={styles.fieldLabel}>Terms / auction rules</span>
+
                 <textarea
                   name="terms_text"
                   placeholder="Bids are binding. Winning bidders will be contacted after the auction closes. Payment and collection details will be confirmed by the organiser."
@@ -332,6 +354,7 @@ export default async function NewAuctionPage() {
           <aside style={styles.sideColumn}>
             <section style={styles.readinessCard}>
               <p style={styles.cardKicker}>Campaign readiness</p>
+
               <h2 style={styles.sideTitle}>Before publishing</h2>
 
               <div style={styles.checkList}>
@@ -339,14 +362,17 @@ export default async function NewAuctionPage() {
                   <span style={styles.checkDot}>1</span>
                   <span>Add auction title</span>
                 </div>
+
                 <div style={styles.checkItem}>
                   <span style={styles.checkDot}>2</span>
                   <span>Set opening and closing times</span>
                 </div>
+
                 <div style={styles.checkItem}>
                   <span style={styles.checkDot}>3</span>
                   <span>Add items from the edit screen</span>
                 </div>
+
                 <div style={styles.checkItem}>
                   <span style={styles.checkDot}>4</span>
                   <span>Publish when ready for bidding</span>
@@ -356,6 +382,7 @@ export default async function NewAuctionPage() {
 
             <section style={styles.helpCard}>
               <h2 style={styles.sideTitle}>What happens next?</h2>
+
               <p style={styles.sideText}>
                 After creation you’ll be taken to the auction edit page, where
                 items, donors, images, starting bids, increments and winner
@@ -366,8 +393,9 @@ export default async function NewAuctionPage() {
         </section>
 
         <section style={styles.nextCard}>
-          <div>
+          <div style={styles.nextCopy}>
             <h2 style={styles.nextTitle}>Ready to create the auction?</h2>
+
             <p style={styles.nextText}>
               Save the auction shell now, then add the lots and bidding details
               on the next screen.
@@ -389,100 +417,19 @@ export default async function NewAuctionPage() {
   );
 }
 
-const responsiveStyles = `
-@media (max-width: 1100px) {
-  .new-auction-page .hero {
-    grid-template-columns: 1fr !important;
-  }
-
-  .new-auction-page .layoutGrid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .new-auction-page .sideColumn {
-    position: static !important;
-  }
-
-  .new-auction-page .summaryGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .new-auction-page .heroStats {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 768px) {
-  .new-auction-page {
-    overflow-x: hidden;
-  }
-
-  .new-auction-page .hero {
-    padding: 22px !important;
-    border-radius: 24px !important;
-    gap: 18px !important;
-  }
-
-  .new-auction-page .title {
-    font-size: clamp(34px, 11vw, 52px) !important;
-    line-height: 0.98 !important;
-  }
-
-  .new-auction-page .fieldGrid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .new-auction-page .summaryGrid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .new-auction-page .heroStats {
-    grid-template-columns: 1fr !important;
-  }
-
-  .new-auction-page .nextCard {
-    flex-direction: column !important;
-    align-items: stretch !important;
-  }
-
-  .new-auction-page .actionRow {
-    width: 100% !important;
-    flex-direction: column !important;
-  }
-
-  .new-auction-page .saveButton,
-  .new-auction-page .cancelButton {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-    box-sizing: border-box !important;
-  }
-
-  .new-auction-page .previewMetaGrid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .new-auction-page .card,
-  .new-auction-page .readinessCard,
-  .new-auction-page .helpCard {
-    padding: 18px !important;
-  }
-
-  .new-auction-page .previewImageCard {
-    min-height: 220px !important;
-  }
-}
-`;
-
 const styles: Record<string, CSSProperties> = {
-    page: {
+  page: {
+    width: "100%",
     maxWidth: 1280,
     margin: "0 auto",
     padding: "28px 16px 64px",
     minHeight: "100vh",
+    overflowX: "hidden",
+    boxSizing: "border-box",
     background:
       "radial-gradient(circle at top left, rgba(251,191,36,0.13), transparent 32%), #f8fafc",
   },
+
   topActions: {
     display: "flex",
     justifyContent: "space-between",
@@ -491,6 +438,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 18,
   },
+
   backButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -503,7 +451,9 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+    minHeight: 44,
   },
+
   dashboardButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -516,26 +466,32 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
+    minHeight: 44,
   },
+
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 460px)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 26,
     alignItems: "stretch",
-    padding: 32,
+    padding: "clamp(20px, 5vw, 32px)",
     borderRadius: 30,
     marginBottom: 18,
     background:
       "linear-gradient(135deg, #070f24 0%, #111c3d 48%, #1e2b63 100%)",
     color: "#ffffff",
     boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+    overflow: "hidden",
+    minWidth: 0,
   },
+
   heroCopy: {
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
     minWidth: 0,
   },
+
   eyebrow: {
     display: "inline-flex",
     alignSelf: "flex-start",
@@ -549,20 +505,25 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     marginBottom: 16,
   },
+
   titleRow: {
     display: "flex",
     alignItems: "center",
     gap: 14,
     flexWrap: "wrap",
+    minWidth: 0,
   },
+
   title: {
     margin: 0,
-    fontSize: "clamp(40px, 6vw, 62px)",
-    lineHeight: 0.95,
+    fontSize: "clamp(34px, 9vw, 62px)",
+    lineHeight: 0.98,
     letterSpacing: "-0.065em",
     maxWidth: 760,
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
+    minWidth: 0,
   },
+
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -573,22 +534,27 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 14,
     fontWeight: 950,
+    flexShrink: 0,
   },
+
   pathText: {
     margin: "16px 0 0",
     color: "#cbd5e1",
     fontSize: 16,
     fontWeight: 950,
     fontStyle: "italic",
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
+
   subtitle: {
     margin: "18px 0 0",
     color: "#cbd5e1",
     fontSize: 17,
     lineHeight: 1.6,
     maxWidth: 720,
+    overflowWrap: "anywhere",
   },
+
   callout: {
     marginTop: 18,
     padding: "14px 16px",
@@ -599,13 +565,17 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     lineHeight: 1.35,
     maxWidth: 680,
+    overflowWrap: "anywhere",
   },
+
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 135px), 1fr))",
     gap: 12,
     marginTop: 24,
+    minWidth: 0,
   },
+
   heroStat: {
     display: "grid",
     gap: 6,
@@ -614,7 +584,9 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.13)",
     minWidth: 0,
+    overflow: "hidden",
   },
+
   previewPanel: {
     alignSelf: "stretch",
     padding: 16,
@@ -623,7 +595,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.18)",
     boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
     minWidth: 0,
+    overflow: "hidden",
   },
+
   previewKicker: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -636,16 +610,18 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     marginBottom: 12,
   },
+
   previewImageCard: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 250,
+    minHeight: 220,
     borderRadius: 20,
     background: "#ffffff",
     overflow: "hidden",
     marginBottom: 12,
   },
+
   previewImage: {
     width: "100%",
     height: "100%",
@@ -653,35 +629,44 @@ const styles: Record<string, CSSProperties> = {
     objectFit: "contain",
     display: "block",
   },
+
   previewInfoCard: {
     padding: 16,
     borderRadius: 18,
     background: "#ffffff",
     color: "#0f172a",
+    minWidth: 0,
   },
+
   previewTitle: {
     margin: 0,
     fontSize: 20,
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
+
   previewText: {
     margin: "6px 0 12px",
     color: "#64748b",
     fontSize: 14,
     fontWeight: 750,
     lineHeight: 1.35,
+    overflowWrap: "anywhere",
   },
+
   previewMetaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
     gap: 8,
   },
+
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 14,
     marginBottom: 18,
   },
+
   summaryCard: {
     display: "grid",
     gap: 5,
@@ -690,39 +675,51 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 22px rgba(15,23,42,0.06)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
+
   form: {
     display: "grid",
     gap: 18,
+    minWidth: 0,
   },
+
   layoutGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 320px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
     gap: 18,
     alignItems: "start",
+    minWidth: 0,
   },
+
   mainColumn: {
     display: "grid",
     gap: 18,
     minWidth: 0,
   },
+
   sideColumn: {
     display: "grid",
     gap: 18,
-    position: "sticky",
-    top: 16,
+    position: "static",
+    minWidth: 0,
   },
+
   card: {
-    padding: 24,
+    padding: "clamp(18px, 4vw, 24px)",
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
     overflow: "hidden",
+    minWidth: 0,
   },
+
   cardHeader: {
     marginBottom: 18,
   },
+
   cardKicker: {
     margin: "0 0 8px",
     color: "#2563eb",
@@ -731,25 +728,31 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.1em",
     fontWeight: 950,
   },
+
   sectionTitle: {
     margin: 0,
-    fontSize: 28,
+    fontSize: "clamp(24px, 6vw, 28px)",
     color: "#0f172a",
     letterSpacing: "-0.04em",
-    wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
+
   sectionText: {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 650,
+    overflowWrap: "anywhere",
   },
+
   fieldGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 16,
     alignItems: "start",
+    minWidth: 0,
   },
+
   field: {
     display: "grid",
     gap: 7,
@@ -757,6 +760,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     minWidth: 0,
   },
+
   fieldWide: {
     display: "grid",
     gridColumn: "1 / -1",
@@ -765,6 +769,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     minWidth: 0,
   },
+
   fieldFull: {
     display: "grid",
     gridColumn: "1 / -1",
@@ -773,12 +778,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     minWidth: 0,
   },
+
   fieldLabel: {
     color: "#0f172a",
     fontSize: 15,
     fontWeight: 950,
     lineHeight: 1.2,
   },
+
   input: {
     width: "100%",
     height: 56,
@@ -786,19 +793,20 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 14,
     border: "1px solid #cbd5e1",
     padding: "12px 13px",
-    fontSize: 15,
+    fontSize: 16,
     color: "#0f172a",
     background: "#ffffff",
     outlineColor: "#2563eb",
     minWidth: 0,
   },
+
   textarea: {
     width: "100%",
     boxSizing: "border-box",
     borderRadius: 14,
     border: "1px solid #cbd5e1",
     padding: "12px 13px",
-    fontSize: 15,
+    fontSize: 16,
     color: "#0f172a",
     background: "#ffffff",
     resize: "vertical",
@@ -806,59 +814,77 @@ const styles: Record<string, CSSProperties> = {
     outlineColor: "#2563eb",
     minWidth: 0,
   },
+
   helpText: {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 700,
     lineHeight: 1.2,
+    overflowWrap: "anywhere",
   },
+
   uploadShell: {
     padding: 16,
     borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
+    minWidth: 0,
   },
+
   readinessCard: {
     padding: 22,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+    minWidth: 0,
+    overflow: "hidden",
   },
+
   helpCard: {
     padding: 22,
     borderRadius: 24,
     background: "#0f172a",
     color: "#ffffff",
     boxShadow: "0 18px 42px rgba(15,23,42,0.18)",
+    minWidth: 0,
+    overflow: "hidden",
   },
+
   sideTitle: {
     margin: 0,
     color: "inherit",
     fontSize: 22,
     letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
+
   sideText: {
     margin: "10px 0 0",
     color: "#cbd5e1",
     lineHeight: 1.55,
     fontWeight: 650,
+    overflowWrap: "anywhere",
   },
+
   checkList: {
     display: "grid",
     gap: 12,
     marginTop: 16,
   },
+
   checkItem: {
     display: "grid",
-    gridTemplateColumns: "28px 1fr",
+    gridTemplateColumns: "28px minmax(0, 1fr)",
     gap: 10,
     alignItems: "center",
     color: "#334155",
     fontWeight: 900,
     lineHeight: 1.25,
+    minWidth: 0,
   },
+
   checkDot: {
     display: "inline-flex",
     alignItems: "center",
@@ -871,34 +897,49 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
   },
+
   nextCard: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 18,
     flexWrap: "wrap",
-    padding: 24,
+    padding: "clamp(18px, 4vw, 24px)",
     borderRadius: 28,
     background: "#0f172a",
     color: "#ffffff",
     boxShadow: "0 18px 42px rgba(15,23,42,0.18)",
+    minWidth: 0,
+    overflow: "hidden",
   },
+
+  nextCopy: {
+    minWidth: 0,
+    flex: "1 1 260px",
+  },
+
   nextTitle: {
     margin: 0,
-    fontSize: 25,
+    fontSize: "clamp(22px, 5vw, 25px)",
     letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
+
   nextText: {
     margin: "7px 0 0",
     color: "#cbd5e1",
     lineHeight: 1.55,
     fontWeight: 650,
+    overflowWrap: "anywhere",
   },
+
   actionRow: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
+    minWidth: 0,
   },
+
   cancelButton: {
     padding: "12px 18px",
     borderRadius: 999,
@@ -910,7 +951,9 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 44,
   },
+
   saveButton: {
     padding: "12px 18px",
     borderRadius: 999,
@@ -920,5 +963,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(245,158,11,0.22)",
+    minHeight: 44,
   },
+};
 };
