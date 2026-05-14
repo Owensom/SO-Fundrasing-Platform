@@ -474,7 +474,6 @@ const responsiveStyles = `
     align-items: stretch !important;
   }
 
-  .auction-edit-page .primaryButton,
   .auction-edit-page .saveButton,
   .auction-edit-page .closeButton,
   .auction-edit-page .deleteButton,
@@ -511,7 +510,6 @@ const responsiveStyles = `
   }
 
   .auction-edit-page .card,
-  .auction-edit-page .panel,
   .auction-edit-page .itemExpanded,
   .auction-edit-page .itemCreateCard {
     padding: 14px !important;
@@ -552,9 +550,7 @@ const responsiveStyles = `
 export default async function AdminAuctionDetailPage({ params }: PageProps) {
   const resolvedParams = await params;
 
-  const { auction, tenantSlug } = await requireAuctionAccess(
-    resolvedParams.id,
-  );
+  const { auction, tenantSlug } = await requireAuctionAccess(resolvedParams.id);
 
   const items = await listAuctionItems(auction.id);
   const bids = await listAuctionBids(auction.id);
@@ -629,7 +625,10 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
           <div className="heroMetaGrid" style={styles.heroMetaGrid}>
             <HeroMetric label="Auction type" value="Silent auction" />
-            <HeroMetric label="Status" value={auctionStatusLabel(auction.status)} />
+            <HeroMetric
+              label="Status"
+              value={auctionStatusLabel(auction.status)}
+            />
             <HeroMetric label="Opens" value={formatDate(auction.opens_at)} />
             <HeroMetric label="Closes" value={formatDate(auction.closes_at)} />
           </div>
@@ -669,12 +668,20 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           View public page
         </a>
 
-        <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.heroButtonLight}>
+        <Link
+          href={`/c/${tenantSlug}`}
+          target="_blank"
+          style={styles.heroButtonLight}
+        >
           Campaigns page
         </Link>
       </section>
 
-      <nav className="tabBar" style={styles.tabBar} aria-label="Auction admin sections">
+      <nav
+        className="tabBar"
+        style={styles.tabBar}
+        aria-label="Auction admin sections"
+      >
         <a href="#auction-overview" className="tabButton" style={styles.tabButton}>
           Overview
         </a>
@@ -717,7 +724,6 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         title="Auction overview"
         description="Headline status, items and bidding summary."
         badge={`${items.length} items`}
-        defaultOpen
       >
         <div className="summaryGrid" style={styles.statsGrid}>
           <StatCard label="Items" value={items.length} />
@@ -814,7 +820,8 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </button>
         </form>
       </CollapsibleSection>
-            <CollapsibleSection
+
+      <CollapsibleSection
         id="auction-settings"
         eyebrow="Section 3"
         title="Auction settings"
@@ -907,8 +914,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
               />
             </label>
           </div>
-
-          <label style={styles.label}>
+                    <label style={styles.label}>
             Description
             <textarea
               name="description"
@@ -989,7 +995,6 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         title="Auction items"
         description="Add prizes, experiences, donated items or sponsor lots. Existing items are collapsible to keep the page manageable."
         badge={`${items.length} lots`}
-        defaultOpen
       >
         <details style={styles.createDetails}>
           <summary className="createSummary" style={styles.createSummary}>
