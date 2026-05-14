@@ -354,7 +354,6 @@ async function createAuctionItemAction(formData: FormData) {
 
   redirect(`/admin/auctions/${auction.id}#items`);
 }
-
 async function updateAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -446,9 +445,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
   });
 
   return (
-    <main className="auction-detail-page" style={styles.page}>
-      <style>{responsiveStyles}</style>
-
+    <main style={styles.page}>
       <section style={styles.hero}>
         <div style={styles.heroCopy}>
           <div style={styles.badge}>Auction editor</div>
@@ -521,7 +518,8 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </Link>
         </div>
       </section>
-            <nav style={styles.tabBar} aria-label="Auction admin sections">
+
+      <nav style={styles.tabBar} aria-label="Auction admin sections">
         <a href="#auction-overview" style={styles.tabButton}>
           Overview
         </a>
@@ -651,8 +649,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </button>
         </form>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="auction-settings"
         eyebrow="Section 3"
         title="Auction settings"
@@ -661,25 +658,6 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
       >
         <form action={updateAuctionAction} style={styles.form}>
           <input type="hidden" name="id" value={auction.id} />
-
-          <div style={styles.sectionHeader}>
-            <div>
-              <p style={styles.kicker}>Auction controls</p>
-
-              <h3 className="so-brand-card-title" style={styles.innerTitle}>
-                Campaign details
-              </h3>
-            </div>
-
-            <span
-              style={{
-                ...styles.status,
-                ...getStatusStyle(auction.status),
-              }}
-            >
-              {auction.status}
-            </span>
-          </div>
 
           <div style={styles.grid}>
             <label style={styles.label}>
@@ -756,14 +734,11 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
           </label>
 
           <section style={styles.imageFocusPanel}>
-            <div>
-              <h3 style={styles.subTitle}>Main auction image</h3>
-
-              <p style={styles.sectionText}>
-                Upload or replace the main public image. If no custom image is
-                uploaded, the SO Auctions default image will be used.
-              </p>
-            </div>
+            <h3 style={styles.subTitle}>Main auction image</h3>
+            <p style={styles.sectionText}>
+              Upload or replace the main public image. If no custom image is
+              uploaded, the SO Auctions default image will be used.
+            </p>
 
             <div style={styles.uploadBox}>
               <ImageFocusUploadField
@@ -798,19 +773,17 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
         id="items"
         eyebrow="Section 4"
         title="Auction items"
-        description="Add prizes, experiences, donated items or sponsor lots. Existing items are collapsible to keep the page manageable as the auction grows."
+        description="Add prizes, experiences, donated items or sponsor lots."
         defaultOpen
       >
         <details style={styles.createDetails}>
           <summary style={styles.createSummary}>
             <span>
               <strong>Add a new auction item</strong>
-
               <small style={styles.summarySmall}>
                 Open this section to add another lot.
               </small>
             </span>
-
             <span style={styles.summaryChevron}>⌄</span>
           </summary>
 
@@ -879,11 +852,7 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
 
               <label style={styles.label}>
                 Status
-                <select
-                  name="status"
-                  defaultValue="active"
-                  style={styles.input}
-                >
+                <select name="status" defaultValue="active" style={styles.input}>
                   <option value="active">Active</option>
                   <option value="closed">Closed</option>
                   <option value="withdrawn">Withdrawn</option>
@@ -918,7 +887,190 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
             </div>
           </form>
         </details>
-                              <div style={styles.uploadBox}>
+
+        <div style={styles.itemsList}>
+          {items.length === 0 ? (
+            <div style={styles.emptyState}>No auction items added yet.</div>
+          ) : (
+            items.map((item, index) => {
+              const itemBids = bids.filter((bid) => bid.item_id === item.id);
+
+              const highestBidAmount =
+                itemBids.length > 0
+                  ? Math.max(
+                      ...itemBids.map((bid) => Number(bid.amount_cents || 0)),
+                    )
+                  : item.highest_bid_cents ?? item.starting_bid_cents ?? 0;
+
+              return (
+                <details
+                  key={item.id}
+                  style={styles.itemDetails}
+                  open={index === 0}
+                >
+                  <summary style={styles.itemSummary}>
+                    <div style={styles.summaryImageWrap}>
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.title}
+                          style={focusedImageStyle(
+                            item.image_focus_x,
+                            item.image_focus_y,
+                          )}
+                        />
+                      ) : (
+                        <img
+                          src={DEFAULT_AUCTION_IMAGE}
+                          alt="SO Auctions item"
+                          style={defaultAuctionImageStyle(18)}
+                        />
+                      )}
+                    </div>
+
+                    <div style={styles.summaryMain}>
+                      <div style={styles.summaryTitleRow}>
+                        <div>
+                          <h3 style={styles.itemTitle}>
+                            Lot {item.sort_order || index + 1}: {item.title}
+                          </h3>
+
+                          <div style={styles.itemSub}>
+                            Donor: {item.donor_name || "Not set"}
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            ...styles.status,
+                            ...getStatusStyle(item.status),
+                          }}
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+
+                      <div style={styles.bidGrid}>
+                        <Detail
+                          label="Starting bid"
+                          value={moneyFromCents(
+                            item.starting_bid_cents,
+                            auction.currency,
+                          )}
+                        />
+
+                        <Detail
+                          label="Highest bid"
+                          value={moneyFromCents(
+                            highestBidAmount,
+                            auction.currency,
+                          )}
+                        />
+
+                        <Detail label="Bid count" value={itemBids.length} />
+
+                        <Detail
+                          label="Increment"
+                          value={moneyFromCents(
+                            item.minimum_increment_cents,
+                            auction.currency,
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <span style={styles.summaryChevron}>⌄</span>
+                  </summary>
+
+                  <div style={styles.itemExpanded}>
+                    <form
+                      action={updateAuctionItemAction}
+                      style={styles.itemEditForm}
+                    >
+                      <input
+                        type="hidden"
+                        name="auction_id"
+                        value={auction.id}
+                      />
+                      <input type="hidden" name="item_id" value={item.id} />
+
+                      <div style={styles.grid}>
+                        <label style={styles.label}>
+                          Item title
+                          <input
+                            name="title"
+                            defaultValue={item.title}
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.label}>
+                          Donor / sponsor
+                          <input
+                            name="donor_name"
+                            defaultValue={item.donor_name || ""}
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.label}>
+                          Starting bid
+                          <input
+                            name="starting_bid"
+                            defaultValue={centsToPoundsInput(
+                              item.starting_bid_cents,
+                            )}
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.label}>
+                          Minimum increment
+                          <input
+                            name="minimum_increment"
+                            defaultValue={centsToPoundsInput(
+                              item.minimum_increment_cents,
+                            )}
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.label}>
+                          Reserve price
+                          <input
+                            name="reserve_price"
+                            defaultValue={centsToPoundsInput(
+                              item.reserve_price_cents,
+                            )}
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.label}>
+                          Sort order
+                          <input
+                            name="sort_order"
+                            type="number"
+                            defaultValue={item.sort_order || 0}
+                            style={styles.input}
+                          />
+                        </label>
+
+                        <label style={styles.label}>
+                          Status
+                          <select
+                            name="status"
+                            defaultValue={item.status}
+                            style={styles.input}
+                          >
+                            <option value="active">Active</option>
+                            <option value="closed">Closed</option>
+                            <option value="withdrawn">Withdrawn</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div style={styles.uploadBox}>
                         <ImageFocusUploadField
                           currentImageUrl={item.image_url || ""}
                           currentFocusX={item.image_focus_x}
@@ -954,7 +1106,6 @@ export default async function AdminAuctionDetailPage({ params }: PageProps) {
                         name="auction_id"
                         value={auction.id}
                       />
-
                       <input type="hidden" name="item_id" value={item.id} />
 
                       <button type="submit" style={styles.deleteButton}>
@@ -1062,9 +1213,7 @@ function CollapsibleSection({
             {title}
           </h2>
 
-          {description ? (
-            <p style={styles.sectionText}>{description}</p>
-          ) : null}
+          {description ? <p style={styles.sectionText}>{description}</p> : null}
         </div>
 
         <span style={styles.collapsibleToggle}>Open / close</span>
@@ -1095,41 +1244,39 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
 
 const styles: Record<string, CSSProperties> = {
   page: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: "26px 16px 64px",
+    overflowX: "hidden",
+    boxSizing: "border-box",
     background:
       "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 34%), #f8fafc",
     minHeight: "100vh",
   },
-
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 180px 150px",
-    gap: 24,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 18,
     alignItems: "center",
-    padding: 24,
-    borderRadius: 30,
+    padding: 18,
+    borderRadius: 22,
     background:
       "linear-gradient(135deg, #020617 0%, #081028 45%, #0f172a 100%)",
     color: "#ffffff",
-    marginBottom: 18,
-    minHeight: 260,
-    boxShadow: "0 24px 60px rgba(15,23,42,0.24)",
+    marginBottom: 12,
+    minHeight: 222,
+    overflow: "hidden",
   },
-
-  heroCopy: {
-    minWidth: 0,
-  },
-
+  heroCopy: { minWidth: 0 },
   heroActions: {
     display: "grid",
-    gap: 10,
+    gap: 8,
     alignContent: "start",
+    minWidth: 0,
   },
-
   heroButtonDark: {
-    padding: "12px 16px",
+    padding: "10px 14px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
@@ -1137,11 +1284,10 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
     textAlign: "center",
-    fontSize: 14,
+    fontSize: 13,
   },
-
   heroButtonLight: {
-    padding: "12px 16px",
+    padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -1149,83 +1295,530 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
     textAlign: "center",
-    fontSize: 14,
+    fontSize: 13,
   },
-
   badge: {
     display: "inline-flex",
-    padding: "6px 10px",
+    padding: "5px 9px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
     color: "#e2e8f0",
     border: "1px solid rgba(255,255,255,0.14)",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 950,
-    marginBottom: 10,
+    marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
-
   title: {
     margin: 0,
-    fontSize: "clamp(34px, 5vw, 48px)",
-    lineHeight: 0.95,
-    letterSpacing: "-0.06em",
+    fontSize: "clamp(28px, 9vw, 42px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
   },
-
   metaRow: {
     display: "flex",
-    gap: 8,
+    gap: 7,
     flexWrap: "wrap",
     alignItems: "center",
-    marginTop: 12,
+    marginTop: 10,
   },
-
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "6px 12px",
+    padding: "5px 10px",
     borderRadius: 999,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 950,
     textTransform: "capitalize",
   },
-
   currencyPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "6px 12px",
+    padding: "5px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.14)",
     color: "#ffffff",
     border: "1px solid rgba(255,255,255,0.12)",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 950,
   },
-
   subtitle: {
-    margin: "10px 0 0",
+    margin: "9px 0 0",
     color: "#cbd5e1",
     fontWeight: 850,
-    fontSize: 13,
+    fontSize: 12,
+    overflowWrap: "anywhere",
   },
-
   description: {
-    margin: "14px 0 0",
-    color: "#bfdbfe",
-    fontSize: 15,
-    lineHeight: 1.6,
-    maxWidth: 680,
+    margin: "10px 0 0",
+    color: "#93c5fd",
+    fontSize: 13,
+    lineHeight: 1.5,
+    maxWidth: 620,
+    overflowWrap: "anywhere",
   },
-
   heroImageWrap: {
-    width: 180,
-    height: 180,
-    borderRadius: 22,
+    width: "100%",
+    maxWidth: 180,
+    aspectRatio: "1 / 1",
+    borderRadius: 14,
     overflow: "hidden",
     background: "#ffffff",
     border: "1px solid rgba(255,255,255,0.16)",
-    boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
   },
+  tabBar: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    padding: 8,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #dbe4ee",
+    marginBottom: 20,
+  },
+  tabButton: {
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    border: "1px solid #dbe4ee",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 850,
+    fontSize: 13,
+  },
+  dangerTabButton: {
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  form: { display: "grid", gap: 18, minWidth: 0 },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
+    gap: 14,
+  },
+  statCard: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+  statLabel: { color: "#64748b", fontSize: 13, fontWeight: 900 },
+  statValue: {
+    marginTop: 6,
+    fontSize: 30,
+    fontWeight: 950,
+    color: "#0f172a",
+    letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
+  },
+  card: {
+    padding: 20,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    marginBottom: 18,
+    boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  collapsibleSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    flexWrap: "wrap",
+  },
+  collapsibleHeading: { minWidth: 0 },
+  collapsibleToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  collapsibleBody: { marginTop: 18, minWidth: 0 },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    marginBottom: 18,
+  },
+  kicker: {
+    margin: "0 0 7px",
+    color: "#b45309",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 950,
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: 26,
+    color: "#0f172a",
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+  innerTitle: {
+    margin: 0,
+    fontSize: 21,
+    color: "#0f172a",
+    letterSpacing: "-0.025em",
+  },
+  sectionText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.55,
+    overflowWrap: "anywhere",
+  },
+  subTitle: { margin: 0, fontSize: 20, color: "#0f172a" },
+  status: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 900,
+    textTransform: "capitalize",
+    whiteSpace: "nowrap",
+  },
+  winnerGrid: { display: "grid", gap: 10, marginTop: 16 },
+  winnerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    flexWrap: "wrap",
+  },
+  winnerTitle: { color: "#0f172a", fontWeight: 950 },
+  winnerMeta: {
+    marginTop: 4,
+    color: "#64748b",
+    fontWeight: 750,
+    fontSize: 13,
+    overflowWrap: "anywhere",
+  },
+  winnerAmount: { color: "#0f172a", fontWeight: 950 },
+  reserveWarning: {
+    display: "block",
+    marginTop: 5,
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  closeForm: { marginTop: 18, display: "flex", justifyContent: "flex-end" },
+  closeButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(15,23,42,0.18)",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
+    gap: 14,
+    minWidth: 0,
+  },
+  label: {
+    display: "grid",
+    gap: 7,
+    marginTop: 14,
+    color: "#0f172a",
+    fontWeight: 900,
+    minWidth: 0,
+  },
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    padding: "12px 13px",
+    fontSize: 16,
+    background: "#ffffff",
+    color: "#0f172a",
+    minWidth: 0,
+  },
+  textarea: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    padding: "12px 13px",
+    fontSize: 16,
+    background: "#ffffff",
+    color: "#0f172a",
+    resize: "vertical",
+    fontFamily: "inherit",
+    minWidth: 0,
+  },
+  imageFocusPanel: {
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  uploadBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  actionsRight: {
+    display: "flex",
+    justifyContent: "flex-end",
+    marginTop: 18,
+    flexWrap: "wrap",
+  },
+  saveButton: {
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+  createDetails: {
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    marginBottom: 18,
+    overflow: "hidden",
+  },
+  createSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    color: "#0f172a",
+    flexWrap: "wrap",
+  },
+  summarySmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#64748b",
+    fontWeight: 750,
+  },
+  summaryChevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#475569",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+  itemCreateCard: { padding: "0 18px 18px", background: "#f8fafc" },
+  itemsList: { display: "grid", gap: 14, minWidth: 0 },
+  itemDetails: {
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+  itemSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: 16,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 110px), 1fr))",
+    gap: 16,
+    alignItems: "center",
+  },
+  summaryImageWrap: {
+    width: "100%",
+    maxWidth: 140,
+    aspectRatio: "1 / 1",
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+  summaryMain: { minWidth: 0 },
+  summaryTitleRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+  },
+  itemTitle: {
+    margin: 0,
+    fontSize: 23,
+    color: "#0f172a",
+    letterSpacing: "-0.025em",
+    overflowWrap: "anywhere",
+  },
+  itemSub: { marginTop: 4, color: "#64748b", fontWeight: 700 },
+  bidGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  detailLabel: { color: "#64748b", fontSize: 12, fontWeight: 900 },
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+    overflowWrap: "anywhere",
+  },
+  itemExpanded: {
+    padding: "0 18px 18px",
+    borderTop: "1px solid #e2e8f0",
+    background: "#ffffff",
+    minWidth: 0,
+  },
+  itemEditForm: { marginTop: 18, minWidth: 0 },
+  itemActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    marginTop: 18,
+    flexWrap: "wrap",
+  },
+  deleteForm: {
+    marginTop: 10,
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  deleteButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  bidHistory: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  bidHistoryTitle: { margin: "0 0 14px", fontSize: 18, color: "#0f172a" },
+  bidList: { display: "grid", gap: 10 },
+  bidRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    flexWrap: "wrap",
+  },
+  bidName: { fontWeight: 900, color: "#0f172a" },
+  bidEmail: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#64748b",
+    overflowWrap: "anywhere",
+  },
+  bidAmount: { fontWeight: 900, color: "#0f172a" },
+  noBidsBox: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+  },
+  emptyState: {
+    padding: 20,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 800,
+    textAlign: "center",
+  },
+  dangerPanel: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    flexWrap: "wrap",
+    padding: 18,
+    borderRadius: 22,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+  },
+  dangerTitle: {
+    margin: 0,
+    color: "#991b1b",
+    fontSize: 20,
+    letterSpacing: "-0.02em",
+  },
+  deleteAuctionButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(220,38,38,0.18)",
+  },
+  disabledDangerButton: {
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#e5e7eb",
+    color: "#64748b",
+    border: "none",
+    fontWeight: 950,
+    cursor: "not-allowed",
+  },
+};
