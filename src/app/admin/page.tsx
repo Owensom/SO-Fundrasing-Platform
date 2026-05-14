@@ -107,6 +107,7 @@ export default async function AdminDashboardPage() {
     const sold = Array.isArray(game.config_json?.sold)
       ? game.config_json.sold.length
       : 0;
+
     return sum + sold;
   }, 0);
 
@@ -114,6 +115,7 @@ export default async function AdminDashboardPage() {
     const sold = Array.isArray(game.config_json?.sold)
       ? game.config_json.sold.length
       : 0;
+
     return sum + sold * Number(game.price_per_square_cents || 0);
   }, 0);
 
@@ -223,6 +225,18 @@ export default async function AdminDashboardPage() {
         />
 
         <FocusCard
+          label="Published events"
+          value={publishedEvents.length}
+          text={`${events.length} total events created`}
+        />
+
+        <FocusCard
+          label="Active auctions"
+          value={publishedAuctions.length}
+          text={`${auctions.length} total auctions created`}
+        />
+
+        <FocusCard
           label="Published campaigns"
           value={totalPublishedCampaigns}
           text={`${totalCampaigns} total campaigns created`}
@@ -284,6 +298,7 @@ export default async function AdminDashboardPage() {
           description="Review raffle sales, squares sales, event orders and auction bids."
           stats="Unified activity dashboard"
           tone="blue"
+          compact
         />
 
         <DashboardCard
@@ -293,6 +308,7 @@ export default async function AdminDashboardPage() {
           description="View supporter profiles grouped from orders and campaign activity."
           stats="Supporter intelligence"
           tone="gold"
+          compact
         />
 
         <DashboardCard
@@ -302,6 +318,7 @@ export default async function AdminDashboardPage() {
           description="Review payment metadata, platform fees, Stripe fees, commission and organiser net estimates."
           stats="Money breakdown"
           tone="gold"
+          compact
         />
       </section>
 
@@ -467,6 +484,7 @@ function DashboardCard({
   description,
   stats,
   tone = "default",
+  compact = false,
 }: {
   href: string;
   image?: string;
@@ -475,6 +493,7 @@ function DashboardCard({
   description: string;
   stats: string;
   tone?: "default" | "blue" | "gold";
+  compact?: boolean;
 }) {
   const badgeStyle =
     tone === "gold"
@@ -485,9 +504,12 @@ function DashboardCard({
 
   return (
     <Link href={href} style={styles.cardLink}>
-      <article className="admin-dashboard-card" style={styles.card}>
+      <article
+        className={`admin-dashboard-card ${compact ? "admin-compact-card" : ""}`}
+        style={compact ? { ...styles.card, ...styles.compactCard } : styles.card}
+      >
         <div style={styles.cardTop}>
-          <div style={styles.logoBox}>
+          <div style={compact ? { ...styles.logoBox, ...styles.compactLogoBox } : styles.logoBox}>
             {image ? (
               <img src={image} alt={title} style={styles.logoImage} />
             ) : (
@@ -531,7 +553,7 @@ const responsiveStyles = `
   min-width: 0;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .admin-dashboard-page .admin-command-centre,
   .admin-dashboard-page .admin-operations-grid {
     grid-template-columns: 1fr !important;
@@ -777,16 +799,16 @@ const styles: Record<string, CSSProperties> = {
 
   focusGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 12,
     marginBottom: 18,
   },
 
   focusCard: {
     display: "grid",
     gap: 8,
-    padding: 18,
-    borderRadius: 24,
+    padding: 16,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
@@ -794,15 +816,15 @@ const styles: Record<string, CSSProperties> = {
 
   focusLabel: {
     color: "#64748b",
-    fontSize: 13,
-    fontWeight: 850,
+    fontSize: 12,
+    fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
 
   focusValue: {
     color: "#0f172a",
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: 950,
     letterSpacing: "-0.06em",
     lineHeight: 1,
@@ -812,7 +834,8 @@ const styles: Record<string, CSSProperties> = {
   focusText: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.5,
+    lineHeight: 1.45,
+    fontSize: 13,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
@@ -849,25 +872,35 @@ const styles: Record<string, CSSProperties> = {
 
   cardsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 16,
     marginBottom: 20,
+    alignItems: "stretch",
   },
 
   cardLink: {
     textDecoration: "none",
+    color: "inherit",
+    display: "block",
+    minWidth: 0,
+    height: "100%",
   },
 
   card: {
     display: "grid",
-    gap: 16,
+    gap: 14,
     padding: 18,
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minHeight: 246,
-    transition: "transform 0.18s ease",
+    minHeight: 250,
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    height: "100%",
+  },
+
+  compactCard: {
+    minHeight: 210,
+    gap: 12,
   },
 
   cardTop: {
@@ -877,8 +910,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   logoBox: {
-    width: 62,
-    height: 62,
+    width: 66,
+    height: 66,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
@@ -886,12 +919,22 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  compactLogoBox: {
+    width: 58,
+    height: 58,
   },
 
   logoImage: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    objectFit: "contain",
+    objectPosition: "center",
+    display: "block",
+    padding: 8,
+    boxSizing: "border-box",
   },
 
   logoTextDefault: {
@@ -918,7 +961,7 @@ const styles: Record<string, CSSProperties> = {
   cardTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 27,
+    fontSize: 26,
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
@@ -926,14 +969,15 @@ const styles: Record<string, CSSProperties> = {
   cardDescription: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.55,
+    lineHeight: 1.5,
+    fontSize: 14,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
 
   cardBottom: {
     display: "grid",
-    gap: 10,
+    gap: 9,
     alignContent: "end",
     marginTop: "auto",
   },
@@ -941,7 +985,7 @@ const styles: Record<string, CSSProperties> = {
   cardStats: {
     color: "#0f172a",
     fontSize: 13,
-    fontWeight: 900,
+    fontWeight: 950,
   },
 
   cardDivider: {
@@ -952,7 +996,7 @@ const styles: Record<string, CSSProperties> = {
 
   openLink: {
     color: "#2563eb",
-    fontWeight: 900,
+    fontWeight: 950,
     fontSize: 14,
   },
 
