@@ -149,7 +149,8 @@ export default async function AdminDashboardPage() {
     publishedEvents.length +
     publishedAuctions.length;
 
-  const combinedEstimatedRevenueCents = raffleRevenueCents + squaresRevenueCents;
+  const combinedEstimatedRevenueCents =
+    raffleRevenueCents + squaresRevenueCents;
 
   return (
     <main className="admin-dashboard-page" style={styles.page}>
@@ -218,8 +219,7 @@ export default async function AdminDashboardPage() {
             </Link>
           </div>
         </div>
-
-        <div className="admin-command-stats" style={styles.commandStats}>
+                <div className="admin-command-stats" style={styles.commandStats}>
           <StatCard label="Total campaigns" value={totalCampaigns} dark />
           <StatCard label="Published" value={totalPublishedCampaigns} dark />
           <StatCard
@@ -261,7 +261,8 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-            <section style={styles.sectionHeader}>
+
+      <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
 
@@ -418,8 +419,7 @@ export default async function AdminDashboardPage() {
             </Link>
           </div>
         </section>
-
-        <section
+                <section
           className="admin-data-panel"
           style={styles.dataPanel}
         >
@@ -489,23 +489,11 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div
-        style={
-          dark
-            ? styles.darkStatLabel
-            : styles.statLabel
-        }
-      >
-        {label}
-      </div>
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
 
       <div
         className="admin-stat-value"
-        style={
-          dark
-            ? styles.darkStatValue
-            : styles.statValue
-        }
+        style={dark ? styles.darkStatValue : styles.statValue}
       >
         {value}
       </div>
@@ -548,6 +536,7 @@ function DataBlock({
     </div>
   );
 }
+
 function DashboardCard({
   href,
   image,
@@ -670,8 +659,7 @@ const responsiveStyles = `
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
-  .admin-dashboard-page .admin-command-actions,
-  .admin-dashboard-page .admin-panel-actions {
+  .admin-dashboard-page .admin-command-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -695,7 +683,7 @@ const responsiveStyles = `
   .admin-dashboard-page .secondaryButton,
   .admin-dashboard-page .financeButton,
   .admin-dashboard-page .financeButtonSecondary {
-    width: 100% !important;
+    width: auto !important;
     justify-content: center !important;
     text-align: center !important;
   }
@@ -713,8 +701,7 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid,
-  .admin-dashboard-page .admin-panel-actions {
+  .admin-dashboard-page .admin-cards-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -1151,10 +1138,10 @@ const styles: Record<string, CSSProperties> = {
   },
 
   panelActions: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 10,
-    alignItems: "stretch",
+    alignItems: "center",
   },
 
   financeButton: {
@@ -1162,13 +1149,13 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "11px 16px",
+    padding: "11px 18px",
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    whiteSpace: "normal",
+    whiteSpace: "nowrap",
   },
 
   financeButtonSecondary: {
@@ -1176,14 +1163,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "11px 16px",
+    padding: "11px 18px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 900,
-    whiteSpace: "normal",
+    whiteSpace: "nowrap",
   },
 
   dataPanel: {
