@@ -164,7 +164,7 @@ export default async function AdminRafflesPage() {
     <main className="raffles-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section className="raffles-admin-hero" style={styles.hero}>
+     <section className="raffles-admin-hero" style={styles.commandHero}>
         <div style={styles.heroContent}>
           <div style={styles.heroPillRow}>
             <Link href="/admin" style={styles.heroBackPill}>
