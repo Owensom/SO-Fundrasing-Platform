@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   attachStripeSessionToReservedSeats,
@@ -22,7 +23,18 @@ type CheckoutItem = {
   tableName?: string;
 };
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+type TenantFinanceRow = {
+  stripe_connect_account_id: string | null;
+  stripe_connect_charges_enabled: boolean | null;
+  stripe_connect_payouts_enabled: boolean | null;
+  stripe_connect_details_submitted: boolean | null;
+  stripe_connect_onboarding_complete: boolean | null;
+  platform_fee_percent: number | string | null;
+};
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2023-10-16",
+});
 
 function siteUrl(req: Request) {
   return new URL(req.url).origin;
@@ -46,10 +58,31 @@ function truthy(value: unknown) {
   return value === true || value === "true" || value === "yes" || value === "1";
 }
 
-function calculatePlatformFeeCents(subtotalCents: number) {
+function calculateBuyerContributionCents(subtotalCents: number) {
   if (!subtotalCents || subtotalCents <= 0) return 0;
 
   return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+}
+
+function safePercent(value: unknown, fallback = 0) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return fallback;
+  }
+
+  return Math.min(100, Number(number.toFixed(2)));
+}
+
+function calculateApplicationFeeCents(
+  subtotalCents: number,
+  platformFeePercent: number,
+) {
+  if (!subtotalCents || subtotalCents <= 0 || platformFeePercent <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.ceil(subtotalCents * (platformFeePercent / 100)));
 }
 
 function seatLabel(input: {
@@ -67,6 +100,83 @@ function seatLabel(input: {
   }
 
   return `Row ${input.rowLabel || ""}, Seat ${input.seatNumber || ""}`;
+}
+
+async function getTenantFinanceSettings(
+  tenantSlug: string,
+): Promise<TenantFinanceRow | null> {
+  const rows = (await query(
+    `
+      select
+        coalesce(
+          nullif(ts.stripe_connect_account_id, ''),
+          nullif(t.stripe_connect_account_id, '')
+        ) as stripe_connect_account_id,
+        t.stripe_connect_charges_enabled,
+        t.stripe_connect_payouts_enabled,
+        t.stripe_connect_details_submitted,
+        t.stripe_connect_onboarding_complete,
+        ts.platform_fee_percent
+      from tenants t
+      left join tenant_settings ts
+        on ts.tenant_slug = t.slug
+      where t.slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  )) as TenantFinanceRow[];
+
+  return rows[0] || null;
+}
+
+function canUseConnectDestination(finance: TenantFinanceRow | null) {
+  return Boolean(
+    finance?.stripe_connect_account_id &&
+      finance.stripe_connect_charges_enabled &&
+      finance.stripe_connect_details_submitted,
+  );
+}
+
+function stripeCheckoutParams(input: {
+  buyerEmail: string;
+  successUrl: string;
+  cancelUrl: string;
+  lineItems: Stripe.Checkout.SessionCreateParams.LineItem[];
+  metadata: Stripe.MetadataParam;
+  finance: TenantFinanceRow | null;
+  applicationFeeCents: number;
+}): Stripe.Checkout.SessionCreateParams {
+  const useConnect = canUseConnectDestination(input.finance);
+  const destination = input.finance?.stripe_connect_account_id || "";
+
+  const params: Stripe.Checkout.SessionCreateParams = {
+    mode: "payment",
+    customer_email: input.buyerEmail,
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    line_items: input.lineItems,
+    metadata: {
+      ...input.metadata,
+      stripe_connect_enabled: useConnect ? "true" : "false",
+      stripe_connect_account_id: destination,
+    },
+  };
+
+  if (useConnect && destination) {
+    params.payment_intent_data = {
+      application_fee_amount: input.applicationFeeCents,
+      transfer_data: {
+        destination,
+      },
+      metadata: {
+        ...input.metadata,
+        stripe_connect_enabled: "true",
+        stripe_connect_account_id: destination,
+      },
+    };
+  }
+
+  return params;
 }
 
 export async function POST(req: Request) {
@@ -129,15 +239,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const finance = await getTenantFinanceSettings(event.tenant_slug);
+    const platformFeePercent = safePercent(finance?.platform_fee_percent, 0);
+
     const ticketTypes = (event.ticket_types || []).filter(
       (ticketType) => ticketType.is_active,
     );
 
     const isGeneralAdmission = event.event_type === "general_admission";
-
-    /*
-      GENERAL ADMISSION
-    */
 
     if (isGeneralAdmission) {
       const checkoutRows = items
@@ -190,11 +299,16 @@ export async function POST(req: Request) {
         );
       }
 
-      const platformFeeCents = coverFees
-        ? calculatePlatformFeeCents(ticketTotal)
+      const buyerContributionCents = coverFees
+        ? calculateBuyerContributionCents(ticketTotal)
         : 0;
 
-      const total = ticketTotal + platformFeeCents;
+      const applicationFeeCents = calculateApplicationFeeCents(
+        ticketTotal,
+        platformFeePercent,
+      );
+
+      const total = ticketTotal + buyerContributionCents;
 
       const order = await createPendingEventOrder({
         tenantSlug: event.tenant_slug,
@@ -236,14 +350,14 @@ export async function POST(req: Request) {
           },
         }));
 
-      if (platformFeeCents > 0) {
+      if (buyerContributionCents > 0) {
         lineItems.push({
           quantity: 1,
           price_data: {
             currency: event.currency.toLowerCase(),
-            unit_amount: platformFeeCents,
+            unit_amount: buyerContributionCents,
             product_data: {
-              name: `${event.title} — Cover platform fees`,
+              name: `${event.title} — Cover processing costs`,
               description:
                 "Optional contribution to help cover platform and payment processing costs.",
             },
@@ -251,35 +365,40 @@ export async function POST(req: Request) {
         });
       }
 
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        customer_email: buyerEmail,
-        success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
-        line_items: lineItems,
-        metadata: {
-          type: "event",
+      const session = await stripe.checkout.sessions.create(
+        stripeCheckoutParams({
+          buyerEmail,
+          successUrl: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+          lineItems,
+          finance,
+          applicationFeeCents,
+          metadata: {
+            type: "event",
 
-          tenant_slug: event.tenant_slug,
+            tenant_slug: event.tenant_slug,
 
-          event_id: event.id,
-          eventId: event.id,
+            event_id: event.id,
+            eventId: event.id,
 
-          order_id: order.id,
-          orderId: order.id,
+            order_id: order.id,
+            orderId: order.id,
 
-          event_type: event.event_type,
-          event_title: event.title,
+            event_type: event.event_type,
+            event_title: event.title,
 
-          buyer_name: buyerName,
-          buyer_email: buyerEmail,
+            buyer_name: buyerName,
+            buyer_email: buyerEmail,
 
-          cover_fees: coverFees ? "true" : "false",
-          platform_fee_cents: String(platformFeeCents),
-          ticket_total_cents: String(ticketTotal),
-          amount_total_cents: String(total),
-        },
-      });
+            cover_fees: coverFees ? "true" : "false",
+            buyer_contribution_cents: String(buyerContributionCents),
+            platform_fee_percent: String(platformFeePercent),
+            platform_fee_cents: String(applicationFeeCents),
+            ticket_total_cents: String(ticketTotal),
+            amount_total_cents: String(total),
+          },
+        }),
+      );
 
       await updateEventOrderStripeSession({
         orderId: order.id,
@@ -290,9 +409,6 @@ export async function POST(req: Request) {
         url: session.url,
       });
     }
-        /*
-      RESERVED / TABLE SEATING
-    */
 
     const seats = event.seats || [];
 
@@ -367,11 +483,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const platformFeeCents = coverFees
-      ? calculatePlatformFeeCents(ticketTotal)
+    const buyerContributionCents = coverFees
+      ? calculateBuyerContributionCents(ticketTotal)
       : 0;
 
-    const total = ticketTotal + platformFeeCents;
+    const applicationFeeCents = calculateApplicationFeeCents(
+      ticketTotal,
+      platformFeePercent,
+    );
+
+    const total = ticketTotal + buyerContributionCents;
 
     const order = await createPendingEventOrder({
       tenantSlug: event.tenant_slug,
@@ -450,14 +571,14 @@ export async function POST(req: Request) {
       },
     ];
 
-    if (platformFeeCents > 0) {
+    if (buyerContributionCents > 0) {
       lineItems.push({
         quantity: 1,
         price_data: {
           currency: event.currency.toLowerCase(),
-          unit_amount: platformFeeCents,
+          unit_amount: buyerContributionCents,
           product_data: {
-            name: `${event.title} — Cover platform fees`,
+            name: `${event.title} — Cover processing costs`,
             description:
               "Optional contribution to help cover platform and payment processing costs.",
           },
@@ -465,40 +586,40 @@ export async function POST(req: Request) {
       });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
+    const session = await stripe.checkout.sessions.create(
+      stripeCheckoutParams({
+        buyerEmail,
+        successUrl: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+        lineItems,
+        finance,
+        applicationFeeCents,
+        metadata: {
+          type: "event",
 
-      customer_email: buyerEmail,
+          tenant_slug: event.tenant_slug,
 
-      success_url: `${siteUrl(req)}/e/${event.slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+          event_id: event.id,
+          eventId: event.id,
 
-      cancel_url: `${siteUrl(req)}/e/${event.slug}?checkout=cancelled`,
+          order_id: order.id,
+          orderId: order.id,
 
-      line_items: lineItems,
+          event_type: event.event_type,
+          event_title: event.title,
 
-      metadata: {
-        type: "event",
+          buyer_name: buyerName,
+          buyer_email: buyerEmail,
 
-        tenant_slug: event.tenant_slug,
-
-        event_id: event.id,
-        eventId: event.id,
-
-        order_id: order.id,
-        orderId: order.id,
-
-        event_type: event.event_type,
-        event_title: event.title,
-
-        buyer_name: buyerName,
-        buyer_email: buyerEmail,
-
-        cover_fees: coverFees ? "true" : "false",
-        platform_fee_cents: String(platformFeeCents),
-        ticket_total_cents: String(ticketTotal),
-        amount_total_cents: String(total),
-      },
-    });
+          cover_fees: coverFees ? "true" : "false",
+          buyer_contribution_cents: String(buyerContributionCents),
+          platform_fee_percent: String(platformFeePercent),
+          platform_fee_cents: String(applicationFeeCents),
+          ticket_total_cents: String(ticketTotal),
+          amount_total_cents: String(total),
+        },
+      }),
+    );
 
     await updateEventOrderStripeSession({
       orderId: order.id,
