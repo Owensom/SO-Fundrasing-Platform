@@ -27,7 +27,9 @@ type Campaign = {
 
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -36,6 +38,7 @@ function getDefaultImage(type: Campaign["type"]) {
   if (type === "squares") return "/brand/so-default-squares.png";
   if (type === "event") return "/brand/so-default-events.png";
   if (type === "auction") return "/brand/so-default-auctions.png";
+
   return "/brand/so-logo-full.png";
 }
 
@@ -60,7 +63,7 @@ function getImageStyle(campaign: Campaign): CSSProperties {
     padding: defaultImage ? 28 : 0,
     boxSizing: "border-box",
     background: defaultImage
-      ? "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)"
+      ? "linear-gradient(135deg, #ffffff 0%, #fefce8 40%, #f8fafc 100%)"
       : "#f1f5f9",
   };
 }
@@ -70,6 +73,7 @@ function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "squares") return `/s/${campaign.slug}`;
   if (campaign.type === "event") return `/e/${campaign.slug}`;
   if (campaign.type === "auction") return `/a/${campaign.slug}`;
+
   return "#";
 }
 
@@ -78,6 +82,7 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
   if (type === "auction") return "Auction";
+
   return "Campaign";
 }
 
@@ -86,28 +91,47 @@ function getTypeMeta(type: Campaign["type"]) {
   if (type === "squares") return "Pick a square to support";
   if (type === "event") return "Ticketed fundraising event";
   if (type === "auction") return "Bid, support, make an impact";
+
   return "Fundraising campaign";
 }
 
 function getTypeStyle(type: Campaign["type"]): CSSProperties {
   if (type === "raffle") {
-    return { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" };
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
   }
 
   if (type === "squares") {
-    return { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" };
+    return {
+      background: "#f5f3ff",
+      color: "#6d28d9",
+      borderColor: "#ddd6fe",
+    };
   }
 
   if (type === "event") {
-    return { background: "#ecfdf5", color: "#166534", borderColor: "#bbf7d0" };
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
   }
 
-  return { background: "#fffbeb", color: "#92400e", borderColor: "#fde68a" };
+  return {
+    background: "#fffbeb",
+    color: "#92400e",
+    borderColor: "#fde68a",
+  };
 }
 
 function getSafeAdminReturn(value?: string) {
   if (!value) return "";
+
   if (value.startsWith("/admin/")) return value;
+
   return "";
 }
 
@@ -120,19 +144,37 @@ export default async function TenantCampaignsPage({
   searchParams,
 }: PageProps) {
   const { tenantSlug } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const adminReturn = getSafeAdminReturn(resolvedSearchParams?.adminReturn);
 
-  const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
+  const resolvedSearchParams = searchParams
+    ? await searchParams
+    : undefined;
+
+  const adminReturn = getSafeAdminReturn(
+    resolvedSearchParams?.adminReturn,
+  );
+
+  const campaigns: Campaign[] =
+    await getAllCampaignsForTenant(tenantSlug);
 
   const publicCampaigns = campaigns.filter(
     (campaign) => campaign.status === "published",
   );
 
-  const raffles = publicCampaigns.filter((item) => item.type === "raffle");
-  const squares = publicCampaigns.filter((item) => item.type === "squares");
-  const events = publicCampaigns.filter((item) => item.type === "event");
-  const auctions = publicCampaigns.filter((item) => item.type === "auction");
+  const raffles = publicCampaigns.filter(
+    (item) => item.type === "raffle",
+  );
+
+  const squares = publicCampaigns.filter(
+    (item) => item.type === "squares",
+  );
+
+  const events = publicCampaigns.filter(
+    (item) => item.type === "event",
+  );
+
+  const auctions = publicCampaigns.filter(
+    (item) => item.type === "auction",
+  );
 
   const featuredCampaign = publicCampaigns[0] || null;
 
@@ -141,6 +183,8 @@ export default async function TenantCampaignsPage({
       <style>{responsiveStyles}</style>
 
       <section className="hero" style={styles.hero}>
+        <div style={styles.heroGlow} />
+
         <div style={styles.heroContent}>
           {adminReturn ? (
             <Link href={adminReturn} style={styles.adminBack}>
@@ -148,23 +192,34 @@ export default async function TenantCampaignsPage({
             </Link>
           ) : null}
 
-          <div style={styles.badge}>Fundraising campaigns</div>
+          <div style={styles.badge}>
+            SO Foundation Platform
+          </div>
 
           <h1 className="so-brand-heading title" style={styles.title}>
             Support an active campaign
           </h1>
 
           <p style={styles.subtitle}>
-            Choose from live raffles, squares, events and auctions. Every
-            campaign helps raise funds and create impact.
+            Choose from live raffles, squares, events and auctions.
+            Every campaign helps raise funds and create impact.
           </p>
 
-          <div className="heroActions" style={styles.heroActions}>
-            <Link href={`/c/${tenantSlug}/terms`} style={styles.legalLink}>
+          <div
+            className="heroActions"
+            style={styles.heroActions}
+          >
+            <Link
+              href={`/c/${tenantSlug}/terms`}
+              style={styles.primaryHeroButton}
+            >
               Terms of Use
             </Link>
 
-            <Link href={`/c/${tenantSlug}/privacy`} style={styles.legalLink}>
+            <Link
+              href={`/c/${tenantSlug}/privacy`}
+              style={styles.secondaryHeroButton}
+            >
               Privacy Policy
             </Link>
           </div>
@@ -172,8 +227,7 @@ export default async function TenantCampaignsPage({
 
         <div className="heroPanel" style={styles.heroPanel}>
           <div style={styles.heroPanelTitle}>Live now</div>
-
-          <div className="heroStats" style={styles.heroStats}>
+                    <div className="heroStats" style={styles.heroStats}>
             <HeroStat label="Campaigns" value={publicCampaigns.length} />
             <HeroStat label="Raffles" value={raffles.length} />
             <HeroStat label="Squares" value={squares.length} />
@@ -182,9 +236,16 @@ export default async function TenantCampaignsPage({
           </div>
 
           {featuredCampaign ? (
-            <Link href={getCampaignUrl(featuredCampaign)} style={styles.featuredLink}>
-              <span style={styles.featuredKicker}>Featured campaign</span>
+            <Link
+              href={getCampaignUrl(featuredCampaign)}
+              style={styles.featuredLink}
+            >
+              <span style={styles.featuredKicker}>
+                Featured campaign
+              </span>
+
               <strong>{featuredCampaign.title}</strong>
+
               <span>View campaign →</span>
             </Link>
           ) : null}
@@ -246,7 +307,9 @@ export default async function TenantCampaignsPage({
                     {campaign.title}
                   </h2>
 
-                  <div style={styles.metaLine}>{getTypeMeta(campaign.type)}</div>
+                  <div style={styles.metaLine}>
+                    {getTypeMeta(campaign.type)}
+                  </div>
 
                   {campaign.description ? (
                     <p style={styles.description}>
@@ -272,9 +335,11 @@ export default async function TenantCampaignsPage({
           <section className="trustCard" style={styles.trustCard}>
             <div>
               <p style={styles.trustKicker}>Secure fundraising</p>
+
               <h2 className="so-brand-card-title" style={styles.trustTitle}>
                 Choose a campaign and support in minutes.
               </h2>
+
               <p style={styles.trustText}>
                 Payments and campaign activity are handled through the SO
                 fundraising platform for this organiser.
@@ -292,6 +357,7 @@ export default async function TenantCampaignsPage({
                   "types",
                 )}
               />
+
               <TrustStat label="Campaign status" value="Published" />
             </div>
           </section>
@@ -368,7 +434,8 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .campaigns-page .legalLink {
+  .campaigns-page .primaryHeroButton,
+  .campaigns-page .secondaryHeroButton {
     width: 100% !important;
     justify-content: center !important;
   }
@@ -394,16 +461,17 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 32%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 30%), radial-gradient(circle at top right, rgba(22,131,248,0.10), transparent 28%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
     padding: "24px 16px 64px",
     color: "#0f172a",
   },
+
   hero: {
+    position: "relative",
     maxWidth: 1180,
     margin: "0 auto 18px",
     display: "grid",
@@ -412,14 +480,27 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.22), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.26), transparent 32%), radial-gradient(circle at bottom right, rgba(37,99,235,0.24), transparent 36%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
     boxShadow: "0 28px 70px rgba(15,23,42,0.20)",
     overflow: "hidden",
+    border: "1px solid rgba(251,191,36,0.22)",
   },
+
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "linear-gradient(135deg, rgba(251,191,36,0.16), transparent 36%), radial-gradient(circle at 18% 24%, rgba(250,204,21,0.18), transparent 28%)",
+  },
+
   heroContent: {
+    position: "relative",
+    zIndex: 1,
     minWidth: 0,
   },
+
   adminBack: {
     display: "inline-flex",
     padding: "10px 14px",
@@ -432,26 +513,31 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.16)",
     marginBottom: 14,
   },
+
   badge: {
     display: "inline-flex",
-    padding: "7px 12px",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#bfdbfe",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(251,191,36,0.14)",
+    color: "#facc15",
+    border: "1px solid rgba(251,191,36,0.38)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 16,
+    boxShadow: "0 12px 28px rgba(251,191,36,0.10)",
   },
+
   title: {
     margin: 0,
     fontSize: "clamp(48px, 7vw, 74px)",
     lineHeight: 0.94,
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
+
   subtitle: {
     margin: "18px 0 0",
     maxWidth: 760,
@@ -460,44 +546,70 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.6,
     fontWeight: 700,
   },
+
   heroActions: {
     marginTop: 24,
     display: "flex",
     flexWrap: "wrap",
     gap: 10,
   },
-  legalLink: {
+
+  primaryHeroButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.24)",
+    background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
+    color: "#111827",
+    border: "1px solid rgba(251,191,36,0.72)",
     textDecoration: "none",
     fontWeight: 950,
+    boxShadow: "0 14px 28px rgba(251,191,36,0.18)",
   },
+
+  secondaryHeroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    border: "1px solid rgba(251,191,36,0.30)",
+    textDecoration: "none",
+    fontWeight: 950,
+    backdropFilter: "blur(10px)",
+  },
+
   heroPanel: {
+    position: "relative",
+    zIndex: 1,
     display: "grid",
     gap: 16,
     padding: 18,
     borderRadius: 26,
     background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
+    border: "1px solid rgba(251,191,36,0.22)",
     alignContent: "start",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
   },
+
   heroPanelTitle: {
     fontSize: 24,
     fontWeight: 950,
     letterSpacing: "-0.04em",
   },
+
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
+
   heroStat: {
     display: "grid",
     gap: 4,
@@ -506,23 +618,28 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.10)",
     border: "1px solid rgba(255,255,255,0.16)",
   },
+
   featuredLink: {
     display: "grid",
     gap: 5,
     padding: 14,
     borderRadius: 18,
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 900,
+    border: "1px solid rgba(251,191,36,0.42)",
   },
+
   featuredKicker: {
-    color: "#2563eb",
+    color: "#b45309",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   filterStrip: {
     maxWidth: 1180,
     margin: "0 auto 18px",
@@ -533,9 +650,10 @@ const styles: Record<string, CSSProperties> = {
     padding: 12,
     borderRadius: 22,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
+    border: "1px solid #fde68a",
     boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
   },
+
   filterLabel: {
     color: "#0f172a",
     fontSize: 13,
@@ -543,17 +661,19 @@ const styles: Record<string, CSSProperties> = {
     marginRight: 4,
     whiteSpace: "nowrap",
   },
+
   filterPill: {
     display: "inline-flex",
     padding: "8px 11px",
     borderRadius: 999,
-    background: "#f8fafc",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
     fontSize: 12,
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
+
   grid: {
     maxWidth: 1180,
     margin: "0 auto",
@@ -561,6 +681,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 18,
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 330px), 1fr))",
   },
+
   card: {
     display: "grid",
     gridTemplateRows: "auto 1fr",
@@ -574,6 +695,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 38px rgba(15,23,42,0.075)",
     minHeight: 460,
   },
+
   imageWrap: {
     height: 214,
     borderRadius: 22,
@@ -582,12 +704,14 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbeafe",
     boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
   },
+
   cardBody: {
     display: "grid",
     gap: 9,
     alignContent: "start",
     minWidth: 0,
   },
+
   cardTopLine: {
     display: "flex",
     justifyContent: "space-between",
@@ -595,6 +719,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
   },
+
   typePill: {
     width: "fit-content",
     padding: "6px 10px",
@@ -603,6 +728,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   statusPill: {
     width: "fit-content",
     padding: "6px 10px",
@@ -613,6 +739,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   cardTitle: {
     margin: 0,
     fontSize: 28,
@@ -621,11 +748,13 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
   },
+
   metaLine: {
     color: "#334155",
     fontSize: 14,
     fontWeight: 950,
   },
+
   description: {
     margin: 0,
     color: "#64748b",
@@ -633,12 +762,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
+
   descriptionMuted: {
     margin: 0,
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 700,
   },
+
   cardFooter: {
     display: "flex",
     justifyContent: "space-between",
@@ -647,21 +778,25 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginTop: 8,
   },
+
   button: {
     display: "inline-flex",
     width: "fit-content",
     padding: "12px 16px",
     borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
+    background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
+    color: "#111827",
     fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+    boxShadow: "0 10px 20px rgba(251,191,36,0.18)",
+    border: "1px solid rgba(251,191,36,0.55)",
   },
+
   cardHint: {
-    color: "#2563eb",
+    color: "#b45309",
     fontSize: 13,
     fontWeight: 950,
   },
+
   trustCard: {
     maxWidth: 1180,
     margin: "20px auto 0",
@@ -671,56 +806,64 @@ const styles: Record<string, CSSProperties> = {
     padding: 24,
     borderRadius: 28,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
+    border: "1px solid #fde68a",
     boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
   },
+
   trustKicker: {
     margin: "0 0 7px",
-    color: "#2563eb",
+    color: "#b45309",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   trustTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 30,
     letterSpacing: "-0.05em",
   },
+
   trustText: {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.6,
     fontWeight: 700,
   },
+
   trustStats: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 10,
   },
+
   trustStat: {
     display: "grid",
     gap: 5,
     padding: 15,
     borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
   },
+
   emptyCard: {
     maxWidth: 1180,
     margin: "0 auto",
     padding: 28,
     borderRadius: 26,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
+    border: "1px solid #fde68a",
     boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
   },
+
   emptyTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 28,
   },
+
   muted: {
     color: "#64748b",
     lineHeight: 1.55,
