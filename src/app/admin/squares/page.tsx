@@ -2,64 +2,32 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { headers, cookies } from "next/headers";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { listSquaresGames } from "../../../../api/_lib/squares-repo";
 
-const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
-const TICKET_LOGO_IMAGE = "/brand/so-ticket-placeholder.png";
+const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
+const SQUARES_LOGO_IMAGE = "/brand/squares-square-gold.png";
 
-type RaffleItem = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string;
-  image_url: string;
-  draw_at: string | null;
-  currency: string;
-  ticket_price: number;
-  total_tickets: number;
-  sold_tickets: number;
-  remaining_tickets: number;
-  status: string;
-  created_at: string;
-  updated_at: string;
-};
+type SquaresGame = Awaited<ReturnType<typeof listSquaresGames>>[number];
 
-type ApiResponse = {
-  ok: boolean;
-  items?: RaffleItem[];
-  error?: string;
-};
+function formatMoney(
+  cents: number | null | undefined,
+  currency: string | null | undefined,
+) {
+  const safeCurrency = currency || "GBP";
+  const pounds = Number(cents || 0) / 100;
 
-async function getAdminRaffles(): Promise<RaffleItem[]> {
-  const headerStore = await headers();
-  const cookieStore = await cookies();
-
-  const host = headerStore.get("host") || "";
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join("; ");
-
-  const res = await fetch(`${protocol}://${host}/api/admin/raffles`, {
-    cache: "no-store",
-    headers: {
-      cookie: cookieHeader,
-    },
-  });
-
-  const data = (await res.json()) as ApiResponse;
-
-  if (!res.ok || !data.ok || !data.items) {
-    return [];
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: safeCurrency,
+    }).format(Number.isFinite(pounds) ? pounds : 0);
+  } catch {
+    return `${pounds.toFixed(2)} ${safeCurrency}`;
   }
-
-  return data.items;
 }
 
-function formatDrawDate(value: string | null) {
+function formatDrawDate(value: string | null | undefined) {
   if (!value) return "Not set";
 
   const date = new Date(value);
@@ -71,65 +39,56 @@ function formatDrawDate(value: string | null) {
   }).format(date);
 }
 
-function formatCurrency(value: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: currency || "GBP",
-    }).format(Number.isFinite(value) ? value : 0);
-  } catch {
-    return `${Number(value || 0).toFixed(2)} ${currency || "GBP"}`;
-  }
-}
-
-function getStatusStyle(status: string): CSSProperties {
-  const clean = status.toLowerCase();
+function getStatusStyle(status: string | null | undefined): CSSProperties {
+  const clean = String(status || "draft").toLowerCase();
 
   if (clean === "published") {
     return {
       background: "#ecfdf5",
-      borderColor: "#bbf7d0",
       color: "#166534",
+      borderColor: "#bbf7d0",
     };
   }
 
   if (clean === "closed") {
     return {
       background: "#fff7ed",
-      borderColor: "#fed7aa",
       color: "#9a3412",
+      borderColor: "#fed7aa",
     };
   }
 
   if (clean === "drawn") {
     return {
       background: "#eff6ff",
-      borderColor: "#bfdbfe",
       color: "#1d4ed8",
+      borderColor: "#bfdbfe",
     };
   }
 
   return {
     background: "#f8fafc",
-    borderColor: "#e2e8f0",
     color: "#475569",
+    borderColor: "#e2e8f0",
   };
 }
 
-function getProgressPercent(raffle: RaffleItem) {
-  if (!raffle.total_tickets || raffle.total_tickets <= 0) return 0;
-
-  return Math.min(
-    100,
-    Math.max(0, Math.round((raffle.sold_tickets / raffle.total_tickets) * 100)),
-  );
+function progressPercent(sold: number, total: number) {
+  if (!total || total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
 }
 
-function getRaisedTotal(raffle: RaffleItem) {
-  return Number(raffle.sold_tickets || 0) * Number(raffle.ticket_price || 0);
+function getSoldSquares(game: SquaresGame) {
+  return Array.isArray(game.config_json?.sold)
+    ? game.config_json.sold.length
+    : 0;
 }
 
-export default async function AdminRafflesPage() {
+function getRaisedCents(game: SquaresGame) {
+  return getSoldSquares(game) * Number(game.price_per_square_cents || 0);
+}
+
+export default async function AdminSquaresListPage() {
   const session = await auth();
 
   if (!session?.user) {
@@ -145,42 +104,49 @@ export default async function AdminRafflesPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const raffles = await getAdminRaffles();
+  const games = await listSquaresGames(tenantSlug);
 
-  const totalRaffles = raffles.length;
-  const publishedCount = raffles.filter((r) => r.status === "published").length;
-  const totalSold = raffles.reduce(
-    (sum, r) => sum + Number(r.sold_tickets || 0),
+  const totalGames = games.length;
+  const publishedCount = games.filter(
+    (game) => game.status === "published",
+  ).length;
+
+  const totalSquares = games.reduce(
+    (sum, game) => sum + Number(game.total_squares || 0),
     0,
   );
-  const totalRemaining = raffles.reduce(
-    (sum, r) => sum + Number(r.remaining_tickets || 0),
+
+  const soldSquares = games.reduce((sum, game) => sum + getSoldSquares(game), 0);
+  const remainingSquares = Math.max(totalSquares - soldSquares, 0);
+
+  const totalRaisedCents = games.reduce(
+    (sum, game) => sum + getRaisedCents(game),
     0,
   );
-  const totalRaised = raffles.reduce((sum, r) => sum + getRaisedTotal(r), 0);
-  const dashboardCurrency = raffles[0]?.currency || "GBP";
+
+  const dashboardCurrency = games[0]?.currency || "GBP";
 
   return (
-    <main className="raffles-admin-page" style={styles.page}>
+    <main className="squares-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-     <section className="raffles-admin-hero" style={styles.commandHero}>
+      <section className="squares-admin-hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.heroPillRow}>
             <Link href="/admin" style={styles.heroBackPill}>
               ← Back to admin
             </Link>
 
-            <span style={styles.heroSectionPill}>Raffle workspace</span>
+            <span style={styles.heroSectionPill}>Squares workspace</span>
           </div>
 
-          <h1 className="so-brand-heading raffles-admin-title" style={styles.title}>
-            Manage raffles
+          <h1 className="so-brand-heading squares-admin-title" style={styles.title}>
+            Manage squares
           </h1>
 
-          <p className="raffles-admin-subtitle" style={styles.subtitle}>
-            Create, manage and monitor premium raffles with live sales tracking,
-            draw readiness and public campaign controls.
+          <p className="squares-admin-subtitle" style={styles.subtitle}>
+            Run premium squares campaigns with live availability, supporter
+            tracking and draw-ready fundraising controls.
           </p>
 
           <p style={styles.tenant}>
@@ -188,26 +154,26 @@ export default async function AdminRafflesPage() {
           </p>
         </div>
 
-        <div className="raffles-hero-stats" style={styles.heroStats}>
-          <HeroStat label="Total raffles" value={totalRaffles} />
+        <div className="squares-hero-stats" style={styles.heroStats}>
+          <HeroStat label="Total games" value={totalGames} />
           <HeroStat label="Published" value={publishedCount} />
-          <HeroStat label="Tickets sold" value={totalSold} />
+          <HeroStat label="Squares sold" value={soldSquares} />
           <HeroStat
             label="Tracked raised"
-            value={formatCurrency(totalRaised, dashboardCurrency)}
+            value={formatMoney(totalRaisedCents, dashboardCurrency)}
           />
         </div>
 
-        <nav className="raffles-admin-nav" style={styles.nav}>
+        <nav className="squares-admin-nav" style={styles.nav}>
           <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
 
-          <div style={styles.navButtonActive}>Raffles</div>
-
-          <Link href="/admin/squares" style={styles.navButton}>
-            Squares
+          <Link href="/admin/raffles" style={styles.navButton}>
+            Raffles
           </Link>
+
+          <div style={styles.navButtonActive}>Squares</div>
 
           <Link href="/admin/events" style={styles.navButton}>
             Events
@@ -218,23 +184,23 @@ export default async function AdminRafflesPage() {
           </Link>
 
           <Link
-            href={`/c/${tenantSlug}?adminReturn=/admin/raffles`}
+            href={`/c/${tenantSlug}?adminReturn=/admin/squares`}
             style={styles.navButton}
           >
             Public site
           </Link>
 
-          <Link href="/admin/raffles/new" style={styles.createButton}>
-            + Create raffle
+          <Link href="/admin/squares/new" style={styles.createButton}>
+            + Create squares
           </Link>
         </nav>
       </section>
 
-      <section className="raffles-stats-grid" style={styles.statsGrid}>
+      <section className="squares-stats-grid" style={styles.statsGrid}>
         <StatCard
-          label="Total raffles"
-          value={totalRaffles}
-          image={TICKET_LOGO_IMAGE}
+          label="Total square games"
+          value={totalGames}
+          image={SQUARES_LOGO_IMAGE}
           accent="#1683f8"
           tint="#eff6ff"
         />
@@ -248,8 +214,8 @@ export default async function AdminRafflesPage() {
         />
 
         <StatCard
-          label="Tickets sold"
-          value={totalSold}
+          label="Squares sold"
+          value={soldSquares}
           icon="↗"
           accent="#7c3aed"
           tint="#f5f3ff"
@@ -257,7 +223,7 @@ export default async function AdminRafflesPage() {
 
         <StatCard
           label="Raised"
-          value={formatCurrency(totalRaised, dashboardCurrency)}
+          value={formatMoney(totalRaisedCents, dashboardCurrency)}
           icon="£"
           accent="#d97706"
           tint="#fffbeb"
@@ -265,44 +231,47 @@ export default async function AdminRafflesPage() {
 
         <StatCard
           label="Remaining"
-          value={totalRemaining}
+          value={remainingSquares}
           icon="•"
           accent="#64748b"
           tint="#f8fafc"
         />
       </section>
 
-      {raffles.length === 0 ? (
+      {games.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>No raffles yet</h2>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>
+            No squares games yet
+          </h2>
 
-          <p style={styles.muted}>
-            Create your first raffle and publish it when ready.
-          </p>
+          <p style={styles.muted}>Create your first squares game.</p>
 
-          <Link href="/admin/raffles/new" style={styles.createButton}>
-            Create raffle
+          <Link href="/admin/squares/new" style={styles.createButton}>
+            + Create squares
           </Link>
         </section>
       ) : (
         <section style={styles.list}>
-          {raffles.map((raffle) => {
-            const progress = getProgressPercent(raffle);
-            const statusStyle = getStatusStyle(raffle.status);
-            const raised = getRaisedTotal(raffle);
+          {games.map((game) => {
+            const sold = getSoldSquares(game);
+            const total = Number(game.total_squares || 0);
+            const remaining = Math.max(total - sold, 0);
+            const progress = progressPercent(sold, total);
+            const raisedCents = getRaisedCents(game);
+            const statusStyle = getStatusStyle(game.status);
 
             return (
-              <article key={raffle.id} className="raffle-card" style={styles.card}>
-                <div className="raffle-card-top" style={styles.cardTop}>
-                  <div className="raffle-image-wrap" style={styles.imageWrap}>
+              <article key={game.id} className="squares-card" style={styles.card}>
+                <div className="squares-card-top" style={styles.cardTop}>
+                  <div className="squares-image-wrap" style={styles.imageWrap}>
                     <img
-                      src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
-                      alt={raffle.title || "Raffle"}
+                      src={game.image_url || DEFAULT_SQUARES_IMAGE}
+                      alt={game.title || "Squares"}
                       style={{
                         ...styles.image,
-                        objectFit: raffle.image_url ? "cover" : "contain",
-                        padding: raffle.image_url ? 0 : 10,
-                        background: raffle.image_url
+                        objectFit: game.image_url ? "cover" : "contain",
+                        padding: game.image_url ? 0 : 10,
+                        background: game.image_url
                           ? "#f1f5f9"
                           : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
                         boxSizing: "border-box",
@@ -311,21 +280,21 @@ export default async function AdminRafflesPage() {
                   </div>
 
                   <div style={styles.cardMain}>
-                    <div className="raffle-card-header" style={styles.cardHeader}>
+                    <div className="squares-card-header" style={styles.cardHeader}>
                       <div style={{ minWidth: 0 }}>
-                        <h2 className="raffle-card-title" style={styles.cardTitle}>
-                          {raffle.title}
+                        <h2 className="squares-card-title" style={styles.cardTitle}>
+                          {game.title || "Untitled squares game"}
                         </h2>
 
-                        <p style={styles.slug}>/r/{raffle.slug}</p>
+                        <p style={styles.slug}>/s/{game.slug}</p>
                       </div>
 
                       <div style={{ ...styles.status, ...statusStyle }}>
-                        {raffle.status}
+                        {game.status}
                       </div>
                     </div>
 
-                    <div className="raffle-headline-grid" style={styles.headlineGrid}>
+                    <div className="squares-headline-grid" style={styles.headlineGrid}>
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Sales progress</div>
                         <div style={styles.headlineValue}>{progress}% sold</div>
@@ -334,41 +303,28 @@ export default async function AdminRafflesPage() {
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Raised so far</div>
                         <div style={styles.headlineValue}>
-                          {formatCurrency(raised, raffle.currency)}
+                          {formatMoney(raisedCents, game.currency)}
                         </div>
                       </div>
                     </div>
 
-                    {raffle.description ? (
-                      <p style={styles.description}>
-                        {raffle.description.length > 130
-                          ? `${raffle.description.slice(0, 130)}…`
-                          : raffle.description}
-                      </p>
-                    ) : null}
-
-                    <div className="raffle-detail-grid" style={styles.detailGrid}>
+                    <div className="squares-detail-grid" style={styles.detailGrid}>
                       <InfoBlock
                         label="Price"
-                        value={formatCurrency(
-                          raffle.ticket_price,
-                          raffle.currency,
+                        value={formatMoney(
+                          game.price_per_square_cents,
+                          game.currency,
                         )}
                       />
 
                       <InfoBlock
                         label="Draw date"
-                        value={formatDrawDate(raffle.draw_at)}
+                        value={formatDrawDate(game.draw_at)}
                       />
 
-                      <InfoBlock label="Total" value={raffle.total_tickets} />
-
-                      <InfoBlock label="Sold" value={raffle.sold_tickets} />
-
-                      <InfoBlock
-                        label="Remaining"
-                        value={raffle.remaining_tickets}
-                      />
+                      <InfoBlock label="Total" value={total} />
+                      <InfoBlock label="Sold" value={sold} />
+                      <InfoBlock label="Remaining" value={remaining} />
                     </div>
 
                     <div style={styles.progressSection}>
@@ -387,21 +343,31 @@ export default async function AdminRafflesPage() {
                       </div>
                     </div>
 
-                    <div className="raffle-card-actions" style={styles.actions}>
+                    <div className="squares-card-actions" style={styles.actions}>
                       <Link
-                        href={`/admin/raffles/${raffle.id}`}
+                        href={`/admin/squares/${game.id}`}
                         style={styles.primaryLink}
                       >
                         Open details
                       </Link>
 
                       <Link
-                        href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
+                        href={`/s/${game.slug}?adminReturn=/admin/squares/${game.id}`}
                         target="_blank"
                         style={styles.secondaryLink}
                       >
                         View campaign
                       </Link>
+
+                      <form
+                        action={`/api/admin/squares/${game.id}/delete`}
+                        method="post"
+                        style={styles.deleteForm}
+                      >
+                        <button type="submit" style={styles.deleteButton}>
+                          Delete
+                        </button>
+                      </form>
                     </div>
                   </div>
                 </div>
@@ -416,7 +382,7 @@ export default async function AdminRafflesPage() {
 
 function HeroStat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="raffles-hero-stat" style={styles.heroStat}>
+    <div className="squares-hero-stat" style={styles.heroStat}>
       <div style={styles.heroStatLabel}>{label}</div>
       <div style={styles.heroStatValue}>{value}</div>
     </div>
@@ -440,7 +406,7 @@ function StatCard({
 }) {
   return (
     <div
-      className="raffles-stat-card"
+      className="squares-stat-card"
       style={{
         ...styles.statCard,
         borderTopColor: accent,
@@ -449,7 +415,7 @@ function StatCard({
       <div style={styles.statTop}>
         <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
-          <div className="raffles-stat-value" style={styles.statValue}>
+          <div className="squares-stat-value" style={styles.statValue}>
             {value}
           </div>
         </div>
@@ -494,180 +460,188 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const responsiveStyles = `
-  .raffles-admin-page,
-  .raffles-admin-page * {
-    box-sizing: border-box;
+.squares-admin-page,
+.squares-admin-page * {
+  box-sizing: border-box;
+}
+
+.squares-admin-page {
+  overflow-x: hidden;
+}
+
+.squares-admin-page section,
+.squares-admin-page article,
+.squares-admin-page div,
+.squares-admin-page a,
+.squares-admin-page nav {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .squares-admin-hero {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "content"
+      "stats"
+      "nav" !important;
+    padding: 24px !important;
   }
 
-  .raffles-admin-page {
-    overflow-x: hidden;
+  .squares-hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .raffles-admin-page section,
-  .raffles-admin-page article,
-  .raffles-admin-page div,
-  .raffles-admin-page a,
-  .raffles-admin-page nav {
-    min-width: 0;
+  .squares-admin-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
-  @media (max-width: 980px) {
-    .raffles-admin-hero {
-      grid-template-columns: 1fr !important;
-      grid-template-areas:
-        "content"
-        "stats"
-        "nav" !important;
-      padding: 24px !important;
-    }
+  .squares-card-top {
+    grid-template-columns: 160px minmax(0, 1fr) !important;
+  }
+}
 
-    .raffles-hero-stats {
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    }
-
-    .raffles-admin-nav {
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    }
-
-    .raffle-card-top {
-      grid-template-columns: 160px minmax(0, 1fr) !important;
-    }
+@media (max-width: 640px) {
+  .squares-admin-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 18px 12px 46px !important;
   }
 
-  @media (max-width: 640px) {
-    .raffles-admin-page {
-      width: 100% !important;
-      max-width: 100% !important;
-      padding: 18px 12px 46px !important;
-    }
-
-    .raffles-admin-hero {
-      padding: 20px !important;
-      border-radius: 28px !important;
-    }
-
-    .raffles-admin-title {
-      font-size: clamp(44px, 14vw, 60px) !important;
-      line-height: 0.96 !important;
-      letter-spacing: -0.075em !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .raffles-admin-subtitle {
-      font-size: 16px !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .raffles-admin-nav {
-      display: grid !important;
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      gap: 10px !important;
-    }
-
-    .raffles-admin-nav a,
-    .raffles-admin-nav div {
-      width: 100% !important;
-      min-height: 48px !important;
-      padding: 12px 14px !important;
-      text-align: center !important;
-      font-size: 14px !important;
-    }
-
-    .raffles-admin-nav a:first-child,
-    .raffles-admin-nav a:last-child {
-      grid-column: 1 / -1 !important;
-    }
-
-    .raffles-hero-stats,
-    .raffles-stats-grid {
-      grid-template-columns: 1fr !important;
-      gap: 12px !important;
-    }
-
-    .raffles-stat-card,
-    .raffles-hero-stat {
-      min-height: 112px !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-    }
-
-    .raffles-stat-value {
-      font-size: clamp(36px, 12vw, 52px) !important;
-      line-height: 1 !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .raffle-card {
-      padding: 16px !important;
-      border-radius: 26px !important;
-    }
-
-    .raffle-card-top {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 16px !important;
-    }
-
-    .raffle-image-wrap {
-      width: 100% !important;
-      height: auto !important;
-      aspect-ratio: 16 / 9 !important;
-      border-radius: 22px !important;
-    }
-
-    .raffle-card-header {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-    }
-
-    .raffle-card-title {
-      font-size: clamp(30px, 10vw, 42px) !important;
-      line-height: 1.05 !important;
-      letter-spacing: -0.055em !important;
-    }
-
-    .raffle-headline-grid,
-    .raffle-detail-grid {
-      grid-template-columns: 1fr !important;
-    }
-
-    .raffle-card-actions {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-    }
-
-    .raffle-card-actions a {
-      width: 100% !important;
-      min-height: 50px !important;
-      font-size: 16px !important;
-    }
+  .squares-admin-hero {
+    padding: 20px !important;
+    border-radius: 28px !important;
   }
 
-  @media (max-width: 380px) {
-    .raffles-admin-page {
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-    }
-
-    .raffles-admin-title {
-      font-size: 40px !important;
-    }
-
-    .raffles-admin-nav {
-      grid-template-columns: 1fr !important;
-    }
-
-    .raffles-admin-nav a,
-    .raffles-admin-nav div {
-      grid-column: auto !important;
-    }
-
-    .raffles-stat-value {
-      font-size: 36px !important;
-    }
+  .squares-admin-title {
+    font-size: clamp(44px, 14vw, 60px) !important;
+    line-height: 0.96 !important;
+    letter-spacing: -0.075em !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
   }
+
+  .squares-admin-subtitle {
+    font-size: 16px !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .squares-admin-nav {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .squares-admin-nav a,
+  .squares-admin-nav div {
+    width: 100% !important;
+    min-height: 48px !important;
+    padding: 12px 14px !important;
+    text-align: center !important;
+    font-size: 14px !important;
+    white-space: normal !important;
+  }
+
+  .squares-admin-nav a:first-child,
+  .squares-admin-nav a:last-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  .squares-hero-stats,
+  .squares-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .squares-stat-card,
+  .squares-hero-stat {
+    min-height: 112px !important;
+    border-radius: 24px !important;
+    padding: 18px !important;
+  }
+
+  .squares-stat-value {
+    font-size: clamp(36px, 12vw, 52px) !important;
+    line-height: 1 !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .squares-card {
+    padding: 16px !important;
+    border-radius: 26px !important;
+  }
+
+  .squares-card-top {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .squares-image-wrap {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9 !important;
+    border-radius: 22px !important;
+  }
+
+  .squares-card-header {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .squares-card-title {
+    font-size: clamp(30px, 10vw, 42px) !important;
+    line-height: 1.05 !important;
+    letter-spacing: -0.055em !important;
+  }
+
+  .squares-headline-grid,
+  .squares-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .squares-card-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .squares-card-actions a,
+  .squares-card-actions form,
+  .squares-card-actions button {
+    width: 100% !important;
+  }
+
+  .squares-card-actions a,
+  .squares-card-actions button {
+    min-height: 50px !important;
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .squares-admin-page {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .squares-admin-title {
+    font-size: 40px !important;
+  }
+
+  .squares-admin-nav {
+    grid-template-columns: 1fr !important;
+  }
+
+  .squares-admin-nav a,
+  .squares-admin-nav div {
+    grid-column: auto !important;
+  }
+
+  .squares-stat-value {
+    font-size: 36px !important;
+  }
+}
 `;
 
 const styles: Record<string, CSSProperties> = {
@@ -1024,13 +998,6 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  description: {
-    color: "#475569",
-    fontSize: 14,
-    lineHeight: 1.5,
-    margin: "10px 0 0",
-  },
-
   detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
@@ -1119,5 +1086,23 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
     boxShadow: "none",
+  },
+
+  deleteForm: {
+    margin: 0,
+  },
+
+  deleteButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 800,
+    fontSize: 14,
+    cursor: "pointer",
   },
 };
