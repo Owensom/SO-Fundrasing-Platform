@@ -11,6 +11,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2023-10-16",
 });
 
+type ConnectAccountRow = {
+  stripe_connect_account_id: string | null;
+};
+
 function getBaseUrl(request: Request) {
   const envUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -24,45 +28,73 @@ function getBaseUrl(request: Request) {
   return new URL(request.url).origin;
 }
 
-export async function GET(request: Request) {
-  try {
-    const session = await auth();
+async function requireTenantSlug() {
+  const session = await auth();
 
-    if (!session?.user) {
-      return NextResponse.redirect(
-        new URL("/admin/login", getBaseUrl(request)),
+  if (!session?.user) {
+    return null;
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return null;
+  }
+
+  return tenantSlug;
+}
+
+export async function GET(request: Request) {
+  const baseUrl = getBaseUrl(request);
+
+  try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { ok: false, error: "Missing STRIPE_SECRET_KEY." },
+        { status: 500 },
       );
     }
 
-    const tenantSlug = await getTenantSlugFromHeaders();
+    const tenantSlug = await requireTenantSlug();
 
-    const result = await query(
+    if (!tenantSlug) {
+      return NextResponse.redirect(
+        new URL("/admin/login?error=tenant_access_denied", baseUrl),
+      );
+    }
+
+    const result = (await query(
       `
-        SELECT stripe_connect_account_id
-        FROM tenants
-        WHERE slug = $1
+        SELECT
+          COALESCE(
+            ts.stripe_connect_account_id,
+            t.stripe_connect_account_id
+          ) AS stripe_connect_account_id
+        FROM tenants t
+        LEFT JOIN tenant_settings ts
+          ON ts.tenant_slug = t.slug
+        WHERE t.slug = $1
         LIMIT 1
       `,
       [tenantSlug],
-    );
+    )) as ConnectAccountRow[];
 
-    const accountId = result.rows[0]?.stripe_connect_account_id as
-      | string
-      | null
-      | undefined;
+    const accountId = result[0]?.stripe_connect_account_id || null;
 
     if (!accountId) {
       return NextResponse.redirect(
-        new URL("/api/admin/stripe/connect/create", getBaseUrl(request)),
+        new URL("/api/stripe/connect/create", baseUrl),
       );
     }
 
-    const baseUrl = getBaseUrl(request);
-
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${baseUrl}/api/admin/stripe/connect/refresh`,
-      return_url: `${baseUrl}/admin/billing?stripe_connect=return`,
+      refresh_url: `${baseUrl}/api/stripe/connect/refresh`,
+      return_url: `${baseUrl}/admin/settings/billing?stripe_connect=return`,
       type: "account_onboarding",
     });
 
