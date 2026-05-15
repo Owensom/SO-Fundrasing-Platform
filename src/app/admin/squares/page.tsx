@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
