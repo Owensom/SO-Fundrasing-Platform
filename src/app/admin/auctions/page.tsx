@@ -174,20 +174,38 @@ export default async function AdminAuctionsPage({
     <main className="auctions-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section className="auctions-admin-header" style={styles.header}>
-        <div style={styles.headerText}>
-          <div style={styles.badge}>Admin dashboard</div>
+      <section className="auctions-admin-hero" style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.heroPillRow}>
+            <Link href="/admin" style={styles.heroBackPill}>
+              ← Back to admin
+            </Link>
 
-          <h1 className="auctions-admin-title" style={styles.title}>
+            <span style={styles.heroSectionPill}>Auctions workspace</span>
+          </div>
+
+          <h1 className="so-brand-heading auctions-admin-title" style={styles.title}>
             Manage auctions
           </h1>
 
           <p className="auctions-admin-subtitle" style={styles.subtitle}>
-            Tenant: <strong style={{ color: "#0f172a" }}>{tenantSlug}</strong>
+            Manage premium auction campaigns, status tools, public pages and
+            bidding windows from one fundraising workspace.
+          </p>
+
+          <p style={styles.tenant}>
+            Tenant: <strong>{tenantSlug}</strong>
           </p>
         </div>
 
-        <div className="auctions-admin-nav" style={styles.nav}>
+        <div className="auctions-hero-stats" style={styles.heroStats}>
+          <HeroStat label="Total auctions" value={auctions.length} />
+          <HeroStat label="Published" value={published} />
+          <HeroStat label="Draft" value={draft} />
+          <HeroStat label="Closed" value={closed} />
+        </div>
+
+        <nav className="auctions-admin-nav" style={styles.nav}>
           <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
@@ -216,10 +234,9 @@ export default async function AdminAuctionsPage({
           <Link href="/admin/auctions/new" style={styles.createButton}>
             + Create auction
           </Link>
-        </div>
+        </nav>
       </section>
-
-      {searchParams?.saved ? (
+            {searchParams?.saved ? (
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
@@ -443,6 +460,15 @@ export default async function AdminAuctionsPage({
   );
 }
 
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="auctions-hero-stat" style={styles.heroStat}>
+      <div style={styles.heroStatLabel}>{label}</div>
+      <div style={styles.heroStatValue}>{value}</div>
+    </div>
+  );
+}
+
 function StatusButton({
   auctionId,
   status,
@@ -552,269 +578,380 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const responsiveStyles = `
-  .auctions-admin-page,
-  .auctions-admin-page * {
-    box-sizing: border-box;
+.auctions-admin-page,
+.auctions-admin-page * {
+  box-sizing: border-box;
+}
+
+.auctions-admin-page {
+  overflow-x: hidden;
+}
+
+.auctions-admin-page section,
+.auctions-admin-page article,
+.auctions-admin-page div,
+.auctions-admin-page a,
+.auctions-admin-page nav {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .auctions-admin-hero {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "content"
+      "stats"
+      "nav" !important;
+    padding: 24px !important;
   }
 
+  .auctions-hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .auctions-admin-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .auctions-card-top {
+    grid-template-columns: 160px minmax(0, 1fr) !important;
+  }
+}
+@media (max-width: 640px) {
   .auctions-admin-page {
-    overflow-x: hidden;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 18px 12px 46px !important;
   }
 
-  @media (max-width: 980px) {
-    .auctions-admin-header {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 18px !important;
-    }
-
-    .auctions-admin-nav {
-      justify-content: flex-start !important;
-      flex-wrap: wrap !important;
-      width: 100% !important;
-    }
-
-    .auctions-card-top {
-      grid-template-columns: 160px minmax(0, 1fr) !important;
-    }
+  .auctions-admin-hero {
+    padding: 20px !important;
+    border-radius: 28px !important;
   }
 
-  @media (max-width: 640px) {
-    .auctions-admin-page {
-      width: 100% !important;
-      max-width: 100% !important;
-      padding: 22px 12px 46px !important;
-    }
-
-    .auctions-admin-title {
-      font-size: clamp(42px, 13vw, 58px) !important;
-      line-height: 0.98 !important;
-      letter-spacing: -0.065em !important;
-      white-space: normal !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .auctions-admin-subtitle {
-      font-size: 17px !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .auctions-admin-nav {
-      display: grid !important;
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      gap: 10px !important;
-    }
-
-    .auctions-admin-nav a,
-    .auctions-admin-nav div {
-      width: 100% !important;
-      min-height: 50px !important;
-      padding: 12px 14px !important;
-      text-align: center !important;
-      font-size: 15px !important;
-      white-space: normal !important;
-    }
-
-    .auctions-admin-nav a:first-child {
-      grid-column: 1 / -1 !important;
-    }
-
-    .auctions-admin-nav a:last-child {
-      grid-column: 1 / -1 !important;
-    }
-
-    .auctions-stats-grid {
-      grid-template-columns: 1fr !important;
-      gap: 12px !important;
-    }
-
-    .auctions-stat-card {
-      min-height: 112px !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-    }
-
-    .auctions-stat-value {
-      font-size: clamp(36px, 12vw, 52px) !important;
-      line-height: 1 !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .auctions-card {
-      padding: 16px !important;
-      border-radius: 26px !important;
-    }
-
-    .auctions-card-top {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 16px !important;
-    }
-
-    .auctions-image-wrap {
-      width: 100% !important;
-      height: auto !important;
-      aspect-ratio: 16 / 9 !important;
-      border-radius: 22px !important;
-    }
-
-    .auctions-card-header {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-    }
-
-    .auctions-card-title {
-      font-size: clamp(30px, 10vw, 42px) !important;
-      line-height: 1.05 !important;
-      letter-spacing: -0.055em !important;
-    }
-
-    .auctions-headline-grid,
-    .auctions-detail-grid {
-      grid-template-columns: 1fr !important;
-    }
-
-    .auctions-tool-section {
-      padding: 14px !important;
-    }
-
-    .auctions-tool-actions,
-    .auctions-card-actions {
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-    }
-
-    .auctions-tool-actions form,
-    .auctions-tool-actions button,
-    .auctions-card-actions a,
-    .auctions-delete-form {
-      width: 100% !important;
-    }
-
-    .auctions-tool-actions button,
-    .auctions-card-actions a {
-      min-height: 50px !important;
-      font-size: 16px !important;
-    }
+  .auctions-admin-title {
+    font-size: clamp(44px, 14vw, 60px) !important;
+    line-height: 0.96 !important;
+    letter-spacing: -0.075em !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
   }
 
-  @media (max-width: 380px) {
-    .auctions-admin-page {
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-    }
-
-    .auctions-admin-title {
-      font-size: 40px !important;
-    }
-
-    .auctions-admin-nav {
-      grid-template-columns: 1fr !important;
-    }
-
-    .auctions-admin-nav a,
-    .auctions-admin-nav div {
-      grid-column: auto !important;
-    }
-
-    .auctions-stat-value {
-      font-size: 36px !important;
-    }
+  .auctions-admin-subtitle {
+    font-size: 16px !important;
+    overflow-wrap: anywhere !important;
   }
+
+  .auctions-admin-nav {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .auctions-admin-nav a,
+  .auctions-admin-nav div {
+    width: 100% !important;
+    min-height: 48px !important;
+    padding: 12px 14px !important;
+    text-align: center !important;
+    font-size: 14px !important;
+    white-space: normal !important;
+  }
+
+  .auctions-admin-nav a:first-child,
+  .auctions-admin-nav a:last-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  .auctions-hero-stats,
+  .auctions-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .auctions-stat-card,
+  .auctions-hero-stat {
+    min-height: 112px !important;
+    border-radius: 24px !important;
+    padding: 18px !important;
+  }
+
+  .auctions-stat-value {
+    font-size: clamp(36px, 12vw, 52px) !important;
+    line-height: 1 !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .auctions-card {
+    padding: 16px !important;
+    border-radius: 26px !important;
+  }
+
+  .auctions-card-top {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .auctions-image-wrap {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9 !important;
+    border-radius: 22px !important;
+  }
+
+  .auctions-card-header {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .auctions-card-title {
+    font-size: clamp(30px, 10vw, 42px) !important;
+    line-height: 1.05 !important;
+    letter-spacing: -0.055em !important;
+  }
+
+  .auctions-headline-grid,
+  .auctions-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .auctions-tool-section {
+    padding: 14px !important;
+  }
+
+  .auctions-tool-actions,
+  .auctions-card-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .auctions-tool-actions form,
+  .auctions-tool-actions button,
+  .auctions-card-actions a,
+  .auctions-delete-form {
+    width: 100% !important;
+  }
+
+  .auctions-tool-actions button,
+  .auctions-card-actions a {
+    min-height: 50px !important;
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .auctions-admin-page {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .auctions-admin-title {
+    font-size: 40px !important;
+  }
+
+  .auctions-admin-nav {
+    grid-template-columns: 1fr !important;
+  }
+
+  .auctions-admin-nav a,
+  .auctions-admin-nav div {
+    grid-column: auto !important;
+  }
+
+  .auctions-stat-value {
+    font-size: 36px !important;
+  }
+}
 `;
 
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 1180,
+    maxWidth: 1240,
     margin: "0 auto",
-    padding: "32px 16px 56px",
-    background: "#f8fafc",
+    padding: "28px 16px 56px",
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
     minHeight: "100vh",
     overflowX: "hidden",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 22,
-    gap: 16,
-    flexWrap: "nowrap",
+
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
+    gridTemplateAreas: `
+      "content stats"
+      "nav nav"
+    `,
+    gap: 22,
+    padding: 30,
+    borderRadius: 34,
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    overflow: "hidden",
   },
-  headerText: {
-    flex: "0 1 auto",
+
+  heroContent: {
+    gridArea: "content",
     minWidth: 0,
   },
-  badge: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#e0f2fe",
-    color: "#0369a1",
-    fontSize: 13,
-    fontWeight: 800,
-    marginBottom: 10,
-  },
-  title: {
-    margin: 0,
-    fontSize: 34,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-    color: "#0f172a",
-    whiteSpace: "nowrap",
-  },
-  subtitle: {
-    margin: "10px 0 0",
-    color: "#64748b",
-    fontSize: 15,
-  },
-  nav: {
+
+  heroPillRow: {
     display: "flex",
     gap: 8,
-    flexWrap: "nowrap",
-    justifyContent: "flex-end",
-    alignItems: "flex-start",
-    minWidth: 0,
+    flexWrap: "wrap",
+    marginBottom: 16,
   },
+
+  heroBackPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
+    fontSize: 12,
+    fontWeight: 950,
+    textDecoration: "none",
+  },
+
+  heroSectionPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.12)",
+    color: "#facc15",
+    border: "1px solid rgba(251,191,36,0.32)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  title: {
+    margin: 0,
+    fontSize: "clamp(54px, 7vw, 84px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.085em",
+    color: "#ffffff",
+    overflowWrap: "anywhere",
+  },
+
+  subtitle: {
+    margin: "18px 0 0",
+    maxWidth: 760,
+    color: "#dbeafe",
+    fontSize: 18,
+    lineHeight: 1.6,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  tenant: {
+    margin: "16px 0 0",
+    color: "#bfdbfe",
+    fontSize: 14,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  heroStats: {
+    gridArea: "stats",
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 12,
+    alignContent: "start",
+  },
+
+  heroStat: {
+    display: "grid",
+    gap: 6,
+    padding: 18,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    backdropFilter: "blur(12px)",
+  },
+
+  heroStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  heroStatValue: {
+    color: "#ffffff",
+    fontSize: 30,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  nav: {
+    gridArea: "nav",
+    display: "grid",
+    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+    gap: 10,
+    width: "100%",
+  },
+
   navButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 13px",
+    minHeight: 46,
+    padding: "11px 14px",
     borderRadius: 9999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(251,191,36,0.34)",
     textDecoration: "none",
-    fontWeight: 800,
-    whiteSpace: "nowrap",
+    fontWeight: 900,
+    textAlign: "center",
+    lineHeight: 1.2,
   },
+
   navButtonActive: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 13px",
+    minHeight: 46,
+    padding: "11px 14px",
     borderRadius: 9999,
-    background: "#0f172a",
-    color: "#ffffff",
-    fontWeight: 900,
-    whiteSpace: "nowrap",
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(255,255,255,0.55)",
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
   },
+
   createButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "13px 14px",
+    minHeight: 46,
+    padding: "11px 16px",
     borderRadius: 9999,
-    background: "#1683f8",
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 800,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-    whiteSpace: "nowrap",
+    fontWeight: 950,
+    boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
+    textAlign: "center",
+    lineHeight: 1.2,
   },
+
   successBox: {
     padding: 12,
     background: "#dcfce7",
@@ -824,6 +961,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 12,
     fontWeight: 900,
   },
+
   errorBox: {
     padding: 12,
     background: "#fee2e2",
@@ -833,12 +971,14 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 12,
     fontWeight: 900,
   },
+
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 12,
     marginBottom: 22,
   },
+
   statCard: {
     padding: 16,
     borderRadius: 18,
@@ -848,12 +988,14 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
+
   statTop: {
     display: "flex",
     justifyContent: "space-between",
     gap: 14,
     alignItems: "flex-start",
   },
+
   statIcon: {
     width: 46,
     height: 46,
@@ -866,11 +1008,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     flexShrink: 0,
   },
+
   statLabel: {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 800,
   },
+
   statValue: {
     color: "#0f172a",
     fontSize: 28,
@@ -878,6 +1022,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
     letterSpacing: "-0.03em",
   },
+
   emptyCard: {
     padding: 28,
     border: "1px solid #e2e8f0",
@@ -885,28 +1030,33 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
+
   muted: {
     color: "#64748b",
     margin: "8px 0 18px",
   },
+
   list: {
     display: "grid",
     gap: 16,
   },
+
   card: {
     border: "1px solid #e2e8f0",
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 18,
     background: "#ffffff",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     minWidth: 0,
   },
+
   cardTop: {
     display: "grid",
     gridTemplateColumns: "104px minmax(0, 1fr)",
     gap: 16,
     alignItems: "start",
   },
+
   imageWrap: {
     width: 104,
     height: 104,
@@ -916,14 +1066,17 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
   },
+
   image: {
     width: "100%",
     height: "100%",
     display: "block",
   },
+
   cardMain: {
     minWidth: 0,
   },
+
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -931,6 +1084,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+
   cardTitle: {
     margin: 0,
     fontSize: 22,
@@ -938,12 +1092,14 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.02em",
     wordBreak: "break-word",
   },
+
   slug: {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: 14,
     wordBreak: "break-word",
   },
+
   status: {
     padding: "7px 11px",
     borderRadius: 9999,
@@ -953,12 +1109,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     width: "fit-content",
   },
+
   headlineGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 10,
     marginTop: 14,
   },
+
   headlineBox: {
     padding: "13px 14px",
     borderRadius: 16,
@@ -966,11 +1124,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   headlineLabel: {
     fontSize: 12,
     color: "#64748b",
     fontWeight: 800,
   },
+
   headlineValue: {
     marginTop: 4,
     color: "#0f172a",
@@ -979,18 +1139,21 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.03em",
     overflowWrap: "anywhere",
   },
+
   description: {
     color: "#475569",
     fontSize: 14,
     lineHeight: 1.5,
     margin: "10px 0 0",
   },
+
   detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
     marginTop: 16,
   },
+
   detail: {
     padding: 12,
     borderRadius: 14,
@@ -998,17 +1161,20 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   detailLabel: {
     fontSize: 12,
     color: "#64748b",
     fontWeight: 800,
   },
+
   detailValue: {
     marginTop: 4,
     color: "#0f172a",
     fontWeight: 900,
     wordBreak: "break-word",
   },
+
   toolSection: {
     marginTop: 16,
     padding: 14,
@@ -1016,20 +1182,24 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
+
   toolTitle: {
     fontWeight: 900,
     color: "#0f172a",
     fontSize: 14,
   },
+
   toolActions: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     marginTop: 12,
   },
+
   statusForm: {
     margin: 0,
   },
+
   statusToolButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1040,12 +1210,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
   },
+
   actions: {
     display: "flex",
     gap: 10,
     marginTop: 18,
     flexWrap: "wrap",
   },
+
   primaryLink: {
     display: "inline-flex",
     alignItems: "center",
@@ -1058,6 +1230,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
   },
+
   secondaryLink: {
     display: "inline-flex",
     alignItems: "center",
@@ -1072,9 +1245,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     boxShadow: "none",
   },
+
   deleteForm: {
     margin: 0,
   },
+
   deleteButton: {
     display: "inline-flex",
     alignItems: "center",
