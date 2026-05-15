@@ -27,9 +27,7 @@ type Campaign = {
 
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
-
   if (!Number.isFinite(number)) return 50;
-
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -38,7 +36,6 @@ function getDefaultImage(type: Campaign["type"]) {
   if (type === "squares") return "/brand/so-default-squares.png";
   if (type === "event") return "/brand/so-default-events.png";
   if (type === "auction") return "/brand/so-default-auctions.png";
-
   return "/brand/so-logo-full.png";
 }
 
@@ -63,7 +60,7 @@ function getImageStyle(campaign: Campaign): CSSProperties {
     padding: defaultImage ? 28 : 0,
     boxSizing: "border-box",
     background: defaultImage
-      ? "linear-gradient(135deg, #ffffff 0%, #fefce8 40%, #f8fafc 100%)"
+      ? "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)"
       : "#f1f5f9",
   };
 }
@@ -73,7 +70,6 @@ function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "squares") return `/s/${campaign.slug}`;
   if (campaign.type === "event") return `/e/${campaign.slug}`;
   if (campaign.type === "auction") return `/a/${campaign.slug}`;
-
   return "#";
 }
 
@@ -82,7 +78,6 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
   if (type === "auction") return "Auction";
-
   return "Campaign";
 }
 
@@ -91,47 +86,28 @@ function getTypeMeta(type: Campaign["type"]) {
   if (type === "squares") return "Pick a square to support";
   if (type === "event") return "Ticketed fundraising event";
   if (type === "auction") return "Bid, support, make an impact";
-
   return "Fundraising campaign";
 }
 
 function getTypeStyle(type: Campaign["type"]): CSSProperties {
   if (type === "raffle") {
-    return {
-      background: "#eff6ff",
-      color: "#1d4ed8",
-      borderColor: "#bfdbfe",
-    };
+    return { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" };
   }
 
   if (type === "squares") {
-    return {
-      background: "#f5f3ff",
-      color: "#6d28d9",
-      borderColor: "#ddd6fe",
-    };
+    return { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" };
   }
 
   if (type === "event") {
-    return {
-      background: "#ecfdf5",
-      color: "#166534",
-      borderColor: "#bbf7d0",
-    };
+    return { background: "#ecfdf5", color: "#166534", borderColor: "#bbf7d0" };
   }
 
-  return {
-    background: "#fffbeb",
-    color: "#92400e",
-    borderColor: "#fde68a",
-  };
+  return { background: "#fffbeb", color: "#92400e", borderColor: "#fde68a" };
 }
 
 function getSafeAdminReturn(value?: string) {
   if (!value) return "";
-
   if (value.startsWith("/admin/")) return value;
-
   return "";
 }
 
@@ -144,37 +120,19 @@ export default async function TenantCampaignsPage({
   searchParams,
 }: PageProps) {
   const { tenantSlug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const adminReturn = getSafeAdminReturn(resolvedSearchParams?.adminReturn);
 
-  const resolvedSearchParams = searchParams
-    ? await searchParams
-    : undefined;
-
-  const adminReturn = getSafeAdminReturn(
-    resolvedSearchParams?.adminReturn,
-  );
-
-  const campaigns: Campaign[] =
-    await getAllCampaignsForTenant(tenantSlug);
+  const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
 
   const publicCampaigns = campaigns.filter(
     (campaign) => campaign.status === "published",
   );
 
-  const raffles = publicCampaigns.filter(
-    (item) => item.type === "raffle",
-  );
-
-  const squares = publicCampaigns.filter(
-    (item) => item.type === "squares",
-  );
-
-  const events = publicCampaigns.filter(
-    (item) => item.type === "event",
-  );
-
-  const auctions = publicCampaigns.filter(
-    (item) => item.type === "auction",
-  );
+  const raffles = publicCampaigns.filter((item) => item.type === "raffle");
+  const squares = publicCampaigns.filter((item) => item.type === "squares");
+  const events = publicCampaigns.filter((item) => item.type === "event");
+  const auctions = publicCampaigns.filter((item) => item.type === "auction");
 
   const featuredCampaign = publicCampaigns[0] || null;
 
@@ -192,23 +150,18 @@ export default async function TenantCampaignsPage({
             </Link>
           ) : null}
 
-          <div style={styles.badge}>
-            SO Foundation Platform
-          </div>
+          <div style={styles.badge}>SO Foundation Platform</div>
 
           <h1 className="so-brand-heading title" style={styles.title}>
             Support an active campaign
           </h1>
 
           <p style={styles.subtitle}>
-            Choose from live raffles, squares, events and auctions.
-            Every campaign helps raise funds and create impact.
+            Choose from live raffles, squares, events and auctions. Every
+            campaign helps raise funds and create impact.
           </p>
 
-          <div
-            className="heroActions"
-            style={styles.heroActions}
-          >
+          <div className="heroActions" style={styles.heroActions}>
             <Link
               href={`/c/${tenantSlug}/terms`}
               style={styles.primaryHeroButton}
@@ -266,11 +219,26 @@ export default async function TenantCampaignsPage({
         <>
           <section className="filterStrip" style={styles.filterStrip}>
             <span style={styles.filterLabel}>Browse live campaigns</span>
-            <span style={styles.filterPill}>All {publicCampaigns.length}</span>
-            <span style={styles.filterPill}>Raffles {raffles.length}</span>
-            <span style={styles.filterPill}>Squares {squares.length}</span>
-            <span style={styles.filterPill}>Events {events.length}</span>
-            <span style={styles.filterPill}>Auctions {auctions.length}</span>
+
+            <span style={styles.filterPill}>
+              All {publicCampaigns.length}
+            </span>
+
+            <span style={styles.filterPill}>
+              Raffles {raffles.length}
+            </span>
+
+            <span style={styles.filterPill}>
+              Squares {squares.length}
+            </span>
+
+            <span style={styles.filterPill}>
+              Events {events.length}
+            </span>
+
+            <span style={styles.filterPill}>
+              Auctions {auctions.length}
+            </span>
           </section>
 
           <section className="grid" style={styles.grid}>
@@ -303,7 +271,10 @@ export default async function TenantCampaignsPage({
                     <span style={styles.statusPill}>Live</span>
                   </div>
 
-                  <h2 className="so-brand-card-title" style={styles.cardTitle}>
+                  <h2
+                    className="so-brand-card-title"
+                    style={styles.cardTitle}
+                  >
                     {campaign.title}
                   </h2>
 
@@ -324,8 +295,13 @@ export default async function TenantCampaignsPage({
                   )}
 
                   <div style={styles.cardFooter}>
-                    <span style={styles.button}>View campaign</span>
-                    <span style={styles.cardHint}>Support now →</span>
+                    <span style={styles.button}>
+                      View campaign
+                    </span>
+
+                    <span style={styles.cardHint}>
+                      Support now →
+                    </span>
                   </div>
                 </div>
               </Link>
@@ -334,9 +310,14 @@ export default async function TenantCampaignsPage({
 
           <section className="trustCard" style={styles.trustCard}>
             <div>
-              <p style={styles.trustKicker}>Secure fundraising</p>
+              <p style={styles.trustKicker}>
+                Secure fundraising
+              </p>
 
-              <h2 className="so-brand-card-title" style={styles.trustTitle}>
+              <h2
+                className="so-brand-card-title"
+                style={styles.trustTitle}
+              >
                 Choose a campaign and support in minutes.
               </h2>
 
@@ -346,7 +327,10 @@ export default async function TenantCampaignsPage({
               </p>
             </div>
 
-            <div className="trustStats" style={styles.trustStats}>
+            <div
+              className="trustStats"
+              style={styles.trustStats}
+            >
               <TrustStat
                 label="Live campaign types"
                 value={pluralise(
@@ -358,7 +342,10 @@ export default async function TenantCampaignsPage({
                 )}
               />
 
-              <TrustStat label="Campaign status" value="Published" />
+              <TrustStat
+                label="Campaign status"
+                value="Published"
+              />
             </div>
           </section>
         </>
@@ -367,7 +354,13 @@ export default async function TenantCampaignsPage({
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: number }) {
+function HeroStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
   return (
     <div style={styles.heroStat}>
       <span>{label}</span>
@@ -376,7 +369,13 @@ function HeroStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function TrustStat({ label, value }: { label: string; value: string }) {
+function TrustStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <div style={styles.trustStat}>
       <span>{label}</span>
@@ -450,22 +449,13 @@ const responsiveStyles = `
     flex-wrap: nowrap !important;
     -webkit-overflow-scrolling: touch !important;
   }
-
-  .campaigns-page .campaignCard {
-    padding: 14px !important;
-    border-radius: 24px !important;
-  }
-
-  .campaigns-page .cardImage {
-    height: 210px !important;
-  }
 }
 `;
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 30%), radial-gradient(circle at top right, rgba(22,131,248,0.10), transparent 28%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.08), transparent 28%), radial-gradient(circle at top right, rgba(22,131,248,0.10), transparent 28%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
     padding: "24px 16px 64px",
     color: "#0f172a",
   },
@@ -480,11 +470,11 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.26), transparent 32%), radial-gradient(circle at bottom right, rgba(37,99,235,0.24), transparent 36%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), radial-gradient(circle at bottom right, rgba(37,99,235,0.22), transparent 36%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
     boxShadow: "0 28px 70px rgba(15,23,42,0.20)",
     overflow: "hidden",
-    border: "1px solid rgba(251,191,36,0.22)",
+    border: "1px solid rgba(251,191,36,0.18)",
   },
 
   heroGlow: {
@@ -492,7 +482,7 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "linear-gradient(135deg, rgba(251,191,36,0.16), transparent 36%), radial-gradient(circle at 18% 24%, rgba(250,204,21,0.18), transparent 28%)",
+      "linear-gradient(135deg, rgba(251,191,36,0.12), transparent 36%), radial-gradient(circle at 18% 24%, rgba(250,204,21,0.14), transparent 28%)",
   },
 
   heroContent: {
@@ -578,7 +568,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "rgba(255,255,255,0.10)",
     color: "#ffffff",
-    border: "1px solid rgba(251,191,36,0.30)",
+    border: "1px solid rgba(251,191,36,0.26)",
     textDecoration: "none",
     fontWeight: 950,
     backdropFilter: "blur(10px)",
@@ -592,7 +582,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 18,
     borderRadius: 26,
     background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(251,191,36,0.22)",
+    border: "1px solid rgba(251,191,36,0.20)",
     alignContent: "start",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
@@ -629,7 +619,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 900,
-    border: "1px solid rgba(251,191,36,0.42)",
+    border: "1px solid rgba(251,191,36,0.38)",
   },
 
   featuredKicker: {
@@ -650,7 +640,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 12,
     borderRadius: 22,
     background: "#ffffff",
-    border: "1px solid #fde68a",
+    border: "1px solid #dbeafe",
     boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
   },
 
@@ -666,9 +656,9 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     padding: "8px 11px",
     borderRadius: 999,
-    background: "#fffbeb",
-    color: "#92400e",
-    border: "1px solid #fde68a",
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
     fontSize: 12,
     fontWeight: 900,
     whiteSpace: "nowrap",
@@ -784,15 +774,14 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     padding: "12px 16px",
     borderRadius: 999,
-    background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
-    color: "#111827",
+    background: "#1683f8",
+    color: "#ffffff",
     fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(251,191,36,0.18)",
-    border: "1px solid rgba(251,191,36,0.55)",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
 
   cardHint: {
-    color: "#b45309",
+    color: "#2563eb",
     fontSize: 13,
     fontWeight: 950,
   },
@@ -806,13 +795,13 @@ const styles: Record<string, CSSProperties> = {
     padding: 24,
     borderRadius: 28,
     background: "#ffffff",
-    border: "1px solid #fde68a",
+    border: "1px solid #dbeafe",
     boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
   },
 
   trustKicker: {
     margin: "0 0 7px",
-    color: "#b45309",
+    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -844,8 +833,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 5,
     padding: 15,
     borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
   },
 
   emptyCard: {
@@ -854,7 +843,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 28,
     borderRadius: 26,
     background: "#ffffff",
-    border: "1px solid #fde68a",
+    border: "1px solid #dbeafe",
     boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
   },
 
