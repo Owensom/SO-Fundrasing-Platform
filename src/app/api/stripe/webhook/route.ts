@@ -14,6 +14,36 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
+async function syncStripeConnectAccount(account: Stripe.Account) {
+  const onboardingComplete = Boolean(
+    account.details_submitted && account.charges_enabled,
+  );
+
+  await query(
+    `
+    update tenants
+    set
+      stripe_connect_charges_enabled = $2,
+      stripe_connect_payouts_enabled = $3,
+      stripe_connect_details_submitted = $4,
+      stripe_connect_onboarding_complete = $5,
+      stripe_connect_country = $6,
+      stripe_connect_default_currency = $7,
+      stripe_connect_last_synced_at = now()
+    where stripe_connect_account_id = $1
+    `,
+    [
+      account.id,
+      Boolean(account.charges_enabled),
+      Boolean(account.payouts_enabled),
+      Boolean(account.details_submitted),
+      onboardingComplete,
+      account.country || null,
+      account.default_currency || null,
+    ],
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -49,6 +79,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (event.type === "account.updated") {
+      const account = event.data.object as Stripe.Account;
+
+      await syncStripeConnectAccount(account);
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        accountId: account.id,
+        chargesEnabled: Boolean(account.charges_enabled),
+        payoutsEnabled: Boolean(account.payouts_enabled),
+        detailsSubmitted: Boolean(account.details_submitted),
+      });
+    }
+
     if (event.type !== "checkout.session.completed") {
       return NextResponse.json({ ok: true, ignored: event.type });
     }
@@ -80,14 +125,12 @@ export async function POST(request: NextRequest) {
 
     const name = session.customer_details?.name || null;
 
-    /*
-      EVENTS
-      Event checkout does not use raffle/squares reservation tokens.
-      It uses event_orders.id as the order reference.
-    */
     if (type === "event") {
       const orderId = String(
-        metadata.order_id || metadata.orderId || session.client_reference_id || "",
+        metadata.order_id ||
+          metadata.orderId ||
+          session.client_reference_id ||
+          "",
       ).trim();
 
       const eventId = String(metadata.event_id || metadata.eventId || "").trim();
