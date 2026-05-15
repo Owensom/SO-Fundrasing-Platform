@@ -14,7 +14,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
-async function syncStripeConnectAccount(account: Stripe.Account) {
+async function syncStripeConnectAccountById(accountId: string) {
+  const account = await stripe.accounts.retrieve(accountId);
+
   const onboardingComplete = Boolean(
     account.details_submitted && account.charges_enabled,
   );
@@ -41,6 +43,59 @@ async function syncStripeConnectAccount(account: Stripe.Account) {
       account.country || null,
       account.default_currency || null,
     ],
+  );
+
+  return account;
+}
+
+function getConnectedAccountIdFromEvent(event: Stripe.Event) {
+  const eventAny = event as any;
+
+  if (typeof event.account === "string" && event.account.trim()) {
+    return event.account.trim();
+  }
+
+  if (
+    eventAny.related_object &&
+    eventAny.related_object.type === "v2.core.account" &&
+    typeof eventAny.related_object.id === "string"
+  ) {
+    return eventAny.related_object.id.trim();
+  }
+
+  if (
+    eventAny.related_object &&
+    eventAny.related_object.type === "account" &&
+    typeof eventAny.related_object.id === "string"
+  ) {
+    return eventAny.related_object.id.trim();
+  }
+
+  const object = event.data?.object as any;
+
+  if (object?.id && typeof object.id === "string" && object.id.startsWith("acct_")) {
+    return object.id.trim();
+  }
+
+  if (
+    object?.account &&
+    typeof object.account === "string" &&
+    object.account.startsWith("acct_")
+  ) {
+    return object.account.trim();
+  }
+
+  return "";
+}
+
+function isStripeConnectAccountEvent(eventType: string) {
+  return (
+    eventType === "account.updated" ||
+    eventType === "v2.core.account[requirements].updated" ||
+    eventType === "v2.core.account[identity].updated" ||
+    eventType === "v2.core.account[configuration.merchant].capability_status_updated" ||
+    eventType === "v2.core.account[configuration.recipient].capability_status_updated" ||
+    eventType === "v2.account_link.returned"
   );
 }
 
@@ -79,10 +134,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (event.type === "account.updated") {
-      const account = event.data.object as Stripe.Account;
+    if (isStripeConnectAccountEvent(event.type)) {
+      const accountId = getConnectedAccountIdFromEvent(event);
 
-      await syncStripeConnectAccount(account);
+      if (!accountId) {
+        console.error("Stripe Connect webhook missing account id", {
+          eventType: event.type,
+          eventId: event.id,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          event: event.type,
+          reason: "Missing connected account id",
+        });
+      }
+
+      const account = await syncStripeConnectAccountById(accountId);
 
       return NextResponse.json({
         ok: true,
@@ -91,6 +160,9 @@ export async function POST(request: NextRequest) {
         chargesEnabled: Boolean(account.charges_enabled),
         payoutsEnabled: Boolean(account.payouts_enabled),
         detailsSubmitted: Boolean(account.details_submitted),
+        onboardingComplete: Boolean(
+          account.details_submitted && account.charges_enabled,
+        ),
       });
     }
 
