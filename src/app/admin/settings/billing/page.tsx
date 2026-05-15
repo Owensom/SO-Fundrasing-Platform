@@ -228,6 +228,7 @@ async function updateTenantBillingSettings(formData: FormData) {
   revalidatePath("/admin");
   redirect("/admin/settings/billing?saved=1");
 }
+
 export default async function AdminBillingSettingsPage() {
   const tenantSlug = await requireCurrentTenantAccess();
   const settings = await getTenantSettings(tenantSlug);
@@ -313,11 +314,7 @@ export default async function AdminBillingSettingsPage() {
           </p>
 
           <div className="heroActions" style={styles.heroActions}>
-            <Link
-              href="/admin"
-              className="heroButton"
-              style={styles.heroButton}
-            >
+            <Link href="/admin" className="heroButton" style={styles.heroButton}>
               ← Back to dashboard
             </Link>
 
@@ -331,101 +328,62 @@ export default async function AdminBillingSettingsPage() {
           </div>
         </div>
 
-        <div
-          className="heroSummaryGrid"
-          style={styles.heroSummaryGrid}
-        >
+        <div className="heroSummaryGrid" style={styles.heroSummaryGrid}>
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Current plan</div>
-
-            <div style={styles.summaryValue}>
-              {currentTier.name}
-            </div>
-
+            <div style={styles.summaryValue}>{currentTier.name}</div>
             <div style={styles.summarySub}>
               {currentTier.monthly} · {currentTier.fee} platform fee
             </div>
           </div>
 
           <div style={styles.summaryCard}>
-            <div style={styles.summaryLabel}>
-              Platform commission
-            </div>
-
+            <div style={styles.summaryLabel}>Platform commission</div>
             <div style={styles.summaryValue}>
               {platformFeePercent.toFixed(1)}%
             </div>
-
             <div style={styles.summarySub}>
               Applied before Stripe processing fees
             </div>
           </div>
 
           <div style={styles.summaryCard}>
-            <div style={styles.summaryLabel}>
-              Buyer contributions
-            </div>
-
+            <div style={styles.summaryLabel}>Stripe payouts</div>
             <div
-              style={enabledStyle(
-                formState.buyer_fee_contributions_enabled,
-              )}
+              style={enabledStyle(Boolean(formState.stripe_connect_account_id))}
             >
-              {enabledLabel(
-                formState.buyer_fee_contributions_enabled,
-              )}
+              {formState.stripe_connect_account_id ? "Started" : "Not started"}
             </div>
-
             <div style={styles.summarySub}>
-              Optional supporter processing-cost contribution
+              Tenant payout onboarding through Stripe Connect
             </div>
           </div>
         </div>
       </section>
 
-      <section
-        className="contentGrid"
-        style={styles.contentGrid}
-      >
-        <form
-          action={updateTenantBillingSettings}
-          style={styles.formCard}
-        >
+      <section className="contentGrid" style={styles.contentGrid}>
+        <form action={updateTenantBillingSettings} style={styles.formCard}>
           <div style={styles.cardHeader}>
             <div>
-              <div style={styles.cardEyebrow}>
-                Subscription setup
-              </div>
-
-              <h2 style={styles.cardTitle}>
-                Tenant billing configuration
-              </h2>
+              <div style={styles.cardEyebrow}>Subscription setup</div>
+              <h2 style={styles.cardTitle}>Tenant billing configuration</h2>
             </div>
 
-            <div style={styles.liveBadge}>
-              LIVE SETTINGS
-            </div>
+            <div style={styles.liveBadge}>LIVE SETTINGS</div>
           </div>
 
           <div className="formGrid" style={styles.formGrid}>
             <label style={styles.field}>
-              <span style={styles.fieldLabel}>
-                Subscription tier
-              </span>
-
+              <span style={styles.fieldLabel}>Subscription tier</span>
               <select
                 name="subscription_tier"
                 defaultValue={formState.subscription_tier}
                 style={styles.select}
               >
-                <option value="community">
-                  Community — Free + 7%
-                </option>
-
+                <option value="community">Community — Free + 7%</option>
                 <option value="professional">
                   Professional — £25/month + 4%
                 </option>
-
                 <option value="foundation">
                   Foundation — £99/month + 2%
                 </option>
@@ -433,10 +391,7 @@ export default async function AdminBillingSettingsPage() {
             </label>
 
             <label style={styles.field}>
-              <span style={styles.fieldLabel}>
-                Platform fee percentage
-              </span>
-
+              <span style={styles.fieldLabel}>Platform fee percentage</span>
               <input
                 type="number"
                 name="platform_fee_percent"
@@ -449,10 +404,7 @@ export default async function AdminBillingSettingsPage() {
             </label>
 
             <label style={styles.field}>
-              <span style={styles.fieldLabel}>
-                Subscription status
-              </span>
-
+              <span style={styles.fieldLabel}>Subscription status</span>
               <select
                 name="subscription_status"
                 defaultValue={formState.subscription_status}
@@ -466,10 +418,7 @@ export default async function AdminBillingSettingsPage() {
             </label>
 
             <label style={styles.field}>
-              <span style={styles.fieldLabel}>
-                Stripe customer ID
-              </span>
-
+              <span style={styles.fieldLabel}>Stripe customer ID</span>
               <input
                 type="text"
                 name="stripe_customer_id"
@@ -478,11 +427,9 @@ export default async function AdminBillingSettingsPage() {
                 style={styles.input}
               />
             </label>
-                        <label style={styles.field}>
-              <span style={styles.fieldLabel}>
-                Stripe subscription ID
-              </span>
 
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Stripe subscription ID</span>
               <input
                 type="text"
                 name="stripe_subscription_id"
@@ -493,10 +440,7 @@ export default async function AdminBillingSettingsPage() {
             </label>
 
             <label style={styles.field}>
-              <span style={styles.fieldLabel}>
-                Stripe Connect account
-              </span>
-
+              <span style={styles.fieldLabel}>Stripe Connect account</span>
               <input
                 type="text"
                 name="stripe_connect_account_id"
@@ -507,10 +451,7 @@ export default async function AdminBillingSettingsPage() {
             </label>
           </div>
 
-          <div
-            className="stripeConnectPanel"
-            style={styles.stripeConnectPanel}
-          >
+          <div className="stripeConnectPanel" style={styles.stripeConnectPanel}>
             <div style={styles.stripeConnectCopy}>
               <div style={styles.stripeConnectKicker}>Stripe Connect</div>
 
@@ -519,9 +460,9 @@ export default async function AdminBillingSettingsPage() {
               </h3>
 
               <p style={styles.stripeConnectText}>
-                Create or continue the Stripe-hosted onboarding flow so this
-                tenant can later receive automatic payouts through their own
-                connected account.
+                Create or continue Stripe-hosted onboarding so this tenant can
+                later receive automatic payouts through their own connected
+                Stripe account.
               </p>
 
               {formState.stripe_connect_account_id ? (
@@ -533,7 +474,7 @@ export default async function AdminBillingSettingsPage() {
             </div>
 
             <Link
-              href="/api/admin/stripe/connect/onboard"
+              href="/api/admin/stripe/connect/create"
               className="connectStripeButton"
               style={styles.connectStripeButton}
             >
@@ -545,10 +486,7 @@ export default async function AdminBillingSettingsPage() {
 
           <div style={styles.toggleSection}>
             <div>
-              <div style={styles.toggleTitle}>
-                Platform capabilities
-              </div>
-
+              <div style={styles.toggleTitle}>Platform capabilities</div>
               <div style={styles.toggleText}>
                 Enable or disable premium operational functionality for this
                 tenant.
@@ -560,16 +498,11 @@ export default async function AdminBillingSettingsPage() {
                 <input
                   type="checkbox"
                   name="buyer_fee_contributions_enabled"
-                  defaultChecked={
-                    formState.buyer_fee_contributions_enabled
-                  }
+                  defaultChecked={formState.buyer_fee_contributions_enabled}
                 />
 
                 <div>
-                  <div style={styles.toggleCardTitle}>
-                    Buyer contributions
-                  </div>
-
+                  <div style={styles.toggleCardTitle}>Buyer contributions</div>
                   <div style={styles.toggleCardText}>
                     Allow optional supporter contribution toward processing
                     costs.
@@ -586,10 +519,7 @@ export default async function AdminBillingSettingsPage() {
                   />
 
                   <div>
-                    <div style={styles.toggleCardTitle}>
-                      {item.label}
-                    </div>
-
+                    <div style={styles.toggleCardTitle}>{item.label}</div>
                     <div style={styles.toggleCardText}>
                       {enabledLabel(item.enabled)}
                     </div>
@@ -608,13 +538,8 @@ export default async function AdminBillingSettingsPage() {
 
         <section style={styles.sideColumn}>
           <article style={styles.sideCard}>
-            <div style={styles.cardEyebrow}>
-              Subscription tiers
-            </div>
-
-            <h2 style={styles.cardTitle}>
-              Platform positioning
-            </h2>
+            <div style={styles.cardEyebrow}>Subscription tiers</div>
+            <h2 style={styles.cardTitle}>Platform positioning</h2>
 
             <div style={styles.tiersList}>
               {(
@@ -625,31 +550,18 @@ export default async function AdminBillingSettingsPage() {
               ).map(([key, value]) => (
                 <div
                   key={key}
-                  style={
-                    key === tier
-                      ? styles.activeTierCard
-                      : styles.tierCard
-                  }
+                  style={key === tier ? styles.activeTierCard : styles.tierCard}
                 >
                   <div style={styles.tierTop}>
                     <div>
-                      <div style={styles.tierName}>
-                        {value.name}
-                      </div>
-
-                      <div style={styles.tierPrice}>
-                        {value.monthly}
-                      </div>
+                      <div style={styles.tierName}>{value.name}</div>
+                      <div style={styles.tierPrice}>{value.monthly}</div>
                     </div>
 
-                    <div style={styles.tierFee}>
-                      {value.fee}
-                    </div>
+                    <div style={styles.tierFee}>{value.fee}</div>
                   </div>
 
-                  <p style={styles.tierDescription}>
-                    {value.description}
-                  </p>
+                  <p style={styles.tierDescription}>{value.description}</p>
 
                   <ul style={styles.featureList}>
                     {value.features.map((feature) => (
@@ -665,10 +577,7 @@ export default async function AdminBillingSettingsPage() {
 
           <article style={styles.sideCard}>
             <div style={styles.cardEyebrow}>Connect status</div>
-
-            <h2 style={styles.cardTitle}>
-              Stripe readiness
-            </h2>
+            <h2 style={styles.cardTitle}>Stripe readiness</h2>
 
             <div style={styles.statusList}>
               <div className="statusRow" style={styles.statusRow}>
@@ -682,17 +591,13 @@ export default async function AdminBillingSettingsPage() {
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Customer ID</span>
-                <strong>
-                  {formState.stripe_customer_id ? "Saved" : "Not saved"}
-                </strong>
+                <strong>{formState.stripe_customer_id ? "Saved" : "Not saved"}</strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Subscription ID</span>
                 <strong>
-                  {formState.stripe_subscription_id
-                    ? "Saved"
-                    : "Not saved"}
+                  {formState.stripe_subscription_id ? "Saved" : "Not saved"}
                 </strong>
               </div>
             </div>
@@ -700,13 +605,13 @@ export default async function AdminBillingSettingsPage() {
 
           <article style={styles.sideCard}>
             <div style={styles.cardEyebrow}>Important note</div>
-
-            <h2 style={styles.cardTitle}>No restrictions yet</h2>
+            <h2 style={styles.cardTitle}>No payment routing changed yet</h2>
 
             <p style={styles.sideText}>
-              These settings are editable and saved to the tenant settings
-              table. Feature restrictions are not enforced yet, so this remains
-              a safe configuration layer while finance and Stripe are completed.
+              Stripe Connect onboarding is now available, but checkout routing
+              has not been changed. Current raffle, square, event and auction
+              payments remain on the existing working flow until Connect is
+              tested.
             </p>
           </article>
         </section>
@@ -793,6 +698,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -805,7 +711,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     overflowX: "hidden",
   },
-
   hero: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
@@ -819,11 +724,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
   },
-
-  heroContent: {
-    minWidth: 0,
-  },
-
+  heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
     padding: "7px 12px",
@@ -837,7 +738,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 16,
   },
-
   title: {
     margin: 0,
     fontSize: "clamp(48px, 7vw, 74px)",
@@ -845,7 +745,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
   },
-
   subtitle: {
     margin: "18px 0 0",
     maxWidth: 780,
@@ -854,21 +753,18 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.6,
     fontWeight: 700,
   },
-
   tenantLine: {
     margin: "14px 0 0",
     color: "#bfdbfe",
     fontWeight: 850,
     overflowWrap: "anywhere",
   },
-
   heroActions: {
     marginTop: 24,
     display: "grid",
     gridTemplateColumns: "repeat(2, max-content)",
     gap: 10,
   },
-
   heroButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -882,7 +778,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
   },
-
   heroButtonLight: {
     display: "inline-flex",
     alignItems: "center",
@@ -896,14 +791,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid rgba(255,255,255,0.16)",
   },
-
   heroSummaryGrid: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 12,
     alignContent: "start",
   },
-
   summaryCard: {
     display: "grid",
     gap: 7,
@@ -913,7 +806,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.16)",
     minWidth: 0,
   },
-
   summaryLabel: {
     color: "#bfdbfe",
     fontSize: 12,
@@ -921,7 +813,6 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
-
   summaryValue: {
     color: "#ffffff",
     fontSize: 28,
@@ -929,7 +820,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.055em",
     overflowWrap: "anywhere",
   },
-
   summarySub: {
     color: "#dbeafe",
     fontSize: 13,
@@ -937,14 +827,12 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
-
   contentGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
     gap: 16,
     alignItems: "start",
   },
-
   formCard: {
     display: "grid",
     gap: 18,
@@ -955,14 +843,12 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-
   cardHeader: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "start",
   },
-
   cardEyebrow: {
     color: "#2563eb",
     fontSize: 12,
@@ -971,7 +857,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 7,
   },
-
   cardTitle: {
     margin: 0,
     color: "#0f172a",
@@ -979,7 +864,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
-
   liveBadge: {
     display: "inline-flex",
     alignItems: "center",
@@ -994,25 +878,13 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     width: "fit-content",
   },
-
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
   },
-
-  field: {
-    display: "grid",
-    gap: 7,
-    minWidth: 0,
-  },
-
-  fieldLabel: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
+  field: { display: "grid", gap: 7, minWidth: 0 },
+  fieldLabel: { color: "#334155", fontSize: 13, fontWeight: 950 },
   input: {
     width: "100%",
     minWidth: 0,
@@ -1025,7 +897,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxSizing: "border-box",
   },
-
   select: {
     width: "100%",
     minWidth: 0,
@@ -1038,7 +909,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxSizing: "border-box",
   },
-
   stripeConnectPanel: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) max-content",
@@ -1051,11 +921,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(99,91,255,0.22)",
     minWidth: 0,
   },
-
-  stripeConnectCopy: {
-    minWidth: 0,
-  },
-
+  stripeConnectCopy: { minWidth: 0 },
   stripeConnectKicker: {
     color: "#635bff",
     fontSize: 12,
@@ -1064,7 +930,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 5,
   },
-
   stripeConnectTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1073,7 +938,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
   },
-
   stripeConnectText: {
     margin: "7px 0 0",
     color: "#475569",
@@ -1081,7 +945,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-
   stripeConnectAccount: {
     margin: "8px 0 0",
     color: "#334155",
@@ -1090,7 +953,6 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     wordBreak: "break-word",
   },
-
   connectStripeButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1105,33 +967,24 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
-
-  toggleSection: {
-    display: "grid",
-    gap: 14,
-    paddingTop: 4,
-  },
-
+  toggleSection: { display: "grid", gap: 14, paddingTop: 4 },
   toggleTitle: {
     color: "#0f172a",
     fontSize: 20,
     fontWeight: 950,
     letterSpacing: "-0.035em",
   },
-
   toggleText: {
     marginTop: 5,
     color: "#64748b",
     lineHeight: 1.5,
     fontWeight: 700,
   },
-
   toggleGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
-
   toggleCard: {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
@@ -1144,13 +997,11 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     minWidth: 0,
   },
-
   toggleCardTitle: {
     color: "#0f172a",
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
-
   toggleCardText: {
     marginTop: 3,
     color: "#64748b",
@@ -1159,13 +1010,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-
   submitRow: {
     display: "grid",
     gridTemplateColumns: "max-content",
     justifyContent: "end",
   },
-
   saveButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1180,13 +1029,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     boxShadow: "0 12px 24px rgba(22,131,248,0.18)",
   },
-
-  sideColumn: {
-    display: "grid",
-    gap: 16,
-    minWidth: 0,
-  },
-
+  sideColumn: { display: "grid", gap: 16, minWidth: 0 },
   sideCard: {
     display: "grid",
     gap: 14,
@@ -1197,12 +1040,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-
-  tiersList: {
-    display: "grid",
-    gap: 12,
-  },
-
+  tiersList: { display: "grid", gap: 12 },
   tierCard: {
     display: "grid",
     gap: 10,
@@ -1212,7 +1050,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
-
   activeTierCard: {
     display: "grid",
     gap: 10,
@@ -1222,14 +1059,12 @@ const styles: Record<string, CSSProperties> = {
     border: "2px solid #1683f8",
     minWidth: 0,
   },
-
   tierTop: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 10,
     alignItems: "start",
   },
-
   tierName: {
     color: "#0f172a",
     fontSize: 20,
@@ -1237,14 +1072,12 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
   },
-
   tierPrice: {
     marginTop: 3,
     color: "#64748b",
     fontSize: 13,
     fontWeight: 850,
   },
-
   tierFee: {
     display: "inline-flex",
     alignItems: "center",
@@ -1259,7 +1092,6 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     width: "fit-content",
   },
-
   tierDescription: {
     margin: 0,
     color: "#475569",
@@ -1267,7 +1099,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-
   featureList: {
     display: "grid",
     gap: 6,
@@ -1278,11 +1109,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 750,
   },
-
-  featureItem: {
-    paddingLeft: 2,
-  },
-
+  featureItem: { paddingLeft: 2 },
   sideText: {
     margin: 0,
     color: "#64748b",
@@ -1290,12 +1117,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-
-  statusList: {
-    display: "grid",
-    gap: 9,
-  },
-
+  statusList: { display: "grid", gap: 9 },
   statusRow: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
@@ -1309,7 +1131,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     minWidth: 0,
   },
-
   enabledPill: {
     display: "inline-flex",
     width: "fit-content",
@@ -1321,7 +1142,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
-
   disabledPill: {
     display: "inline-flex",
     width: "fit-content",
