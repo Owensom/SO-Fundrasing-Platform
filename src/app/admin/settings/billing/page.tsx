@@ -28,6 +28,17 @@ type TenantSettingsFormState = {
   custom_domain_enabled: boolean;
 };
 
+type TenantConnectStatus = {
+  stripe_connect_account_id: string | null;
+  stripe_connect_onboarding_complete: boolean | null;
+  stripe_connect_charges_enabled: boolean | null;
+  stripe_connect_payouts_enabled: boolean | null;
+  stripe_connect_details_submitted: boolean | null;
+  stripe_connect_country: string | null;
+  stripe_connect_default_currency: string | null;
+  stripe_connect_last_synced_at: string | null;
+};
+
 const TIER_DETAILS: Record<
   TierKey,
   {
@@ -119,8 +130,29 @@ function enabledLabel(value: boolean) {
   return value ? "Enabled" : "Not enabled";
 }
 
+function completeLabel(value: boolean) {
+  return value ? "Complete" : "Incomplete";
+}
+
+function savedLabel(value: boolean) {
+  return value ? "Saved" : "Not saved";
+}
+
 function enabledStyle(value: boolean): CSSProperties {
   return value ? styles.enabledPill : styles.disabledPill;
+}
+
+function formatSyncDate(value: string | null | undefined) {
+  if (!value) return "Not synced yet";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Not synced yet";
+
+  return date.toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 async function requireCurrentTenantAccess() {
@@ -141,6 +173,30 @@ async function requireCurrentTenantAccess() {
   }
 
   return tenantSlug;
+}
+
+async function getTenantConnectStatus(
+  tenantSlug: string,
+): Promise<TenantConnectStatus | null> {
+  const rows = (await query(
+    `
+      select
+        stripe_connect_account_id,
+        stripe_connect_onboarding_complete,
+        stripe_connect_charges_enabled,
+        stripe_connect_payouts_enabled,
+        stripe_connect_details_submitted,
+        stripe_connect_country,
+        stripe_connect_default_currency,
+        stripe_connect_last_synced_at
+      from tenants
+      where slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  )) as TenantConnectStatus[];
+
+  return rows[0] || null;
 }
 
 async function updateTenantBillingSettings(formData: FormData) {
@@ -224,6 +280,19 @@ async function updateTenantBillingSettings(formData: FormData) {
     ],
   );
 
+  if (stripeConnectAccountId) {
+    await query(
+      `
+        update tenants
+        set
+          stripe_connect_account_id = $1,
+          updated_at = now()
+        where slug = $2
+      `,
+      [stripeConnectAccountId, tenantSlug],
+    );
+  }
+
   revalidatePath("/admin/settings/billing");
   revalidatePath("/admin");
   redirect("/admin/settings/billing?saved=1");
@@ -232,6 +301,7 @@ async function updateTenantBillingSettings(formData: FormData) {
 export default async function AdminBillingSettingsPage() {
   const tenantSlug = await requireCurrentTenantAccess();
   const settings = await getTenantSettings(tenantSlug);
+  const connectStatus = await getTenantConnectStatus(tenantSlug);
 
   const tier = safeTier(settings?.subscription_tier);
   const currentTier = TIER_DETAILS[tier];
@@ -241,12 +311,17 @@ export default async function AdminBillingSettingsPage() {
     defaultFeeForTier(tier),
   );
 
+  const connectAccountId =
+    settings?.stripe_connect_account_id ||
+    connectStatus?.stripe_connect_account_id ||
+    "";
+
   const formState: TenantSettingsFormState = {
     subscription_tier: tier,
     platform_fee_percent: platformFeePercent,
     stripe_customer_id: settings?.stripe_customer_id || "",
     stripe_subscription_id: settings?.stripe_subscription_id || "",
-    stripe_connect_account_id: settings?.stripe_connect_account_id || "",
+    stripe_connect_account_id: connectAccountId,
     subscription_status: settings?.subscription_status || "active",
     buyer_fee_contributions_enabled: Boolean(
       settings?.buyer_fee_contributions_enabled,
@@ -258,6 +333,15 @@ export default async function AdminBillingSettingsPage() {
     white_label_enabled: Boolean(settings?.white_label_enabled),
     custom_domain_enabled: Boolean(settings?.custom_domain_enabled),
   };
+
+  const onboardingComplete = Boolean(
+    connectStatus?.stripe_connect_onboarding_complete,
+  );
+  const chargesEnabled = Boolean(connectStatus?.stripe_connect_charges_enabled);
+  const payoutsEnabled = Boolean(connectStatus?.stripe_connect_payouts_enabled);
+  const detailsSubmitted = Boolean(
+    connectStatus?.stripe_connect_details_submitted,
+  );
 
   const capabilities = [
     {
@@ -349,10 +433,8 @@ export default async function AdminBillingSettingsPage() {
 
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Stripe payouts</div>
-            <div
-              style={enabledStyle(Boolean(formState.stripe_connect_account_id))}
-            >
-              {formState.stripe_connect_account_id ? "Started" : "Not started"}
+            <div style={enabledStyle(Boolean(formState.stripe_connect_account_id))}>
+              {onboardingComplete ? "Ready" : formState.stripe_connect_account_id ? "Started" : "Not started"}
             </div>
             <div style={styles.summarySub}>
               Tenant payout onboarding through Stripe Connect
@@ -460,8 +542,8 @@ export default async function AdminBillingSettingsPage() {
               </h3>
 
               <p style={styles.stripeConnectText}>
-                Create or continue Stripe-hosted onboarding so this tenant can
-                later receive automatic payouts through their own connected
+                Create, continue or refresh Stripe-hosted onboarding so this
+                tenant can receive automatic payouts through their own connected
                 Stripe account.
               </p>
 
@@ -473,15 +555,27 @@ export default async function AdminBillingSettingsPage() {
               ) : null}
             </div>
 
-            <Link
-              href="/api/stripe/connect/create"
-              className="connectStripeButton"
-              style={styles.connectStripeButton}
-            >
-              {formState.stripe_connect_account_id
-                ? "Continue Stripe onboarding →"
-                : "Connect Stripe →"}
-            </Link>
+            <div className="stripeButtonStack" style={styles.stripeButtonStack}>
+              <Link
+                href="/api/stripe/connect/create"
+                className="connectStripeButton"
+                style={styles.connectStripeButton}
+              >
+                {formState.stripe_connect_account_id
+                  ? "Continue onboarding →"
+                  : "Connect Stripe →"}
+              </Link>
+
+              {formState.stripe_connect_account_id ? (
+                <Link
+                  href="/api/stripe/connect/status"
+                  className="refreshStripeButton"
+                  style={styles.refreshStripeButton}
+                >
+                  Refresh status
+                </Link>
+              ) : null}
+            </div>
           </div>
 
           <div style={styles.toggleSection}>
@@ -582,25 +676,54 @@ export default async function AdminBillingSettingsPage() {
             <div style={styles.statusList}>
               <div className="statusRow" style={styles.statusRow}>
                 <span>Connected account</span>
+                <strong>{formState.stripe_connect_account_id ? "Created" : "Not created"}</strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Onboarding</span>
+                <strong>{completeLabel(onboardingComplete)}</strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Charges</span>
+                <strong>{enabledLabel(chargesEnabled)}</strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Payouts</span>
+                <strong>{enabledLabel(payoutsEnabled)}</strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Details submitted</span>
+                <strong>{savedLabel(detailsSubmitted)}</strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Country</span>
+                <strong>{connectStatus?.stripe_connect_country || "Not synced"}</strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Currency</span>
                 <strong>
-                  {formState.stripe_connect_account_id
-                    ? "Created"
-                    : "Not created"}
+                  {(connectStatus?.stripe_connect_default_currency || "Not synced").toUpperCase()}
                 </strong>
+              </div>
+
+              <div className="statusRow" style={styles.statusRow}>
+                <span>Last synced</span>
+                <strong>{formatSyncDate(connectStatus?.stripe_connect_last_synced_at)}</strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Customer ID</span>
-                <strong>
-                  {formState.stripe_customer_id ? "Saved" : "Not saved"}
-                </strong>
+                <strong>{formState.stripe_customer_id ? "Saved" : "Not saved"}</strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Subscription ID</span>
-                <strong>
-                  {formState.stripe_subscription_id ? "Saved" : "Not saved"}
-                </strong>
+                <strong>{formState.stripe_subscription_id ? "Saved" : "Not saved"}</strong>
               </div>
             </div>
           </article>
@@ -610,10 +733,10 @@ export default async function AdminBillingSettingsPage() {
             <h2 style={styles.cardTitle}>No payment routing changed yet</h2>
 
             <p style={styles.sideText}>
-              Stripe Connect onboarding is now available, but checkout routing
-              has not been changed. Current raffle, square, event and auction
-              payments remain on the existing working flow until Connect is
-              tested.
+              Stripe Connect onboarding and status sync are now available, but
+              checkout routing has not been changed. Current raffle, square,
+              event and auction payments remain on the existing working flow
+              until Connect is fully tested.
             </p>
           </article>
         </section>
@@ -656,7 +779,8 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .billing-page .connectStripeButton {
+  .billing-page .connectStripeButton,
+  .billing-page .refreshStripeButton {
     width: fit-content !important;
   }
 }
@@ -684,6 +808,7 @@ const responsiveStyles = `
   .billing-page .toggleGrid,
   .billing-page .submitRow,
   .billing-page .stripeConnectPanel,
+  .billing-page .stripeButtonStack,
   .billing-page .statusRow,
   .billing-page .cardHeader,
   .billing-page .tierTop {
@@ -693,7 +818,8 @@ const responsiveStyles = `
   .billing-page .heroButton,
   .billing-page .heroButtonLight,
   .billing-page .saveButton,
-  .billing-page .connectStripeButton {
+  .billing-page .connectStripeButton,
+  .billing-page .refreshStripeButton {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
@@ -955,6 +1081,12 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     wordBreak: "break-word",
   },
+  stripeButtonStack: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 8,
+    justifyItems: "end",
+  },
   connectStripeButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -964,6 +1096,21 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#635bff",
     color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  refreshStripeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    padding: "9px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#4338ca",
+    border: "1px solid rgba(99,91,255,0.28)",
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
