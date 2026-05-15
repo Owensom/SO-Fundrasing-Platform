@@ -4,18 +4,22 @@ import { getAllCampaignsForTenant } from "@/lib/campaigns";
 
 export const dynamic = "force-dynamic";
 
+type CampaignType = "raffle" | "squares" | "event" | "auction";
+type FilterType = "all" | CampaignType;
+
 type PageProps = {
   params: Promise<{
     tenantSlug: string;
   }>;
   searchParams?: Promise<{
     adminReturn?: string;
+    type?: string;
   }>;
 };
 
 type Campaign = {
   id: string;
-  type: "raffle" | "squares" | "event" | "auction";
+  type: CampaignType;
   title: string;
   slug: string;
   description?: string | null;
@@ -111,6 +115,38 @@ function getSafeAdminReturn(value?: string) {
   return "";
 }
 
+function getActiveType(value?: string): FilterType {
+  if (
+    value === "raffle" ||
+    value === "squares" ||
+    value === "event" ||
+    value === "auction"
+  ) {
+    return value;
+  }
+
+  return "all";
+}
+
+function getFilterHref({
+  tenantSlug,
+  type,
+  adminReturn,
+}: {
+  tenantSlug: string;
+  type: FilterType;
+  adminReturn: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (type !== "all") params.set("type", type);
+  if (adminReturn) params.set("adminReturn", adminReturn);
+
+  const query = params.toString();
+
+  return query ? `/c/${tenantSlug}?${query}` : `/c/${tenantSlug}`;
+}
+
 function pluralise(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
@@ -122,6 +158,7 @@ export default async function TenantCampaignsPage({
   const { tenantSlug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const adminReturn = getSafeAdminReturn(resolvedSearchParams?.adminReturn);
+  const activeType = getActiveType(resolvedSearchParams?.type);
 
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
 
@@ -133,6 +170,11 @@ export default async function TenantCampaignsPage({
   const squares = publicCampaigns.filter((item) => item.type === "squares");
   const events = publicCampaigns.filter((item) => item.type === "event");
   const auctions = publicCampaigns.filter((item) => item.type === "auction");
+
+  const visibleCampaigns =
+    activeType === "all"
+      ? publicCampaigns
+      : publicCampaigns.filter((campaign) => campaign.type === activeType);
 
   const featuredCampaign = publicCampaigns[0] || null;
 
@@ -180,7 +222,8 @@ export default async function TenantCampaignsPage({
 
         <div className="heroPanel" style={styles.heroPanel}>
           <div style={styles.heroPanelTitle}>Live now</div>
-                    <div className="heroStats" style={styles.heroStats}>
+
+          <div className="heroStats" style={styles.heroStats}>
             <HeroStat label="Campaigns" value={publicCampaigns.length} />
             <HeroStat label="Raffles" value={raffles.length} />
             <HeroStat label="Squares" value={squares.length} />
@@ -193,9 +236,7 @@ export default async function TenantCampaignsPage({
               href={getCampaignUrl(featuredCampaign)}
               style={styles.featuredLink}
             >
-              <span style={styles.featuredKicker}>
-                Featured campaign
-              </span>
+              <span style={styles.featuredKicker}>Featured campaign</span>
 
               <strong>{featuredCampaign.title}</strong>
 
@@ -204,8 +245,7 @@ export default async function TenantCampaignsPage({
           ) : null}
         </div>
       </section>
-
-      {publicCampaigns.length === 0 ? (
+            {publicCampaigns.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 className="so-brand-card-title" style={styles.emptyTitle}>
             No active campaigns found
@@ -220,104 +260,178 @@ export default async function TenantCampaignsPage({
           <section className="filterStrip" style={styles.filterStrip}>
             <span style={styles.filterLabel}>Browse live campaigns</span>
 
-            <span style={styles.filterPill}>
+            <Link
+              href={getFilterHref({
+                tenantSlug,
+                type: "all",
+                adminReturn,
+              })}
+              scroll={false}
+              aria-current={activeType === "all" ? "page" : undefined}
+              style={{
+                ...styles.filterPill,
+                ...(activeType === "all" ? styles.filterPillActive : {}),
+              }}
+            >
               All {publicCampaigns.length}
-            </span>
+            </Link>
 
-            <span style={styles.filterPill}>
+            <Link
+              href={getFilterHref({
+                tenantSlug,
+                type: "raffle",
+                adminReturn,
+              })}
+              scroll={false}
+              aria-current={activeType === "raffle" ? "page" : undefined}
+              style={{
+                ...styles.filterPill,
+                ...(activeType === "raffle" ? styles.filterPillActive : {}),
+              }}
+            >
               Raffles {raffles.length}
-            </span>
+            </Link>
 
-            <span style={styles.filterPill}>
+            <Link
+              href={getFilterHref({
+                tenantSlug,
+                type: "squares",
+                adminReturn,
+              })}
+              scroll={false}
+              aria-current={activeType === "squares" ? "page" : undefined}
+              style={{
+                ...styles.filterPill,
+                ...(activeType === "squares" ? styles.filterPillActive : {}),
+              }}
+            >
               Squares {squares.length}
-            </span>
+            </Link>
 
-            <span style={styles.filterPill}>
+            <Link
+              href={getFilterHref({
+                tenantSlug,
+                type: "event",
+                adminReturn,
+              })}
+              scroll={false}
+              aria-current={activeType === "event" ? "page" : undefined}
+              style={{
+                ...styles.filterPill,
+                ...(activeType === "event" ? styles.filterPillActive : {}),
+              }}
+            >
               Events {events.length}
-            </span>
+            </Link>
 
-            <span style={styles.filterPill}>
+            <Link
+              href={getFilterHref({
+                tenantSlug,
+                type: "auction",
+                adminReturn,
+              })}
+              scroll={false}
+              aria-current={activeType === "auction" ? "page" : undefined}
+              style={{
+                ...styles.filterPill,
+                ...(activeType === "auction" ? styles.filterPillActive : {}),
+              }}
+            >
               Auctions {auctions.length}
-            </span>
+            </Link>
           </section>
 
-          <section className="grid" style={styles.grid}>
-            {publicCampaigns.map((campaign) => (
+          {visibleCampaigns.length === 0 ? (
+            <section style={styles.emptyCard}>
+              <h2 className="so-brand-card-title" style={styles.emptyTitle}>
+                No campaigns in this category
+              </h2>
+
+              <p style={styles.muted}>
+                Try another campaign type or browse all live campaigns.
+              </p>
+
               <Link
-                key={`${campaign.type}-${campaign.id}`}
-                href={getCampaignUrl(campaign)}
-                className="campaignCard"
-                style={styles.card}
+                href={getFilterHref({
+                  tenantSlug,
+                  type: "all",
+                  adminReturn,
+                })}
+                style={styles.emptyButton}
               >
-                <div style={styles.imageWrap}>
-                  <img
-                    src={campaign.imageUrl || getDefaultImage(campaign.type)}
-                    alt={campaign.title}
-                    style={getImageStyle(campaign)}
-                  />
-                </div>
-
-                <div style={styles.cardBody}>
-                  <div style={styles.cardTopLine}>
-                    <span
-                      style={{
-                        ...styles.typePill,
-                        ...getTypeStyle(campaign.type),
-                      }}
-                    >
-                      {getTypeLabel(campaign.type)}
-                    </span>
-
-                    <span style={styles.statusPill}>Live</span>
-                  </div>
-
-                  <h2
-                    className="so-brand-card-title"
-                    style={styles.cardTitle}
-                  >
-                    {campaign.title}
-                  </h2>
-
-                  <div style={styles.metaLine}>
-                    {getTypeMeta(campaign.type)}
-                  </div>
-
-                  {campaign.description ? (
-                    <p style={styles.description}>
-                      {campaign.description.length > 170
-                        ? `${campaign.description.slice(0, 170)}…`
-                        : campaign.description}
-                    </p>
-                  ) : (
-                    <p style={styles.descriptionMuted}>
-                      Open this campaign to view details and support the cause.
-                    </p>
-                  )}
-
-                  <div style={styles.cardFooter}>
-                    <span style={styles.button}>
-                      View campaign
-                    </span>
-
-                    <span style={styles.cardHint}>
-                      Support now →
-                    </span>
-                  </div>
-                </div>
+                Browse all campaigns
               </Link>
-            ))}
-          </section>
+            </section>
+          ) : (
+            <section className="grid" style={styles.grid}>
+              {visibleCampaigns.map((campaign) => (
+                <Link
+                  key={`${campaign.type}-${campaign.id}`}
+                  href={getCampaignUrl(campaign)}
+                  className="campaignCard"
+                  style={styles.card}
+                >
+                  <div style={styles.imageWrap}>
+                    <img
+                      src={campaign.imageUrl || getDefaultImage(campaign.type)}
+                      alt={campaign.title}
+                      style={getImageStyle(campaign)}
+                    />
+                  </div>
+
+                  <div style={styles.cardBody}>
+                    <div style={styles.cardTopLine}>
+                      <span
+                        style={{
+                          ...styles.typePill,
+                          ...getTypeStyle(campaign.type),
+                        }}
+                      >
+                        {getTypeLabel(campaign.type)}
+                      </span>
+
+                      <span style={styles.statusPill}>Live</span>
+                    </div>
+
+                    <h2
+                      className="so-brand-card-title"
+                      style={styles.cardTitle}
+                    >
+                      {campaign.title}
+                    </h2>
+
+                    <div style={styles.metaLine}>
+                      {getTypeMeta(campaign.type)}
+                    </div>
+
+                    {campaign.description ? (
+                      <p style={styles.description}>
+                        {campaign.description.length > 170
+                          ? `${campaign.description.slice(0, 170)}…`
+                          : campaign.description}
+                      </p>
+                    ) : (
+                      <p style={styles.descriptionMuted}>
+                        Open this campaign to view details and support the cause.
+                      </p>
+                    )}
+
+                    <div style={styles.cardFooter}>
+                      <span style={styles.button}>View campaign</span>
+
+                      <span style={styles.cardHint}>Support now →</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </section>
+          )}
 
           <section className="trustCard" style={styles.trustCard}>
             <div>
-              <p style={styles.trustKicker}>
-                Secure fundraising
-              </p>
+              <p style={styles.trustKicker}>Secure fundraising</p>
 
-              <h2
-                className="so-brand-card-title"
-                style={styles.trustTitle}
-              >
+              <h2 className="so-brand-card-title" style={styles.trustTitle}>
                 Choose a campaign and support in minutes.
               </h2>
 
@@ -327,10 +441,7 @@ export default async function TenantCampaignsPage({
               </p>
             </div>
 
-            <div
-              className="trustStats"
-              style={styles.trustStats}
-            >
+            <div className="trustStats" style={styles.trustStats}>
               <TrustStat
                 label="Live campaign types"
                 value={pluralise(
@@ -342,10 +453,7 @@ export default async function TenantCampaignsPage({
                 )}
               />
 
-              <TrustStat
-                label="Campaign status"
-                value="Published"
-              />
+              <TrustStat label="Campaign status" value="Published" />
             </div>
           </section>
         </>
@@ -354,13 +462,7 @@ export default async function TenantCampaignsPage({
   );
 }
 
-function HeroStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function HeroStat({ label, value }: { label: string; value: number }) {
   return (
     <div style={styles.heroStat}>
       <span>{label}</span>
@@ -369,13 +471,7 @@ function HeroStat({
   );
 }
 
-function TrustStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function TrustStat({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.trustStat}>
       <span>{label}</span>
@@ -399,6 +495,28 @@ const responsiveStyles = `
 .campaigns-page article,
 .campaigns-page a {
   min-width: 0;
+}
+
+.campaigns-page .filterStrip a {
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.campaigns-page .filterStrip a:hover {
+  transform: translateY(-1px);
+}
+
+.campaigns-page .campaignCard {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.campaigns-page .campaignCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 46px rgba(15,23,42,0.11) !important;
+  border-color: #bfdbfe !important;
 }
 
 @media (max-width: 980px) {
@@ -432,8 +550,7 @@ const responsiveStyles = `
     display: grid !important;
     grid-template-columns: 1fr !important;
   }
-
-  .campaigns-page .primaryHeroButton,
+    .campaigns-page .primaryHeroButton,
   .campaigns-page .secondaryHeroButton {
     width: 100% !important;
     justify-content: center !important;
@@ -448,9 +565,15 @@ const responsiveStyles = `
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
     -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+  }
+
+  .campaigns-page .filterStrip::-webkit-scrollbar {
+    display: none !important;
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -614,8 +737,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 5,
     padding: 14,
     borderRadius: 18,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)",
+    background: "linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 900,
@@ -662,6 +784,16 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 900,
     whiteSpace: "nowrap",
+    textDecoration: "none",
+    transition:
+      "transform 180ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease",
+  },
+
+  filterPillActive: {
+    background: "linear-gradient(135deg, #0f172a 0%, #172554 100%)",
+    color: "#ffffff",
+    borderColor: "rgba(251,191,36,0.55)",
+    boxShadow: "0 10px 22px rgba(15,23,42,0.16)",
   },
 
   grid: {
@@ -857,5 +989,20 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 700,
+  },
+
+  emptyButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 14,
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
 };
