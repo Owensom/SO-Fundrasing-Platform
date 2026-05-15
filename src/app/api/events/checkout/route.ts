@@ -46,11 +46,7 @@ function cleanText(value: unknown) {
 
 function positiveQuantity(value: unknown) {
   const number = Number(value || 0);
-
-  if (!Number.isFinite(number)) {
-    return 0;
-  }
-
+  if (!Number.isFinite(number)) return 0;
   return Math.max(0, Math.floor(number));
 }
 
@@ -60,17 +56,12 @@ function truthy(value: unknown) {
 
 function calculateBuyerContributionCents(subtotalCents: number) {
   if (!subtotalCents || subtotalCents <= 0) return 0;
-
   return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
 }
 
 function safePercent(value: unknown, fallback = 0) {
   const number = Number(value);
-
-  if (!Number.isFinite(number) || number < 0) {
-    return fallback;
-  }
-
+  if (!Number.isFinite(number) || number < 0) return fallback;
   return Math.min(100, Number(number.toFixed(2)));
 }
 
@@ -78,10 +69,7 @@ function calculateApplicationFeeCents(
   subtotalCents: number,
   platformFeePercent: number,
 ) {
-  if (!subtotalCents || subtotalCents <= 0 || platformFeePercent <= 0) {
-    return 0;
-  }
-
+  if (!subtotalCents || subtotalCents <= 0 || platformFeePercent <= 0) return 0;
   return Math.max(0, Math.ceil(subtotalCents * (platformFeePercent / 100)));
 }
 
@@ -133,7 +121,9 @@ function canUseConnectDestination(finance: TenantFinanceRow | null) {
   return Boolean(
     finance?.stripe_connect_account_id &&
       finance.stripe_connect_charges_enabled &&
-      finance.stripe_connect_details_submitted,
+      finance.stripe_connect_payouts_enabled &&
+      finance.stripe_connect_details_submitted &&
+      finance.stripe_connect_onboarding_complete,
   );
 }
 
@@ -194,48 +184,26 @@ export async function POST(req: Request) {
     const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
 
     if (!eventId || items.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Missing checkout data.",
-        },
-        {
-          status: 400,
-        },
-      );
+      return NextResponse.json({ error: "Missing checkout data." }, { status: 400 });
     }
 
     if (!buyerName || !buyerEmail) {
       return NextResponse.json(
-        {
-          error: "Name and email address are required.",
-        },
-        {
-          status: 400,
-        },
+        { error: "Name and email address are required." },
+        { status: 400 },
       );
     }
 
     const event = await getEventById(eventId);
 
     if (!event || event.status !== "published") {
-      return NextResponse.json(
-        {
-          error: "Event unavailable.",
-        },
-        {
-          status: 404,
-        },
-      );
+      return NextResponse.json({ error: "Event unavailable." }, { status: 404 });
     }
 
     if (!tenantSlug || event.tenant_slug !== tenantSlug) {
       return NextResponse.json(
-        {
-          error: "Event unavailable for this tenant.",
-        },
-        {
-          status: 404,
-        },
+        { error: "Event unavailable for this tenant." },
+        { status: 404 },
       );
     }
 
@@ -258,9 +226,7 @@ export async function POST(req: Request) {
             (currentTicketType) => currentTicketType.id === ticketTypeId,
           );
 
-          if (!ticketType || quantity <= 0) {
-            return null;
-          }
+          if (!ticketType || quantity <= 0) return null;
 
           return {
             ticketType,
@@ -274,12 +240,8 @@ export async function POST(req: Request) {
 
       if (checkoutRows.length === 0) {
         return NextResponse.json(
-          {
-            error: "Please choose at least one ticket.",
-          },
-          {
-            status: 400,
-          },
+          { error: "Please choose at least one ticket." },
+          { status: 400 },
         );
       }
 
@@ -290,12 +252,8 @@ export async function POST(req: Request) {
 
       if (ticketTotal <= 0) {
         return NextResponse.json(
-          {
-            error: "Invalid checkout total.",
-          },
-          {
-            status: 400,
-          },
+          { error: "Invalid checkout total." },
+          { status: 400 },
         );
       }
 
@@ -375,21 +333,15 @@ export async function POST(req: Request) {
           applicationFeeCents,
           metadata: {
             type: "event",
-
             tenant_slug: event.tenant_slug,
-
             event_id: event.id,
             eventId: event.id,
-
             order_id: order.id,
             orderId: order.id,
-
             event_type: event.event_type,
             event_title: event.title,
-
             buyer_name: buyerName,
             buyer_email: buyerEmail,
-
             cover_fees: coverFees ? "true" : "false",
             buyer_contribution_cents: String(buyerContributionCents),
             platform_fee_percent: String(platformFeePercent),
@@ -405,9 +357,7 @@ export async function POST(req: Request) {
         stripeSessionId: session.id,
       });
 
-      return NextResponse.json({
-        url: session.url,
-      });
+      return NextResponse.json({ url: session.url });
     }
 
     const seats = event.seats || [];
@@ -418,12 +368,8 @@ export async function POST(req: Request) {
 
     if (seatIds.length !== items.length) {
       return NextResponse.json(
-        {
-          error: "Duplicate or invalid seat selection.",
-        },
-        {
-          status: 400,
-        },
+        { error: "Duplicate or invalid seat selection." },
+        { status: 400 },
       );
     }
 
@@ -474,12 +420,8 @@ export async function POST(req: Request) {
 
     if (ticketTotal <= 0) {
       return NextResponse.json(
-        {
-          error: "Invalid checkout total.",
-        },
-        {
-          status: 400,
-        },
+        { error: "Invalid checkout total." },
+        { status: 400 },
       );
     }
 
@@ -517,40 +459,27 @@ export async function POST(req: Request) {
       await deleteEventOrderAndItems(order.id);
 
       return NextResponse.json(
-        {
-          error: "Seats unavailable.",
-        },
-        {
-          status: 409,
-        },
+        { error: "Seats unavailable." },
+        { status: 409 },
       );
     }
 
     for (const row of checkoutRows) {
       await createEventOrderItem({
         orderId: order.id,
-
         eventId: event.id,
-
         ticketTypeId: row.ticketType.id,
-
         seatId: row.seat.id,
-
         label: seatLabel({
           tableNumber: row.seat.table_number,
           rowLabel: row.seat.row_label,
           seatNumber: row.seat.seat_number,
           tableName: row.tableName,
         }),
-
         quantity: 1,
-
         unitAmount: row.ticketType.price,
-
         guest_name: row.guestName || buyerName,
-
         dietary_requirements: row.dietaryRequirements || null,
-
         menu_choice: row.menuChoice || null,
       });
     }
@@ -558,12 +487,9 @@ export async function POST(req: Request) {
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         quantity: 1,
-
         price_data: {
           currency: event.currency.toLowerCase(),
-
           unit_amount: ticketTotal,
-
           product_data: {
             name: event.title,
           },
@@ -596,21 +522,15 @@ export async function POST(req: Request) {
         applicationFeeCents,
         metadata: {
           type: "event",
-
           tenant_slug: event.tenant_slug,
-
           event_id: event.id,
           eventId: event.id,
-
           order_id: order.id,
           orderId: order.id,
-
           event_type: event.event_type,
           event_title: event.title,
-
           buyer_name: buyerName,
           buyer_email: buyerEmail,
-
           cover_fees: coverFees ? "true" : "false",
           buyer_contribution_cents: String(buyerContributionCents),
           platform_fee_percent: String(platformFeePercent),
@@ -631,9 +551,7 @@ export async function POST(req: Request) {
       stripeSessionId: session.id,
     });
 
-    return NextResponse.json({
-      url: session.url,
-    });
+    return NextResponse.json({ url: session.url });
   } catch (error) {
     if (orderId) {
       await deleteEventOrderAndItems(orderId);
@@ -643,9 +561,7 @@ export async function POST(req: Request) {
       {
         error: error instanceof Error ? error.message : "Checkout failed.",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }
