@@ -474,7 +474,7 @@ export default async function AdminBillingSettingsPage() {
             </div>
 
             <Link
-              href="/api/admin/stripe/connect/create"
+              href="/api/stripe/connect/create"
               className="connectStripeButton"
               style={styles.connectStripeButton}
             >
@@ -591,7 +591,9 @@ export default async function AdminBillingSettingsPage() {
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Customer ID</span>
-                <strong>{formState.stripe_customer_id ? "Saved" : "Not saved"}</strong>
+                <strong>
+                  {formState.stripe_customer_id ? "Saved" : "Not saved"}
+                </strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
