@@ -44,13 +44,9 @@ export function isSubscriptionActive(
 ): boolean {
   if (!status) return true;
 
-  return [
-    "active",
-    "trialing",
-    "free",
-    "manual",
-    "exempt",
-  ].includes(status.toLowerCase());
+  return ["active", "trialing", "free", "manual", "exempt"].includes(
+    status.toLowerCase(),
+  );
 }
 
 export function getTierLabel(tier: SubscriptionTier) {
@@ -71,7 +67,9 @@ export function getTierPlatformFeePercent(tier: SubscriptionTier) {
   return 1.5;
 }
 
-export function getTierCapabilities(tier: SubscriptionTier): SubscriptionCapability[] {
+export function getTierCapabilities(
+  tier: SubscriptionTier,
+): SubscriptionCapability[] {
   if (tier === "foundation") {
     return [
       "raffles",
@@ -97,11 +95,7 @@ export function getTierCapabilities(tier: SubscriptionTier): SubscriptionCapabil
     ];
   }
 
-  return [
-    "raffles",
-    "squares",
-    "events",
-  ];
+  return ["raffles", "squares", "events"];
 }
 
 export function checkSubscriptionCapability(
@@ -174,4 +168,30 @@ export function requireSubscriptionCapability(
   }
 
   return result;
+}
+
+export function getMaximumActiveCampaignsForTier(tier: SubscriptionTier) {
+  if (tier === "community") {
+    return 2;
+  }
+
+  return Number.POSITIVE_INFINITY;
+}
+
+export function canPublishAnotherCampaign(params: {
+  subscription_tier?: string | null;
+  currentActiveCampaigns: number;
+}) {
+  const tier = normaliseSubscriptionTier(params.subscription_tier);
+  const limit = getMaximumActiveCampaignsForTier(tier);
+
+  return params.currentActiveCampaigns < limit;
+}
+
+export function getCampaignLimitMessage(tier: SubscriptionTier) {
+  if (tier === "community") {
+    return "Community plans can publish up to 2 active campaigns at once.";
+  }
+
+  return "Unlimited active campaigns available.";
 }
