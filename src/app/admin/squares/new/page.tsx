@@ -403,7 +403,8 @@ export default function NewSquaresGamePage() {
 
         <SummaryCard label="Public prizes" value={prizeText(publicPrizesCount)} />
       </section>
-            <section style={styles.readinessGrid}>
+
+      <section style={styles.readinessGrid}>
         <ReadinessCard eyebrow="Campaign readiness" title="Before publishing">
           <CheckItem done={Boolean(title.trim())}>Add campaign title</CheckItem>
           <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
@@ -412,8 +413,7 @@ export default function NewSquaresGamePage() {
           <CheckItem done={price > 0}>Set price per square</CheckItem>
           <CheckItem done={publicPrizesCount > 0}>Add public prize</CheckItem>
         </ReadinessCard>
-
-        <ReadinessCard
+                <ReadinessCard
           eyebrow="Sales preview"
           title={formatPreviewMoney(estimatedTotal, currency)}
         >
@@ -479,7 +479,7 @@ export default function NewSquaresGamePage() {
           />
         </Field>
 
-        <div style={styles.twoColumn}>
+        <div style={styles.drawDateStack}>
           <Field label="Draw date">
             <input
               name="draw_at"
@@ -490,10 +490,13 @@ export default function NewSquaresGamePage() {
             />
           </Field>
 
-          <div style={styles.previewInfoCard}>
-            <div style={styles.previewInfoLabel}>Draw preview</div>
-            <div style={styles.previewInfoValue}>
-              {formatDatePreview(drawAt)}
+          <div style={styles.drawPreviewCompact}>
+            <div>
+              <div style={styles.previewInfoLabel}>Draw preview</div>
+
+              <div style={styles.previewInfoValue}>
+                {formatDatePreview(drawAt)}
+              </div>
             </div>
           </div>
         </div>
@@ -567,6 +570,7 @@ export default function NewSquaresGamePage() {
           <div style={styles.boardPreviewTop}>
             <div>
               <div style={styles.boardPreviewLabel}>Board preview</div>
+
               <div style={styles.boardPreviewTitle}>
                 {boardShape.columns} × {boardShape.rows}
               </div>
@@ -644,7 +648,8 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </SectionCard>
-            <SectionCard
+
+      <SectionCard
         number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
@@ -655,6 +660,7 @@ export default function NewSquaresGamePage() {
           <div style={styles.prizeSectionTop}>
             <div>
               <div style={styles.prizeSectionTitle}>Public prize list</div>
+
               <div style={styles.prizeSectionText}>
                 These prizes can also be used later during winner draws.
               </div>
@@ -847,7 +853,6 @@ export default function NewSquaresGamePage() {
     </form>
   );
 }
-
 function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroMetric}>
@@ -981,6 +986,7 @@ function CheckItem({
     </div>
   );
 }
+
 const responsiveStyles = `
   .new-squares-form,
   .new-squares-form * {
@@ -1465,6 +1471,21 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
+  },
+  drawDateStack: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 10,
+  },
+  drawPreviewCompact: {
+    display: "flex",
+    alignItems: "center",
+    minHeight: 58,
+    padding: "12px 14px",
+    borderRadius: 16,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
   },
   fourColumn: {
     display: "grid",
