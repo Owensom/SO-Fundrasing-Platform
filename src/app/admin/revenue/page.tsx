@@ -200,7 +200,10 @@ export default async function AdminRevenuePage() {
           <HeroStat label="Payments" value={totalPayments} />
           <HeroStat label="Gross tracked" value={money(totalGrossCents)} />
           <HeroStat label="Platform fees" value={money(totalPlatformFeeCents)} />
-          <HeroStat label="Pending payouts" value={money(totalPendingPayoutCents)} />
+          <HeroStat
+            label="Pending payouts"
+            value={money(totalPendingPayoutCents)}
+          />
         </div>
       </section>
             <section className="revenue-cards" style={styles.cards}>
@@ -215,7 +218,9 @@ export default async function AdminRevenuePage() {
 
             return (
               <div key={currency} style={styles.card}>
-                <div style={styles.cardLabel}>{currency.toUpperCase()} totals</div>
+                <div style={styles.cardLabel}>
+                  {currency.toUpperCase()} totals
+                </div>
 
                 <div style={styles.currencyGrid}>
                   <div>
@@ -297,7 +302,9 @@ export default async function AdminRevenuePage() {
                 {tenantSummaries.map((row) => {
                   const currency = row.currency || "gbp";
                   const tenantSlug = row.tenant_slug || "";
-                  const pendingAmount = Number(row.pending_net_amount_cents ?? 0);
+                  const pendingAmount = Number(
+                    row.pending_net_amount_cents ?? 0,
+                  );
                   const pendingCount = Number(row.pending_payment_count ?? 0);
 
                   return (
@@ -397,7 +404,9 @@ export default async function AdminRevenuePage() {
 
                   return (
                     <tr key={payment.id}>
-                      <td style={styles.td}>{formatDate(payment.created_at)}</td>
+                      <td style={styles.td}>
+                        {formatDate(payment.created_at)}
+                      </td>
 
                       <td style={styles.td}>
                         {payment.raffle_title || payment.raffle_id}
@@ -442,7 +451,9 @@ export default async function AdminRevenuePage() {
 
                       <td style={styles.td}>{payment.payout_reference || "—"}</td>
 
-                      <td style={styles.td}>{formatDate(payment.paid_out_at)}</td>
+                      <td style={styles.td}>
+                        {formatDate(payment.paid_out_at)}
+                      </td>
 
                       <td style={styles.td}>{payment.payment_status || "—"}</td>
                     </tr>
