@@ -84,8 +84,9 @@ export default async function AdminEventsPage() {
   const publishedCount = events.filter(
     (event) => event.status === "published",
   ).length;
-  const draftCount = events.filter((event) => event.status !== "published")
-    .length;
+  const draftCount = events.filter(
+    (event) => event.status !== "published",
+  ).length;
   const totalCapacity = events.reduce(
     (sum, event) => sum + Number(event.capacity || 0),
     0,
@@ -96,16 +97,17 @@ export default async function AdminEventsPage() {
       <style>{responsiveStyles}</style>
 
       <section className="events-admin-hero" style={styles.hero}>
+        <div style={styles.heroGlow} />
+
         <div style={styles.heroContent}>
           <div style={styles.heroPillRow}>
-            <Link href="/admin" style={styles.heroBackPill}>
-              ← Back to admin
-            </Link>
-
             <span style={styles.heroSectionPill}>Events workspace</span>
           </div>
 
-          <h1 className="so-brand-heading events-admin-title" style={styles.title}>
+          <h1
+            className="so-brand-heading events-admin-title"
+            style={styles.title}
+          >
             Manage events
           </h1>
 
@@ -157,7 +159,8 @@ export default async function AdminEventsPage() {
           </Link>
         </nav>
       </section>
-            <section className="events-stats-grid" style={styles.statsGrid}>
+
+      <section className="events-stats-grid" style={styles.statsGrid}>
         <StatCard
           label="Total events"
           value={totalEvents}
@@ -190,8 +193,7 @@ export default async function AdminEventsPage() {
           tint="#f8fafc"
         />
       </section>
-
-      {events.length === 0 ? (
+            {events.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>No events yet</h2>
 
@@ -228,9 +230,15 @@ export default async function AdminEventsPage() {
                   </div>
 
                   <div style={styles.cardMain}>
-                    <div className="events-card-header" style={styles.cardHeader}>
+                    <div
+                      className="events-card-header"
+                      style={styles.cardHeader}
+                    >
                       <div style={{ minWidth: 0 }}>
-                        <h2 className="events-card-title" style={styles.cardTitle}>
+                        <h2
+                          className="events-card-title"
+                          style={styles.cardTitle}
+                        >
                           {event.title || "Untitled event"}
                         </h2>
 
@@ -242,9 +250,13 @@ export default async function AdminEventsPage() {
                       </div>
                     </div>
 
-                    <div className="events-headline-grid" style={styles.headlineGrid}>
+                    <div
+                      className="events-headline-grid"
+                      style={styles.headlineGrid}
+                    >
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Starts</div>
+
                         <div style={styles.headlineValue}>
                           {formatDate(event.starts_at)}
                         </div>
@@ -252,6 +264,7 @@ export default async function AdminEventsPage() {
 
                       <div style={styles.headlineBox}>
                         <div style={styles.headlineLabel}>Capacity</div>
+
                         <div style={styles.headlineValue}>{capacity}</div>
                       </div>
                     </div>
@@ -264,7 +277,10 @@ export default async function AdminEventsPage() {
                       </p>
                     ) : null}
 
-                    <div className="events-detail-grid" style={styles.detailGrid}>
+                    <div
+                      className="events-detail-grid"
+                      style={styles.detailGrid}
+                    >
                       <InfoBlock
                         label="Starts"
                         value={formatDate(event.starts_at)}
@@ -288,7 +304,10 @@ export default async function AdminEventsPage() {
                       />
                     </div>
 
-                    <div className="events-card-actions" style={styles.actions}>
+                    <div
+                      className="events-card-actions"
+                      style={styles.actions}
+                    >
                       <Link
                         href={`/admin/events/${event.id}`}
                         style={styles.primaryLink}
@@ -315,7 +334,13 @@ export default async function AdminEventsPage() {
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: ReactNode }) {
+function HeroStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <div className="events-hero-stat" style={styles.heroStat}>
       <div style={styles.heroStatLabel}>{label}</div>
@@ -350,6 +375,7 @@ function StatCard({
       <div style={styles.statTop}>
         <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
+
           <div className="events-stat-value" style={styles.statValue}>
             {value}
           </div>
@@ -385,7 +411,13 @@ function StatCard({
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
@@ -579,12 +611,13 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 auto",
     padding: "28px 16px 56px",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     minHeight: "100vh",
     overflowX: "hidden",
   },
 
   hero: {
+    position: "relative",
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
     gridTemplateAreas: `
@@ -595,14 +628,25 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
 
   heroContent: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "content",
     minWidth: 0,
   },
@@ -614,33 +658,20 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
 
-  heroBackPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "7px 12px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
-    fontSize: 12,
-    fontWeight: 950,
-    textDecoration: "none",
-  },
-
   heroSectionPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "7px 12px",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.12)",
+    background: "rgba(15,23,42,0.24)",
     color: "#facc15",
-    border: "1px solid rgba(251,191,36,0.32)",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
@@ -650,6 +681,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.085em",
     color: "#ffffff",
     overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
@@ -671,6 +703,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   heroStats: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "stats",
     display: "grid",
     gridTemplateColumns: "1fr",
@@ -683,8 +717,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     padding: 18,
     borderRadius: 22,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
   },
 
@@ -703,6 +738,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   nav: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "nav",
     display: "grid",
     gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
@@ -717,13 +754,14 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 46,
     padding: "11px 14px",
     borderRadius: 9999,
-    background: "rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.06)",
     color: "#ffffff",
-    border: "1px solid rgba(251,191,36,0.34)",
+    border: "1px solid rgba(148,163,184,0.52)",
     textDecoration: "none",
     fontWeight: 900,
     textAlign: "center",
     lineHeight: 1.2,
+    backdropFilter: "blur(10px)",
   },
 
   navButtonActive: {
@@ -735,7 +773,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.55)",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontWeight: 950,
     textAlign: "center",
     lineHeight: 1.2,
