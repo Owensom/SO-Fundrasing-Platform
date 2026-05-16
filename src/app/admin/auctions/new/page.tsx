@@ -3,6 +3,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  checkSubscriptionCapability,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import {
   createAuction,
@@ -28,9 +33,7 @@ function cleanFocus(value: FormDataEntryValue | null) {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
-async function createAuctionAction(formData: FormData) {
-  "use server";
-
+async function requireCurrentTenantAccess() {
   const session = await auth();
 
   if (!session?.user) {
@@ -38,6 +41,7 @@ async function createAuctionAction(formData: FormData) {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
+
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
@@ -46,7 +50,32 @@ async function createAuctionAction(formData: FormData) {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
+  return tenantSlug;
+}
+
+async function createAuctionAction(formData: FormData) {
+  "use server";
+
+  const tenantSlug = await requireCurrentTenantAccess();
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const tier = normaliseSubscriptionTier(tenantSettings?.subscription_tier);
+
+  const auctionCapability = checkSubscriptionCapability(
+    {
+      subscription_tier: tier,
+      subscription_status: tenantSettings?.subscription_status,
+      platform_owner_bypass: Boolean(tenantSettings?.platform_owner_bypass),
+    },
+    "auctions",
+  );
+
+  if (!auctionCapability.allowed) {
+    redirect("/admin/auctions/create?error=upgrade-required");
+  }
+
   const title = String(formData.get("title") || "").trim() || "Untitled auction";
+
   const slug =
     String(formData.get("slug") || "").trim().toLowerCase() ||
     slugifyAuctionTitle(title);
@@ -71,20 +100,116 @@ async function createAuctionAction(formData: FormData) {
   redirect(`/admin/auctions/${auction?.id}`);
 }
 
-export default async function NewAuctionPage() {
-  const session = await auth();
+export default async function NewAuctionPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    error?: string;
+  }>;
+}) {
+  const tenantSlug = await requireCurrentTenantAccess();
+  const resolvedSearchParams = await searchParams;
 
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
+  const tenantSettings = await getTenantSettings(tenantSlug);
+  const tier = normaliseSubscriptionTier(tenantSettings?.subscription_tier);
 
-  const tenantSlug = await getTenantSlugFromHeaders();
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
-    : [];
+  const auctionCapability = checkSubscriptionCapability(
+    {
+      subscription_tier: tier,
+      subscription_status: tenantSettings?.subscription_status,
+      platform_owner_bypass: Boolean(tenantSettings?.platform_owner_bypass),
+    },
+    "auctions",
+  );
 
-  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    redirect("/admin/login?error=tenant_access_denied");
+  if (!auctionCapability.allowed) {
+    return (
+      <main style={styles.page}>
+        <section style={styles.topActions}>
+          <Link href="/admin/auctions" style={styles.backButton}>
+            ← Back to auctions
+          </Link>
+
+          <Link href="/admin/settings/billing" style={styles.dashboardButton}>
+            Billing settings
+          </Link>
+        </section>
+
+        <section style={styles.upgradeHero}>
+          <div style={styles.upgradeCopy}>
+            <div style={styles.eyebrow}>Professional feature</div>
+
+            <h1 style={styles.title}>Auctions require Professional</h1>
+
+            <p style={styles.subtitle}>
+              Silent auctions are a premium fundraising workspace. Upgrade this
+              tenant to Professional or Foundation to create auction campaigns.
+            </p>
+
+            <div style={styles.upgradeGrid}>
+              <div style={styles.upgradeCard}>
+                <span>Current plan</span>
+                <strong>
+                  {tier === "community"
+                    ? "Community"
+                    : tier === "professional"
+                      ? "Professional"
+                      : "Foundation"}
+                </strong>
+              </div>
+
+              <div style={styles.upgradeCard}>
+                <span>Required plan</span>
+                <strong>Professional+</strong>
+              </div>
+
+              <div style={styles.upgradeCard}>
+                <span>Campaign limit</span>
+                <strong>Community excludes auctions</strong>
+              </div>
+            </div>
+
+            {resolvedSearchParams?.error === "upgrade-required" ? (
+              <div style={styles.errorBox}>
+                This tenant cannot create auctions on the current subscription
+                plan.
+              </div>
+            ) : null}
+
+            <div style={styles.upgradeActions}>
+              <Link href="/admin/settings/billing" style={styles.saveButton}>
+                Open billing settings
+              </Link>
+
+              <Link href="/admin/auctions" style={styles.cancelButtonLight}>
+                Back to auctions
+              </Link>
+            </div>
+          </div>
+
+          <aside style={styles.previewPanel}>
+            <div style={styles.previewKicker}>Locked workspace</div>
+
+            <div style={styles.previewImageCard}>
+              <img
+                src={DEFAULT_AUCTION_IMAGE_URL}
+                alt="SO Auctions"
+                style={styles.previewImage}
+              />
+            </div>
+
+            <div style={styles.previewInfoCard}>
+              <h2 style={styles.previewTitle}>Silent auctions</h2>
+
+              <p style={styles.previewText}>
+                Unlock premium auction pages, donated item listings, bidding and
+                winner notification tools.
+              </p>
+            </div>
+          </aside>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -98,8 +223,7 @@ export default async function NewAuctionPage() {
           Dashboard
         </Link>
       </section>
-
-      <section style={styles.hero}>
+            <section style={styles.hero}>
         <div style={styles.heroCopy}>
           <div style={styles.eyebrow}>Auction builder</div>
 
@@ -416,7 +540,6 @@ export default async function NewAuctionPage() {
     </main>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -485,7 +608,30 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
+  upgradeHero: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 26,
+    alignItems: "stretch",
+    padding: "clamp(20px, 5vw, 34px)",
+    borderRadius: 30,
+    marginBottom: 18,
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.20), transparent 34%), linear-gradient(135deg, #070f24 0%, #111c3d 48%, #1e2b63 100%)",
+    color: "#ffffff",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+    overflow: "hidden",
+    minWidth: 0,
+  },
+
   heroCopy: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    minWidth: 0,
+  },
+
+  upgradeCopy: {
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
@@ -498,7 +644,8 @@ const styles: Record<string, CSSProperties> = {
     padding: "7px 12px",
     borderRadius: 999,
     background: "rgba(148,163,184,0.18)",
-    color: "#cbd5e1",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.3)",
     textTransform: "uppercase",
     letterSpacing: "0.11em",
     fontSize: 12,
@@ -658,6 +805,40 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
     gap: 8,
+  },
+
+  upgradeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+    gap: 12,
+    marginTop: 22,
+  },
+
+  upgradeCard: {
+    display: "grid",
+    gap: 6,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    minWidth: 0,
+  },
+
+  errorBox: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontWeight: 900,
+  },
+
+  upgradeActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 22,
   },
 
   summaryGrid: {
@@ -954,15 +1135,33 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
   },
 
+  cancelButtonLight: {
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
+    textDecoration: "none",
+    fontWeight: 950,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+
   saveButton: {
     padding: "12px 18px",
     borderRadius: 999,
     background: "#f59e0b",
     color: "#111827",
     border: "none",
+    textDecoration: "none",
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(245,158,11,0.22)",
     minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 };
