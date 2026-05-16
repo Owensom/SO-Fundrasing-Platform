@@ -110,7 +110,11 @@ async function createAuctionAction(formData: FormData) {
       String(formData.get("terms_text") || "").trim() || null,
   });
 
-  redirect(`/admin/auctions/${auction.id}`);
+  if (!auction?.id) {
+  redirect("/admin/auctions");
+}
+
+redirect(`/admin/auctions/${auction.id}`);
 }
 
 export default async function NewAuctionPage() {
