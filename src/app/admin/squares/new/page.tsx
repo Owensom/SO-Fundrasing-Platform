@@ -1478,17 +1478,17 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
   },
-    drawDateRow: {
+      drawDateRow: {
     display: "grid",
-    gridTemplateColumns: "minmax(240px, 340px) minmax(220px, 1fr)",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 14,
     alignItems: "end",
   },
   drawPreviewInline: {
     display: "grid",
     alignContent: "center",
     minHeight: 48,
-    padding: "10px 13px",
+    padding: "12px 13px",
     borderRadius: 14,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
