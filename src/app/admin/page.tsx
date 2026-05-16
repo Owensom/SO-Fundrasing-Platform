@@ -106,6 +106,10 @@ export default async function AdminDashboardPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
+  const publicCampaignsHref = `/c/${tenantSlug}?adminReturn=${encodeURIComponent(
+    "/admin",
+  )}`;
+
   const [raffles, squares, events, auctions, tenantSettingsRaw] =
     await Promise.all([
       getAdminRaffles(),
@@ -263,15 +267,14 @@ export default async function AdminDashboardPage() {
 
         <div className="admin-command-actions" style={styles.commandActions}>
           <Link
-            href={`/c/${tenantSlug}`}
+            href={publicCampaignsHref}
             target="_blank"
             className="primaryButton"
             style={styles.primaryButton}
           >
             View public →
           </Link>
-
-          <Link
+                    <Link
             href="/admin/orders"
             className="secondaryButton"
             style={styles.secondaryButton}
@@ -600,7 +603,6 @@ export default async function AdminDashboardPage() {
     </main>
   );
 }
-
 function StatCard({
   label,
   value,
@@ -907,7 +909,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
