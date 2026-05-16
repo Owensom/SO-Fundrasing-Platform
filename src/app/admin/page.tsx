@@ -157,6 +157,8 @@ export default async function AdminDashboardPage() {
       <style>{responsiveStyles}</style>
 
       <section className="admin-command-centre" style={styles.commandCentre}>
+        <div style={styles.heroGlow} />
+
         <div style={styles.commandContent}>
           <div style={styles.badge}>SO Foundation Platform</div>
 
@@ -193,17 +195,14 @@ export default async function AdminDashboardPage() {
           />
         </div>
 
-        <div
-          className="admin-command-actions"
-          style={styles.commandActions}
-        >
+        <div className="admin-command-actions" style={styles.commandActions}>
           <Link
             href={`/c/${tenantSlug}`}
             target="_blank"
             className="primaryButton"
             style={styles.primaryButton}
           >
-            View public campaigns →
+            View public →
           </Link>
 
           <Link
@@ -211,7 +210,7 @@ export default async function AdminDashboardPage() {
             className="secondaryButton"
             style={styles.secondaryButton}
           >
-            Orders dashboard →
+            Orders →
           </Link>
 
           <Link
@@ -227,7 +226,7 @@ export default async function AdminDashboardPage() {
             className="secondaryButton"
             style={styles.secondaryButton}
           >
-            Finance & fees →
+            Finance →
           </Link>
 
           <Link
@@ -479,9 +478,7 @@ function StatCard({
       className="admin-stat-card"
       style={dark ? styles.darkStatCard : styles.statCard}
     >
-      <div style={dark ? styles.darkStatLabel : styles.statLabel}>
-        {label}
-      </div>
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
 
       <div
         className="admin-stat-value"
@@ -669,7 +666,7 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-centre {
     padding: 22px !important;
-    border-radius: 26px !important;
+    border-radius: 28px !important;
   }
 
   .admin-dashboard-page .admin-dashboard-title {
@@ -732,12 +729,13 @@ const styles: Record<string, CSSProperties> = {
     padding: "28px 16px 64px",
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     boxSizing: "border-box",
     overflowX: "hidden",
   },
 
   commandCentre: {
+    position: "relative",
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
     gridTemplateAreas: `
@@ -748,13 +746,25 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
 
   commandContent: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "content",
     minWidth: 0,
   },
@@ -763,16 +773,17 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "7px 13px",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.12)",
+    background: "rgba(15,23,42,0.24)",
     color: "#facc15",
-    border: "1px solid rgba(251,191,36,0.32)",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 16,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
@@ -780,7 +791,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(52px, 7vw, 82px)",
     lineHeight: 0.92,
     letterSpacing: "-0.08em",
+    color: "#ffffff",
     overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
@@ -802,6 +815,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandActions: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "actions",
     display: "grid",
     gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
@@ -817,14 +832,13 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 48,
     padding: "12px 16px",
     borderRadius: 999,
-    background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
-    color: "#111827",
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid rgba(251,191,36,0.82)",
-    boxShadow: "0 14px 28px rgba(251,191,36,0.20)",
-    whiteSpace: "normal",
-    overflowWrap: "anywhere",
+    border: "1px solid #1683f8",
+    boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
+    whiteSpace: "nowrap",
     textAlign: "center",
     lineHeight: 1.2,
   },
@@ -836,19 +850,20 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 48,
     padding: "12px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.06)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 900,
-    border: "1px solid rgba(251,191,36,0.42)",
+    border: "1px solid rgba(148,163,184,0.52)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "normal",
-    overflowWrap: "anywhere",
+    whiteSpace: "nowrap",
     textAlign: "center",
     lineHeight: 1.2,
   },
 
   commandStats: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "stats",
     display: "grid",
     gridTemplateColumns: "1fr",
@@ -870,8 +885,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     padding: 18,
     borderRadius: 22,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
   },
 
