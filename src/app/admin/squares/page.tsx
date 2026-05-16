@@ -199,7 +199,7 @@ export default async function AdminSquaresListPage() {
           </Link>
 
           <Link href="/admin/squares/new" style={styles.createButton}>
-            + Create squares
+            + Create game
           </Link>
         </nav>
       </section>
@@ -259,7 +259,7 @@ export default async function AdminSquaresListPage() {
             href="/admin/squares/new"
             style={styles.createButton}
           >
-            + Create squares
+            + Create game
           </Link>
         </section>
       ) : (
@@ -928,6 +928,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
     textAlign: "center",
     lineHeight: 1.2,
+    whiteSpace: "nowrap",
   },
 
   statsGrid: {
