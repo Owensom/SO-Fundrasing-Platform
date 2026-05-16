@@ -306,7 +306,8 @@ export default function NewSquaresGamePage() {
             Perfect for football cards, race nights, finals, ceilidhs and live
             fundraising events.
           </p>
-                    <div style={styles.heroMetricGrid}>
+
+          <div style={styles.heroMetricGrid}>
             <HeroMetric label="Total squares" value={boardSize} />
 
             <HeroMetric
@@ -381,8 +382,7 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </section>
-
-      <section style={styles.summaryGrid}>
+            <section style={styles.summaryGrid}>
         <SummaryCard
           label="Estimated revenue"
           value={formatPreviewMoney(estimatedTotal, currency)}
@@ -491,7 +491,7 @@ export default function NewSquaresGamePage() {
           </Field>
 
           <div style={styles.drawPreviewField}>
-            <div style={styles.label}>Draw preview</div>
+            <span style={styles.label}>Draw preview</span>
 
             <div style={styles.drawPreviewInline}>
               <span style={styles.previewInfoValue}>
@@ -1483,18 +1483,18 @@ const styles: Record<string, CSSProperties> = {
   drawPreviewField: {
     display: "grid",
     gap: 7,
-    alignContent: "start",
+    minWidth: 0,
   },
   drawPreviewInline: {
+    width: "100%",
     minHeight: 48,
     display: "flex",
     alignItems: "center",
-    padding: "12px 14px",
+    padding: "12px 13px",
     borderRadius: 14,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
     color: "#1e3a8a",
-    width: "100%",
     boxSizing: "border-box",
   },
   previewInfoValue: {
