@@ -199,6 +199,7 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
+
 async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "squares",
@@ -262,7 +263,6 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-
 async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "events",
@@ -575,7 +575,8 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
-            <section className="topActions" style={styles.topActions}>
+
+      <section className="topActions" style={styles.topActions}>
         <Link
           href="/admin"
           className="secondaryButton"
@@ -601,18 +602,11 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           Export CSV
         </a>
       </section>
-
-      <section className="summaryGrid" style={styles.summaryGrid}>
-        <SummaryCard
-          label="Visible customers"
-          value={filteredCustomers.length}
-        />
+            <section className="summaryGrid" style={styles.summaryGrid}>
+        <SummaryCard label="Visible customers" value={filteredCustomers.length} />
         <SummaryCard label="All customers" value={customers.length} />
         <SummaryCard label="Orders" value={totalOrders} />
-        <SummaryCard
-          label="Total spend"
-          value={formatMoney(totalSpendCents)}
-        />
+        <SummaryCard label="Total spend" value={formatMoney(totalSpendCents)} />
         <SummaryCard label="Raffle rows" value={raffleOrders.length} />
         <SummaryCard label="Squares rows" value={squaresOrders.length} />
         <SummaryCard label="Event rows" value={eventOrders.length} />
@@ -637,11 +631,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
 
           <label style={styles.field}>
             <span style={styles.label}>Activity type</span>
-            <select
-              name="type"
-              defaultValue={selectedType}
-              style={styles.input}
-            >
+            <select name="type" defaultValue={selectedType} style={styles.input}>
               <option value="all">All activity</option>
               <option value="raffle">Raffles</option>
               <option value="squares">Squares</option>
@@ -650,19 +640,11 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
             </select>
           </label>
 
-          <button
-            type="submit"
-            className="filterButton"
-            style={styles.filterButton}
-          >
+          <button type="submit" className="filterButton" style={styles.filterButton}>
             Apply filters
           </button>
 
-          <Link
-            href="/admin/customers"
-            className="clearButton"
-            style={styles.clearButton}
-          >
+          <Link href="/admin/customers" className="clearButton" style={styles.clearButton}>
             Clear
           </Link>
         </form>
@@ -673,10 +655,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           <div>
             <p style={styles.kicker}>Customer profiles</p>
 
-            <h2
-              className="so-brand-card-title sectionTitle"
-              style={styles.sectionTitle}
-            >
+            <h2 className="so-brand-card-title sectionTitle" style={styles.sectionTitle}>
               Supporter list
             </h2>
 
@@ -686,15 +665,11 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
             </p>
           </div>
 
-          <span style={styles.countPill}>
-            {filteredCustomers.length} rows
-          </span>
+          <span style={styles.countPill}>{filteredCustomers.length} rows</span>
         </div>
 
         {filteredCustomers.length === 0 ? (
-          <div style={styles.emptyBox}>
-            No matching customers found yet.
-          </div>
+          <div style={styles.emptyBox}>No matching customers found yet.</div>
         ) : (
           <div className="customerGrid" style={styles.customerGrid}>
             {filteredCustomers.map((customer) => {
@@ -714,16 +689,11 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                 >
                   <div className="customerTop" style={styles.customerTop}>
                     <div style={styles.customerIdentity}>
-                      <h3
-                        className="customerName"
-                        style={styles.customerName}
-                      >
+                      <h3 className="customerName" style={styles.customerName}>
                         {customer.name}
                       </h3>
 
-                      <p style={styles.customerEmail}>
-                        {customer.email}
-                      </p>
+                      <p style={styles.customerEmail}>{customer.email}</p>
                     </div>
 
                     <div className="spendBadge" style={styles.spendBadge}>
@@ -731,20 +701,9 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                     </div>
                   </div>
 
-                  <div
-                    className="customerStats"
-                    style={styles.customerStats}
-                  >
-                    <MiniMetric
-                      label="Orders"
-                      value={customer.orderCount}
-                    />
-
-                    <MiniMetric
-                      label="Campaigns"
-                      value={customer.campaignCount}
-                    />
-
+                  <div className="customerStats" style={styles.customerStats}>
+                    <MiniMetric label="Orders" value={customer.orderCount} />
+                    <MiniMetric label="Campaigns" value={customer.campaignCount} />
                     <MiniMetric
                       label="Last active"
                       value={formatDate(customer.lastActivity)}
@@ -755,10 +714,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                     {Array.from(customer.types).map((type) => (
                       <span
                         key={type}
-                        style={{
-                          ...styles.typePill,
-                          ...typeStyle(type),
-                        }}
+                        style={{ ...styles.typePill, ...typeStyle(type) }}
                       >
                         {typeLabel(type)}
                       </span>
@@ -782,15 +738,9 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                           </div>
                         </div>
 
-                        <div
-                          className="activityRight"
-                          style={styles.activityRight}
-                        >
+                        <div className="activityRight" style={styles.activityRight}>
                           <strong>
-                            {formatMoney(
-                              order.amountCents,
-                              order.currency,
-                            )}
+                            {formatMoney(order.amountCents, order.currency)}
                           </strong>
 
                           <span>{formatDate(order.createdAt)}</span>
@@ -799,14 +749,9 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                     ))}
                   </div>
 
-                  <div
-                    className="cardActions"
-                    style={styles.cardActions}
-                  >
+                  <div className="cardActions" style={styles.cardActions}>
                     <Link
-                      href={`/admin/orders?q=${encodeURIComponent(
-                        customer.email,
-                      )}`}
+                      href={`/admin/orders?q=${encodeURIComponent(customer.email)}`}
                       className="smallLink"
                       style={styles.smallLink}
                     >
@@ -833,13 +778,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
   );
 }
 
-function HeroStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroStat}>
       <span>{label}</span>
@@ -848,13 +787,7 @@ function HeroStat({
   );
 }
 
-function MiniMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function MiniMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.miniMetric}>
       <span>{label}</span>
@@ -863,13 +796,7 @@ function MiniMetric({
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.summaryCard}>
       <span>{label}</span>
@@ -1000,7 +927,6 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     overflowX: "hidden",
   },
-
   hero: {
     position: "relative",
     display: "grid",
@@ -1016,7 +942,6 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
-
   heroGlow: {
     position: "absolute",
     inset: 0,
@@ -1024,13 +949,11 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
-
   heroContent: {
     position: "relative",
     zIndex: 1,
     minWidth: 0,
   },
-
   eyebrow: {
     display: "inline-flex",
     padding: "8px 14px",
@@ -1045,7 +968,6 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 14,
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
-
   title: {
     margin: 0,
     fontSize: "clamp(42px, 7vw, 68px)",
@@ -1054,7 +976,6 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
-
   subtitle: {
     margin: "16px 0 0",
     maxWidth: 760,
@@ -1064,14 +985,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
     marginTop: 24,
   },
-
   heroStat: {
     display: "grid",
     gap: 5,
@@ -1082,7 +1001,6 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
-
   heroPanel: {
     position: "relative",
     zIndex: 1,
@@ -1097,27 +1015,23 @@ const styles: Record<string, CSSProperties> = {
     backdropFilter: "blur(12px)",
     minWidth: 0,
   },
-
   heroPanelTitle: {
     color: "#ffffff",
     fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.035em",
   },
-
   heroPanelText: {
     margin: 0,
     color: "#dbeafe",
     lineHeight: 1.5,
     fontWeight: 700,
   },
-
   heroPanelGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
-
   miniMetric: {
     display: "grid",
     gap: 4,
@@ -1128,5 +1042,303 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(217,119,6,0.34)",
     minWidth: 0,
     overflowWrap: "anywhere",
+  },
+  topActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  primaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #1683f8",
+  },
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    display: "grid",
+    gap: 5,
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+  filterCard: {
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    marginBottom: 16,
+    minWidth: 0,
+  },
+  filterForm: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) minmax(180px, 0.6fr) auto auto",
+    gap: 12,
+    alignItems: "end",
+    minWidth: 0,
+  },
+  field: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "10px 12px",
+    fontSize: 15,
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+  filterButton: {
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  clearButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#475569",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+  },
+  customersCard: {
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  kicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 27,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+  sectionText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    lineHeight: 1.5,
+    maxWidth: 720,
+    overflowWrap: "anywhere",
+  },
+  countPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  emptyBox: {
+    padding: 18,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 850,
+    textAlign: "center",
+  },
+  customerGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 14,
+  },
+  customerCard: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  customerTop: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+  },
+  customerIdentity: {
+    minWidth: 0,
+  },
+  customerName: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+  customerEmail: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+  spendBadge: {
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  customerStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  typeRow: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+  typePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  activityList: {
+    display: "grid",
+    gap: 9,
+  },
+  activityRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  activityTitle: {
+    color: "#0f172a",
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  activityDetail: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+  activityRight: {
+    display: "grid",
+    gap: 3,
+    textAlign: "right",
+    color: "#0f172a",
+    fontSize: 13,
+  },
+  cardActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  smallLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  smallLinkMuted: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontSize: 12,
+    fontWeight: 950,
   },
 };
