@@ -480,7 +480,7 @@ export default function NewSquaresGamePage() {
           />
         </Field>
 
-        <div style={styles.drawDateRow}>
+        <div style={styles.drawDateGroup}>
           <Field label="Draw date">
             <input
               name="draw_at"
@@ -492,11 +492,10 @@ export default function NewSquaresGamePage() {
           </Field>
 
           <div style={styles.drawPreviewInline}>
-            <div style={styles.previewInfoLabel}>Draw preview</div>
-
-            <div style={styles.previewInfoValue}>
+            <span style={styles.previewInfoLabel}>Draw preview</span>
+            <span style={styles.previewInfoValue}>
               {formatDatePreview(drawAt)}
-            </div>
+            </span>
           </div>
         </div>
       </SectionCard>
@@ -1403,7 +1402,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionSummary: {
     display: "flex",
@@ -1478,17 +1477,19 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
   },
-      drawDateRow: {
+  drawDateGroup: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
-    gap: 14,
-    alignItems: "end",
+    gap: 8,
+    maxWidth: 420,
   },
   drawPreviewInline: {
-    display: "grid",
-    alignContent: "center",
-    minHeight: 48,
-    padding: "12px 13px",
+    display: "inline-flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 42,
+    padding: "8px 12px",
     borderRadius: 14,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
@@ -1539,11 +1540,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
+    lineHeight: 1.2,
     marginBottom: 2,
   },
   previewInfoValue: {
     color: "#1e3a8a",
     fontSize: 14,
+    lineHeight: 1.25,
     fontWeight: 950,
   },
   boardPreviewCard: {
