@@ -297,7 +297,6 @@ async function updateTenantBillingSettings(formData: FormData) {
   revalidatePath("/admin");
   redirect("/admin/settings/billing?saved=1");
 }
-
 export default async function AdminBillingSettingsPage() {
   const tenantSlug = await requireCurrentTenantAccess();
   const settings = await getTenantSettings(tenantSlug);
@@ -381,6 +380,8 @@ export default async function AdminBillingSettingsPage() {
       <style>{responsiveStyles}</style>
 
       <section className="hero" style={styles.hero}>
+        <div style={styles.heroGlow} />
+
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Tenant billing</div>
 
@@ -433,8 +434,14 @@ export default async function AdminBillingSettingsPage() {
 
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Stripe payouts</div>
-            <div style={enabledStyle(Boolean(formState.stripe_connect_account_id))}>
-              {onboardingComplete ? "Ready" : formState.stripe_connect_account_id ? "Started" : "Not started"}
+            <div
+              style={enabledStyle(Boolean(formState.stripe_connect_account_id))}
+            >
+              {onboardingComplete
+                ? "Ready"
+                : formState.stripe_connect_account_id
+                  ? "Started"
+                  : "Not started"}
             </div>
             <div style={styles.summarySub}>
               Tenant payout onboarding through Stripe Connect
@@ -577,8 +584,7 @@ export default async function AdminBillingSettingsPage() {
               ) : null}
             </div>
           </div>
-
-          <div style={styles.toggleSection}>
+                    <div style={styles.toggleSection}>
             <div>
               <div style={styles.toggleTitle}>Platform capabilities</div>
               <div style={styles.toggleText}>
@@ -676,7 +682,11 @@ export default async function AdminBillingSettingsPage() {
             <div style={styles.statusList}>
               <div className="statusRow" style={styles.statusRow}>
                 <span>Connected account</span>
-                <strong>{formState.stripe_connect_account_id ? "Created" : "Not created"}</strong>
+                <strong>
+                  {formState.stripe_connect_account_id
+                    ? "Created"
+                    : "Not created"}
+                </strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
@@ -701,29 +711,42 @@ export default async function AdminBillingSettingsPage() {
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Country</span>
-                <strong>{connectStatus?.stripe_connect_country || "Not synced"}</strong>
+                <strong>
+                  {connectStatus?.stripe_connect_country || "Not synced"}
+                </strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Currency</span>
                 <strong>
-                  {(connectStatus?.stripe_connect_default_currency || "Not synced").toUpperCase()}
+                  {(
+                    connectStatus?.stripe_connect_default_currency ||
+                    "Not synced"
+                  ).toUpperCase()}
                 </strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Last synced</span>
-                <strong>{formatSyncDate(connectStatus?.stripe_connect_last_synced_at)}</strong>
+                <strong>
+                  {formatSyncDate(
+                    connectStatus?.stripe_connect_last_synced_at,
+                  )}
+                </strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Customer ID</span>
-                <strong>{formState.stripe_customer_id ? "Saved" : "Not saved"}</strong>
+                <strong>
+                  {formState.stripe_customer_id ? "Saved" : "Not saved"}
+                </strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
                 <span>Subscription ID</span>
-                <strong>{formState.stripe_subscription_id ? "Saved" : "Not saved"}</strong>
+                <strong>
+                  {formState.stripe_subscription_id ? "Saved" : "Not saved"}
+                </strong>
               </div>
             </div>
           </article>
@@ -835,36 +858,50 @@ const styles: Record<string, CSSProperties> = {
     padding: "28px 16px 64px",
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     color: "#0f172a",
     overflowX: "hidden",
   },
   hero: {
+    position: "relative",
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.22), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
   },
-  heroContent: { minWidth: 0 },
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
+  },
+  heroContent: {
+    position: "relative",
+    zIndex: 1,
+    minWidth: 0,
+  },
   eyebrow: {
     display: "inline-flex",
-    padding: "7px 12px",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#bfdbfe",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(15,23,42,0.24)",
+    color: "#facc15",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 16,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
   title: {
     margin: 0,
@@ -872,6 +909,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 0.94,
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
   subtitle: {
     margin: "18px 0 0",
@@ -905,6 +943,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #1683f8",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
   heroButtonLight: {
     display: "inline-flex",
@@ -913,13 +952,16 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.06)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid rgba(255,255,255,0.16)",
+    border: "1px solid rgba(148,163,184,0.52)",
+    backdropFilter: "blur(10px)",
   },
   heroSummaryGrid: {
+    position: "relative",
+    zIndex: 1,
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 12,
@@ -930,8 +972,10 @@ const styles: Record<string, CSSProperties> = {
     gap: 7,
     padding: 16,
     borderRadius: 22,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
     minWidth: 0,
   },
   summaryLabel: {
