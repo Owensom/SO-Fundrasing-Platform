@@ -227,7 +227,6 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-
 async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "squares",
@@ -512,6 +511,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       <style>{responsiveStyles}</style>
 
       <section className="hero" style={styles.hero}>
+        <div style={styles.heroGlow} />
+
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Platform operations</div>
 
@@ -551,9 +552,12 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
-
-      <section className="topActions" style={styles.topActions}>
-        <Link href="/admin" className="secondaryButton" style={styles.secondaryButton}>
+            <section className="topActions" style={styles.topActions}>
+        <Link
+          href="/admin"
+          className="secondaryButton"
+          style={styles.secondaryButton}
+        >
           ← Back to dashboard
         </Link>
 
@@ -604,11 +608,19 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
             </select>
           </label>
 
-          <button type="submit" className="filterButton" style={styles.filterButton}>
+          <button
+            type="submit"
+            className="filterButton"
+            style={styles.filterButton}
+          >
             Apply filters
           </button>
 
-          <Link href="/admin/orders" className="clearButton" style={styles.clearButton}>
+          <Link
+            href="/admin/orders"
+            className="clearButton"
+            style={styles.clearButton}
+          >
             Clear
           </Link>
         </form>
@@ -659,7 +671,10 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
                     <tr key={order.id}>
                       <td style={styles.td}>
                         <span
-                          style={{ ...styles.typePill, ...typeStyle(order.type) }}
+                          style={{
+                            ...styles.typePill,
+                            ...typeStyle(order.type),
+                          }}
                         >
                           {typeLabel(order.type)}
                         </span>
@@ -941,37 +956,50 @@ const styles: Record<string, CSSProperties> = {
     padding: "28px 16px 64px",
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     boxSizing: "border-box",
     overflowX: "hidden",
   },
   hero: {
+    position: "relative",
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 30,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.20), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 16,
     boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
     overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
   heroContent: {
+    position: "relative",
+    zIndex: 1,
     minWidth: 0,
   },
   eyebrow: {
     display: "inline-flex",
-    padding: "7px 12px",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#bfdbfe",
+    background: "rgba(15,23,42,0.24)",
+    color: "#facc15",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
     marginBottom: 14,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
   title: {
     margin: 0,
@@ -979,6 +1007,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 0.95,
     letterSpacing: "-0.07em",
     overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
   subtitle: {
     margin: "16px 0 0",
@@ -1001,18 +1030,22 @@ const styles: Record<string, CSSProperties> = {
     padding: 14,
     borderRadius: 18,
     background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(255,255,255,0.15)",
+    border: "1px solid rgba(148,163,184,0.25)",
     minWidth: 0,
     overflowWrap: "anywhere",
   },
   heroPanel: {
+    position: "relative",
+    zIndex: 1,
     display: "grid",
     gap: 14,
     alignContent: "start",
     padding: 18,
     borderRadius: 24,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
     minWidth: 0,
   },
   heroPanelTitle: {
@@ -1039,7 +1072,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     color: "#0f172a",
-    border: "1px solid #e2e8f0",
+    border: "1px solid rgba(217,119,6,0.34)",
     minWidth: 0,
     overflowWrap: "anywhere",
   },
