@@ -230,11 +230,12 @@ export default async function AdminAuctionsPage({
           </Link>
 
           <Link href="/admin/auctions/new" style={styles.createButton}>
-            + Create auction
+            + Create item
           </Link>
         </nav>
       </section>
-            {searchParams?.saved ? (
+
+      {searchParams?.saved ? (
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
@@ -279,15 +280,14 @@ export default async function AdminAuctionsPage({
           tint="#fffbeb"
         />
       </section>
-
-      {auctions.length === 0 ? (
+            {auctions.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>No auctions yet</h2>
 
           <p style={styles.muted}>Create your first auction campaign.</p>
 
           <Link href="/admin/auctions/new" style={styles.createButton}>
-            + Create auction
+            + Create item
           </Link>
         </section>
       ) : (
@@ -535,6 +535,7 @@ function StatusButton({
     </form>
   );
 }
+
 function StatCard({
   label,
   value,
@@ -561,6 +562,7 @@ function StatCard({
       <div style={styles.statTop}>
         <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
+
           <div className="auctions-stat-value" style={styles.statValue}>
             {value}
           </div>
@@ -604,7 +606,6 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .auctions-admin-page,
 .auctions-admin-page * {
@@ -985,6 +986,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
     textAlign: "center",
     lineHeight: 1.2,
+    whiteSpace: "nowrap",
   },
 
   successBox: {
