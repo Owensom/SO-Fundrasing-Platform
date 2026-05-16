@@ -83,66 +83,66 @@ export default async function AdminRevenuePage() {
 
   const currencySummaries = await query<CurrencySummaryRow>(
     `
-    select
-      coalesce(currency, 'gbp') as currency,
-      count(*)::int as payment_count,
-      coalesce(sum(gross_amount_cents), 0)::int as gross_amount_cents,
-      coalesce(sum(platform_fee_cents), 0)::int as platform_fee_cents,
-      coalesce(sum(net_amount_cents), 0)::int as net_amount_cents,
-      coalesce(sum(donor_fee_cents), 0)::int as donor_fee_cents,
-      coalesce(sum(case when payout_status = 'pending' then net_amount_cents else 0 end), 0)::int as pending_net_amount_cents,
-      coalesce(sum(case when payout_status = 'paid' then net_amount_cents else 0 end), 0)::int as paid_net_amount_cents
-    from platform_payments
-    where payment_status = 'paid'
-    group by coalesce(currency, 'gbp')
-    order by currency asc
+      select
+        coalesce(currency, 'gbp') as currency,
+        count(*)::int as payment_count,
+        coalesce(sum(gross_amount_cents), 0)::int as gross_amount_cents,
+        coalesce(sum(platform_fee_cents), 0)::int as platform_fee_cents,
+        coalesce(sum(net_amount_cents), 0)::int as net_amount_cents,
+        coalesce(sum(donor_fee_cents), 0)::int as donor_fee_cents,
+        coalesce(sum(case when payout_status = 'pending' then net_amount_cents else 0 end), 0)::int as pending_net_amount_cents,
+        coalesce(sum(case when payout_status = 'paid' then net_amount_cents else 0 end), 0)::int as paid_net_amount_cents
+      from platform_payments
+      where payment_status = 'paid'
+      group by coalesce(currency, 'gbp')
+      order by currency asc
     `,
   );
 
   const tenantSummaries = await query<TenantSummaryRow>(
     `
-    select
-      tenant_slug,
-      coalesce(currency, 'gbp') as currency,
-      count(*)::int as payment_count,
-      coalesce(sum(gross_amount_cents), 0)::int as gross_amount_cents,
-      coalesce(sum(platform_fee_cents), 0)::int as platform_fee_cents,
-      coalesce(sum(net_amount_cents), 0)::int as net_amount_cents,
-      coalesce(sum(donor_fee_cents), 0)::int as donor_fee_cents,
-      coalesce(sum(case when payout_status = 'pending' then net_amount_cents else 0 end), 0)::int as pending_net_amount_cents,
-      coalesce(sum(case when payout_status = 'paid' then net_amount_cents else 0 end), 0)::int as paid_net_amount_cents,
-      coalesce(sum(case when payout_status = 'pending' then 1 else 0 end), 0)::int as pending_payment_count
-    from platform_payments
-    where payment_status = 'paid'
-    group by tenant_slug, coalesce(currency, 'gbp')
-    order by tenant_slug asc, currency asc
+      select
+        tenant_slug,
+        coalesce(currency, 'gbp') as currency,
+        count(*)::int as payment_count,
+        coalesce(sum(gross_amount_cents), 0)::int as gross_amount_cents,
+        coalesce(sum(platform_fee_cents), 0)::int as platform_fee_cents,
+        coalesce(sum(net_amount_cents), 0)::int as net_amount_cents,
+        coalesce(sum(donor_fee_cents), 0)::int as donor_fee_cents,
+        coalesce(sum(case when payout_status = 'pending' then net_amount_cents else 0 end), 0)::int as pending_net_amount_cents,
+        coalesce(sum(case when payout_status = 'paid' then net_amount_cents else 0 end), 0)::int as paid_net_amount_cents,
+        coalesce(sum(case when payout_status = 'pending' then 1 else 0 end), 0)::int as pending_payment_count
+      from platform_payments
+      where payment_status = 'paid'
+      group by tenant_slug, coalesce(currency, 'gbp')
+      order by tenant_slug asc, currency asc
     `,
   );
 
   const payments = await query<PaymentRow>(
     `
-    select
-      p.id::text,
-      p.stripe_checkout_session_id,
-      p.raffle_id,
-      p.tenant_slug,
-      p.currency,
-      p.gross_amount_cents,
-      p.platform_fee_cents,
-      p.net_amount_cents,
-      coalesce(p.donor_fee_cents, 0)::int as donor_fee_cents,
-      coalesce(p.donor_covered_fees, false)::boolean as donor_covered_fees,
-      coalesce(p.payout_status, 'pending') as payout_status,
-      p.payout_reference,
-      p.paid_out_at,
-      p.payment_status,
-      p.customer_email,
-      p.created_at,
-      r.title as raffle_title
-    from platform_payments p
-    left join raffles r on r.id = p.raffle_id
-    order by p.created_at desc
-    limit 100
+      select
+        p.id::text,
+        p.stripe_checkout_session_id,
+        p.raffle_id,
+        p.tenant_slug,
+        p.currency,
+        p.gross_amount_cents,
+        p.platform_fee_cents,
+        p.net_amount_cents,
+        coalesce(p.donor_fee_cents, 0)::int as donor_fee_cents,
+        coalesce(p.donor_covered_fees, false)::boolean as donor_covered_fees,
+        coalesce(p.payout_status, 'pending') as payout_status,
+        p.payout_reference,
+        p.paid_out_at,
+        p.payment_status,
+        p.customer_email,
+        p.created_at,
+        r.title as raffle_title
+      from platform_payments p
+      left join raffles r on r.id = p.raffle_id
+      order by p.created_at desc
+      limit 100
     `,
   );
 
@@ -151,17 +151,34 @@ export default async function AdminRevenuePage() {
     0,
   );
 
+  const totalGrossCents = currencySummaries.reduce(
+    (sum, row) => sum + Number(row.gross_amount_cents ?? 0),
+    0,
+  );
+
+  const totalPlatformFeeCents = currencySummaries.reduce(
+    (sum, row) => sum + Number(row.platform_fee_cents ?? 0),
+    0,
+  );
+
+  const totalPendingPayoutCents = currencySummaries.reduce(
+    (sum, row) => sum + Number(row.pending_net_amount_cents ?? 0),
+    0,
+  );
+
+  const primaryCurrency = currencySummaries[0]?.currency || "gbp";
+
   return (
     <main className="revenue-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section className="hero" style={styles.hero}>
+      <section className="revenue-hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Finance operations</div>
 
-          <h1 className="so-brand-heading title" style={styles.title}>
+          <h1 className="so-brand-heading revenue-title" style={styles.title}>
             Revenue dashboard
           </h1>
 
@@ -170,27 +187,15 @@ export default async function AdminRevenuePage() {
             financial oversight across your fundraising platform.
           </p>
 
-          <div className="heroStats" style={styles.heroStats}>
+          <div className="revenue-hero-stats" style={styles.heroStats}>
             <HeroStat label="Payments" value={totalPayments} />
-
-            <HeroStat
-              label="Currencies"
-              value={currencySummaries.length}
-            />
-
-            <HeroStat
-              label="Tenants"
-              value={tenantSummaries.length}
-            />
-
-            <HeroStat
-              label="Latest rows"
-              value={payments.length}
-            />
+            <HeroStat label="Currencies" value={currencySummaries.length} />
+            <HeroStat label="Tenants" value={tenantSummaries.length} />
+            <HeroStat label="Latest rows" value={payments.length} />
           </div>
         </div>
 
-        <div style={styles.heroPanel}>
+        <aside className="revenue-hero-panel" style={styles.heroPanel}>
           <div style={styles.heroPanelTitle}>Finance overview</div>
 
           <p style={styles.heroPanelText}>
@@ -198,24 +203,22 @@ export default async function AdminRevenuePage() {
             obligations from one operational dashboard.
           </p>
 
-          <div className="heroPanelGrid" style={styles.heroPanelGrid}>
-            {currencySummaries.map((row) => {
-              const currency = row.currency || "gbp";
-
-              return (
-                <MiniMetric
-                  key={currency}
-                  label={currency.toUpperCase()}
-                  value={money(row.gross_amount_cents, currency)}
-                />
-              );
-            })}
+          <div className="revenue-hero-panel-grid" style={styles.heroPanelGrid}>
+            <MiniMetric label="Gross" value={money(totalGrossCents, primaryCurrency)} />
+            <MiniMetric
+              label="Platform fees"
+              value={money(totalPlatformFeeCents, primaryCurrency)}
+            />
+            <MiniMetric
+              label="Pending payouts"
+              value={money(totalPendingPayoutCents, primaryCurrency)}
+            />
           </div>
 
-          <div className="topActions" style={styles.topActions}>
+          <div className="revenue-top-actions" style={styles.topActions}>
             <Link
               href="/admin"
-              className="secondaryButton"
+              className="revenue-secondary-button"
               style={styles.secondaryButton}
             >
               ← Back to dashboard
@@ -223,119 +226,119 @@ export default async function AdminRevenuePage() {
 
             <Link
               href="/admin/orders"
-              className="primaryButton"
+              className="revenue-primary-button"
               style={styles.primaryButton}
             >
-              Orders dashboard →
+              Orders →
             </Link>
           </div>
-        </div>
+        </aside>
       </section>
 
-      <section className="summaryGrid" style={styles.summaryGrid}>
+      <section className="revenue-summary-grid" style={styles.summaryGrid}>
         <SummaryCard label="Total payments" value={totalPayments} />
-
-        <SummaryCard
-          label="Currencies"
-          value={currencySummaries.length}
-        />
-
-        <SummaryCard
-          label="Tenants"
-          value={tenantSummaries.length}
-        />
-
-        <SummaryCard
-          label="Latest payment rows"
-          value={payments.length}
-        />
+        <SummaryCard label="Currencies" value={currencySummaries.length} />
+        <SummaryCard label="Tenants" value={tenantSummaries.length} />
+        <SummaryCard label="Latest payment rows" value={payments.length} />
       </section>
-            <section className="cards" style={styles.cards}>
+            <section className="revenue-currency-grid" style={styles.currencyGrid}>
         {currencySummaries.length ? (
           currencySummaries.map((row) => {
             const currency = row.currency || "gbp";
 
             return (
-              <div key={currency} style={styles.card}>
-                <div style={styles.cardLabel}>
-                  {currency.toUpperCase()} totals
-                </div>
-
-                <div style={styles.currencyGrid}>
+              <article
+                key={currency}
+                className="revenue-currency-card"
+                style={styles.currencyCard}
+              >
+                <div style={styles.currencyHeader}>
                   <div>
-                    <div style={styles.miniLabel}>Gross</div>
+                    <p style={styles.currencyKicker}>
+                      {currency.toUpperCase()} totals
+                    </p>
 
-                    <div style={styles.miniValue}>
-                      {money(row.gross_amount_cents, currency)}
-                    </div>
+                    <h2
+                      className="so-brand-card-title"
+                      style={styles.currencyTitle}
+                    >
+                      Finance snapshot
+                    </h2>
                   </div>
 
-                  <div>
-                    <div style={styles.miniLabel}>Platform fees</div>
-
-                    <div style={styles.miniValue}>
-                      {money(row.platform_fee_cents, currency)}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={styles.miniLabel}>Donor-covered fees</div>
-
-                    <div style={styles.miniValue}>
-                      {money(row.donor_fee_cents, currency)}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={styles.miniLabel}>Pending payouts</div>
-
-                    <div style={styles.pendingValue}>
-                      {money(row.pending_net_amount_cents, currency)}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={styles.miniLabel}>Paid out</div>
-
-                    <div style={styles.paidValue}>
-                      {money(row.paid_net_amount_cents, currency)}
-                    </div>
+                  <div style={styles.currencyBadge}>
+                    {Number(row.payment_count)} payments
                   </div>
                 </div>
-              </div>
+
+                <div style={styles.currencyMetrics}>
+                  <MetricBlock
+                    label="Gross"
+                    value={money(row.gross_amount_cents, currency)}
+                  />
+
+                  <MetricBlock
+                    label="Platform fees"
+                    value={money(row.platform_fee_cents, currency)}
+                  />
+
+                  <MetricBlock
+                    label="Donor-covered fees"
+                    value={money(row.donor_fee_cents, currency)}
+                  />
+
+                  <MetricBlock
+                    label="Pending payouts"
+                    value={money(row.pending_net_amount_cents, currency)}
+                    tone="orange"
+                  />
+
+                  <MetricBlock
+                    label="Paid out"
+                    value={money(row.paid_net_amount_cents, currency)}
+                    tone="green"
+                  />
+                </div>
+              </article>
             );
           })
         ) : (
-          <div style={styles.card}>
-            <div style={styles.cardLabel}>No payments yet</div>
+          <div style={styles.emptyCard}>
+            <div style={styles.emptyTitle}>No payments yet</div>
 
-            <div style={styles.cardValue}>—</div>
+            <p style={styles.emptyText}>
+              Revenue activity will appear here once successful payments are
+              processed through the platform.
+            </p>
           </div>
         )}
       </section>
 
-      <section style={styles.panel}>
+      <section className="revenue-panel" style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Tenant payouts</p>
 
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            <h2
+              className="so-brand-card-title"
+              style={styles.sectionTitle}
+            >
               Payouts by tenant and currency
             </h2>
 
             <p style={styles.sectionText}>
-              Review pending payouts, donor-covered fees and completed payout
-              activity by tenant.
+              Track platform fees, donor contributions, pending payouts and
+              completed payout batches across each tenant.
             </p>
           </div>
 
-          <span style={styles.countPill}>
-            {tenantSummaries.length} payout groups
-          </span>
+          <div style={styles.countPill}>
+            {tenantSummaries.length} tenant rows
+          </div>
         </div>
 
         {tenantSummaries.length ? (
-          <div className="tableWrap" style={styles.tableWrap}>
+          <div className="revenue-table-wrap" style={styles.tableWrap}>
             <table style={styles.table}>
               <thead>
                 <tr>
@@ -364,11 +367,19 @@ export default async function AdminRevenuePage() {
                   );
 
                   return (
-                    <tr key={`${tenantSlug || "unknown"}-${currency}`}>
-                      <td style={styles.td}>{tenantSlug || "—"}</td>
+                    <tr
+                      key={`${tenantSlug || "unknown"}-${currency}`}
+                    >
+                      <td style={styles.td}>
+                        <strong style={styles.primaryText}>
+                          {tenantSlug || "—"}
+                        </strong>
+                      </td>
 
                       <td style={styles.td}>
-                        {currency.toUpperCase()}
+                        <span style={styles.currencyPill}>
+                          {currency.toUpperCase()}
+                        </span>
                       </td>
 
                       <td style={styles.td}>
@@ -388,22 +399,26 @@ export default async function AdminRevenuePage() {
                       </td>
 
                       <td style={styles.td}>
-                        {money(row.net_amount_cents, currency)}
+                        <strong style={styles.primaryText}>
+                          {money(row.net_amount_cents, currency)}
+                        </strong>
                       </td>
 
                       <td style={styles.td}>
-                        <strong>
+                        <strong style={styles.pendingText}>
                           {money(pendingAmount, currency)}
                         </strong>
 
-                        <div style={styles.smallMuted}>
+                        <div style={styles.secondaryText}>
                           {pendingCount} payment
                           {pendingCount === 1 ? "" : "s"}
                         </div>
                       </td>
 
                       <td style={styles.td}>
-                        {money(row.paid_net_amount_cents, currency)}
+                        <strong style={styles.greenText}>
+                          {money(row.paid_net_amount_cents, currency)}
+                        </strong>
                       </td>
 
                       <td style={styles.td}>
@@ -424,38 +439,42 @@ export default async function AdminRevenuePage() {
             </table>
           </div>
         ) : (
-          <div style={styles.empty}>
+          <div style={styles.emptyState}>
             No paid platform payments found yet.
           </div>
         )}
       </section>
 
-      <section style={styles.panel}>
+      <section className="revenue-panel" style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
-            <p style={styles.kicker}>Latest finance activity</p>
+            <p style={styles.kicker}>Latest activity</p>
 
-            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            <h2
+              className="so-brand-card-title"
+              style={styles.sectionTitle}
+            >
               Latest payments
             </h2>
 
             <p style={styles.sectionText}>
-              Recent revenue activity, payout tracking and donor fee coverage.
+              Review recent checkout activity, donor fee coverage and payout
+              tracking from one unified finance feed.
             </p>
           </div>
 
-          <span style={styles.countPill}>
-            {payments.length} latest rows
-          </span>
+          <div style={styles.countPill}>
+            {payments.length} rows
+          </div>
         </div>
 
         {payments.length ? (
-          <div className="tableWrap" style={styles.tableWrap}>
+          <div className="revenue-table-wrap" style={styles.tableWrap}>
             <table style={styles.table}>
               <thead>
                 <tr>
                   <th style={styles.th}>Date</th>
-                  <th style={styles.th}>Raffle</th>
+                  <th style={styles.th}>Campaign</th>
                   <th style={styles.th}>Tenant</th>
                   <th style={styles.th}>Customer</th>
                   <th style={styles.th}>Gross</th>
@@ -483,7 +502,9 @@ export default async function AdminRevenuePage() {
                       </td>
 
                       <td style={styles.td}>
-                        {payment.raffle_title || payment.raffle_id}
+                        <strong style={styles.primaryText}>
+                          {payment.raffle_title || payment.raffle_id}
+                        </strong>
                       </td>
 
                       <td style={styles.td}>
@@ -495,17 +516,11 @@ export default async function AdminRevenuePage() {
                       </td>
 
                       <td style={styles.td}>
-                        {money(
-                          payment.gross_amount_cents,
-                          currency,
-                        )}
+                        {money(payment.gross_amount_cents, currency)}
                       </td>
 
                       <td style={styles.td}>
-                        {money(
-                          payment.platform_fee_cents,
-                          currency,
-                        )}
+                        {money(payment.platform_fee_cents, currency)}
                       </td>
 
                       <td style={styles.td}>
@@ -513,15 +528,16 @@ export default async function AdminRevenuePage() {
                       </td>
 
                       <td style={styles.td}>
-                        {money(payment.net_amount_cents, currency)}
+                        <strong style={styles.primaryText}>
+                          {money(payment.net_amount_cents, currency)}
+                        </strong>
                       </td>
 
                       <td style={styles.td}>
-                        {payment.donor_covered_fees
-                          ? "Yes"
-                          : "No"}
+                        {payment.donor_covered_fees ? "Yes" : "No"}
                       </td>
-                                            <td style={styles.td}>
+
+                      <td style={styles.td}>
                         <span
                           style={{
                             ...styles.badge,
@@ -552,7 +568,7 @@ export default async function AdminRevenuePage() {
             </table>
           </div>
         ) : (
-          <div style={styles.empty}>No payments yet.</div>
+          <div style={styles.emptyState}>No payments yet.</div>
         )}
       </section>
     </main>
@@ -568,8 +584,9 @@ function HeroStat({
 }) {
   return (
     <div style={styles.heroStat}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span style={styles.heroStatLabel}>{label}</span>
+
+      <strong style={styles.heroStatValue}>{value}</strong>
     </div>
   );
 }
@@ -583,8 +600,9 @@ function MiniMetric({
 }) {
   return (
     <div style={styles.miniMetric}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span style={styles.miniMetricLabel}>{label}</span>
+
+      <strong style={styles.miniMetricValue}>{value}</strong>
     </div>
   );
 }
@@ -598,8 +616,34 @@ function SummaryCard({
 }) {
   return (
     <div style={styles.summaryCard}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span style={styles.summaryLabel}>{label}</span>
+
+      <strong style={styles.summaryValue}>{value}</strong>
+    </div>
+  );
+}
+
+function MetricBlock({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "default" | "green" | "orange";
+}) {
+  const valueStyle =
+    tone === "green"
+      ? styles.greenText
+      : tone === "orange"
+        ? styles.pendingText
+        : styles.metricValue;
+
+  return (
+    <div style={styles.metricBlock}>
+      <div style={styles.metricLabel}>{label}</div>
+
+      <div style={valueStyle}>{value}</div>
     </div>
   );
 }
@@ -614,17 +658,40 @@ const responsiveStyles = `
   overflow-x: hidden;
 }
 
-.revenue-page .tableWrap {
-  overflow-x: auto;
+.revenue-page section,
+.revenue-page article,
+.revenue-page div,
+.revenue-page table {
+  min-width: 0;
 }
-
-@media (max-width: 980px) {
-  .revenue-page .hero {
+@media (max-width: 1180px) {
+  .revenue-page .revenue-hero {
     grid-template-columns: 1fr !important;
   }
 
-  .revenue-page .heroStats,
-  .revenue-page .summaryGrid {
+  .revenue-page .revenue-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .revenue-page {
+    padding: 18px 12px 48px !important;
+  }
+
+  .revenue-page .revenue-hero {
+    padding: 22px !important;
+    border-radius: 28px !important;
+  }
+
+  .revenue-page .revenue-title {
+    font-size: clamp(38px, 11vw, 56px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .revenue-page .revenue-hero-stats,
+  .revenue-page .revenue-summary-grid,
+  .revenue-page .revenue-hero-panel-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -634,25 +701,36 @@ const responsiveStyles = `
     padding: 14px 10px 42px !important;
   }
 
-  .revenue-page .hero {
-    padding: 18px !important;
-    border-radius: 24px !important;
+  .revenue-page .revenue-hero,
+  .revenue-page .revenue-panel,
+  .revenue-page .revenue-currency-card {
+    padding: 16px !important;
+    border-radius: 22px !important;
   }
 
-  .revenue-page .title {
-    font-size: clamp(34px, 12vw, 48px) !important;
+  .revenue-page .revenue-title {
+    font-size: clamp(34px, 12vw, 46px) !important;
   }
 
-  .revenue-page .heroStats,
-  .revenue-page .summaryGrid,
-  .revenue-page .heroPanelGrid {
+  .revenue-page .revenue-hero-stats,
+  .revenue-page .revenue-summary-grid,
+  .revenue-page .revenue-hero-panel-grid {
     grid-template-columns: 1fr !important;
   }
 
-  .revenue-page .panel,
-  .revenue-page .card {
-    padding: 14px !important;
-    border-radius: 20px !important;
+  .revenue-page .revenue-top-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .revenue-page .revenue-primary-button,
+  .revenue-page .revenue-secondary-button {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .revenue-page .revenue-table-wrap {
+    overflow-x: auto !important;
   }
 }
 `;
@@ -668,8 +746,6 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     boxSizing: "border-box",
     overflowX: "hidden",
-    display: "grid",
-    gap: 18,
   },
 
   hero: {
@@ -682,9 +758,10 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
-    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
   },
 
   heroGlow: {
@@ -715,6 +792,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 16,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
@@ -723,6 +801,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 0.92,
     letterSpacing: "-0.08em",
     color: "#ffffff",
+    overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
@@ -733,6 +812,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     lineHeight: 1.6,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   heroStats: {
@@ -746,27 +826,45 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 6,
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 20,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+  },
+
+  heroStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  heroStatValue: {
+    color: "#ffffff",
+    fontSize: 28,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
   heroPanel: {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gap: 14,
+    gap: 18,
     alignContent: "start",
-    padding: 20,
-    borderRadius: 24,
+    padding: 22,
+    borderRadius: 28,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
+    minWidth: 0,
   },
 
   heroPanelTitle: {
     color: "#ffffff",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 950,
     letterSpacing: "-0.04em",
   },
@@ -774,29 +872,42 @@ const styles: Record<string, CSSProperties> = {
   heroPanelText: {
     margin: 0,
     color: "#dbeafe",
-    lineHeight: 1.55,
+    lineHeight: 1.6,
     fontWeight: 700,
   },
 
   heroPanelGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
+    gridTemplateColumns: "1fr",
+    gap: 12,
   },
 
   miniMetric: {
     display: "grid",
     gap: 4,
-    padding: 12,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 18,
     background: "#ffffff",
-    border: "1px solid rgba(217,119,6,0.34)",
+    border: "1px solid rgba(217,119,6,0.20)",
+  },
+
+  miniMetricLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 850,
+  },
+
+  miniMetricValue: {
     color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   topActions: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
 
@@ -813,6 +924,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
+    whiteSpace: "nowrap",
+    textAlign: "center",
   },
 
   secondaryButton: {
@@ -828,12 +941,15 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(148,163,184,0.52)",
     backdropFilter: "blur(10px)",
+    whiteSpace: "nowrap",
+    textAlign: "center",
   },
 
   summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
+    marginBottom: 18,
   },
 
   summaryCard: {
@@ -846,68 +962,125 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
 
-  cards: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: 14,
-  },
-
-  card: {
-    padding: 18,
-    borderRadius: 24,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    boxShadow: "0 2px 10px rgba(15,23,42,0.05)",
-  },
-
-  cardLabel: {
+  summaryLabel: {
     color: "#64748b",
-    fontSize: 14,
-    fontWeight: 800,
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: 850,
   },
 
-  cardValue: {
-    fontSize: 28,
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 30,
     fontWeight: 950,
-    color: "#111827",
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
   currencyGrid: {
     display: "grid",
-    gap: 10,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 16,
+    marginBottom: 18,
   },
 
-  miniLabel: {
+  currencyCard: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+  },
+
+  currencyHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  currencyKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  currencyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    letterSpacing: "-0.05em",
+  },
+
+  currencyBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  currencyMetrics: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  metricBlock: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  metricLabel: {
     color: "#64748b",
     fontSize: 12,
-    fontWeight: 700,
+    fontWeight: 850,
   },
 
-  miniValue: {
-    color: "#111827",
-    fontSize: 20,
+  metricValue: {
+    color: "#0f172a",
+    fontSize: 22,
     fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
-  pendingValue: {
-    color: "#c2410c",
-    fontSize: 20,
-    fontWeight: 950,
-  },
-
-  paidValue: {
+  greenText: {
     color: "#166534",
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  pendingText: {
+    color: "#c2410c",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   panel: {
-    padding: 20,
+    padding: 22,
     borderRadius: 28,
-    border: "1px solid #e2e8f0",
     background: "#ffffff",
-    boxShadow: "0 2px 10px rgba(15,23,42,0.05)",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    marginBottom: 18,
   },
 
   sectionHeader: {
@@ -931,7 +1104,7 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 28,
+    fontSize: 30,
     letterSpacing: "-0.05em",
   },
 
@@ -956,45 +1129,67 @@ const styles: Record<string, CSSProperties> = {
   },
 
   tableWrap: {
+    width: "100%",
     overflowX: "auto",
   },
 
   table: {
     width: "100%",
-    borderCollapse: "collapse",
-    fontSize: 14,
+    minWidth: 1100,
+    borderCollapse: "separate",
+    borderSpacing: "0 10px",
   },
 
   th: {
-    textAlign: "left",
-    padding: "12px 12px",
-    borderBottom: "1px solid #e2e8f0",
-    color: "#475569",
-    whiteSpace: "nowrap",
+    padding: "8px 10px",
+    color: "#64748b",
     fontSize: 12,
+    fontWeight: 950,
+    textAlign: "left",
     textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
   },
 
   td: {
-    padding: "12px 12px",
-    borderBottom: "1px solid #f1f5f9",
+    padding: "14px 10px",
+    background: "#f8fafc",
+    borderTop: "1px solid #e2e8f0",
+    borderBottom: "1px solid #e2e8f0",
+    verticalAlign: "middle",
     whiteSpace: "nowrap",
-    verticalAlign: "top",
   },
 
-  smallMuted: {
-    marginTop: 3,
-    color: "#64748b",
+  currencyPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
     fontSize: 12,
+    fontWeight: 950,
+  },
+
+  primaryText: {
+    color: "#0f172a",
+    fontWeight: 950,
+  },
+
+  secondaryText: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 750,
   },
 
   badge: {
     display: "inline-flex",
-    padding: "5px 9px",
+    alignItems: "center",
+    padding: "7px 10px",
     borderRadius: 999,
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 950,
     textTransform: "capitalize",
   },
 
@@ -1010,11 +1205,34 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #a7f3d0",
   },
 
-  empty: {
-    padding: 16,
-    borderRadius: 12,
-    background: "#f8fafc",
+  emptyCard: {
+    padding: 24,
+    borderRadius: 28,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
+  },
+
+  emptyTitle: {
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+    marginBottom: 10,
+  },
+
+  emptyText: {
+    margin: 0,
     color: "#64748b",
+    lineHeight: 1.6,
+    fontWeight: 700,
+  },
+
+  emptyState: {
+    padding: 18,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 850,
+    textAlign: "center",
   },
 };
