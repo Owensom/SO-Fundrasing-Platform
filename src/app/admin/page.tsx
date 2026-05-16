@@ -4,6 +4,13 @@ import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  checkSubscriptionCapability,
+  getTierLabel,
+  getTierPlatformFeePercent,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import { listSquaresGames } from "../../../api/_lib/squares-repo";
 import { listEvents } from "../../../api/_lib/events-repo";
 import { listAuctions } from "../../../api/_lib/auctions-repo";
@@ -22,6 +29,13 @@ type ApiResponse = {
   ok: boolean;
   items?: RaffleItem[];
   error?: string;
+};
+
+type TenantBillingLike = {
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  platform_owner_bypass?: boolean | null;
+  platform_fee_percent?: number | null;
 };
 
 async function getAdminRaffles(): Promise<RaffleItem[]> {
@@ -67,6 +81,14 @@ function formatMoney(cents: number, currency = "GBP") {
   }
 }
 
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return "0%";
+
+  return `${Number(value).toLocaleString("en-GB", {
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
 export default async function AdminDashboardPage() {
   const session = await auth();
 
@@ -84,12 +106,50 @@ export default async function AdminDashboardPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const [raffles, squares, events, auctions] = await Promise.all([
-    getAdminRaffles(),
-    listSquaresGames(tenantSlug),
-    listEvents(tenantSlug),
-    listAuctions(tenantSlug),
-  ]);
+  const [raffles, squares, events, auctions, tenantSettingsRaw] =
+    await Promise.all([
+      getAdminRaffles(),
+      listSquaresGames(tenantSlug),
+      listEvents(tenantSlug),
+      listAuctions(tenantSlug),
+      getTenantSettings(tenantSlug),
+    ]);
+
+  const tenantSettings = tenantSettingsRaw as TenantBillingLike | null;
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const subscriptionStatus =
+    tenantSettings?.subscription_status?.trim() || "active";
+
+  const platformFeePercent = Number.isFinite(
+    Number(tenantSettings?.platform_fee_percent),
+  )
+    ? Number(tenantSettings?.platform_fee_percent)
+    : getTierPlatformFeePercent(subscriptionTier);
+
+  const subscriptionTenant = {
+    subscription_tier: subscriptionTier,
+    subscription_status: subscriptionStatus,
+    platform_owner_bypass: Boolean(tenantSettings?.platform_owner_bypass),
+  };
+
+  const auctionCapability = checkSubscriptionCapability(
+    subscriptionTenant,
+    "auctions",
+  );
+
+  const brandingCapability = checkSubscriptionCapability(
+    subscriptionTenant,
+    "advanced_branding",
+  );
+
+  const customDomainCapability = checkSubscriptionCapability(
+    subscriptionTenant,
+    "custom_domain",
+  );
 
   const publishedRaffles = raffles.filter(
     (item) => item.status === "published",
@@ -99,9 +159,7 @@ export default async function AdminDashboardPage() {
     (item) => item.status === "published",
   );
 
-  const publishedEvents = events.filter(
-    (item) => item.status === "published",
-  );
+  const publishedEvents = events.filter((item) => item.status === "published");
 
   const publishedAuctions = auctions.filter(
     (item) => item.status === "published",
@@ -182,15 +240,23 @@ export default async function AdminDashboardPage() {
         <div className="admin-command-stats" style={styles.commandStats}>
           <StatCard label="Total campaigns" value={totalCampaigns} dark />
 
-          <StatCard
-            label="Published"
-            value={totalPublishedCampaigns}
-            dark
-          />
+          <StatCard label="Published" value={totalPublishedCampaigns} dark />
 
           <StatCard
             label="Tracked estimate"
             value={formatMoney(combinedEstimatedRevenueCents)}
+            dark
+          />
+
+          <StatCard
+            label="Current plan"
+            value={getTierLabel(subscriptionTier)}
+            dark
+          />
+
+          <StatCard
+            label="Platform fee"
+            value={formatPercent(platformFeePercent)}
             dark
           />
         </div>
@@ -239,6 +305,74 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      <section className="admin-plan-panel" style={styles.planPanel}>
+        <div>
+          <p style={styles.planKicker}>Subscription status</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.planTitle}
+          >
+            {getTierLabel(subscriptionTier)} plan
+          </h2>
+
+          <p style={styles.planText}>
+            This dashboard now understands the tenant plan and can show
+            upgrade-only features without blocking routes yet.
+          </p>
+        </div>
+
+        <div className="admin-plan-grid" style={styles.planGrid}>
+          <PlanFeature
+            label="Raffles"
+            included
+            text="Included on all plans"
+          />
+
+          <PlanFeature
+            label="Squares"
+            included
+            text="Included on all plans"
+          />
+
+          <PlanFeature
+            label="Events"
+            included
+            text="Included on all plans"
+          />
+
+          <PlanFeature
+            label="Auctions"
+            included={auctionCapability.allowed}
+            text={
+              auctionCapability.allowed
+                ? "Included on this plan"
+                : "Professional required"
+            }
+          />
+
+          <PlanFeature
+            label="Advanced branding"
+            included={brandingCapability.allowed}
+            text={
+              brandingCapability.allowed
+                ? "Included on this plan"
+                : "Professional required"
+            }
+          />
+
+          <PlanFeature
+            label="Custom domains"
+            included={customDomainCapability.allowed}
+            text={
+              customDomainCapability.allowed
+                ? "Included on this plan"
+                : "Foundation required"
+            }
+          />
+        </div>
+      </section>
+
       <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
@@ -270,7 +404,8 @@ export default async function AdminDashboardPage() {
           text={`${totalCampaigns} total campaigns created`}
         />
       </section>
-            <section style={styles.sectionHeader}>
+
+      <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Main workspaces</p>
 
@@ -283,7 +418,7 @@ export default async function AdminDashboardPage() {
 
           <p style={styles.sectionText}>
             Choose the campaign type or operational dashboard you want to
-            manage.
+            manage. Locked labels are visual only at this stage.
           </p>
         </div>
       </section>
@@ -319,6 +454,8 @@ export default async function AdminDashboardPage() {
           title="Auctions"
           description="Run premium auction fundraising campaigns."
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
+          locked={!auctionCapability.allowed}
+          lockText="Professional required"
         />
 
         <DashboardCard
@@ -490,6 +627,41 @@ function StatCard({
   );
 }
 
+function PlanFeature({
+  label,
+  included,
+  text,
+}: {
+  label: string;
+  included: boolean;
+  text: string;
+}) {
+  return (
+    <div
+      className="admin-plan-feature"
+      style={{
+        ...styles.planFeature,
+        ...(included ? styles.planFeatureIncluded : styles.planFeatureLocked),
+      }}
+    >
+      <div style={styles.planFeatureTop}>
+        <span style={styles.planFeatureLabel}>{label}</span>
+
+        <span
+          style={{
+            ...styles.planPill,
+            ...(included ? styles.planPillIncluded : styles.planPillLocked),
+          }}
+        >
+          {included ? "Included" : "Locked"}
+        </span>
+      </div>
+
+      <p style={styles.planFeatureText}>{text}</p>
+    </div>
+  );
+}
+
 function FocusCard({
   label,
   value,
@@ -539,6 +711,8 @@ function DashboardCard({
   stats,
   tone = "default",
   compact = false,
+  locked = false,
+  lockText,
 }: {
   href: string;
   image?: string;
@@ -548,6 +722,8 @@ function DashboardCard({
   stats: string;
   tone?: "default" | "blue" | "gold";
   compact?: boolean;
+  locked?: boolean;
+  lockText?: string;
 }) {
   const badgeStyle =
     tone === "gold"
@@ -561,45 +737,50 @@ function DashboardCard({
       <article
         className={`admin-dashboard-card ${
           compact ? "admin-compact-card" : ""
-        }`}
-        style={
-          compact
+        } ${locked ? "admin-locked-card" : ""}`}
+        style={{
+          ...(compact
             ? {
                 ...styles.card,
                 ...styles.compactCard,
               }
-            : styles.card
-        }
+            : styles.card),
+          ...(locked ? styles.lockedCard : {}),
+        }}
       >
         <div style={styles.cardTop}>
-          <div
-            style={
-              compact
-                ? {
-                    ...styles.logoBox,
-                    ...styles.compactLogoBox,
+          <div style={styles.cardHeaderRow}>
+            <div
+              style={
+                compact
+                  ? {
+                      ...styles.logoBox,
+                      ...styles.compactLogoBox,
+                    }
+                  : styles.logoBox
+              }
+            >
+              {image ? (
+                <img
+                  src={image}
+                  alt={title}
+                  style={
+                    image.includes("so-default-auctions")
+                      ? {
+                          ...styles.logoImage,
+                          width: "132%",
+                          height: "132%",
+                          padding: 2,
+                        }
+                      : styles.logoImage
                   }
-                : styles.logoBox
-            }
-          >
-            {image ? (
-              <img
-                src={image}
-                alt={title}
-                style={
-                  image.includes("so-default-auctions")
-                    ? {
-                        ...styles.logoImage,
-                        width: "132%",
-                        height: "132%",
-                        padding: 2,
-                      }
-                    : styles.logoImage
-                }
-              />
-            ) : (
-              <span style={badgeStyle}>{badgeText || title}</span>
-            )}
+                />
+              ) : (
+                <span style={badgeStyle}>{badgeText || title}</span>
+              )}
+            </div>
+
+            {locked ? <span style={styles.lockBadge}>{lockText}</span> : null}
           </div>
 
           <h2
@@ -617,12 +798,15 @@ function DashboardCard({
 
           <div style={styles.cardDivider} />
 
-          <div style={styles.openLink}>Open dashboard →</div>
+          <div style={locked ? styles.lockedOpenLink : styles.openLink}>
+            {locked ? "View upgrade option →" : "Open dashboard →"}
+          </div>
         </div>
       </article>
     </Link>
   );
 }
+
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -688,7 +872,8 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-panel-actions {
+  .admin-dashboard-page .admin-panel-actions,
+  .admin-dashboard-page .admin-plan-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -699,13 +884,15 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
   .admin-dashboard-page .admin-cards-grid,
-  .admin-dashboard-page .admin-panel-actions {
+  .admin-dashboard-page .admin-panel-actions,
+  .admin-dashboard-page .admin-plan-grid {
     grid-template-columns: 1fr !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
   .admin-dashboard-page .admin-finance-panel,
-  .admin-dashboard-page .admin-data-panel {
+  .admin-dashboard-page .admin-data-panel,
+  .admin-dashboard-page .admin-plan-panel {
     padding: 16px !important;
     border-radius: 22px !important;
   }
@@ -918,6 +1105,115 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  planPanel: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+  },
+
+  planKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  planTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  planText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.6,
+    maxWidth: 860,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  planGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  planFeature: {
+    display: "grid",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
+    minWidth: 0,
+  },
+
+  planFeatureIncluded: {
+    background: "#ffffff",
+    border: "1px solid #bbf7d0",
+  },
+
+  planFeatureLocked: {
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+  },
+
+  planFeatureTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  planFeatureLabel: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  planPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+  },
+
+  planPillIncluded: {
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+  },
+
+  planPillLocked: {
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fdba74",
+  },
+
+  planFeatureText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
   focusGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
@@ -1021,6 +1317,12 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
+  lockedCard: {
+    background:
+      "linear-gradient(135deg, rgba(255,247,237,0.92), rgba(255,255,255,1) 62%)",
+    border: "1px solid #fed7aa",
+  },
+
   compactCard: {
     minHeight: 210,
     gap: 12,
@@ -1031,6 +1333,13 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignContent: "start",
     minWidth: 0,
+  },
+
+  cardHeaderRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
   },
 
   logoBox: {
@@ -1059,6 +1368,22 @@ const styles: Record<string, CSSProperties> = {
     display: "block",
     padding: 8,
     boxSizing: "border-box",
+  },
+
+  lockBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fdba74",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
   },
 
   logoTextDefault: {
@@ -1121,6 +1446,12 @@ const styles: Record<string, CSSProperties> = {
 
   openLink: {
     color: "#2563eb",
+    fontWeight: 950,
+    fontSize: 14,
+  },
+
+  lockedOpenLink: {
+    color: "#b45309",
     fontWeight: 950,
     fontSize: 14,
   },
