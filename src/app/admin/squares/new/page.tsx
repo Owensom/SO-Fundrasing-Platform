@@ -491,9 +491,9 @@ export default function NewSquaresGamePage() {
           </Field>
 
           <div style={styles.drawPreviewField}>
-            <span style={styles.label}>Draw preview</span>
-
             <div style={styles.drawPreviewInline}>
+              <span style={styles.previewInfoLabel}>Draw preview</span>
+
               <span style={styles.previewInfoValue}>
                 {formatDatePreview(drawAt)}
               </span>
@@ -1482,20 +1482,29 @@ const styles: Record<string, CSSProperties> = {
   },
   drawPreviewField: {
     display: "grid",
-    gap: 7,
+    alignContent: "end",
     minWidth: 0,
   },
   drawPreviewInline: {
     width: "100%",
     minHeight: 48,
-    display: "flex",
-    alignItems: "center",
-    padding: "12px 13px",
+    display: "grid",
+    alignContent: "center",
+    padding: "8px 13px",
     borderRadius: 14,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
     color: "#1e3a8a",
     boxSizing: "border-box",
+  },
+  previewInfoLabel: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    lineHeight: 1.2,
+    marginBottom: 2,
   },
   previewInfoValue: {
     color: "#1e3a8a",
@@ -1643,7 +1652,12 @@ const styles: Record<string, CSSProperties> = {
   prizeSectionShell: {
     display: "grid",
     gap: 14,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
     minWidth: 0,
+    overflow: "hidden",
   },
   prizeSectionTop: {
     display: "flex",
@@ -1651,10 +1665,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #fde68a",
   },
   prizeSectionTitle: {
     color: "#0f172a",
@@ -1688,7 +1698,8 @@ const styles: Record<string, CSSProperties> = {
     padding: 14,
     border: "1px solid #fde68a",
     borderRadius: 18,
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 55%, #f8fafc 100%)",
     minWidth: 0,
   },
   rowHeader: {
