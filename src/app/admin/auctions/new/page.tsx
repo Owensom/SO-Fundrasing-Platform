@@ -19,9 +19,11 @@ const DEFAULT_AUCTION_IMAGE_URL = "/brand/so-default-auctions.png";
 
 function cleanDateTime(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim();
+
   if (!raw) return null;
 
   const date = new Date(raw);
+
   if (Number.isNaN(date.getTime())) return null;
 
   return date.toISOString();
@@ -29,7 +31,9 @@ function cleanDateTime(value: FormDataEntryValue | null) {
 
 function cleanFocus(value: FormDataEntryValue | null) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -57,11 +61,14 @@ async function createAuctionAction(formData: FormData) {
   "use server";
 
   const tenantSlug = await requireCurrentTenantAccess();
+
   const tenantSettings = await getTenantSettings(tenantSlug);
 
-  const tier = normaliseSubscriptionTier(tenantSettings?.subscription_tier);
+  const tier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
 
-  const auctionCapability = checkSubscriptionCapability(
+  const capability = checkSubscriptionCapability(
     {
       subscription_tier: tier,
       subscription_status: tenantSettings?.subscription_status,
@@ -69,50 +76,53 @@ async function createAuctionAction(formData: FormData) {
     "auctions",
   );
 
-  if (!auctionCapability.allowed) {
-    redirect("/admin/auctions/new?error=upgrade-required");
+  if (!capability.allowed) {
+    redirect("/admin/settings/billing");
   }
 
-  const title = String(formData.get("title") || "").trim() || "Untitled auction";
+  const title =
+    String(formData.get("title") || "").trim() || "Untitled auction";
 
   const slug =
-    String(formData.get("slug") || "").trim().toLowerCase() ||
-    slugifyAuctionTitle(title);
+    String(formData.get("slug") || "")
+      .trim()
+      .toLowerCase() || slugifyAuctionTitle(title);
 
-  const submittedImageUrl = String(formData.get("image_url") || "").trim();
+  const imageUrl =
+    String(formData.get("image_url") || "").trim() ||
+    DEFAULT_AUCTION_IMAGE_URL;
 
   const auction = await createAuction({
     tenantSlug,
     title,
     slug,
-    description: String(formData.get("description") || "").trim() || null,
-    imageUrl: submittedImageUrl || DEFAULT_AUCTION_IMAGE_URL,
+    description:
+      String(formData.get("description") || "").trim() || null,
+    imageUrl,
     imageFocusX: cleanFocus(formData.get("image_focus_x")),
     imageFocusY: cleanFocus(formData.get("image_focus_y")),
     status: String(formData.get("status") || "draft") as AuctionStatus,
-    currency: String(formData.get("currency") || "GBP").trim() || "GBP",
+    currency:
+      String(formData.get("currency") || "GBP").trim() || "GBP",
     opensAt: cleanDateTime(formData.get("opens_at")),
     closesAt: cleanDateTime(formData.get("closes_at")),
-    termsText: String(formData.get("terms_text") || "").trim() || null,
+    termsText:
+      String(formData.get("terms_text") || "").trim() || null,
   });
 
-  redirect(`/admin/auctions/${auction?.id}`);
+  redirect(`/admin/auctions/${auction.id}`);
 }
 
-export default async function NewAuctionPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{
-    error?: string;
-  }>;
-}) {
+export default async function NewAuctionPage() {
   const tenantSlug = await requireCurrentTenantAccess();
-  const resolvedSearchParams = await searchParams;
 
   const tenantSettings = await getTenantSettings(tenantSlug);
-  const tier = normaliseSubscriptionTier(tenantSettings?.subscription_tier);
 
-  const auctionCapability = checkSubscriptionCapability(
+  const tier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const capability = checkSubscriptionCapability(
     {
       subscription_tier: tier,
       subscription_status: tenantSettings?.subscription_status,
@@ -120,93 +130,38 @@ export default async function NewAuctionPage({
     "auctions",
   );
 
-  if (!auctionCapability.allowed) {
+  if (!capability.allowed) {
     return (
       <main style={styles.page}>
-        <style>{responsiveStyles}</style>
-
-        <section style={styles.topActions}>
-          <Link href="/admin/auctions" style={styles.backButton}>
-            ← Back to auctions
-          </Link>
-
-          <Link href="/admin/settings/billing" style={styles.dashboardButton}>
-            Billing settings
-          </Link>
-        </section>
-
-        <section style={styles.upgradeHero}>
-          <div style={styles.upgradeCopy}>
+        <section style={styles.lockedShell}>
+          <div style={styles.lockedCard}>
             <div style={styles.eyebrow}>Professional feature</div>
 
-            <h1 style={styles.title}>Auctions require Professional</h1>
+            <h1 style={styles.title}>
+              Auctions require Professional or Foundation
+            </h1>
 
             <p style={styles.subtitle}>
-              Silent auctions are a premium fundraising workspace. Upgrade this
-              tenant to Professional or Foundation to create auction campaigns.
+              Upgrade this tenant subscription to unlock premium
+              silent auction campaigns, item bidding and winner tools.
             </p>
 
-            <div style={styles.upgradeGrid}>
-              <div style={styles.upgradeCard}>
-                <span>Current plan</span>
-                <strong>
-                  {tier === "community"
-                    ? "Community"
-                    : tier === "professional"
-                      ? "Professional"
-                      : "Foundation"}
-                </strong>
-              </div>
-
-              <div style={styles.upgradeCard}>
-                <span>Required plan</span>
-                <strong>Professional+</strong>
-              </div>
-
-              <div style={styles.upgradeCard}>
-                <span>Campaign limit</span>
-                <strong>Community excludes auctions</strong>
-              </div>
-            </div>
-
-            {resolvedSearchParams?.error === "upgrade-required" ? (
-              <div style={styles.errorBox}>
-                This tenant cannot create auctions on the current subscription
-                plan.
-              </div>
-            ) : null}
-
-            <div style={styles.upgradeActions}>
-              <Link href="/admin/settings/billing" style={styles.saveButton}>
+            <div style={styles.lockedActions}>
+              <Link
+                href="/admin/settings/billing"
+                style={styles.saveButton}
+              >
                 Open billing settings
               </Link>
 
-              <Link href="/admin/auctions" style={styles.cancelButtonLight}>
-                Back to auctions
+              <Link
+                href="/admin"
+                style={styles.cancelButtonLight}
+              >
+                Back to dashboard
               </Link>
             </div>
           </div>
-
-          <aside style={styles.previewPanel}>
-            <div style={styles.previewKicker}>Locked workspace</div>
-
-            <div style={styles.previewImageCard}>
-              <img
-                src={DEFAULT_AUCTION_IMAGE_URL}
-                alt="SO Auctions"
-                style={styles.previewImage}
-              />
-            </div>
-
-            <div style={styles.previewInfoCard}>
-              <h2 style={styles.previewTitle}>Silent auctions</h2>
-
-              <p style={styles.previewText}>
-                Unlock premium auction pages, donated item listings, bidding and
-                winner notification tools.
-              </p>
-            </div>
-          </aside>
         </section>
       </main>
     );
@@ -231,21 +186,24 @@ export default async function NewAuctionPage({
           <div style={styles.eyebrow}>Auction builder</div>
 
           <div style={styles.titleRow}>
-            <h1 style={styles.title}>Build a premium silent auction</h1>
+            <h1 style={styles.title}>
+              Build a premium silent auction
+            </h1>
+
             <span style={styles.statusPill}>Draft</span>
           </div>
 
           <p style={styles.pathText}>/a/auction-slug</p>
 
           <p style={styles.subtitle}>
-            Create the public auction page, set timing, upload a polished
-            campaign image and prepare your auction for items, bids and winner
-            management.
+            Create the public auction page, upload the hero image,
+            configure timings and prepare for items, bids and
+            supporter engagement.
           </p>
 
           <div style={styles.callout}>
-            Ideal for charity dinners, galas, fundraising evenings, prize
-            auctions, business donations and supporter-led campaigns.
+            Perfect for gala dinners, charity nights, donor events,
+            experiences and premium fundraising campaigns.
           </div>
 
           <div style={styles.heroStats}>
@@ -255,7 +213,7 @@ export default async function NewAuctionPage({
             </div>
 
             <div style={styles.heroStat}>
-              <span>Status</span>
+              <span>Starting status</span>
               <strong>Draft</strong>
             </div>
 
@@ -271,28 +229,29 @@ export default async function NewAuctionPage({
           </div>
         </div>
                 <aside style={styles.previewPanel}>
-          <div style={styles.previewKicker}>Public preview</div>
+          <div style={styles.previewKicker}>Auction preview</div>
 
           <div style={styles.previewImageCard}>
             <img
               src={DEFAULT_AUCTION_IMAGE_URL}
-              alt="Default auction campaign preview"
+              alt="Auction preview"
               style={styles.previewImage}
             />
           </div>
 
           <div style={styles.previewInfoCard}>
-            <h2 style={styles.previewTitle}>Your auction title</h2>
+            <h2 style={styles.previewTitle}>Premium silent auction</h2>
 
             <p style={styles.previewText}>
-              A short public summary of your auction will appear here.
+              The public page will showcase items, bidding activity and premium
+              fundraising experiences.
             </p>
 
             <div style={styles.previewMetaGrid}>
-              <span>Silent auction</span>
-              <span>Date to be confirmed</span>
-              <span>Items added later</span>
-              <span>Draft</span>
+              <span>Live bidding</span>
+              <span>Premium lots</span>
+              <span>Supporter checkout</span>
+              <span>Winner tools</span>
             </div>
           </div>
         </aside>
@@ -335,7 +294,7 @@ export default async function NewAuctionPage({
                 <h2 style={styles.sectionTitle}>Auction basics</h2>
 
                 <p style={styles.sectionText}>
-                  Set the public title, slug, description, status and dates that
+                  Set the public title, slug, description, timing and status
                   supporters see first.
                 </p>
               </div>
@@ -365,7 +324,7 @@ export default async function NewAuctionPage({
                   />
 
                   <span style={styles.helpText}>
-                    Leave blank to generate from the title.
+                    Leave blank to auto-generate from the title.
                   </span>
                 </label>
 
@@ -382,11 +341,11 @@ export default async function NewAuctionPage({
                     </option>
 
                     <option value="published">
-                      Published — visible and open by dates
+                      Published — visible to supporters
                     </option>
 
                     <option value="closed">
-                      Closed — visible but not accepting bids
+                      Closed — bidding finished
                     </option>
                   </select>
                 </label>
@@ -397,7 +356,7 @@ export default async function NewAuctionPage({
                   <input
                     name="currency"
                     defaultValue="GBP"
-                    style={styles.input}
+                    style={styles.compactInput}
                   />
                 </label>
 
@@ -407,7 +366,7 @@ export default async function NewAuctionPage({
                   <input
                     name="opens_at"
                     type="datetime-local"
-                    style={styles.input}
+                    style={styles.compactInput}
                   />
                 </label>
 
@@ -417,7 +376,7 @@ export default async function NewAuctionPage({
                   <input
                     name="closes_at"
                     type="datetime-local"
-                    style={styles.input}
+                    style={styles.compactInput}
                   />
                 </label>
 
@@ -426,8 +385,8 @@ export default async function NewAuctionPage({
 
                   <textarea
                     name="description"
-                    placeholder="Tell supporters what this auction is supporting and why their bids matter."
                     rows={5}
+                    placeholder="Tell supporters what this auction is supporting and why the bids matter."
                     style={styles.textarea}
                   />
                 </label>
@@ -441,8 +400,8 @@ export default async function NewAuctionPage({
                 <h2 style={styles.sectionTitle}>Public auction image</h2>
 
                 <p style={styles.sectionText}>
-                  A branded auction image is already selected. Upload a custom
-                  campaign image only if you want to replace it.
+                  Upload a premium campaign image or use the platform default
+                  auction branding.
                 </p>
               </div>
 
@@ -451,8 +410,8 @@ export default async function NewAuctionPage({
                   currentImageUrl={DEFAULT_AUCTION_IMAGE_URL}
                   currentFocusX={50}
                   currentFocusY={50}
-                  label="Main auction image"
-                  previewAlt="Auction image preview"
+                  label="Auction image"
+                  previewAlt="Auction preview image"
                 />
               </div>
             </section>
@@ -461,21 +420,20 @@ export default async function NewAuctionPage({
               <div style={styles.cardHeader}>
                 <p style={styles.cardKicker}>Section 3</p>
 
-                <h2 style={styles.sectionTitle}>Auction rules</h2>
+                <h2 style={styles.sectionTitle}>Auction terms</h2>
 
                 <p style={styles.sectionText}>
-                  Optional public terms shown underneath the auction. Keep this
-                  short and clear.
+                  Optional public auction rules shown underneath the campaign.
                 </p>
               </div>
 
               <label style={styles.fieldFull}>
-                <span style={styles.fieldLabel}>Terms / auction rules</span>
+                <span style={styles.fieldLabel}>Terms and conditions</span>
 
                 <textarea
                   name="terms_text"
-                  placeholder="Bids are binding. Winning bidders will be contacted after the auction closes. Payment and collection details will be confirmed by the organiser."
                   rows={6}
+                  placeholder="Winning bidders will be contacted after the auction closes. Payments are binding and item collection details will be confirmed by the organiser."
                   style={styles.textarea}
                 />
               </label>
@@ -501,7 +459,7 @@ export default async function NewAuctionPage({
 
                 <div style={styles.checkItem}>
                   <span style={styles.checkDot}>3</span>
-                  <span>Add items from the edit screen</span>
+                  <span>Add auction items after creation</span>
                 </div>
 
                 <div style={styles.checkItem}>
@@ -515,9 +473,9 @@ export default async function NewAuctionPage({
               <h2 style={styles.sideTitle}>What happens next?</h2>
 
               <p style={styles.sideText}>
-                After creation you’ll be taken to the auction edit page, where
-                items, donors, images, starting bids, increments and winner
-                tools are managed.
+                After creation you’ll move to the auction management page where
+                items, donors, images, bids, increments and winner workflows are
+                controlled.
               </p>
             </section>
           </aside>
@@ -528,8 +486,8 @@ export default async function NewAuctionPage({
             <h2 style={styles.nextTitle}>Ready to create the auction?</h2>
 
             <p style={styles.nextText}>
-              Save the auction shell now, then add the lots and bidding details
-              on the next screen.
+              Save the auction shell now and continue adding items and bidding
+              settings on the next screen.
             </p>
           </div>
 
@@ -611,6 +569,30 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
   },
 
+  lockedShell: {
+    minHeight: "calc(100vh - 140px)",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  lockedCard: {
+    width: "100%",
+    maxWidth: 880,
+    padding: "clamp(24px, 5vw, 42px)",
+    borderRadius: 34,
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.20), transparent 32%), linear-gradient(135deg, #070f24 0%, #111c3d 52%, #1e2b63 100%)",
+    color: "#ffffff",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+  },
+
+  lockedActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 24,
+  },
+
   hero: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
@@ -627,30 +609,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  upgradeHero: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-    gap: 26,
-    alignItems: "stretch",
-    padding: "clamp(20px, 5vw, 34px)",
-    borderRadius: 30,
-    marginBottom: 18,
-    background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.20), transparent 34%), linear-gradient(135deg, #070f24 0%, #111c3d 48%, #1e2b63 100%)",
-    color: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
-    overflow: "hidden",
-    minWidth: 0,
-  },
-
   heroCopy: {
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    minWidth: 0,
-  },
-
-  upgradeCopy: {
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
@@ -826,40 +785,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
   },
 
-  upgradeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
-    gap: 12,
-    marginTop: 22,
-  },
-
-  upgradeCard: {
-    display: "grid",
-    gap: 6,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    minWidth: 0,
-  },
-
-  errorBox: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fff7ed",
-    color: "#9a3412",
-    border: "1px solid #fed7aa",
-    fontWeight: 900,
-  },
-
-  upgradeActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 22,
-  },
-
   summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
@@ -953,14 +878,6 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  field: {
-    display: "grid",
-    gap: 7,
-    color: "#0f172a",
-    fontWeight: 900,
-    minWidth: 0,
-  },
-
   fieldHalf: {
     display: "grid",
     gap: 7,
@@ -1004,12 +921,28 @@ const styles: Record<string, CSSProperties> = {
 
   input: {
     width: "100%",
-    height: 56,
+    minHeight: 52,
+    height: "auto",
     boxSizing: "border-box",
     borderRadius: 14,
     border: "1px solid #cbd5e1",
     padding: "12px 13px",
     fontSize: 16,
+    color: "#0f172a",
+    background: "#ffffff",
+    outlineColor: "#2563eb",
+    minWidth: 0,
+  },
+
+  compactInput: {
+    width: "100%",
+    minHeight: 48,
+    height: "auto",
+    boxSizing: "border-box",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    padding: "9px 12px",
+    fontSize: 15,
     color: "#0f172a",
     background: "#ffffff",
     outlineColor: "#2563eb",
