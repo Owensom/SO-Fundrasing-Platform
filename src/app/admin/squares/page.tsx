@@ -110,7 +110,6 @@ export default async function AdminSquaresListPage() {
   const games = await listSquaresGames(tenantSlug);
 
   const totalGames = games.length;
-
   const publishedCount = games.filter(
     (game) => game.status === "published",
   ).length;
@@ -139,15 +138,11 @@ export default async function AdminSquaresListPage() {
       <style>{responsiveStyles}</style>
 
       <section className="squares-admin-hero" style={styles.hero}>
+        <div style={styles.heroGlow} />
+
         <div style={styles.heroContent}>
           <div style={styles.heroPillRow}>
-            <Link href="/admin" style={styles.heroBackPill}>
-              ← Back to admin
-            </Link>
-
-            <span style={styles.heroSectionPill}>
-              Squares workspace
-            </span>
+            <span style={styles.heroSectionPill}>Squares workspace</span>
           </div>
 
           <h1
@@ -157,12 +152,9 @@ export default async function AdminSquaresListPage() {
             Manage squares
           </h1>
 
-          <p
-            className="squares-admin-subtitle"
-            style={styles.subtitle}
-          >
-            Run premium squares campaigns with live availability,
-            supporter tracking and draw-ready fundraising controls.
+          <p className="squares-admin-subtitle" style={styles.subtitle}>
+            Run premium squares campaigns with live availability, supporter
+            tracking and draw-ready fundraising controls.
           </p>
 
           <p style={styles.tenant}>
@@ -170,22 +162,13 @@ export default async function AdminSquaresListPage() {
           </p>
         </div>
 
-        <div
-          className="squares-hero-stats"
-          style={styles.heroStats}
-        >
+        <div className="squares-hero-stats" style={styles.heroStats}>
           <HeroStat label="Total games" value={totalGames} />
-
           <HeroStat label="Published" value={publishedCount} />
-
           <HeroStat label="Squares sold" value={soldSquares} />
-
           <HeroStat
             label="Tracked raised"
-            value={formatMoney(
-              totalRaisedCents,
-              dashboardCurrency,
-            )}
+            value={formatMoney(totalRaisedCents, dashboardCurrency)}
           />
         </div>
 
@@ -198,9 +181,7 @@ export default async function AdminSquaresListPage() {
             Raffles
           </Link>
 
-          <div style={styles.navButtonActive}>
-            Squares
-          </div>
+          <div style={styles.navButtonActive}>Squares</div>
 
           <Link href="/admin/events" style={styles.navButton}>
             Events
@@ -217,19 +198,13 @@ export default async function AdminSquaresListPage() {
             Public site
           </Link>
 
-          <Link
-            href="/admin/squares/new"
-            style={styles.createButton}
-          >
+          <Link href="/admin/squares/new" style={styles.createButton}>
             + Create squares
           </Link>
         </nav>
       </section>
 
-      <section
-        className="squares-stats-grid"
-        style={styles.statsGrid}
-      >
+      <section className="squares-stats-grid" style={styles.statsGrid}>
         <StatCard
           label="Total square games"
           value={totalGames}
@@ -256,10 +231,7 @@ export default async function AdminSquaresListPage() {
 
         <StatCard
           label="Raised"
-          value={formatMoney(
-            totalRaisedCents,
-            dashboardCurrency,
-          )}
+          value={formatMoney(totalRaisedCents, dashboardCurrency)}
           icon="£"
           accent="#d97706"
           tint="#fffbeb"
@@ -273,21 +245,15 @@ export default async function AdminSquaresListPage() {
           tint="#f8fafc"
         />
       </section>
-
-      {games.length === 0 ? (
+            {games.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>
             No squares games yet
           </h2>
 
-          <p style={styles.muted}>
-            Create your first squares game.
-          </p>
+          <p style={styles.muted}>Create your first squares game.</p>
 
-          <Link
-            href="/admin/squares/new"
-            style={styles.createButton}
-          >
+          <Link href="/admin/squares/new" style={styles.createButton}>
             + Create squares
           </Link>
         </section>
@@ -295,15 +261,10 @@ export default async function AdminSquaresListPage() {
         <section style={styles.list}>
           {games.map((game) => {
             const sold = getSoldSquares(game);
-
             const total = Number(game.total_squares || 0);
-
             const remaining = Math.max(total - sold, 0);
-
             const progress = progressPercent(sold, total);
-
             const raisedCents = getRaisedCents(game);
-
             const statusStyle = getStatusStyle(game.status);
 
             return (
@@ -312,25 +273,14 @@ export default async function AdminSquaresListPage() {
                 className="squares-card"
                 style={styles.card}
               >
-                <div
-                  className="squares-card-top"
-                  style={styles.cardTop}
-                >
-                  <div
-                    className="squares-image-wrap"
-                    style={styles.imageWrap}
-                  >
+                <div className="squares-card-top" style={styles.cardTop}>
+                  <div className="squares-image-wrap" style={styles.imageWrap}>
                     <img
-                      src={
-                        game.image_url ||
-                        DEFAULT_SQUARES_IMAGE
-                      }
+                      src={game.image_url || DEFAULT_SQUARES_IMAGE}
                       alt={game.title || "Squares"}
                       style={{
                         ...styles.image,
-                        objectFit: game.image_url
-                          ? "cover"
-                          : "contain",
+                        objectFit: game.image_url ? "cover" : "contain",
                         padding: game.image_url ? 0 : 10,
                         background: game.image_url
                           ? "#f1f5f9"
@@ -350,48 +300,32 @@ export default async function AdminSquaresListPage() {
                           className="squares-card-title"
                           style={styles.cardTitle}
                         >
-                          {game.title ||
-                            "Untitled squares game"}
+                          {game.title || "Untitled squares game"}
                         </h2>
 
-                        <p style={styles.slug}>
-                          /s/{game.slug}
-                        </p>
+                        <p style={styles.slug}>/s/{game.slug}</p>
                       </div>
 
-                      <div
-                        style={{
-                          ...styles.status,
-                          ...statusStyle,
-                        }}
-                      >
+                      <div style={{ ...styles.status, ...statusStyle }}>
                         {game.status}
                       </div>
                     </div>
-                                        <div
+
+                    <div
                       className="squares-headline-grid"
                       style={styles.headlineGrid}
                     >
                       <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>
-                          Sales progress
-                        </div>
+                        <div style={styles.headlineLabel}>Sales progress</div>
 
-                        <div style={styles.headlineValue}>
-                          {progress}% sold
-                        </div>
+                        <div style={styles.headlineValue}>{progress}% sold</div>
                       </div>
 
                       <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>
-                          Raised so far
-                        </div>
+                        <div style={styles.headlineLabel}>Raised so far</div>
 
                         <div style={styles.headlineValue}>
-                          {formatMoney(
-                            raisedCents,
-                            game.currency,
-                          )}
+                          {formatMoney(raisedCents, game.currency)}
                         </div>
                       </div>
                     </div>
@@ -413,20 +347,11 @@ export default async function AdminSquaresListPage() {
                         value={formatDrawDate(game.draw_at)}
                       />
 
-                      <InfoBlock
-                        label="Total"
-                        value={total}
-                      />
+                      <InfoBlock label="Total" value={total} />
 
-                      <InfoBlock
-                        label="Sold"
-                        value={sold}
-                      />
+                      <InfoBlock label="Sold" value={sold} />
 
-                      <InfoBlock
-                        label="Remaining"
-                        value={remaining}
-                      />
+                      <InfoBlock label="Remaining" value={remaining} />
                     </div>
 
                     <div style={styles.progressSection}>
@@ -445,10 +370,7 @@ export default async function AdminSquaresListPage() {
                       </div>
                     </div>
 
-                    <div
-                      className="squares-card-actions"
-                      style={styles.actions}
-                    >
+                    <div className="squares-card-actions" style={styles.actions}>
                       <Link
                         href={`/admin/squares/${game.id}`}
                         style={styles.primaryLink}
@@ -469,10 +391,7 @@ export default async function AdminSquaresListPage() {
                         method="post"
                         style={styles.deleteForm}
                       >
-                        <button
-                          type="submit"
-                          style={styles.deleteButton}
-                        >
+                        <button type="submit" style={styles.deleteButton}>
                           Delete
                         </button>
                       </form>
@@ -488,20 +407,10 @@ export default async function AdminSquaresListPage() {
   );
 }
 
-function HeroStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div
-      className="squares-hero-stat"
-      style={styles.heroStat}
-    >
+    <div className="squares-hero-stat" style={styles.heroStat}>
       <div style={styles.heroStatLabel}>{label}</div>
-
       <div style={styles.heroStatValue}>{value}</div>
     </div>
   );
@@ -534,10 +443,7 @@ function StatCard({
         <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
 
-          <div
-            className="squares-stat-value"
-            style={styles.statValue}
-          >
+          <div className="squares-stat-value" style={styles.statValue}>
             {value}
           </div>
         </div>
@@ -572,17 +478,10 @@ function StatCard({
   );
 }
 
-function InfoBlock({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
-
       <div style={styles.detailValue}>{value}</div>
     </div>
   );
@@ -779,12 +678,13 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 auto",
     padding: "28px 16px 56px",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     minHeight: "100vh",
     overflowX: "hidden",
   },
 
   hero: {
+    position: "relative",
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
     gridTemplateAreas: `
@@ -795,14 +695,25 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
 
   heroContent: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "content",
     minWidth: 0,
   },
@@ -814,33 +725,20 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
 
-  heroBackPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "7px 12px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
-    fontSize: 12,
-    fontWeight: 950,
-    textDecoration: "none",
-  },
-
   heroSectionPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "7px 12px",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.12)",
+    background: "rgba(15,23,42,0.24)",
     color: "#facc15",
-    border: "1px solid rgba(251,191,36,0.32)",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
@@ -850,6 +748,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.085em",
     color: "#ffffff",
     overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
@@ -871,6 +770,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   heroStats: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "stats",
     display: "grid",
     gridTemplateColumns: "1fr",
@@ -883,8 +784,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     padding: 18,
     borderRadius: 22,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
   },
 
@@ -903,6 +805,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   nav: {
+    position: "relative",
+    zIndex: 1,
     gridArea: "nav",
     display: "grid",
     gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
@@ -917,13 +821,14 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 46,
     padding: "11px 14px",
     borderRadius: 9999,
-    background: "rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.06)",
     color: "#ffffff",
-    border: "1px solid rgba(251,191,36,0.34)",
+    border: "1px solid rgba(148,163,184,0.52)",
     textDecoration: "none",
     fontWeight: 900,
     textAlign: "center",
     lineHeight: 1.2,
+    backdropFilter: "blur(10px)",
   },
 
   navButtonActive: {
@@ -935,7 +840,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 9999,
     background: "#ffffff",
     color: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.55)",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontWeight: 950,
     textAlign: "center",
     lineHeight: 1.2,
@@ -1094,5 +999,143 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "capitalize",
     fontWeight: 800,
     width: "fit-content",
+  },
+
+  headlineGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  headlineBox: {
+    padding: "13px 14px",
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  headlineLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+
+  headlineValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontSize: 19,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
+  },
+
+  detailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+
+  detail: {
+    padding: 12,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  detailLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: 800,
+  },
+
+  detailValue: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontWeight: 900,
+    wordBreak: "break-word",
+  },
+
+  progressSection: {
+    marginTop: 16,
+  },
+
+  progressHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 700,
+    marginBottom: 6,
+  },
+
+  progressTrack: {
+    height: 10,
+    borderRadius: 999,
+    background: "#e2e8f0",
+    overflow: "hidden",
+  },
+
+  progressFill: {
+    height: "100%",
+    background: "linear-gradient(90deg, #16a34a 0%, #22c55e 100%)",
+    borderRadius: 999,
+  },
+
+  actions: {
+    display: "flex",
+    gap: 10,
+    marginTop: 18,
+    flexWrap: "wrap",
+  },
+
+  primaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+
+  secondaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: 14,
+    boxShadow: "none",
+  },
+
+  deleteForm: {
+    margin: 0,
+  },
+
+  deleteButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#dc2626",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 800,
+    fontSize: 14,
+    cursor: "pointer",
   },
 };
