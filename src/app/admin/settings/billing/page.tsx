@@ -58,7 +58,8 @@ const TIER_DETAILS: Record<
     features: [
       "Raffles",
       "Squares",
-      "Simple campaigns",
+      "Events",
+      "2 active campaigns",
       "Public campaign pages",
       "Optional supporter processing-cost contribution",
     ],
@@ -66,10 +67,11 @@ const TIER_DETAILS: Record<
   professional: {
     name: "Professional",
     monthly: "£25/month",
-    fee: "4%",
+    fee: "3.5%",
     description:
       "Premium fundraising tools for schools, clubs and growing charities.",
     features: [
+      "Unlimited active campaigns",
       "Events",
       "Auctions",
       "CRM",
@@ -81,16 +83,18 @@ const TIER_DETAILS: Record<
   foundation: {
     name: "Foundation",
     monthly: "£99/month",
-    fee: "2%",
+    fee: "1.5%",
     description:
       "Advanced operating infrastructure for larger fundraising organisations.",
     features: [
-      "Lower platform fee",
+      "Unlimited active campaigns",
+      "Lowest platform fee",
       "Advanced reporting",
       "Stripe Connect ready",
       "Priority support",
       "White-label direction",
       "Large-scale operations",
+      "Custom domain direction",
     ],
   },
 };
@@ -102,8 +106,8 @@ function safeTier(value: unknown): TierKey {
 }
 
 function defaultFeeForTier(tier: TierKey) {
-  if (tier === "foundation") return 2;
-  if (tier === "professional") return 4;
+  if (tier === "foundation") return 1.5;
+  if (tier === "professional") return 3.5;
   return 7;
 }
 
@@ -471,10 +475,10 @@ export default async function AdminBillingSettingsPage() {
               >
                 <option value="community">Community — Free + 7%</option>
                 <option value="professional">
-                  Professional — £25/month + 4%
+                  Professional — £25/month + 3.5%
                 </option>
                 <option value="foundation">
-                  Foundation — £99/month + 2%
+                  Foundation — £99/month + 1.5%
                 </option>
               </select>
             </label>
@@ -584,7 +588,8 @@ export default async function AdminBillingSettingsPage() {
               ) : null}
             </div>
           </div>
-                    <div style={styles.toggleSection}>
+
+          <div style={styles.toggleSection}>
             <div>
               <div style={styles.toggleTitle}>Platform capabilities</div>
               <div style={styles.toggleText}>
@@ -674,8 +679,7 @@ export default async function AdminBillingSettingsPage() {
               ))}
             </div>
           </article>
-
-          <article style={styles.sideCard}>
+                    <article style={styles.sideCard}>
             <div style={styles.cardEyebrow}>Connect status</div>
             <h2 style={styles.cardTitle}>Stripe readiness</h2>
 
