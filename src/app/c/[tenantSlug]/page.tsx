@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { auth } from "@/auth";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,10 @@ type Campaign = {
   image_focus_x?: number | null;
   image_focus_y?: number | null;
   status: "draft" | "published" | "closed" | "drawn";
+};
+
+type SessionUserWithTenants = {
+  tenantSlugs?: string[];
 };
 
 function normaliseFocus(value: number | null | undefined) {
@@ -157,7 +162,21 @@ export default async function TenantCampaignsPage({
 }: PageProps) {
   const { tenantSlug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const adminReturn = getSafeAdminReturn(resolvedSearchParams?.adminReturn);
+  const session = await auth();
+
+  const sessionUser = session?.user as SessionUserWithTenants | undefined;
+  const userTenantSlugs = Array.isArray(sessionUser?.tenantSlugs)
+    ? sessionUser.tenantSlugs
+    : [];
+
+  const requestedAdminReturn = getSafeAdminReturn(
+    resolvedSearchParams?.adminReturn,
+  );
+
+  const canShowAdminReturn =
+    Boolean(requestedAdminReturn) && userTenantSlugs.includes(tenantSlug);
+
+  const adminReturn = canShowAdminReturn ? requestedAdminReturn : "";
   const activeType = getActiveType(resolvedSearchParams?.type);
 
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
@@ -186,7 +205,7 @@ export default async function TenantCampaignsPage({
         <div style={styles.heroGlow} />
 
         <div style={styles.heroContent}>
-          {adminReturn ? (
+          {canShowAdminReturn ? (
             <Link href={adminReturn} style={styles.adminBack}>
               ← Back to admin
             </Link>
@@ -202,8 +221,7 @@ export default async function TenantCampaignsPage({
             Choose from live raffles, squares, events and auctions. Every
             campaign helps raise funds and create impact.
           </p>
-
-          <div className="heroActions" style={styles.heroActions}>
+                    <div className="heroActions" style={styles.heroActions}>
             <Link
               href={`/c/${tenantSlug}/terms`}
               style={styles.primaryHeroButton}
@@ -245,7 +263,8 @@ export default async function TenantCampaignsPage({
           ) : null}
         </div>
       </section>
-            {publicCampaigns.length === 0 ? (
+
+      {publicCampaigns.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 className="so-brand-card-title" style={styles.emptyTitle}>
             No active campaigns found
@@ -440,8 +459,7 @@ export default async function TenantCampaignsPage({
                 fundraising platform for this organiser.
               </p>
             </div>
-
-            <div className="trustStats" style={styles.trustStats}>
+                        <div className="trustStats" style={styles.trustStats}>
               <TrustStat
                 label="Live campaign types"
                 value={pluralise(
@@ -550,7 +568,8 @@ const responsiveStyles = `
     display: grid !important;
     grid-template-columns: 1fr !important;
   }
-    .campaigns-page .primaryHeroButton,
+
+  .campaigns-page .primaryHeroButton,
   .campaigns-page .secondaryHeroButton {
     width: 100% !important;
     justify-content: center !important;
