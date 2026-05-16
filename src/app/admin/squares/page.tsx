@@ -251,9 +251,14 @@ export default async function AdminSquaresListPage() {
             No squares games yet
           </h2>
 
-          <p style={styles.muted}>Create your first squares game.</p>
+          <p style={styles.muted}>
+            Create your first squares game.
+          </p>
 
-          <Link href="/admin/squares/new" style={styles.createButton}>
+          <Link
+            href="/admin/squares/new"
+            style={styles.createButton}
+          >
             + Create squares
           </Link>
         </section>
@@ -273,14 +278,25 @@ export default async function AdminSquaresListPage() {
                 className="squares-card"
                 style={styles.card}
               >
-                <div className="squares-card-top" style={styles.cardTop}>
-                  <div className="squares-image-wrap" style={styles.imageWrap}>
+                <div
+                  className="squares-card-top"
+                  style={styles.cardTop}
+                >
+                  <div
+                    className="squares-image-wrap"
+                    style={styles.imageWrap}
+                  >
                     <img
-                      src={game.image_url || DEFAULT_SQUARES_IMAGE}
+                      src={
+                        game.image_url ||
+                        DEFAULT_SQUARES_IMAGE
+                      }
                       alt={game.title || "Squares"}
                       style={{
                         ...styles.image,
-                        objectFit: game.image_url ? "cover" : "contain",
+                        objectFit: game.image_url
+                          ? "cover"
+                          : "contain",
                         padding: game.image_url ? 0 : 10,
                         background: game.image_url
                           ? "#f1f5f9"
@@ -300,13 +316,21 @@ export default async function AdminSquaresListPage() {
                           className="squares-card-title"
                           style={styles.cardTitle}
                         >
-                          {game.title || "Untitled squares game"}
+                          {game.title ||
+                            "Untitled squares game"}
                         </h2>
 
-                        <p style={styles.slug}>/s/{game.slug}</p>
+                        <p style={styles.slug}>
+                          /s/{game.slug}
+                        </p>
                       </div>
 
-                      <div style={{ ...styles.status, ...statusStyle }}>
+                      <div
+                        style={{
+                          ...styles.status,
+                          ...statusStyle,
+                        }}
+                      >
                         {game.status}
                       </div>
                     </div>
@@ -316,16 +340,25 @@ export default async function AdminSquaresListPage() {
                       style={styles.headlineGrid}
                     >
                       <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>Sales progress</div>
+                        <div style={styles.headlineLabel}>
+                          Sales progress
+                        </div>
 
-                        <div style={styles.headlineValue}>{progress}% sold</div>
+                        <div style={styles.headlineValue}>
+                          {progress}% sold
+                        </div>
                       </div>
 
                       <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>Raised so far</div>
+                        <div style={styles.headlineLabel}>
+                          Raised so far
+                        </div>
 
                         <div style={styles.headlineValue}>
-                          {formatMoney(raisedCents, game.currency)}
+                          {formatMoney(
+                            raisedCents,
+                            game.currency,
+                          )}
                         </div>
                       </div>
                     </div>
@@ -347,11 +380,20 @@ export default async function AdminSquaresListPage() {
                         value={formatDrawDate(game.draw_at)}
                       />
 
-                      <InfoBlock label="Total" value={total} />
+                      <InfoBlock
+                        label="Total"
+                        value={total}
+                      />
 
-                      <InfoBlock label="Sold" value={sold} />
+                      <InfoBlock
+                        label="Sold"
+                        value={sold}
+                      />
 
-                      <InfoBlock label="Remaining" value={remaining} />
+                      <InfoBlock
+                        label="Remaining"
+                        value={remaining}
+                      />
                     </div>
 
                     <div style={styles.progressSection}>
@@ -370,7 +412,10 @@ export default async function AdminSquaresListPage() {
                       </div>
                     </div>
 
-                    <div className="squares-card-actions" style={styles.actions}>
+                    <div
+                      className="squares-card-actions"
+                      style={styles.actions}
+                    >
                       <Link
                         href={`/admin/squares/${game.id}`}
                         style={styles.primaryLink}
@@ -391,7 +436,10 @@ export default async function AdminSquaresListPage() {
                         method="post"
                         style={styles.deleteForm}
                       >
-                        <button type="submit" style={styles.deleteButton}>
+                        <button
+                          type="submit"
+                          style={styles.deleteButton}
+                        >
                           Delete
                         </button>
                       </form>
@@ -407,10 +455,20 @@ export default async function AdminSquaresListPage() {
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: ReactNode }) {
+function HeroStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
-    <div className="squares-hero-stat" style={styles.heroStat}>
+    <div
+      className="squares-hero-stat"
+      style={styles.heroStat}
+    >
       <div style={styles.heroStatLabel}>{label}</div>
+
       <div style={styles.heroStatValue}>{value}</div>
     </div>
   );
@@ -443,7 +501,10 @@ function StatCard({
         <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
 
-          <div className="squares-stat-value" style={styles.statValue}>
+          <div
+            className="squares-stat-value"
+            style={styles.statValue}
+          >
             {value}
           </div>
         </div>
@@ -478,15 +539,21 @@ function StatCard({
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
   return (
     <div style={styles.detail}>
       <div style={styles.detailLabel}>{label}</div>
+
       <div style={styles.detailValue}>{value}</div>
     </div>
   );
 }
-
 const responsiveStyles = `
 .squares-admin-page,
 .squares-admin-page * {
@@ -646,6 +713,7 @@ const responsiveStyles = `
     font-size: 16px !important;
   }
 }
+
 @media (max-width: 380px) {
   .squares-admin-page {
     padding-left: 10px !important;
