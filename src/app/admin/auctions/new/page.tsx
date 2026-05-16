@@ -123,6 +123,8 @@ export default async function NewAuctionPage({
   if (!auctionCapability.allowed) {
     return (
       <main style={styles.page}>
+        <style>{responsiveStyles}</style>
+
         <section style={styles.topActions}>
           <Link href="/admin/auctions" style={styles.backButton}>
             ← Back to auctions
@@ -212,6 +214,8 @@ export default async function NewAuctionPage({
 
   return (
     <main style={styles.page}>
+      <style>{responsiveStyles}</style>
+
       <section style={styles.topActions}>
         <Link href="/admin/auctions" style={styles.backButton}>
           ← Back to auctions
@@ -336,7 +340,10 @@ export default async function NewAuctionPage({
                 </p>
               </div>
 
-              <div style={styles.fieldGrid}>
+              <div
+                className="auction-field-grid"
+                style={styles.fieldGrid}
+              >
                 <label style={styles.fieldWide}>
                   <span style={styles.fieldLabel}>Auction title</span>
 
@@ -348,7 +355,7 @@ export default async function NewAuctionPage({
                   />
                 </label>
 
-                <label style={styles.field}>
+                <label style={styles.fieldHalf}>
                   <span style={styles.fieldLabel}>Public slug</span>
 
                   <input
@@ -362,7 +369,7 @@ export default async function NewAuctionPage({
                   </span>
                 </label>
 
-                <label style={styles.field}>
+                <label style={styles.fieldHalf}>
                   <span style={styles.fieldLabel}>Status</span>
 
                   <select
@@ -373,16 +380,18 @@ export default async function NewAuctionPage({
                     <option value="draft">
                       Draft — hidden from public bidding
                     </option>
+
                     <option value="published">
                       Published — visible and open by dates
                     </option>
+
                     <option value="closed">
                       Closed — visible but not accepting bids
                     </option>
                   </select>
                 </label>
 
-                <label style={styles.field}>
+                <label style={styles.fieldThird}>
                   <span style={styles.fieldLabel}>Currency</span>
 
                   <input
@@ -392,7 +401,7 @@ export default async function NewAuctionPage({
                   />
                 </label>
 
-                <label style={styles.field}>
+                <label style={styles.fieldThird}>
                   <span style={styles.fieldLabel}>Opens</span>
 
                   <input
@@ -402,7 +411,7 @@ export default async function NewAuctionPage({
                   />
                 </label>
 
-                <label style={styles.field}>
+                <label style={styles.fieldThird}>
                   <span style={styles.fieldLabel}>Closes</span>
 
                   <input
@@ -538,6 +547,18 @@ export default async function NewAuctionPage({
     </main>
   );
 }
+
+const responsiveStyles = `
+.auction-field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+  .auction-field-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+`;
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -926,13 +947,29 @@ const styles: Record<string, CSSProperties> = {
 
   fieldGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 16,
     alignItems: "start",
     minWidth: 0,
   },
 
   field: {
+    display: "grid",
+    gap: 7,
+    color: "#0f172a",
+    fontWeight: 900,
+    minWidth: 0,
+  },
+
+  fieldHalf: {
+    display: "grid",
+    gap: 7,
+    color: "#0f172a",
+    fontWeight: 900,
+    minWidth: 0,
+  },
+
+  fieldThird: {
     display: "grid",
     gap: 7,
     color: "#0f172a",
