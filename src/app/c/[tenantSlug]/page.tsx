@@ -116,6 +116,7 @@ function getTypeStyle(type: Campaign["type"]): CSSProperties {
 
 function getSafeAdminReturn(value?: string) {
   if (!value) return "";
+  if (value === "/admin") return value;
   if (value.startsWith("/admin/")) return value;
   return "";
 }
@@ -166,17 +167,19 @@ export default async function TenantCampaignsPage({
 
   const sessionUser = session?.user as SessionUserWithTenants | undefined;
   const userTenantSlugs = Array.isArray(sessionUser?.tenantSlugs)
-    ? sessionUser.tenantSlugs
+    ? sessionUser.tenantSlugs.map((value) => String(value))
     : [];
 
   const requestedAdminReturn = getSafeAdminReturn(
     resolvedSearchParams?.adminReturn,
   );
 
-  const canShowAdminReturn =
-    Boolean(requestedAdminReturn) && userTenantSlugs.includes(tenantSlug);
+  const isTenantAdmin = userTenantSlugs.includes(tenantSlug);
+  const canShowAdminReturn = isTenantAdmin;
+  const adminReturn = canShowAdminReturn
+    ? requestedAdminReturn || "/admin"
+    : "";
 
-  const adminReturn = canShowAdminReturn ? requestedAdminReturn : "";
   const activeType = getActiveType(resolvedSearchParams?.type);
 
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
@@ -227,8 +230,7 @@ export default async function TenantCampaignsPage({
           ) : null}
         </nav>
       </header>
-
-      <section className="hero" style={styles.hero}>
+            <section className="hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
         <div style={styles.heroContent}>
@@ -242,7 +244,8 @@ export default async function TenantCampaignsPage({
             Choose from live raffles, squares, events and auctions. Every
             campaign helps raise funds and create impact.
           </p>
-                    <div className="heroActions" style={styles.heroActions}>
+
+          <div className="heroActions" style={styles.heroActions}>
             <Link
               href={`/c/${tenantSlug}/terms`}
               style={styles.primaryHeroButton}
@@ -510,6 +513,7 @@ function HeroStat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
 function TrustStat({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.trustStat}>
@@ -518,7 +522,6 @@ function TrustStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .campaigns-page,
 .campaigns-page * {
@@ -863,8 +866,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
-
-  heroStat: {
+    heroStat: {
     display: "grid",
     gap: 4,
     padding: 13,
@@ -934,216 +936,4 @@ const styles: Record<string, CSSProperties> = {
     background: "#0f172a",
     color: "#ffffff",
     borderColor: "rgba(250,204,21,0.78)",
-    boxShadow: "0 10px 22px rgba(15,23,42,0.16)",
-  },
-
-  grid: {
-    maxWidth: 1180,
-    margin: "0 auto",
-    display: "grid",
-    gap: 18,
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 330px), 1fr))",
-  },
-
-  card: {
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-    gap: 16,
-    padding: 16,
-    borderRadius: 28,
-    border: "1px solid #dbeafe",
-    background: "#ffffff",
-    textDecoration: "none",
-    color: "#111827",
-    boxShadow: "0 14px 38px rgba(15,23,42,0.075)",
-    minHeight: 460,
-  },
-
-  imageWrap: {
-    height: 214,
-    borderRadius: 22,
-    overflow: "hidden",
-    background: "#f1f5f9",
-    border: "1px solid #dbeafe",
-    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
-  },
-
-  cardBody: {
-    display: "grid",
-    gap: 9,
-    alignContent: "start",
-    minWidth: 0,
-  },
-
-  cardTopLine: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  typePill: {
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  statusPill: {
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid #bbf7d0",
-    background: "#dcfce7",
-    color: "#166534",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  cardTitle: {
-    margin: 0,
-    fontSize: 28,
-    lineHeight: 1.08,
-    color: "#0f172a",
-    letterSpacing: "-0.045em",
-    overflowWrap: "anywhere",
-  },
-
-  metaLine: {
-    color: "#334155",
-    fontSize: 14,
-    fontWeight: 950,
-  },
-
-  description: {
-    margin: 0,
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 700,
-    overflowWrap: "anywhere",
-  },
-
-  descriptionMuted: {
-    margin: 0,
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 700,
-  },
-
-  cardFooter: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
-
-  button: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
-  },
-
-  cardHint: {
-    color: "#2563eb",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  trustCard: {
-    maxWidth: 1180,
-    margin: "20px auto 0",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.5fr)",
-    gap: 18,
-    padding: 24,
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
-  },
-
-  trustKicker: {
-    margin: "0 0 7px",
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  trustTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.05em",
-  },
-
-  trustText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.6,
-    fontWeight: 700,
-  },
-
-  trustStats: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 10,
-  },
-
-  trustStat: {
-    display: "grid",
-    gap: 5,
-    padding: 15,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-
-  emptyCard: {
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: 28,
-    borderRadius: 26,
-    background: "#ffffff",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
-  },
-
-  emptyTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 28,
-  },
-
-  muted: {
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 700,
-  },
-
-  emptyButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 14,
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
-  },
-};
+    box
