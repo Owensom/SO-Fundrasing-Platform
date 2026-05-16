@@ -65,13 +65,12 @@ async function createAuctionAction(formData: FormData) {
     {
       subscription_tier: tier,
       subscription_status: tenantSettings?.subscription_status,
-      platform_owner_bypass: Boolean(tenantSettings?.platform_owner_bypass),
     },
     "auctions",
   );
 
   if (!auctionCapability.allowed) {
-    redirect("/admin/auctions/create?error=upgrade-required");
+    redirect("/admin/auctions/new?error=upgrade-required");
   }
 
   const title = String(formData.get("title") || "").trim() || "Untitled auction";
@@ -117,7 +116,6 @@ export default async function NewAuctionPage({
     {
       subscription_tier: tier,
       subscription_status: tenantSettings?.subscription_status,
-      platform_owner_bypass: Boolean(tenantSettings?.platform_owner_bypass),
     },
     "auctions",
   );
@@ -223,7 +221,8 @@ export default async function NewAuctionPage({
           Dashboard
         </Link>
       </section>
-            <section style={styles.hero}>
+
+      <section style={styles.hero}>
         <div style={styles.heroCopy}>
           <div style={styles.eyebrow}>Auction builder</div>
 
@@ -267,8 +266,7 @@ export default async function NewAuctionPage({
             </div>
           </div>
         </div>
-
-        <aside style={styles.previewPanel}>
+                <aside style={styles.previewPanel}>
           <div style={styles.previewKicker}>Public preview</div>
 
           <div style={styles.previewImageCard}>
