@@ -1478,9 +1478,9 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
   },
-  drawDateRow: {
+    drawDateRow: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.65fr)",
+    gridTemplateColumns: "minmax(240px, 340px) minmax(220px, 1fr)",
     gap: 12,
     alignItems: "end",
   },
