@@ -413,7 +413,8 @@ export default function NewSquaresGamePage() {
           <CheckItem done={price > 0}>Set price per square</CheckItem>
           <CheckItem done={publicPrizesCount > 0}>Add public prize</CheckItem>
         </ReadinessCard>
-                <ReadinessCard
+
+        <ReadinessCard
           eyebrow="Sales preview"
           title={formatPreviewMoney(estimatedTotal, currency)}
         >
@@ -479,7 +480,7 @@ export default function NewSquaresGamePage() {
           />
         </Field>
 
-        <div style={styles.drawDateStack}>
+        <div style={styles.drawDateRow}>
           <Field label="Draw date">
             <input
               name="draw_at"
@@ -490,19 +491,16 @@ export default function NewSquaresGamePage() {
             />
           </Field>
 
-          <div style={styles.drawPreviewCompact}>
-            <div>
-              <div style={styles.previewInfoLabel}>Draw preview</div>
+          <div style={styles.drawPreviewInline}>
+            <div style={styles.previewInfoLabel}>Draw preview</div>
 
-              <div style={styles.previewInfoValue}>
-                {formatDatePreview(drawAt)}
-              </div>
+            <div style={styles.previewInfoValue}>
+              {formatDatePreview(drawAt)}
             </div>
           </div>
         </div>
       </SectionCard>
-
-      <SectionCard
+            <SectionCard
         number="02"
         title="Squares setup"
         description="Configure board size, square pricing, currency and publication status."
@@ -853,6 +851,7 @@ export default function NewSquaresGamePage() {
     </form>
   );
 }
+
 function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroMetric}>
@@ -897,7 +896,6 @@ function PreviewLine({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 function SectionCard({
   number,
   title,
@@ -1003,6 +1001,14 @@ const responsiveStyles = `
   .new-squares-form select,
   .new-squares-form button {
     max-width: 100%;
+  }
+
+  .new-squares-form details > summary {
+    list-style: none;
+  }
+
+  .new-squares-form details > summary::-webkit-details-marker {
+    display: none;
   }
 
   @media (max-width: 760px) {
@@ -1397,7 +1403,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   sectionSummary: {
     display: "flex",
@@ -1464,25 +1470,26 @@ const styles: Record<string, CSSProperties> = {
   },
   sectionBody: {
     display: "grid",
-    gap: 18,
-    marginTop: 18,
+    gap: 14,
+    marginTop: 14,
   },
   twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
   },
-  drawDateStack: {
+  drawDateRow: {
     display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 10,
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.65fr)",
+    gap: 12,
+    alignItems: "end",
   },
-  drawPreviewCompact: {
-    display: "flex",
-    alignItems: "center",
-    minHeight: 58,
-    padding: "12px 14px",
-    borderRadius: 16,
+  drawPreviewInline: {
+    display: "grid",
+    alignContent: "center",
+    minHeight: 48,
+    padding: "10px 13px",
+    borderRadius: 14,
     background: "#eff6ff",
     border: "1px solid #bfdbfe",
     color: "#1e3a8a",
@@ -1526,21 +1533,9 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     minWidth: 0,
   },
-  previewInfoCard: {
-    display: "grid",
-    alignContent: "center",
-    minHeight: 48,
-    padding: "12px 13px",
-    borderRadius: 16,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    color: "#1e3a8a",
-    fontSize: 14,
-    fontWeight: 900,
-  },
   previewInfoLabel: {
     color: "#2563eb",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
