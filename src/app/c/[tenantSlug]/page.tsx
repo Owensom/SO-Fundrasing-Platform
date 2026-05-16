@@ -201,16 +201,37 @@ export default async function TenantCampaignsPage({
     <main className="campaigns-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
+      <header className="topBar" style={styles.topBar}>
+        <Link href={`/c/${tenantSlug}`} style={styles.logoLink}>
+          <img
+            src="/brand/so-logo-full.png"
+            alt="SO Fundraising Platform"
+            style={styles.logoImage}
+          />
+        </Link>
+
+        <nav className="topNav" style={styles.topNav}>
+          <Link href={`/c/${tenantSlug}/terms`} style={styles.topNavLink}>
+            Terms of Use
+          </Link>
+
+          <Link href={`/c/${tenantSlug}/privacy`} style={styles.topNavLink}>
+            Privacy Policy
+          </Link>
+
+          {canShowAdminReturn ? (
+            <Link href={adminReturn} style={styles.adminBackTop}>
+              <span style={styles.adminBackIcon}>↩</span>
+              <span>Back to admin</span>
+            </Link>
+          ) : null}
+        </nav>
+      </header>
+
       <section className="hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
         <div style={styles.heroContent}>
-          {canShowAdminReturn ? (
-            <Link href={adminReturn} style={styles.adminBack}>
-              ← Back to admin
-            </Link>
-          ) : null}
-
           <div style={styles.badge}>SO Foundation Platform</div>
 
           <h1 className="so-brand-heading title" style={styles.title}>
@@ -459,7 +480,8 @@ export default async function TenantCampaignsPage({
                 fundraising platform for this organiser.
               </p>
             </div>
-                        <div className="trustStats" style={styles.trustStats}>
+
+            <div className="trustStats" style={styles.trustStats}>
               <TrustStat
                 label="Live campaign types"
                 value={pluralise(
@@ -488,7 +510,6 @@ function HeroStat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-
 function TrustStat({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.trustStat}>
@@ -511,7 +532,9 @@ const responsiveStyles = `
 .campaigns-page section,
 .campaigns-page div,
 .campaigns-page article,
-.campaigns-page a {
+.campaigns-page a,
+.campaigns-page header,
+.campaigns-page nav {
   min-width: 0;
 }
 
@@ -520,7 +543,8 @@ const responsiveStyles = `
   touch-action: manipulation;
 }
 
-.campaigns-page .filterStrip a:hover {
+.campaigns-page .filterStrip a:hover,
+.campaigns-page .adminBackTop:hover {
   transform: translateY(-1px);
 }
 
@@ -538,6 +562,16 @@ const responsiveStyles = `
 }
 
 @media (max-width: 980px) {
+  .campaigns-page .topBar {
+    grid-template-columns: 1fr !important;
+    justify-items: center !important;
+    gap: 12px !important;
+  }
+
+  .campaigns-page .topNav {
+    justify-content: center !important;
+  }
+
   .campaigns-page .hero,
   .campaigns-page .trustCard {
     grid-template-columns: 1fr !important;
@@ -550,10 +584,40 @@ const responsiveStyles = `
 
 @media (max-width: 720px) {
   .campaigns-page {
-    padding: 14px 10px 42px !important;
+    padding: 0 10px 42px !important;
+  }
+
+  .campaigns-page .topBar {
+    margin-left: -10px !important;
+    margin-right: -10px !important;
+    padding: 14px 14px !important;
+  }
+
+  .campaigns-page .logoImage {
+    height: 46px !important;
+  }
+
+  .campaigns-page .topNav {
+    width: 100% !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+  }
+
+  .campaigns-page .topNav::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .campaigns-page .topNavLink,
+  .campaigns-page .adminBackTop {
+    flex: 0 0 auto !important;
   }
 
   .campaigns-page .hero {
+    margin-top: 14px !important;
     padding: 20px !important;
     border-radius: 26px !important;
   }
@@ -597,9 +661,80 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.08), transparent 28%), radial-gradient(circle at top right, rgba(22,131,248,0.10), transparent 28%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
-    padding: "24px 16px 64px",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 28%), radial-gradient(circle at top right, rgba(15,23,42,0.06), transparent 30%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
+    padding: "0 16px 64px",
     color: "#0f172a",
+  },
+
+  topBar: {
+    maxWidth: "none",
+    margin: "0 -16px 24px",
+    padding: "18px 56px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    alignItems: "center",
+    gap: 18,
+    background: "#ffffff",
+    borderBottom: "1px solid #e2e8f0",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.045)",
+  },
+
+  logoLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    textDecoration: "none",
+  },
+
+  logoImage: {
+    height: 56,
+    width: "auto",
+    display: "block",
+  },
+
+  topNav: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+
+  topNavLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    fontSize: 14,
+    whiteSpace: "nowrap",
+  },
+
+  adminBackTop: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#78350f",
+    border: "1px solid rgba(217,119,6,0.62)",
+    textDecoration: "none",
+    fontWeight: 950,
+    fontSize: 14,
+    whiteSpace: "nowrap",
+    boxShadow: "0 10px 22px rgba(15,23,42,0.045)",
+    transition:
+      "transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease",
+  },
+
+  adminBackIcon: {
+    color: "#d97706",
+    fontWeight: 950,
   },
 
   hero: {
@@ -612,11 +747,11 @@ const styles: Record<string, CSSProperties> = {
     padding: 30,
     borderRadius: 34,
     background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.24), transparent 32%), radial-gradient(circle at bottom right, rgba(37,99,235,0.22), transparent 36%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
     boxShadow: "0 28px 70px rgba(15,23,42,0.20)",
     overflow: "hidden",
-    border: "1px solid rgba(251,191,36,0.18)",
+    border: "1px solid rgba(148,163,184,0.22)",
   },
 
   heroGlow: {
@@ -624,7 +759,7 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "linear-gradient(135deg, rgba(251,191,36,0.12), transparent 36%), radial-gradient(circle at 18% 24%, rgba(250,204,21,0.14), transparent 28%)",
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
 
   heroContent: {
@@ -633,32 +768,19 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  adminBack: {
-    display: "inline-flex",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-    border: "1px solid rgba(255,255,255,0.16)",
-    marginBottom: 14,
-  },
-
   badge: {
     display: "inline-flex",
     padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.14)",
+    background: "rgba(15,23,42,0.24)",
     color: "#facc15",
-    border: "1px solid rgba(251,191,36,0.38)",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 16,
-    boxShadow: "0 12px 28px rgba(251,191,36,0.10)",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
@@ -708,9 +830,9 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.06)",
     color: "#ffffff",
-    border: "1px solid rgba(251,191,36,0.26)",
+    border: "1px solid rgba(148,163,184,0.52)",
     textDecoration: "none",
     fontWeight: 950,
     backdropFilter: "blur(10px)",
@@ -723,8 +845,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
     padding: 18,
     borderRadius: 26,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(251,191,36,0.20)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
     alignContent: "start",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
@@ -747,8 +869,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 4,
     padding: 13,
     borderRadius: 18,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
   },
 
   featuredLink: {
@@ -756,11 +878,11 @@ const styles: Record<string, CSSProperties> = {
     gap: 5,
     padding: 14,
     borderRadius: 18,
-    background: "linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)",
+    background: "#ffffff",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 900,
-    border: "1px solid rgba(251,191,36,0.38)",
+    border: "1px solid rgba(217,119,6,0.44)",
   },
 
   featuredKicker: {
@@ -809,9 +931,9 @@ const styles: Record<string, CSSProperties> = {
   },
 
   filterPillActive: {
-    background: "linear-gradient(135deg, #0f172a 0%, #172554 100%)",
+    background: "#0f172a",
     color: "#ffffff",
-    borderColor: "rgba(251,191,36,0.55)",
+    borderColor: "rgba(250,204,21,0.78)",
     boxShadow: "0 10px 22px rgba(15,23,42,0.16)",
   },
 
