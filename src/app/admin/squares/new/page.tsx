@@ -481,13 +481,21 @@ export default function NewSquaresGamePage() {
 
         <div style={styles.twoColumn}>
           <Field label="Draw date">
-            <input
-              name="draw_at"
-              type="datetime-local"
-              value={drawAt}
-              onChange={(event) => setDrawAt(event.target.value)}
-              style={styles.input}
-            />
+            <div style={styles.dateInputWrap}>
+              <input
+                name="draw_at"
+                type="datetime-local"
+                value={drawAt}
+                onChange={(event) => setDrawAt(event.target.value)}
+                style={styles.dateInput}
+              />
+
+              {!drawAt ? (
+                <div style={styles.fakePlaceholder}>
+                  Select date and time
+                </div>
+              ) : null}
+            </div>
           </Field>
 
           <div style={styles.drawPreviewField}>
@@ -648,8 +656,7 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </SectionCard>
-
-      <SectionCard
+            <SectionCard
         number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
@@ -674,7 +681,8 @@ export default function NewSquaresGamePage() {
               + Add prize
             </button>
           </div>
-                    <div style={styles.prizeList}>
+
+          <div style={styles.prizeList}>
             {prizes.map((prize, index) => (
               <div key={prize.id} style={styles.prizeRow}>
                 <div style={styles.rowHeader}>
@@ -1011,6 +1019,10 @@ const responsiveStyles = `
 
   .new-squares-form details > summary::-webkit-details-marker {
     display: none;
+  }
+
+  .new-squares-form input[type="datetime-local"]::-webkit-date-and-time-value {
+    text-align: left;
   }
 
   @media (max-width: 760px) {
@@ -1479,6 +1491,37 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
+  },
+  dateInputWrap: {
+    position: "relative",
+    width: "100%",
+    minWidth: 0,
+  },
+  dateInput: {
+    width: "100%",
+    minHeight: 48,
+    padding: "12px 13px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 16,
+    boxSizing: "border-box",
+    minWidth: 0,
+    WebkitAppearance: "none",
+    appearance: "none",
+  },
+  fakePlaceholder: {
+    position: "absolute",
+    left: 13,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    color: "#94a3b8",
+    fontSize: 16,
+    fontWeight: 500,
+    background: "#ffffff",
+    paddingRight: 8,
   },
   drawPreviewField: {
     display: "grid",
