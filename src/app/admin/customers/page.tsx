@@ -382,6 +382,7 @@ function buildCustomerProfiles(orders: UnifiedOrder[]) {
         types: new Set([order.type]),
         orders: [order],
       });
+
       continue;
     }
 
@@ -477,7 +478,9 @@ function buildCsvHref(customers: CustomerProfile[]) {
   return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
 
-export default async function AdminCustomersPage({ searchParams }: PageProps) {
+export default async function AdminCustomersPage({
+  searchParams,
+}: PageProps) {
   const session = await auth();
 
   if (!session?.user) {
@@ -540,71 +543,83 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
       <section className="hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
-        <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Platform CRM</div>
+        <div className="heroMainGrid" style={styles.heroMainGrid}>
+          <div style={styles.heroContent}>
+            <div style={styles.eyebrow}>Platform CRM</div>
 
-          <h1 className="so-brand-heading title" style={styles.title}>
-            Customers
-          </h1>
+            <h1 className="so-brand-heading title" style={styles.title}>
+              Customers
+            </h1>
 
-          <p style={styles.subtitle}>
-            Supporter profiles grouped from raffle sales, squares sales, event
-            orders and silent auction bids.
-          </p>
+            <p style={styles.subtitle}>
+              Supporter profiles grouped from raffle sales, squares sales,
+              event orders and silent auction bids.
+            </p>
 
-          <div className="heroStats" style={styles.heroStats}>
-            <HeroStat label="Customers" value={filteredCustomers.length} />
-            <HeroStat label="Orders" value={totalOrders} />
-            <HeroStat label="Spend" value={formatMoney(totalSpendCents)} />
-            <HeroStat label="Tenant" value={tenantSlug} />
+            <div className="heroStats" style={styles.heroStats}>
+              <HeroStat
+                label="Customers"
+                value={filteredCustomers.length}
+              />
+              <HeroStat label="Orders" value={totalOrders} />
+              <HeroStat
+                label="Spend"
+                value={formatMoney(totalSpendCents)}
+              />
+              <HeroStat label="Tenant" value={tenantSlug} />
+            </div>
+          </div>
+
+          <div style={styles.heroPanel}>
+            <div style={styles.heroPanelTitle}>Data included</div>
+
+            <p style={styles.heroPanelText}>
+              This page groups the same corrected source data used by Orders.
+            </p>
+
+            <div className="heroPanelGrid" style={styles.heroPanelGrid}>
+              <MiniMetric label="Raffles" value={raffleOrders.length} />
+              <MiniMetric label="Squares" value={squaresOrders.length} />
+              <MiniMetric label="Events" value={eventOrders.length} />
+              <MiniMetric label="Auctions" value={auctionOrders.length} />
+            </div>
           </div>
         </div>
 
-        <div style={styles.heroPanel}>
-          <div style={styles.heroPanelTitle}>Data included</div>
+        <div className="heroActions" style={styles.heroActions}>
+          <Link
+            href="/admin"
+            className="heroSecondaryButton"
+            style={styles.heroSecondaryButton}
+          >
+            ← Back to dashboard
+          </Link>
 
-          <p style={styles.heroPanelText}>
-            This page groups the same corrected source data used by Orders.
-          </p>
+          <Link
+            href="/admin/orders"
+            className="heroSecondaryButton"
+            style={styles.heroSecondaryButton}
+          >
+            Orders dashboard
+          </Link>
 
-          <div className="heroPanelGrid" style={styles.heroPanelGrid}>
-            <MiniMetric label="Raffles" value={raffleOrders.length} />
-            <MiniMetric label="Squares" value={squaresOrders.length} />
-            <MiniMetric label="Events" value={eventOrders.length} />
-            <MiniMetric label="Auctions" value={auctionOrders.length} />
-          </div>
+          <a
+            href={csvHref}
+            download={`customers-${tenantSlug}.csv`}
+            className="heroPrimaryButton"
+            style={styles.heroPrimaryButton}
+          >
+            Export CSV
+          </a>
         </div>
       </section>
 
-      <section className="topActions" style={styles.topActions}>
-        <Link
-          href="/admin"
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          ← Back to dashboard
-        </Link>
-
-        <Link
-          href="/admin/orders"
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          Orders dashboard
-        </Link>
-
-        <a
-          href={csvHref}
-          download={`customers-${tenantSlug}.csv`}
-          className="primaryButton"
-          style={styles.primaryButton}
-        >
-          Export CSV
-        </a>
-      </section>
-            <section className="summaryGrid" style={styles.summaryGrid}>
-        <SummaryCard label="Visible customers" value={filteredCustomers.length} />
-        <SummaryCard label="All customers" value={customers.length} />
+      <section className="summaryGrid" style={styles.summaryGrid}>
+        <SummaryCard
+          label="Visible customers"
+          value={filteredCustomers.length}
+        />
+                <SummaryCard label="All customers" value={customers.length} />
         <SummaryCard label="Orders" value={totalOrders} />
         <SummaryCard label="Total spend" value={formatMoney(totalSpendCents)} />
         <SummaryCard label="Raffle rows" value={raffleOrders.length} />
@@ -640,11 +655,19 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
             </select>
           </label>
 
-          <button type="submit" className="filterButton" style={styles.filterButton}>
+          <button
+            type="submit"
+            className="filterButton"
+            style={styles.filterButton}
+          >
             Apply filters
           </button>
 
-          <Link href="/admin/customers" className="clearButton" style={styles.clearButton}>
+          <Link
+            href="/admin/customers"
+            className="clearButton"
+            style={styles.clearButton}
+          >
             Clear
           </Link>
         </form>
@@ -655,7 +678,10 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
           <div>
             <p style={styles.kicker}>Customer profiles</p>
 
-            <h2 className="so-brand-card-title sectionTitle" style={styles.sectionTitle}>
+            <h2
+              className="so-brand-card-title sectionTitle"
+              style={styles.sectionTitle}
+            >
               Supporter list
             </h2>
 
@@ -703,7 +729,10 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
 
                   <div className="customerStats" style={styles.customerStats}>
                     <MiniMetric label="Orders" value={customer.orderCount} />
-                    <MiniMetric label="Campaigns" value={customer.campaignCount} />
+                    <MiniMetric
+                      label="Campaigns"
+                      value={customer.campaignCount}
+                    />
                     <MiniMetric
                       label="Last active"
                       value={formatDate(customer.lastActivity)}
@@ -738,7 +767,10 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                           </div>
                         </div>
 
-                        <div className="activityRight" style={styles.activityRight}>
+                        <div
+                          className="activityRight"
+                          style={styles.activityRight}
+                        >
                           <strong>
                             {formatMoney(order.amountCents, order.currency)}
                           </strong>
@@ -751,7 +783,9 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
 
                   <div className="cardActions" style={styles.cardActions}>
                     <Link
-                      href={`/admin/orders?q=${encodeURIComponent(customer.email)}`}
+                      href={`/admin/orders?q=${encodeURIComponent(
+                        customer.email,
+                      )}`}
                       className="smallLink"
                       style={styles.smallLink}
                     >
@@ -824,7 +858,7 @@ const responsiveStyles = `
 }
 
 @media (max-width: 980px) {
-  .customers-page .hero,
+  .customers-page .heroMainGrid,
   .customers-page .filterForm {
     grid-template-columns: 1fr !important;
   }
@@ -834,14 +868,14 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .customers-page .topActions,
+  .customers-page .heroActions,
   .customers-page .cardActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
   }
 
-  .customers-page .primaryButton,
-  .customers-page .secondaryButton,
+  .customers-page .heroPrimaryButton,
+  .customers-page .heroSecondaryButton,
   .customers-page .filterButton,
   .customers-page .clearButton,
   .customers-page .smallLink,
@@ -883,8 +917,7 @@ const responsiveStyles = `
     gap: 12px !important;
     align-items: stretch !important;
   }
-
-  .customers-page .field,
+    .customers-page .field,
   .customers-page .input,
   .customers-page .filterButton,
   .customers-page .clearButton {
@@ -930,7 +963,6 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 30,
@@ -941,6 +973,15 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+  },
+  heroMainGrid: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gap: 22,
+    alignItems: "stretch",
+    minWidth: 0,
   },
   heroGlow: {
     position: "absolute",
@@ -1043,15 +1084,19 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
-  topActions: {
+  heroActions: {
+    position: "relative",
+    zIndex: 1,
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 16,
+    paddingTop: 18,
+    marginTop: 2,
+    borderTop: "1px solid rgba(148,163,184,0.24)",
   },
-  primaryButton: {
+  heroPrimaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1062,20 +1107,22 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #1683f8",
+    border: "1px solid rgba(96,165,250,0.88)",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
   },
-  secondaryButton: {
+  heroSecondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #cbd5e1",
+    border: "1px solid rgba(255,255,255,0.28)",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
   },
   summaryGrid: {
     display: "grid",
@@ -1213,7 +1260,8 @@ const styles: Record<string, CSSProperties> = {
   },
   customerGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 14,
   },
   customerCard: {
