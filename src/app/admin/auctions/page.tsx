@@ -2,6 +2,12 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import {
+  checkSubscriptionCapability,
+  getTierLabel,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
+import { getTenantSettings } from "@/lib/tenant-settings";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   deleteAuction,
@@ -94,6 +100,16 @@ async function updateAuctionStatusAction(formData: FormData) {
   "use server";
 
   const tenantSlug = await requireAuctionDashboardAccess();
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const capability = checkSubscriptionCapability(
+    tenantSettings,
+    "auctions",
+  );
+
+  if (!capability.allowed) {
+    redirect("/admin/auctions?error=subscription-required");
+  }
 
   const id = String(formData.get("id") || "").trim();
   const status = cleanAuctionStatus(formData.get("status"));
@@ -129,6 +145,16 @@ async function deleteAuctionAction(formData: FormData) {
   "use server";
 
   const tenantSlug = await requireAuctionDashboardAccess();
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const capability = checkSubscriptionCapability(
+    tenantSettings,
+    "auctions",
+  );
+
+  if (!capability.allowed) {
+    redirect("/admin/auctions?error=subscription-required");
+  }
 
   const id = String(formData.get("id") || "").trim();
 
@@ -161,14 +187,35 @@ export default async function AdminAuctionsPage({
   };
 }) {
   const tenantSlug = await requireAuctionDashboardAccess();
+
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const tierLabel = getTierLabel(subscriptionTier);
+
+  const capability = checkSubscriptionCapability(
+    tenantSettings,
+    "auctions",
+  );
+
   const auctions = await listAuctions(tenantSlug);
 
   const published = auctions.filter(
     (auction) => auction.status === "published",
   ).length;
 
-  const draft = auctions.filter((auction) => auction.status === "draft").length;
-  const closed = auctions.filter((auction) => auction.status === "closed").length;
+  const draft = auctions.filter(
+    (auction) => auction.status === "draft",
+  ).length;
+
+  const closed = auctions.filter(
+    (auction) => auction.status === "closed",
+  ).length;
+
+  const isReadOnly = !capability.allowed;
 
   return (
     <main className="auctions-admin-page" style={styles.page}>
@@ -179,16 +226,35 @@ export default async function AdminAuctionsPage({
 
         <div style={styles.heroContent}>
           <div style={styles.heroPillRow}>
-            <span style={styles.heroSectionPill}>Auctions workspace</span>
+            <span style={styles.heroSectionPill}>
+              Auctions workspace
+            </span>
+
+            <span style={styles.subscriptionPill}>
+              {tierLabel} plan
+            </span>
+
+            {isReadOnly ? (
+              <span style={styles.lockedPill}>
+                Professional feature
+              </span>
+            ) : null}
           </div>
 
-          <h1 className="so-brand-heading auctions-admin-title" style={styles.title}>
+          <h1
+            className="so-brand-heading auctions-admin-title"
+            style={styles.title}
+          >
             Manage auctions
           </h1>
 
-          <p className="auctions-admin-subtitle" style={styles.subtitle}>
-            Manage premium auction campaigns, status tools, public pages and
-            bidding windows from one fundraising workspace.
+          <p
+            className="auctions-admin-subtitle"
+            style={styles.subtitle}
+          >
+            Manage premium auction campaigns, status tools,
+            public pages and bidding windows from one
+            fundraising workspace.
           </p>
 
           <p style={styles.tenant}>
@@ -196,31 +262,63 @@ export default async function AdminAuctionsPage({
           </p>
         </div>
 
-        <div className="auctions-hero-stats" style={styles.heroStats}>
-          <HeroStat label="Total auctions" value={auctions.length} />
-          <HeroStat label="Published" value={published} />
-          <HeroStat label="Draft" value={draft} />
-          <HeroStat label="Closed" value={closed} />
+        <div
+          className="auctions-hero-stats"
+          style={styles.heroStats}
+        >
+          <HeroStat
+            label="Total auctions"
+            value={auctions.length}
+          />
+
+          <HeroStat
+            label="Published"
+            value={published}
+          />
+
+          <HeroStat
+            label="Draft"
+            value={draft}
+          />
+
+          <HeroStat
+            label="Closed"
+            value={closed}
+          />
         </div>
 
-        <nav className="auctions-admin-nav" style={styles.nav}>
+        <nav
+          className="auctions-admin-nav"
+          style={styles.nav}
+        >
           <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
 
-          <Link href="/admin/raffles" style={styles.navButton}>
+          <Link
+            href="/admin/raffles"
+            style={styles.navButton}
+          >
             Raffles
           </Link>
 
-          <Link href="/admin/squares" style={styles.navButton}>
+          <Link
+            href="/admin/squares"
+            style={styles.navButton}
+          >
             Squares
           </Link>
 
-          <Link href="/admin/events" style={styles.navButton}>
+          <Link
+            href="/admin/events"
+            style={styles.navButton}
+          >
             Events
           </Link>
 
-          <div style={styles.navButtonActive}>Auctions</div>
+          <div style={styles.navButtonActive}>
+            Auctions
+          </div>
 
           <Link
             href={`/c/${tenantSlug}?adminReturn=/admin/auctions`}
@@ -229,13 +327,21 @@ export default async function AdminAuctionsPage({
             Public site
           </Link>
 
-          <Link href="/admin/auctions/new" style={styles.createButton}>
-            + Create item
-          </Link>
+          {isReadOnly ? (
+            <div style={styles.lockedCreateButton}>
+              🔒 Professional
+            </div>
+          ) : (
+            <Link
+              href="/admin/auctions/new"
+              style={styles.createButton}
+            >
+              + Create item
+            </Link>
+          )}
         </nav>
       </section>
-
-      {searchParams?.saved ? (
+            {searchParams?.saved ? (
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
@@ -243,8 +349,38 @@ export default async function AdminAuctionsPage({
         <div style={styles.errorBox}>
           {searchParams.error === "close-before-delete"
             ? "Close the auction before deleting it."
-            : "Please check the auction and try again."}
+            : searchParams.error === "subscription-required"
+              ? "Auctions require the Professional plan or higher."
+              : "Please check the auction and try again."}
         </div>
+      ) : null}
+
+      {isReadOnly ? (
+        <section style={styles.upgradeCard}>
+          <div style={styles.upgradeContent}>
+            <div style={styles.upgradeEyebrow}>Upgrade required</div>
+
+            <h2 style={styles.upgradeTitle}>
+              Auctions are available on the Professional plan or higher.
+            </h2>
+
+            <p style={styles.upgradeText}>
+              Your existing auction records are preserved here for reference,
+              but creating, publishing, closing, editing and deleting auctions
+              are locked on the Community plan.
+            </p>
+          </div>
+
+          <div style={styles.upgradeActions}>
+            <Link href="/admin/billing" style={styles.upgradeButton}>
+              View billing options
+            </Link>
+
+            <Link href="/admin" style={styles.upgradeSecondaryButton}>
+              Back to dashboard
+            </Link>
+          </div>
+        </section>
       ) : null}
 
       <section className="auctions-stats-grid" style={styles.statsGrid}>
@@ -280,15 +416,31 @@ export default async function AdminAuctionsPage({
           tint="#fffbeb"
         />
       </section>
-            {auctions.length === 0 ? (
+
+      {auctions.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>No auctions yet</h2>
 
-          <p style={styles.muted}>Create your first auction campaign.</p>
+          {isReadOnly ? (
+            <>
+              <p style={styles.muted}>
+                Auctions are a Professional feature. Upgrade to create auction
+                campaigns for this tenant.
+              </p>
 
-          <Link href="/admin/auctions/new" style={styles.createButton}>
-            + Create item
-          </Link>
+              <Link href="/admin/billing" style={styles.createButton}>
+                View billing options
+              </Link>
+            </>
+          ) : (
+            <>
+              <p style={styles.muted}>Create your first auction campaign.</p>
+
+              <Link href="/admin/auctions/new" style={styles.createButton}>
+                + Create item
+              </Link>
+            </>
+          )}
         </section>
       ) : (
         <section style={styles.list}>
@@ -339,14 +491,22 @@ export default async function AdminAuctionsPage({
                         <p style={styles.slug}>/a/{auction.slug}</p>
                       </div>
 
-                      <span
-                        style={{
-                          ...styles.status,
-                          ...getStatusStyle(auction.status),
-                        }}
-                      >
-                        {auction.status}
-                      </span>
+                      <div style={styles.statusStack}>
+                        <span
+                          style={{
+                            ...styles.status,
+                            ...getStatusStyle(auction.status),
+                          }}
+                        >
+                          {auction.status}
+                        </span>
+
+                        {isReadOnly ? (
+                          <span style={styles.readOnlyStatus}>
+                            Read-only
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div
@@ -377,8 +537,7 @@ export default async function AdminAuctionsPage({
                           : auction.description}
                       </p>
                     ) : null}
-
-                    <div
+                                        <div
                       className="auctions-detail-grid"
                       style={styles.detailGrid}
                     >
@@ -413,66 +572,96 @@ export default async function AdminAuctionsPage({
                     >
                       <div style={styles.toolTitle}>Status tools</div>
 
-                      <div
-                        className="auctions-tool-actions"
-                        style={styles.toolActions}
-                      >
-                        <StatusButton
-                          auctionId={auction.id}
-                          status="draft"
-                          label="Set draft"
-                          action={updateAuctionStatusAction}
-                          disabled={auction.status === "draft"}
-                        />
+                      {isReadOnly ? (
+                        <div style={styles.lockedToolNotice}>
+                          🔒 Auction status tools are locked on the Community
+                          plan. Upgrade to Professional to create, publish,
+                          close, edit or delete auctions.
+                        </div>
+                      ) : (
+                        <div
+                          className="auctions-tool-actions"
+                          style={styles.toolActions}
+                        >
+                          <StatusButton
+                            auctionId={auction.id}
+                            status="draft"
+                            label="Set draft"
+                            action={updateAuctionStatusAction}
+                            disabled={auction.status === "draft"}
+                          />
 
-                        <StatusButton
-                          auctionId={auction.id}
-                          status="published"
-                          label="Publish"
-                          action={updateAuctionStatusAction}
-                          disabled={auction.status === "published"}
-                        />
+                          <StatusButton
+                            auctionId={auction.id}
+                            status="published"
+                            label="Publish"
+                            action={updateAuctionStatusAction}
+                            disabled={auction.status === "published"}
+                          />
 
-                        <StatusButton
-                          auctionId={auction.id}
-                          status="closed"
-                          label="Close"
-                          action={updateAuctionStatusAction}
-                          disabled={auction.status === "closed"}
-                          danger
-                        />
+                          <StatusButton
+                            auctionId={auction.id}
+                            status="closed"
+                            label="Close"
+                            action={updateAuctionStatusAction}
+                            disabled={auction.status === "closed"}
+                            danger
+                          />
 
-                        {auction.status === "closed" ? (
-                          <form
-                            action={deleteAuctionAction}
-                            className="auctions-delete-form"
-                            style={styles.deleteForm}
-                          >
-                            <input type="hidden" name="id" value={auction.id} />
+                          {auction.status === "closed" ? (
+                            <form
+                              action={deleteAuctionAction}
+                              className="auctions-delete-form"
+                              style={styles.deleteForm}
+                            >
+                              <input
+                                type="hidden"
+                                name="id"
+                                value={auction.id}
+                              />
 
-                            <button type="submit" style={styles.deleteButton}>
-                              Delete
-                            </button>
-                          </form>
-                        ) : null}
-                      </div>
+                              <button
+                                type="submit"
+                                style={styles.deleteButton}
+                              >
+                                Delete
+                              </button>
+                            </form>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="auctions-card-actions" style={styles.actions}>
-                      <Link
-                        href={`/admin/auctions/${auction.id}`}
-                        style={styles.primaryLink}
-                      >
-                        Open details
-                      </Link>
+                    <div
+                      className="auctions-card-actions"
+                      style={styles.actions}
+                    >
+                      {isReadOnly ? (
+                        <Link
+                          href={`/a/${auction.slug}?adminReturn=/admin/auctions`}
+                          target="_blank"
+                          style={styles.secondaryLink}
+                        >
+                          View campaign
+                        </Link>
+                      ) : (
+                        <>
+                          <Link
+                            href={`/admin/auctions/${auction.id}`}
+                            style={styles.primaryLink}
+                          >
+                            Open details
+                          </Link>
 
-                      <Link
-                        href={`/a/${auction.slug}?adminReturn=/admin/auctions/${auction.id}`}
-                        target="_blank"
-                        style={styles.secondaryLink}
-                      >
-                        View campaign
-                      </Link>
+                          <Link
+                            href={`/a/${auction.slug}?adminReturn=/admin/auctions/${auction.id}`}
+                            target="_blank"
+                            style={styles.secondaryLink}
+                          >
+                            View campaign
+                          </Link>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -606,6 +795,7 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .auctions-admin-page,
 .auctions-admin-page * {
@@ -705,8 +895,7 @@ const responsiveStyles = `
     border-radius: 24px !important;
     padding: 18px !important;
   }
-
-  .auctions-stat-value {
+    .auctions-stat-value {
     font-size: clamp(36px, 12vw, 52px) !important;
     line-height: 1 !important;
     overflow-wrap: anywhere !important;
@@ -867,6 +1056,36 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
+  subscriptionPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 14px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#dbeafe",
+    border: "1px solid rgba(191,219,254,0.44)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  lockedPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 14px",
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.12)",
+    color: "#fde68a",
+    border: "1px solid rgba(251,191,36,0.64)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
   title: {
     margin: 0,
     fontSize: "clamp(54px, 7vw, 84px)",
@@ -989,6 +1208,23 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
+  lockedCreateButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "11px 16px",
+    borderRadius: 9999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#fde68a",
+    border: "1px solid rgba(251,191,36,0.56)",
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "nowrap",
+    cursor: "not-allowed",
+  },
+
   successBox: {
     padding: 12,
     background: "#dcfce7",
@@ -1007,6 +1243,84 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     marginBottom: 12,
     fontWeight: 900,
+  },
+
+  upgradeCard: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 18,
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 60%, #eff6ff 100%)",
+    border: "1px solid rgba(217,119,6,0.32)",
+    boxShadow: "0 16px 40px rgba(15,23,42,0.07)",
+    marginBottom: 18,
+  },
+
+  upgradeContent: {
+    minWidth: 0,
+  },
+
+  upgradeEyebrow: {
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 8,
+  },
+
+  upgradeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+  },
+
+  upgradeText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.55,
+    fontWeight: 700,
+  },
+
+  upgradeActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  upgradeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  upgradeSecondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   statsGrid: {
@@ -1071,6 +1385,8 @@ const styles: Record<string, CSSProperties> = {
   muted: {
     color: "#64748b",
     margin: "8px 0 18px",
+    lineHeight: 1.55,
+    fontWeight: 700,
   },
 
   list: {
@@ -1137,6 +1453,12 @@ const styles: Record<string, CSSProperties> = {
     wordBreak: "break-word",
   },
 
+  statusStack: {
+    display: "grid",
+    gap: 6,
+    justifyItems: "end",
+  },
+
   status: {
     padding: "7px 11px",
     borderRadius: 9999,
@@ -1145,6 +1467,18 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "capitalize",
     fontWeight: 800,
     width: "fit-content",
+  },
+
+  readOnlyStatus: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 12,
+    fontWeight: 950,
   },
 
   headlineGrid: {
@@ -1224,6 +1558,17 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     color: "#0f172a",
     fontSize: 14,
+  },
+
+  lockedToolNotice: {
+    marginTop: 12,
+    padding: 13,
+    borderRadius: 16,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    lineHeight: 1.5,
+    fontWeight: 850,
   },
 
   toolActions: {
