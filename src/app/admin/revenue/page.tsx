@@ -7,6 +7,8 @@ import PayoutButton from "./PayoutButton";
 
 export const dynamic = "force-dynamic";
 
+const PLATFORM_FINANCE_TIME_ZONE = "Europe/London";
+
 type CurrencySummaryRow = {
   currency: string | null;
   payment_count: string | number;
@@ -71,7 +73,11 @@ function formatDate(value?: string | null) {
 
   if (Number.isNaN(date.getTime())) return value;
 
-  return date.toLocaleString("en-GB");
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: PLATFORM_FINANCE_TIME_ZONE,
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(date);
 }
 
 export default async function AdminRevenuePage() {
@@ -206,7 +212,8 @@ export default async function AdminRevenuePage() {
           />
         </div>
       </section>
-            <section className="revenue-cards" style={styles.cards}>
+
+      <section className="revenue-cards" style={styles.cards}>
         <div style={styles.card}>
           <div style={styles.cardLabel}>Total payments</div>
           <div style={styles.cardValue}>{totalPayments}</div>
@@ -373,6 +380,10 @@ export default async function AdminRevenuePage() {
             <h2 className="so-brand-card-title" style={styles.sectionTitle}>
               Payment activity
             </h2>
+
+            <p style={styles.sectionText}>
+              Times shown in UK platform time.
+            </p>
           </div>
         </div>
 
@@ -478,6 +489,7 @@ function HeroStat({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .revenue-page,
 .revenue-page * {
@@ -751,6 +763,14 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 27,
     letterSpacing: "-0.04em",
+  },
+
+  sectionText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
   },
 
   tableWrap: {
