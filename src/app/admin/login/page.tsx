@@ -14,10 +14,22 @@ function getErrorMessage(error?: string) {
     case "tenant_access_denied":
       return "This account does not have access to this site.";
     case "invalid_credentials":
+    case "CredentialsSignin":
+    case "CallbackRouteError":
       return "Invalid email or password.";
     default:
       return "";
   }
+}
+
+function isRedirectError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
 }
 
 export default async function AdminLoginPage({
@@ -43,11 +55,23 @@ export default async function AdminLoginPage({
         redirectTo: "/admin",
       });
     } catch (error) {
-      if (error instanceof AuthError) {
-        redirect("/admin/login?error=invalid_credentials");
+      if (isRedirectError(error)) {
+        throw error;
       }
 
-      throw error;
+      if (error instanceof AuthError) {
+        console.error("Admin login AuthError", {
+          type: error.type,
+          message: error.message,
+          cause: error.cause,
+        });
+
+        redirect(`/admin/login?error=${encodeURIComponent(error.type)}`);
+      }
+
+      console.error("Admin login unexpected error", error);
+
+      redirect("/admin/login?error=invalid_credentials");
     }
   }
 
@@ -71,18 +95,14 @@ export default async function AdminLoginPage({
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
-        <h1 style={{ fontSize: 44, marginBottom: 16 }}>
-          Admin login
-        </h1>
+        <h1 style={{ fontSize: 44, marginBottom: 16 }}>Admin login</h1>
 
         <p style={{ marginBottom: 16 }}>
           Site: <strong>{tenantSlug || "unknown"}</strong>
         </p>
 
         {errorMessage && (
-          <p style={{ color: "red", marginBottom: 16 }}>
-            {errorMessage}
-          </p>
+          <p style={{ color: "red", marginBottom: 16 }}>{errorMessage}</p>
         )}
 
         <form action={loginAction}>
