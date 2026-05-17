@@ -227,6 +227,7 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
+
 async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "squares",
@@ -290,7 +291,6 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-
 async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "events",
@@ -513,62 +513,65 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       <section className="hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
-        <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Platform operations</div>
+        <div className="heroMainGrid" style={styles.heroMainGrid}>
+          <div style={styles.heroContent}>
+            <div style={styles.eyebrow}>Platform operations</div>
 
-          <h1 className="so-brand-heading title" style={styles.title}>
-            Orders dashboard
-          </h1>
+            <h1 className="so-brand-heading title" style={styles.title}>
+              Orders dashboard
+            </h1>
 
-          <p style={styles.subtitle}>
-            Unified activity across raffles, squares, events and auctions for
-            this tenant.
-          </p>
+            <p style={styles.subtitle}>
+              Unified activity across raffles, squares, events and auctions for
+              this tenant.
+            </p>
 
-          <div className="heroStats" style={styles.heroStats}>
-            <HeroStat label="Orders" value={filteredOrders.length} />
-            <HeroStat
-              label="Revenue"
-              value={formatMoney(totalRevenue, "GBP")}
-            />
-            <HeroStat label="Customers" value={uniqueCustomers} />
-            <HeroStat label="Tenant" value={tenantSlug} />
+            <div className="heroStats" style={styles.heroStats}>
+              <HeroStat label="Orders" value={filteredOrders.length} />
+              <HeroStat
+                label="Revenue"
+                value={formatMoney(totalRevenue, "GBP")}
+              />
+              <HeroStat label="Customers" value={uniqueCustomers} />
+              <HeroStat label="Tenant" value={tenantSlug} />
+            </div>
+          </div>
+
+          <div style={styles.heroPanel}>
+            <div style={styles.heroPanelTitle}>Operational view</div>
+
+            <p style={styles.heroPanelText}>
+              Search supporters, review campaign activity, open the source
+              campaign, and export the current view as CSV.
+            </p>
+
+            <div className="heroPanelGrid" style={styles.heroPanelGrid}>
+              <MiniMetric label="Raffles" value={raffleOrders.length} />
+              <MiniMetric label="Squares" value={squaresOrders.length} />
+              <MiniMetric label="Events" value={eventOrders.length} />
+              <MiniMetric label="Auctions" value={auctionOrders.length} />
+            </div>
           </div>
         </div>
 
-        <div style={styles.heroPanel}>
-          <div style={styles.heroPanelTitle}>Operational view</div>
+        <div className="heroActions" style={styles.heroActions}>
+          <Link
+            href="/admin"
+            className="secondaryButton heroSecondaryButton"
+            style={styles.heroSecondaryButton}
+          >
+            ← Back to dashboard
+          </Link>
 
-          <p style={styles.heroPanelText}>
-            Search supporters, review campaign activity, open the source
-            campaign, and export the current view as CSV.
-          </p>
-
-          <div className="heroPanelGrid" style={styles.heroPanelGrid}>
-            <MiniMetric label="Raffles" value={raffleOrders.length} />
-            <MiniMetric label="Squares" value={squaresOrders.length} />
-            <MiniMetric label="Events" value={eventOrders.length} />
-            <MiniMetric label="Auctions" value={auctionOrders.length} />
-          </div>
+          <a
+            href={csvHref}
+            download={`orders-${tenantSlug}.csv`}
+            className="primaryButton heroPrimaryButton"
+            style={styles.heroPrimaryButton}
+          >
+            Export CSV
+          </a>
         </div>
-      </section>
-            <section className="topActions" style={styles.topActions}>
-        <Link
-          href="/admin"
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          ← Back to dashboard
-        </Link>
-
-        <a
-          href={csvHref}
-          download={`orders-${tenantSlug}.csv`}
-          className="primaryButton"
-          style={styles.primaryButton}
-        >
-          Export CSV
-        </a>
       </section>
 
       <section className="summaryGrid" style={styles.summaryGrid}>
@@ -596,8 +599,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
               style={styles.input}
             />
           </label>
-
-          <label style={styles.field}>
+                    <label style={styles.field}>
             <span style={styles.label}>Type</span>
             <select name="type" defaultValue={selectedType} style={styles.input}>
               <option value="all">All activity</option>
@@ -858,7 +860,7 @@ const responsiveStyles = `
 }
 
 @media (max-width: 980px) {
-  .orders-page .hero,
+  .orders-page .heroMainGrid,
   .orders-page .filterForm {
     grid-template-columns: 1fr !important;
   }
@@ -876,15 +878,15 @@ const responsiveStyles = `
     display: grid !important;
   }
 
-  .orders-page .topActions,
+  .orders-page .heroActions,
   .orders-page .mobileActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
     align-items: stretch !important;
   }
 
-  .orders-page .primaryButton,
-  .orders-page .secondaryButton,
+  .orders-page .heroPrimaryButton,
+  .orders-page .heroSecondaryButton,
   .orders-page .filterButton,
   .orders-page .clearButton,
   .orders-page .smallLink,
@@ -901,8 +903,7 @@ const responsiveStyles = `
     max-width: 100% !important;
     padding: 14px 10px 42px !important;
   }
-
-  .orders-page .hero {
+    .orders-page .hero {
     padding: 18px !important;
     border-radius: 24px !important;
     gap: 14px !important;
@@ -963,7 +964,6 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 30,
@@ -974,6 +974,15 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+  },
+  heroMainGrid: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gap: 22,
+    alignItems: "stretch",
+    minWidth: 0,
   },
   heroGlow: {
     position: "absolute",
@@ -1076,15 +1085,19 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
-  topActions: {
+  heroActions: {
+    position: "relative",
+    zIndex: 1,
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 16,
+    paddingTop: 18,
+    marginTop: 2,
+    borderTop: "1px solid rgba(148,163,184,0.24)",
   },
-  primaryButton: {
+  heroPrimaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1095,21 +1108,22 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #1683f8",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+    border: "1px solid rgba(96,165,250,0.88)",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
   },
-  secondaryButton: {
+  heroSecondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #cbd5e1",
+    border: "1px solid rgba(255,255,255,0.28)",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
   },
   summaryGrid: {
     display: "grid",
