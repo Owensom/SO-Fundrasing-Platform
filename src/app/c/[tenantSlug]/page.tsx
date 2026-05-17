@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import { getTenantSettings } from "@/lib/tenant-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -183,10 +185,24 @@ export default async function TenantCampaignsPage({
   const activeType = getActiveType(resolvedSearchParams?.type);
 
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
+  const tenantSettings = await getTenantSettings(tenantSlug);
 
-  const publicCampaigns = campaigns.filter(
-    (campaign) => campaign.status === "published",
+  const auctionCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "auctions",
   );
+
+  const publicCampaigns = campaigns.filter((campaign) => {
+    if (campaign.status !== "published") {
+      return false;
+    }
+
+    if (campaign.type === "auction" && !auctionCapability.allowed) {
+      return false;
+    }
+
+    return true;
+  });
 
   const raffles = publicCampaigns.filter((item) => item.type === "raffle");
   const squares = publicCampaigns.filter((item) => item.type === "squares");
@@ -230,7 +246,8 @@ export default async function TenantCampaignsPage({
           ) : null}
         </nav>
       </header>
-            <section className="hero" style={styles.hero}>
+
+      <section className="hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
         <div style={styles.heroContent}>
@@ -287,8 +304,7 @@ export default async function TenantCampaignsPage({
           ) : null}
         </div>
       </section>
-
-      {publicCampaigns.length === 0 ? (
+            {publicCampaigns.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 className="so-brand-card-title" style={styles.emptyTitle}>
             No active campaigns found
@@ -367,21 +383,23 @@ export default async function TenantCampaignsPage({
               Events {events.length}
             </Link>
 
-            <Link
-              href={getFilterHref({
-                tenantSlug,
-                type: "auction",
-                adminReturn,
-              })}
-              scroll={false}
-              aria-current={activeType === "auction" ? "page" : undefined}
-              style={{
-                ...styles.filterPill,
-                ...(activeType === "auction" ? styles.filterPillActive : {}),
-              }}
-            >
-              Auctions {auctions.length}
-            </Link>
+            {auctionCapability.allowed ? (
+              <Link
+                href={getFilterHref({
+                  tenantSlug,
+                  type: "auction",
+                  adminReturn,
+                })}
+                scroll={false}
+                aria-current={activeType === "auction" ? "page" : undefined}
+                style={{
+                  ...styles.filterPill,
+                  ...(activeType === "auction" ? styles.filterPillActive : {}),
+                }}
+              >
+                Auctions {auctions.length}
+              </Link>
+            ) : null}
           </section>
 
           {visibleCampaigns.length === 0 ? (
@@ -522,6 +540,7 @@ function TrustStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .campaigns-page,
 .campaigns-page * {
@@ -618,8 +637,7 @@ const responsiveStyles = `
   .campaigns-page .adminBackTop {
     flex: 0 0 auto !important;
   }
-
-  .campaigns-page .hero {
+    .campaigns-page .hero {
     margin-top: 14px !important;
     padding: 20px !important;
     border-radius: 26px !important;
@@ -866,7 +884,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
-    heroStat: {
+
+  heroStat: {
     display: "grid",
     gap: 4,
     padding: 13,
