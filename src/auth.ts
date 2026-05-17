@@ -7,6 +7,7 @@ type AdminUserRow = {
   email: string;
   name: string | null;
   tenant_id: string | null;
+  password_matches: boolean;
 };
 
 type AdminTenantRow = {
@@ -21,22 +22,35 @@ type AdminUser = {
   emailVerified: null;
 };
 
+function maskEmail(value: string) {
+  const [name, domain] = value.split("@");
+
+  if (!name || !domain) return value;
+
+  return `${name.slice(0, 3)}***@${domain}`;
+}
+
 async function findAdminUserByCredentials(
   email: string,
   password: string,
 ): Promise<AdminUser | null> {
   try {
+    console.log("ADMIN_AUTH_DB_LOOKUP_START", {
+      email: maskEmail(email),
+      hasPassword: Boolean(password),
+    });
+
     const users = await query<AdminUserRow>(
       `
         select
           id::text,
           email,
           name,
-          tenant_id::text
+          tenant_id::text,
+          password_hash = crypt($2, password_hash) as password_matches
         from admin_users
         where lower(email) = lower($1)
           and is_active = true
-          and password_hash = crypt($2, password_hash)
         limit 1
       `,
       [email, password],
@@ -44,7 +58,24 @@ async function findAdminUserByCredentials(
 
     const user = users[0];
 
-    if (!user) return null;
+    if (!user) {
+      console.log("ADMIN_AUTH_DB_NO_ACTIVE_USER", {
+        email: maskEmail(email),
+      });
+
+      return null;
+    }
+
+    console.log("ADMIN_AUTH_DB_USER_FOUND", {
+      id: user.id,
+      email: maskEmail(user.email),
+      tenantId: user.tenant_id,
+      passwordMatches: Boolean(user.password_matches),
+    });
+
+    if (!user.password_matches) {
+      return null;
+    }
 
     const tenantRows = await query<AdminTenantRow>(
       `
@@ -59,6 +90,11 @@ async function findAdminUserByCredentials(
     const tenantSlugs = tenantRows
       .map((row) => String(row.tenant_slug || "").trim())
       .filter(Boolean);
+
+    console.log("ADMIN_AUTH_DB_TENANTS_RESOLVED", {
+      email: maskEmail(user.email),
+      tenantSlugs,
+    });
 
     if (tenantSlugs.length === 0) return null;
 
@@ -100,12 +136,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
-        if (!email || !password) return null;
+        console.log("ADMIN_AUTH_AUTHORIZE_START", {
+          email: maskEmail(email),
+          hasEmail: Boolean(email),
+          hasPassword: Boolean(password),
+          isOwnerEmail: email === "sofundraisingplatform@gmail.com",
+          isForceEmail: email === "force@test.com",
+          hasPlatformOwnerPasswordEnv: Boolean(
+            process.env.PLATFORM_OWNER_PASSWORD,
+          ),
+        });
+
+        if (!email || !password) {
+          console.log("ADMIN_AUTH_MISSING_CREDENTIALS", {
+            hasEmail: Boolean(email),
+            hasPassword: Boolean(password),
+          });
+
+          return null;
+        }
 
         if (
           email === "sofundraisingplatform@gmail.com" &&
+          process.env.PLATFORM_OWNER_PASSWORD &&
           password === process.env.PLATFORM_OWNER_PASSWORD
         ) {
+          console.log("ADMIN_AUTH_PLATFORM_OWNER_ENV_SUCCESS");
+
           return {
             id: "platform-owner",
             email: "sofundraisingplatform@gmail.com",
@@ -115,11 +172,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
+        console.log("ADMIN_AUTH_BEFORE_DB_LOOKUP", {
+          email: maskEmail(email),
+        });
+
         const adminUser = await findAdminUserByCredentials(email, password);
 
-        if (adminUser) return adminUser;
+        if (adminUser) {
+          console.log("ADMIN_AUTH_DB_SUCCESS", {
+            email: maskEmail(adminUser.email),
+            tenantSlugs: adminUser.tenantSlugs,
+          });
+
+          return adminUser;
+        }
+
+        console.log("ADMIN_AUTH_BEFORE_FORCE_FALLBACK", {
+          email: maskEmail(email),
+        });
 
         if (email === "force@test.com" && password === "forcepass123") {
+          console.log("ADMIN_AUTH_FORCE_FALLBACK_SUCCESS");
+
           return {
             id: "force-user",
             email: "force@test.com",
@@ -128,6 +202,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             emailVerified: null,
           };
         }
+
+        console.log("ADMIN_AUTH_RETURNING_NULL", {
+          email: maskEmail(email),
+        });
 
         return null;
       },
