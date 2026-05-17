@@ -16,22 +16,17 @@ type UpdatedPaymentRow = {
   net_amount_cents: number;
 };
 
+type SessionUserWithTenants = {
+  email?: string | null;
+  tenantSlugs?: string[];
+};
+
 function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
 function cleanCurrency(value: unknown) {
   return cleanText(value).toLowerCase();
-}
-
-function getSessionTenantSlugs(session: Awaited<ReturnType<typeof auth>>) {
-  const tenantSlugs = session?.user?.tenantSlugs;
-
-  if (!Array.isArray(tenantSlugs)) {
-    return [];
-  }
-
-  return tenantSlugs.map((value) => String(value));
 }
 
 export async function POST(request: NextRequest) {
@@ -44,6 +39,8 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
     }
+
+    const user = session.user as SessionUserWithTenants;
 
     const body = (await request.json()) as Body;
 
@@ -65,7 +62,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sessionTenantSlugs = getSessionTenantSlugs(session);
+    const sessionTenantSlugs = Array.isArray(user.tenantSlugs)
+      ? user.tenantSlugs.map((value) => String(value))
+      : [];
 
     if (!sessionTenantSlugs.includes(tenantSlug)) {
       return NextResponse.json(
@@ -90,7 +89,7 @@ export async function POST(request: NextRequest) {
         id::text,
         coalesce(net_amount_cents, 0)::int as net_amount_cents
       `,
-      [tenantSlug, currency, reference, session.user.email || null],
+      [tenantSlug, currency, reference, user.email || null],
     );
 
     const paidTotalCents = updated.reduce(
