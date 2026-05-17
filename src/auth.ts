@@ -6,10 +6,11 @@ type AdminUserRow = {
   id: string;
   email: string;
   name: string | null;
+  tenant_id: string | null;
 };
 
 type AdminTenantRow = {
-  tenant_slug: string;
+  tenant_slug: string | null;
 };
 
 type AdminUser = {
@@ -20,13 +21,17 @@ type AdminUser = {
   emailVerified: null;
 };
 
-async function findAdminUserByCredentials(email: string, password: string) {
+async function findAdminUserByCredentials(
+  email: string,
+  password: string,
+): Promise<AdminUser | null> {
   const users = await query<AdminUserRow>(
     `
       select
         id::text,
         email,
-        name
+        name,
+        tenant_id::text
       from admin_users
       where lower(email) = lower($1)
         and is_active = true
@@ -38,27 +43,30 @@ async function findAdminUserByCredentials(email: string, password: string) {
 
   const user = users[0];
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const tenantRows = await query<AdminTenantRow>(
     `
       select tenant_slug
       from admin_user_tenants
       where admin_user_id = $1::text
+
+      union
+
+      select slug as tenant_slug
+      from tenants
+      where id::text = $2::text
+
       order by tenant_slug asc
     `,
-    [user.id],
+    [user.id, user.tenant_id || ""],
   );
 
   const tenantSlugs = tenantRows
     .map((row) => String(row.tenant_slug || "").trim())
     .filter(Boolean);
 
-  if (tenantSlugs.length === 0) {
-    return null;
-  }
+  if (tenantSlugs.length === 0) return null;
 
   return {
     id: user.id,
@@ -66,7 +74,7 @@ async function findAdminUserByCredentials(email: string, password: string) {
     name: user.name || user.email,
     tenantSlugs,
     emailVerified: null,
-  } satisfies AdminUser;
+  };
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -94,15 +102,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
-        if (!email || !password) {
-          throw new Error("INVALID_CREDENTIALS");
-        }
+        if (!email || !password) return null;
 
         const adminUser = await findAdminUserByCredentials(email, password);
 
-        if (adminUser) {
-          return adminUser;
-        }
+        if (adminUser) return adminUser;
 
         if (email === "force@test.com" && password === "forcepass123") {
           return {
@@ -114,7 +118,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
-        throw new Error("AUTHORIZE_RAN_BUT_CREDENTIALS_DID_NOT_MATCH");
+        return null;
       },
     }),
   ],
