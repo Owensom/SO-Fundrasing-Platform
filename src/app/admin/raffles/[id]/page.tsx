@@ -4,6 +4,9 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getRaffleById } from "@/lib/raffles";
 import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
 import RaffleAdminActions from "./RaffleAdminActions";
 import PrizeSettings from "./PrizeSettings";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
@@ -227,6 +230,23 @@ export default async function AdminRafflePage({ params }: PageProps) {
     redirect("/admin/login");
   }
 
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
+  );
+
   const raffle = await getRaffleById(id);
 
   if (!raffle) {
@@ -269,8 +289,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-
-  const winners = await query<WinnerRow>(
+    const winners = await query<WinnerRow>(
     `
       select *
       from raffle_winners
@@ -307,6 +326,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
     (acc, ticket) => {
       const key = ticket.colour || "No colour";
       acc[key] = (acc[key] || 0) + 1;
+
       return acc;
     },
     {},
@@ -360,10 +380,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
           <div style={styles.heroMetaGrid}>
             <HeroMeta label="Draw" value={formatDrawDate(raffle.draw_at)} />
+
             <HeroMeta
               label="Ticket sales"
               value={`${soldTicketsCount}/${totalTickets}`}
             />
+
             <HeroMeta label="Progress" value={`${progress}% sold`} />
           </div>
         </div>
@@ -521,6 +543,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       currentFocusY={imageFocusY}
                       label="Raffle image"
                       previewAlt={raffle.title}
+                      subscriptionTier={tenantSettings?.subscription_tier}
+                      customImagesAllowed={customImagesCapability.allowed}
                     />
                   </div>
 
@@ -679,7 +703,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   />
                 </Field>
 
-                <input type="hidden" name="offer_count" value={offerRows.length} />
+                <input
+                  type="hidden"
+                  name="offer_count"
+                  value={offerRows.length}
+                />
 
                 <div style={styles.offerList}>
                   {offerRows.map((offer, index) => (
@@ -906,8 +934,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
-
-          <div style={styles.adminDetailsBody}>
+                    <div style={styles.adminDetailsBody}>
             {winners.length ? (
               <div style={styles.winnerList}>
                 {winners.map((winner) => (
@@ -957,7 +984,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
             ) : (
               <div style={styles.emptyBox}>No winners yet.</div>
             )}
-                        <details open style={styles.drawDetails}>
+
+            <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
