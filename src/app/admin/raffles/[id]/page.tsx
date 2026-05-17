@@ -196,6 +196,7 @@ function getProgressPercent(sold: number, total: number) {
 
   return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
 }
+
 function offerSavingText(
   quantity: number | "",
   price: number | "",
@@ -288,8 +289,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-
-  const winners = await query<WinnerRow>(
+    const winners = await query<WinnerRow>(
     `
       select *
       from raffle_winners
@@ -405,7 +405,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
           />
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
           value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
@@ -492,8 +493,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     </p>
                   </div>
                 </div>
-
-                <div style={styles.twoColumn}>
+                                <div style={styles.twoColumn}>
                   <Field label="Title">
                     <input
                       name="title"
@@ -652,7 +652,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     />
                   </Field>
                 </div>
-                                <div style={styles.colourGrid}>
+
+                <div style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
                     const selected = colours.includes(colour);
                     const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
@@ -759,8 +760,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   ))}
                 </div>
               </section>
-
-              <section style={styles.innerPanel}>
+                            <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Compliance</div>
@@ -1509,9 +1509,13 @@ const styles: Record<string, CSSProperties> = {
   },
   settingsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
     gap: 14,
     alignItems: "stretch",
+    background: "#eff6ff",
+    padding: 14,
+    borderRadius: 20,
+    border: "1px solid #dbeafe",
   },
   settingCard: {
     display: "grid",
