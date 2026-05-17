@@ -220,7 +220,6 @@ function offerSavingText(
 function isConfigured(value: unknown) {
   return String(value ?? "").trim().length > 0;
 }
-
 export default async function AdminRafflePage({ params }: PageProps) {
   const { id } = await params;
 
@@ -289,7 +288,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-    const winners = await query<WinnerRow>(
+
+  const winners = await query<WinnerRow>(
     `
       select *
       from raffle_winners
@@ -420,8 +420,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
         <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
-
-      <section style={styles.progressCard}>
+            <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
             <strong style={{ color: "#0f172a" }}>Sales progress</strong>
@@ -493,7 +492,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     </p>
                   </div>
                 </div>
-                                <div style={styles.twoColumn}>
+
+                <div style={styles.twoColumn}>
                   <Field label="Title">
                     <input
                       name="title"
@@ -565,46 +565,40 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.settingsGrid}>
-                  <div style={styles.settingCard}>
-                    <Field label="Draw date">
-                      <input
-                        name="draw_at"
-                        type="datetime-local"
-                        defaultValue={formatDateTimeLocal(raffle.draw_at)}
-                        style={styles.input}
-                      />
-                    </Field>
-                  </div>
+                <div style={styles.threeColumn}>
+                  <Field label="Draw date">
+                    <input
+                      name="draw_at"
+                      type="datetime-local"
+                      defaultValue={formatDateTimeLocal(raffle.draw_at)}
+                      style={styles.input}
+                    />
+                  </Field>
 
-                  <div style={styles.settingCard}>
-                    <Field label="Status">
-                      <select
-                        name="status"
-                        defaultValue={raffle.status}
-                        style={styles.input}
-                      >
-                        <option value="draft">Draft</option>
-                        <option value="published">Published</option>
-                        <option value="closed">Closed</option>
-                        <option value="drawn">Drawn</option>
-                      </select>
-                    </Field>
-                  </div>
+                  <Field label="Status">
+                    <select
+                      name="status"
+                      defaultValue={raffle.status}
+                      style={styles.input}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="closed">Closed</option>
+                      <option value="drawn">Drawn</option>
+                    </select>
+                  </Field>
 
-                  <div style={styles.settingCard}>
-                    <Field label="Currency">
-                      <select
-                        name="currency"
-                        defaultValue={raffle.currency ?? "GBP"}
-                        style={styles.input}
-                      >
-                        <option value="GBP">GBP</option>
-                        <option value="EUR">EUR</option>
-                        <option value="USD">USD</option>
-                      </select>
-                    </Field>
-                  </div>
+                  <Field label="Currency">
+                    <select
+                      name="currency"
+                      defaultValue={raffle.currency ?? "GBP"}
+                      style={styles.input}
+                    >
+                      <option value="GBP">GBP</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </Field>
                 </div>
               </section>
 
@@ -691,8 +685,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     );
                   })}
                 </div>
-
-                <Field label="Custom colours">
+                                <Field label="Custom colours">
                   <input
                     name="custom_colours"
                     placeholder="Gold, Silver, #00ff00"
@@ -760,13 +753,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   ))}
                 </div>
               </section>
-                            <section style={styles.innerPanel}>
+
+              <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Compliance</div>
-
                     <h3 style={styles.subTitle}>Legal & postal entry</h3>
-
                     <p style={styles.sectionDescription}>
                       Add a skill-based entry question and the free postal entry
                       route shown on the public raffle page.
@@ -835,9 +827,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Draw system</div>
-
                     <h3 style={styles.subTitle}>Draw settings</h3>
-
                     <p style={styles.sectionDescription}>
                       Choose which prize numbers the automatic randomizer should
                       draw.
@@ -845,37 +835,32 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.settingsGrid}>
-                  <div style={styles.settingCard}>
-                    <Field label="Auto draw from prize number">
-                      <input
-                        name="auto_draw_from_prize"
-                        type="number"
-                        min={1}
-                        defaultValue={autoDrawFromPrize}
-                        style={styles.input}
-                      />
-                    </Field>
-                  </div>
+                <div style={styles.twoColumn}>
+                  <Field label="Auto draw from prize number">
+                    <input
+                      name="auto_draw_from_prize"
+                      type="number"
+                      min={1}
+                      defaultValue={autoDrawFromPrize}
+                      style={styles.input}
+                    />
+                  </Field>
 
-                  <div style={styles.settingCard}>
-                    <Field label="Auto draw to prize number">
-                      <input
-                        name="auto_draw_to_prize"
-                        type="number"
-                        min={1}
-                        defaultValue={autoDrawToPrize}
-                        style={styles.input}
-                      />
-                    </Field>
-                  </div>
+                  <Field label="Auto draw to prize number">
+                    <input
+                      name="auto_draw_to_prize"
+                      type="number"
+                      min={1}
+                      defaultValue={autoDrawToPrize}
+                      style={styles.input}
+                    />
+                  </Field>
                 </div>
               </section>
 
               <section style={styles.submitBar}>
                 <div>
                   <strong style={{ color: "#0f172a" }}>Save changes</strong>
-
                   <div style={styles.mutedSmall}>
                     This updates the raffle page and admin values.
                   </div>
@@ -895,9 +880,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <summary style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 2</div>
-
               <h2 style={styles.sectionTitle}>Prize management</h2>
-
               <p style={styles.sectionDescription}>
                 Manage prize names, descriptions and public visibility.
               </p>
@@ -920,9 +903,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <summary style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 3</div>
-
               <h2 style={styles.sectionTitle}>Draw centre</h2>
-
               <p style={styles.sectionDescription}>
                 View winners, add postal tickets, run automatic draws and open
                 the dramatic live draw.
@@ -931,11 +912,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
             <div style={styles.summaryPillRow}>
               <span style={styles.neutralPill}>{winners.length} winners</span>
-
               <span style={styles.neutralPill}>
                 {soldTicketsForDraw.length} eligible tickets
               </span>
-
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
@@ -951,7 +930,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Prize</div>
-
                       <div style={styles.winnerValue}>
                         {winner.prize_title || `Prize ${winner.prize_position}`}
                       </div>
@@ -959,7 +937,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Ticket</div>
-
                       <div style={styles.winnerValue}>
                         #{winner.ticket_number}
                       </div>
@@ -967,7 +944,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Colour</div>
-
                       <div style={styles.winnerValue}>
                         {winner.colour || "No colour"}
                       </div>
@@ -975,11 +951,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Buyer</div>
-
                       <div style={styles.winnerValue}>
                         {winner.buyer_name || "Supporter"}
                       </div>
-
                       <div style={styles.winnerEmail}>
                         {winner.buyer_email || "—"}
                       </div>
@@ -995,7 +969,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
-
                   <p style={styles.sectionDescription}>
                     Add a received postal entry into the eligible ticket pool.
                   </p>
@@ -1021,11 +994,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </Field>
 
                   <Field label="Ticket colour">
-                    <input
-                      name="colour"
-                      placeholder="Optional"
-                      style={styles.input}
-                    />
+                    <input name="colour" placeholder="Optional" style={styles.input} />
                   </Field>
                 </div>
 
@@ -1060,7 +1029,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Live draw tools</h3>
-
                   <p style={styles.sectionDescription}>
                     Automatic draw and full-screen dramatic draw controls.
                   </p>
@@ -1075,20 +1043,10 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   method="post"
                   style={styles.drawPanel}
                 >
-                  <input
-                    type="hidden"
-                    name="from_prize"
-                    value={autoDrawFromPrize}
-                  />
-
-                  <input
-                    type="hidden"
-                    name="to_prize"
-                    value={autoDrawToPrize}
-                  />
+                  <input type="hidden" name="from_prize" value={autoDrawFromPrize} />
+                  <input type="hidden" name="to_prize" value={autoDrawToPrize} />
 
                   <h3 style={styles.subTitle}>Automatic random draw</h3>
-
                   <p style={styles.sectionDescription}>
                     Randomly draw remaining undrawn prizes using the saved auto
                     draw range.
@@ -1118,13 +1076,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.summaryCard}>
       <div style={styles.summaryLabel}>{label}</div>
@@ -1142,13 +1094,7 @@ function HeroMeta({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function StatusMiniPill({
-  label,
-  active,
-}: {
-  label: string;
-  active: boolean;
-}) {
+function StatusMiniPill({ label, active }: { label: string; active: boolean }) {
   return (
     <span
       style={{
@@ -1234,9 +1180,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     minWidth: 0,
   },
-  heroContent: {
-    minWidth: 0,
-  },
+  heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -1306,11 +1250,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.12)",
     minWidth: 0,
   },
-  heroMetaLabel: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: 900,
-  },
+  heroMetaLabel: { color: "#94a3b8", fontSize: 12, fontWeight: 900 },
   heroMetaValue: {
     color: "#ffffff",
     fontSize: 15,
@@ -1344,11 +1284,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 950,
-  },
+  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: 950 },
   summaryValue: {
     color: "#0f172a",
     fontSize: 22,
@@ -1372,11 +1308,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 10,
     flexWrap: "wrap",
   },
-  progressPercent: {
-    color: "#166534",
-    fontWeight: 950,
-    fontSize: 18,
-  },
+  progressPercent: { color: "#166534", fontWeight: 950, fontSize: 18 },
   progressTrack: {
     height: 11,
     background: "#e2e8f0",
@@ -1432,11 +1364,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
-  adminDetails: {
-    display: "grid",
-    gap: 0,
-    minWidth: 0,
-  },
+  adminDetails: { display: "grid", gap: 0, minWidth: 0 },
   adminSummary: {
     display: "flex",
     justifyContent: "space-between",
@@ -1459,18 +1387,8 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
-  adminDetailsBody: {
-    display: "grid",
-    gap: 14,
-    marginTop: 16,
-    minWidth: 0,
-  },
-  summaryPillRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
+  adminDetailsBody: { display: "grid", gap: 14, marginTop: 16, minWidth: 0 },
+  summaryPillRow: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" },
   statusMiniPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1492,11 +1410,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
-  form: {
-    display: "grid",
-    gap: 14,
-    minWidth: 0,
-  },
+  form: { display: "grid", gap: 14, minWidth: 0 },
   twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
@@ -1506,37 +1420,10 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
+    alignItems: "start",
   },
-  settingsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
-    gap: 14,
-    alignItems: "stretch",
-    background: "#eff6ff",
-    padding: 14,
-    borderRadius: 20,
-    border: "1px solid #dbeafe",
-  },
-  settingCard: {
-    display: "grid",
-    alignContent: "start",
-    minWidth: 0,
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #dbe3ef",
-    boxShadow: "0 2px 10px rgba(15,23,42,0.03)",
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
+  field: { display: "grid", gap: 6, minWidth: 0 },
+  label: { color: "#334155", fontSize: 13, fontWeight: 950 },
   input: {
     width: "100%",
     minHeight: 46,
@@ -1571,15 +1458,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
-  mediaControls: {
-    minWidth: 0,
-  },
-  subTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
+  mediaControls: { minWidth: 0 },
+  subTitle: { margin: 0, color: "#0f172a", fontSize: 18, letterSpacing: "-0.01em" },
   previewBox: {
     height: 220,
     borderRadius: 18,
@@ -1636,16 +1516,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
     flexShrink: 0,
   },
-  colourText: {
-    display: "grid",
-    gap: 2,
-    color: "#0f172a",
-    minWidth: 0,
-  },
-  offerList: {
-    display: "grid",
-    gap: 10,
-  },
+  colourText: { display: "grid", gap: 2, color: "#0f172a", minWidth: 0 },
+  offerList: { display: "grid", gap: 10 },
   offerCard: {
     display: "grid",
     gap: 10,
@@ -1708,16 +1580,8 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
     minHeight: 44,
   },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  winnerList: {
-    display: "grid",
-    gap: 10,
-    marginBottom: 14,
-  },
+  mutedSmall: { color: "#64748b", fontSize: 13, marginTop: 3 },
+  winnerList: { display: "grid", gap: 10, marginBottom: 14 },
   winnerCard: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
@@ -1740,12 +1604,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     fontWeight: 950,
   },
-  winnerLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 950,
-    marginBottom: 4,
-  },
+  winnerLabel: { color: "#64748b", fontSize: 12, fontWeight: 950, marginBottom: 4 },
   winnerValue: {
     color: "#0f172a",
     fontSize: 16,
