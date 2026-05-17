@@ -25,56 +25,70 @@ async function findAdminUserByCredentials(
   email: string,
   password: string,
 ): Promise<AdminUser | null> {
-  const users = await query<AdminUserRow>(
-    `
-      select
-        id::text,
-        email,
-        name,
-        tenant_id::text
-      from admin_users
-      where lower(email) = lower($1)
-        and is_active = true
-        and password_hash = crypt($2, password_hash)
-      limit 1
-    `,
-    [email, password],
-  );
+  try {
+    const users = await query<AdminUserRow>(
+      `
+        select
+          id::text,
+          email,
+          name,
+          tenant_id::text
+        from admin_users
+        where lower(email) = lower($1)
+          and is_active = true
+          and password_hash = crypt($2, password_hash)
+        limit 1
+      `,
+      [email, password],
+    );
 
-  const user = users[0];
+    const user = users[0];
 
-  if (!user) return null;
+    if (!user) return null;
 
-  const tenantRows = await query<AdminTenantRow>(
-    `
-      select tenant_slug
-      from admin_user_tenants
-      where admin_user_id = $1::text
+    const membershipRows = await query<AdminTenantRow>(
+      `
+        select tenant_slug
+        from admin_user_tenants
+        where admin_user_id = $1
+        order by tenant_slug asc
+      `,
+      [user.id],
+    );
 
-      union
+    const directTenantRows = user.tenant_id
+      ? await query<AdminTenantRow>(
+          `
+            select slug as tenant_slug
+            from tenants
+            where id::text = $1
+            limit 1
+          `,
+          [user.tenant_id],
+        )
+      : [];
 
-      select slug as tenant_slug
-      from tenants
-      where id::text = $2::text
+    const tenantSlugs = Array.from(
+      new Set(
+        [...membershipRows, ...directTenantRows]
+          .map((row) => String(row.tenant_slug || "").trim())
+          .filter(Boolean),
+      ),
+    );
 
-      order by tenant_slug asc
-    `,
-    [user.id, user.tenant_id || ""],
-  );
+    if (tenantSlugs.length === 0) return null;
 
-  const tenantSlugs = tenantRows
-    .map((row) => String(row.tenant_slug || "").trim())
-    .filter(Boolean);
-
-  if (tenantSlugs.length === 0) return null;
-
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name || user.email,
-    tenantSlugs,
-    emailVerified: null,
-  };
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name || user.email,
+      tenantSlugs,
+      emailVerified: null,
+    };
+  } catch (error) {
+    console.error("Database admin auth failed", error);
+    return null;
+  }
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
