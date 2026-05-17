@@ -14,6 +14,17 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
+type PaymentFinancials = {
+  grossAmountCents: number;
+  platformFeeCents: number;
+  donorFeeCents: number;
+  donorCoveredFees: boolean;
+  netAmountCents: number;
+  stripeConnectRouted: boolean;
+  stripeConnectAccountId: string;
+  applicationFeeAmountCents: number;
+};
+
 async function syncStripeConnectAccountById(accountId: string) {
   const account = await stripe.accounts.retrieve(accountId);
 
@@ -73,7 +84,11 @@ function getConnectedAccountIdFromEvent(event: Stripe.Event) {
 
   const object = event.data?.object as any;
 
-  if (object?.id && typeof object.id === "string" && object.id.startsWith("acct_")) {
+  if (
+    object?.id &&
+    typeof object.id === "string" &&
+    object.id.startsWith("acct_")
+  ) {
     return object.id.trim();
   }
 
@@ -93,12 +108,127 @@ function isStripeConnectAccountEvent(eventType: string) {
     eventType === "account.updated" ||
     eventType === "v2.core.account[requirements].updated" ||
     eventType === "v2.core.account[identity].updated" ||
-    eventType === "v2.core.account[configuration.merchant].capability_status_updated" ||
-    eventType === "v2.core.account[configuration.recipient].capability_status_updated" ||
+    eventType ===
+      "v2.core.account[configuration.merchant].capability_status_updated" ||
+    eventType ===
+      "v2.core.account[configuration.recipient].capability_status_updated" ||
     eventType === "v2.account_link.returned"
   );
 }
 
+function safeNumber(value: unknown, fallback = 0) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.round(number));
+}
+
+function stringValue(value: unknown) {
+  return String(value || "").trim();
+}
+
+function boolMetadata(value: unknown) {
+  const clean = String(value || "").trim().toLowerCase();
+
+  return clean === "true" || clean === "1" || clean === "yes";
+}
+
+async function getPaymentIntentApplicationFeeAmount(
+  paymentIntentId: string | null,
+) {
+  if (!paymentIntentId) return 0;
+
+  try {
+    const paymentIntent = (await stripe.paymentIntents.retrieve(
+      paymentIntentId,
+    )) as any;
+
+    return safeNumber(paymentIntent?.application_fee_amount, 0);
+  } catch (error) {
+    console.error("Unable to retrieve PaymentIntent application fee", {
+      paymentIntentId,
+      error,
+    });
+
+    return 0;
+  }
+}
+
+async function getCheckoutFinancials({
+  session,
+  metadata,
+  paymentIntentId,
+}: {
+  session: Stripe.Checkout.Session;
+  metadata: Stripe.Metadata;
+  paymentIntentId: string | null;
+}): Promise<PaymentFinancials> {
+  const grossAmountCents = safeNumber(session.amount_total, 0);
+
+  const stripeConnectRouted = boolMetadata(metadata.stripe_connect_routed);
+  const stripeConnectAccountId = stringValue(
+    metadata.stripe_connect_account_id,
+  );
+
+  const metadataApplicationFeeAmount = safeNumber(
+    metadata.application_fee_amount,
+    0,
+  );
+
+  const paymentIntentApplicationFeeAmount =
+    await getPaymentIntentApplicationFeeAmount(paymentIntentId);
+
+  const applicationFeeAmountCents =
+    paymentIntentApplicationFeeAmount || metadataApplicationFeeAmount;
+
+  const supporterContributionCents = safeNumber(
+    metadata.supporter_contribution_cents ||
+      metadata.donor_fee_cents ||
+      metadata.buyer_fee_cents,
+    0,
+  );
+
+  const rawPlatformFeeCents = safeNumber(metadata.platform_fee_cents, 0);
+
+  const platformCommissionCents = safeNumber(
+    metadata.platform_commission_cents ||
+      applicationFeeAmountCents ||
+      Math.max(rawPlatformFeeCents - supporterContributionCents, 0),
+    0,
+  );
+
+  const platformFeeCents = stripeConnectRouted
+    ? applicationFeeAmountCents || platformCommissionCents
+    : platformCommissionCents || rawPlatformFeeCents;
+
+  const donorFeeCents = supporterContributionCents;
+
+  const metadataNetAmountCents = safeNumber(metadata.net_amount_cents, 0);
+
+  const calculatedNetAmountCents = Math.max(
+    grossAmountCents - platformFeeCents - donorFeeCents,
+    0,
+  );
+
+  const netAmountCents =
+    metadataNetAmountCents > 0
+      ? metadataNetAmountCents
+      : calculatedNetAmountCents;
+
+  return {
+    grossAmountCents,
+    platformFeeCents,
+    donorFeeCents,
+    donorCoveredFees: donorFeeCents > 0,
+    netAmountCents,
+    stripeConnectRouted,
+    stripeConnectAccountId,
+    applicationFeeAmountCents,
+  };
+}
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -185,12 +315,22 @@ export async function POST(request: NextRequest) {
         ? session.payment_intent
         : session.payment_intent?.id || null;
 
-    const grossAmountCents = Number(session.amount_total || 0);
-    const platformFeeCents = Number(metadata.platform_fee_cents || 0);
-    const netAmountCents = Number(
-      metadata.net_amount_cents ||
-        Math.max(grossAmountCents - platformFeeCents, 0),
-    );
+    const financials = await getCheckoutFinancials({
+      session,
+      metadata,
+      paymentIntentId,
+    });
+
+    const {
+      grossAmountCents,
+      platformFeeCents,
+      donorFeeCents,
+      donorCoveredFees,
+      netAmountCents,
+      stripeConnectRouted,
+      stripeConnectAccountId,
+      applicationFeeAmountCents,
+    } = financials;
 
     const email =
       session.customer_details?.email || session.customer_email || null;
@@ -262,12 +402,14 @@ export async function POST(request: NextRequest) {
           gross_amount_cents,
           platform_fee_cents,
           net_amount_cents,
+          donor_fee_cents,
+          donor_covered_fees,
           payment_status,
           customer_email,
           payment_type,
           squares_game_id
         )
-        values ($1,$2,null,$3,$4,$5,$6,$7,$8,$9,$10,'event',null)
+        values ($1,$2,null,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'event',null)
         on conflict (stripe_checkout_session_id)
         do update set
           stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -277,6 +419,8 @@ export async function POST(request: NextRequest) {
           gross_amount_cents = excluded.gross_amount_cents,
           platform_fee_cents = excluded.platform_fee_cents,
           net_amount_cents = excluded.net_amount_cents,
+          donor_fee_cents = excluded.donor_fee_cents,
+          donor_covered_fees = excluded.donor_covered_fees,
           payment_status = excluded.payment_status,
           customer_email = excluded.customer_email,
           payment_type = excluded.payment_type
@@ -290,6 +434,8 @@ export async function POST(request: NextRequest) {
           grossAmountCents,
           platformFeeCents,
           netAmountCents,
+          donorFeeCents,
+          donorCoveredFees,
           session.payment_status || null,
           email,
         ],
@@ -324,8 +470,7 @@ export async function POST(request: NextRequest) {
             `,
             [orderId],
           );
-
-          await sendEventReceiptEmail({
+                    await sendEventReceiptEmail({
             to: email,
             name,
             eventTitle:
@@ -349,6 +494,9 @@ export async function POST(request: NextRequest) {
         checkoutSessionId: session.id,
         orderId,
         eventId,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        applicationFeeAmountCents,
       });
     }
 
@@ -591,11 +739,17 @@ export async function POST(request: NextRequest) {
           email,
           name,
           JSON.stringify(squares),
-          JSON.stringify(metadata),
+          JSON.stringify({
+            ...metadata,
+            stripe_connect_routed: stripeConnectRouted ? "true" : "false",
+            stripe_connect_account_id: stripeConnectAccountId,
+            application_fee_amount: String(applicationFeeAmountCents),
+            normalized_platform_fee_cents: String(platformFeeCents),
+            normalized_net_amount_cents: String(netAmountCents),
+          }),
         ],
       );
-
-      await query(
+            await query(
         `
         update squares_games
         set
@@ -656,12 +810,14 @@ export async function POST(request: NextRequest) {
         gross_amount_cents,
         platform_fee_cents,
         net_amount_cents,
+        donor_fee_cents,
+        donor_covered_fees,
         payment_status,
         customer_email,
         payment_type,
         squares_game_id
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -672,6 +828,8 @@ export async function POST(request: NextRequest) {
         gross_amount_cents = excluded.gross_amount_cents,
         platform_fee_cents = excluded.platform_fee_cents,
         net_amount_cents = excluded.net_amount_cents,
+        donor_fee_cents = excluded.donor_fee_cents,
+        donor_covered_fees = excluded.donor_covered_fees,
         payment_status = excluded.payment_status,
         customer_email = excluded.customer_email,
         payment_type = excluded.payment_type,
@@ -687,6 +845,8 @@ export async function POST(request: NextRequest) {
         grossAmountCents,
         platformFeeCents,
         netAmountCents,
+        donorFeeCents,
+        donorCoveredFees,
         session.payment_status || null,
         email,
         type,
@@ -699,6 +859,11 @@ export async function POST(request: NextRequest) {
       event: event.type,
       type,
       checkoutSessionId: session.id,
+      stripeConnectRouted,
+      stripeConnectAccountId,
+      applicationFeeAmountCents,
+      platformFeeCents,
+      netAmountCents,
     });
   } catch (error: any) {
     console.error("Stripe webhook error", error);
