@@ -7,7 +7,6 @@ type AdminUserRow = {
   email: string;
   name: string | null;
   tenant_id: string | null;
-  password_matches: boolean;
 };
 
 type AdminTenantRow = {
@@ -27,22 +26,17 @@ async function findAdminUserByCredentials(
   password: string,
 ): Promise<AdminUser | null> {
   try {
-    console.log("ADMIN_AUTH_ATTEMPT", {
-      email,
-      hasPassword: Boolean(password),
-    });
-
     const users = await query<AdminUserRow>(
       `
         select
           id::text,
           email,
           name,
-          tenant_id::text,
-          password_hash = crypt($2, password_hash) as password_matches
+          tenant_id::text
         from admin_users
         where lower(email) = lower($1)
           and is_active = true
+          and password_hash = crypt($2, password_hash)
         limit 1
       `,
       [email, password],
@@ -50,21 +44,7 @@ async function findAdminUserByCredentials(
 
     const user = users[0];
 
-    if (!user) {
-      console.log("ADMIN_AUTH_NO_ACTIVE_USER", { email });
-      return null;
-    }
-
-    console.log("ADMIN_AUTH_USER_FOUND", {
-      id: user.id,
-      email: user.email,
-      tenantId: user.tenant_id,
-      passwordMatches: user.password_matches,
-    });
-
-    if (!user.password_matches) {
-      return null;
-    }
+    if (!user) return null;
 
     const tenantRows = await query<AdminTenantRow>(
       `
@@ -79,11 +59,6 @@ async function findAdminUserByCredentials(
     const tenantSlugs = tenantRows
       .map((row) => String(row.tenant_slug || "").trim())
       .filter(Boolean);
-
-    console.log("ADMIN_AUTH_TENANTS_RESOLVED", {
-      email: user.email,
-      tenantSlugs,
-    });
 
     if (tenantSlugs.length === 0) return null;
 
@@ -125,29 +100,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
-        if (!email || !password) {
-          console.log("ADMIN_AUTH_MISSING_CREDENTIALS", {
-            hasEmail: Boolean(email),
-            hasPassword: Boolean(password),
-          });
+        if (!email || !password) return null;
 
-          return null;
+        if (
+          email === "sofundraisingplatform@gmail.com" &&
+          password === process.env.PLATFORM_OWNER_PASSWORD
+        ) {
+          return {
+            id: "platform-owner",
+            email: "sofundraisingplatform@gmail.com",
+            name: "Owen Somerville",
+            tenantSlugs: ["demo-a"],
+            emailVerified: null,
+          };
         }
 
         const adminUser = await findAdminUserByCredentials(email, password);
 
-        if (adminUser) {
-          console.log("ADMIN_AUTH_SUCCESS", {
-            email: adminUser.email,
-            tenantSlugs: adminUser.tenantSlugs,
-          });
-
-          return adminUser;
-        }
+        if (adminUser) return adminUser;
 
         if (email === "force@test.com" && password === "forcepass123") {
-          console.log("ADMIN_AUTH_FORCE_FALLBACK_SUCCESS");
-
           return {
             id: "force-user",
             email: "force@test.com",
@@ -157,7 +129,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
-        console.log("ADMIN_AUTH_FAILED", { email });
         return null;
       },
     }),
