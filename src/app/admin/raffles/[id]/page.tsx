@@ -196,7 +196,6 @@ function getProgressPercent(sold: number, total: number) {
 
   return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
 }
-
 function offerSavingText(
   quantity: number | "",
   price: number | "",
@@ -289,69 +288,10 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-    const soldCount = Number(raffle.sold_tickets || 0);
-  const totalTickets = Number(raffle.total_tickets || 0);
-  const remainingTickets = Math.max(0, totalTickets - soldCount);
-  const progressPercent = getProgressPercent(soldCount, totalTickets);
 
-  const prizesConfigured = Array.isArray(config.prizes)
-    ? config.prizes.length > 0
-    : false;
-
-  const legalQuestionConfigured = Boolean(
-    config.question?.text && config.question?.answer,
-  );
-
-  const freeEntryConfigured = Boolean(
-    config.free_entry?.address ||
-      config.free_entry?.instructions ||
-      config.free_entry?.closes_at,
-  );
-
-  const soldByColour = colours.reduce<Record<string, number>>(
-    (accumulator, colour) => {
-      accumulator[colour] = 0;
-      return accumulator;
-    },
-    {},
-  );
-
-  const soldTicketsResult = await query<SoldTicketRow>(
+  const winners = await query<WinnerRow>(
     `
-      select
-        ticket_number,
-        colour
-      from raffle_tickets
-      where raffle_id = $1
-      order by ticket_number asc
-    `,
-    [raffle.id],
-  );
-
-  for (const row of soldTicketsResult.rows) {
-    const colour = row.colour || "";
-
-    if (!colour) continue;
-
-    soldByColour[colour] = (soldByColour[colour] || 0) + 1;
-  }
-
-  const soldTicketsForDraw = soldTicketsResult.rows.map((ticket) => ({
-    ticketNumber: Number(ticket.ticket_number),
-    colour: ticket.colour || "",
-  }));
-
-  const winnersResult = await query<WinnerRow>(
-    `
-      select
-        id,
-        raffle_id,
-        prize_position,
-        prize_title,
-        ticket_number,
-        colour,
-        buyer_name,
-        buyer_email
+      select *
       from raffle_winners
       where raffle_id = $1
       order by prize_position asc
@@ -359,45 +299,71 @@ export default async function AdminRafflePage({ params }: PageProps) {
     [raffle.id],
   );
 
-  const winners = winnersResult.rows;
+  const soldTicketRows = await query<SoldTicketRow>(
+    `
+      select ticket_number, colour
+      from raffle_ticket_sales
+      where raffle_id = $1
+      order by created_at asc
+    `,
+    [raffle.id],
+  );
+
+  const soldTicketsForDraw = soldTicketRows
+    .map((ticket) => ({
+      ticketNumber: Number(ticket.ticket_number),
+      colour: ticket.colour,
+    }))
+    .filter((ticket) => Number.isFinite(ticket.ticketNumber));
+
+  const soldTicketsCount = Number(raffle.sold_tickets || 0);
+  const totalTickets = Number(raffle.total_tickets || 0);
+  const remainingTickets = Math.max(totalTickets - soldTicketsCount, 0);
+  const progress = getProgressPercent(soldTicketsCount, totalTickets);
+  const statusStyle = getStatusStyle(raffle.status);
+
+  const soldByColour = soldTicketRows.reduce((acc, ticket) => {
+    const key = ticket.colour || "No colour";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const legalQuestionEnabled =
+    isConfigured(config.question?.text) && isConfigured(config.question?.answer);
+
+  const postalEntryEnabled =
+    isConfigured(config.free_entry?.address) ||
+    isConfigured(config.free_entry?.instructions);
+
+  const prizesConfigured =
+    Array.isArray(config.prizes) && config.prizes.length > 0;
 
   return (
-    <main className="raffle-admin-page" style={styles.page}>
-      <style>{responsiveStyles}</style>
-
+    <main style={styles.page}>
       <section style={styles.topBar}>
         <Link href="/admin/raffles" style={styles.backLink}>
           ← Back to raffles
         </Link>
 
-        <div style={styles.topBarActions}>
-          <Link
-            href={`/r/${raffle.slug}`}
-            target="_blank"
-            style={styles.publicLink}
-          >
-            View public page
-          </Link>
-
-          <RaffleAdminActions raffleId={raffle.id} />
-        </div>
+        <Link
+          href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
+          target="_blank"
+          style={styles.publicLink}
+        >
+          View campaign page
+        </Link>
       </section>
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Raffle administration</div>
+          <div style={styles.eyebrow}>Raffle editor</div>
 
           <div style={styles.heroTitleRow}>
             <h1 style={styles.heroTitle}>{raffle.title}</h1>
 
-            <span
-              style={{
-                ...styles.statusPill,
-                ...getStatusStyle(raffle.status),
-              }}
-            >
+            <div style={{ ...styles.statusPill, ...statusStyle }}>
               {raffle.status}
-            </span>
+            </div>
           </div>
 
           <p style={styles.heroSlug}>/r/{raffle.slug}</p>
@@ -405,127 +371,84 @@ export default async function AdminRafflePage({ params }: PageProps) {
           {raffle.description ? (
             <p style={styles.heroDescription}>{raffle.description}</p>
           ) : (
-            <p style={styles.heroDescriptionMuted}>
-              Add a description to explain the raffle and showcase prizes.
-            </p>
+            <p style={styles.heroDescriptionMuted}>No description added yet.</p>
           )}
 
           <div style={styles.heroMetaGrid}>
-            <HeroMeta
-              label="Draw date"
-              value={formatDrawDate(raffle.draw_at)}
-            />
+            <HeroMeta label="Draw" value={formatDrawDate(raffle.draw_at)} />
 
             <HeroMeta
-              label="Ticket price"
-              value={formatMoney(
-                Number(raffle.ticket_price_cents || 0),
-                raffle.currency || "GBP",
-              )}
+              label="Ticket sales"
+              value={`${soldTicketsCount}/${totalTickets}`}
             />
 
-            <HeroMeta
-              label="Revenue"
-              value={formatMoney(
-                Number(raffle.revenue_cents || 0),
-                raffle.currency || "GBP",
-              )}
-            />
-
-            <HeroMeta label="Tickets sold" value={soldCount} />
+            <HeroMeta label="Progress" value={`${progress}% sold`} />
           </div>
         </div>
 
         <div style={styles.heroImageWrap}>
           <img
             src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
-            alt={raffle.title}
+            alt={raffle.title || "SO Raffles"}
             style={{
               width: "100%",
               height: "100%",
-              objectFit: "cover",
-              objectPosition: imageObjectPosition,
+              objectFit: raffle.image_url ? "cover" : "contain",
+              objectPosition: raffle.image_url ? imageObjectPosition : "center",
               display: "block",
+              padding: raffle.image_url ? 0 : 22,
+              boxSizing: "border-box",
+              background: raffle.image_url
+                ? "#1e293b"
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
             }}
           />
         </div>
       </section>
-
-      <section style={styles.summaryGrid}>
-        <SummaryCard label="Sold tickets" value={soldCount} />
-
-        <SummaryCard label="Remaining" value={remainingTickets} />
-
+            <section style={styles.summaryGrid}>
         <SummaryCard
-          label="Revenue"
-          value={formatMoney(
-            Number(raffle.revenue_cents || 0),
-            raffle.currency || "GBP",
-          )}
+          label="Ticket price"
+          value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
         />
 
-        <SummaryCard label="Colours" value={colours.length} />
+        <SummaryCard label="Draw date" value={formatDrawDate(raffle.draw_at)} />
 
-        <SummaryCard label="Offers" value={offers.length} />
+        <SummaryCard label="Total tickets" value={totalTickets} />
 
-        <SummaryCard label="Winners drawn" value={winners.length} />
+        <SummaryCard label="Sold" value={soldTicketsCount} />
+
+        <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
 
       <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
-            <div style={styles.sectionEyebrow}>Sales progress</div>
+            <strong style={{ color: "#0f172a" }}>Sales progress</strong>
 
-            <h2 style={styles.sectionTitle}>Ticket sales</h2>
+            <div style={styles.mutedSmall}>
+              {soldTicketsCount} sold from {totalTickets} tickets
+            </div>
           </div>
 
-          <div style={styles.progressPercent}>{progressPercent}% sold</div>
+          <div style={styles.progressPercent}>{progress}%</div>
         </div>
 
         <div style={styles.progressTrack}>
-          <div
-            style={{
-              ...styles.progressFill,
-              width: `${progressPercent}%`,
-            }}
-          />
+          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
         </div>
       </section>
 
       <section style={styles.actionsCard}>
-        <div style={styles.sectionHeader}>
-          <div>
-            <div style={styles.sectionEyebrow}>Configuration overview</div>
+        <div>
+          <h2 style={styles.sectionTitle}>Raffle actions</h2>
 
-            <h2 style={styles.sectionTitle}>Raffle readiness</h2>
-
-            <p style={styles.sectionDescription}>
-              Quick overview of images, legal setup and prize configuration.
-            </p>
-          </div>
+          <p style={styles.sectionDescription}>
+            Publish, close, draw or remove this raffle using the existing action
+            controls.
+          </p>
         </div>
 
-        <div style={styles.summaryPillRow}>
-          <StatusMiniPill
-            label="Custom image"
-            active={Boolean(raffle.image_url)}
-          />
-
-          <StatusMiniPill
-            label="Legal question"
-            active={legalQuestionConfigured}
-          />
-
-          <StatusMiniPill
-            label="Free postal entry"
-            active={freeEntryConfigured}
-          />
-
-          <StatusMiniPill
-            label="Prizes configured"
-            active={prizesConfigured}
-          />
-        </div>
+        <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
       </section>
 
       <section style={styles.section}>
@@ -534,15 +457,19 @@ export default async function AdminRafflePage({ params }: PageProps) {
             <div>
               <div style={styles.sectionEyebrow}>Section 1</div>
 
-              <h2 style={styles.sectionTitle}>Campaign settings</h2>
+              <h2 style={styles.sectionTitle}>Edit raffle</h2>
 
               <p style={styles.sectionDescription}>
-                Update the public raffle page, ticket setup, legal details and
-                campaign image.
+                Update the public details, pricing, legal settings, colours and
+                offer bundles.
               </p>
             </div>
 
-            <span style={styles.adminSummaryToggle}>Open / close</span>
+            <div style={styles.summaryPillRow}>
+              <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
+              <StatusMiniPill label="Postal" active={postalEntryEnabled} />
+              <span style={styles.adminSummaryToggle}>Open / close</span>
+            </div>
           </summary>
 
           <div style={styles.adminDetailsBody}>
@@ -551,24 +478,27 @@ export default async function AdminRafflePage({ params }: PageProps) {
               method="post"
               style={styles.form}
             >
+              <input type="hidden" name="image_position" value={imagePosition} />
+
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <div style={styles.innerEyebrow}>Public campaign</div>
+                    <div style={styles.innerEyebrow}>Public overview</div>
 
-                    <h3 style={styles.subTitle}>Title & content</h3>
+                    <h3 style={styles.subTitle}>Campaign details</h3>
 
                     <p style={styles.sectionDescription}>
-                      Control the public-facing campaign content and imagery.
+                      These details are shown on the public raffle page.
                     </p>
                   </div>
                 </div>
-                                <div style={styles.twoColumn}>
+
+                <div style={styles.twoColumn}>
                   <Field label="Title">
                     <input
                       name="title"
-                      required
                       defaultValue={raffle.title}
+                      required
                       style={styles.input}
                     />
                   </Field>
@@ -576,8 +506,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   <Field label="Slug">
                     <input
                       name="slug"
-                      required
                       defaultValue={raffle.slug}
+                      required
                       style={styles.input}
                     />
                   </Field>
@@ -587,55 +517,49 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   <textarea
                     name="description"
                     rows={4}
-                    defaultValue={raffle.description || ""}
+                    defaultValue={raffle.description ?? ""}
                     style={styles.textarea}
                   />
                 </Field>
 
-                <div style={styles.mediaPanel}>
-                  <div style={styles.mediaPanelLeft}>
-                    <div style={styles.mediaHeader}>
-                      <div>
-                        <div style={styles.mediaEyebrow}>Campaign media</div>
+                <div style={styles.mediaBox}>
+                  <div style={styles.mediaControls}>
+                    <h3 style={styles.subTitle}>Raffle image</h3>
 
-                        <h3 style={styles.mediaTitle}>Raffle image</h3>
-
-                        <p style={styles.mediaDescription}>
-                          Upload or replace the public image, then choose the
-                          crop focus. If no image is uploaded, the SO default
-                          raffle image is shown.
-                        </p>
-                      </div>
-                    </div>
+                    <p style={styles.sectionDescription}>
+                      Upload or replace the public image, then choose the crop
+                      focus. If no image is uploaded, the SO default raffle image
+                      is shown.
+                    </p>
 
                     <ImageFocusUploadField
-                      currentImageUrl={raffle.image_url || ""}
+                      currentImageUrl={raffle.image_url ?? ""}
                       currentFocusX={imageFocusX}
                       currentFocusY={imageFocusY}
                       label="Raffle image"
                       previewAlt={raffle.title}
-                      onImageUrlChange={() => {}}
-                      onFocusXChange={() => {}}
-                      onFocusYChange={() => {}}
-                      subscriptionTier={
-                        tenantSettings?.subscription_tier
-                      }
-                      customImagesAllowed={
-                        customImagesCapability.allowed
-                      }
+                      subscriptionTier={tenantSettings?.subscription_tier}
+                      customImagesAllowed={customImagesCapability.allowed}
                     />
                   </div>
 
-                  <div style={styles.mediaPreview}>
+                  <div style={styles.previewBox}>
                     <img
                       src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
-                      alt={raffle.title}
+                      alt={raffle.title || "SO Raffles"}
                       style={{
                         width: "100%",
                         height: "100%",
-                        objectFit: "cover",
-                        objectPosition: imageObjectPosition,
+                        objectFit: raffle.image_url ? "cover" : "contain",
+                        objectPosition: raffle.image_url
+                          ? imageObjectPosition
+                          : "center",
                         display: "block",
+                        padding: raffle.image_url ? 0 : 22,
+                        boxSizing: "border-box",
+                        background: raffle.image_url
+                          ? "#ffffff"
+                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
                       }}
                     />
                   </div>
@@ -647,9 +571,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       <input
                         name="draw_at"
                         type="datetime-local"
-                        defaultValue={formatDateTimeLocal(
-                          raffle.draw_at,
-                        )}
+                        defaultValue={formatDateTimeLocal(raffle.draw_at)}
                         style={styles.input}
                       />
                     </Field>
@@ -663,9 +585,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                         style={styles.input}
                       >
                         <option value="draft">Draft</option>
-                        <option value="published">
-                          Published
-                        </option>
+                        <option value="published">Published</option>
                         <option value="closed">Closed</option>
                         <option value="drawn">Drawn</option>
                       </select>
@@ -691,17 +611,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <div style={styles.innerEyebrow}>
-                      Ticket setup
-                    </div>
+                    <div style={styles.innerEyebrow}>Ticket setup</div>
 
-                    <h3 style={styles.subTitle}>
-                      Pricing & bundles
-                    </h3>
+                    <h3 style={styles.subTitle}>Pricing & bundles</h3>
 
                     <p style={styles.sectionDescription}>
-                      Configure pricing, number range,
-                      colours and bundle offers.
+                      Configure pricing, number range, colours and bundle
+                      offers.
                     </p>
                   </div>
                 </div>
@@ -722,9 +638,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     <input
                       name="startNumber"
                       type="number"
-                      defaultValue={
-                        config.startNumber ?? 1
-                      }
+                      defaultValue={config.startNumber ?? 1}
                       style={styles.input}
                     />
                   </Field>
@@ -733,35 +647,23 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     <input
                       name="endNumber"
                       type="number"
-                      defaultValue={
-                        config.endNumber ??
-                        raffle.total_tickets
-                      }
+                      defaultValue={config.endNumber ?? raffle.total_tickets}
                       style={styles.input}
                     />
                   </Field>
                 </div>
-
-                <div style={styles.colourGrid}>
+                                <div style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
-                    const selected =
-                      colours.includes(colour);
-
-                    const swatch =
-                      COLOUR_SWATCHES[colour] ||
-                      "#e2e8f0";
+                    const selected = colours.includes(colour);
+                    const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
 
                     return (
                       <label
                         key={colour}
                         style={{
                           ...styles.colourCard,
-                          borderColor: selected
-                            ? "#1683f8"
-                            : "#e2e8f0",
-                          background: selected
-                            ? "#eff6ff"
-                            : "#ffffff",
+                          borderColor: selected ? "#1683f8" : "#e2e8f0",
+                          background: selected ? "#eff6ff" : "#ffffff",
                         }}
                       >
                         <input
@@ -776,18 +678,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
                             ...styles.swatch,
                             background: swatch,
                             borderColor:
-                              colour === "White"
-                                ? "#cbd5e1"
-                                : "transparent",
+                              colour === "White" ? "#cbd5e1" : "transparent",
                           }}
                         />
 
                         <span style={styles.colourText}>
                           <strong>{colour}</strong>
-
-                          <small>
-                            {soldByColour[colour] || 0} sold
-                          </small>
+                          <small>{soldByColour[colour] || 0} sold</small>
                         </span>
                       </label>
                     );
@@ -800,16 +697,14 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     placeholder="Gold, Silver, #00ff00"
                     defaultValue={colours
                       .filter(
-                        (colour: string) =>
-                          !PRESET_COLOURS.includes(
-                            colour,
-                          ),
+                        (colour: string) => !PRESET_COLOURS.includes(colour),
                       )
                       .join(", ")}
                     style={styles.input}
                   />
                 </Field>
-                                <input
+
+                <input
                   type="hidden"
                   name="offer_count"
                   value={offerRows.length}
@@ -1288,39 +1183,234 @@ const styles: Record<string, CSSProperties> = {
     overflowX: "hidden",
     boxSizing: "border-box",
   },
-  settingsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 16,
-    alignItems: "stretch",
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 16,
+    flexWrap: "wrap",
   },
-  settingCard: {
-    display: "grid",
-    alignContent: "start",
-    minWidth: 0,
-    padding: 18,
-    borderRadius: 18,
+  backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
     background: "#ffffff",
-    border: "1px solid #dbe3ef",
-    boxShadow: "0 2px 10px rgba(15,23,42,0.03)",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 900,
   },
-  mediaPanel: {
+  publicLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+  hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.9fr)",
-    gap: 16,
-    padding: 18,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 20,
+    alignItems: "center",
+    padding: "clamp(20px, 5vw, 28px)",
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.26), transparent 32%), linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%)",
+    color: "#ffffff",
+    marginBottom: 16,
+    minHeight: 330,
+    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
+    overflow: "hidden",
+    minWidth: 0,
+  },
+  heroContent: {
+    minWidth: 0,
+  },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: "clamp(34px, 8vw, 48px)",
+    lineHeight: 1.03,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+    minWidth: 0,
+  },
+  statusPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+  heroSlug: {
+    margin: "9px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+  heroDescription: {
+    margin: "14px 0 0",
+    color: "#e2e8f0",
+    lineHeight: 1.55,
+    maxWidth: 760,
+    overflowWrap: "anywhere",
+  },
+  heroDescriptionMuted: {
+    margin: "14px 0 0",
+    color: "#94a3b8",
+    lineHeight: 1.55,
+  },
+  heroMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
+    gap: 10,
+    marginTop: 22,
+    maxWidth: 700,
+  },
+  heroMetaCard: {
+    padding: "12px 14px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    minWidth: 0,
+  },
+  heroMetaLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  heroMetaValue: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: 950,
+    marginTop: 4,
+    overflowWrap: "anywhere",
+  },
+  heroImageWrap: {
+    width: "100%",
+    maxWidth: 280,
+    height: 280,
+    borderRadius: 22,
+    background: "#1e293b",
+    border: "1px solid rgba(255,255,255,0.14)",
+    overflow: "hidden",
+    alignSelf: "center",
+    justifySelf: "center",
+    boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    marginTop: 5,
+    overflowWrap: "anywhere",
+  },
+  progressCard: {
+    padding: 16,
     borderRadius: 22,
     background: "#ffffff",
-    border: "1px solid #dbe3ef",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+  },
+  progressHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  progressPercent: {
+    color: "#166534",
+    fontWeight: 950,
+    fontSize: 18,
+  },
+  progressTrack: {
+    height: 11,
+    background: "#e2e8f0",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    background: "linear-gradient(90deg, #16a34a, #22c55e)",
+    borderRadius: 999,
+  },
+  actionsCard: {
+    display: "grid",
+    gap: 14,
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
     minWidth: 0,
+    overflow: "hidden",
   },
-  mediaPanelLeft: {
+  section: {
+    padding: "clamp(16px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
     minWidth: 0,
+    overflow: "hidden",
   },
-  mediaHeader: {
-    marginBottom: 12,
-  },
-  mediaEyebrow: {
+  sectionEyebrow: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -1328,23 +1418,406 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 5,
   },
-  mediaTitle: {
+  sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.025em",
+    fontSize: "clamp(22px, 5vw, 26px)",
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
-  mediaDescription: {
-    margin: "6px 0 0",
+  sectionDescription: {
+    margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
-  mediaPreview: {
-    minHeight: 220,
+  adminDetails: {
+    display: "grid",
+    gap: 0,
+    minWidth: 0,
+  },
+  adminSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+  adminSummaryToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  adminDetailsBody: {
+    display: "grid",
+    gap: 14,
+    marginTop: 16,
+    minWidth: 0,
+  },
+  summaryPillRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+  },
+  statusMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  neutralPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  form: {
+    display: "grid",
+    gap: 14,
+    minWidth: 0,
+  },
+  twoColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 12,
+  },
+  threeColumn: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
+    gap: 12,
+  },
+  settingsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+    gap: 14,
+    alignItems: "stretch",
+  },
+  settingCard: {
+    display: "grid",
+    alignContent: "start",
+    minWidth: 0,
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #dbe3ef",
+    boxShadow: "0 2px 10px rgba(15,23,42,0.03)",
+  },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  input: {
+    width: "100%",
+    minHeight: 46,
+    padding: "11px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 16,
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+  textarea: {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 16,
+    resize: "vertical",
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 16,
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: {
+    minWidth: 0,
+  },
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
+  },
+  previewBox: {
+    height: 220,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+  },
+  innerPanel: {
+    display: "grid",
+    gap: 14,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eff6ff 100%)",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  innerHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+  colourGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 135px), 1fr))",
+    gap: 10,
+  },
+  colourCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    border: "1px solid",
+    cursor: "pointer",
+    fontWeight: 900,
+    minWidth: 0,
+  },
+  swatch: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    border: "1px solid",
+    flexShrink: 0,
+  },
+  colourText: {
+    display: "grid",
+    gap: 2,
+    color: "#0f172a",
+    minWidth: 0,
+  },
+  offerList: {
+    display: "grid",
+    gap: 10,
+  },
+  offerCard: {
+    display: "grid",
+    gap: 10,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    background: "#ffffff",
+    minWidth: 0,
+  },
+  offerBadge: {
+    justifySelf: "start",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ecfdf5",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  offerInputs: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gap: 10,
+    alignItems: "end",
+  },
+  checkboxLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    fontWeight: 950,
+    color: "#334155",
+    cursor: "pointer",
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    margin: 0,
+    overflowWrap: "anywhere",
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
     borderRadius: 20,
     background: "#f8fafc",
-    border: "1px solid #dbe3ef",
+    border: "1px solid #e2e8f0",
+  },
+  submitButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+    minHeight: 44,
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  winnerList: {
+    display: "grid",
+    gap: 10,
+    marginBottom: 14,
+  },
+  winnerCard: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    alignItems: "center",
+    minWidth: 0,
+  },
+  winnerPrizeIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+  },
+  winnerLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    marginBottom: 4,
+  },
+  winnerValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  winnerEmail: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+    overflowWrap: "anywhere",
+  },
+  emptyBox: {
+    padding: 16,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 900,
+    marginBottom: 14,
+  },
+  drawDetails: {
+    padding: 0,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
     overflow: "hidden",
+    marginTop: 14,
+  },
+  drawSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    padding: 16,
+    background: "#ffffff",
+    borderBottom: "1px solid #e2e8f0",
+    flexWrap: "wrap",
+  },
+  drawToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  drawGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 14,
+    padding: 16,
+  },
+  drawPanel: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+    minWidth: 0,
+  },
+  drawButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
+    minHeight: 44,
   },
 };
