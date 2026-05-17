@@ -2,7 +2,11 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
-import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import {
+  checkSubscriptionCapability,
+  getMaximumActiveCampaignsForTier,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import { getTenantSettings } from "@/lib/tenant-settings";
 
 export const dynamic = "force-dynamic";
@@ -187,12 +191,18 @@ export default async function TenantCampaignsPage({
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
   const tenantSettings = await getTenantSettings(tenantSlug);
 
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const maxPublicCampaigns = getMaximumActiveCampaignsForTier(subscriptionTier);
+
   const auctionCapability = checkSubscriptionCapability(
     tenantSettings,
     "auctions",
   );
 
-  const publicCampaigns = campaigns.filter((campaign) => {
+  const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
     if (campaign.status !== "published") {
       return false;
     }
@@ -203,6 +213,10 @@ export default async function TenantCampaignsPage({
 
     return true;
   });
+
+  const publicCampaigns = Number.isFinite(maxPublicCampaigns)
+    ? capabilityFilteredPublishedCampaigns.slice(0, maxPublicCampaigns)
+    : capabilityFilteredPublishedCampaigns;
 
   const raffles = publicCampaigns.filter((item) => item.type === "raffle");
   const squares = publicCampaigns.filter((item) => item.type === "squares");
@@ -215,6 +229,9 @@ export default async function TenantCampaignsPage({
       : publicCampaigns.filter((campaign) => campaign.type === activeType);
 
   const featuredCampaign = publicCampaigns[0] || null;
+  const campaignTypeNames = auctionCapability.allowed
+    ? "raffles, squares, events and auctions"
+    : "raffles, squares and events";
 
   return (
     <main className="campaigns-page" style={styles.page}>
@@ -258,8 +275,8 @@ export default async function TenantCampaignsPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Choose from live raffles, squares, events and auctions. Every
-            campaign helps raise funds and create impact.
+            Choose from live {campaignTypeNames}. Every campaign helps raise
+            funds and create impact.
           </p>
 
           <div className="heroActions" style={styles.heroActions}>
@@ -287,7 +304,9 @@ export default async function TenantCampaignsPage({
             <HeroStat label="Raffles" value={raffles.length} />
             <HeroStat label="Squares" value={squares.length} />
             <HeroStat label="Events" value={events.length} />
-            <HeroStat label="Auctions" value={auctions.length} />
+            {auctionCapability.allowed ? (
+              <HeroStat label="Auctions" value={auctions.length} />
+            ) : null}
           </div>
 
           {featuredCampaign ? (
@@ -394,7 +413,9 @@ export default async function TenantCampaignsPage({
                 aria-current={activeType === "auction" ? "page" : undefined}
                 style={{
                   ...styles.filterPill,
-                  ...(activeType === "auction" ? styles.filterPillActive : {}),
+                  ...(activeType === "auction"
+                    ? styles.filterPillActive
+                    : {}),
                 }}
               >
                 Auctions {auctions.length}
