@@ -14,11 +14,16 @@ type Props = {
   onImageUrlChange?: (url: string) => void;
   onFocusXChange?: (value: number) => void;
   onFocusYChange?: (value: number) => void;
+
+  subscriptionTier?: string | null;
+  customImagesAllowed?: boolean;
 };
 
 function cleanFocus(value: number | null | undefined) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -34,11 +39,15 @@ export default function ImageFocusUploadField({
   onImageUrlChange,
   onFocusXChange,
   onFocusYChange,
+  subscriptionTier = "community",
+  customImagesAllowed = true,
 }: Props) {
   const [imageUrl, setImageUrl] = useState(currentImageUrl || "");
   const [focusX, setFocusX] = useState(cleanFocus(currentFocusX));
   const [focusY, setFocusY] = useState(cleanFocus(currentFocusY));
   const [uploading, setUploading] = useState(false);
+
+  const uploadsLocked = !customImagesAllowed;
 
   function updateImageUrl(url: string) {
     setImageUrl(url);
@@ -47,17 +56,29 @@ export default function ImageFocusUploadField({
 
   function updateFocusX(value: number) {
     const clean = cleanFocus(value);
+
     setFocusX(clean);
+
     onFocusXChange?.(clean);
   }
 
   function updateFocusY(value: number) {
     const clean = cleanFocus(value);
+
     setFocusY(clean);
+
     onFocusYChange?.(clean);
   }
 
   async function uploadImage(file: File) {
+    if (uploadsLocked) {
+      alert(
+        "Custom campaign images require the Professional plan or higher.",
+      );
+
+      return;
+    }
+
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -70,6 +91,7 @@ export default function ImageFocusUploadField({
 
     try {
       const formData = new FormData();
+
       formData.append("file", file);
       formData.append("upload_preset", preset);
 
@@ -85,13 +107,16 @@ export default function ImageFocusUploadField({
 
       if (!response.ok || !data.secure_url) {
         console.error(data);
+
         alert("Image upload failed.");
+
         return;
       }
 
       updateImageUrl(data.secure_url);
     } catch (error) {
       console.error(error);
+
       alert("Upload error");
     } finally {
       setUploading(false);
@@ -112,16 +137,78 @@ export default function ImageFocusUploadField({
       <input type="hidden" name={focusXFieldName} value={focusX} />
       <input type="hidden" name={focusYFieldName} value={focusY} />
 
-      <label style={styles.label}>
-        {label}
+      <div style={styles.headerRow}>
+        <div style={styles.headerText}>
+          <div style={styles.title}>{label}</div>
+
+          <div style={styles.subtitle}>
+            Upload campaign artwork and adjust crop focus positioning.
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...styles.planPill,
+            ...(uploadsLocked
+              ? styles.communityPill
+              : styles.professionalPill),
+          }}
+        >
+          {uploadsLocked
+            ? "Professional feature"
+            : subscriptionTier === "foundation"
+              ? "Foundation enabled"
+              : "Professional enabled"}
+        </div>
+      </div>
+
+      {uploadsLocked ? (
+        <div style={styles.lockedCard}>
+          <div style={styles.lockedTitle}>
+            Custom campaign images are locked
+          </div>
+
+          <p style={styles.lockedText}>
+            Community campaigns use the premium SO platform default artwork.
+            Upgrade to Professional or Foundation to upload custom branding,
+            sponsor artwork, event banners and prize imagery.
+          </p>
+
+          <div style={styles.upgradeRow}>
+            <div style={styles.upgradePrice}>
+              Professional · £25/month
+            </div>
+
+            <div style={styles.upgradePrice}>
+              Foundation · £99/month
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <label
+        style={{
+          ...styles.label,
+          ...(uploadsLocked ? styles.disabledLabel : {}),
+        }}
+      >
+        Upload image
+
         <input
           type="file"
           accept="image/*"
+          disabled={uploadsLocked || uploading}
           onChange={(event) => {
             const file = event.target.files?.[0];
-            if (file) uploadImage(file);
+
+            if (file) {
+              uploadImage(file);
+            }
           }}
-          style={styles.fileInput}
+          style={{
+            ...styles.fileInput,
+            ...(uploadsLocked ? styles.disabledInput : {}),
+          }}
         />
       </label>
 
@@ -132,8 +219,14 @@ export default function ImageFocusUploadField({
           <div style={styles.previewGrid}>
             <div style={styles.previewColumn}>
               <div style={styles.previewLabel}>Wide banner preview</div>
+
               <div style={styles.bannerPreview}>
-                <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
+                <img
+                  src={imageUrl}
+                  alt={previewAlt}
+                  style={previewImageStyle}
+                />
+
                 <div
                   style={{
                     ...styles.crosshair,
@@ -146,8 +239,14 @@ export default function ImageFocusUploadField({
 
             <div style={styles.previewColumn}>
               <div style={styles.previewLabel}>Card preview</div>
+
               <div style={styles.cardPreview}>
-                <img src={imageUrl} alt={previewAlt} style={previewImageStyle} />
+                <img
+                  src={imageUrl}
+                  alt={previewAlt}
+                  style={previewImageStyle}
+                />
+
                 <div
                   style={{
                     ...styles.crosshair,
@@ -162,24 +261,32 @@ export default function ImageFocusUploadField({
           <div style={styles.controls}>
             <label style={styles.label}>
               Horizontal focus: {focusX}%
+
               <input
                 type="range"
                 min="0"
                 max="100"
                 value={focusX}
-                onChange={(event) => updateFocusX(Number(event.target.value))}
+                disabled={uploadsLocked}
+                onChange={(event) =>
+                  updateFocusX(Number(event.target.value))
+                }
                 style={styles.range}
               />
             </label>
 
             <label style={styles.label}>
               Vertical focus: {focusY}%
+
               <input
                 type="range"
                 min="0"
                 max="100"
                 value={focusY}
-                onChange={(event) => updateFocusY(Number(event.target.value))}
+                disabled={uploadsLocked}
+                onChange={(event) =>
+                  updateFocusY(Number(event.target.value))
+                }
                 style={styles.range}
               />
             </label>
@@ -205,6 +312,91 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
   },
+
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  headerText: {
+    display: "grid",
+    gap: 4,
+  },
+
+  title: {
+    color: "#0f172a",
+    fontWeight: 950,
+    fontSize: 18,
+  },
+
+  subtitle: {
+    color: "#64748b",
+    fontWeight: 700,
+    fontSize: 13,
+  },
+
+  planPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  communityPill: {
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+  },
+
+  professionalPill: {
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+  },
+
+  lockedCard: {
+    display: "grid",
+    gap: 10,
+    padding: 18,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%)",
+    border: "1px solid #fed7aa",
+  },
+
+  lockedTitle: {
+    color: "#9a3412",
+    fontWeight: 950,
+    fontSize: 18,
+  },
+
+  lockedText: {
+    margin: 0,
+    color: "#7c2d12",
+    lineHeight: 1.6,
+    fontWeight: 700,
+  },
+
+  upgradeRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  upgradePrice: {
+    padding: "8px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #fdba74",
+    color: "#9a3412",
+    fontWeight: 900,
+    fontSize: 12,
+  },
+
   label: {
     display: "grid",
     gap: 7,
@@ -213,6 +405,11 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     maxWidth: "100%",
   },
+
+  disabledLabel: {
+    opacity: 0.72,
+  },
+
   fileInput: {
     display: "block",
     width: "100%",
@@ -224,29 +421,40 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     minWidth: 0,
   },
+
+  disabledInput: {
+    cursor: "not-allowed",
+    background: "#f8fafc",
+  },
+
   muted: {
     margin: 0,
     color: "#64748b",
     fontWeight: 800,
   },
+
   previewGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: 14,
     width: "100%",
     maxWidth: "100%",
     minWidth: 0,
   },
+
   previewColumn: {
     minWidth: 0,
     maxWidth: "100%",
   },
+
   previewLabel: {
     marginBottom: 8,
     color: "#475569",
     fontSize: 13,
     fontWeight: 900,
   },
+
   bannerPreview: {
     position: "relative",
     width: "100%",
@@ -257,6 +465,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#e2e8f0",
     border: "1px solid #cbd5e1",
   },
+
   cardPreview: {
     position: "relative",
     width: "100%",
@@ -267,6 +476,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#e2e8f0",
     border: "1px solid #cbd5e1",
   },
+
   crosshair: {
     position: "absolute",
     width: 18,
@@ -277,18 +487,22 @@ const styles: Record<string, CSSProperties> = {
     transform: "translate(-50%, -50%)",
     pointerEvents: "none",
   },
+
   controls: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: 14,
     width: "100%",
     maxWidth: "100%",
     minWidth: 0,
   },
+
   range: {
     width: "100%",
     maxWidth: "100%",
   },
+
   urlText: {
     margin: 0,
     color: "#64748b",
@@ -297,6 +511,7 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     maxWidth: "100%",
   },
+
   emptyPreview: {
     padding: 18,
     borderRadius: 16,
