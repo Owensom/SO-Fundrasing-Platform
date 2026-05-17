@@ -36,6 +36,7 @@ type TenantSummaryRow = {
 type PaymentRow = {
   id: string;
   stripe_checkout_session_id: string;
+  stripe_payment_intent_id: string | null;
   raffle_id: string;
   tenant_slug: string | null;
   currency: string | null;
@@ -51,6 +52,12 @@ type PaymentRow = {
   customer_email: string | null;
   created_at: string;
   raffle_title: string | null;
+  payment_type: string | null;
+  stripe_transfer_id: string | null;
+  stripe_destination_account_id: string | null;
+  stripe_payout_id: string | null;
+  stripe_payout_status: string | null;
+  payout_reconciled_at: string | null;
 };
 
 function money(cents: number | string | null | undefined, currency = "GBP") {
@@ -78,6 +85,42 @@ function formatDate(value?: string | null) {
     dateStyle: "short",
     timeStyle: "medium",
   }).format(date);
+}
+
+function shortId(value?: string | null) {
+  if (!value) return "—";
+
+  if (value.length <= 18) return value;
+
+  return `${value.slice(0, 10)}…${value.slice(-6)}`;
+}
+
+function reconciliationLabel(payment: PaymentRow) {
+  if (payment.stripe_transfer_id && payment.stripe_destination_account_id) {
+    return "Reconciled";
+  }
+
+  if (payment.stripe_destination_account_id) {
+    return "Destination logged";
+  }
+
+  if (payment.stripe_payout_status) {
+    return payment.stripe_payout_status;
+  }
+
+  return "Legacy/manual";
+}
+
+function reconciliationTone(payment: PaymentRow): "green" | "blue" | "orange" {
+  if (payment.stripe_transfer_id && payment.stripe_destination_account_id) {
+    return "green";
+  }
+
+  if (payment.stripe_destination_account_id || payment.stripe_payout_status) {
+    return "blue";
+  }
+
+  return "orange";
 }
 
 export default async function AdminRevenuePage() {
@@ -130,6 +173,7 @@ export default async function AdminRevenuePage() {
       select
         p.id::text,
         p.stripe_checkout_session_id,
+        p.stripe_payment_intent_id,
         p.raffle_id,
         p.tenant_slug,
         p.currency,
@@ -144,7 +188,13 @@ export default async function AdminRevenuePage() {
         p.payment_status,
         p.customer_email,
         p.created_at,
-        r.title as raffle_title
+        r.title as raffle_title,
+        p.payment_type,
+        p.stripe_transfer_id,
+        p.stripe_destination_account_id,
+        p.stripe_payout_id,
+        p.stripe_payout_status,
+        p.payout_reconciled_at
       from platform_payments p
       left join raffles r on r.id = p.raffle_id
       order by p.created_at desc
@@ -172,6 +222,12 @@ export default async function AdminRevenuePage() {
     0,
   );
 
+  const reconciledPayments = payments.filter(
+    (payment) =>
+      Boolean(payment.stripe_transfer_id) &&
+      Boolean(payment.stripe_destination_account_id),
+  ).length;
+
   return (
     <main className="revenue-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -187,8 +243,8 @@ export default async function AdminRevenuePage() {
           </h1>
 
           <p style={styles.subtitle}>
-            Platform fee accounting, donor-covered fees, tenant payout tracking
-            and latest payment activity.
+            Platform fee accounting, donor-covered fees, tenant payout tracking,
+            Stripe transfer reconciliation and latest payment activity.
           </p>
 
           <div className="heroActions" style={styles.heroActions}>
@@ -210,13 +266,18 @@ export default async function AdminRevenuePage() {
             label="Pending payouts"
             value={money(totalPendingPayoutCents)}
           />
+          <HeroStat label="Reconciled rows" value={reconciledPayments} />
         </div>
       </section>
-
-      <section className="revenue-cards" style={styles.cards}>
+            <section className="revenue-cards" style={styles.cards}>
         <div style={styles.card}>
           <div style={styles.cardLabel}>Total payments</div>
           <div style={styles.cardValue}>{totalPayments}</div>
+        </div>
+
+        <div style={styles.card}>
+          <div style={styles.cardLabel}>Stripe reconciled rows</div>
+          <div style={styles.cardValue}>{reconciledPayments}</div>
         </div>
 
         {currencySummaries.length ? (
@@ -382,7 +443,9 @@ export default async function AdminRevenuePage() {
             </h2>
 
             <p style={styles.sectionText}>
-              Times shown in UK platform time.
+              Times shown in UK platform time. Stripe reconciliation appears
+              when the payment has a destination transfer and connected account
+              recorded.
             </p>
           </div>
         </div>
@@ -393,7 +456,8 @@ export default async function AdminRevenuePage() {
               <thead>
                 <tr>
                   <th style={styles.th}>Date</th>
-                  <th style={styles.th}>Raffle</th>
+                  <th style={styles.th}>Type</th>
+                  <th style={styles.th}>Campaign</th>
                   <th style={styles.th}>Tenant</th>
                   <th style={styles.th}>Customer</th>
                   <th style={styles.th}>Gross</th>
@@ -401,6 +465,11 @@ export default async function AdminRevenuePage() {
                   <th style={styles.th}>Donor fee</th>
                   <th style={styles.th}>Net</th>
                   <th style={styles.th}>Covered?</th>
+                  <th style={styles.th}>Reconciliation</th>
+                  <th style={styles.th}>Transfer</th>
+                  <th style={styles.th}>Destination</th>
+                  <th style={styles.th}>Stripe payout</th>
+                  <th style={styles.th}>Reconciled at</th>
                   <th style={styles.th}>Payout</th>
                   <th style={styles.th}>Reference</th>
                   <th style={styles.th}>Paid at</th>
@@ -412,6 +481,7 @@ export default async function AdminRevenuePage() {
                 {payments.map((payment) => {
                   const currency = payment.currency || "gbp";
                   const payoutStatus = payment.payout_status || "pending";
+                  const tone = reconciliationTone(payment);
 
                   return (
                     <tr key={payment.id}>
@@ -420,7 +490,13 @@ export default async function AdminRevenuePage() {
                       </td>
 
                       <td style={styles.td}>
-                        {payment.raffle_title || payment.raffle_id}
+                        <span style={styles.typePill}>
+                          {payment.payment_type || "payment"}
+                        </span>
+                      </td>
+
+                      <td style={styles.td}>
+                        {payment.raffle_title || payment.raffle_id || "—"}
                       </td>
 
                       <td style={styles.td}>{payment.tenant_slug || "—"}</td>
@@ -445,6 +521,51 @@ export default async function AdminRevenuePage() {
 
                       <td style={styles.td}>
                         {payment.donor_covered_fees ? "Yes" : "No"}
+                      </td>
+
+                      <td style={styles.td}>
+                        <span
+                          style={{
+                            ...styles.badge,
+                            ...(tone === "green"
+                              ? styles.badgePaid
+                              : tone === "blue"
+                                ? styles.badgeBlue
+                                : styles.badgePending),
+                          }}
+                        >
+                          {reconciliationLabel(payment)}
+                        </span>
+                      </td>
+
+                      <td style={styles.td}>
+                        <span title={payment.stripe_transfer_id || undefined}>
+                          {shortId(payment.stripe_transfer_id)}
+                        </span>
+                      </td>
+
+                      <td style={styles.td}>
+                        <span
+                          title={
+                            payment.stripe_destination_account_id || undefined
+                          }
+                        >
+                          {shortId(payment.stripe_destination_account_id)}
+                        </span>
+                      </td>
+
+                      <td style={styles.td}>
+                        {payment.stripe_payout_id ? (
+                          <span title={payment.stripe_payout_id}>
+                            {shortId(payment.stripe_payout_id)}
+                          </span>
+                        ) : (
+                          payment.stripe_payout_status || "—"
+                        )}
+                      </td>
+
+                      <td style={styles.td}>
+                        {formatDate(payment.payout_reconciled_at)}
                       </td>
 
                       <td style={styles.td}>
@@ -489,7 +610,6 @@ function HeroStat({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .revenue-page,
 .revenue-page * {
@@ -780,6 +900,7 @@ const styles: Record<string, CSSProperties> = {
 
   table: {
     width: "100%",
+    minWidth: 1680,
     borderCollapse: "collapse",
     fontSize: 14,
   },
@@ -809,6 +930,18 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
   },
 
+  typePill: {
+    display: "inline-flex",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "capitalize",
+  },
+
   badge: {
     display: "inline-flex",
     padding: "5px 9px",
@@ -828,6 +961,12 @@ const styles: Record<string, CSSProperties> = {
     background: "#ecfdf5",
     color: "#047857",
     border: "1px solid #a7f3d0",
+  },
+
+  badgeBlue: {
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
   },
 
   empty: {
