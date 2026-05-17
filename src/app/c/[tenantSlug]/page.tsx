@@ -42,7 +42,9 @@ type SessionUserWithTenants = {
 
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
+
   if (!Number.isFinite(number)) return 50;
+
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
@@ -51,6 +53,7 @@ function getDefaultImage(type: Campaign["type"]) {
   if (type === "squares") return "/brand/so-default-squares.png";
   if (type === "event") return "/brand/so-default-events.png";
   if (type === "auction") return "/brand/so-default-auctions.png";
+
   return "/brand/so-logo-full.png";
 }
 
@@ -85,6 +88,7 @@ function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "squares") return `/s/${campaign.slug}`;
   if (campaign.type === "event") return `/e/${campaign.slug}`;
   if (campaign.type === "auction") return `/a/${campaign.slug}`;
+
   return "#";
 }
 
@@ -93,6 +97,7 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
   if (type === "auction") return "Auction";
+
   return "Campaign";
 }
 
@@ -101,29 +106,47 @@ function getTypeMeta(type: Campaign["type"]) {
   if (type === "squares") return "Pick a square to support";
   if (type === "event") return "Ticketed fundraising event";
   if (type === "auction") return "Bid, support, make an impact";
+
   return "Fundraising campaign";
 }
 
 function getTypeStyle(type: Campaign["type"]): CSSProperties {
   if (type === "raffle") {
-    return { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" };
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
   }
 
   if (type === "squares") {
-    return { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" };
+    return {
+      background: "#f5f3ff",
+      color: "#6d28d9",
+      borderColor: "#ddd6fe",
+    };
   }
 
   if (type === "event") {
-    return { background: "#ecfdf5", color: "#166534", borderColor: "#bbf7d0" };
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
   }
 
-  return { background: "#fffbeb", color: "#92400e", borderColor: "#fde68a" };
+  return {
+    background: "#fffbeb",
+    color: "#92400e",
+    borderColor: "#fde68a",
+  };
 }
 
 function getSafeAdminReturn(value?: string) {
   if (!value) return "";
   if (value === "/admin") return value;
   if (value.startsWith("/admin/")) return value;
+
   return "";
 }
 
@@ -172,6 +195,7 @@ export default async function TenantCampaignsPage({
   const session = await auth();
 
   const sessionUser = session?.user as SessionUserWithTenants | undefined;
+
   const userTenantSlugs = Array.isArray(sessionUser?.tenantSlugs)
     ? sessionUser.tenantSlugs.map((value) => String(value))
     : [];
@@ -182,6 +206,7 @@ export default async function TenantCampaignsPage({
 
   const isTenantAdmin = userTenantSlugs.includes(tenantSlug);
   const canShowAdminReturn = isTenantAdmin;
+
   const adminReturn = canShowAdminReturn
     ? requestedAdminReturn || "/admin"
     : "";
@@ -201,8 +226,7 @@ export default async function TenantCampaignsPage({
     tenantSettings,
     "auctions",
   );
-
-  const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
+    const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
     if (campaign.status !== "published") {
       return false;
     }
@@ -229,6 +253,7 @@ export default async function TenantCampaignsPage({
       : publicCampaigns.filter((campaign) => campaign.type === activeType);
 
   const featuredCampaign = publicCampaigns[0] || null;
+
   const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
@@ -304,6 +329,7 @@ export default async function TenantCampaignsPage({
             <HeroStat label="Raffles" value={raffles.length} />
             <HeroStat label="Squares" value={squares.length} />
             <HeroStat label="Events" value={events.length} />
+
             {auctionCapability.allowed ? (
               <HeroStat label="Auctions" value={auctions.length} />
             ) : null}
@@ -323,7 +349,8 @@ export default async function TenantCampaignsPage({
           ) : null}
         </div>
       </section>
-            {publicCampaigns.length === 0 ? (
+
+      {publicCampaigns.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 className="so-brand-card-title" style={styles.emptyTitle}>
             No active campaigns found
@@ -369,8 +396,7 @@ export default async function TenantCampaignsPage({
             >
               Raffles {raffles.length}
             </Link>
-
-            <Link
+                        <Link
               href={getFilterHref({
                 tenantSlug,
                 type: "squares",
@@ -413,9 +439,7 @@ export default async function TenantCampaignsPage({
                 aria-current={activeType === "auction" ? "page" : undefined}
                 style={{
                   ...styles.filterPill,
-                  ...(activeType === "auction"
-                    ? styles.filterPillActive
-                    : {}),
+                  ...(activeType === "auction" ? styles.filterPillActive : {}),
                 }}
               >
                 Auctions {auctions.length}
@@ -561,7 +585,6 @@ function TrustStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .campaigns-page,
 .campaigns-page * {
@@ -633,7 +656,7 @@ const responsiveStyles = `
   .campaigns-page .topBar {
     margin-left: -10px !important;
     margin-right: -10px !important;
-    padding: 14px 14px !important;
+    padding: 14px !important;
   }
 
   .campaigns-page .logoImage {
@@ -642,23 +665,23 @@ const responsiveStyles = `
 
   .campaigns-page .topNav {
     width: 100% !important;
-    gap: 8px !important;
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    justify-content: flex-start !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important;
-  }
-
-  .campaigns-page .topNav::-webkit-scrollbar {
-    display: none !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    overflow: visible !important;
+    justify-content: stretch !important;
   }
 
   .campaigns-page .topNavLink,
   .campaigns-page .adminBackTop {
-    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-height: 48px !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 12px 16px !important;
   }
-    .campaigns-page .hero {
+
+  .campaigns-page .hero {
     margin-top: 14px !important;
     padding: 20px !important;
     border-radius: 26px !important;
@@ -695,6 +718,31 @@ const responsiveStyles = `
 
   .campaigns-page .filterStrip::-webkit-scrollbar {
     display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .campaigns-page .heroStats {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .campaigns-page .card {
+    min-height: auto !important;
+    padding: 14px !important;
+  }
+
+  .campaigns-page .imageWrap {
+    height: 190px !important;
+  }
+
+  .campaigns-page .cardFooter {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .campaigns-page .button {
+    width: 100% !important;
+    justify-content: center !important;
   }
 }
 `;
