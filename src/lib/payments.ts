@@ -114,11 +114,35 @@ export function buildStripeCheckoutSessionParams(
   const useConnect = canUseStripeConnectDestination(input.finance);
   const destination = input.finance?.stripe_connect_account_id || "";
 
+  const applicationFeeCents = Math.max(
+    0,
+    Math.floor(Number(input.applicationFeeCents || 0)),
+  );
+
   const metadata = normaliseStripeMetadata({
     ...input.metadata,
+
     stripe_connect_enabled: useConnect,
-    stripe_connect_account_id: destination,
-    application_fee_cents: input.applicationFeeCents,
+    stripe_connect_routed: useConnect,
+    stripe_connect_account_id: useConnect ? destination : "",
+
+    application_fee_cents: applicationFeeCents,
+    application_fee_amount: applicationFeeCents,
+
+    platform_commission_cents: applicationFeeCents,
+    platform_fee_cents:
+      input.metadata.platform_fee_cents ?? applicationFeeCents,
+
+    supporter_contribution_cents:
+      input.metadata.supporter_contribution_cents ??
+      input.metadata.buyer_contribution_cents ??
+      0,
+
+    donor_fee_cents:
+      input.metadata.donor_fee_cents ??
+      input.metadata.supporter_contribution_cents ??
+      input.metadata.buyer_contribution_cents ??
+      0,
   });
 
   const params: Stripe.Checkout.SessionCreateParams = {
@@ -132,7 +156,7 @@ export function buildStripeCheckoutSessionParams(
 
   if (useConnect && destination) {
     params.payment_intent_data = {
-      application_fee_amount: Math.max(0, Math.floor(input.applicationFeeCents)),
+      application_fee_amount: applicationFeeCents,
       transfer_data: {
         destination,
       },
