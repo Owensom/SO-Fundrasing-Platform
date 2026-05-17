@@ -6,6 +6,8 @@ import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 
 type Props = {
   tenantSlug: string;
+  subscriptionTier?: string | null;
+  customImagesAllowed?: boolean;
 };
 
 type OfferRow = {
@@ -126,7 +128,11 @@ function formatPreviewMoney(value: string, currency: string) {
   }
 }
 
-export default function NewRaffleForm({ tenantSlug }: Props) {
+export default function NewRaffleForm({
+  tenantSlug,
+  subscriptionTier,
+  customImagesAllowed,
+}: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -183,8 +189,7 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
     () => selectedColours.join(","),
     [selectedColours],
   );
-
-  const offersValue = useMemo(() => {
+    const offersValue = useMemo(() => {
     const clean = offers
       .map((offer, index) => ({
         id: offer.id,
@@ -483,6 +488,8 @@ export default function NewRaffleForm({ tenantSlug }: Props) {
                     onImageUrlChange={setImageUrl}
                     onFocusXChange={setImageFocusX}
                     onFocusYChange={setImageFocusY}
+                    subscriptionTier={subscriptionTier}
+                    customImagesAllowed={customImagesAllowed}
                   />
                 </div>
 
@@ -1227,6 +1234,7 @@ const responsiveStyles = `
     }
   }
 `;
+
 const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
