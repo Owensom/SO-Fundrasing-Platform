@@ -5,6 +5,7 @@ export type SubscriptionCapability =
   | "squares"
   | "events"
   | "auctions"
+  | "custom_campaign_images"
   | "advanced_branding"
   | "custom_commission"
   | "custom_domain"
@@ -76,6 +77,7 @@ export function getTierCapabilities(
       "squares",
       "events",
       "auctions",
+      "custom_campaign_images",
       "advanced_branding",
       "custom_commission",
       "custom_domain",
@@ -90,6 +92,7 @@ export function getTierCapabilities(
       "squares",
       "events",
       "auctions",
+      "custom_campaign_images",
       "advanced_branding",
       "custom_commission",
     ];
@@ -129,6 +132,7 @@ export function checkSubscriptionCapability(
 
   if (
     capability === "auctions" ||
+    capability === "custom_campaign_images" ||
     capability === "advanced_branding" ||
     capability === "custom_commission"
   ) {
@@ -194,4 +198,8 @@ export function getCampaignLimitMessage(tier: SubscriptionTier) {
   }
 
   return "Unlimited active campaigns available.";
+}
+
+export function getCustomCampaignImagesUpgradeMessage() {
+  return "Custom campaign images require the Professional plan or higher. Community campaigns use the platform default images.";
 }
