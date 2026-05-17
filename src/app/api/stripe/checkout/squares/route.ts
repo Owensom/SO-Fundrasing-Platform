@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { query } from "@/lib/db";
+import { getTenantSettings } from "@/lib/tenant-settings";
 import {
   getSquaresGameById,
   getSquaresReservationByToken,
@@ -13,6 +15,92 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
+type TenantConnectStatus = {
+  stripe_connect_account_id: string | null;
+  stripe_connect_onboarding_complete: boolean | null;
+  stripe_connect_charges_enabled: boolean | null;
+  stripe_connect_payouts_enabled: boolean | null;
+  stripe_connect_details_submitted: boolean | null;
+};
+
+function safePercent(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.min(100, number);
+}
+
+function calculateApplicationFeeAmount(params: {
+  totalAmountCents: number;
+  platformFeePercent: number;
+}) {
+  const totalAmountCents = Math.max(0, Math.round(params.totalAmountCents));
+  const platformFeePercent = safePercent(params.platformFeePercent);
+
+  if (!totalAmountCents || !platformFeePercent) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.round(totalAmountCents * (platformFeePercent / 100)),
+  );
+}
+
+function getUsableConnectAccountId(params: {
+  settingsAccountId?: string | null;
+  connectStatus?: TenantConnectStatus | null;
+}) {
+  const settingsAccountId = String(params.settingsAccountId || "").trim();
+  const statusAccountId = String(
+    params.connectStatus?.stripe_connect_account_id || "",
+  ).trim();
+
+  const accountId = settingsAccountId || statusAccountId;
+
+  if (!accountId || !accountId.startsWith("acct_")) {
+    return "";
+  }
+
+  return accountId;
+}
+
+function isConnectReady(connectStatus: TenantConnectStatus | null) {
+  if (!connectStatus?.stripe_connect_account_id) {
+    return false;
+  }
+
+  return Boolean(
+    connectStatus.stripe_connect_onboarding_complete &&
+      connectStatus.stripe_connect_charges_enabled &&
+      connectStatus.stripe_connect_payouts_enabled &&
+      connectStatus.stripe_connect_details_submitted,
+  );
+}
+
+async function getTenantConnectStatus(
+  tenantSlug: string,
+): Promise<TenantConnectStatus | null> {
+  const rows = await query<TenantConnectStatus>(
+    `
+      select
+        stripe_connect_account_id,
+        stripe_connect_onboarding_complete,
+        stripe_connect_charges_enabled,
+        stripe_connect_payouts_enabled,
+        stripe_connect_details_submitted
+      from tenants
+      where slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+
+  return rows[0] || null;
+}
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -55,7 +143,9 @@ export async function POST(req: NextRequest) {
     }
 
     const squares = Array.isArray(reservation.squares)
-      ? reservation.squares.map((square) => Number(square)).filter(Number.isFinite)
+      ? reservation.squares
+          .map((square) => Number(square))
+          .filter(Number.isFinite)
       : [];
 
     const quantity = squares.length;
@@ -77,17 +167,48 @@ export async function POST(req: NextRequest) {
     }
 
     const baseAmount = pricePerSquareCents * quantity;
-    const platformFeeCents = coverFees ? Math.round(baseAmount * 0.1) : 0;
-    const totalAmount = baseAmount + platformFeeCents;
-    const netAmountCents = baseAmount;
+    const supporterContributionCents = coverFees
+      ? Math.round(baseAmount * 0.1)
+      : 0;
+    const totalAmount = baseAmount + supporterContributionCents;
+
+    const tenantSlug = String(game.tenant_slug || "").trim();
+
+    const tenantSettings = tenantSlug
+      ? await getTenantSettings(tenantSlug)
+      : null;
+
+    const connectStatus = tenantSlug
+      ? await getTenantConnectStatus(tenantSlug)
+      : null;
+
+    const connectAccountId = getUsableConnectAccountId({
+      settingsAccountId: tenantSettings?.stripe_connect_account_id,
+      connectStatus,
+    });
+
+    const platformCommissionCents = calculateApplicationFeeAmount({
+      totalAmountCents: baseAmount,
+      platformFeePercent: tenantSettings?.platform_fee_percent ?? 0,
+    });
+
+    const platformFeeCents =
+      platformCommissionCents + supporterContributionCents;
+
+    const netAmountCents = Math.max(totalAmount - platformFeeCents, 0);
+
+    const shouldUseConnectRouting =
+      Boolean(connectAccountId) &&
+      isConnectReady(connectStatus) &&
+      platformCommissionCents > 0 &&
+      platformCommissionCents < totalAmount;
 
     const origin = req.nextUrl.origin;
     const successUrl = `${origin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${origin}/s/${game.slug}`;
 
     const squaresJson = JSON.stringify(squares);
-
-    const session = await stripe.checkout.sessions.create({
+        const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
 
@@ -105,6 +226,17 @@ export async function POST(req: NextRequest) {
         },
       ],
 
+      ...(shouldUseConnectRouting
+        ? {
+            payment_intent_data: {
+              application_fee_amount: platformCommissionCents,
+              transfer_data: {
+                destination: connectAccountId,
+              },
+            },
+          }
+        : {}),
+
       success_url: successUrl,
       cancel_url: cancelUrl,
 
@@ -113,11 +245,25 @@ export async function POST(req: NextRequest) {
         game_id: game.id,
         squares_game_id: game.id,
         game_title: game.title || "Squares Game",
-        tenant_slug: game.tenant_slug,
+        tenant_slug: tenantSlug,
         reservation_token: reservationToken,
         quantity: String(quantity),
+
         platform_fee_cents: String(platformFeeCents),
+        platform_commission_cents: String(platformCommissionCents),
+        supporter_contribution_cents: String(supporterContributionCents),
         net_amount_cents: String(netAmountCents),
+
+        stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
+        stripe_connect_account_id: shouldUseConnectRouting
+          ? connectAccountId
+          : "",
+        platform_fee_percent: String(
+          tenantSettings?.platform_fee_percent ?? "",
+        ),
+        application_fee_amount: shouldUseConnectRouting
+          ? String(platformCommissionCents)
+          : "0",
 
         // Important: webhook currently reads this exact key.
         squares_json: squaresJson,
