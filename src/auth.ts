@@ -26,6 +26,11 @@ async function findAdminUserByCredentials(
   password: string,
 ): Promise<AdminUser | null> {
   try {
+    console.log("ADMIN_AUTH_ATTEMPT", {
+      email,
+      hasPassword: Boolean(password),
+    });
+
     const users = await query<AdminUserRow>(
       `
         select
@@ -44,7 +49,19 @@ async function findAdminUserByCredentials(
 
     const user = users[0];
 
-    if (!user) return null;
+    if (!user) {
+      console.log("ADMIN_AUTH_NO_USER_OR_PASSWORD_MISMATCH", {
+        email,
+      });
+
+      return null;
+    }
+
+    console.log("ADMIN_AUTH_USER_MATCHED", {
+      id: user.id,
+      email: user.email,
+      tenantId: user.tenant_id,
+    });
 
     const membershipRows = await query<AdminTenantRow>(
       `
@@ -76,7 +93,14 @@ async function findAdminUserByCredentials(
       ),
     );
 
-    if (tenantSlugs.length === 0) return null;
+    console.log("ADMIN_AUTH_TENANTS_RESOLVED", {
+      email: user.email,
+      tenantSlugs,
+    });
+
+    if (tenantSlugs.length === 0) {
+      return null;
+    }
 
     return {
       id: user.id,
@@ -86,7 +110,7 @@ async function findAdminUserByCredentials(
       emailVerified: null,
     };
   } catch (error) {
-    console.error("Database admin auth failed", error);
+    console.error("DATABASE_ADMIN_AUTH_FAILED", error);
     return null;
   }
 }
@@ -116,13 +140,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
-        if (!email || !password) return null;
+        if (!email || !password) {
+          console.log("ADMIN_AUTH_MISSING_CREDENTIALS", {
+            hasEmail: Boolean(email),
+            hasPassword: Boolean(password),
+          });
+
+          return null;
+        }
 
         const adminUser = await findAdminUserByCredentials(email, password);
 
-        if (adminUser) return adminUser;
+        if (adminUser) {
+          console.log("ADMIN_AUTH_SUCCESS", {
+            email: adminUser.email,
+            tenantSlugs: adminUser.tenantSlugs,
+          });
+
+          return adminUser;
+        }
 
         if (email === "force@test.com" && password === "forcepass123") {
+          console.log("ADMIN_AUTH_FORCE_FALLBACK_SUCCESS");
+
           return {
             id: "force-user",
             email: "force@test.com",
@@ -131,6 +171,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             emailVerified: null,
           };
         }
+
+        console.log("ADMIN_AUTH_FAILED", {
+          email,
+        });
 
         return null;
       },
