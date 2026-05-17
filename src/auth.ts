@@ -46,7 +46,7 @@ async function findAdminUserByCredentials(email: string, password: string) {
     `
       select tenant_slug
       from admin_user_tenants
-      where admin_user_id = $1
+      where admin_user_id = $1::text
       order by tenant_slug asc
     `,
     [user.id],
