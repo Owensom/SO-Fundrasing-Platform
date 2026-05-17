@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
 import NewRaffleForm from "@/components/admin/NewRaffleForm";
 
 export default async function NewRafflePage() {
@@ -22,6 +24,13 @@ export default async function NewRafflePage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
+  );
+
   return (
     <main className="new-raffle-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -36,7 +45,11 @@ export default async function NewRafflePage() {
         </Link>
       </section>
 
-      <NewRaffleForm tenantSlug={tenantSlug} />
+      <NewRaffleForm
+        tenantSlug={tenantSlug}
+        subscriptionTier={tenantSettings?.subscription_tier}
+        customImagesAllowed={customImagesCapability.allowed}
+      />
     </main>
   );
 }
