@@ -23,6 +23,8 @@ type PaymentFinancials = {
   stripeConnectRouted: boolean;
   stripeConnectAccountId: string;
   applicationFeeAmountCents: number;
+  stripeTransferId: string;
+  stripeDestinationAccountId: string;
 };
 
 async function syncStripeConnectAccountById(accountId: string) {
@@ -136,27 +138,64 @@ function boolMetadata(value: unknown) {
   return clean === "true" || clean === "1" || clean === "yes";
 }
 
-async function getPaymentIntentApplicationFeeAmount(
-  paymentIntentId: string | null,
-) {
-  if (!paymentIntentId) return 0;
+function getPaymentIntentId(session: Stripe.Checkout.Session) {
+  if (typeof session.payment_intent === "string") {
+    return session.payment_intent;
+  }
+
+  return session.payment_intent?.id || null;
+}
+
+async function getPaymentIntentDetails(paymentIntentId: string | null) {
+  if (!paymentIntentId) {
+    return {
+      applicationFeeAmountCents: 0,
+      stripeTransferId: "",
+      stripeDestinationAccountId: "",
+    };
+  }
 
   try {
     const paymentIntent = (await stripe.paymentIntents.retrieve(
       paymentIntentId,
+      {
+        expand: ["latest_charge"],
+      },
     )) as any;
 
-    return safeNumber(paymentIntent?.application_fee_amount, 0);
+    const latestCharge = paymentIntent?.latest_charge;
+
+    const stripeTransferId =
+      typeof latestCharge?.transfer === "string"
+        ? latestCharge.transfer
+        : latestCharge?.transfer?.id || "";
+
+    const stripeDestinationAccountId =
+      typeof latestCharge?.destination === "string"
+        ? latestCharge.destination
+        : latestCharge?.destination?.id || "";
+
+    return {
+      applicationFeeAmountCents: safeNumber(
+        paymentIntent?.application_fee_amount,
+        0,
+      ),
+      stripeTransferId,
+      stripeDestinationAccountId,
+    };
   } catch (error) {
-    console.error("Unable to retrieve PaymentIntent application fee", {
+    console.error("Unable to retrieve PaymentIntent reconciliation details", {
       paymentIntentId,
       error,
     });
 
-    return 0;
+    return {
+      applicationFeeAmountCents: 0,
+      stripeTransferId: "",
+      stripeDestinationAccountId: "",
+    };
   }
 }
-
 async function getCheckoutFinancials({
   session,
   metadata,
@@ -178,16 +217,17 @@ async function getCheckoutFinancials({
     0,
   );
 
-  const paymentIntentApplicationFeeAmount =
-    await getPaymentIntentApplicationFeeAmount(paymentIntentId);
+  const paymentIntentDetails = await getPaymentIntentDetails(paymentIntentId);
 
   const applicationFeeAmountCents =
-    paymentIntentApplicationFeeAmount || metadataApplicationFeeAmount;
+    paymentIntentDetails.applicationFeeAmountCents ||
+    metadataApplicationFeeAmount;
 
   const supporterContributionCents = safeNumber(
     metadata.supporter_contribution_cents ||
       metadata.donor_fee_cents ||
-      metadata.buyer_fee_cents,
+      metadata.buyer_fee_cents ||
+      metadata.buyer_contribution_cents,
     0,
   );
 
@@ -218,6 +258,9 @@ async function getCheckoutFinancials({
       ? metadataNetAmountCents
       : calculatedNetAmountCents;
 
+  const stripeDestinationAccountId =
+    paymentIntentDetails.stripeDestinationAccountId || stripeConnectAccountId;
+
   return {
     grossAmountCents,
     platformFeeCents,
@@ -227,8 +270,11 @@ async function getCheckoutFinancials({
     stripeConnectRouted,
     stripeConnectAccountId,
     applicationFeeAmountCents,
+    stripeTransferId: paymentIntentDetails.stripeTransferId,
+    stripeDestinationAccountId,
   };
 }
+
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -310,10 +356,7 @@ export async function POST(request: NextRequest) {
       metadata.tenant_slug || metadata.tenantSlug || "",
     ).trim();
 
-    const paymentIntentId =
-      typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : session.payment_intent?.id || null;
+    const paymentIntentId = getPaymentIntentId(session);
 
     const financials = await getCheckoutFinancials({
       session,
@@ -330,14 +373,15 @@ export async function POST(request: NextRequest) {
       stripeConnectRouted,
       stripeConnectAccountId,
       applicationFeeAmountCents,
+      stripeTransferId,
+      stripeDestinationAccountId,
     } = financials;
 
     const email =
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
-
-    if (type === "event") {
+        if (type === "event") {
       const orderId = String(
         metadata.order_id ||
           metadata.orderId ||
@@ -407,9 +451,13 @@ export async function POST(request: NextRequest) {
           payment_status,
           customer_email,
           payment_type,
-          squares_game_id
+          squares_game_id,
+          stripe_transfer_id,
+          stripe_destination_account_id,
+          stripe_payout_status,
+          payout_reconciled_at
         )
-        values ($1,$2,null,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'event',null)
+        values ($1,$2,null,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'event',null,$13,$14,$15,$16)
         on conflict (stripe_checkout_session_id)
         do update set
           stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -423,7 +471,11 @@ export async function POST(request: NextRequest) {
           donor_covered_fees = excluded.donor_covered_fees,
           payment_status = excluded.payment_status,
           customer_email = excluded.customer_email,
-          payment_type = excluded.payment_type
+          payment_type = excluded.payment_type,
+          stripe_transfer_id = excluded.stripe_transfer_id,
+          stripe_destination_account_id = excluded.stripe_destination_account_id,
+          stripe_payout_status = excluded.stripe_payout_status,
+          payout_reconciled_at = excluded.payout_reconciled_at
         `,
         [
           session.id,
@@ -438,6 +490,10 @@ export async function POST(request: NextRequest) {
           donorCoveredFees,
           session.payment_status || null,
           email,
+          stripeTransferId || null,
+          stripeDestinationAccountId || stripeConnectAccountId || null,
+          stripeConnectRouted ? "destination_charge_created" : null,
+          stripeConnectRouted ? new Date().toISOString() : null,
         ],
       );
 
@@ -470,7 +526,8 @@ export async function POST(request: NextRequest) {
             `,
             [orderId],
           );
-                    await sendEventReceiptEmail({
+
+          await sendEventReceiptEmail({
             to: email,
             name,
             eventTitle:
@@ -496,6 +553,8 @@ export async function POST(request: NextRequest) {
         eventId,
         stripeConnectRouted,
         stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
         applicationFeeAmountCents,
       });
     }
@@ -672,8 +731,7 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-
-    if (type === "squares") {
+        if (type === "squares") {
       if (!squaresGameId) {
         console.error("Stripe webhook missing squares game id", {
           checkoutSessionId: session.id,
@@ -743,13 +801,16 @@ export async function POST(request: NextRequest) {
             ...metadata,
             stripe_connect_routed: stripeConnectRouted ? "true" : "false",
             stripe_connect_account_id: stripeConnectAccountId,
+            stripe_transfer_id: stripeTransferId,
+            stripe_destination_account_id: stripeDestinationAccountId,
             application_fee_amount: String(applicationFeeAmountCents),
             normalized_platform_fee_cents: String(platformFeeCents),
             normalized_net_amount_cents: String(netAmountCents),
           }),
         ],
       );
-            await query(
+
+      await query(
         `
         update squares_games
         set
@@ -815,9 +876,13 @@ export async function POST(request: NextRequest) {
         payment_status,
         customer_email,
         payment_type,
-        squares_game_id
+        squares_game_id,
+        stripe_transfer_id,
+        stripe_destination_account_id,
+        stripe_payout_status,
+        payout_reconciled_at
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -833,7 +898,11 @@ export async function POST(request: NextRequest) {
         payment_status = excluded.payment_status,
         customer_email = excluded.customer_email,
         payment_type = excluded.payment_type,
-        squares_game_id = excluded.squares_game_id
+        squares_game_id = excluded.squares_game_id,
+        stripe_transfer_id = excluded.stripe_transfer_id,
+        stripe_destination_account_id = excluded.stripe_destination_account_id,
+        stripe_payout_status = excluded.stripe_payout_status,
+        payout_reconciled_at = excluded.payout_reconciled_at
       `,
       [
         session.id,
@@ -851,6 +920,10 @@ export async function POST(request: NextRequest) {
         email,
         type,
         squaresGameId,
+        stripeTransferId || null,
+        stripeDestinationAccountId || stripeConnectAccountId || null,
+        stripeConnectRouted ? "destination_charge_created" : null,
+        stripeConnectRouted ? new Date().toISOString() : null,
       ],
     );
 
@@ -861,6 +934,8 @@ export async function POST(request: NextRequest) {
       checkoutSessionId: session.id,
       stripeConnectRouted,
       stripeConnectAccountId,
+      stripeTransferId,
+      stripeDestinationAccountId,
       applicationFeeAmountCents,
       platformFeeCents,
       netAmountCents,
