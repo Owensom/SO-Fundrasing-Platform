@@ -57,7 +57,7 @@ export async function POST(
       });
     }
 
-    const tenantSlug = getTenantSlugFromHeaders();
+    const tenantSlug = await getTenantSlugFromHeaders();
 
     const raffle = await getRaffleById(params.id);
 
