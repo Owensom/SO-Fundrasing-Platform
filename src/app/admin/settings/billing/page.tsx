@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
 import BillingSettingsForm from "./BillingSettingsForm";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,17 @@ function safePercent(value: unknown, fallback: number) {
   }
 
   return Math.min(100, Number(number.toFixed(2)));
+}
+
+function safeTierPercent(value: unknown, tier: TierKey) {
+  const minimum = defaultFeeForTier(tier);
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return minimum;
+  }
+
+  return Math.min(100, Math.max(minimum, Number(number.toFixed(2))));
 }
 
 function cleanText(value: FormDataEntryValue | null, fallback = "") {
@@ -119,15 +131,25 @@ async function updateTenantBillingSettings(formData: FormData) {
   const tenantSlug = await requireCurrentTenantAccess();
 
   const subscriptionTier = safeTier(formData.get("subscription_tier"));
-  const platformFeePercent = safePercent(
-    formData.get("platform_fee_percent"),
-    defaultFeeForTier(subscriptionTier),
-  );
 
   const subscriptionStatus = cleanText(
     formData.get("subscription_status"),
     "active",
   );
+
+  const customCommissionCapability = checkSubscriptionCapability(
+    {
+      subscription_tier: subscriptionTier,
+      subscription_status: subscriptionStatus,
+    },
+    "custom_commission",
+  );
+
+  const defaultPlatformFeePercent = defaultFeeForTier(subscriptionTier);
+
+  const platformFeePercent = customCommissionCapability.allowed
+    ? safeTierPercent(formData.get("platform_fee_percent"), subscriptionTier)
+    : defaultPlatformFeePercent;
 
   const stripeCustomerId = cleanText(formData.get("stripe_customer_id"));
   const stripeSubscriptionId = cleanText(
