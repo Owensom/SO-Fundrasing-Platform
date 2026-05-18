@@ -1544,3 +1544,10 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
   },
 };
+  boardPreviewTitle: {
+    marginTop: 4,
+    color: "#0f172a",
+    fontSize: 26,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
