@@ -5,7 +5,12 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
-import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import {
+  canPublishAnotherCampaign,
+  checkSubscriptionCapability,
+  getCampaignLimitMessage,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import NewEventForm from "@/components/admin/NewEventForm";
 
 type PageProps = {
@@ -14,35 +19,34 @@ type PageProps = {
   }>;
 };
 
-type PublishedEventCountRow = {
+type ActiveCampaignCountRow = {
   active_count: string | number;
 };
 
-function getSubscriptionTier(
-  tenantSettings:
-    | {
-        subscription_tier?: string | null;
-        subscriptionTier?: string | null;
-      }
-    | null
-    | undefined,
-) {
-  return String(
-    tenantSettings?.subscription_tier ||
-      tenantSettings?.subscriptionTier ||
-      "community",
-  )
-    .trim()
-    .toLowerCase();
-}
-
-async function getPublishedEventCountForTenant(tenantSlug: string) {
-  const rows = await query<PublishedEventCountRow>(
+async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
     `
       select count(*) as active_count
-      from events
-      where tenant_slug = $1
-        and status = 'published'
+      from (
+        select id
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select id
+        from squares
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select id
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
     `,
     [tenantSlug],
   );
@@ -75,13 +79,19 @@ export default async function NewEventPage({ searchParams }: PageProps) {
     "custom_campaign_images",
   );
 
-  const subscriptionTier = getSubscriptionTier(tenantSettings);
-  const publishedEventCount = await getPublishedEventCountForTenant(tenantSlug);
-  const communityPublishedEventLimitReached =
-    subscriptionTier === "community" && publishedEventCount >= 1;
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+  const activePublishedCampaignCount =
+    await getActivePublishedCampaignCountForTenant(tenantSlug);
+
+  const canPublishCampaign = canPublishAnotherCampaign({
+    subscription_tier: subscriptionTier,
+    currentActiveCampaigns: activePublishedCampaignCount,
+  });
+
   const showCampaignLimitBanner =
-    resolvedSearchParams?.error === "campaign-limit" ||
-    communityPublishedEventLimitReached;
+    resolvedSearchParams?.error === "campaign-limit" || !canPublishCampaign;
 
   return (
     <main className="new-event-page" style={styles.page}>
@@ -92,11 +102,11 @@ export default async function NewEventPage({ searchParams }: PageProps) {
           <div style={styles.limitContent}>
             <div style={styles.limitEyebrow}>Premium campaign limit</div>
             <h1 style={styles.limitTitle}>
-              Community plans include one active published event.
+              {getCampaignLimitMessage(subscriptionTier)}
             </h1>
             <p style={styles.limitText}>
-              You can still create and save draft events. To publish more than
-              one event at the same time, upgrade your plan from Billing.
+              You can still create and save draft events. To publish more active
+              campaigns at the same time, upgrade your plan from Billing.
             </p>
           </div>
 
