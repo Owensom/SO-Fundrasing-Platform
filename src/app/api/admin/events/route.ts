@@ -39,7 +39,7 @@ type TableConfigInput = {
   ticket_type_id?: string;
 };
 
-type ActiveCampaignCountRow = {
+type ActiveEventCountRow = {
   active_count: string | number;
 };
 
@@ -208,30 +208,13 @@ function localTicketIdToCreatedId(
   return ticketTypeIdMap.get(localId) || null;
 }
 
-async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
-  const rows = await query<ActiveCampaignCountRow>(
+async function getActivePublishedEventCountForTenant(tenantSlug: string) {
+  const rows = await query<ActiveEventCountRow>(
     `
       select count(*) as active_count
-      from (
-        select id
-        from raffles
-        where tenant_slug = $1
-          and status = 'published'
-
-        union all
-
-        select id
-        from squares
-        where tenant_slug = $1
-          and status = 'published'
-
-        union all
-
-        select id
-        from events
-        where tenant_slug = $1
-          and status = 'published'
-      ) active_campaigns
+      from events
+      where tenant_slug = $1
+        and status = 'published'
     `,
     [tenantSlug],
   );
@@ -245,7 +228,7 @@ async function canPublishEventForTenant(tenantSlug: string) {
     tenantSettings?.subscription_tier,
   );
   const currentActiveCampaigns =
-    await getActivePublishedCampaignCountForTenant(tenantSlug);
+    await getActivePublishedEventCountForTenant(tenantSlug);
 
   return canPublishAnotherCampaign({
     subscription_tier: subscriptionTier,
