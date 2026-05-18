@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { queryOne } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ type Body = {
 
 type RaffleRow = {
   id: string;
+  tenant_slug: string;
   config_json: Record<string, unknown> | null;
 };
 
@@ -49,7 +51,7 @@ function normalisePrizes(value: unknown) {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const session = await auth();
@@ -57,7 +59,20 @@ export async function POST(
     if (!session?.user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
+      );
+    }
+
+    const tenantSlug = await getTenantSlugFromHeaders();
+
+    const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+      ? session.user.tenantSlugs.map((value) => String(value))
+      : [];
+
+    if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
       );
     }
 
@@ -66,18 +81,19 @@ export async function POST(
 
     const raffle = await queryOne<RaffleRow>(
       `
-      select id, config_json
-      from raffles
-      where id = $1
-      limit 1
+        select id, tenant_slug, config_json
+        from raffles
+        where id = $1
+          and tenant_slug = $2
+        limit 1
       `,
-      [params.id]
+      [params.id, tenantSlug],
     );
 
     if (!raffle) {
       return NextResponse.json(
         { ok: false, error: "Raffle not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -93,20 +109,21 @@ export async function POST(
 
     const updated = await queryOne<RaffleRow>(
       `
-      update raffles
-      set
-        config_json = $2::jsonb,
-        updated_at = now()
-      where id = $1
-      returning id, config_json
+        update raffles
+        set
+          config_json = $3::jsonb,
+          updated_at = now()
+        where id = $1
+          and tenant_slug = $2
+        returning id, tenant_slug, config_json
       `,
-      [params.id, JSON.stringify(nextConfig)]
+      [params.id, tenantSlug, JSON.stringify(nextConfig)],
     );
 
     if (!updated) {
       return NextResponse.json(
         { ok: false, error: "Failed to save prizes" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -119,7 +136,7 @@ export async function POST(
 
     return NextResponse.json(
       { ok: false, error: error?.message || "Failed to save prize settings" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
