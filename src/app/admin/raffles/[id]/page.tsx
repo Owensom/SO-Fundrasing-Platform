@@ -329,7 +329,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
   }, {} as Record<string, number>);
 
   const legalQuestionEnabled =
-    isConfigured(config.question?.text) && isConfigured(config.question?.answer);
+    isConfigured(config.question?.text) &&
+    isConfigured(config.question?.answer);
 
   const postalEntryEnabled =
     isConfigured(config.free_entry?.address) ||
@@ -373,7 +374,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
           {raffle.description ? (
             <p style={styles.heroDescription}>{raffle.description}</p>
           ) : (
-            <p style={styles.heroDescriptionMuted}>No description added yet.</p>
+            <p style={styles.heroDescriptionMuted}>
+              No description added yet.
+            </p>
           )}
 
           <div className="raffle-hero-meta" style={styles.heroMetaGrid}>
@@ -396,7 +399,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
               width: "100%",
               height: "100%",
               objectFit: raffle.image_url ? "cover" : "contain",
-              objectPosition: raffle.image_url ? imageObjectPosition : "center",
+              objectPosition: raffle.image_url
+                ? imageObjectPosition
+                : "center",
               display: "block",
               padding: raffle.image_url ? 0 : 22,
               boxSizing: "border-box",
@@ -411,10 +416,16 @@ export default async function AdminRafflePage({ params }: PageProps) {
       <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
-          value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
+          value={formatMoney(
+            raffle.ticket_price_cents,
+            raffle.currency,
+          )}
         />
 
-        <SummaryCard label="Draw date" value={formatDrawDate(raffle.draw_at)} />
+        <SummaryCard
+          label="Draw date"
+          value={formatDrawDate(raffle.draw_at)}
+        />
 
         <SummaryCard label="Total tickets" value={totalTickets} />
 
@@ -426,7 +437,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
       <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
-            <strong style={{ color: "#0f172a" }}>Sales progress</strong>
+            <strong style={{ color: "#0f172a" }}>
+              Sales progress
+            </strong>
 
             <div style={styles.mutedSmall}>
               {soldTicketsCount} sold from {totalTickets} tickets
@@ -437,7 +450,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
         </div>
 
         <div style={styles.progressTrack}>
-          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+          <div
+            style={{
+              ...styles.progressFill,
+              width: `${progress}%`,
+            }}
+          />
         </div>
       </section>
 
@@ -446,32 +464,51 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <h2 style={styles.sectionTitle}>Raffle actions</h2>
 
           <p style={styles.sectionDescription}>
-            Publish, close, draw or remove this raffle using the existing action
-            controls.
+            Publish, close, draw or remove this raffle using the
+            existing action controls.
           </p>
         </div>
 
-        <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
+        <RaffleAdminActions
+          raffleId={raffle.id}
+          status={raffle.status}
+        />
       </section>
 
       <section style={styles.section}>
         <details open style={styles.adminDetails}>
-          <summary className="raffle-admin-summary" style={styles.adminSummary}>
+          <summary
+            className="raffle-admin-summary"
+            style={styles.adminSummary}
+          >
             <div>
               <div style={styles.sectionEyebrow}>Section 1</div>
 
               <h2 style={styles.sectionTitle}>Edit raffle</h2>
 
               <p style={styles.sectionDescription}>
-                Update the public details, pricing, legal settings, colours and
-                offer bundles.
+                Update the public details, pricing, legal settings,
+                colours and offer bundles.
               </p>
             </div>
 
-            <div className="raffle-summary-pills" style={styles.summaryPillRow}>
-              <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
-              <StatusMiniPill label="Postal" active={postalEntryEnabled} />
-              <span style={styles.adminSummaryToggle}>Open / close</span>
+            <div
+              className="raffle-summary-pills"
+              style={styles.summaryPillRow}
+            >
+              <StatusMiniPill
+                label="Legal"
+                active={legalQuestionEnabled}
+              />
+
+              <StatusMiniPill
+                label="Postal"
+                active={postalEntryEnabled}
+              />
+
+              <span style={styles.adminSummaryToggle}>
+                Open / close
+              </span>
             </div>
           </summary>
 
@@ -481,22 +518,29 @@ export default async function AdminRafflePage({ params }: PageProps) {
               method="post"
               style={styles.form}
             >
-              <input type="hidden" name="image_position" value={imagePosition} />
+              <input
+                type="hidden"
+                name="image_position"
+                value={imagePosition}
+              />
 
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <div style={styles.innerEyebrow}>Public overview</div>
+                    <div style={styles.innerEyebrow}>
+                      Public overview
+                    </div>
 
-                    <h3 style={styles.subTitle}>Campaign details</h3>
+                    <h3 style={styles.subTitle}>
+                      Campaign details
+                    </h3>
 
                     <p style={styles.sectionDescription}>
                       These details are shown on the public raffle page.
                     </p>
                   </div>
                 </div>
-
-                <div className="raffle-two-column" style={styles.twoColumn}>
+                                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Title">
                     <input
                       name="title"
@@ -534,7 +578,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       focus. If no image is uploaded, the SO default raffle image
                       is shown.
                     </p>
-                                        <ImageFocusUploadField
+
+                    <ImageFocusUploadField
                       currentImageUrl={raffle.image_url ?? ""}
                       currentFocusX={imageFocusX}
                       currentFocusY={imageFocusY}
@@ -718,333 +763,10 @@ export default async function AdminRafflePage({ params }: PageProps) {
                         )}
                       </div>
 
-                      <div className="raffle-offer-inputs" style={styles.offerInputs}>
-                        <Field label="Number of tickets">
-                          <input
-                            name={`offer_quantity_${index}`}
-                            type="number"
-                            min={1}
-                            defaultValue={offer.quantity}
-                            placeholder="3"
-                            style={styles.input}
-                          />
-                        </Field>
-
-                        <Field label="Total offer price">
-                          <input
-                            name={`offer_price_${index}`}
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            defaultValue={offer.price}
-                            placeholder="12.00"
-                            style={styles.input}
-                          />
-                        </Field>
-
-                        <label style={styles.checkboxLabel}>
-                          <input
-                            name={`offer_active_${index}`}
-                            type="checkbox"
-                            value="true"
-                            defaultChecked={offer.is_active}
-                          />
-                          Use
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section style={styles.innerPanel}>
-                <div style={styles.innerHeader}>
-                  <div>
-                    <div style={styles.innerEyebrow}>Compliance</div>
-                    <h3 style={styles.subTitle}>Legal & postal entry</h3>
-                    <p style={styles.sectionDescription}>
-                      Add a skill-based entry question and the free postal entry
-                      route shown on the public raffle page.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="raffle-two-column" style={styles.twoColumn}>
-                  <Field label="Entry question">
-                    <input
-                      name="question_text"
-                      defaultValue={String(config.question?.text ?? "")}
-                      placeholder="e.g. What colour is a London taxi?"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Correct answer">
-                    <input
-                      name="question_answer"
-                      defaultValue={String(config.question?.answer ?? "")}
-                      placeholder="e.g. black"
-                      style={styles.input}
-                    />
-                  </Field>
-                </div>
-
-                <Field label="Postal address">
-                  <textarea
-                    name="free_entry_address"
-                    rows={3}
-                    defaultValue={String(config.free_entry?.address ?? "")}
-                    placeholder="e.g. SO Foundation, 123 High Street, London"
-                    style={styles.textarea}
-                  />
-                </Field>
-
-                <Field label="Postal instructions">
-                  <textarea
-                    name="free_entry_instructions"
-                    rows={4}
-                    defaultValue={String(config.free_entry?.instructions ?? "")}
-                    placeholder="Include your full name, email address and answer to the question."
-                    style={styles.textarea}
-                  />
-                </Field>
-
-                <Field label="Postal entry closing date">
-                  <input
-                    name="free_entry_closes_at"
-                    type="datetime-local"
-                    defaultValue={formatDateTimeLocal(
-                      config.free_entry?.closes_at,
-                    )}
-                    style={styles.input}
-                  />
-                </Field>
-
-                <p style={styles.helpText}>
-                  Postal entries must include an email address so the entrant can
-                  be contacted if they win.
-                </p>
-              </section>
-
-              <section style={styles.innerPanel}>
-                <div style={styles.innerHeader}>
-                  <div>
-                    <div style={styles.innerEyebrow}>Draw system</div>
-                    <h3 style={styles.subTitle}>Draw settings</h3>
-                    <p style={styles.sectionDescription}>
-                      Choose which prize numbers the automatic randomizer should
-                      draw.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="raffle-two-column" style={styles.twoColumn}>
-                  <Field label="Auto draw from prize number">
-                    <input
-                      name="auto_draw_from_prize"
-                      type="number"
-                      min={1}
-                      defaultValue={autoDrawFromPrize}
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Auto draw to prize number">
-                    <input
-                      name="auto_draw_to_prize"
-                      type="number"
-                      min={1}
-                      defaultValue={autoDrawToPrize}
-                      style={styles.input}
-                    />
-                  </Field>
-                </div>
-              </section>
-                                  <ImageFocusUploadField
-                      currentImageUrl={raffle.image_url ?? ""}
-                      currentFocusX={imageFocusX}
-                      currentFocusY={imageFocusY}
-                      label="Raffle image"
-                      previewAlt={raffle.title}
-                      subscriptionTier={tenantSettings?.subscription_tier}
-                      customImagesAllowed={customImagesCapability.allowed}
-                    />
-                  </div>
-
-                  <div className="raffle-preview-box" style={styles.previewBox}>
-                    <img
-                      src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
-                      alt={raffle.title || "SO Raffles"}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: raffle.image_url ? "cover" : "contain",
-                        objectPosition: raffle.image_url
-                          ? imageObjectPosition
-                          : "center",
-                        display: "block",
-                        padding: raffle.image_url ? 0 : 22,
-                        boxSizing: "border-box",
-                        background: raffle.image_url
-                          ? "#ffffff"
-                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="raffle-three-column" style={styles.threeColumn}>
-                  <Field label="Draw date">
-                    <input
-                      name="draw_at"
-                      type="datetime-local"
-                      defaultValue={formatDateTimeLocal(raffle.draw_at)}
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Status">
-                    <select
-                      name="status"
-                      defaultValue={raffle.status}
-                      style={styles.input}
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                      <option value="closed">Closed</option>
-                      <option value="drawn">Drawn</option>
-                    </select>
-                  </Field>
-
-                  <Field label="Currency">
-                    <select
-                      name="currency"
-                      defaultValue={raffle.currency ?? "GBP"}
-                      style={styles.input}
-                    >
-                      <option value="GBP">GBP</option>
-                      <option value="EUR">EUR</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  </Field>
-                </div>
-              </section>
-
-              <section style={styles.innerPanel}>
-                <div style={styles.innerHeader}>
-                  <div>
-                    <div style={styles.innerEyebrow}>Ticket setup</div>
-
-                    <h3 style={styles.subTitle}>Pricing & bundles</h3>
-
-                    <p style={styles.sectionDescription}>
-                      Configure pricing, number range, colours and bundle
-                      offers.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="raffle-three-column" style={styles.threeColumn}>
-                  <Field label="Ticket price">
-                    <input
-                      name="ticket_price"
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      defaultValue={ticketPrice}
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Start number">
-                    <input
-                      name="startNumber"
-                      type="number"
-                      defaultValue={config.startNumber ?? 1}
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="End number">
-                    <input
-                      name="endNumber"
-                      type="number"
-                      defaultValue={config.endNumber ?? raffle.total_tickets}
-                      style={styles.input}
-                    />
-                  </Field>
-                </div>
-
-                <div className="raffle-colour-grid" style={styles.colourGrid}>
-                  {PRESET_COLOURS.map((colour) => {
-                    const selected = colours.includes(colour);
-                    const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
-
-                    return (
-                      <label
-                        key={colour}
-                        style={{
-                          ...styles.colourCard,
-                          borderColor: selected ? "#1683f8" : "#e2e8f0",
-                          background: selected ? "#eff6ff" : "#ffffff",
-                        }}
+                      <div
+                        className="raffle-offer-inputs"
+                        style={styles.offerInputs}
                       >
-                        <input
-                          type="checkbox"
-                          name="colour_preset"
-                          value={colour}
-                          defaultChecked={selected}
-                        />
-
-                        <span
-                          style={{
-                            ...styles.swatch,
-                            background: swatch,
-                            borderColor:
-                              colour === "White" ? "#cbd5e1" : "transparent",
-                          }}
-                        />
-
-                        <span style={styles.colourText}>
-                          <strong>{colour}</strong>
-                          <small>{soldByColour[colour] || 0} sold</small>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <Field label="Custom colours">
-                  <input
-                    name="custom_colours"
-                    placeholder="Gold, Silver, #00ff00"
-                    defaultValue={colours
-                      .filter(
-                        (colour: string) => !PRESET_COLOURS.includes(colour),
-                      )
-                      .join(", ")}
-                    style={styles.input}
-                  />
-                </Field>
-
-                <input
-                  type="hidden"
-                  name="offer_count"
-                  value={offerRows.length}
-                />
-
-                <div style={styles.offerList}>
-                  {offerRows.map((offer, index) => (
-                    <div key={`${offer.id}-${index}`} style={styles.offerCard}>
-                      <div style={styles.offerBadge}>
-                        {offerSavingText(
-                          offer.quantity as number | "",
-                          offer.price as number | "",
-                          raffle.ticket_price_cents,
-                        )}
-                      </div>
-
-                      <div className="raffle-offer-inputs" style={styles.offerInputs}>
                         <Field label="Number of tickets">
                           <input
                             name={`offer_quantity_${index}`}
@@ -1082,12 +804,13 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   ))}
                 </div>
               </section>
-
-              <section style={styles.innerPanel}>
+                            <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Compliance</div>
+
                     <h3 style={styles.subTitle}>Legal & postal entry</h3>
+
                     <p style={styles.sectionDescription}>
                       Add a skill-based entry question and the free postal entry
                       route shown on the public raffle page.
@@ -1156,7 +879,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Draw system</div>
+
                     <h3 style={styles.subTitle}>Draw settings</h3>
+
                     <p style={styles.sectionDescription}>
                       Choose which prize numbers the automatic randomizer should
                       draw.
@@ -1186,9 +911,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </Field>
                 </div>
               </section>
-                      <section style={styles.submitBar}>
+
+              <section style={styles.submitBar}>
                 <div>
                   <strong style={{ color: "#0f172a" }}>Save changes</strong>
+
                   <div style={styles.mutedSmall}>
                     This updates the raffle page and admin values.
                   </div>
@@ -1208,7 +935,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 2</div>
+
               <h2 style={styles.sectionTitle}>Prize management</h2>
+
               <p style={styles.sectionDescription}>
                 Manage prize names, descriptions and public visibility.
               </p>
@@ -1231,7 +960,9 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 3</div>
+
               <h2 style={styles.sectionTitle}>Draw centre</h2>
+
               <p style={styles.sectionDescription}>
                 View winners, add postal tickets, run automatic draws and open
                 the dramatic live draw.
@@ -1240,9 +971,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
             <div className="raffle-summary-pills" style={styles.summaryPillRow}>
               <span style={styles.neutralPill}>{winners.length} winners</span>
+
               <span style={styles.neutralPill}>
                 {soldTicketsForDraw.length} eligible tickets
               </span>
+
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
@@ -1258,6 +991,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Prize</div>
+
                       <div style={styles.winnerValue}>
                         {winner.prize_title || `Prize ${winner.prize_position}`}
                       </div>
@@ -1265,6 +999,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Ticket</div>
+
                       <div style={styles.winnerValue}>
                         #{winner.ticket_number}
                       </div>
@@ -1272,6 +1007,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Colour</div>
+
                       <div style={styles.winnerValue}>
                         {winner.colour || "No colour"}
                       </div>
@@ -1279,9 +1015,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
                     <div>
                       <div style={styles.winnerLabel}>Buyer</div>
+
                       <div style={styles.winnerValue}>
                         {winner.buyer_name || "Supporter"}
                       </div>
+
                       <div style={styles.winnerEmail}>
                         {winner.buyer_email || "—"}
                       </div>
@@ -1297,6 +1035,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
+
                   <p style={styles.sectionDescription}>
                     Add a received postal entry into the eligible ticket pool.
                   </p>
@@ -1356,11 +1095,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 </button>
               </form>
             </details>
-
-            <details open style={styles.drawDetails}>
+                        <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Live draw tools</h3>
+
                   <p style={styles.sectionDescription}>
                     Automatic draw and full-screen dramatic draw controls.
                   </p>
@@ -1380,6 +1119,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     name="from_prize"
                     value={autoDrawFromPrize}
                   />
+
                   <input
                     type="hidden"
                     name="to_prize"
@@ -1387,6 +1127,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   />
 
                   <h3 style={styles.subTitle}>Automatic random draw</h3>
+
                   <p style={styles.sectionDescription}>
                     Randomly draw remaining undrawn prizes using the saved auto
                     draw range.
@@ -1420,6 +1161,7 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.summaryCard}>
       <div style={styles.summaryLabel}>{label}</div>
+
       <div style={styles.summaryValue}>{value}</div>
     </div>
   );
@@ -1429,6 +1171,7 @@ function HeroMeta({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroMetaCard}>
       <div style={styles.heroMetaLabel}>{label}</div>
+
       <div style={styles.heroMetaValue}>{value}</div>
     </div>
   );
@@ -1622,7 +1365,9 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     minWidth: 0,
   },
-  heroContent: { minWidth: 0 },
+  heroContent: {
+    minWidth: 0,
+  },
   eyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -1692,7 +1437,11 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.12)",
     minWidth: 0,
   },
-  heroMetaLabel: { color: "#94a3b8", fontSize: 12, fontWeight: 900 },
+  heroMetaLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 900,
+  },
   heroMetaValue: {
     color: "#ffffff",
     fontSize: 15,
@@ -1726,7 +1475,11 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: 950 },
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+  },
   summaryValue: {
     color: "#0f172a",
     fontSize: 22,
@@ -1750,7 +1503,11 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 10,
     flexWrap: "wrap",
   },
-  progressPercent: { color: "#166534", fontWeight: 950, fontSize: 18 },
+  progressPercent: {
+    color: "#166534",
+    fontWeight: 950,
+    fontSize: 18,
+  },
   progressTrack: {
     height: 11,
     background: "#e2e8f0",
@@ -1806,7 +1563,11 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
-  adminDetails: { display: "grid", gap: 0, minWidth: 0 },
+  adminDetails: {
+    display: "grid",
+    gap: 0,
+    minWidth: 0,
+  },
   adminSummary: {
     display: "flex",
     justifyContent: "space-between",
@@ -1862,7 +1623,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
-  form: { display: "grid", gap: 14, minWidth: 0 },
+  form: {
+    display: "grid",
+    gap: 14,
+    minWidth: 0,
+  },
   twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
@@ -1874,8 +1639,16 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "start",
   },
-  field: { display: "grid", gap: 6, minWidth: 0 },
-  label: { color: "#334155", fontSize: 13, fontWeight: 950 },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
   input: {
     width: "100%",
     minHeight: 46,
@@ -1910,7 +1683,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
-  mediaControls: { minWidth: 0 },
+  mediaControls: {
+    minWidth: 0,
+  },
   subTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1979,7 +1754,10 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     minWidth: 0,
   },
-  offerList: { display: "grid", gap: 10 },
+  offerList: {
+    display: "grid",
+    gap: 10,
+  },
   offerCard: {
     display: "grid",
     gap: 10,
@@ -2042,8 +1820,16 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
     minHeight: 44,
   },
-  mutedSmall: { color: "#64748b", fontSize: 13, marginTop: 3 },
-  winnerList: { display: "grid", gap: 10, marginBottom: 14 },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  winnerList: {
+    display: "grid",
+    gap: 10,
+    marginBottom: 14,
+  },
   winnerCard: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
