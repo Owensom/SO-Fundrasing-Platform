@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { queryOne } from "@/lib/db";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { canPublishAnotherCampaign } from "@/lib/subscription-capabilities";
 import {
   createSquaresGame,
   listSquaresGames,
@@ -75,6 +78,44 @@ function parseDrawAt(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+async function canTenantPublishCampaign(tenantSlug: string) {
+  const activeCampaignCounts = await queryOne<{
+    total: number;
+  }>(
+    `
+    select (
+      (
+        select count(*)
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+      ) +
+      (
+        select count(*)
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+      ) +
+      (
+        select count(*)
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      )
+    )::int as total
+    `,
+    [tenantSlug],
+  );
+
+  const currentActiveCampaigns = Number(activeCampaignCounts?.total || 0);
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  return canPublishAnotherCampaign({
+    subscription_tier: tenantSettings?.subscription_tier,
+    currentActiveCampaigns,
+  });
+}
+
 export async function GET(request: NextRequest) {
   const tenantSlug = getTenantSlugFromRequest(request);
 
@@ -147,6 +188,17 @@ export async function POST(request: NextRequest) {
       | "published"
       | "closed"
       | "drawn";
+
+    if (status === "published") {
+      const allowedToPublish = await canTenantPublishCampaign(tenantSlug);
+
+      if (!allowedToPublish) {
+        return NextResponse.redirect(
+          new URL("/admin/squares/new?error=campaign_limit", request.url),
+          { status: 303 },
+        );
+      }
+    }
 
     const total_squares = Math.min(
       500,
