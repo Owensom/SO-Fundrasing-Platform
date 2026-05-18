@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
   canPublishAnotherCampaign,
@@ -211,7 +212,7 @@ function localTicketIdToCreatedId(
 async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   const rows = await query<ActiveCampaignCountRow>(
     `
-      select count(*) as active_count
+      select count(*)::int as active_count
       from (
         select 1
         from raffles
@@ -257,20 +258,44 @@ export async function POST(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.redirect(new URL("/admin/login", request.url));
+    return NextResponse.redirect(new URL("/admin/login", request.url), {
+      status: 303,
+    });
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return NextResponse.redirect(
+      new URL("/admin/login?error=tenant_access_denied", request.url),
+      { status: 303 },
+    );
   }
 
   const formData = await request.formData();
 
-  const tenantSlug = String(formData.get("tenantSlug") || "").trim();
+  const submittedTenantSlug = String(formData.get("tenantSlug") || "").trim();
+
+  if (submittedTenantSlug && submittedTenantSlug !== tenantSlug) {
+    return NextResponse.redirect(
+      new URL("/admin/login?error=tenant_access_denied", request.url),
+      { status: 303 },
+    );
+  }
+
   const title = String(formData.get("title") || "").trim();
   const slug = String(formData.get("slug") || "").trim();
   const eventType = cleanEventType(formData.get("event_type"));
   const status = cleanStatus(formData.get("status"));
 
-  if (!tenantSlug || !title || !slug) {
+  if (!title || !slug) {
     return NextResponse.redirect(
       new URL("/admin/events/new?error=missing-required", request.url),
+      { status: 303 },
     );
   }
 
@@ -278,6 +303,7 @@ export async function POST(request: Request) {
     if (status === "published" && !(await canPublishEventForTenant(tenantSlug))) {
       return NextResponse.redirect(
         new URL("/admin/events/new?error=campaign-limit", request.url),
+        { status: 303 },
       );
     }
 
@@ -406,12 +432,14 @@ export async function POST(request: Request) {
 
     return NextResponse.redirect(
       new URL(`/admin/events/${event.id}?saved=created`, request.url),
+      { status: 303 },
     );
   } catch (error) {
     console.error("Create event failed", error);
 
     return NextResponse.redirect(
       new URL("/admin/events/new?error=create-failed", request.url),
+      { status: 303 },
     );
   }
 }
