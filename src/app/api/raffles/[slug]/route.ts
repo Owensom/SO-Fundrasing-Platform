@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +63,7 @@ function normalizeImagePosition(value: unknown) {
 function normalizeColourItem(value: unknown, index: number) {
   if (typeof value === "string") {
     const trimmed = value.trim();
+
     return {
       id: `colour-${index}`,
       name: trimmed || `Colour ${index + 1}`,
@@ -164,14 +166,24 @@ export async function GET(
   { params }: { params: { slug: string } },
 ) {
   try {
+    const tenantSlug = await getTenantSlugFromHeaders();
+
+    if (!tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Not found" },
+        { status: 404 },
+      );
+    }
+
     const raffleRows = await query<DbRaffleRow>(
       `
-      select *
-      from raffles
-      where slug = $1
-      limit 1
+        select *
+        from raffles
+        where tenant_slug = $1
+          and slug = $2
+        limit 1
       `,
-      [params.slug],
+      [tenantSlug, params.slug],
     );
 
     if (!raffleRows.length) {
@@ -188,39 +200,42 @@ export async function GET(
 
     const sold = await query<TicketRow>(
       `
-      select ticket_number, colour
-      from raffle_ticket_sales
-      where raffle_id = $1
-      order by ticket_number asc
+        select ticket_number, colour
+        from raffle_ticket_sales
+        where tenant_slug = $1
+          and raffle_id = $2
+        order by ticket_number asc
       `,
-      [raffleId],
+      [tenantSlug, raffleId],
     );
 
     const reserved = await query<TicketRow>(
       `
-      select ticket_number, colour
-      from raffle_ticket_reservations
-      where raffle_id = $1
-        and status = 'reserved'
-        and expires_at > now()
-      order by ticket_number asc
+        select ticket_number, colour
+        from raffle_ticket_reservations
+        where tenant_slug = $1
+          and raffle_id = $2
+          and status = 'reserved'
+          and expires_at > now()
+        order by ticket_number asc
       `,
-      [raffleId],
+      [tenantSlug, raffleId],
     );
 
     const winners = await query<WinnerRow>(
       `
-      select
-        prize_position::int,
-        ticket_number::int,
-        colour,
-        buyer_name,
-        drawn_at
-      from raffle_winners
-      where raffle_id = $1
-      order by prize_position asc
+        select
+          prize_position::int,
+          ticket_number::int,
+          colour,
+          buyer_name,
+          drawn_at
+        from raffle_winners
+        where tenant_slug = $1
+          and raffle_id = $2
+        order by prize_position asc
       `,
-      [raffleId],
+      [tenantSlug, raffleId],
     );
 
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
