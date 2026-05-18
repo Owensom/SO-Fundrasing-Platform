@@ -22,6 +22,9 @@ type PageProps = {
   params: {
     id: string;
   };
+  searchParams?: {
+    error?: string;
+  };
 };
 
 type Prize = {
@@ -138,7 +141,10 @@ async function safeListSquaresSales(gameId: string) {
   }
 }
 
-export default async function AdminSquaresEditPage({ params }: PageProps) {
+export default async function AdminSquaresEditPage({
+  params,
+  searchParams,
+}: PageProps) {
   const tenantSlug = await getTenantSlugFromHeaders();
   const game = await getSquaresGameById(params.id);
 
@@ -152,6 +158,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     tenantSettings,
     "custom_campaign_images",
   );
+
+  const campaignLimitReached = searchParams?.error === "campaign_limit";
 
   const [winners, sales] = await Promise.all([
     safeListSquaresWinners(game.id),
@@ -172,8 +180,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
   const savedPrizes = Array.isArray(config.prizes)
     ? (config.prizes as Prize[])
     : [];
-
-  const soldSquareOptions: SoldSquareOption[] = sales
+    const soldSquareOptions: SoldSquareOption[] = sales
     .flatMap((sale: any) =>
       Array.isArray(sale.squares)
         ? sale.squares.map((squareNumber: number | string) => ({
@@ -214,7 +221,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
   const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
-    return (
+
+  return (
     <main style={styles.page}>
       <section style={styles.topBar}>
         <Link href="/admin/squares" style={styles.backLink}>
@@ -225,6 +233,33 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           View campaign page
         </Link>
       </section>
+
+      {campaignLimitReached ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Plan limit reached</div>
+
+          <h1 style={styles.upgradeTitle}>
+            Community plans can publish up to 2 active campaigns.
+          </h1>
+
+          <p style={styles.upgradeText}>
+            This squares campaign was not published because this tenant already
+            has the maximum number of active published campaigns allowed on the
+            Community plan. Keep this campaign as a draft, close an existing
+            campaign, or upgrade to Professional for unlimited active campaigns.
+          </p>
+
+          <div style={styles.upgradeActions}>
+            <Link href="/admin/billing" style={styles.primaryUpgradeButton}>
+              View billing options
+            </Link>
+
+            <Link href="/admin/squares" style={styles.secondaryUpgradeButton}>
+              Manage squares
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
@@ -277,8 +312,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           />
         </div>
       </section>
-
-      <section style={styles.summaryGrid}>
+            <section style={styles.summaryGrid}>
         <SummaryCard
           label="Price"
           value={formatMoney(game.price_per_square_cents, currency)}
@@ -395,15 +429,15 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                       Upload or replace the public image for this squares game.
                     </p>
 
-                 <ImageFocusUploadField
-                  currentImageUrl={game.image_url || ""}
-                  currentFocusX={imageFocusX}
-                  currentFocusY={imageFocusY}
-                  label="Squares image"
-                  previewAlt={game.title}
-                  subscriptionTier={tenantSettings?.subscription_tier}
-                  customImagesAllowed={customImagesCapability.allowed}
-                />
+                    <ImageFocusUploadField
+                      currentImageUrl={game.image_url || ""}
+                      currentFocusX={imageFocusX}
+                      currentFocusY={imageFocusY}
+                      label="Squares image"
+                      previewAlt={game.title}
+                      subscriptionTier={tenantSettings?.subscription_tier}
+                      customImagesAllowed={customImagesCapability.allowed}
+                    />
                   </div>
 
                   <div style={styles.previewBox}>
@@ -636,8 +670,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
           </button>
         </section>
       </form>
-
-      <section style={styles.section}>
+            <section style={styles.section}>
         <details style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
@@ -663,7 +696,8 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
-                    <div style={styles.adminDetailsBody}>
+
+          <div style={styles.adminDetailsBody}>
             {winners.length ? (
               <div style={styles.winnerList}>
                 {winners.map((winner: any) => (
@@ -872,6 +906,75 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 14,
   },
+  upgradeBanner: {
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    marginBottom: 16,
+  },
+  upgradeEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  upgradeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(26px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  upgradeText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 780,
+  },
+  upgradeActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  primaryUpgradeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #1683f8",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
+  },
+  secondaryUpgradeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+  },
   hero: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
@@ -1037,7 +1140,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     fontSize: 18,
   },
-  progressTrack: {
+    progressTrack: {
     height: 11,
     background: "#e2e8f0",
     borderRadius: 999,
@@ -1156,7 +1259,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
   },
-    innerHeader: {
+  innerHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
