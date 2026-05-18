@@ -235,7 +235,6 @@ export default async function AdminRafflePage({ params }: PageProps) {
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
-
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     redirect("/admin/login?error=tenant_access_denied");
   }
@@ -251,6 +250,10 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
   if (!raffle) {
     notFound();
+  }
+
+  if (raffle.tenant_slug !== tenantSlug) {
+    redirect("/admin/login?error=tenant_access_denied");
   }
 
   const config = (raffle.config_json as any) ?? {};
