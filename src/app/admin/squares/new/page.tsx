@@ -141,7 +141,6 @@ function getSectionToneStyle(tone: SectionTone): CSSProperties {
 function prizeText(count: number) {
   return `${count} prize${count === 1 ? "" : "s"}`;
 }
-
 export default function NewSquaresGamePage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -165,20 +164,15 @@ export default function NewSquaresGamePage() {
   const [freeEntryInstructions, setFreeEntryInstructions] = useState("");
   const [freeEntryClosesAt, setFreeEntryClosesAt] = useState("");
 
+  const [campaignLimitReached, setCampaignLimitReached] = useState(false);
+
   const [prizes, setPrizes] = useState<PrizeRow[]>([
     makePrize("prize-1", "1", "1st Prize", ""),
   ]);
 
-  const [campaignLimitReached, setCampaignLimitReached] = useState(false);
-
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-
-      setCampaignLimitReached(
-        params.get("error") === "campaign_limit",
-      );
-    }
+    const params = new URLSearchParams(window.location.search);
+    setCampaignLimitReached(params.get("error") === "campaign_limit");
   }, []);
 
   useEffect(() => {
@@ -217,7 +211,8 @@ export default function NewSquaresGamePage() {
 
     return JSON.stringify(clean);
   }, [prizes]);
-    const board = useMemo(() => {
+
+  const board = useMemo(() => {
     const total = Math.max(1, toInt(totalSquares, 100));
     return getBoardShape(total);
   }, [totalSquares]);
@@ -266,8 +261,7 @@ export default function NewSquaresGamePage() {
   function removePrize(id: string) {
     setPrizes((current) => current.filter((prize) => prize.id !== id));
   }
-
-  return (
+    return (
     <form
       className="new-squares-form"
       action="/api/admin/squares"
@@ -302,17 +296,11 @@ export default function NewSquaresGamePage() {
           </p>
 
           <div style={styles.upgradeActions}>
-            <Link
-              href="/admin/billing"
-              style={styles.primaryUpgradeButton}
-            >
+            <Link href="/admin/billing" style={styles.primaryUpgradeButton}>
               View billing options
             </Link>
 
-            <Link
-              href="/admin/squares"
-              style={styles.secondaryUpgradeButton}
-            >
+            <Link href="/admin/squares" style={styles.secondaryUpgradeButton}>
               Manage campaigns
             </Link>
           </div>
@@ -418,170 +406,137 @@ export default function NewSquaresGamePage() {
       </section>
             <section style={styles.summaryGrid}>
         <SummaryCard
+          label="Projected revenue"
+          value={formatPreviewMoney(totalRevenue, currency)}
+        />
+
+        <SummaryCard
           label="Board layout"
           value={`${board.columns} × ${board.rows}`}
         />
 
         <SummaryCard
-          label="Squares"
-          value={Math.max(1, toInt(totalSquares, 100))}
+          label="Public prizes"
+          value={prizeText(publicPrizesCount)}
         />
 
         <SummaryCard
-          label="Projected revenue"
-          value={formatPreviewMoney(totalRevenue, currency)}
+          label="Draw date"
+          value={drawAt ? formatDatePreview(drawAt) : "Not scheduled"}
         />
-
-        <SummaryCard label="Prize count" value={publicPrizesCount} />
-
-        <SummaryCard
-          label="Skill question"
-          value={hasQuestion ? "Enabled" : "Disabled"}
-        />
-
-        <SummaryCard
-          label="Postal entry"
-          value={hasPostalEntry ? "Configured" : "Not configured"}
-        />
-      </section>
-
-      <section style={styles.readinessGrid}>
-        <ReadinessCard eyebrow="Public experience" title="Launch readiness">
-          <CheckItem done={title.trim().length > 0}>
-            Squares title added
-          </CheckItem>
-
-          <CheckItem done={slug.trim().length > 0}>
-            Public URL generated
-          </CheckItem>
-
-          <CheckItem done={description.trim().length > 0}>
-            Public description added
-          </CheckItem>
-
-          <CheckItem done={drawAt.trim().length > 0}>
-            Draw date configured
-          </CheckItem>
-        </ReadinessCard>
-
-        <ReadinessCard eyebrow="Fundraising" title="Revenue overview">
-          <PreviewLine
-            label="Squares"
-            value={Math.max(1, toInt(totalSquares, 100))}
-          />
-
-          <PreviewLine
-            label="Price"
-            value={formatPreviewMoney(pricePerSquare, currency)}
-          />
-
-          <PreviewLine
-            label="Potential revenue"
-            value={formatPreviewMoney(totalRevenue, currency)}
-          />
-
-          <PreviewLine label="Currency" value={currency} />
-        </ReadinessCard>
-
-        <ReadinessCard eyebrow="Compliance" title="Legal framework">
-          <CheckItem done={hasQuestion}>
-            Skill-based entry question configured
-          </CheckItem>
-
-          <CheckItem done={questionAnswer.trim().length > 0}>
-            Correct answer configured
-          </CheckItem>
-
-          <CheckItem done={hasPostalEntry}>
-            Free postal entry details added
-          </CheckItem>
-
-          <CheckItem done={freeEntryClosesAt.trim().length > 0}>
-            Postal closing date added
-          </CheckItem>
-        </ReadinessCard>
       </section>
 
       <SectionCard
         number="01"
         title="Campaign details"
-        description="Set the public title, URL, description and draw date."
-        badge={drawAt ? "Draw scheduled" : undefined}
+        description="Configure the public squares page title, slug, description and visual branding."
         tone="default"
+        badge="Core setup"
       >
         <div style={styles.twoColumn}>
-          <Field label="Squares game title">
+          <Field label="Squares title">
             <input
               name="title"
               required
               value={title}
               onChange={(event) => setTitle(event.target.value)}
+              placeholder="Friday Night Jackpot Squares"
               style={styles.input}
-              placeholder="Summer fundraiser squares"
             />
           </Field>
 
           <Field label="Public URL slug">
             <input
               name="slug"
+              required
               value={slug}
               onChange={(event) => {
                 setSlugEdited(true);
                 setSlug(slugify(event.target.value));
               }}
+              placeholder="friday-night-jackpot"
               style={styles.input}
-              placeholder="summer-fundraiser-squares"
             />
           </Field>
         </div>
 
-        <Field label="Public description">
+        <Field label="Description">
           <textarea
             name="description"
             rows={4}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+            placeholder="Describe the fundraiser, event or game."
             style={styles.textarea}
-            placeholder="Describe the game, prizes, event details and draw information."
           />
         </Field>
 
-        <div style={styles.twoColumn}>
-          <Field label="Draw date">
-            <input
-              name="draw_at"
-              type="datetime-local"
-              value={drawAt}
-              onChange={(event) => setDrawAt(event.target.value)}
-              style={styles.input}
+        <div style={styles.mediaBox}>
+          <div style={styles.mediaControls}>
+            <h3 style={styles.subTitle}>Squares image</h3>
+
+            <p style={styles.helpText}>
+              Upload a premium hero image to represent your fundraiser publicly.
+            </p>
+
+            <ImageFocusUploadField
+              label="Squares image"
+              currentImageUrl={imageUrl}
+              currentFocusX={imageFocusX}
+              currentFocusY={imageFocusY}
+              previewAlt="Squares preview"
+              onUploaded={(url) => setImageUrl(url)}
+              onFocusChange={(x, y) => {
+                setImageFocusX(x);
+                setImageFocusY(y);
+              }}
             />
-          </Field>
+          </div>
 
-          <div style={styles.previewInfoCard}>
-            <div style={styles.previewInfoLabel}>Draw preview</div>
-
-            <div style={styles.previewInfoValue}>
-              {formatDatePreview(drawAt)}
-            </div>
+          <div style={styles.previewBoxLarge}>
+            <img
+              src={previewImage}
+              alt="Squares preview"
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "block",
+                objectFit: imageUrl ? "cover" : "contain",
+                objectPosition: `${imageFocusX}% ${imageFocusY}%`,
+                background:
+                  "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+              }}
+            />
           </div>
         </div>
+
+        <input type="hidden" name="image_url" value={imageUrl} />
+        <input
+          type="hidden"
+          name="image_focus_x"
+          value={String(imageFocusX)}
+        />
+        <input
+          type="hidden"
+          name="image_focus_y"
+          value={String(imageFocusY)}
+        />
       </SectionCard>
 
       <SectionCard
         number="02"
-        title="Squares setup"
-        description="Configure board size, square pricing, currency and publication status."
-        badge={`${Math.max(1, toInt(totalSquares, 100))} squares`}
+        title="Board setup"
+        description="Configure square count, pricing, draw timing and publication status."
         tone="setup"
+        badge={`${Math.max(1, toInt(totalSquares, 100))} squares`}
       >
         <div style={styles.fourColumn}>
-          <Field label="Number of squares">
+          <Field label="Total squares">
             <input
               name="total_squares"
               type="number"
               min={1}
               max={500}
-              required
               value={totalSquares}
               onChange={(event) => setTotalSquares(event.target.value)}
               style={styles.input}
@@ -594,7 +549,6 @@ export default function NewSquaresGamePage() {
               type="number"
               min={0}
               step="0.01"
-              required
               value={pricePerSquare}
               onChange={(event) => setPricePerSquare(event.target.value)}
               style={styles.input}
@@ -609,8 +563,8 @@ export default function NewSquaresGamePage() {
               style={styles.input}
             >
               <option value="GBP">GBP</option>
-              <option value="EUR">EUR</option>
               <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
             </select>
           </Field>
 
@@ -623,37 +577,47 @@ export default function NewSquaresGamePage() {
             >
               <option value="draft">Draft</option>
               <option value="published">Published</option>
-              <option value="closed">Closed</option>
             </select>
           </Field>
         </div>
+                <Field label="Draw date & time">
+          <input
+            name="draw_at"
+            type="datetime-local"
+            value={drawAt}
+            onChange={(event) => setDrawAt(event.target.value)}
+            style={styles.input}
+          />
+        </Field>
 
         <div style={styles.boardPreviewCard}>
           <div style={styles.boardPreviewTop}>
             <div>
-              <div style={styles.boardPreviewLabel}>Board preview</div>
+              <div style={styles.boardPreviewLabel}>
+                Squares board preview
+              </div>
 
               <div style={styles.boardPreviewTitle}>
-                {board.columns} × {board.rows}
+                {board.columns} × {board.rows} layout
               </div>
             </div>
 
             <div style={styles.boardPreviewBadge}>
-              {Math.max(1, toInt(totalSquares, 100))} squares
+              {Math.max(1, toInt(totalSquares, 100))} selectable squares
             </div>
           </div>
 
           <div
             style={{
               ...styles.boardGrid,
-              gridTemplateColumns: `repeat(${Math.min(
-                board.columns,
-                10,
-              )}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${board.columns}, minmax(0, 1fr))`,
             }}
           >
             {Array.from({
-              length: Math.min(Math.max(1, toInt(totalSquares, 100)), 50),
+              length: Math.min(
+                Math.max(1, toInt(totalSquares, 100)),
+                120,
+              ),
             }).map((_, index) => (
               <div key={index} style={styles.boardCell}>
                 {index + 1}
@@ -662,68 +626,27 @@ export default function NewSquaresGamePage() {
           </div>
 
           <p style={styles.boardFootnote}>
-            Showing first {Math.min(Math.max(1, toInt(totalSquares, 100)), 50)}{" "}
-            squares as a preview. The public board will use the full{" "}
-            {Math.max(1, toInt(totalSquares, 100))} squares.
+            The public board automatically scales for mobile and desktop players.
           </p>
-        </div>
-      </SectionCard>
-            <SectionCard
-        number="03"
-        title="Squares image"
-        description="Upload a strong public image and choose the crop focus."
-        badge={imageUrl ? "Image selected" : "Using default image"}
-        tone="media"
-      >
-        <div style={styles.mediaBox}>
-          <div style={styles.mediaControls}>
-            <h3 style={styles.subTitle}>Squares image</h3>
-
-            <ImageFocusUploadField
-              currentImageUrl={imageUrl}
-              currentFocusX={imageFocusX}
-              currentFocusY={imageFocusY}
-              label="Squares image"
-              previewAlt={title.trim() || "Squares preview"}
-              customImagesAllowed={true}
-              onImageUrlChange={setImageUrl}
-              onFocusXChange={setImageFocusX}
-              onFocusYChange={setImageFocusY}
-            />
-          </div>
-
-          <div style={styles.previewBoxLarge}>
-            <img
-              src={previewImage}
-              alt={title.trim() || "Squares preview"}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: imageUrl ? "cover" : "contain",
-                objectPosition: `${imageFocusX}% ${imageFocusY}%`,
-                display: "block",
-                background:
-                  "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-              }}
-            />
-          </div>
         </div>
       </SectionCard>
 
       <SectionCard
-        number="04"
-        title="Prize settings"
-        description="Add prizes and choose which ones appear publicly on the campaign page."
-        badge={prizeText(publicPrizesCount)}
+        number="03"
+        title="Prize management"
+        description="Create prize positions, descriptions and public visibility."
         tone="prize"
+        badge={prizeText(publicPrizesCount)}
       >
         <div style={styles.prizeSectionShell}>
           <div style={styles.prizeSectionTop}>
             <div>
-              <div style={styles.prizeSectionTitle}>Public prize list</div>
+              <div style={styles.prizeSectionTitle}>
+                Configure your prizes
+              </div>
 
               <div style={styles.prizeSectionText}>
-                These prizes can also be used later during winner draws.
+                Add premium prize descriptions to increase engagement and sales.
               </div>
             </div>
 
@@ -737,25 +660,22 @@ export default function NewSquaresGamePage() {
           </div>
 
           <div style={styles.prizeList}>
-            {prizes.map((prize, index) => (
+            {prizes.map((prize) => (
               <div key={prize.id} style={styles.prizeRow}>
                 <div style={styles.rowHeader}>
-                  <strong>Prize {index + 1}</strong>
+                  <strong>
+                    Prize {prize.position || "1"}
+                  </strong>
 
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={prize.is_public}
-                      onChange={(event) =>
-                        updatePrize(
-                          prize.id,
-                          "is_public",
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    Show publicly
-                  </label>
+                  {prizes.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => removePrize(prize.id)}
+                      style={styles.removePrizeButton}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
 
                 <div style={styles.prizeGrid}>
@@ -763,11 +683,12 @@ export default function NewSquaresGamePage() {
                     <input
                       value={prize.position}
                       onChange={(event) =>
-                        updatePrize(prize.id, "position", event.target.value)
+                        updatePrize(
+                          prize.id,
+                          "position",
+                          event.target.value,
+                        )
                       }
-                      type="number"
-                      min="1"
-                      step="1"
                       style={styles.input}
                     />
                   </Field>
@@ -776,7 +697,11 @@ export default function NewSquaresGamePage() {
                     <input
                       value={prize.title}
                       onChange={(event) =>
-                        updatePrize(prize.id, "title", event.target.value)
+                        updatePrize(
+                          prize.id,
+                          "title",
+                          event.target.value,
+                        )
                       }
                       placeholder="1st Prize"
                       style={styles.input}
@@ -784,129 +709,151 @@ export default function NewSquaresGamePage() {
                   </Field>
                 </div>
 
-                <Field label="Description optional">
+                <Field label="Prize description">
                   <textarea
+                    rows={3}
                     value={prize.description}
                     onChange={(event) =>
-                      updatePrize(prize.id, "description", event.target.value)
+                      updatePrize(
+                        prize.id,
+                        "description",
+                        event.target.value,
+                      )
                     }
-                    rows={2}
+                    placeholder="Describe the prize, experience or reward."
                     style={styles.textarea}
                   />
                 </Field>
 
-                <button
-                  type="button"
-                  onClick={() => removePrize(prize.id)}
-                  disabled={prizes.length <= 1}
-                  style={{
-                    ...styles.removePrizeButton,
-                    cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
-                    opacity: prizes.length <= 1 ? 0.55 : 1,
-                  }}
-                >
-                  Remove prize
-                </button>
+                <label style={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={prize.is_public}
+                    onChange={(event) =>
+                      updatePrize(
+                        prize.id,
+                        "is_public",
+                        event.target.checked,
+                      )
+                    }
+                  />
+
+                  Show publicly on the campaign page
+                </label>
               </div>
             ))}
           </div>
         </div>
-      </SectionCard>
 
-      <SectionCard
-        number="05"
-        title="Entry question"
-        description="Optional skill-based question for the public checkout flow."
-        badge={hasQuestion ? "Configured" : "Not configured"}
-        tone="legal"
-      >
-        <div style={styles.legalBody}>
-          <div style={styles.twoColumn}>
-            <Field label="Question">
-              <input
-                name="question_text"
-                value={questionText}
-                onChange={(event) => setQuestionText(event.target.value)}
-                placeholder="e.g. What colour is a London taxi?"
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Correct answer">
-              <input
-                name="question_answer"
-                value={questionAnswer}
-                onChange={(event) => setQuestionAnswer(event.target.value)}
-                placeholder="e.g. black"
-                style={styles.input}
-              />
-            </Field>
-          </div>
-
-          <p style={styles.helpText}>
-            The public squares page requires this answer before checkout when a
-            question is set.
-          </p>
-        </div>
+        <input type="hidden" name="prizes" value={prizesValue} />
       </SectionCard>
             <SectionCard
-        number="06"
-        title="Free postal entry"
-        description="Add no-purchase entry instructions shown on the public squares page."
-        badge={hasPostalEntry ? "Configured" : "Not configured"}
+        number="04"
+        title="Legal entry question"
+        description="Add an optional skill-based question before checkout."
         tone="legal"
+        badge={hasQuestion ? "Enabled" : "Optional"}
       >
-        <div style={styles.legalBody}>
-          <Field label="Postal address">
-            <textarea
-              name="free_entry_address"
-              value={freeEntryAddress}
-              onChange={(event) => setFreeEntryAddress(event.target.value)}
-              rows={3}
-              placeholder="Postal entry address"
-              style={styles.textarea}
-            />
-          </Field>
-
-          <Field label="Instructions">
-            <textarea
-              name="free_entry_instructions"
-              value={freeEntryInstructions}
-              onChange={(event) => setFreeEntryInstructions(event.target.value)}
-              rows={3}
-              placeholder="Include name, email, game name, answer and preferred square number..."
-              style={styles.textarea}
-            />
-          </Field>
-
-          <Field label="Postal entry closes">
+        <div style={styles.twoColumn}>
+          <Field label="Question">
             <input
-              name="free_entry_closes_at"
-              type="datetime-local"
-              value={freeEntryClosesAt}
-              onChange={(event) => setFreeEntryClosesAt(event.target.value)}
+              name="question_text"
+              value={questionText}
+              onChange={(event) => setQuestionText(event.target.value)}
+              placeholder="Example: What colour is the sky on a clear day?"
               style={styles.input}
             />
           </Field>
 
-          <div style={styles.complianceRow}>
-            <CheckItem done={hasQuestion}>Skill question configured</CheckItem>
-
-            <CheckItem done={hasPostalEntry}>
-              Free entry details configured
-            </CheckItem>
-          </div>
+          <Field label="Correct answer">
+            <input
+              name="question_answer"
+              value={questionAnswer}
+              onChange={(event) => setQuestionAnswer(event.target.value)}
+              placeholder="Example: blue"
+              style={styles.input}
+            />
+          </Field>
         </div>
+
+        <input
+          type="hidden"
+          name="question"
+          value={
+            hasQuestion && questionAnswer.trim()
+              ? JSON.stringify({
+                  text: questionText.trim(),
+                  answer: questionAnswer.trim(),
+                })
+              : ""
+          }
+        />
+      </SectionCard>
+
+      <SectionCard
+        number="05"
+        title="Free postal entry"
+        description="Provide the no-purchase entry route shown on the public page."
+        tone="legal"
+        badge={hasPostalEntry ? "Configured" : "Optional"}
+      >
+        <Field label="Postal address">
+          <textarea
+            name="free_entry_address"
+            rows={3}
+            value={freeEntryAddress}
+            onChange={(event) => setFreeEntryAddress(event.target.value)}
+            placeholder="Postal entry address"
+            style={styles.textarea}
+          />
+        </Field>
+
+        <Field label="Postal instructions">
+          <textarea
+            name="free_entry_instructions"
+            rows={3}
+            value={freeEntryInstructions}
+            onChange={(event) => setFreeEntryInstructions(event.target.value)}
+            placeholder="Explain what entrants must include with postal entries."
+            style={styles.textarea}
+          />
+        </Field>
+
+        <Field label="Postal entry closes">
+          <input
+            name="free_entry_closes_at"
+            type="datetime-local"
+            value={freeEntryClosesAt}
+            onChange={(event) => setFreeEntryClosesAt(event.target.value)}
+            style={styles.input}
+          />
+        </Field>
+
+        <input
+          type="hidden"
+          name="free_entry"
+          value={
+            hasPostalEntry || freeEntryClosesAt.trim()
+              ? JSON.stringify({
+                  address: freeEntryAddress.trim(),
+                  instructions: freeEntryInstructions.trim(),
+                  closes_at: freeEntryClosesAt
+                    ? new Date(freeEntryClosesAt).toISOString()
+                    : null,
+                })
+              : ""
+          }
+        />
       </SectionCard>
 
       <section style={styles.submitBar}>
         <div style={styles.submitText}>
-          <div style={styles.submitEyebrow}>Ready to create?</div>
+          <div style={styles.submitEyebrow}>Ready to save?</div>
 
           <strong style={styles.submitTitle}>Create squares game</strong>
 
           <div style={styles.mutedSmall}>
-            Save as draft first — you can review everything before publishing.
+            Drafts are always allowed. Publishing may be limited by your plan.
           </div>
         </div>
 
@@ -914,43 +861,9 @@ export default function NewSquaresGamePage() {
           Create squares game
         </button>
       </section>
-
-      <input type="hidden" name="image_url" value={imageUrl} />
-      <input type="hidden" name="image_focus_x" value={imageFocusX} />
-      <input type="hidden" name="image_focus_y" value={imageFocusY} />
-      <input type="hidden" name="image_position" value="center" />
-      <input type="hidden" name="prizes" value={prizesValue} />
-      <input
-        type="hidden"
-        name="question"
-        value={
-          hasQuestion && questionAnswer.trim()
-            ? JSON.stringify({
-                text: questionText.trim(),
-                answer: questionAnswer.trim(),
-              })
-            : ""
-        }
-      />
-      <input
-        type="hidden"
-        name="free_entry"
-        value={
-          hasPostalEntry || freeEntryClosesAt.trim()
-            ? JSON.stringify({
-                address: freeEntryAddress.trim(),
-                instructions: freeEntryInstructions.trim(),
-                closes_at: freeEntryClosesAt
-                  ? new Date(freeEntryClosesAt).toISOString()
-                  : null,
-              })
-            : ""
-        }
-      />
     </form>
   );
 }
-
 function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroMetric}>
@@ -969,32 +882,6 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function ReadinessCard({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div style={styles.readinessCard}>
-      <div style={styles.readinessEyebrow}>{eyebrow}</div>
-      <h3 style={styles.readinessTitle}>{title}</h3>
-      <div style={styles.readinessBody}>{children}</div>
-    </div>
-  );
-}
-
-function PreviewLine({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={styles.previewLine}>
-      <span style={styles.previewLineLabel}>{label}</span>
-      <strong style={styles.previewLineValue}>{value}</strong>
-    </div>
-  );
-}
 function SectionCard({
   number,
   title,
@@ -1011,43 +898,21 @@ function SectionCard({
   children: ReactNode;
 }) {
   const toneStyle = getSectionToneStyle(tone);
-  const isOverview = number === "01";
-
-  if (isOverview) {
-    return (
-      <section style={{ ...styles.sectionCard, ...toneStyle }}>
-        <div style={styles.sectionTop}>
-          <div>
-            <div style={styles.sectionNumber}>SECTION {number}</div>
-            <h2 style={styles.sectionTitle}>{title}</h2>
-            <p style={styles.sectionDescription}>{description}</p>
-          </div>
-
-          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
-        </div>
-
-        <div style={styles.sectionBody}>{children}</div>
-      </section>
-    );
-  }
 
   return (
-    <details style={{ ...styles.sectionCard, ...toneStyle }}>
-      <summary style={styles.sectionSummary}>
-        <div style={styles.sectionSummaryText}>
+    <section style={{ ...styles.sectionCard, ...toneStyle }}>
+      <div style={styles.sectionTop}>
+        <div>
           <div style={styles.sectionNumber}>SECTION {number}</div>
           <h2 style={styles.sectionTitle}>{title}</h2>
           <p style={styles.sectionDescription}>{description}</p>
         </div>
 
-        <div style={styles.sectionActions}>
-          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
-          <span style={styles.openButton}>OPEN</span>
-        </div>
-      </summary>
+        {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
+      </div>
 
       <div style={styles.sectionBody}>{children}</div>
-    </details>
+    </section>
   );
 }
 
@@ -1057,30 +922,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span style={styles.label}>{label}</span>
       {children}
     </label>
-  );
-}
-
-function CheckItem({
-  done,
-  children,
-}: {
-  done: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div style={styles.checkItem}>
-      <span
-        style={{
-          ...styles.checkIcon,
-          background: done ? "#16a34a" : "#e2e8f0",
-          color: done ? "#ffffff" : "#64748b",
-        }}
-      >
-        {done ? "✓" : "•"}
-      </span>
-
-      <span>{children}</span>
-    </div>
   );
 }
 
@@ -1102,18 +943,6 @@ const responsiveStyles = `
     max-width: 100%;
   }
 
-  .new-squares-form details > summary {
-    list-style: none;
-  }
-
-  .new-squares-form details > summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .new-squares-form input[type="datetime-local"]::-webkit-date-and-time-value {
-    text-align: left;
-  }
-
   @media (max-width: 760px) {
     .new-squares-form {
       width: 100% !important;
@@ -1127,7 +956,6 @@ const responsiveStyles = `
     }
 
     .new-squares-form section,
-    .new-squares-form details,
     .new-squares-form div,
     .new-squares-form label {
       min-width: 0 !important;
@@ -1182,8 +1010,7 @@ const responsiveStyles = `
       justify-content: center !important;
     }
 
-    .new-squares-form section,
-    .new-squares-form details {
+    .new-squares-form section {
       border-radius: 22px !important;
     }
 
@@ -1356,7 +1183,7 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     maxWidth: 680,
   },
-    statusPill: {
+  statusPill: {
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid rgba(255,255,255,0.22)",
@@ -1437,7 +1264,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
-  previewImageWrap: {
+    previewImageWrap: {
     height: 240,
     borderRadius: 20,
     background: "#ffffff",
@@ -1504,86 +1331,21 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     wordBreak: "break-word",
   },
-  readinessGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 14,
-  },
-  readinessCard: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
+  sectionCard: {
+    padding: "clamp(18px, 4vw, 22px)",
+    borderRadius: 24,
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-  readinessEyebrow: {
-    margin: 0,
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  readinessTitle: {
-    margin: "8px 0 0",
-    color: "#0f172a",
-    fontSize: 22,
-    lineHeight: 1.1,
-    letterSpacing: "-0.03em",
-  },
-  readinessBody: {
-    display: "grid",
-    gap: 10,
-    marginTop: 14,
-  },
-  previewLine: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    color: "#334155",
-    fontSize: 14,
-  },
-    previewLineLabel: {
-    color: "#64748b",
-    fontWeight: 700,
-  },
-  previewLineValue: {
-    color: "#0f172a",
-    fontWeight: 950,
-    textAlign: "right",
-    wordBreak: "break-word",
-  },
-  sectionCard: {
-    borderRadius: 28,
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-  },
-  sectionSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    padding: "22px 22px 20px",
-    cursor: "pointer",
-  },
-  sectionSummaryText: {
     minWidth: 0,
+    overflow: "hidden",
   },
   sectionTop: {
     display: "flex",
     justifyContent: "space-between",
+    gap: 12,
     alignItems: "flex-start",
-    gap: 16,
-    padding: "22px 22px 0",
     flexWrap: "wrap",
-  },
-  sectionActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
+    marginBottom: 16,
   },
   sectionNumber: {
     color: "#2563eb",
@@ -1591,70 +1353,49 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    marginBottom: 5,
   },
   sectionTitle: {
-    margin: "6px 0 0",
+    margin: 0,
     color: "#0f172a",
-    fontSize: 32,
-    lineHeight: 1.02,
-    letterSpacing: "-0.05em",
-    overflowWrap: "anywhere",
+    fontSize: 24,
+    letterSpacing: "-0.03em",
   },
   sectionDescription: {
-    margin: "10px 0 0",
+    margin: "5px 0 0",
     color: "#64748b",
-    lineHeight: 1.6,
-    maxWidth: 760,
+    fontSize: 14,
+    lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
   sectionBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 38,
-    padding: "8px 14px",
+    padding: "7px 10px",
     borderRadius: 999,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
-    color: "#1d4ed8",
-    fontSize: 12,
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    fontSize: 11,
     fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
     whiteSpace: "nowrap",
-  },
-  openButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 38,
-    padding: "8px 14px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
   },
   sectionBody: {
     display: "grid",
-    gap: 18,
-    padding: 22,
+    gap: 14,
+    marginTop: 14,
   },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 14,
   },
   fourColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 14,
   },
   field: {
     display: "grid",
-    gap: 8,
+    gap: 7,
     minWidth: 0,
   },
   label: {
@@ -1664,62 +1405,76 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: 48,
+    padding: "12px 13px",
+    borderRadius: 14,
     border: "1px solid #cbd5e1",
-    padding: "0 14px",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
-    outline: "none",
+    fontSize: 16,
+    boxSizing: "border-box",
+    minWidth: 0,
   },
   textarea: {
     width: "100%",
-    borderRadius: 18,
+    padding: "12px 13px",
+    borderRadius: 14,
     border: "1px solid #cbd5e1",
-    padding: "14px",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 15,
-    lineHeight: 1.55,
+    fontSize: 16,
     resize: "vertical",
-    outline: "none",
+    boxSizing: "border-box",
+    minWidth: 0,
   },
-  previewInfoCard: {
+  mediaBox: {
     display: "grid",
-    alignContent: "center",
-    gap: 6,
-    padding: 18,
-    borderRadius: 18,
-    background: "#f8fafc",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 16,
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
-  previewInfoLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
+  mediaControls: {
+    minWidth: 0,
   },
-  previewInfoValue: {
+  subTitle: {
+    margin: "0 0 10px",
     color: "#0f172a",
     fontSize: 18,
-    fontWeight: 950,
-    lineHeight: 1.2,
+    letterSpacing: "-0.01em",
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    margin: 0,
+    overflowWrap: "anywhere",
+  },
+  previewBoxLarge: {
+    height: 230,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   boardPreviewCard: {
-    padding: 18,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #eff6ff 0%, #ffffff 52%, #f8fafc 100%)",
-    border: "1px solid #bfdbfe",
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
   },
   boardPreviewTop: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
     gap: 12,
+    alignItems: "flex-start",
     flexWrap: "wrap",
+    marginBottom: 14,
   },
   boardPreviewLabel: {
     color: "#2563eb",
@@ -1735,3 +1490,169 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     letterSpacing: "-0.04em",
   },
+  boardPreviewBadge: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  boardGrid: {
+    display: "grid",
+    gap: 7,
+  },
+  boardCell: {
+    aspectRatio: "1 / 1",
+    minHeight: 34,
+    borderRadius: 11,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    color: "#1e3a8a",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  boardFootnote: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    margin: "12px 0 0",
+  },
+  prizeSectionShell: {
+    display: "grid",
+    gap: 14,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  prizeSectionTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  prizeSectionTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  prizeSectionText: {
+    marginTop: 4,
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+  },
+  prizeAddButton: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid #facc15",
+    background: "#fef3c7",
+    color: "#92400e",
+    cursor: "pointer",
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  prizeList: {
+    display: "grid",
+    gap: 12,
+  },
+  prizeRow: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    border: "1px solid #fde68a",
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 55%, #f8fafc 100%)",
+    minWidth: 0,
+  },
+  rowHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    color: "#0f172a",
+  },
+  prizeGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(96px, 120px) minmax(0, 1fr)",
+    gap: 12,
+  },
+  checkboxLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    fontWeight: 900,
+    color: "#334155",
+    cursor: "pointer",
+  },
+  removePrizeButton: {
+    width: "fit-content",
+    padding: "10px 12px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#ffffff",
+    color: "#b91c1c",
+    fontWeight: 900,
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 22,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    marginTop: 18,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+  },
+  submitText: {
+    minWidth: 0,
+    flex: "1 1 240px",
+  },
+  submitEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+  submitTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+  submitButton: {
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
+  },
+};
