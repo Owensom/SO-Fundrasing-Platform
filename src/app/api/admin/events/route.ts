@@ -214,7 +214,7 @@ function getSubscriptionTier(settings: TenantSettingsWithTier | null | undefined
 }
 
 async function getPublishedEventCountForTenant(tenantSlug: string) {
-  const result = await query<{ active_count: string | number }>(
+  const rows = await query<{ active_count: string | number }>(
     `
       select count(*) as active_count
       from events
@@ -224,7 +224,7 @@ async function getPublishedEventCountForTenant(tenantSlug: string) {
     [tenantSlug],
   );
 
-  return Number(result.rows[0]?.active_count || 0);
+  return Number(rows[0]?.active_count || 0);
 }
 
 async function communityPublishedEventLimitReached(tenantSlug: string) {
