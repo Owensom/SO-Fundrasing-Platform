@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
+import { getTenantSettings } from "@/lib/tenant-settings";
 import {
   createEvent,
   createEventSeat,
@@ -31,6 +33,11 @@ type TableConfigInput = {
   table_count?: string | number;
   seats_per_table?: string | number;
   ticket_type_id?: string;
+};
+
+type TenantSettingsWithTier = {
+  subscription_tier?: string | null;
+  subscriptionTier?: string | null;
 };
 
 function positiveInteger(
@@ -198,6 +205,42 @@ function localTicketIdToCreatedId(
   return ticketTypeIdMap.get(localId) || null;
 }
 
+function getSubscriptionTier(settings: TenantSettingsWithTier | null | undefined) {
+  return String(
+    settings?.subscription_tier || settings?.subscriptionTier || "community",
+  )
+    .trim()
+    .toLowerCase();
+}
+
+async function getPublishedEventCountForTenant(tenantSlug: string) {
+  const result = await query<{ active_count: string | number }>(
+    `
+      select count(*) as active_count
+      from events
+      where tenant_slug = $1
+        and status = 'published'
+    `,
+    [tenantSlug],
+  );
+
+  return Number(result.rows[0]?.active_count || 0);
+}
+
+async function communityPublishedEventLimitReached(tenantSlug: string) {
+  const tenantSettings = await getTenantSettings(tenantSlug);
+  const subscriptionTier = getSubscriptionTier(tenantSettings);
+
+  if (subscriptionTier !== "community") {
+    return false;
+  }
+
+  const activePublishedEventCount =
+    await getPublishedEventCountForTenant(tenantSlug);
+
+  return activePublishedEventCount >= 1;
+}
+
 export async function POST(request: Request) {
   const session = await auth();
 
@@ -211,6 +254,7 @@ export async function POST(request: Request) {
   const title = String(formData.get("title") || "").trim();
   const slug = String(formData.get("slug") || "").trim();
   const eventType = cleanEventType(formData.get("event_type"));
+  const status = cleanStatus(formData.get("status"));
 
   if (!tenantSlug || !title || !slug) {
     return NextResponse.redirect(
@@ -219,6 +263,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (
+      status === "published" &&
+      (await communityPublishedEventLimitReached(tenantSlug))
+    ) {
+      return NextResponse.redirect(
+        new URL("/admin/events/new?error=campaign-limit", request.url),
+      );
+    }
+
     const prizes = parseJsonArray<EventPrize>(formData.get("prizes"));
     const ticketTypes = parseJsonArray<TicketTypeInput>(
       formData.get("ticket_types"),
@@ -245,7 +298,7 @@ export async function POST(request: Request) {
       capacity: positiveInteger(formData.get("capacity"), 0) || null,
       currency: String(formData.get("currency") || "GBP").trim() || "GBP",
       eventType,
-      status: cleanStatus(formData.get("status")),
+      status,
       prizesJson: prizes,
       tableNamesJson,
       seatingLayoutJson: {},
