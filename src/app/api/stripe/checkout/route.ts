@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRaffleById } from "@/lib/raffles";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import { query } from "@/lib/db";
 
@@ -17,6 +18,14 @@ type TenantConnectStatus = {
   stripe_connect_details_submitted: boolean | null;
 };
 
+type ReservationRow = {
+  id: string;
+  ticket_number: number;
+  colour: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+};
+
 function clean(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -25,6 +34,14 @@ function clean(value: unknown) {
     .replace(/[’‘]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[.,!?;:]+$/g, "");
+}
+
+function cleanText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function cleanEmail(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function safePercent(value: unknown) {
@@ -85,6 +102,29 @@ function isConnectReady(connectStatus: TenantConnectStatus | null) {
   );
 }
 
+function parseSelectedTickets(body: any) {
+  if (Array.isArray(body.selectedTickets)) {
+    return body.selectedTickets;
+  }
+
+  if (Array.isArray(body.tickets)) {
+    return body.tickets;
+  }
+
+  if (Array.isArray(body.ticketNumbers)) {
+    return body.ticketNumbers.map((ticketNumber: unknown) => ({
+      ticket_number: ticketNumber,
+      colour: "",
+    }));
+  }
+
+  return [];
+}
+
+function ticketKey(ticketNumber: unknown, colour: unknown) {
+  return `${Number(ticketNumber)}::${cleanText(colour).toLowerCase()}`;
+}
+
 async function getTenantConnectStatus(
   tenantSlug: string,
 ): Promise<TenantConnectStatus | null> {
@@ -106,33 +146,69 @@ async function getTenantConnectStatus(
   return rows[0] || null;
 }
 
+async function getActiveReservations(input: {
+  tenantSlug: string;
+  raffleId: string;
+  reservationToken: string;
+}) {
+  return query<ReservationRow>(
+    `
+      select
+        id,
+        ticket_number,
+        colour,
+        buyer_name,
+        buyer_email
+      from raffle_ticket_reservations
+      where tenant_slug = $1
+        and raffle_id = $2
+        and reservation_token = $3
+        and status = 'reserved'
+        and expires_at > now()
+      order by ticket_number asc, colour asc nulls last
+    `,
+    [input.tenantSlug, input.raffleId, input.reservationToken],
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const raffleId = String(body.raffleId ?? body.raffle_id ?? "").trim();
+    const tenantSlug = await getTenantSlugFromHeaders();
 
-    const selectedTickets = Array.isArray(body.selectedTickets)
-      ? body.selectedTickets
-      : Array.isArray(body.tickets)
-        ? body.tickets
-        : Array.isArray(body.ticketNumbers)
-          ? body.ticketNumbers
-          : [];
+    if (!tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant not found" },
+        { status: 404 },
+      );
+    }
 
-    const quantity = selectedTickets.length;
+    const submittedTenantSlug = cleanText(
+      body.tenantSlug ?? body.tenant_slug ?? "",
+    );
 
-    const buyerName = String(
-      body.buyerName ?? body.buyer_name ?? body.name ?? "",
-    ).trim();
+    if (submittedTenantSlug && submittedTenantSlug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Raffle not available" },
+        { status: 404 },
+      );
+    }
 
-    const buyerEmail = String(
-      body.buyerEmail ?? body.buyer_email ?? body.email ?? "",
-    ).trim();
-
-    const reservationToken = String(
+    const raffleId = cleanText(body.raffleId ?? body.raffle_id ?? "");
+    const reservationToken = cleanText(
       body.reservationToken ?? body.reservation_token ?? "",
-    ).trim();
+    );
+
+    const selectedTickets = parseSelectedTickets(body);
+
+    const buyerName = cleanText(
+      body.buyerName ?? body.buyer_name ?? body.name ?? "",
+    );
+
+    const buyerEmail = cleanEmail(
+      body.buyerEmail ?? body.buyer_email ?? body.email ?? "",
+    );
 
     const submittedAnswer = clean(
       body.answer ??
@@ -144,9 +220,16 @@ export async function POST(req: NextRequest) {
         body.legal_answer,
     );
 
-    if (!raffleId || !quantity || quantity <= 0) {
+    if (!raffleId || !reservationToken || selectedTickets.length <= 0) {
       return NextResponse.json(
         { ok: false, error: "Invalid request" },
+        { status: 400 },
+      );
+    }
+
+    if (!buyerName || !buyerEmail) {
+      return NextResponse.json(
+        { ok: false, error: "Buyer name and email are required" },
         { status: 400 },
       );
     }
@@ -157,6 +240,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Raffle not available" },
         { status: 400 },
+      );
+    }
+
+    const raffleTenantSlug = cleanText((raffle as any).tenant_slug);
+
+    if (!raffleTenantSlug || raffleTenantSlug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Raffle not available" },
+        { status: 404 },
       );
     }
 
@@ -173,6 +265,63 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const reservations = await getActiveReservations({
+      tenantSlug,
+      raffleId,
+      reservationToken,
+    });
+
+    if (reservations.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: "Reservation not found or expired" },
+        { status: 409 },
+      );
+    }
+
+    if (reservations.length !== selectedTickets.length) {
+      return NextResponse.json(
+        { ok: false, error: "Reservation does not match selected tickets" },
+        { status: 409 },
+      );
+    }
+
+    const selectedTicketKeys = new Set(
+      selectedTickets.map((ticket: any) =>
+        ticketKey(ticket.ticket_number ?? ticket.number, ticket.colour ?? ""),
+      ),
+    );
+
+    const reservationTicketKeys = new Set(
+      reservations.map((reservation) =>
+        ticketKey(reservation.ticket_number, reservation.colour ?? ""),
+      ),
+    );
+
+    if (selectedTicketKeys.size !== reservationTicketKeys.size) {
+      return NextResponse.json(
+        { ok: false, error: "Reservation contains duplicate ticket data" },
+        { status: 409 },
+      );
+    }
+
+    for (const key of reservationTicketKeys) {
+      if (!selectedTicketKeys.has(key)) {
+        return NextResponse.json(
+          { ok: false, error: "Reservation does not match selected tickets" },
+          { status: 409 },
+        );
+      }
+    }
+
+    const reservationBuyerEmail = cleanEmail(reservations[0]?.buyer_email);
+
+    if (reservationBuyerEmail && reservationBuyerEmail !== buyerEmail) {
+      return NextResponse.json(
+        { ok: false, error: "Reservation buyer does not match checkout buyer" },
+        { status: 409 },
+      );
+    }
+
     const ticketPriceCents = Number(raffle.ticket_price_cents || 0);
 
     if (!ticketPriceCents || ticketPriceCents <= 0) {
@@ -182,6 +331,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const quantity = reservations.length;
+
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.VERCEL_PROJECT_PRODUCTION_URL ||
@@ -189,17 +340,10 @@ export async function POST(req: NextRequest) {
 
     const baseUrl = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
 
-    const tenantSlug = String((raffle as any).tenant_slug ?? "").trim();
+    const publicRafflePath = `/c/${tenantSlug}`;
 
-    const publicRafflePath = tenantSlug ? `/c/${tenantSlug}` : "/";
-
-    const tenantSettings = tenantSlug
-      ? await getTenantSettings(tenantSlug)
-      : null;
-
-    const connectStatus = tenantSlug
-      ? await getTenantConnectStatus(tenantSlug)
-      : null;
+    const tenantSettings = await getTenantSettings(tenantSlug);
+    const connectStatus = await getTenantConnectStatus(tenantSlug);
 
     const connectAccountId = getUsableConnectAccountId({
       settingsAccountId: tenantSettings?.stripe_connect_account_id,
