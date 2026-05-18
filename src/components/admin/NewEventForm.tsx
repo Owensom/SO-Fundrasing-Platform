@@ -7,6 +7,8 @@ import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 
 type Props = {
   tenantSlug: string;
+  subscriptionTier?: string | null;
+  customImagesAllowed?: boolean;
 };
 
 type EventType = "general_admission" | "reserved_seating" | "tables";
@@ -184,7 +186,11 @@ function prizeText(count: number) {
   return `${count} prize${count === 1 ? "" : "s"}`;
 }
 
-export default function NewEventForm({ tenantSlug }: Props) {
+export default function NewEventForm({
+  tenantSlug,
+  subscriptionTier,
+  customImagesAllowed = false,
+}: Props) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -501,7 +507,12 @@ export default function NewEventForm({ tenantSlug }: Props) {
 
           <div style={styles.heroMetricGrid}>
             <HeroMetric label="Event type" value={formatEventType(eventType)} />
-            <HeroMetric label="Tickets" value={`${activeTicketCount} active`} />
+
+            <HeroMetric
+              label="Tickets"
+              value={`${activeTicketCount} active`}
+            />
+
             <HeroMetric
               label="From"
               value={
@@ -510,6 +521,7 @@ export default function NewEventForm({ tenantSlug }: Props) {
                   : formatPreviewMoney(lowestTicketPrice, currency)
               }
             />
+
             <HeroMetric
               label="Capacity"
               value={seatingPreview > 0 ? seatingPreview : "Not set"}
@@ -564,7 +576,9 @@ export default function NewEventForm({ tenantSlug }: Props) {
               </span>
 
               <span style={styles.previewMetaItem}>
-                {seatingPreview > 0 ? `${seatingPreview} places` : "Capacity TBC"}
+                {seatingPreview > 0
+                  ? `${seatingPreview} places`
+                  : "Capacity TBC"}
               </span>
             </div>
           </div>
@@ -702,6 +716,9 @@ export default function NewEventForm({ tenantSlug }: Props) {
               currentFocusY={imageFocusY}
               label="Event image upload"
               previewAlt={title.trim() || "Event image preview"}
+              subscriptionTier={subscriptionTier}
+              customImagesAllowed={customImagesAllowed}
+              upgradeMessage="Upgrade to Professional to unlock custom event campaign images."
               onImageUrlChange={(url) => setImageUrl(url)}
               onFocusXChange={(value) => setImageFocusX(cleanFocus(value))}
               onFocusYChange={(value) => setImageFocusY(cleanFocus(value))}
@@ -959,7 +976,9 @@ export default function NewEventForm({ tenantSlug }: Props) {
           number="03"
           title="Row seating"
           description="Generate initial row seats during creation. You can fine-tune them later."
-          badge={reservedSeatsPreview ? `${reservedSeatsPreview} seats` : "Optional"}
+          badge={
+            reservedSeatsPreview ? `${reservedSeatsPreview} seats` : "Optional"
+          }
           tone="seating"
         >
           <div style={styles.twoPanel}>
@@ -1055,7 +1074,9 @@ export default function NewEventForm({ tenantSlug }: Props) {
           number="03"
           title="Table seating"
           description="Generate table seats during creation and optionally name tables."
-          badge={tableSeatsPreview ? `${tableSeatsPreview} places` : "Optional"}
+          badge={
+            tableSeatsPreview ? `${tableSeatsPreview} places` : "Optional"
+          }
           tone="seating"
         >
           <div style={styles.twoPanel}>
