@@ -230,6 +230,7 @@ function parseMenuOptionsFromForm(formData: FormData): EventMenuOption[] {
     };
   }).filter((option) => option.name);
 }
+
 function parsePrizeSelection(
   value: FormDataEntryValue | null,
 ): ParsedPrizeSelection | null {
@@ -611,7 +612,7 @@ async function updateTicketTypeAction(formData: FormData) {
 
   await requireEventAccess(eventId);
 
-  await updateEventTicketType(ticketTypeId, {
+  await updateEventTicketType(eventId, ticketTypeId, {
     name,
     description: String(formData.get("description") || "").trim() || null,
     price: poundsToCents(formData.get("price")),
@@ -630,7 +631,7 @@ async function deleteTicketTypeAction(formData: FormData) {
   const ticketTypeId = String(formData.get("ticket_type_id") || "").trim();
 
   if (eventId) await requireEventAccess(eventId);
-  if (ticketTypeId) await deleteEventTicketType(ticketTypeId);
+  if (eventId && ticketTypeId) await deleteEventTicketType(eventId, ticketTypeId);
 
   redirect(`/admin/events/${eventId}?saved=ticket-deleted#tickets`);
 }
@@ -746,6 +747,7 @@ async function updateSelectedSeatsStatusAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-status#${returnAnchor}`);
 }
+
 async function deleteSelectedSeatsAction(formData: FormData) {
   "use server";
 
@@ -873,7 +875,6 @@ async function generateTablesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
-
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -1031,6 +1032,7 @@ async function runWinnerDrawAction(formData: FormData) {
     }#winner-draw`,
   );
 }
+
 async function deleteWinnerAction(formData: FormData) {
   "use server";
 
@@ -1042,7 +1044,7 @@ async function deleteWinnerAction(formData: FormData) {
   }
 
   await requireEventAccess(eventId);
-  await deleteEventWinner(winnerId);
+  await deleteEventWinner(eventId, winnerId);
 
   redirect(`/admin/events/${eventId}?saved=winner-deleted#winner-draw`);
 }
@@ -1338,8 +1340,7 @@ export default async function AdminEventManagePage({
   return (
     <main className="event-edit-page" style={styles.page}>
       <style>{responsiveStyles}</style>
-
-      <section className="hero" style={styles.hero}>
+            <section className="hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Events editor</div>
 
@@ -1411,7 +1412,8 @@ export default async function AdminEventManagePage({
           View public page
         </a>
       </section>
-            <nav className="tabs" style={styles.tabs}>
+
+      <nav className="tabs" style={styles.tabs}>
         <a href="#overview" className="tab" style={styles.tab}>
           Overview
         </a>
@@ -1948,8 +1950,7 @@ export default async function AdminEventManagePage({
           clearWinnersAction={clearWinnersAction}
         />
       </CollapsibleSection>
-
-      {isReservedSeating ? (
+            {isReservedSeating ? (
         <CollapsibleSection
           id="row-seating"
           eyebrow="Section 5"
