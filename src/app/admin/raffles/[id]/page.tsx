@@ -220,6 +220,7 @@ function offerSavingText(
 function isConfigured(value: unknown) {
   return String(value ?? "").trim().length > 0;
 }
+
 export default async function AdminRafflePage({ params }: PageProps) {
   const { id } = await params;
 
@@ -288,8 +289,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-
-  const winners = await query<WinnerRow>(
+    const winners = await query<WinnerRow>(
     `
       select *
       from raffle_winners
@@ -339,8 +339,10 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Array.isArray(config.prizes) && config.prizes.length > 0;
 
   return (
-    <main style={styles.page}>
-      <section style={styles.topBar}>
+    <main className="raffle-admin-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="raffle-topbar" style={styles.topBar}>
         <Link href="/admin/raffles" style={styles.backLink}>
           ← Back to raffles
         </Link>
@@ -354,7 +356,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
         </Link>
       </section>
 
-      <section style={styles.hero}>
+      <section className="raffle-hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Raffle editor</div>
 
@@ -374,7 +376,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
             <p style={styles.heroDescriptionMuted}>No description added yet.</p>
           )}
 
-          <div style={styles.heroMetaGrid}>
+          <div className="raffle-hero-meta" style={styles.heroMetaGrid}>
             <HeroMeta label="Draw" value={formatDrawDate(raffle.draw_at)} />
 
             <HeroMeta
@@ -386,7 +388,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
           </div>
         </div>
 
-        <div style={styles.heroImageWrap}>
+        <div className="raffle-hero-image" style={styles.heroImageWrap}>
           <img
             src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
             alt={raffle.title || "SO Raffles"}
@@ -406,7 +408,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
         </div>
       </section>
 
-      <section style={styles.summaryGrid}>
+      <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
           value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
@@ -420,7 +422,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
         <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
-            <section style={styles.progressCard}>
+
+      <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
             <strong style={{ color: "#0f172a" }}>Sales progress</strong>
@@ -453,7 +456,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
       <section style={styles.section}>
         <details open style={styles.adminDetails}>
-          <summary style={styles.adminSummary}>
+          <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 1</div>
 
@@ -465,7 +468,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               </p>
             </div>
 
-            <div style={styles.summaryPillRow}>
+            <div className="raffle-summary-pills" style={styles.summaryPillRow}>
               <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
               <StatusMiniPill label="Postal" active={postalEntryEnabled} />
               <span style={styles.adminSummaryToggle}>Open / close</span>
@@ -493,7 +496,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.twoColumn}>
+                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Title">
                     <input
                       name="title"
@@ -522,7 +525,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   />
                 </Field>
 
-                <div style={styles.mediaBox}>
+                <div className="raffle-media-box" style={styles.mediaBox}>
                   <div style={styles.mediaControls}>
                     <h3 style={styles.subTitle}>Raffle image</h3>
 
@@ -531,8 +534,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                       focus. If no image is uploaded, the SO default raffle image
                       is shown.
                     </p>
-
-                    <ImageFocusUploadField
+                                        <ImageFocusUploadField
                       currentImageUrl={raffle.image_url ?? ""}
                       currentFocusX={imageFocusX}
                       currentFocusY={imageFocusY}
@@ -543,7 +545,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     />
                   </div>
 
-                  <div style={styles.previewBox}>
+                  <div className="raffle-preview-box" style={styles.previewBox}>
                     <img
                       src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
                       alt={raffle.title || "SO Raffles"}
@@ -565,7 +567,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.threeColumn}>
+                <div className="raffle-three-column" style={styles.threeColumn}>
                   <Field label="Draw date">
                     <input
                       name="draw_at"
@@ -616,7 +618,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.threeColumn}>
+                <div className="raffle-three-column" style={styles.threeColumn}>
                   <Field label="Ticket price">
                     <input
                       name="ticket_price"
@@ -647,7 +649,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </Field>
                 </div>
 
-                <div style={styles.colourGrid}>
+                <div className="raffle-colour-grid" style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
                     const selected = colours.includes(colour);
                     const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
@@ -685,7 +687,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     );
                   })}
                 </div>
-                                <Field label="Custom colours">
+
+                <Field label="Custom colours">
                   <input
                     name="custom_colours"
                     placeholder="Gold, Silver, #00ff00"
@@ -715,7 +718,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                         )}
                       </div>
 
-                      <div style={styles.offerInputs}>
+                      <div className="raffle-offer-inputs" style={styles.offerInputs}>
                         <Field label="Number of tickets">
                           <input
                             name={`offer_quantity_${index}`}
@@ -766,7 +769,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.twoColumn}>
+                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Entry question">
                     <input
                       name="question_text"
@@ -835,7 +838,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <div style={styles.twoColumn}>
+                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Auto draw from prize number">
                     <input
                       name="auto_draw_from_prize"
@@ -857,8 +860,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </Field>
                 </div>
               </section>
-
-              <section style={styles.submitBar}>
+                            <section style={styles.submitBar}>
                 <div>
                   <strong style={{ color: "#0f172a" }}>Save changes</strong>
                   <div style={styles.mutedSmall}>
@@ -877,7 +879,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
       <section style={styles.section}>
         <details open={!prizesConfigured} style={styles.adminDetails}>
-          <summary style={styles.adminSummary}>
+          <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 2</div>
               <h2 style={styles.sectionTitle}>Prize management</h2>
@@ -900,7 +902,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
 
       <section style={styles.section}>
         <details style={styles.adminDetails}>
-          <summary style={styles.adminSummary}>
+          <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 3</div>
               <h2 style={styles.sectionTitle}>Draw centre</h2>
@@ -910,7 +912,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
               </p>
             </div>
 
-            <div style={styles.summaryPillRow}>
+            <div className="raffle-summary-pills" style={styles.summaryPillRow}>
               <span style={styles.neutralPill}>{winners.length} winners</span>
               <span style={styles.neutralPill}>
                 {soldTicketsForDraw.length} eligible tickets
@@ -982,7 +984,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 method="post"
                 style={styles.drawPanel}
               >
-                <div style={styles.twoColumn}>
+                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Ticket number">
                     <input
                       name="ticket_number"
@@ -994,11 +996,15 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   </Field>
 
                   <Field label="Ticket colour">
-                    <input name="colour" placeholder="Optional" style={styles.input} />
+                    <input
+                      name="colour"
+                      placeholder="Optional"
+                      style={styles.input}
+                    />
                   </Field>
                 </div>
 
-                <div style={styles.twoColumn}>
+                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Buyer name">
                     <input
                       name="buyer_name"
@@ -1037,14 +1043,22 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 <span style={styles.drawToggle}>Open / close</span>
               </summary>
 
-              <div style={styles.drawGrid}>
+              <div className="raffle-draw-grid" style={styles.drawGrid}>
                 <form
                   action={`/api/admin/raffles/${raffle.id}/draw/auto`}
                   method="post"
                   style={styles.drawPanel}
                 >
-                  <input type="hidden" name="from_prize" value={autoDrawFromPrize} />
-                  <input type="hidden" name="to_prize" value={autoDrawToPrize} />
+                  <input
+                    type="hidden"
+                    name="from_prize"
+                    value={autoDrawFromPrize}
+                  />
+                  <input
+                    type="hidden"
+                    name="to_prize"
+                    value={autoDrawToPrize}
+                  />
 
                   <h3 style={styles.subTitle}>Automatic random draw</h3>
                   <p style={styles.sectionDescription}>
@@ -1118,569 +1132,155 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const responsiveStyles = `
+  .raffle-admin-page,
+  .raffle-admin-page * {
+    box-sizing: border-box;
+  }
+
+  .raffle-admin-page {
+    overflow-x: hidden;
+  }
+
+  .raffle-admin-page section,
+  .raffle-admin-page div,
+  .raffle-admin-page form,
+  .raffle-admin-page label,
+  .raffle-admin-page input,
+  .raffle-admin-page select,
+  .raffle-admin-page textarea,
+  .raffle-admin-page button {
+    min-width: 0;
+  }
+
+  .raffle-admin-page input,
+  .raffle-admin-page select,
+  .raffle-admin-page textarea {
+    max-width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    .raffle-admin-page {
+      padding: 22px 14px 50px !important;
+    }
+
+    .raffle-hero {
+      min-height: auto !important;
+      padding: 22px !important;
+      grid-template-columns: 1fr !important;
+    }
+
+    .raffle-hero-image {
+      max-width: 240px !important;
+      height: 240px !important;
+    }
+
+    .raffle-hero-meta,
+    .raffle-summary-grid,
+    .raffle-three-column,
+    .raffle-two-column,
+    .raffle-offer-inputs,
+    .raffle-draw-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .raffle-media-box {
+      grid-template-columns: 1fr !important;
+    }
+
+    .raffle-preview-box {
+      height: 210px !important;
+    }
+
+    .raffle-admin-summary {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      align-items: start !important;
+    }
+
+    .raffle-summary-pills {
+      width: 100% !important;
+      justify-content: flex-start !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .raffle-admin-page {
+      padding: 16px 10px 44px !important;
+    }
+
+    .raffle-topbar {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .raffle-topbar a {
+      width: 100% !important;
+      min-height: 48px !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+
+    .raffle-hero {
+      padding: 18px !important;
+      border-radius: 24px !important;
+      gap: 18px !important;
+    }
+
+    .raffle-hero-image {
+      max-width: 210px !important;
+      height: 210px !important;
+    }
+
+    .raffle-summary-grid {
+      gap: 10px !important;
+    }
+
+    .raffle-media-box {
+      padding: 12px !important;
+      gap: 12px !important;
+    }
+
+    .raffle-preview-box {
+      height: 190px !important;
+    }
+
+    .raffle-colour-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .raffle-summary-pills span {
+      flex: 1 1 auto !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .raffle-admin-page {
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+    }
+
+    .raffle-hero {
+      padding: 16px !important;
+    }
+
+    .raffle-hero-image {
+      max-width: 190px !important;
+      height: 190px !important;
+    }
+
+    .raffle-preview-box {
+      height: 170px !important;
+    }
+  }
+`;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-    overflowX: "hidden",
-    boxSizing: "border-box",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  backLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 900,
-  },
-  publicLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-    gap: 20,
-    alignItems: "center",
-    padding: "clamp(20px, 5vw, 28px)",
-    borderRadius: 28,
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.26), transparent 32%), linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%)",
-    color: "#ffffff",
-    marginBottom: 16,
-    minHeight: 330,
-    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
-    overflow: "hidden",
-    minWidth: 0,
-  },
-  heroContent: { minWidth: 0 },
-  eyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-  heroTitleRow: {
-    display: "flex",
-    gap: 12,
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    minWidth: 0,
-  },
-  heroTitle: {
-    margin: 0,
-    fontSize: "clamp(34px, 8vw, 48px)",
-    lineHeight: 1.03,
-    letterSpacing: "-0.055em",
-    overflowWrap: "anywhere",
-    minWidth: 0,
-  },
-  statusPill: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    textTransform: "capitalize",
-    fontWeight: 950,
-    flexShrink: 0,
-  },
-  heroSlug: {
-    margin: "9px 0 0",
-    color: "#cbd5e1",
-    fontSize: 14,
-    fontWeight: 800,
-    overflowWrap: "anywhere",
-  },
-  heroDescription: {
-    margin: "14px 0 0",
-    color: "#e2e8f0",
-    lineHeight: 1.55,
-    maxWidth: 760,
-    overflowWrap: "anywhere",
-  },
-  heroDescriptionMuted: {
-    margin: "14px 0 0",
-    color: "#94a3b8",
-    lineHeight: 1.55,
-  },
-  heroMetaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
-    gap: 10,
-    marginTop: 22,
-    maxWidth: 700,
-  },
-  heroMetaCard: {
-    padding: "12px 14px",
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    minWidth: 0,
-  },
-  heroMetaLabel: { color: "#94a3b8", fontSize: 12, fontWeight: 900 },
-  heroMetaValue: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: 950,
-    marginTop: 4,
-    overflowWrap: "anywhere",
-  },
-  heroImageWrap: {
-    width: "100%",
-    maxWidth: 280,
-    height: 280,
-    borderRadius: 22,
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.14)",
-    overflow: "hidden",
-    alignSelf: "center",
-    justifySelf: "center",
-    boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
-  },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
-  },
-  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: 950 },
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    marginTop: 5,
-    overflowWrap: "anywhere",
-  },
-  progressCard: {
-    padding: 16,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-  },
-  progressHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 10,
-    flexWrap: "wrap",
-  },
-  progressPercent: { color: "#166534", fontWeight: 950, fontSize: 18 },
-  progressTrack: {
-    height: 11,
-    background: "#e2e8f0",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    background: "linear-gradient(90deg, #16a34a, #22c55e)",
-    borderRadius: 999,
-  },
-  actionsCard: {
-    display: "grid",
-    gap: 14,
-    padding: 18,
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  section: {
-    padding: "clamp(16px, 4vw, 18px)",
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  sectionEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(22px, 5vw, 26px)",
-    letterSpacing: "-0.035em",
-    overflowWrap: "anywhere",
-  },
-  sectionDescription: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-    overflowWrap: "anywhere",
-  },
-  adminDetails: { display: "grid", gap: 0, minWidth: 0 },
-  adminSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "center",
-    cursor: "pointer",
-    listStyle: "none",
-    flexWrap: "wrap",
-    minWidth: 0,
-  },
-  adminSummaryToggle: {
-    flexShrink: 0,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  adminDetailsBody: { display: "grid", gap: 14, marginTop: 16, minWidth: 0 },
-  summaryPillRow: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" },
-  statusMiniPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "8px 11px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  neutralPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "8px 11px",
-    borderRadius: 999,
-    background: "#f8fafc",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  form: { display: "grid", gap: 14, minWidth: 0 },
-  twoColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
-    gap: 12,
-  },
-  threeColumn: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
-    gap: 12,
-    alignItems: "start",
-  },
-  field: { display: "grid", gap: 6, minWidth: 0 },
-  label: { color: "#334155", fontSize: 13, fontWeight: 950 },
-  input: {
-    width: "100%",
-    minHeight: 46,
-    padding: "11px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 16,
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
-  textarea: {
-    width: "100%",
-    padding: "11px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 16,
-    resize: "vertical",
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 16,
-    padding: 14,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-  },
-  mediaControls: { minWidth: 0 },
-  subTitle: { margin: 0, color: "#0f172a", fontSize: 18, letterSpacing: "-0.01em" },
-  previewBox: {
-    height: 220,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    overflow: "hidden",
-  },
-  innerPanel: {
-    display: "grid",
-    gap: 14,
-    padding: "clamp(14px, 4vw, 16px)",
-    borderRadius: 20,
-    background:
-      "linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eff6ff 100%)",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  innerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  innerEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-  colourGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 135px), 1fr))",
-    gap: 10,
-  },
-  colourCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderRadius: 16,
-    border: "1px solid",
-    cursor: "pointer",
-    fontWeight: 900,
-    minWidth: 0,
-  },
-  swatch: {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    border: "1px solid",
-    flexShrink: 0,
-  },
-  colourText: { display: "grid", gap: 2, color: "#0f172a", minWidth: 0 },
-  offerList: { display: "grid", gap: 10 },
-  offerCard: {
-    display: "grid",
-    gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
-    background: "#ffffff",
-    minWidth: 0,
-  },
-  offerBadge: {
-    justifySelf: "start",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#ecfdf5",
-    color: "#166534",
-    border: "1px solid #bbf7d0",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  offerInputs: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
-    gap: 10,
-    alignItems: "end",
-  },
-  checkboxLabel: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 44,
-    fontWeight: 950,
-    color: "#334155",
-    cursor: "pointer",
-  },
-  helpText: {
-    color: "#64748b",
-    fontSize: 13,
-    margin: 0,
-    overflowWrap: "anywhere",
-  },
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-  submitButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-    minHeight: 44,
-  },
-  mutedSmall: { color: "#64748b", fontSize: 13, marginTop: 3 },
-  winnerList: { display: "grid", gap: 10, marginBottom: 14 },
-  winnerCard: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
-    gap: 12,
-    padding: 14,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    alignItems: "center",
-    minWidth: 0,
-  },
-  winnerPrizeIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 950,
-  },
-  winnerLabel: { color: "#64748b", fontSize: 12, fontWeight: 950, marginBottom: 4 },
-  winnerValue: {
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-  winnerEmail: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-    overflowWrap: "anywhere",
-  },
-  emptyBox: {
-    padding: 16,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 900,
-    marginBottom: 14,
-  },
-  drawDetails: {
-    padding: 0,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-    marginTop: 14,
-  },
-  drawSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    cursor: "pointer",
-    listStyle: "none",
-    padding: 16,
-    background: "#ffffff",
-    borderBottom: "1px solid #e2e8f0",
-    flexWrap: "wrap",
-  },
-  drawToggle: {
-    flexShrink: 0,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  drawGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-    gap: 14,
-    padding: 16,
-  },
-  drawPanel: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 12,
-    minWidth: 0,
-  },
-  drawButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#16a34a",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-    minHeight: 44,
-  },
-};
+    padding: "28px
