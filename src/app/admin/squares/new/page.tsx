@@ -10,11 +10,6 @@ import {
 } from "react";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 
-type Props = {
-  subscriptionTier?: string | null;
-  customImagesAllowed?: boolean;
-};
-
 type PrizeRow = {
   id: string;
   position: string;
@@ -147,10 +142,7 @@ function prizeText(count: number) {
   return `${count} prize${count === 1 ? "" : "s"}`;
 }
 
-export default function NewSquaresGamePage({
-  subscriptionTier,
-  customImagesAllowed = false,
-}: Props) {
+export default function NewSquaresGamePage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -396,10 +388,7 @@ export default function NewSquaresGamePage({
           value={formatPreviewMoney(totalRevenue, currency)}
         />
 
-        <SummaryCard
-          label="Prize count"
-          value={publicPrizesCount}
-        />
+        <SummaryCard label="Prize count" value={publicPrizesCount} />
 
         <SummaryCard
           label="Skill question"
@@ -413,10 +402,7 @@ export default function NewSquaresGamePage({
       </section>
 
       <section style={styles.readinessGrid}>
-        <ReadinessCard
-          eyebrow="Public experience"
-          title="Launch readiness"
-        >
+        <ReadinessCard eyebrow="Public experience" title="Launch readiness">
           <CheckItem done={title.trim().length > 0}>
             Squares title added
           </CheckItem>
@@ -450,10 +436,7 @@ export default function NewSquaresGamePage({
             value={formatPreviewMoney(totalRevenue, currency)}
           />
 
-          <PreviewLine
-            label="Currency"
-            value={currency}
-          />
+          <PreviewLine label="Currency" value={currency} />
         </ReadinessCard>
 
         <ReadinessCard eyebrow="Compliance" title="Legal framework">
@@ -658,8 +641,7 @@ export default function NewSquaresGamePage({
               currentFocusY={imageFocusY}
               label="Squares image"
               previewAlt={title.trim() || "Squares preview"}
-              subscriptionTier={subscriptionTier}
-              customImagesAllowed={customImagesAllowed}
+              customImagesAllowed={true}
               onImageUrlChange={setImageUrl}
               onFocusXChange={setImageFocusX}
               onFocusYChange={setImageFocusY}
@@ -865,7 +847,10 @@ export default function NewSquaresGamePage({
 
           <div style={styles.complianceRow}>
             <CheckItem done={hasQuestion}>Skill question configured</CheckItem>
-            <CheckItem done={hasPostalEntry}>Free entry details configured</CheckItem>
+
+            <CheckItem done={hasPostalEntry}>
+              Free entry details configured
+            </CheckItem>
           </div>
         </div>
       </SectionCard>
