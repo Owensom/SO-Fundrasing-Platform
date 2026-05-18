@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { queryOne } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { sendWinnerEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -74,6 +75,19 @@ export async function POST(
       );
     }
 
+    const tenantSlug = await getTenantSlugFromHeaders();
+
+    const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+      ? session.user.tenantSlugs.map((value) => String(value))
+      : [];
+
+    if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      );
+    }
+
     const formData = await request.formData();
 
     const prizePosition = parsePositiveInteger(formData.get("prize_position"));
@@ -88,12 +102,13 @@ export async function POST(
 
     const raffle = await queryOne<RaffleRow>(
       `
-      select id, tenant_slug, title, config_json
-      from raffles
-      where id = $1
-      limit 1
+        select id, tenant_slug, title, config_json
+        from raffles
+        where id = $1
+          and tenant_slug = $2
+        limit 1
       `,
-      [params.id],
+      [params.id, tenantSlug],
     );
 
     if (!raffle) {
@@ -105,13 +120,14 @@ export async function POST(
 
     const existingPrizeWinner = await queryOne(
       `
-      select *
-      from raffle_winners
-      where raffle_id = $1
-        and prize_position = $2
-      limit 1
+        select *
+        from raffle_winners
+        where tenant_slug = $1
+          and raffle_id = $2
+          and prize_position = $3
+        limit 1
       `,
-      [raffle.id, prizePosition],
+      [tenantSlug, raffle.id, prizePosition],
     );
 
     if (existingPrizeWinner) {
@@ -123,13 +139,14 @@ export async function POST(
 
     const existingTicketWinner = await queryOne(
       `
-      select *
-      from raffle_winners
-      where raffle_id = $1
-        and ticket_number = $2
-      limit 1
+        select *
+        from raffle_winners
+        where tenant_slug = $1
+          and raffle_id = $2
+          and ticket_number = $3
+        limit 1
       `,
-      [raffle.id, ticketNumber],
+      [tenantSlug, raffle.id, ticketNumber],
     );
 
     if (existingTicketWinner) {
@@ -141,18 +158,19 @@ export async function POST(
 
     const soldTicket = await queryOne<TicketRow>(
       `
-      select
-        id as sale_id,
-        ticket_number,
-        colour,
-        buyer_name,
-        buyer_email
-      from raffle_ticket_sales
-      where raffle_id = $1
-        and ticket_number = $2
-      limit 1
+        select
+          id as sale_id,
+          ticket_number,
+          colour,
+          buyer_name,
+          buyer_email
+        from raffle_ticket_sales
+        where tenant_slug = $1
+          and raffle_id = $2
+          and ticket_number = $3
+        limit 1
       `,
-      [raffle.id, ticketNumber],
+      [tenantSlug, raffle.id, ticketNumber],
     );
 
     if (!soldTicket) {
@@ -168,24 +186,24 @@ export async function POST(
 
     const winner = await queryOne(
       `
-      insert into raffle_winners (
-        id,
-        tenant_slug,
-        raffle_id,
-        prize_position,
-        prize_title,
-        ticket_number,
-        colour,
-        sale_id,
-        buyer_name,
-        buyer_email
-      )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      returning *
+        insert into raffle_winners (
+          id,
+          tenant_slug,
+          raffle_id,
+          prize_position,
+          prize_title,
+          ticket_number,
+          colour,
+          sale_id,
+          buyer_name,
+          buyer_email
+        )
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        returning *
       `,
       [
         crypto.randomUUID(),
-        raffle.tenant_slug,
+        tenantSlug,
         raffle.id,
         prizePosition,
         prizeTitle,
@@ -205,13 +223,13 @@ export async function POST(
     if (winnerEmail) {
       try {
         await sendWinnerEmail({
-  to: winnerEmail,
-  name: winnerName,
-  raffleTitle: raffle.title,
-  prizeTitle,
-  ticketNumber: soldTicket.ticket_number,
-  colour: soldTicket.colour,
-});
+          to: winnerEmail,
+          name: winnerName,
+          raffleTitle: raffle.title,
+          prizeTitle,
+          ticketNumber: soldTicket.ticket_number,
+          colour: soldTicket.colour,
+        });
 
         winnerEmailStatus = "sent";
 
