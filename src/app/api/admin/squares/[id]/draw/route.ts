@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { sendSquaresWinnerEmail } from "@/lib/email";
 import {
   createSquaresWinner,
@@ -7,6 +9,7 @@ import {
   listSquaresWinners,
 } from "../../../../../../../api/_lib/squares-repo";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
@@ -64,12 +67,56 @@ function getPrizeTitle(prize: any, prizeNumber: number) {
   );
 }
 
+async function requireTenantAccess(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const tenantSlug = getTenantSlugFromRequest(request);
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    session,
+    tenantSlug,
+  };
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    const access = await requireTenantAccess(request);
+
+    if (!access.ok) {
+      return access.response;
+    }
+
+    const { tenantSlug } = access;
+
     const gameId = context.params.id;
     const game = await getSquaresGameById(gameId);
 
-    if (!game) {
+    if (!game || game.tenant_slug !== tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Squares game not found" },
         { status: 404 },
@@ -88,7 +135,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const winners = await listSquaresWinners(gameId);
+    const winners = await listSquaresWinners(game.id);
 
     const existingPrizeWinner = winners.find(
       (winner) => Number(winner.prize_index) === prizeNumber,
@@ -120,7 +167,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const sales = await listSquaresSales(gameId);
+    const sales = await listSquaresSales(game.id);
 
     const matchingSale = sales.find((sale) =>
       Array.isArray(sale.squares)
@@ -151,7 +198,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const winnerEmail = cleanEmail(matchingSale.customer_email);
 
     const winner = await createSquaresWinner({
-      tenant_slug: game.tenant_slug,
+      tenant_slug: tenantSlug,
       game_id: game.id,
       prize_index: prizeNumber,
       prize_title: prizeTitle,
