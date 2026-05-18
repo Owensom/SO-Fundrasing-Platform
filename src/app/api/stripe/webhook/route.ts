@@ -27,6 +27,64 @@ type PaymentFinancials = {
   stripeDestinationAccountId: string;
 };
 
+type TenantConnectStatus = {
+  stripe_connect_account_id: string | null;
+  stripe_connect_onboarding_complete: boolean | null;
+  stripe_connect_charges_enabled: boolean | null;
+  stripe_connect_payouts_enabled: boolean | null;
+  stripe_connect_details_submitted: boolean | null;
+};
+
+type VerifiedEventOrder = {
+  id: string;
+  tenant_slug: string;
+  event_id: string;
+  customer_name: string | null;
+  customer_email: string | null;
+};
+
+type VerifiedRaffleReservation = {
+  id: string;
+  tenant_slug: string;
+  raffle_id: string;
+  reservation_token: string;
+  reservation_group_id: string | null;
+  ticket_number: number;
+  colour: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+};
+
+type VerifiedSquaresReservation = {
+  id: string;
+  tenant_slug: string;
+  game_id: string;
+  reservation_token: string;
+  squares: number[] | null;
+  customer_name: string | null;
+  customer_email: string | null;
+};
+
+type RaffleDetails = {
+  id: string;
+  tenant_slug: string;
+  title: string;
+};
+
+type EventDetails = {
+  id: string;
+  tenant_slug: string;
+  title: string;
+  starts_at: string | null;
+  location: string | null;
+};
+
+type SquaresGameDetails = {
+  id: string;
+  tenant_slug: string;
+  title: string;
+};
+
 async function syncStripeConnectAccountById(accountId: string) {
   const account = await stripe.accounts.retrieve(accountId);
 
@@ -36,16 +94,16 @@ async function syncStripeConnectAccountById(accountId: string) {
 
   await query(
     `
-    update tenants
-    set
-      stripe_connect_charges_enabled = $2,
-      stripe_connect_payouts_enabled = $3,
-      stripe_connect_details_submitted = $4,
-      stripe_connect_onboarding_complete = $5,
-      stripe_connect_country = $6,
-      stripe_connect_default_currency = $7,
-      stripe_connect_last_synced_at = now()
-    where stripe_connect_account_id = $1
+      update tenants
+      set
+        stripe_connect_charges_enabled = $2,
+        stripe_connect_payouts_enabled = $3,
+        stripe_connect_details_submitted = $4,
+        stripe_connect_onboarding_complete = $5,
+        stripe_connect_country = $6,
+        stripe_connect_default_currency = $7,
+        stripe_connect_last_synced_at = now()
+      where stripe_connect_account_id = $1
     `,
     [
       account.id,
@@ -146,6 +204,37 @@ function getPaymentIntentId(session: Stripe.Checkout.Session) {
   return session.payment_intent?.id || null;
 }
 
+function normalisePaymentType(value: unknown) {
+  const rawType = String(value || "raffle").trim();
+
+  if (rawType === "event_order") return "event";
+  if (rawType === "event" || rawType === "squares" || rawType === "raffle") {
+    return rawType;
+  }
+
+  return "raffle";
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function parseSquaresMetadata(value: unknown): number[] {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item) && item > 0);
+  } catch {
+    return [];
+  }
+}
+
 async function getPaymentIntentDetails(paymentIntentId: string | null) {
   if (!paymentIntentId) {
     return {
@@ -196,6 +285,7 @@ async function getPaymentIntentDetails(paymentIntentId: string | null) {
     };
   }
 }
+
 async function getCheckoutFinancials({
   session,
   metadata,
@@ -274,7 +364,277 @@ async function getCheckoutFinancials({
     stripeDestinationAccountId,
   };
 }
+async function getVerifiedEventOrder(input: {
+  orderId: string;
+  eventId: string;
+  metadataTenantSlug: string;
+}): Promise<VerifiedEventOrder | null> {
+  const rows = await query<VerifiedEventOrder>(
+    `
+      select
+        eo.id,
+        eo.tenant_slug,
+        eo.event_id,
+        eo.customer_name,
+        eo.customer_email
+      from event_orders eo
+      inner join events e
+        on e.id = eo.event_id
+       and e.tenant_slug = eo.tenant_slug
+      where eo.id = $1
+        and eo.event_id = $2
+      limit 1
+    `,
+    [input.orderId, input.eventId],
+  );
 
+  const order = rows[0] || null;
+
+  if (!order) return null;
+
+  if (
+    input.metadataTenantSlug &&
+    input.metadataTenantSlug !== order.tenant_slug
+  ) {
+    return null;
+  }
+
+  return order;
+}
+
+async function getEventDetails(input: {
+  eventId: string;
+  tenantSlug: string;
+}): Promise<EventDetails | null> {
+  const rows = await query<EventDetails>(
+    `
+      select
+        id,
+        tenant_slug,
+        title,
+        starts_at,
+        location
+      from events
+      where id = $1
+        and tenant_slug = $2
+      limit 1
+    `,
+    [input.eventId, input.tenantSlug],
+  );
+
+  return rows[0] || null;
+}
+
+async function getVerifiedRaffleReservations(input: {
+  raffleId: string;
+  reservationToken: string;
+  metadataTenantSlug: string;
+}): Promise<VerifiedRaffleReservation[]> {
+  const rows = await query<VerifiedRaffleReservation>(
+    `
+      select
+        r.id,
+        r.tenant_slug,
+        r.raffle_id,
+        r.reservation_token,
+        r.reservation_group_id,
+        r.ticket_number,
+        r.colour,
+        r.buyer_name,
+        r.buyer_email
+      from raffle_ticket_reservations r
+      inner join raffles ra
+        on ra.id = r.raffle_id
+       and ra.tenant_slug = r.tenant_slug
+      where r.raffle_id = $1
+        and r.reservation_token = $2
+        and r.status in ('reserved', 'sold')
+      order by r.ticket_number asc, r.colour asc nulls last
+    `,
+    [input.raffleId, input.reservationToken],
+  );
+
+  if (!rows.length) return [];
+
+  const tenantSlug = rows[0]?.tenant_slug || "";
+
+  if (
+    input.metadataTenantSlug &&
+    tenantSlug &&
+    input.metadataTenantSlug !== tenantSlug
+  ) {
+    return [];
+  }
+
+  return rows.filter((row) => row.tenant_slug === tenantSlug);
+}
+
+async function getRaffleDetails(input: {
+  raffleId: string;
+  tenantSlug: string;
+}): Promise<RaffleDetails | null> {
+  const rows = await query<RaffleDetails>(
+    `
+      select
+        id,
+        tenant_slug,
+        title
+      from raffles
+      where id = $1
+        and tenant_slug = $2
+      limit 1
+    `,
+    [input.raffleId, input.tenantSlug],
+  );
+
+  return rows[0] || null;
+}
+
+async function getVerifiedSquaresReservation(input: {
+  gameId: string;
+  reservationToken: string;
+  metadataTenantSlug: string;
+}): Promise<VerifiedSquaresReservation | null> {
+  const rows = await query<VerifiedSquaresReservation>(
+    `
+      select
+        sr.id,
+        sg.tenant_slug,
+        sr.game_id,
+        sr.reservation_token,
+        null::int[] as squares,
+        null::text as customer_name,
+        null::text as customer_email
+      from squares_reservations sr
+      inner join squares_games sg
+        on sg.id = sr.game_id
+      where sr.game_id = $1
+        and sr.reservation_token = $2
+      limit 1
+    `,
+    [input.gameId, input.reservationToken],
+  );
+
+  const reservation = rows[0] || null;
+
+  if (!reservation) return null;
+
+  if (
+    input.metadataTenantSlug &&
+    input.metadataTenantSlug !== reservation.tenant_slug
+  ) {
+    return null;
+  }
+
+  return reservation;
+}
+
+async function getSquaresGameDetails(input: {
+  gameId: string;
+  tenantSlug: string;
+}): Promise<SquaresGameDetails | null> {
+  const rows = await query<SquaresGameDetails>(
+    `
+      select
+        id,
+        tenant_slug,
+        title
+      from squares_games
+      where id = $1
+        and tenant_slug = $2
+      limit 1
+    `,
+    [input.gameId, input.tenantSlug],
+  );
+
+  return rows[0] || null;
+}
+
+async function recordPlatformPayment(input: {
+  session: Stripe.Checkout.Session;
+  paymentIntentId: string | null;
+  raffleId: string | null;
+  tenantSlug: string;
+  reservationToken: string;
+  paymentType: string;
+  squaresGameId: string | null;
+  email: string | null;
+  financials: PaymentFinancials;
+}) {
+  await query(
+    `
+      insert into platform_payments (
+        stripe_checkout_session_id,
+        stripe_payment_intent_id,
+        raffle_id,
+        tenant_slug,
+        reservation_token,
+        currency,
+        gross_amount_cents,
+        platform_fee_cents,
+        net_amount_cents,
+        donor_fee_cents,
+        donor_covered_fees,
+        payment_status,
+        customer_email,
+        payment_type,
+        squares_game_id,
+        stripe_transfer_id,
+        stripe_destination_account_id,
+        stripe_payout_status,
+        payout_reconciled_at
+      )
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      on conflict (stripe_checkout_session_id)
+      do update set
+        stripe_payment_intent_id = excluded.stripe_payment_intent_id,
+        raffle_id = excluded.raffle_id,
+        tenant_slug = excluded.tenant_slug,
+        reservation_token = excluded.reservation_token,
+        currency = excluded.currency,
+        gross_amount_cents = excluded.gross_amount_cents,
+        platform_fee_cents = excluded.platform_fee_cents,
+        net_amount_cents = excluded.net_amount_cents,
+        donor_fee_cents = excluded.donor_fee_cents,
+        donor_covered_fees = excluded.donor_covered_fees,
+        payment_status = excluded.payment_status,
+        customer_email = excluded.customer_email,
+        payment_type = excluded.payment_type,
+        squares_game_id = excluded.squares_game_id,
+        stripe_transfer_id = excluded.stripe_transfer_id,
+        stripe_destination_account_id = excluded.stripe_destination_account_id,
+        stripe_payout_status = excluded.stripe_payout_status,
+        payout_reconciled_at = excluded.payout_reconciled_at
+    `,
+    [
+      input.session.id,
+      input.paymentIntentId,
+      input.raffleId,
+      input.tenantSlug,
+      input.reservationToken,
+      input.session.currency || null,
+      input.financials.grossAmountCents,
+      input.financials.platformFeeCents,
+      input.financials.netAmountCents,
+      input.financials.donorFeeCents,
+      input.financials.donorCoveredFees,
+      input.session.payment_status || null,
+      input.email,
+      input.paymentType,
+      input.squaresGameId,
+      input.financials.stripeTransferId || null,
+      input.financials.stripeDestinationAccountId ||
+        input.financials.stripeConnectAccountId ||
+        null,
+      input.financials.stripeConnectRouted
+        ? "destination_charge_created"
+        : null,
+      input.financials.stripeConnectRouted
+        ? new Date().toISOString()
+        : null,
+    ],
+  );
+}
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -348,11 +708,8 @@ export async function POST(request: NextRequest) {
 
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
-
-    const rawType = String(metadata.type || metadata.kind || "raffle");
-    const type = rawType === "event_order" ? "event" : rawType;
-
-    const tenantSlug = String(
+    const type = normalisePaymentType(metadata.type || metadata.kind);
+    const metadataTenantSlug = String(
       metadata.tenant_slug || metadata.tenantSlug || "",
     ).trim();
 
@@ -367,8 +724,6 @@ export async function POST(request: NextRequest) {
     const {
       grossAmountCents,
       platformFeeCents,
-      donorFeeCents,
-      donorCoveredFees,
       netAmountCents,
       stripeConnectRouted,
       stripeConnectAccountId,
@@ -381,7 +736,8 @@ export async function POST(request: NextRequest) {
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
-        if (type === "event") {
+
+    if (type === "event") {
       const orderId = String(
         metadata.order_id ||
           metadata.orderId ||
@@ -404,114 +760,78 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      const verifiedOrder = await getVerifiedEventOrder({
+        orderId,
+        eventId,
+        metadataTenantSlug,
+      });
+
+      if (!verifiedOrder) {
+        console.error("Stripe event webhook failed tenant/order verification", {
+          checkoutSessionId: session.id,
+          orderId,
+          eventId,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Event order verification failed",
+        });
+      }
+
+      const tenantSlug = verifiedOrder.tenant_slug;
+
       await query(
         `
-        update event_orders
-        set
-          status = 'paid',
-          stripe_session_id = $1,
-          customer_name = coalesce($2, customer_name),
-          customer_email = coalesce($3, customer_email)
-        where id = $4
-          and event_id = $5
+          update event_orders
+          set
+            status = 'paid',
+            stripe_session_id = $1,
+            customer_name = coalesce($2, customer_name),
+            customer_email = coalesce($3, customer_email)
+          where id = $4
+            and event_id = $5
+            and tenant_slug = $6
         `,
-        [session.id, name, email, orderId, eventId],
+        [session.id, name, email, orderId, eventId, tenantSlug],
       );
 
       await query(
         `
-        update event_seats
-        set
-          status = 'sold',
-          customer_name = $2,
-          customer_email = $3,
-          updated_at = now()
-        where event_id = $1
-          and order_id = $4
-          and stripe_session_id = $5
-          and status = 'reserved'
+          update event_seats
+          set
+            status = 'sold',
+            customer_name = $2,
+            customer_email = $3,
+            updated_at = now()
+          where event_id = $1
+            and order_id = $4
+            and stripe_session_id = $5
+            and status = 'reserved'
         `,
         [eventId, name, email, orderId, session.id],
       );
 
-      await query(
-        `
-        insert into platform_payments (
-          stripe_checkout_session_id,
-          stripe_payment_intent_id,
-          raffle_id,
-          tenant_slug,
-          reservation_token,
-          currency,
-          gross_amount_cents,
-          platform_fee_cents,
-          net_amount_cents,
-          donor_fee_cents,
-          donor_covered_fees,
-          payment_status,
-          customer_email,
-          payment_type,
-          squares_game_id,
-          stripe_transfer_id,
-          stripe_destination_account_id,
-          stripe_payout_status,
-          payout_reconciled_at
-        )
-        values ($1,$2,null,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'event',null,$13,$14,$15,$16)
-        on conflict (stripe_checkout_session_id)
-        do update set
-          stripe_payment_intent_id = excluded.stripe_payment_intent_id,
-          tenant_slug = excluded.tenant_slug,
-          reservation_token = excluded.reservation_token,
-          currency = excluded.currency,
-          gross_amount_cents = excluded.gross_amount_cents,
-          platform_fee_cents = excluded.platform_fee_cents,
-          net_amount_cents = excluded.net_amount_cents,
-          donor_fee_cents = excluded.donor_fee_cents,
-          donor_covered_fees = excluded.donor_covered_fees,
-          payment_status = excluded.payment_status,
-          customer_email = excluded.customer_email,
-          payment_type = excluded.payment_type,
-          stripe_transfer_id = excluded.stripe_transfer_id,
-          stripe_destination_account_id = excluded.stripe_destination_account_id,
-          stripe_payout_status = excluded.stripe_payout_status,
-          payout_reconciled_at = excluded.payout_reconciled_at
-        `,
-        [
-          session.id,
-          paymentIntentId,
-          tenantSlug,
-          orderId,
-          session.currency || null,
-          grossAmountCents,
-          platformFeeCents,
-          netAmountCents,
-          donorFeeCents,
-          donorCoveredFees,
-          session.payment_status || null,
-          email,
-          stripeTransferId || null,
-          stripeDestinationAccountId || stripeConnectAccountId || null,
-          stripeConnectRouted ? "destination_charge_created" : null,
-          stripeConnectRouted ? new Date().toISOString() : null,
-        ],
-      );
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug,
+        reservationToken: orderId,
+        paymentType: "event",
+        squaresGameId: null,
+        email,
+        financials,
+      });
 
       if (email) {
         try {
-          const eventDetails = await query<{
-            title: string;
-            starts_at: string | null;
-            location: string | null;
-          }>(
-            `
-            select title, starts_at, location
-            from events
-            where id = $1
-            limit 1
-            `,
-            [eventId],
-          );
+          const eventDetails = await getEventDetails({
+            eventId,
+            tenantSlug,
+          });
 
           const orderItems = await query<{
             label: string;
@@ -519,25 +839,26 @@ export async function POST(request: NextRequest) {
             unit_amount: number;
           }>(
             `
-            select label, quantity, unit_amount
-            from event_order_items
-            where order_id = $1
-            order by created_at asc
+              select label, quantity, unit_amount
+              from event_order_items
+              where order_id = $1
+                and event_id = $2
+              order by created_at asc
             `,
-            [orderId],
+            [orderId, eventId],
           );
 
           await sendEventReceiptEmail({
             to: email,
             name,
             eventTitle:
-              eventDetails[0]?.title || metadata.event_title || "Event",
+              eventDetails?.title || metadata.event_title || "Event",
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
             orderReference: orderId,
             tickets: orderItems,
-            eventDate: eventDetails[0]?.starts_at || null,
-            location: eventDetails[0]?.location || null,
+            eventDate: eventDetails?.starts_at || null,
+            location: eventDetails?.location || null,
           });
         } catch (emailError) {
           console.error("Event receipt email failed:", emailError);
@@ -551,15 +872,17 @@ export async function POST(request: NextRequest) {
         checkoutSessionId: session.id,
         orderId,
         eventId,
+        tenantSlug,
         stripeConnectRouted,
         stripeConnectAccountId,
         stripeTransferId,
         stripeDestinationAccountId,
         applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
       });
     }
-
-    const reservationToken = String(
+        const reservationToken = String(
       metadata.reservation_token ||
         metadata.reservationToken ||
         metadata.reservation_id ||
@@ -605,18 +928,61 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      const verifiedReservations = await getVerifiedRaffleReservations({
+        raffleId,
+        reservationToken,
+        metadataTenantSlug,
+      });
+
+      if (verifiedReservations.length === 0) {
+        console.error("Stripe raffle webhook failed tenant/reservation check", {
+          checkoutSessionId: session.id,
+          raffleId,
+          reservationToken,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Raffle reservation verification failed",
+        });
+      }
+
+      const tenantSlug = verifiedReservations[0].tenant_slug;
+
+      const raffleDetails = await getRaffleDetails({
+        raffleId,
+        tenantSlug,
+      });
+
+      if (!raffleDetails) {
+        console.error("Stripe raffle webhook failed raffle verification", {
+          checkoutSessionId: session.id,
+          raffleId,
+          tenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Raffle verification failed",
+        });
+      }
+
       await query(
         `
-        update raffle_ticket_reservations
-        set
-          status = 'sold',
-          checkout_session_id = $1,
-          payment_id = $2,
-          gross_amount_cents = $3,
-          platform_fee_cents = $4,
-          net_amount_cents = $5
-        where raffle_id = $6
-          and reservation_token = $7
+          update raffle_ticket_reservations
+          set
+            status = 'sold',
+            checkout_session_id = $1,
+            payment_id = $2,
+            gross_amount_cents = $3,
+            platform_fee_cents = $4,
+            net_amount_cents = $5
+          where tenant_slug = $6
+            and raffle_id = $7
+            and reservation_token = $8
         `,
         [
           session.id,
@@ -624,6 +990,7 @@ export async function POST(request: NextRequest) {
           grossAmountCents,
           platformFeeCents,
           netAmountCents,
+          tenantSlug,
           raffleId,
           reservationToken,
         ],
@@ -631,48 +998,52 @@ export async function POST(request: NextRequest) {
 
       await query(
         `
-        insert into raffle_ticket_sales (
-          raffle_id,
-          ticket_number,
-          colour,
-          buyer_name,
-          buyer_email,
-          currency,
-          amount_cents,
-          reservation_id,
-          payment_id,
-          stripe_checkout_session_id,
-          stripe_payment_intent_id,
-          purchase_reference,
-          reservation_group_id,
-          sold_at
-        )
-        select
-          r.raffle_id,
-          r.ticket_number,
-          coalesce(nullif(r.colour, ''), 'default'),
-          coalesce(r.buyer_name, $7),
-          coalesce(r.buyer_email, $8),
-          $3,
-          $4,
-          r.reservation_token,
-          $5,
-          $6,
-          $5,
-          r.reservation_token,
-          r.reservation_group_id,
-          now()
-        from raffle_ticket_reservations r
-        where r.raffle_id = $1
-          and r.reservation_token = $2
-          and r.status = 'sold'
-          and not exists (
-            select 1
-            from raffle_ticket_sales s
-            where s.raffle_id = r.raffle_id
-              and s.ticket_number = r.ticket_number
-              and s.colour = coalesce(nullif(r.colour, ''), 'default')
+          insert into raffle_ticket_sales (
+            tenant_slug,
+            raffle_id,
+            ticket_number,
+            colour,
+            buyer_name,
+            buyer_email,
+            currency,
+            amount_cents,
+            reservation_id,
+            payment_id,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            purchase_reference,
+            reservation_group_id,
+            sold_at
           )
+          select
+            r.tenant_slug,
+            r.raffle_id,
+            r.ticket_number,
+            coalesce(nullif(r.colour, ''), 'default'),
+            coalesce(r.buyer_name, $7),
+            coalesce(r.buyer_email, $8),
+            $3,
+            $4,
+            r.reservation_token,
+            $5,
+            $6,
+            $5,
+            r.reservation_token,
+            r.reservation_group_id,
+            now()
+          from raffle_ticket_reservations r
+          where r.tenant_slug = $9
+            and r.raffle_id = $1
+            and r.reservation_token = $2
+            and r.status = 'sold'
+            and not exists (
+              select 1
+              from raffle_ticket_sales s
+              where s.tenant_slug = r.tenant_slug
+                and s.raffle_id = r.raffle_id
+                and s.ticket_number = r.ticket_number
+                and s.colour = coalesce(nullif(r.colour, ''), 'default')
+            )
         `,
         [
           raffleId,
@@ -683,22 +1054,25 @@ export async function POST(request: NextRequest) {
           session.id,
           name,
           email,
+          tenantSlug,
         ],
       );
 
       await query(
         `
-        update raffles
-        set
-          sold_tickets = (
-            select count(*)::int
-            from raffle_ticket_sales
-            where raffle_id = $1
-          ),
-          updated_at = now()
-        where id = $1
+          update raffles
+          set
+            sold_tickets = (
+              select count(*)::int
+              from raffle_ticket_sales
+              where tenant_slug = $2
+                and raffle_id = $1
+            ),
+            updated_at = now()
+          where id = $1
+            and tenant_slug = $2
         `,
-        [raffleId],
+        [raffleId, tenantSlug],
       );
 
       const tickets = await query<{
@@ -706,21 +1080,35 @@ export async function POST(request: NextRequest) {
         colour: string;
       }>(
         `
-        select ticket_number, colour
-        from raffle_ticket_sales
-        where raffle_id = $1
-          and reservation_id = $2
-        order by ticket_number asc
+          select ticket_number, colour
+          from raffle_ticket_sales
+          where tenant_slug = $1
+            and raffle_id = $2
+            and reservation_id = $3
+          order by ticket_number asc
         `,
-        [raffleId, reservationToken],
+        [tenantSlug, raffleId, reservationToken],
       );
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId,
+        tenantSlug,
+        reservationToken,
+        paymentType: "raffle",
+        squaresGameId: null,
+        email,
+        financials,
+      });
 
       if (email) {
         try {
           await sendReceiptEmail({
             to: email,
             name,
-            raffleTitle: metadata.raffle_title || "Raffle",
+            raffleTitle:
+              raffleDetails.title || metadata.raffle_title || "Raffle",
             tickets,
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
@@ -730,8 +1118,25 @@ export async function POST(request: NextRequest) {
           console.error("Raffle receipt email failed:", emailError);
         }
       }
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        raffleId,
+        tenantSlug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
     }
-        if (type === "squares") {
+
+    if (type === "squares") {
       if (!squaresGameId) {
         console.error("Stripe webhook missing squares game id", {
           checkoutSessionId: session.id,
@@ -745,43 +1150,84 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const squares = JSON.parse(metadata.squares_json || "[]") as number[];
+      const verifiedReservation = await getVerifiedSquaresReservation({
+        gameId: squaresGameId,
+        reservationToken,
+        metadataTenantSlug,
+      });
 
-      await query(
+      if (!verifiedReservation) {
+        console.error("Stripe squares webhook failed tenant/reservation check", {
+          checkoutSessionId: session.id,
+          squaresGameId,
+          reservationToken,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Squares reservation verification failed",
+        });
+      }
+
+      const tenantSlug = verifiedReservation.tenant_slug;
+
+      const squaresGame = await getSquaresGameDetails({
+        gameId: squaresGameId,
+        tenantSlug,
+      });
+
+      if (!squaresGame) {
+        console.error("Stripe squares webhook failed game verification", {
+          checkoutSessionId: session.id,
+          squaresGameId,
+          tenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Squares game verification failed",
+        });
+      }
+
+      const squares = parseSquaresMetadata(metadata.squares_json);
+            await query(
         `
-        update squares_reservations
-        set
-          payment_status = 'paid',
-          stripe_checkout_session_id = $1
-        where reservation_token = $2
-          and game_id = $3
+          update squares_reservations
+          set
+            payment_status = 'paid',
+            stripe_checkout_session_id = $1
+          where reservation_token = $2
+            and game_id = $3
         `,
         [session.id, reservationToken, squaresGameId],
       );
 
       await query(
         `
-        insert into squares_sales (
-          id,
-          tenant_slug,
-          game_id,
-          reservation_token,
-          stripe_checkout_session_id,
-          stripe_payment_intent_id,
-          payment_status,
-          currency,
-          gross_amount_cents,
-          platform_fee_cents,
-          net_amount_cents,
-          customer_email,
-          customer_name,
-          squares,
-          metadata_json
-        )
-        values (
-          gen_random_uuid()::text,
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb
-        )
+          insert into squares_sales (
+            id,
+            tenant_slug,
+            game_id,
+            reservation_token,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            payment_status,
+            currency,
+            gross_amount_cents,
+            platform_fee_cents,
+            net_amount_cents,
+            customer_email,
+            customer_name,
+            squares,
+            metadata_json
+          )
+          values (
+            gen_random_uuid()::text,
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb
+          )
         `,
         [
           tenantSlug,
@@ -799,6 +1245,7 @@ export async function POST(request: NextRequest) {
           JSON.stringify(squares),
           JSON.stringify({
             ...metadata,
+            tenant_slug: tenantSlug,
             stripe_connect_routed: stripeConnectRouted ? "true" : "false",
             stripe_connect_account_id: stripeConnectAccountId,
             stripe_transfer_id: stripeTransferId,
@@ -812,42 +1259,56 @@ export async function POST(request: NextRequest) {
 
       await query(
         `
-        update squares_games
-        set
-          config_json = jsonb_set(
-            jsonb_set(
-              coalesce(config_json, '{}'::jsonb),
-              '{sold}',
+          update squares_games
+          set
+            config_json = jsonb_set(
+              jsonb_set(
+                coalesce(config_json, '{}'::jsonb),
+                '{sold}',
+                (
+                  select to_jsonb(array_agg(distinct value::int order by value::int))
+                  from jsonb_array_elements_text(
+                    coalesce(config_json->'sold', '[]'::jsonb) || $3::jsonb
+                  ) as value
+                )
+              ),
+              '{reserved}',
               (
-                select to_jsonb(array_agg(distinct value::int order by value::int))
+                select to_jsonb(coalesce(array_agg(value::int order by value::int), '{}'))
                 from jsonb_array_elements_text(
-                  coalesce(config_json->'sold', '[]'::jsonb) || $2::jsonb
+                  coalesce(config_json->'reserved', '[]'::jsonb)
                 ) as value
+                where value::int not in (
+                  select jsonb_array_elements_text($3::jsonb)::int
+                )
               )
             ),
-            '{reserved}',
-            (
-              select to_jsonb(coalesce(array_agg(value::int order by value::int), '{}'))
-              from jsonb_array_elements_text(
-                coalesce(config_json->'reserved', '[]'::jsonb)
-              ) as value
-              where value::int not in (
-                select jsonb_array_elements_text($2::jsonb)::int
-              )
-            )
-          ),
-          updated_at = now()
-        where id = $1
+            updated_at = now()
+          where id = $1
+            and tenant_slug = $2
         `,
-        [squaresGameId, JSON.stringify(squares)],
+        [squaresGameId, tenantSlug, JSON.stringify(squares)],
       );
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug,
+        reservationToken,
+        paymentType: "squares",
+        squaresGameId,
+        email,
+        financials,
+      });
 
       if (email) {
         try {
           await sendSquaresReceiptEmail({
             to: email,
             name,
-            gameTitle: metadata.game_title || "Squares Game",
+            gameTitle:
+              squaresGame.title || metadata.game_title || "Squares Game",
             squares,
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
@@ -857,88 +1318,30 @@ export async function POST(request: NextRequest) {
           console.error("Squares receipt email failed:", emailError);
         }
       }
-    }
 
-    await query(
-      `
-      insert into platform_payments (
-        stripe_checkout_session_id,
-        stripe_payment_intent_id,
-        raffle_id,
-        tenant_slug,
-        reservation_token,
-        currency,
-        gross_amount_cents,
-        platform_fee_cents,
-        net_amount_cents,
-        donor_fee_cents,
-        donor_covered_fees,
-        payment_status,
-        customer_email,
-        payment_type,
-        squares_game_id,
-        stripe_transfer_id,
-        stripe_destination_account_id,
-        stripe_payout_status,
-        payout_reconciled_at
-      )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-      on conflict (stripe_checkout_session_id)
-      do update set
-        stripe_payment_intent_id = excluded.stripe_payment_intent_id,
-        raffle_id = excluded.raffle_id,
-        tenant_slug = excluded.tenant_slug,
-        reservation_token = excluded.reservation_token,
-        currency = excluded.currency,
-        gross_amount_cents = excluded.gross_amount_cents,
-        platform_fee_cents = excluded.platform_fee_cents,
-        net_amount_cents = excluded.net_amount_cents,
-        donor_fee_cents = excluded.donor_fee_cents,
-        donor_covered_fees = excluded.donor_covered_fees,
-        payment_status = excluded.payment_status,
-        customer_email = excluded.customer_email,
-        payment_type = excluded.payment_type,
-        squares_game_id = excluded.squares_game_id,
-        stripe_transfer_id = excluded.stripe_transfer_id,
-        stripe_destination_account_id = excluded.stripe_destination_account_id,
-        stripe_payout_status = excluded.stripe_payout_status,
-        payout_reconciled_at = excluded.payout_reconciled_at
-      `,
-      [
-        session.id,
-        paymentIntentId,
-        raffleId,
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        squaresGameId,
         tenantSlug,
-        reservationToken,
-        session.currency || null,
-        grossAmountCents,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
         platformFeeCents,
         netAmountCents,
-        donorFeeCents,
-        donorCoveredFees,
-        session.payment_status || null,
-        email,
-        type,
-        squaresGameId,
-        stripeTransferId || null,
-        stripeDestinationAccountId || stripeConnectAccountId || null,
-        stripeConnectRouted ? "destination_charge_created" : null,
-        stripeConnectRouted ? new Date().toISOString() : null,
-      ],
-    );
+      });
+    }
 
     return NextResponse.json({
       ok: true,
+      skipped: true,
       event: event.type,
       type,
-      checkoutSessionId: session.id,
-      stripeConnectRouted,
-      stripeConnectAccountId,
-      stripeTransferId,
-      stripeDestinationAccountId,
-      applicationFeeAmountCents,
-      platformFeeCents,
-      netAmountCents,
+      reason: "Unsupported checkout session type",
     });
   } catch (error: any) {
     console.error("Stripe webhook error", error);
