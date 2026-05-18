@@ -718,7 +718,6 @@ export default function NewEventForm({
               previewAlt={title.trim() || "Event image preview"}
               subscriptionTier={subscriptionTier}
               customImagesAllowed={customImagesAllowed}
-              upgradeMessage="Upgrade to Professional to unlock custom event campaign images."
               onImageUrlChange={(url) => setImageUrl(url)}
               onFocusXChange={(value) => setImageFocusX(cleanFocus(value))}
               onFocusYChange={(value) => setImageFocusY(cleanFocus(value))}
