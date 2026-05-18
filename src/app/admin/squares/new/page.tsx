@@ -479,19 +479,17 @@ export default function NewSquaresGamePage() {
               Upload a premium hero image to represent your fundraiser publicly.
             </p>
 
-            <ImageFocusUploadField
-              label="Squares image"
-              currentImageUrl={imageUrl}
-              currentFocusX={imageFocusX}
-              currentFocusY={imageFocusY}
-              previewAlt="Squares preview"
-              onUploaded={(url) => setImageUrl(url)}
-              onFocusChange={(x, y) => {
-                setImageFocusX(x);
-                setImageFocusY(y);
-              }}
-            />
-          </div>
+        <ImageFocusUploadField
+  currentImageUrl={imageUrl}
+  currentFocusX={imageFocusX}
+  currentFocusY={imageFocusY}
+  label="Squares image"
+  previewAlt={title.trim() || "Squares preview"}
+  customImagesAllowed={true}
+  onImageUrlChange={setImageUrl}
+  onFocusXChange={setImageFocusX}
+  onFocusYChange={setImageFocusY}
+/>
 
           <div style={styles.previewBoxLarge}>
             <img
