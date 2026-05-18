@@ -19,17 +19,34 @@ type PageProps = {
   }>;
 };
 
-type ActiveEventCountRow = {
+type ActiveCampaignCountRow = {
   active_count: string | number;
 };
 
-async function getActivePublishedEventCountForTenant(tenantSlug: string) {
-  const rows = await query<ActiveEventCountRow>(
+async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
     `
       select count(*) as active_count
-      from events
-      where tenant_slug = $1
-        and status = 'published'
+      from (
+        select 1
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
     `,
     [tenantSlug],
   );
@@ -65,12 +82,12 @@ export default async function NewEventPage({ searchParams }: PageProps) {
   const subscriptionTier = normaliseSubscriptionTier(
     tenantSettings?.subscription_tier,
   );
-  const activePublishedEventCount =
-    await getActivePublishedEventCountForTenant(tenantSlug);
+  const activePublishedCampaignCount =
+    await getActivePublishedCampaignCountForTenant(tenantSlug);
 
   const canPublishCampaign = canPublishAnotherCampaign({
     subscription_tier: subscriptionTier,
-    currentActiveCampaigns: activePublishedEventCount,
+    currentActiveCampaigns: activePublishedCampaignCount,
   });
 
   const showCampaignLimitBanner =
