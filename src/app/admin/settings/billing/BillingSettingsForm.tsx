@@ -80,6 +80,7 @@ const TIER_DETAILS: Record<
       "CRM",
       "Finance dashboard",
       "Branding controls",
+      "Custom commission",
       "Customer exports",
     ],
   },
@@ -95,6 +96,7 @@ const TIER_DETAILS: Record<
       "Lowest platform fee",
       "Advanced reporting",
       "Stripe Connect ready",
+      "Custom commission",
       "Priority support",
       "White-label direction",
       "Large-scale operations",
@@ -141,6 +143,20 @@ function tierCapabilityEnabled(tier: TierKey, key: string) {
   return false;
 }
 
+function customCommissionAllowed(tier: TierKey) {
+  return tier === "professional" || tier === "foundation";
+}
+
+function clampPlatformFeeForTier(value: number, tier: TierKey) {
+  const minimum = TIER_DETAILS[tier].feeNumber;
+
+  if (!Number.isFinite(value)) {
+    return minimum;
+  }
+
+  return Math.min(100, Math.max(minimum, Number(value.toFixed(2))));
+}
+
 export default function BillingSettingsForm({
   tenantSlug,
   formState,
@@ -148,14 +164,21 @@ export default function BillingSettingsForm({
   updateAction,
 }: Props) {
   const [tier, setTier] = useState<TierKey>(formState.subscription_tier);
-  const [platformFeePercent, setPlatformFeePercent] = useState<number>(
-    formState.platform_fee_percent,
+  const [platformFeePercent, setPlatformFeePercent] = useState<number>(() =>
+    clampPlatformFeeForTier(
+      formState.platform_fee_percent,
+      formState.subscription_tier,
+    ),
   );
   const [buyerContributions, setBuyerContributions] = useState(
     formState.buyer_fee_contributions_enabled,
   );
 
   const currentTier = TIER_DETAILS[tier];
+  const commissionEditable = customCommissionAllowed(tier);
+  const displayedPlatformFeePercent = commissionEditable
+    ? clampPlatformFeeForTier(platformFeePercent, tier)
+    : currentTier.feeNumber;
 
   const onboardingComplete = Boolean(
     connectStatus?.stripe_connect_onboarding_complete,
@@ -250,17 +273,19 @@ export default function BillingSettingsForm({
             <div style={styles.summaryLabel}>Current plan</div>
             <div style={styles.summaryValue}>{currentTier.name}</div>
             <div style={styles.summarySub}>
-              {currentTier.monthly} · {currentTier.fee} platform fee
+              {currentTier.monthly} · {currentTier.fee} minimum platform fee
             </div>
           </div>
 
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Platform commission</div>
             <div style={styles.summaryValue}>
-              {Number(platformFeePercent || 0).toFixed(1)}%
+              {Number(displayedPlatformFeePercent || 0).toFixed(1)}%
             </div>
             <div style={styles.summarySub}>
-              Applied before Stripe processing fees
+              {commissionEditable
+                ? `Editable, with a minimum of ${currentTier.fee}`
+                : "Community uses the fixed default platform fee"}
             </div>
           </div>
 
@@ -319,15 +344,40 @@ export default function BillingSettingsForm({
               <input
                 type="number"
                 name="platform_fee_percent"
-                min="0"
+                min={currentTier.feeNumber}
                 max="100"
                 step="0.1"
-                value={platformFeePercent}
-                onChange={(event) =>
-                  setPlatformFeePercent(Number(event.target.value))
+                value={displayedPlatformFeePercent}
+                readOnly={!commissionEditable}
+                aria-readonly={!commissionEditable}
+                onChange={(event) => {
+                  if (!commissionEditable) return;
+
+                  setPlatformFeePercent(Number(event.target.value));
+                }}
+                onBlur={() => {
+                  setPlatformFeePercent((current) =>
+                    clampPlatformFeeForTier(current, tier),
+                  );
+                }}
+                style={
+                  commissionEditable
+                    ? styles.input
+                    : { ...styles.input, ...styles.lockedInput }
                 }
-                style={styles.input}
               />
+
+              {!commissionEditable ? (
+                <span style={styles.upgradeNotice}>
+                  Custom commission requires Professional or Foundation.
+                  Community is fixed at 7%.
+                </span>
+              ) : (
+                <span style={styles.helperText}>
+                  Custom commission is enabled. Minimum for this plan is{" "}
+                  {currentTier.fee}.
+                </span>
+              )}
             </label>
 
             <label style={styles.field}>
@@ -804,6 +854,29 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 12px",
     fontSize: 15,
     boxSizing: "border-box",
+  },
+  lockedInput: {
+    background: "#f8fafc",
+    color: "#64748b",
+    borderColor: "#e2e8f0",
+    cursor: "not-allowed",
+  },
+  helperText: {
+    color: "#166534",
+    fontSize: 12,
+    fontWeight: 850,
+    lineHeight: 1.35,
+  },
+  upgradeNotice: {
+    display: "inline-flex",
+    padding: "9px 11px",
+    borderRadius: 14,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 12,
+    fontWeight: 850,
+    lineHeight: 1.35,
   },
   select: {
     width: "100%",
