@@ -194,13 +194,12 @@ export async function POST(request: NextRequest) {
       const allowedToPublish = await canTenantPublishCampaign(tenantSlug);
 
       if (!allowedToPublish) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Community tier is limited to 2 active published campaigns. Upgrade to Professional for unlimited campaigns.",
-          },
-          { status: 403 },
+        return NextResponse.redirect(
+          new URL(
+            "/admin/raffles/new?error=campaign_limit",
+            request.url,
+          ),
+          { status: 303 },
         );
       }
     }
