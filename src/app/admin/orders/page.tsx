@@ -195,8 +195,11 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         raffle.currency,
         raffle.ticket_price_cents
       from raffle_ticket_sales sale
-      join raffles raffle on raffle.id = sale.raffle_id
-      where raffle.tenant_slug = $1
+      join raffles raffle
+        on raffle.id = sale.raffle_id
+       and raffle.tenant_slug = sale.tenant_slug
+      where sale.tenant_slug = $1
+        and raffle.tenant_slug = $1
       order by sale.created_at desc
       limit 500
     `,
@@ -247,8 +250,11 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         game.currency as game_currency,
         game.price_per_square_cents
       from squares_sales sale
-      join squares_games game on game.id = sale.game_id
+      join squares_games game
+        on game.id = sale.game_id
+       and game.tenant_slug = sale.tenant_slug
       where sale.tenant_slug = $1
+        and game.tenant_slug = $1
       order by sale.created_at desc
       limit 500
     `,
@@ -308,8 +314,11 @@ async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         event.slug as campaign_slug,
         event.currency as event_currency
       from event_orders event_order
-      join events event on event.id = event_order.event_id
+      join events event
+        on event.id = event_order.event_id
+       and event.tenant_slug = event_order.tenant_slug
       where event_order.tenant_slug = $1
+        and event.tenant_slug = $1
       order by event_order.created_at desc
       limit 500
     `,
@@ -357,8 +366,10 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         auction.slug as campaign_slug,
         auction.currency
       from silent_auction_bids bid
-      join silent_auction_items item on item.id = bid.item_id
-      join silent_auctions auction on auction.id = item.auction_id
+      join silent_auction_items item
+        on item.id = bid.item_id
+      join silent_auctions auction
+        on auction.id = item.auction_id
       where auction.tenant_slug = $1
       order by bid.created_at desc
       limit 500
@@ -573,8 +584,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           </a>
         </div>
       </section>
-
-      <section className="summaryGrid" style={styles.summaryGrid}>
+            <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Visible orders" value={filteredOrders.length} />
         <SummaryCard label="All orders" value={allOrders.length} />
         <SummaryCard label="Unique customers" value={uniqueCustomers} />
@@ -599,7 +609,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
               style={styles.input}
             />
           </label>
-                    <label style={styles.field}>
+
+          <label style={styles.field}>
             <span style={styles.label}>Type</span>
             <select name="type" defaultValue={selectedType} style={styles.input}>
               <option value="all">All activity</option>
@@ -903,7 +914,8 @@ const responsiveStyles = `
     max-width: 100% !important;
     padding: 14px 10px 42px !important;
   }
-    .orders-page .hero {
+
+  .orders-page .hero {
     padding: 18px !important;
     border-radius: 24px !important;
     gap: 14px !important;
@@ -948,7 +960,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
