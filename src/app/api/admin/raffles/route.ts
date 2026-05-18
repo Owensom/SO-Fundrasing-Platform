@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { queryOne } from "@/lib/db";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { canPublishAnotherCampaign } from "@/lib/subscription-capabilities";
 import { createRaffle, listRaffles } from "../../../../../api/_lib/raffles-repo";
 
 export const runtime = "nodejs";
@@ -89,7 +92,6 @@ function normaliseDrawAt(value: FormDataEntryValue | null) {
   const clean = String(value ?? "").trim();
   return clean ? clean : null;
 }
-
 export async function GET(request: NextRequest) {
   const tenantSlug = getTenantSlugFromRequest(request);
 
@@ -149,11 +151,68 @@ export async function POST(request: NextRequest) {
     const currency = String(formData.get("currency") ?? "EUR").trim();
     const status = String(formData.get("status") ?? "draft").trim();
 
+    if (status === "published") {
+      const activeCampaignCounts = await queryOne<{
+        total: number;
+      }>(
+        `
+        select (
+          (
+            select count(*)
+            from raffles
+            where tenant_slug = $1
+              and status = 'published'
+          ) +
+          (
+            select count(*)
+            from squares_games
+            where tenant_slug = $1
+              and status = 'published'
+          ) +
+          (
+            select count(*)
+            from events
+            where tenant_slug = $1
+              and status = 'published'
+          ) +
+          (
+            select count(*)
+            from auctions
+            where tenant_slug = $1
+              and status = 'published'
+          )
+        )::int as total
+        `,
+        [tenantSlug],
+      );
+
+      const currentActiveCampaigns = Number(
+        activeCampaignCounts?.total || 0,
+      );
+
+      const tenantSettings = await getTenantSettings(tenantSlug);
+
+      const allowedToPublish = canPublishAnotherCampaign({
+        subscription_tier: tenantSettings?.subscription_tier,
+        currentActiveCampaigns,
+      });
+
+      if (!allowedToPublish) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Community tier is limited to 2 active published campaigns. Upgrade to Professional for unlimited campaigns.",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const ticket_price = parseNumber(formData.get("ticket_price"), 0);
     const startNumber = parseNumber(formData.get("startNumber"), 1);
     const endNumber = parseNumber(formData.get("endNumber"), 1);
-
-    const colours = parseColours(String(formData.get("colours") ?? ""));
+        const colours = parseColours(String(formData.get("colours") ?? ""));
     const offers = parseJsonArray(String(formData.get("offers") ?? "[]"));
     const prizes = parseJsonArray(String(formData.get("prizes") ?? "[]"));
     const question = parseLegalQuestion(String(formData.get("question") ?? ""));
@@ -190,7 +249,7 @@ export async function POST(request: NextRequest) {
       image_focus_x,
       image_focus_y,
       currency: currency as "GBP" | "USD" | "EUR",
-      ticket_price,
+            ticket_price,
       total_tickets,
       sold_tickets: 0,
       status: status as "draft" | "published" | "closed" | "drawn",
