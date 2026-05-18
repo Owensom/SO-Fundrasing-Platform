@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
@@ -6,6 +7,7 @@ import { canPublishAnotherCampaign } from "@/lib/subscription-capabilities";
 import { createRaffle, listRaffles } from "../../../../../api/_lib/raffles-repo";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function parseNumber(
   value: FormDataEntryValue | string | null | undefined,
@@ -93,31 +95,66 @@ function normaliseDrawAt(value: FormDataEntryValue | null) {
   return clean ? clean : null;
 }
 
+async function requireTenantAccess(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const tenantSlug = getTenantSlugFromRequest(request);
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    tenantSlug,
+  };
+}
+
 async function canTenantPublishCampaign(tenantSlug: string) {
   const activeCampaignCounts = await queryOne<{
     total: number;
   }>(
     `
-    select (
-      (
-        select count(*)
-        from raffles
-        where tenant_slug = $1
-          and status = 'published'
-      ) +
-      (
-        select count(*)
-        from squares_games
-        where tenant_slug = $1
-          and status = 'published'
-      ) +
-      (
-        select count(*)
-        from events
-        where tenant_slug = $1
-          and status = 'published'
-      )
-    )::int as total
+      select (
+        (
+          select count(*)
+          from raffles
+          where tenant_slug = $1
+            and status = 'published'
+        ) +
+        (
+          select count(*)
+          from squares_games
+          where tenant_slug = $1
+            and status = 'published'
+        ) +
+        (
+          select count(*)
+          from events
+          where tenant_slug = $1
+            and status = 'published'
+        )
+      )::int as total
     `,
     [tenantSlug],
   );
@@ -132,17 +169,14 @@ async function canTenantPublishCampaign(tenantSlug: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const tenantSlug = getTenantSlugFromRequest(request);
+  const access = await requireTenantAccess(request);
 
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
+  if (!access.ok) {
+    return access.response;
   }
 
   try {
-    const items = await listRaffles(tenantSlug);
+    const items = await listRaffles(access.tenantSlug);
 
     return NextResponse.json({
       ok: true,
@@ -160,16 +194,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireTenantAccess(request);
+
+    if (!access.ok) {
+      return access.response;
+    }
+
+    const tenantSlug = access.tenantSlug;
     const formData = await request.formData();
 
-    const tenantSlug =
-      getTenantSlugFromRequest(request) ||
-      String(formData.get("tenantSlug") ?? "").trim();
+    const submittedTenantSlug = String(formData.get("tenantSlug") ?? "").trim();
 
-    if (!tenantSlug) {
+    if (submittedTenantSlug && submittedTenantSlug !== tenantSlug) {
       return NextResponse.json(
-        { ok: false, error: "Tenant not found" },
-        { status: 404 },
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
       );
     }
 
@@ -195,10 +234,7 @@ export async function POST(request: NextRequest) {
 
       if (!allowedToPublish) {
         return NextResponse.redirect(
-          new URL(
-            "/admin/raffles/new?error=campaign_limit",
-            request.url,
-          ),
+          new URL("/admin/raffles/new?error=campaign_limit", request.url),
           { status: 303 },
         );
       }
