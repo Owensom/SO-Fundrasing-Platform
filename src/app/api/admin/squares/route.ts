@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
@@ -9,6 +10,9 @@ import {
   normalisePrizes,
   slugify,
 } from "../../../../../api/_lib/squares-repo";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function parseNumber(
   value: FormDataEntryValue | string | null | undefined,
@@ -78,31 +82,66 @@ function parseDrawAt(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+async function requireTenantAccess(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const tenantSlug = getTenantSlugFromRequest(request);
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    tenantSlug,
+  };
+}
+
 async function canTenantPublishCampaign(tenantSlug: string) {
   const activeCampaignCounts = await queryOne<{
     total: number;
   }>(
     `
-    select (
-      (
-        select count(*)
-        from raffles
-        where tenant_slug = $1
-          and status = 'published'
-      ) +
-      (
-        select count(*)
-        from squares_games
-        where tenant_slug = $1
-          and status = 'published'
-      ) +
-      (
-        select count(*)
-        from events
-        where tenant_slug = $1
-          and status = 'published'
-      )
-    )::int as total
+      select (
+        (
+          select count(*)
+          from raffles
+          where tenant_slug = $1
+            and status = 'published'
+        ) +
+        (
+          select count(*)
+          from squares_games
+          where tenant_slug = $1
+            and status = 'published'
+        ) +
+        (
+          select count(*)
+          from events
+          where tenant_slug = $1
+            and status = 'published'
+        )
+      )::int as total
     `,
     [tenantSlug],
   );
@@ -117,17 +156,14 @@ async function canTenantPublishCampaign(tenantSlug: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const tenantSlug = getTenantSlugFromRequest(request);
+  const access = await requireTenantAccess(request);
 
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
+  if (!access.ok) {
+    return access.response;
   }
 
   try {
-    const items = await listSquaresGames(tenantSlug);
+    const items = await listSquaresGames(access.tenantSlug);
 
     return NextResponse.json({
       ok: true,
@@ -144,17 +180,25 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const tenantSlug = getTenantSlugFromRequest(request);
+  const access = await requireTenantAccess(request);
 
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
+  if (!access.ok) {
+    return access.response;
   }
+
+  const tenantSlug = access.tenantSlug;
 
   try {
     const formData = await request.formData();
+
+    const submittedTenantSlug = String(formData.get("tenantSlug") ?? "").trim();
+
+    if (submittedTenantSlug && submittedTenantSlug !== tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      );
+    }
 
     const title = String(formData.get("title") ?? "").trim();
     const rawSlug = String(formData.get("slug") ?? "").trim();
