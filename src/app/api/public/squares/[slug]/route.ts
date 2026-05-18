@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { query } from "@/lib/db";
 import { getSquaresGameByTenantAndSlug } from "../../../../../../api/_lib/squares-repo";
+
+type PublicSquaresWinnerRow = {
+  id: string;
+  prize_title: string;
+  square_number: number;
+  customer_name: string | null;
+};
 
 function normaliseFocus(value: unknown, fallback = 50) {
   const parsed = Number(value);
@@ -38,6 +46,21 @@ export async function GET(
     const imageFocusX = normaliseFocus(config.image_focus_x, 50);
     const imageFocusY = normaliseFocus(config.image_focus_y, 50);
 
+    const winners = await query<PublicSquaresWinnerRow>(
+      `
+        select
+          id,
+          prize_title,
+          square_number,
+          customer_name
+        from squares_winners
+        where tenant_slug = $1
+          and game_id = $2
+        order by prize_index asc, created_at asc
+      `,
+      [tenantSlug, game.id],
+    );
+
     return NextResponse.json({
       ok: true,
       game: {
@@ -61,7 +84,12 @@ export async function GET(
         reservedSquares: Array.isArray(config.reserved)
           ? config.reserved
           : [],
-        winners: [],
+        winners: winners.map((winner) => ({
+          id: winner.id,
+          prize_title: winner.prize_title,
+          square_number: Number(winner.square_number),
+          customer_name: winner.customer_name,
+        })),
         question: config.question ?? null,
         freeEntry: config.free_entry
           ? {
