@@ -12,6 +12,7 @@ type Props = {
 };
 
 type EventType = "general_admission" | "reserved_seating" | "tables";
+type TableShape = "round" | "square" | "rectangle";
 type SectionTone = "default" | "tickets" | "seating" | "media" | "prize";
 
 type PrizeRow = {
@@ -33,6 +34,7 @@ type TicketTypeRow = {
 };
 
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
+const TABLE_SHAPE_KEY = "__table_shape";
 
 const DEFAULT_TICKETS: TicketTypeRow[] = [
   {
@@ -105,10 +107,24 @@ function cleanFocus(value: number | null | undefined) {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
+function cleanTableShape(value: string): TableShape {
+  if (value === "square" || value === "rectangle" || value === "round") {
+    return value;
+  }
+
+  return "round";
+}
+
 function formatEventType(value: EventType) {
   if (value === "reserved_seating") return "Reserved seating";
   if (value === "tables") return "Tables";
   return "General admission";
+}
+
+function formatTableShape(value: TableShape) {
+  if (value === "square") return "Square tables";
+  if (value === "rectangle") return "Rectangle tables";
+  return "Round tables";
 }
 
 function formatPreviewMoney(value: number | string, currency: string) {
@@ -223,6 +239,7 @@ export default function NewEventForm({
   const [tableCount, setTableCount] = useState("");
   const [tableSeatsPerTable, setTableSeatsPerTable] = useState("");
   const [tableInitialTicketTypeId, setTableInitialTicketTypeId] = useState("");
+  const [tableShape, setTableShape] = useState<TableShape>("round");
   const [tableNames, setTableNames] = useState<Record<string, string>>({});
 
   const tableNumbers = useMemo(() => {
@@ -296,7 +313,8 @@ export default function NewEventForm({
 
     return rowCount * seats;
   }, [rowRows, rowSeatsPerRow]);
-    const tableSeatsPreview = useMemo(() => {
+
+  const tableSeatsPreview = useMemo(() => {
     return toPositiveNumber(tableCount) * toPositiveNumber(tableSeatsPerTable);
   }, [tableCount, tableSeatsPerTable]);
 
@@ -374,17 +392,20 @@ export default function NewEventForm({
   }, [tableCount, tableSeatsPerTable, tableInitialTicketTypeId]);
 
   const tableNamesValue = useMemo(() => {
-    return JSON.stringify(
-      Object.fromEntries(
-        tableNumbers
-          .map((tableNumber) => [
-            tableNumber,
-            String(tableNames[tableNumber] || "").trim(),
-          ])
-          .filter(([, name]) => name),
-      ),
-    );
-  }, [tableNames, tableNumbers]);
+    const tableNamesPayload: Record<string, string> = {
+      [TABLE_SHAPE_KEY]: tableShape,
+    };
+
+    for (const tableNumber of tableNumbers) {
+      const name = String(tableNames[tableNumber] || "").trim();
+
+      if (name) {
+        tableNamesPayload[tableNumber] = name;
+      }
+    }
+
+    return JSON.stringify(tableNamesPayload);
+  }, [tableNames, tableNumbers, tableShape]);
 
   function updateTitle(value: string) {
     setTitle(value);
@@ -584,7 +605,8 @@ export default function NewEventForm({
           </div>
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard label="Event type" value={formatEventType(eventType)} />
 
         <SummaryCard label="Ticket types" value={`${activeTicketCount} active`} />
@@ -649,6 +671,10 @@ export default function NewEventForm({
             label="Capacity"
             value={seatingPreview > 0 ? seatingPreview : "Not set"}
           />
+
+          {eventType === "tables" ? (
+            <PreviewLine label="Table shape" value={formatTableShape(tableShape)} />
+          ) : null}
 
           <PreviewLine label="Starts" value={formatDatePreview(startsAt)} />
 
@@ -906,7 +932,8 @@ export default function NewEventForm({
                   />
                 </Field>
               </div>
-                            <div style={styles.threeCol}>
+
+              <div style={styles.threeCol}>
                 <Field label="Price">
                   <input
                     value={ticketType.price}
@@ -1072,7 +1099,7 @@ export default function NewEventForm({
         <SectionCard
           number="03"
           title="Table seating"
-          description="Generate table seats during creation and optionally name tables."
+          description="Generate table seats during creation, choose the table shape and optionally name tables."
           badge={
             tableSeatsPreview ? `${tableSeatsPreview} places` : "Optional"
           }
@@ -1099,6 +1126,20 @@ export default function NewEventForm({
                           {ticketType.name}
                         </option>
                       ))}
+                  </select>
+                </Field>
+
+                <Field label="Table shape">
+                  <select
+                    value={tableShape}
+                    onChange={(event) =>
+                      setTableShape(cleanTableShape(event.target.value))
+                    }
+                    style={styles.input}
+                  >
+                    <option value="round">Round tables</option>
+                    <option value="square">Square tables</option>
+                    <option value="rectangle">Rectangle tables</option>
                   </select>
                 </Field>
 
@@ -1145,6 +1186,14 @@ export default function NewEventForm({
                   {tableSeatsPreview
                     ? `${tableCount || 0} tables • ${tableSeatsPreview} places`
                     : "No tables configured yet"}
+                </div>
+              </div>
+
+              <div style={{ ...styles.previewInfoCard, marginTop: 12 }}>
+                <div style={styles.previewInfoLabel}>Shape</div>
+
+                <div style={styles.previewInfoValue}>
+                  {formatTableShape(tableShape)}
                 </div>
               </div>
             </div>
@@ -1302,6 +1351,7 @@ export default function NewEventForm({
     </form>
   );
 }
+
 function SectionCard({
   number,
   title,
