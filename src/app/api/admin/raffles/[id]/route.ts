@@ -39,7 +39,10 @@ function normaliseFocus(value: FormDataEntryValue | null, fallback = 50) {
   return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
-function parsePositiveInteger(value: FormDataEntryValue | null, fallback: number) {
+function parsePositiveInteger(
+  value: FormDataEntryValue | null,
+  fallback: number,
+) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
@@ -49,15 +52,26 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   try {
-    const user = await auth();
+    const session = await auth();
 
-    if (!user) {
+    if (!session?.user) {
       return NextResponse.redirect(new URL("/admin/login", req.url), {
         status: 303,
       });
     }
 
     const tenantSlug = await getTenantSlugFromHeaders();
+
+    const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+      ? session.user.tenantSlugs.map((value) => String(value))
+      : [];
+
+    if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+      return NextResponse.redirect(
+        new URL("/admin/login?error=tenant_access_denied", req.url),
+        { status: 303 },
+      );
+    }
 
     const raffle = await getRaffleById(params.id);
 
@@ -108,32 +122,27 @@ export async function POST(
         total: number;
       }>(
         `
-        select (
-          (
-            select count(*)
+          select count(*)::int as total
+          from (
+            select 1
             from raffles
             where tenant_slug = $1
               and status = 'published'
-          ) +
-          (
-            select count(*)
+
+            union all
+
+            select 1
             from squares_games
             where tenant_slug = $1
               and status = 'published'
-          ) +
-          (
-            select count(*)
+
+            union all
+
+            select 1
             from events
             where tenant_slug = $1
               and status = 'published'
-          ) +
-          (
-            select count(*)
-            from auctions
-            where tenant_slug = $1
-              and status = 'published'
-          )
-        )::int as total
+          ) active_campaigns
         `,
         [tenantSlug],
       );
@@ -221,38 +230,38 @@ export async function POST(
 
     await queryOne(
       `
-      update raffles
-      set
-        config_json = jsonb_set(
-          jsonb_set(
+        update raffles
+        set
+          config_json = jsonb_set(
             jsonb_set(
               jsonb_set(
                 jsonb_set(
-                  coalesce(config_json, '{}'::jsonb),
-                  '{auto_draw_from_prize}',
-                  to_jsonb($3::int),
+                  jsonb_set(
+                    coalesce(config_json, '{}'::jsonb),
+                    '{auto_draw_from_prize}',
+                    to_jsonb($3::int),
+                    true
+                  ),
+                  '{auto_draw_to_prize}',
+                  to_jsonb($4::int),
                   true
                 ),
-                '{auto_draw_to_prize}',
-                to_jsonb($4::int),
+                '{free_entry}',
+                $5::jsonb,
                 true
               ),
-              '{free_entry}',
-              $5::jsonb,
+              '{image_focus_x}',
+              to_jsonb($6::int),
               true
             ),
-            '{image_focus_x}',
-            to_jsonb($6::int),
+            '{image_focus_y}',
+            to_jsonb($7::int),
             true
           ),
-          '{image_focus_y}',
-          to_jsonb($7::int),
-          true
-        ),
-        updated_at = now()
-      where id = $1
-        and tenant_slug = $2
-      returning id
+          updated_at = now()
+        where id = $1
+          and tenant_slug = $2
+        returning id
       `,
       [
         params.id,
