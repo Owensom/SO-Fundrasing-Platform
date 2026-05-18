@@ -395,20 +395,15 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                       Upload or replace the public image for this squares game.
                     </p>
 
-                    <ImageFocusUploadField
-                      currentImageUrl={game.image_url || ""}
-                      currentFocusX={imageFocusX}
-                      currentFocusY={imageFocusY}
-                      label="Squares image"
-                      previewAlt={game.title}
-                      subscriptionTier={
-                        tenantSettings?.subscription_tier
-                      }
-                      customImagesAllowed={
-                        customImagesCapability.allowed
-                      }
-                      upgradeMessage="Upgrade to Professional to unlock custom squares campaign images."
-                    />
+                 <ImageFocusUploadField
+                  currentImageUrl={game.image_url || ""}
+                  currentFocusX={imageFocusX}
+                  currentFocusY={imageFocusY}
+                  label="Squares image"
+                  previewAlt={game.title}
+                  subscriptionTier={tenantSettings?.subscription_tier}
+                  customImagesAllowed={customImagesCapability.allowed}
+                />
                   </div>
 
                   <div style={styles.previewBox}>
