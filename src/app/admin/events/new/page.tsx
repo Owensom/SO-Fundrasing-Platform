@@ -1,12 +1,56 @@
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
 import NewEventForm from "@/components/admin/NewEventForm";
 
-export default async function NewEventPage() {
+type PageProps = {
+  searchParams?: Promise<{
+    error?: string;
+  }>;
+};
+
+type PublishedEventCountRow = {
+  active_count: string | number;
+};
+
+function getSubscriptionTier(
+  tenantSettings:
+    | {
+        subscription_tier?: string | null;
+        subscriptionTier?: string | null;
+      }
+    | null
+    | undefined,
+) {
+  return String(
+    tenantSettings?.subscription_tier ||
+      tenantSettings?.subscriptionTier ||
+      "community",
+  )
+    .trim()
+    .toLowerCase();
+}
+
+async function getPublishedEventCountForTenant(tenantSlug: string) {
+  const rows = await query<PublishedEventCountRow>(
+    `
+      select count(*) as active_count
+      from events
+      where tenant_slug = $1
+        and status = 'published'
+    `,
+    [tenantSlug],
+  );
+
+  return Number(rows[0]?.active_count || 0);
+}
+
+export default async function NewEventPage({ searchParams }: PageProps) {
   const session = await auth();
 
   if (!session?.user) {
@@ -23,6 +67,7 @@ export default async function NewEventPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
+  const resolvedSearchParams = await searchParams;
   const tenantSettings = await getTenantSettings(tenantSlug);
 
   const customImagesCapability = checkSubscriptionCapability(
@@ -30,9 +75,36 @@ export default async function NewEventPage() {
     "custom_campaign_images",
   );
 
+  const subscriptionTier = getSubscriptionTier(tenantSettings);
+  const publishedEventCount = await getPublishedEventCountForTenant(tenantSlug);
+  const communityPublishedEventLimitReached =
+    subscriptionTier === "community" && publishedEventCount >= 1;
+  const showCampaignLimitBanner =
+    resolvedSearchParams?.error === "campaign-limit" ||
+    communityPublishedEventLimitReached;
+
   return (
     <main className="new-event-page" style={styles.page}>
       <style>{responsiveStyles}</style>
+
+      {showCampaignLimitBanner ? (
+        <section className="campaign-limit-banner" style={styles.limitBanner}>
+          <div style={styles.limitContent}>
+            <div style={styles.limitEyebrow}>Premium campaign limit</div>
+            <h1 style={styles.limitTitle}>
+              Community plans include one active published event.
+            </h1>
+            <p style={styles.limitText}>
+              You can still create and save draft events. To publish more than
+              one event at the same time, upgrade your plan from Billing.
+            </p>
+          </div>
+
+          <Link href="/admin/billing" style={styles.limitButton}>
+            View billing plans
+          </Link>
+        </section>
+      ) : null}
 
       <NewEventForm
         tenantSlug={tenantSlug}
@@ -51,6 +123,23 @@ const responsiveStyles = `
 
   .new-event-page {
     overflow-x: hidden;
+  }
+
+  .campaign-limit-banner {
+    width: 100%;
+  }
+
+  @media (max-width: 720px) {
+    .campaign-limit-banner {
+      align-items: stretch !important;
+      flex-direction: column !important;
+    }
+
+    .campaign-limit-banner a {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
   }
 
   @media (max-width: 640px) {
@@ -72,5 +161,60 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
     overflowX: "hidden",
     boxSizing: "border-box",
+  },
+  limitBanner: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 18,
+    marginBottom: 22,
+    padding: "20px 22px",
+    borderRadius: 24,
+    border: "1px solid rgba(202, 138, 4, 0.28)",
+    background:
+      "linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.92))",
+    boxShadow: "0 18px 42px rgba(15, 23, 42, 0.08)",
+  },
+  limitContent: {
+    minWidth: 0,
+  },
+  limitEyebrow: {
+    marginBottom: 6,
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+  },
+  limitTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: 22,
+    fontWeight: 900,
+    letterSpacing: "-0.04em",
+    lineHeight: 1.1,
+  },
+  limitText: {
+    maxWidth: 720,
+    margin: "8px 0 0",
+    color: "#78350f",
+    fontSize: 14,
+    fontWeight: 700,
+    lineHeight: 1.6,
+  },
+  limitButton: {
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#111827",
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: 900,
+    textDecoration: "none",
+    boxShadow: "0 14px 28px rgba(15, 23, 42, 0.18)",
   },
 };
