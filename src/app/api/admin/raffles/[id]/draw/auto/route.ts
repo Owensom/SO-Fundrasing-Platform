@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { query, queryOne } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { sendWinnerEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -93,6 +94,19 @@ export async function POST(
       );
     }
 
+    const tenantSlug = await getTenantSlugFromHeaders();
+
+    const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+      ? session.user.tenantSlugs.map((value) => String(value))
+      : [];
+
+    if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      );
+    }
+
     const formData = await request.formData();
 
     const fromPrize =
@@ -110,12 +124,13 @@ export async function POST(
 
     const raffle = await queryOne<RaffleRow>(
       `
-      select id, tenant_slug, title, config_json
-      from raffles
-      where id = $1
-      limit 1
+        select id, tenant_slug, title, config_json
+        from raffles
+        where id = $1
+          and tenant_slug = $2
+        limit 1
       `,
-      [params.id],
+      [params.id, tenantSlug],
     );
 
     if (!raffle) {
@@ -127,11 +142,12 @@ export async function POST(
 
     const existingWinners = await query<WinnerRow>(
       `
-      select prize_position, ticket_number
-      from raffle_winners
-      where raffle_id = $1
+        select prize_position, ticket_number
+        from raffle_winners
+        where tenant_slug = $1
+          and raffle_id = $2
       `,
-      [raffle.id],
+      [tenantSlug, raffle.id],
     );
 
     const usedPrizePositions = new Set(
@@ -162,18 +178,19 @@ export async function POST(
 
     const soldTickets = await query<SoldTicketRow>(
       `
-      select
-        id as sale_id,
-        ticket_number,
-        colour,
-        buyer_name,
-        buyer_email
-      from raffle_ticket_sales
-      where raffle_id = $1
-        and ticket_number is not null
-      order by created_at asc
+        select
+          id as sale_id,
+          ticket_number,
+          colour,
+          buyer_name,
+          buyer_email
+        from raffle_ticket_sales
+        where tenant_slug = $1
+          and raffle_id = $2
+          and ticket_number is not null
+        order by created_at asc
       `,
-      [raffle.id],
+      [tenantSlug, raffle.id],
     );
 
     const availableTickets = shuffle(
@@ -206,30 +223,31 @@ export async function POST(
       const ticket = availableTickets[index];
       const winnerEmail = cleanEmail(ticket.buyer_email);
       const winnerName = cleanName(ticket.buyer_name);
+      const prizeTitle = getPrizeTitle(raffle.config_json, prizePosition);
 
       const winner = await queryOne(
         `
-        insert into raffle_winners (
-          id,
-          tenant_slug,
-          raffle_id,
-          prize_position,
-          prize_title,
-          ticket_number,
-          colour,
-          sale_id,
-          buyer_name,
-          buyer_email
-        )
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        returning *
+          insert into raffle_winners (
+            id,
+            tenant_slug,
+            raffle_id,
+            prize_position,
+            prize_title,
+            ticket_number,
+            colour,
+            sale_id,
+            buyer_name,
+            buyer_email
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          returning *
         `,
         [
           crypto.randomUUID(),
-          raffle.tenant_slug,
+          tenantSlug,
           raffle.id,
           prizePosition,
-          getPrizeTitle(raffle.config_json, prizePosition),
+          prizeTitle,
           Number(ticket.ticket_number),
           ticket.colour,
           ticket.sale_id,
@@ -257,6 +275,7 @@ export async function POST(
           to: winnerEmail,
           name: winnerName,
           raffleTitle: raffle.title,
+          prizeTitle,
           ticketNumber: Number(ticket.ticket_number),
           colour: ticket.colour,
         });
