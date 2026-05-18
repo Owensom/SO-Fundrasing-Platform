@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { query, queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
@@ -56,31 +57,68 @@ function parseDateTime(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+async function requireTenantAccess(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const tenantSlug = getTenantSlugFromRequest(request);
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    session,
+    tenantSlug,
+  };
+}
+
 async function canTenantPublishCampaign(tenantSlug: string) {
   const activeCampaignCounts = await queryOne<{
     total: number;
   }>(
     `
-    select (
-      (
-        select count(*)
+      select count(*)::int as total
+      from (
+        select 1
         from raffles
         where tenant_slug = $1
           and status = 'published'
-      ) +
-      (
-        select count(*)
+
+        union all
+
+        select 1
         from squares_games
         where tenant_slug = $1
           and status = 'published'
-      ) +
-      (
-        select count(*)
+
+        union all
+
+        select 1
         from events
         where tenant_slug = $1
           and status = 'published'
-      )
-    )::int as total
+      ) active_campaigns
     `,
     [tenantSlug],
   );
@@ -95,15 +133,14 @@ async function canTenantPublishCampaign(tenantSlug: string) {
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const id = context.params.id;
+  const access = await requireTenantAccess(request);
 
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
+  if (!access.ok) {
+    return access.response;
   }
+
+  const { tenantSlug } = access;
+  const id = context.params.id;
 
   try {
     const game = await getSquaresGameById(id);
@@ -117,8 +154,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     if (game.tenant_slug !== tenantSlug) {
       return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 },
+        { ok: false, error: "Squares game not found" },
+        { status: 404 },
       );
     }
 
@@ -134,15 +171,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const tenantSlug = getTenantSlugFromRequest(request);
-  const id = context.params.id;
+  const access = await requireTenantAccess(request);
 
-  if (!tenantSlug) {
-    return NextResponse.json(
-      { ok: false, error: "Tenant not found" },
-      { status: 404 },
-    );
+  if (!access.ok) {
+    return access.response;
   }
+
+  const { tenantSlug } = access;
+  const id = context.params.id;
 
   try {
     const existing = await getSquaresGameById(id);
@@ -156,8 +192,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (existing.tenant_slug !== tenantSlug) {
       return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 },
+        { ok: false, error: "Squares game not found" },
+        { status: 404 },
       );
     }
 
