@@ -3,6 +3,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import AdminSeatManager from "@/components/admin/events/AdminSeatManager";
 import TableNamesEditor from "@/components/admin/events/TableNamesEditor";
@@ -228,7 +230,6 @@ function parseMenuOptionsFromForm(formData: FormData): EventMenuOption[] {
     };
   }).filter((option) => option.name);
 }
-
 function parsePrizeSelection(
   value: FormDataEntryValue | null,
 ): ParsedPrizeSelection | null {
@@ -311,6 +312,7 @@ function expandRows(value: string): string[] {
 
   return Array.from(new Set(rows));
 }
+
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Tables";
@@ -496,7 +498,6 @@ async function updateMenuOptionsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
-
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
@@ -646,6 +647,7 @@ async function clearTicketTypesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
+
 async function applySeatTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -744,7 +746,6 @@ async function updateSelectedSeatsStatusAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-status#${returnAnchor}`);
 }
-
 async function deleteSelectedSeatsAction(formData: FormData) {
   "use server";
 
@@ -1030,7 +1031,6 @@ async function runWinnerDrawAction(formData: FormData) {
     }#winner-draw`,
   );
 }
-
 async function deleteWinnerAction(formData: FormData) {
   "use server";
 
@@ -1201,6 +1201,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1230,6 +1231,13 @@ export default async function AdminEventManagePage({
   ) {
     redirect("/admin/login?error=tenant_access_denied");
   }
+
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
+  );
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
@@ -1403,8 +1411,7 @@ export default async function AdminEventManagePage({
           View public page
         </a>
       </section>
-
-      <nav className="tabs" style={styles.tabs}>
+            <nav className="tabs" style={styles.tabs}>
         <a href="#overview" className="tab" style={styles.tab}>
           Overview
         </a>
@@ -1525,6 +1532,8 @@ export default async function AdminEventManagePage({
                   currentFocusY={event.image_focus_y ?? 50}
                   label="Event image upload"
                   previewAlt={event.title}
+                  subscriptionTier={tenantSettings?.subscription_tier}
+                  customImagesAllowed={customImagesCapability.allowed}
                 />
               </div>
 
