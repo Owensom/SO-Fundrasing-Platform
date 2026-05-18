@@ -3,6 +3,10 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
+  canPublishAnotherCampaign,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
+import {
   createEvent,
   createEventSeat,
   createEventTicketType,
@@ -35,9 +39,8 @@ type TableConfigInput = {
   ticket_type_id?: string;
 };
 
-type TenantSettingsWithTier = {
-  subscription_tier?: string | null;
-  subscriptionTier?: string | null;
+type ActiveCampaignCountRow = {
+  active_count: string | number;
 };
 
 function positiveInteger(
@@ -205,21 +208,30 @@ function localTicketIdToCreatedId(
   return ticketTypeIdMap.get(localId) || null;
 }
 
-function getSubscriptionTier(settings: TenantSettingsWithTier | null | undefined) {
-  return String(
-    settings?.subscription_tier || settings?.subscriptionTier || "community",
-  )
-    .trim()
-    .toLowerCase();
-}
-
-async function getPublishedEventCountForTenant(tenantSlug: string) {
-  const rows = await query<{ active_count: string | number }>(
+async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
     `
       select count(*) as active_count
-      from events
-      where tenant_slug = $1
-        and status = 'published'
+      from (
+        select id
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select id
+        from squares
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select id
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
     `,
     [tenantSlug],
   );
@@ -227,18 +239,18 @@ async function getPublishedEventCountForTenant(tenantSlug: string) {
   return Number(rows[0]?.active_count || 0);
 }
 
-async function communityPublishedEventLimitReached(tenantSlug: string) {
+async function canPublishEventForTenant(tenantSlug: string) {
   const tenantSettings = await getTenantSettings(tenantSlug);
-  const subscriptionTier = getSubscriptionTier(tenantSettings);
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+  const currentActiveCampaigns =
+    await getActivePublishedCampaignCountForTenant(tenantSlug);
 
-  if (subscriptionTier !== "community") {
-    return false;
-  }
-
-  const activePublishedEventCount =
-    await getPublishedEventCountForTenant(tenantSlug);
-
-  return activePublishedEventCount >= 1;
+  return canPublishAnotherCampaign({
+    subscription_tier: subscriptionTier,
+    currentActiveCampaigns,
+  });
 }
 
 export async function POST(request: Request) {
@@ -263,10 +275,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (
-      status === "published" &&
-      (await communityPublishedEventLimitReached(tenantSlug))
-    ) {
+    if (status === "published" && !(await canPublishEventForTenant(tenantSlug))) {
       return NextResponse.redirect(
         new URL("/admin/events/new?error=campaign-limit", request.url),
       );
