@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
 import { queryOne } from "@/lib/db";
 import {
   getRaffleById,
@@ -9,6 +10,7 @@ import {
   updateRaffleColours,
   updateRaffleImagePosition,
 } from "@/lib/raffles";
+import { canPublishAnotherCampaign } from "@/lib/subscription-capabilities";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,6 +102,62 @@ export async function POST(
     );
 
     const status = String(formData.get("status") || "draft");
+
+    if (status === "published" && raffle.status !== "published") {
+      const activeCampaignCounts = await queryOne<{
+        total: number;
+      }>(
+        `
+        select (
+          (
+            select count(*)
+            from raffles
+            where tenant_slug = $1
+              and status = 'published'
+          ) +
+          (
+            select count(*)
+            from squares_games
+            where tenant_slug = $1
+              and status = 'published'
+          ) +
+          (
+            select count(*)
+            from events
+            where tenant_slug = $1
+              and status = 'published'
+          ) +
+          (
+            select count(*)
+            from auctions
+            where tenant_slug = $1
+              and status = 'published'
+          )
+        )::int as total
+        `,
+        [tenantSlug],
+      );
+
+      const currentActiveCampaigns = Number(activeCampaignCounts?.total || 0);
+      const tenantSettings = await getTenantSettings(tenantSlug);
+
+      const allowedToPublish = canPublishAnotherCampaign({
+        subscription_tier: tenantSettings?.subscription_tier,
+        currentActiveCampaigns,
+      });
+
+      if (!allowedToPublish) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Community tier is limited to 2 active published campaigns. Upgrade to Professional for unlimited campaigns.",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const currency = String(formData.get("currency") || "GBP");
 
     const freeEntry = {
