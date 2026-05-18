@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
@@ -145,10 +146,25 @@ export default async function AdminSquaresEditPage({
   params,
   searchParams,
 }: PageProps) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
   const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
   const game = await getSquaresGameById(params.id);
 
-  if (!tenantSlug || !game || game.tenant_slug !== tenantSlug) {
+  if (!game || game.tenant_slug !== tenantSlug) {
     notFound();
   }
 
@@ -180,7 +196,8 @@ export default async function AdminSquaresEditPage({
   const savedPrizes = Array.isArray(config.prizes)
     ? (config.prizes as Prize[])
     : [];
-    const soldSquareOptions: SoldSquareOption[] = sales
+
+  const soldSquareOptions: SoldSquareOption[] = sales
     .flatMap((sale: any) =>
       Array.isArray(sale.squares)
         ? sale.squares.map((squareNumber: number | string) => ({
@@ -260,8 +277,7 @@ export default async function AdminSquaresEditPage({
           </div>
         </section>
       ) : null}
-
-      <section style={styles.hero}>
+            <section style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Squares editor</div>
 
@@ -312,7 +328,8 @@ export default async function AdminSquaresEditPage({
           />
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard
           label="Price"
           value={formatMoney(game.price_per_square_cents, currency)}
@@ -460,7 +477,8 @@ export default async function AdminSquaresEditPage({
                   </div>
                 </div>
               </section>
-                            <CompactDetails
+
+              <CompactDetails
                 eyebrow="Squares setup"
                 title="Board, pricing & status"
                 description="Configure board size, pricing, draw date and publication status."
@@ -559,8 +577,7 @@ export default async function AdminSquaresEditPage({
                     />
                   </Field>
                 </div>
-
-                <Field label="Postal address">
+                                <Field label="Postal address">
                   <textarea
                     name="free_entry_address"
                     rows={2}
@@ -670,7 +687,8 @@ export default async function AdminSquaresEditPage({
           </button>
         </section>
       </form>
-            <section style={styles.section}>
+
+      <section style={styles.section}>
         <details style={styles.adminDetails}>
           <summary style={styles.adminSummary}>
             <div>
@@ -860,6 +878,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -915,7 +934,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
     marginBottom: 16,
   },
-  upgradeEyebrow: {
+    upgradeEyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
     borderRadius: 999,
