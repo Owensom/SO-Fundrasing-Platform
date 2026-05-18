@@ -2,6 +2,8 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
 import {
   getSquaresGameById,
   listSquaresSales,
@@ -144,6 +146,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
     notFound();
   }
 
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
+  );
+
   const [winners, sales] = await Promise.all([
     safeListSquaresWinners(game.id),
     safeListSquaresSales(game.id),
@@ -205,8 +214,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
 
   const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
   const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
-
-  return (
+    return (
     <main style={styles.page}>
       <section style={styles.topBar}>
         <Link href="/admin/squares" style={styles.backLink}>
@@ -326,6 +334,12 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <div style={styles.summaryPillRow}>
                 <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
                 <StatusMiniPill label="Postal" active={postalEntryEnabled} />
+
+                <StatusMiniPill
+                  label="Custom images"
+                  active={customImagesCapability.allowed}
+                />
+
                 <span style={styles.adminSummaryToggle}>Open / close</span>
               </div>
             </summary>
@@ -387,6 +401,13 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                       currentFocusY={imageFocusY}
                       label="Squares image"
                       previewAlt={game.title}
+                      subscriptionTier={
+                        tenantSettings?.subscription_tier
+                      }
+                      customImagesAllowed={
+                        customImagesCapability.allowed
+                      }
+                      upgradeMessage="Upgrade to Professional to unlock custom squares campaign images."
                     />
                   </div>
 
@@ -410,8 +431,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
                   </div>
                 </div>
               </section>
-
-              <CompactDetails
+                            <CompactDetails
                 eyebrow="Squares setup"
                 title="Board, pricing & status"
                 description="Configure board size, pricing, draw date and publication status."
@@ -648,8 +668,7 @@ export default async function AdminSquaresEditPage({ params }: PageProps) {
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
-
-          <div style={styles.adminDetailsBody}>
+                    <div style={styles.adminDetailsBody}>
             {winners.length ? (
               <div style={styles.winnerList}>
                 {winners.map((winner: any) => (
@@ -812,7 +831,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1143,7 +1161,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
   },
-  innerHeader: {
+    innerHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
