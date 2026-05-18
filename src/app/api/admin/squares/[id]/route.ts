@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import { query, queryOne } from "@/lib/db";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { canPublishAnotherCampaign } from "@/lib/subscription-capabilities";
 import {
   getSquaresGameById,
   normalisePrizes,
   slugify,
 } from "../../../../../../api/_lib/squares-repo";
-import { query } from "@/lib/db";
 
 type RouteContext = {
   params: {
@@ -52,6 +54,44 @@ function parseDateTime(value: FormDataEntryValue | null) {
   if (Number.isNaN(date.getTime())) return null;
 
   return date.toISOString();
+}
+
+async function canTenantPublishCampaign(tenantSlug: string) {
+  const activeCampaignCounts = await queryOne<{
+    total: number;
+  }>(
+    `
+    select (
+      (
+        select count(*)
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+      ) +
+      (
+        select count(*)
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+      ) +
+      (
+        select count(*)
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      )
+    )::int as total
+    `,
+    [tenantSlug],
+  );
+
+  const currentActiveCampaigns = Number(activeCampaignCounts?.total || 0);
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  return canPublishAnotherCampaign({
+    subscription_tier: tenantSettings?.subscription_tier,
+    currentActiveCampaigns,
+  });
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
@@ -150,6 +190,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
 
     const status = String(formData.get("status") ?? existing.status);
+
+    if (status === "published" && existing.status !== "published") {
+      const allowedToPublish = await canTenantPublishCampaign(tenantSlug);
+
+      if (!allowedToPublish) {
+        return NextResponse.redirect(
+          new URL(`/admin/squares/${id}?error=campaign_limit`, request.url),
+          { status: 303 },
+        );
+      }
+    }
 
     const totalSquares = Math.min(
       500,
