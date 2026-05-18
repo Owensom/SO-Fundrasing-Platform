@@ -226,7 +226,8 @@ export default async function TenantCampaignsPage({
     tenantSettings,
     "auctions",
   );
-    const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
+
+  const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
     if (campaign.status !== "published") {
       return false;
     }
@@ -267,6 +268,7 @@ export default async function TenantCampaignsPage({
           <img
             src="/brand/so-logo-full.png"
             alt="SO Fundraising Platform"
+            className="logoImage"
             style={styles.logoImage}
           />
         </Link>
@@ -281,7 +283,7 @@ export default async function TenantCampaignsPage({
           </Link>
 
           {canShowAdminReturn ? (
-            <Link href={adminReturn} style={styles.adminBackTop}>
+            <Link href={adminReturn} className="adminBackTop" style={styles.adminBackTop}>
               <span style={styles.adminBackIcon}>↩</span>
               <span>Back to admin</span>
             </Link>
@@ -307,6 +309,7 @@ export default async function TenantCampaignsPage({
           <div className="heroActions" style={styles.heroActions}>
             <Link
               href={`/c/${tenantSlug}/terms`}
+              className="primaryHeroButton"
               style={styles.primaryHeroButton}
             >
               Terms of Use
@@ -314,14 +317,14 @@ export default async function TenantCampaignsPage({
 
             <Link
               href={`/c/${tenantSlug}/privacy`}
+              className="secondaryHeroButton"
               style={styles.secondaryHeroButton}
             >
               Privacy Policy
             </Link>
           </div>
         </div>
-
-        <div className="heroPanel" style={styles.heroPanel}>
+                <div className="heroPanel" style={styles.heroPanel}>
           <div style={styles.heroPanelTitle}>Live now</div>
 
           <div className="heroStats" style={styles.heroStats}>
@@ -396,7 +399,8 @@ export default async function TenantCampaignsPage({
             >
               Raffles {raffles.length}
             </Link>
-                        <Link
+
+            <Link
               href={getFilterHref({
                 tenantSlug,
                 type: "squares",
@@ -477,7 +481,7 @@ export default async function TenantCampaignsPage({
                   className="campaignCard"
                   style={styles.card}
                 >
-                  <div style={styles.imageWrap}>
+                  <div className="imageWrap" style={styles.imageWrap}>
                     <img
                       src={campaign.imageUrl || getDefaultImage(campaign.type)}
                       alt={campaign.title}
@@ -522,8 +526,10 @@ export default async function TenantCampaignsPage({
                       </p>
                     )}
 
-                    <div style={styles.cardFooter}>
-                      <span style={styles.button}>View campaign</span>
+                    <div className="cardFooter" style={styles.cardFooter}>
+                      <span className="button" style={styles.button}>
+                        View campaign
+                      </span>
 
                       <span style={styles.cardHint}>Support now →</span>
                     </div>
@@ -585,6 +591,7 @@ function TrustStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .campaigns-page,
 .campaigns-page * {
@@ -592,6 +599,8 @@ const responsiveStyles = `
 }
 
 .campaigns-page {
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -602,6 +611,10 @@ const responsiveStyles = `
 .campaigns-page header,
 .campaigns-page nav {
   min-width: 0;
+}
+
+.campaigns-page img {
+  max-width: 100%;
 }
 
 .campaigns-page .filterStrip a {
@@ -643,8 +656,12 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .campaigns-page .heroPanel {
+    width: 100% !important;
+  }
+
   .campaigns-page .heroStats {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 
@@ -656,11 +673,19 @@ const responsiveStyles = `
   .campaigns-page .topBar {
     margin-left: -10px !important;
     margin-right: -10px !important;
-    padding: 14px !important;
+    padding: 14px 12px !important;
+  }
+
+  .campaigns-page .logoLink {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
   .campaigns-page .logoImage {
-    height: 46px !important;
+    width: min(100%, 260px) !important;
+    height: auto !important;
+    max-height: 50px !important;
+    object-fit: contain !important;
   }
 
   .campaigns-page .topNav {
@@ -682,14 +707,21 @@ const responsiveStyles = `
   }
 
   .campaigns-page .hero {
+    width: 100% !important;
     margin-top: 14px !important;
     padding: 20px !important;
     border-radius: 26px !important;
   }
 
   .campaigns-page .title {
-    font-size: clamp(38px, 12vw, 54px) !important;
-    line-height: 0.98 !important;
+    font-size: clamp(34px, 12vw, 48px) !important;
+    line-height: 1.02 !important;
+    letter-spacing: -0.06em !important;
+  }
+
+  .campaigns-page .subtitle {
+    font-size: 16px !important;
+    line-height: 1.55 !important;
   }
 
   .campaigns-page .heroActions,
@@ -714,25 +746,73 @@ const responsiveStyles = `
     flex-wrap: nowrap !important;
     -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important;
+    padding: 10px !important;
+    border-radius: 18px !important;
   }
 
   .campaigns-page .filterStrip::-webkit-scrollbar {
     display: none !important;
   }
+
+  .campaigns-page .filterStrip > span {
+    flex: 0 0 auto !important;
+  }
+
+  .campaigns-page .filterStrip > a {
+    flex: 0 0 auto !important;
+  }
+
+  .campaigns-page .trustCard {
+    padding: 18px !important;
+    border-radius: 24px !important;
+  }
 }
 
 @media (max-width: 480px) {
+  .campaigns-page {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .campaigns-page .topBar {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+  }
+
+  .campaigns-page .hero {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .campaigns-page .badge {
+    max-width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: normal !important;
+  }
+
+  .campaigns-page .title {
+    font-size: clamp(31px, 13vw, 42px) !important;
+  }
+
   .campaigns-page .heroStats {
     grid-template-columns: 1fr 1fr !important;
   }
 
-  .campaigns-page .card {
+  .campaigns-page .campaignCard {
     min-height: auto !important;
-    padding: 14px !important;
+    padding: 12px !important;
+    border-radius: 22px !important;
   }
 
   .campaigns-page .imageWrap {
-    height: 190px !important;
+    height: 178px !important;
+    border-radius: 18px !important;
+  }
+
+  .campaigns-page .cardTitle {
+    font-size: 24px !important;
+    line-height: 1.12 !important;
   }
 
   .campaigns-page .cardFooter {
@@ -744,16 +824,24 @@ const responsiveStyles = `
     width: 100% !important;
     justify-content: center !important;
   }
+
+  .campaigns-page .emptyCard {
+    padding: 20px !important;
+    border-radius: 22px !important;
+  }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
+    width: "100%",
+    maxWidth: "100%",
     background:
       "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 28%), radial-gradient(circle at top right, rgba(15,23,42,0.06), transparent 30%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
     padding: "0 16px 64px",
     color: "#0f172a",
+    overflowX: "hidden",
+    boxSizing: "border-box",
   },
 
   topBar: {
@@ -829,6 +917,7 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     position: "relative",
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto 18px",
     display: "grid",
@@ -842,6 +931,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 28px 70px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+    boxSizing: "border-box",
   },
 
   heroGlow: {
@@ -940,6 +1030,7 @@ const styles: Record<string, CSSProperties> = {
     alignContent: "start",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
+    minWidth: 0,
   },
 
   heroPanelTitle: {
@@ -961,6 +1052,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(148,163,184,0.25)",
+    minWidth: 0,
   },
 
   featuredLink: {
@@ -973,6 +1065,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
     border: "1px solid rgba(217,119,6,0.44)",
+    overflowWrap: "anywhere",
   },
 
   featuredKicker: {
@@ -984,6 +1077,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   filterStrip: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto 18px",
     display: "flex",
@@ -995,6 +1089,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #dbeafe",
     boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
+    boxSizing: "border-box",
   },
 
   filterLabel: {
@@ -1028,6 +1123,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   grid: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     display: "grid",
@@ -1047,6 +1143,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#111827",
     boxShadow: "0 14px 38px rgba(15,23,42,0.075)",
     minHeight: 460,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   imageWrap: {
@@ -1150,6 +1248,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   trustCard: {
+    width: "100%",
     maxWidth: 1180,
     margin: "20px auto 0",
     display: "grid",
@@ -1160,6 +1259,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #dbeafe",
     boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
+    boxSizing: "border-box",
   },
 
   trustKicker: {
@@ -1176,6 +1276,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 30,
     letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
   trustText: {
@@ -1198,9 +1299,11 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   emptyCard: {
+    width: "100%",
     maxWidth: 1180,
     margin: "0 auto",
     padding: 28,
@@ -1208,12 +1311,14 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #dbeafe",
     boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
+    boxSizing: "border-box",
   },
 
   emptyTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 28,
+    overflowWrap: "anywhere",
   },
 
   muted: {
