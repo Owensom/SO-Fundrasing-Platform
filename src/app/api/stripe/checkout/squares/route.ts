@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
+import { getTenantSlugFromRequest } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
-import {
-  getSquaresGameById,
-  getSquaresReservationByToken,
-  markSquaresReservationCheckoutSession,
-} from "../../../../../../api/_lib/squares-repo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +17,19 @@ type TenantConnectStatus = {
   stripe_connect_charges_enabled: boolean | null;
   stripe_connect_payouts_enabled: boolean | null;
   stripe_connect_details_submitted: boolean | null;
+};
+
+type VerifiedSquaresCheckoutRow = {
+  game_id: string;
+  tenant_slug: string;
+  slug: string;
+  title: string;
+  currency: string | null;
+  price_per_square_cents: number | null;
+  status: string | null;
+  reservation_token: string;
+  payment_status: string | null;
+  squares: number[] | null;
 };
 
 function safePercent(value: unknown) {
@@ -101,9 +110,49 @@ async function getTenantConnectStatus(
 
   return rows[0] || null;
 }
+
+async function getVerifiedSquaresCheckout(input: {
+  tenantSlug: string;
+  gameId: string;
+  reservationToken: string;
+}) {
+  return queryOne<VerifiedSquaresCheckoutRow>(
+    `
+      select
+        sg.id as game_id,
+        sg.tenant_slug,
+        sg.slug,
+        sg.title,
+        sg.currency,
+        sg.price_per_square_cents,
+        sg.status,
+        sr.reservation_token,
+        sr.payment_status,
+        sr.squares
+      from squares_games sg
+      inner join squares_reservations sr
+        on sr.game_id = sg.id
+      where sg.tenant_slug = $1
+        and sg.id = $2
+        and sr.reservation_token = $3
+      limit 1
+    `,
+    [input.tenantSlug, input.gameId, input.reservationToken],
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    const tenantSlug = getTenantSlugFromRequest(req);
+
+    if (!tenantSlug) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant not found" },
+        { status: 404 },
+      );
+    }
 
     const gameId = String(body.gameId || "").trim();
     const reservationToken = String(body.reservationToken || "").trim();
@@ -116,36 +165,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [game, reservation] = await Promise.all([
-      getSquaresGameById(gameId),
-      getSquaresReservationByToken(reservationToken),
-    ]);
+    const checkout = await getVerifiedSquaresCheckout({
+      tenantSlug,
+      gameId,
+      reservationToken,
+    });
 
-    if (!game) {
-      return NextResponse.json(
-        { ok: false, error: "Squares game not found" },
-        { status: 404 },
-      );
-    }
-
-    if (!reservation || reservation.game_id !== game.id) {
+    if (!checkout) {
       return NextResponse.json(
         { ok: false, error: "Reservation not found" },
         { status: 404 },
       );
     }
 
-    if (reservation.payment_status !== "reserved") {
+    if (checkout.status !== "published") {
+      return NextResponse.json(
+        { ok: false, error: "Squares game is not available" },
+        { status: 400 },
+      );
+    }
+
+    if (checkout.payment_status !== "reserved") {
       return NextResponse.json(
         { ok: false, error: "Reservation is not available" },
         { status: 400 },
       );
     }
 
-    const squares = Array.isArray(reservation.squares)
-      ? reservation.squares
+    const squares = Array.isArray(checkout.squares)
+      ? checkout.squares
           .map((square) => Number(square))
-          .filter(Number.isFinite)
+          .filter((square) => Number.isInteger(square) && square > 0)
       : [];
 
     const quantity = squares.length;
@@ -157,7 +207,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pricePerSquareCents = Number(game.price_per_square_cents || 0);
+    const pricePerSquareCents = Number(checkout.price_per_square_cents || 0);
 
     if (!Number.isFinite(pricePerSquareCents) || pricePerSquareCents <= 0) {
       return NextResponse.json(
@@ -172,15 +222,8 @@ export async function POST(req: NextRequest) {
       : 0;
     const totalAmount = baseAmount + supporterContributionCents;
 
-    const tenantSlug = String(game.tenant_slug || "").trim();
-
-    const tenantSettings = tenantSlug
-      ? await getTenantSettings(tenantSlug)
-      : null;
-
-    const connectStatus = tenantSlug
-      ? await getTenantConnectStatus(tenantSlug)
-      : null;
+    const tenantSettings = await getTenantSettings(tenantSlug);
+    const connectStatus = await getTenantConnectStatus(tenantSlug);
 
     const connectAccountId = getUsableConnectAccountId({
       settingsAccountId: tenantSettings?.stripe_connect_account_id,
@@ -205,19 +248,20 @@ export async function POST(req: NextRequest) {
 
     const origin = req.nextUrl.origin;
     const successUrl = `${origin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${origin}/s/${game.slug}`;
+    const cancelUrl = `${origin}/s/${checkout.slug}`;
 
     const squaresJson = JSON.stringify(squares);
-        const session = await stripe.checkout.sessions.create({
+
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
 
       line_items: [
         {
           price_data: {
-            currency: String(game.currency || "GBP").toLowerCase(),
+            currency: String(checkout.currency || "GBP").toLowerCase(),
             product_data: {
-              name: game.title || "Squares Game",
+              name: checkout.title || "Squares Game",
               description: `${quantity} square${quantity === 1 ? "" : "s"}`,
             },
             unit_amount: totalAmount,
@@ -242,9 +286,9 @@ export async function POST(req: NextRequest) {
 
       metadata: {
         type: "squares",
-        game_id: game.id,
-        squares_game_id: game.id,
-        game_title: game.title || "Squares Game",
+        game_id: checkout.game_id,
+        squares_game_id: checkout.game_id,
+        game_title: checkout.title || "Squares Game",
         tenant_slug: tenantSlug,
         reservation_token: reservationToken,
         quantity: String(quantity),
@@ -265,16 +309,21 @@ export async function POST(req: NextRequest) {
           ? String(platformCommissionCents)
           : "0",
 
-        // Important: webhook currently reads this exact key.
         squares_json: squaresJson,
-
-        // Keep old key too, harmless backward compatibility.
         squares: squaresJson,
       },
     });
 
     if (session.id) {
-      await markSquaresReservationCheckoutSession(reservationToken, session.id);
+      await query(
+        `
+          update squares_reservations
+          set stripe_checkout_session_id = $1
+          where reservation_token = $2
+            and game_id = $3
+        `,
+        [session.id, reservationToken, checkout.game_id],
+      );
     }
 
     return NextResponse.json({
