@@ -31,6 +31,7 @@ function shuffle<T>(items: T[]) {
   for (let index = copy.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     const current = copy[index];
+
     copy[index] = copy[swapIndex];
     copy[swapIndex] = current;
   }
@@ -55,6 +56,42 @@ function getPrizeTitle(prizes: PrizeRow[], index: number) {
   return `Prize ${index + 1}`;
 }
 
+async function requireTenantAccess(req: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    session,
+    tenantSlug,
+  };
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -62,17 +99,16 @@ export async function POST(
   try {
     const { id } = await params;
 
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
+    const access = await requireTenantAccess(req);
+
+    if (!access.ok) {
+      return access.response;
     }
 
-    const tenantSlug = getTenantSlugFromHeaders();
+    const { session, tenantSlug } = access;
 
     const raffle = await getRaffleById(id);
+
     if (!raffle || raffle.tenant_slug !== tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Raffle not found" },
@@ -86,14 +122,14 @@ export async function POST(
     if (action === "close") {
       const updated = await query(
         `
-        update raffles
-        set
-          status = 'closed',
-          updated_at = now()
-        where id = $1
-          and tenant_slug = $2
-          and status = 'published'
-        returning id
+          update raffles
+          set
+            status = 'closed',
+            updated_at = now()
+          where id = $1
+            and tenant_slug = $2
+            and status = 'published'
+          returning id
         `,
         [raffle.id, tenantSlug],
       );
@@ -118,18 +154,19 @@ export async function POST(
 
       const soldTickets = await query<SoldTicketRow>(
         `
-        select
-          id as sale_id,
-          ticket_number,
-          colour,
-          buyer_name,
-          buyer_email
-        from raffle_ticket_sales
-        where raffle_id = $1
-          and ticket_number is not null
-        order by created_at asc
+          select
+            id as sale_id,
+            ticket_number,
+            colour,
+            buyer_name,
+            buyer_email
+          from raffle_ticket_sales
+          where tenant_slug = $1
+            and raffle_id = $2
+            and ticket_number is not null
+          order by created_at asc
         `,
-        [raffle.id],
+        [tenantSlug, raffle.id],
       );
 
       if (!soldTickets.length) {
@@ -156,6 +193,7 @@ export async function POST(
             const title = String(prize?.title ?? prize?.name ?? "").trim();
             const isPublic =
               prize?.isPublic !== false && prize?.is_public !== false;
+
             return title && isPublic;
           })
         : [];
@@ -167,33 +205,45 @@ export async function POST(
         Math.min(winnerCount, validSoldTickets.length),
       );
 
-      await query("delete from raffle_winners where raffle_id = $1", [
-        raffle.id,
-      ]);
+      await query(
+        `
+          delete from raffle_winners
+          where tenant_slug = $1
+            and raffle_id = $2
+        `,
+        [tenantSlug, raffle.id],
+      );
 
       for (let index = 0; index < winners.length; index += 1) {
         const winner = winners[index];
+        const prizeTitle = getPrizeTitle(prizes, index);
 
         await query(
           `
-          insert into raffle_winners (
-            id,
-            raffle_id,
-            prize_position,
-            ticket_number,
-            colour,
-            buyer_name,
-            buyer_email,
-            drawn_at
-          )
-          values ($1, $2, $3, $4, $5, $6, $7, now())
+            insert into raffle_winners (
+              id,
+              tenant_slug,
+              raffle_id,
+              prize_position,
+              prize_title,
+              ticket_number,
+              colour,
+              sale_id,
+              buyer_name,
+              buyer_email,
+              drawn_at
+            )
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
           `,
           [
             crypto.randomUUID(),
+            tenantSlug,
             raffle.id,
             index + 1,
+            prizeTitle,
             Number(winner.ticket_number),
             winner.colour,
+            winner.sale_id,
             cleanName(winner.buyer_name),
             cleanEmail(winner.buyer_email) || null,
           ],
@@ -204,17 +254,17 @@ export async function POST(
 
       await query(
         `
-        update raffles
-        set
-          status = 'drawn',
-          winner_ticket_number = $3,
-          winner_colour = $4,
-          winner_sale_id = $5,
-          drawn_at = now(),
-          drawn_by = $6,
-          updated_at = now()
-        where id = $1
-          and tenant_slug = $2
+          update raffles
+          set
+            status = 'drawn',
+            winner_ticket_number = $3,
+            winner_colour = $4,
+            winner_sale_id = $5,
+            drawn_at = now(),
+            drawn_by = $6,
+            updated_at = now()
+          where id = $1
+            and tenant_slug = $2
         `,
         [
           raffle.id,
@@ -237,6 +287,7 @@ export async function POST(
 
         if (!winnerEmail) {
           skippedWinnerEmails += 1;
+
           console.warn("Winner email skipped - missing buyer_email", {
             raffleId: raffle.id,
             ticketNumber: winner.ticket_number,
@@ -244,6 +295,7 @@ export async function POST(
             saleId: winner.sale_id,
             prizeTitle,
           });
+
           continue;
         }
 
@@ -311,6 +363,7 @@ export async function POST(
       }
 
       await deleteRaffle(raffle.id, tenantSlug);
+
       return NextResponse.json({ ok: true });
     }
 
