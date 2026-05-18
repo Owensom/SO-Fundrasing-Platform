@@ -141,6 +141,7 @@ function getSectionToneStyle(tone: SectionTone): CSSProperties {
 function prizeText(count: number) {
   return `${count} prize${count === 1 ? "" : "s"}`;
 }
+
 export default function NewSquaresGamePage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -163,7 +164,6 @@ export default function NewSquaresGamePage() {
   const [freeEntryAddress, setFreeEntryAddress] = useState("");
   const [freeEntryInstructions, setFreeEntryInstructions] = useState("");
   const [freeEntryClosesAt, setFreeEntryClosesAt] = useState("");
-
   const [campaignLimitReached, setCampaignLimitReached] = useState(false);
 
   const [prizes, setPrizes] = useState<PrizeRow[]>([
@@ -185,8 +185,7 @@ export default function NewSquaresGamePage() {
     return prizes.filter((prize) => prize.title.trim() && prize.is_public)
       .length;
   }, [prizes]);
-
-  const prizesValue = useMemo(() => {
+    const prizesValue = useMemo(() => {
     const clean = prizes
       .map((prize, index) => {
         const position = Number(prize.position);
@@ -212,56 +211,60 @@ export default function NewSquaresGamePage() {
     return JSON.stringify(clean);
   }, [prizes]);
 
-  const board = useMemo(() => {
-    const total = Math.max(1, toInt(totalSquares, 100));
-    return getBoardShape(total);
-  }, [totalSquares]);
+  const questionValue = useMemo(() => {
+    const text = questionText.trim();
+    const answer = questionAnswer.trim();
 
-  const totalRevenue = useMemo(() => {
-    const total = Math.max(0, toInt(totalSquares, 0));
-    const price = Math.max(0, toMoney(pricePerSquare, 0));
+    if (!text || !answer) return "";
 
-    return total * price;
-  }, [totalSquares, pricePerSquare]);
+    return JSON.stringify({ text, answer });
+  }, [questionText, questionAnswer]);
 
-  const heroDescription =
-    description.trim() ||
-    "Build a premium fundraising squares experience with live draw excitement, premium visuals and integrated checkout.";
+  const freeEntryValue = useMemo(() => {
+    const address = freeEntryAddress.trim();
+    const instructions = freeEntryInstructions.trim();
+    const closes_at = freeEntryClosesAt.trim();
 
-  const previewImage = imageUrl || DEFAULT_SQUARES_IMAGE;
+    if (!address && !instructions && !closes_at) return "";
 
-  const hasQuestion = questionText.trim().length > 0;
-  const hasPostalEntry =
-    freeEntryAddress.trim().length > 0 ||
-    freeEntryInstructions.trim().length > 0;
+    return JSON.stringify({
+      address,
+      instructions,
+      closes_at: closes_at ? new Date(closes_at).toISOString() : null,
+    });
+  }, [freeEntryAddress, freeEntryInstructions, freeEntryClosesAt]);
+
+  const boardSize = Math.max(1, Math.min(500, toInt(totalSquares, 100)));
+  const price = Math.max(0, toMoney(pricePerSquare, 0));
+  const estimatedTotal = boardSize * price;
+  const boardShape = getBoardShape(boardSize);
+  const hasLegalQuestion = Boolean(questionText.trim() && questionAnswer.trim());
+  const hasFreeEntry = Boolean(
+    freeEntryAddress.trim() ||
+      freeEntryInstructions.trim() ||
+      freeEntryClosesAt.trim(),
+  );
+
+  function updatePrize(id: string, patch: Partial<PrizeRow>) {
+    setPrizes((current) =>
+      current.map((prize) =>
+        prize.id === id ? { ...prize, ...patch } : prize,
+      ),
+    );
+  }
 
   function addPrize() {
     setPrizes((current) => [
       ...current,
-      makePrize(
-        safeId("prize"),
-        String(current.length + 1),
-        `${current.length + 1}${current.length + 1 === 1 ? "st" : "th"} Prize`,
-      ),
+      makePrize(safeId("prize"), String(current.length + 1)),
     ]);
-  }
-
-  function updatePrize(
-    id: string,
-    field: keyof PrizeRow,
-    value: string | boolean,
-  ) {
-    setPrizes((current) =>
-      current.map((prize) =>
-        prize.id === id ? { ...prize, [field]: value } : prize,
-      ),
-    );
   }
 
   function removePrize(id: string) {
     setPrizes((current) => current.filter((prize) => prize.id !== id));
   }
-    return (
+
+  return (
     <form
       className="new-squares-form"
       action="/api/admin/squares"
@@ -270,15 +273,20 @@ export default function NewSquaresGamePage() {
     >
       <style>{responsiveStyles}</style>
 
-      <div style={styles.topBar}>
-        <Link href="/admin/squares" style={styles.backLink}>
+      <input type="hidden" name="image_position" value="center" />
+      <input type="hidden" name="prizes" value={prizesValue} />
+      <input type="hidden" name="question" value={questionValue} />
+      <input type="hidden" name="free_entry" value={freeEntryValue} />
+
+      <section style={styles.topActions}>
+        <Link href="/admin/squares" style={styles.backButton}>
           ← Back to squares
         </Link>
 
-        <Link href="/admin" style={styles.dashboardLink}>
+        <Link href="/admin" style={styles.dashboardButton}>
           Dashboard
         </Link>
-      </div>
+      </section>
 
       {campaignLimitReached ? (
         <section style={styles.upgradeBanner}>
@@ -301,7 +309,7 @@ export default function NewSquaresGamePage() {
             </Link>
 
             <Link href="/admin/squares" style={styles.secondaryUpgradeButton}>
-              Manage campaigns
+              Manage squares
             </Link>
           </div>
         </section>
@@ -312,229 +320,245 @@ export default function NewSquaresGamePage() {
           <div style={styles.eyebrow}>Squares builder</div>
 
           <div style={styles.heroTitleRow}>
-            <h1 className="so-brand-heading" style={styles.heroTitle}>
-              {title.trim() || "Create a premium squares experience"}
+            <h1 style={styles.heroTitle}>
+              {title.trim() ? title : "Build a premium squares game"}
             </h1>
 
-            <div style={styles.statusPill}>
-              {status === "published" ? "Published" : "Draft"}
-            </div>
+            <div style={styles.statusPill}>{status || "draft"}</div>
           </div>
+                    <p style={styles.heroSlug}>/s/{slug.trim() ? slug : "squares-slug"}</p>
 
-          <p style={styles.heroSlug}>
-            {slug.trim() ? `/s/${slug}` : "/s/your-squares-page"}
+          <p style={styles.heroDescription}>
+            Create the public campaign, configure the board, set pricing, add
+            prizes and keep legal entry requirements in one polished setup flow.
           </p>
 
-          <p style={styles.heroDescription}>{heroDescription}</p>
-
-          <div style={styles.heroUseCase}>
-            Perfect for sports clubs, schools, charities and gala fundraising
-            nights with instant live excitement.
-          </div>
+          <p style={styles.heroUseCase}>
+            Perfect for football cards, race nights, finals, ceilidhs and live
+            fundraising events.
+          </p>
 
           <div style={styles.heroMetricGrid}>
+            <HeroMetric label="Total squares" value={boardSize} />
+
             <HeroMetric
-              label="Squares"
-              value={Math.max(1, toInt(totalSquares, 100))}
+              label="Price / square"
+              value={formatPreviewMoney(price, currency)}
             />
 
             <HeroMetric
-              label="Price"
-              value={formatPreviewMoney(pricePerSquare, currency)}
+              label="Max sales"
+              value={formatPreviewMoney(estimatedTotal, currency)}
             />
 
             <HeroMetric
-              label="Revenue"
-              value={formatPreviewMoney(totalRevenue, currency)}
-            />
-
-            <HeroMetric
-              label="Prizes"
+              label="Public prizes"
               value={prizeText(publicPrizesCount)}
             />
           </div>
         </div>
 
         <div style={styles.previewShell}>
-          <div style={styles.previewBadge}>Live preview</div>
+          <div style={styles.previewBadge}>Public preview</div>
 
           <div style={styles.previewImageWrap}>
-            <img
-              src={previewImage}
-              alt={title.trim() || "Squares preview"}
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "block",
-                objectFit: imageUrl ? "cover" : "contain",
-                objectPosition: `${imageFocusX}% ${imageFocusY}%`,
-                background:
-                  "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-              }}
-            />
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Squares preview"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: `${imageFocusX}% ${imageFocusY}%`,
+                  display: "block",
+                }}
+              />
+            ) : (
+              <img
+                src={DEFAULT_SQUARES_IMAGE}
+                alt="Squares placeholder"
+                style={styles.placeholderImage}
+              />
+            )}
           </div>
 
           <div style={styles.previewCardBody}>
             <div style={styles.previewTitle}>
-              {title.trim() || "Premium fundraising squares"}
+              {title.trim() ? title : "Your squares game"}
             </div>
 
             <div style={styles.previewText}>
-              {description.trim() ||
-                "Your public squares page preview updates live while you build."}
+              {description.trim()
+                ? description.trim().slice(0, 92)
+                : "A short public summary of your squares game will appear here."}
+              {description.trim().length > 92 ? "…" : ""}
             </div>
 
             <div style={styles.previewMetaGrid}>
-              <div style={styles.previewMetaItem}>
-                {Math.max(1, toInt(totalSquares, 100))} squares
-              </div>
+              <span style={styles.previewMetaItem}>
+                {formatPreviewMoney(price, currency)} each
+              </span>
 
-              <div style={styles.previewMetaItem}>
-                {formatPreviewMoney(pricePerSquare, currency)}
-              </div>
+              <span style={styles.previewMetaItem}>{boardSize} squares</span>
 
-              <div style={styles.previewMetaItem}>
+              <span style={styles.previewMetaItem}>
                 {formatDatePreview(drawAt)}
-              </div>
+              </span>
 
-              <div style={styles.previewMetaItem}>
-                {publicPrizesCount} visible prizes
-              </div>
+              <span style={styles.previewMetaItem}>
+                {prizeText(publicPrizesCount)}
+              </span>
             </div>
           </div>
         </div>
       </section>
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard
-          label="Projected revenue"
-          value={formatPreviewMoney(totalRevenue, currency)}
+          label="Estimated revenue"
+          value={formatPreviewMoney(estimatedTotal, currency)}
+        />
+
+        <SummaryCard label="Board size" value={`${boardSize} squares`} />
+
+        <SummaryCard
+          label="Draw status"
+          value={drawAt ? "Scheduled" : "Not scheduled"}
         />
 
         <SummaryCard
-          label="Board layout"
-          value={`${board.columns} × ${board.rows}`}
+          label="Legal readiness"
+          value={hasLegalQuestion || hasFreeEntry ? "In progress" : "Not set"}
         />
 
-        <SummaryCard
-          label="Public prizes"
-          value={prizeText(publicPrizesCount)}
-        />
-
-        <SummaryCard
-          label="Draw date"
-          value={drawAt ? formatDatePreview(drawAt) : "Not scheduled"}
-        />
+        <SummaryCard label="Public prizes" value={prizeText(publicPrizesCount)} />
       </section>
 
-      <SectionCard
+      <section style={styles.readinessGrid}>
+        <ReadinessCard eyebrow="Campaign readiness" title="Before publishing">
+          <CheckItem done={Boolean(title.trim())}>Add campaign title</CheckItem>
+          <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
+          <CheckItem done={Boolean(description.trim())}>Add description</CheckItem>
+          <CheckItem done={boardSize > 0}>Set board size</CheckItem>
+          <CheckItem done={price > 0}>Set price per square</CheckItem>
+          <CheckItem done={publicPrizesCount > 0}>Add public prize</CheckItem>
+        </ReadinessCard>
+
+        <ReadinessCard
+          eyebrow="Sales preview"
+          title={formatPreviewMoney(estimatedTotal, currency)}
+        >
+          <PreviewLine label="Board" value={`${boardSize} squares`} />
+          <PreviewLine
+            label="Price"
+            value={`${formatPreviewMoney(price, currency)} each`}
+          />
+          <PreviewLine
+            label="Layout"
+            value={`${boardShape.columns} × ${boardShape.rows}`}
+          />
+        </ReadinessCard>
+
+        <ReadinessCard eyebrow="Compliance preview" title="Legal checks">
+          <CheckItem done={hasLegalQuestion}>Skill question configured</CheckItem>
+          <CheckItem done={hasFreeEntry}>Free postal entry configured</CheckItem>
+          <CheckItem done={Boolean(drawAt)}>Draw date scheduled</CheckItem>
+        </ReadinessCard>
+      </section>
+            <SectionCard
         number="01"
         title="Campaign details"
-        description="Configure the public squares page title, slug, description and visual branding."
+        description="Set the public title, URL, description and draw date."
+        badge={drawAt ? "Draw scheduled" : undefined}
         tone="default"
-        badge="Core setup"
       >
         <div style={styles.twoColumn}>
-          <Field label="Squares title">
+          <Field label="Squares game title">
             <input
               name="title"
               required
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Friday Night Jackpot Squares"
               style={styles.input}
+              placeholder="Summer fundraiser squares"
             />
           </Field>
 
           <Field label="Public URL slug">
             <input
               name="slug"
-              required
               value={slug}
               onChange={(event) => {
                 setSlugEdited(true);
                 setSlug(slugify(event.target.value));
               }}
-              placeholder="friday-night-jackpot"
               style={styles.input}
+              placeholder="summer-fundraiser-squares"
             />
           </Field>
         </div>
 
-        <Field label="Description">
+        <Field label="Public description">
           <textarea
             name="description"
             rows={4}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="Describe the fundraiser, event or game."
             style={styles.textarea}
+            placeholder="Describe the game, prizes, event details and draw information."
           />
         </Field>
 
-        <div style={styles.mediaBox}>
-          <div style={styles.mediaControls}>
-            <h3 style={styles.subTitle}>Squares image</h3>
+        <div style={styles.twoColumn}>
+          <Field label="Draw date">
+            <div style={styles.dateInputWrap}>
+              <input
+                name="draw_at"
+                type="datetime-local"
+                value={drawAt}
+                onChange={(event) => setDrawAt(event.target.value)}
+                style={styles.dateInput}
+              />
 
-            <p style={styles.helpText}>
-              Upload a premium hero image to represent your fundraiser publicly.
-            </p>
+              {!drawAt ? (
+                <div style={styles.fakePlaceholder}>
+                  Select date and time
+                </div>
+              ) : null}
+            </div>
+          </Field>
 
-        <ImageFocusUploadField
-  currentImageUrl={imageUrl}
-  currentFocusX={imageFocusX}
-  currentFocusY={imageFocusY}
-  label="Squares image"
-  previewAlt={title.trim() || "Squares preview"}
-  customImagesAllowed={true}
-  onImageUrlChange={setImageUrl}
-  onFocusXChange={setImageFocusX}
-  onFocusYChange={setImageFocusY}
-/>
+          <div style={styles.drawPreviewField}>
+            <div style={styles.drawPreviewInline}>
+              <span style={styles.previewInfoLabel}>Draw preview</span>
 
-          <div style={styles.previewBoxLarge}>
-            <img
-              src={previewImage}
-              alt="Squares preview"
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "block",
-                objectFit: imageUrl ? "cover" : "contain",
-                objectPosition: `${imageFocusX}% ${imageFocusY}%`,
-                background:
-                  "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-              }}
-            />
+              <span style={styles.previewInfoValue}>
+                {formatDatePreview(drawAt)}
+              </span>
+            </div>
           </div>
         </div>
-
-        <input type="hidden" name="image_url" value={imageUrl} />
-        <input
-          type="hidden"
-          name="image_focus_x"
-          value={String(imageFocusX)}
-        />
-        <input
-          type="hidden"
-          name="image_focus_y"
-          value={String(imageFocusY)}
-        />
       </SectionCard>
 
       <SectionCard
         number="02"
-        title="Board setup"
-        description="Configure square count, pricing, draw timing and publication status."
+        title="Squares setup"
+        description="Configure board size, square pricing, currency and publication status."
+        badge={`${boardSize} squares • ${formatPreviewMoney(
+          price,
+          currency,
+        )} each`}
         tone="setup"
-        badge={`${Math.max(1, toInt(totalSquares, 100))} squares`}
       >
         <div style={styles.fourColumn}>
-          <Field label="Total squares">
+          <Field label="Number of squares">
             <input
               name="total_squares"
               type="number"
               min={1}
               max={500}
+              required
               value={totalSquares}
               onChange={(event) => setTotalSquares(event.target.value)}
               style={styles.input}
@@ -547,6 +571,7 @@ export default function NewSquaresGamePage() {
               type="number"
               min={0}
               step="0.01"
+              required
               value={pricePerSquare}
               onChange={(event) => setPricePerSquare(event.target.value)}
               style={styles.input}
@@ -561,8 +586,8 @@ export default function NewSquaresGamePage() {
               style={styles.input}
             >
               <option value="GBP">GBP</option>
-              <option value="USD">USD</option>
               <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
             </select>
           </Field>
 
@@ -575,48 +600,34 @@ export default function NewSquaresGamePage() {
             >
               <option value="draft">Draft</option>
               <option value="published">Published</option>
+              <option value="closed">Closed</option>
             </select>
           </Field>
         </div>
-                <Field label="Draw date & time">
-          <input
-            name="draw_at"
-            type="datetime-local"
-            value={drawAt}
-            onChange={(event) => setDrawAt(event.target.value)}
-            style={styles.input}
-          />
-        </Field>
 
         <div style={styles.boardPreviewCard}>
           <div style={styles.boardPreviewTop}>
             <div>
-              <div style={styles.boardPreviewLabel}>
-                Squares board preview
-              </div>
+              <div style={styles.boardPreviewLabel}>Board preview</div>
 
               <div style={styles.boardPreviewTitle}>
-                {board.columns} × {board.rows} layout
+                {boardShape.columns} × {boardShape.rows}
               </div>
             </div>
 
-            <div style={styles.boardPreviewBadge}>
-              {Math.max(1, toInt(totalSquares, 100))} selectable squares
-            </div>
+            <div style={styles.boardPreviewBadge}>{boardSize} squares</div>
           </div>
 
           <div
             style={{
               ...styles.boardGrid,
-              gridTemplateColumns: `repeat(${board.columns}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${Math.min(
+                boardShape.columns,
+                10,
+              )}, minmax(0, 1fr))`,
             }}
           >
-            {Array.from({
-              length: Math.min(
-                Math.max(1, toInt(totalSquares, 100)),
-                120,
-              ),
-            }).map((_, index) => (
+            {Array.from({ length: Math.min(boardSize, 50) }).map((_, index) => (
               <div key={index} style={styles.boardCell}>
                 {index + 1}
               </div>
@@ -624,27 +635,72 @@ export default function NewSquaresGamePage() {
           </div>
 
           <p style={styles.boardFootnote}>
-            The public board automatically scales for mobile and desktop players.
+            Showing first {Math.min(boardSize, 50)} squares as a preview. The
+            public board will use the full {boardSize} squares.
           </p>
         </div>
       </SectionCard>
 
       <SectionCard
         number="03"
-        title="Prize management"
-        description="Create prize positions, descriptions and public visibility."
-        tone="prize"
+        title="Squares image"
+        description="Upload a strong public image and choose the crop focus."
+        badge={imageUrl ? "Image selected" : "Using default image"}
+        tone="media"
+      >
+        <div style={styles.mediaBox}>
+          <div style={styles.mediaControls}>
+            <h3 style={styles.subTitle}>Squares image</h3>
+
+            <ImageFocusUploadField
+              currentImageUrl={imageUrl}
+              currentFocusX={imageFocusX}
+              currentFocusY={imageFocusY}
+              label="Squares image"
+              previewAlt={title.trim() || "Squares preview"}
+              onImageUrlChange={setImageUrl}
+              onFocusXChange={setImageFocusX}
+              onFocusYChange={setImageFocusY}
+            />
+          </div>
+
+          <div style={styles.previewBoxLarge}>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Squares preview"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: `${imageFocusX}% ${imageFocusY}%`,
+                  display: "block",
+                }}
+              />
+            ) : (
+              <img
+                src={DEFAULT_SQUARES_IMAGE}
+                alt="Squares placeholder"
+                style={styles.previewPlaceholderImage}
+              />
+            )}
+          </div>
+        </div>
+      </SectionCard>
+            <SectionCard
+        number="04"
+        title="Prize settings"
+        description="Add prizes and choose which ones appear publicly on the campaign page."
         badge={prizeText(publicPrizesCount)}
+        tone="prize"
       >
         <div style={styles.prizeSectionShell}>
           <div style={styles.prizeSectionTop}>
             <div>
-              <div style={styles.prizeSectionTitle}>
-                Configure your prizes
-              </div>
+              <div style={styles.prizeSectionTitle}>Public prize list</div>
 
               <div style={styles.prizeSectionText}>
-                Add premium prize descriptions to increase engagement and sales.
+                These prizes can also be used later during winner draws.
               </div>
             </div>
 
@@ -658,22 +714,23 @@ export default function NewSquaresGamePage() {
           </div>
 
           <div style={styles.prizeList}>
-            {prizes.map((prize) => (
+            {prizes.map((prize, index) => (
               <div key={prize.id} style={styles.prizeRow}>
                 <div style={styles.rowHeader}>
-                  <strong>
-                    Prize {prize.position || "1"}
-                  </strong>
+                  <strong>Prize {index + 1}</strong>
 
-                  {prizes.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => removePrize(prize.id)}
-                      style={styles.removePrizeButton}
-                    >
-                      Remove
-                    </button>
-                  ) : null}
+                  <label style={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={prize.is_public}
+                      onChange={(event) =>
+                        updatePrize(prize.id, {
+                          is_public: event.target.checked,
+                        })
+                      }
+                    />
+                    Show publicly
+                  </label>
                 </div>
 
                 <div style={styles.prizeGrid}>
@@ -681,12 +738,13 @@ export default function NewSquaresGamePage() {
                     <input
                       value={prize.position}
                       onChange={(event) =>
-                        updatePrize(
-                          prize.id,
-                          "position",
-                          event.target.value,
-                        )
+                        updatePrize(prize.id, {
+                          position: event.target.value,
+                        })
                       }
+                      type="number"
+                      min="1"
+                      step="1"
                       style={styles.input}
                     />
                   </Field>
@@ -695,11 +753,9 @@ export default function NewSquaresGamePage() {
                     <input
                       value={prize.title}
                       onChange={(event) =>
-                        updatePrize(
-                          prize.id,
-                          "title",
-                          event.target.value,
-                        )
+                        updatePrize(prize.id, {
+                          title: event.target.value,
+                        })
                       }
                       placeholder="1st Prize"
                       style={styles.input}
@@ -707,151 +763,124 @@ export default function NewSquaresGamePage() {
                   </Field>
                 </div>
 
-                <Field label="Prize description">
+                <Field label="Description optional">
                   <textarea
-                    rows={3}
                     value={prize.description}
                     onChange={(event) =>
-                      updatePrize(
-                        prize.id,
-                        "description",
-                        event.target.value,
-                      )
+                      updatePrize(prize.id, {
+                        description: event.target.value,
+                      })
                     }
-                    placeholder="Describe the prize, experience or reward."
+                    rows={2}
                     style={styles.textarea}
                   />
                 </Field>
 
-                <label style={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={prize.is_public}
-                    onChange={(event) =>
-                      updatePrize(
-                        prize.id,
-                        "is_public",
-                        event.target.checked,
-                      )
-                    }
-                  />
-
-                  Show publicly on the campaign page
-                </label>
+                <button
+                  type="button"
+                  onClick={() => removePrize(prize.id)}
+                  disabled={prizes.length <= 1}
+                  style={{
+                    ...styles.removePrizeButton,
+                    cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                    opacity: prizes.length <= 1 ? 0.55 : 1,
+                  }}
+                >
+                  Remove prize
+                </button>
               </div>
             ))}
           </div>
         </div>
-
-        <input type="hidden" name="prizes" value={prizesValue} />
-      </SectionCard>
-            <SectionCard
-        number="04"
-        title="Legal entry question"
-        description="Add an optional skill-based question before checkout."
-        tone="legal"
-        badge={hasQuestion ? "Enabled" : "Optional"}
-      >
-        <div style={styles.twoColumn}>
-          <Field label="Question">
-            <input
-              name="question_text"
-              value={questionText}
-              onChange={(event) => setQuestionText(event.target.value)}
-              placeholder="Example: What colour is the sky on a clear day?"
-              style={styles.input}
-            />
-          </Field>
-
-          <Field label="Correct answer">
-            <input
-              name="question_answer"
-              value={questionAnswer}
-              onChange={(event) => setQuestionAnswer(event.target.value)}
-              placeholder="Example: blue"
-              style={styles.input}
-            />
-          </Field>
-        </div>
-
-        <input
-          type="hidden"
-          name="question"
-          value={
-            hasQuestion && questionAnswer.trim()
-              ? JSON.stringify({
-                  text: questionText.trim(),
-                  answer: questionAnswer.trim(),
-                })
-              : ""
-          }
-        />
       </SectionCard>
 
       <SectionCard
         number="05"
-        title="Free postal entry"
-        description="Provide the no-purchase entry route shown on the public page."
+        title="Entry question"
+        description="Optional skill-based question for the public checkout flow."
+        badge={hasLegalQuestion ? "Configured" : "Not configured"}
         tone="legal"
-        badge={hasPostalEntry ? "Configured" : "Optional"}
       >
-        <Field label="Postal address">
-          <textarea
-            name="free_entry_address"
-            rows={3}
-            value={freeEntryAddress}
-            onChange={(event) => setFreeEntryAddress(event.target.value)}
-            placeholder="Postal entry address"
-            style={styles.textarea}
-          />
-        </Field>
+        <div style={styles.legalBody}>
+          <div style={styles.twoColumn}>
+            <Field label="Question">
+              <input
+                value={questionText}
+                onChange={(event) => setQuestionText(event.target.value)}
+                placeholder="e.g. What colour is a London taxi?"
+                style={styles.input}
+              />
+            </Field>
 
-        <Field label="Postal instructions">
-          <textarea
-            name="free_entry_instructions"
-            rows={3}
-            value={freeEntryInstructions}
-            onChange={(event) => setFreeEntryInstructions(event.target.value)}
-            placeholder="Explain what entrants must include with postal entries."
-            style={styles.textarea}
-          />
-        </Field>
+            <Field label="Correct answer">
+              <input
+                value={questionAnswer}
+                onChange={(event) => setQuestionAnswer(event.target.value)}
+                placeholder="e.g. black"
+                style={styles.input}
+              />
+            </Field>
+          </div>
 
-        <Field label="Postal entry closes">
-          <input
-            name="free_entry_closes_at"
-            type="datetime-local"
-            value={freeEntryClosesAt}
-            onChange={(event) => setFreeEntryClosesAt(event.target.value)}
-            style={styles.input}
-          />
-        </Field>
+          <p style={styles.helpText}>
+            The public squares page requires this answer before checkout when a
+            question is set.
+          </p>
+        </div>
+      </SectionCard>
 
-        <input
-          type="hidden"
-          name="free_entry"
-          value={
-            hasPostalEntry || freeEntryClosesAt.trim()
-              ? JSON.stringify({
-                  address: freeEntryAddress.trim(),
-                  instructions: freeEntryInstructions.trim(),
-                  closes_at: freeEntryClosesAt
-                    ? new Date(freeEntryClosesAt).toISOString()
-                    : null,
-                })
-              : ""
-          }
-        />
+      <SectionCard
+        number="06"
+        title="Free postal entry"
+        description="Add no-purchase entry instructions shown on the public squares page."
+        badge={hasFreeEntry ? "Configured" : "Not configured"}
+        tone="legal"
+      >
+        <div style={styles.legalBody}>
+          <Field label="Postal address">
+            <textarea
+              value={freeEntryAddress}
+              onChange={(event) => setFreeEntryAddress(event.target.value)}
+              rows={3}
+              placeholder="Postal entry address"
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Instructions">
+            <textarea
+              value={freeEntryInstructions}
+              onChange={(event) => setFreeEntryInstructions(event.target.value)}
+              rows={3}
+              placeholder="Include name, email, game name, answer and preferred square number..."
+              style={styles.textarea}
+            />
+          </Field>
+
+          <Field label="Postal entry closes">
+            <input
+              type="datetime-local"
+              value={freeEntryClosesAt}
+              onChange={(event) => setFreeEntryClosesAt(event.target.value)}
+              style={styles.input}
+            />
+          </Field>
+
+          <div style={styles.complianceRow}>
+            <CheckItem done={hasLegalQuestion}>Skill question configured</CheckItem>
+            <CheckItem done={hasFreeEntry}>Free entry details configured</CheckItem>
+          </div>
+        </div>
       </SectionCard>
 
       <section style={styles.submitBar}>
         <div style={styles.submitText}>
-          <div style={styles.submitEyebrow}>Ready to save?</div>
+          <div style={styles.submitEyebrow}>Ready to create?</div>
 
           <strong style={styles.submitTitle}>Create squares game</strong>
 
           <div style={styles.mutedSmall}>
-            Drafts are always allowed. Publishing may be limited by your plan.
+            Save as draft first — you can review everything before publishing.
           </div>
         </div>
 
@@ -880,6 +909,33 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function ReadinessCard({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div style={styles.readinessCard}>
+      <div style={styles.readinessEyebrow}>{eyebrow}</div>
+      <h3 style={styles.readinessTitle}>{title}</h3>
+      <div style={styles.readinessBody}>{children}</div>
+    </div>
+  );
+}
+
+function PreviewLine({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.previewLine}>
+      <span style={styles.previewLineLabel}>{label}</span>
+      <strong style={styles.previewLineValue}>{value}</strong>
+    </div>
+  );
+}
+
 function SectionCard({
   number,
   title,
@@ -896,21 +952,43 @@ function SectionCard({
   children: ReactNode;
 }) {
   const toneStyle = getSectionToneStyle(tone);
+  const isOverview = number === "01";
+
+  if (isOverview) {
+    return (
+      <section style={{ ...styles.sectionCard, ...toneStyle }}>
+        <div style={styles.sectionTop}>
+          <div>
+            <div style={styles.sectionNumber}>SECTION {number}</div>
+            <h2 style={styles.sectionTitle}>{title}</h2>
+            <p style={styles.sectionDescription}>{description}</p>
+          </div>
+
+          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
+        </div>
+
+        <div style={styles.sectionBody}>{children}</div>
+      </section>
+    );
+  }
 
   return (
-    <section style={{ ...styles.sectionCard, ...toneStyle }}>
-      <div style={styles.sectionTop}>
-        <div>
+    <details style={{ ...styles.sectionCard, ...toneStyle }}>
+      <summary style={styles.sectionSummary}>
+        <div style={styles.sectionSummaryText}>
           <div style={styles.sectionNumber}>SECTION {number}</div>
           <h2 style={styles.sectionTitle}>{title}</h2>
           <p style={styles.sectionDescription}>{description}</p>
         </div>
 
-        {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
-      </div>
+        <div style={styles.sectionActions}>
+          {badge ? <span style={styles.sectionBadge}>{badge}</span> : null}
+          <span style={styles.openButton}>OPEN</span>
+        </div>
+      </summary>
 
       <div style={styles.sectionBody}>{children}</div>
-    </section>
+    </details>
   );
 }
 
@@ -920,6 +998,30 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span style={styles.label}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function CheckItem({
+  done,
+  children,
+}: {
+  done: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div style={styles.checkItem}>
+      <span
+        style={{
+          ...styles.checkIcon,
+          background: done ? "#16a34a" : "#e2e8f0",
+          color: done ? "#ffffff" : "#64748b",
+        }}
+      >
+        {done ? "✓" : "•"}
+      </span>
+
+      <span>{children}</span>
+    </div>
   );
 }
 
@@ -941,6 +1043,18 @@ const responsiveStyles = `
     max-width: 100%;
   }
 
+  .new-squares-form details > summary {
+    list-style: none;
+  }
+
+  .new-squares-form details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .new-squares-form input[type="datetime-local"]::-webkit-date-and-time-value {
+    text-align: left;
+  }
+
   @media (max-width: 760px) {
     .new-squares-form {
       width: 100% !important;
@@ -954,6 +1068,7 @@ const responsiveStyles = `
     }
 
     .new-squares-form section,
+    .new-squares-form details,
     .new-squares-form div,
     .new-squares-form label {
       min-width: 0 !important;
@@ -997,18 +1112,19 @@ const responsiveStyles = `
   }
 
   @media (max-width: 520px) {
-    .new-squares-form > div:first-child {
+    .new-squares-form section:first-of-type {
       display: grid !important;
       grid-template-columns: 1fr !important;
       gap: 10px !important;
     }
 
-    .new-squares-form > div:first-child a {
+    .new-squares-form section:first-of-type a {
       width: 100% !important;
       justify-content: center !important;
     }
 
-    .new-squares-form section {
+    .new-squares-form section,
+    .new-squares-form details {
       border-radius: 22px !important;
     }
 
@@ -1024,6 +1140,7 @@ const responsiveStyles = `
     }
   }
 `;
+
 const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
@@ -1035,7 +1152,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     overflowX: "hidden",
   },
-  topBar: {
+  topActions: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1043,7 +1160,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 2,
   },
-  backLink: {
+  backButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1056,7 +1173,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
   },
-  dashboardLink: {
+  dashboardButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1150,9 +1267,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
   },
-  heroContent: {
-    minWidth: 0,
-  },
+  heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -1229,11 +1344,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(255,255,255,0.16)",
   },
-  heroMetricLabel: {
-    color: "#bfdbfe",
-    fontSize: 12,
-    fontWeight: 900,
-  },
+  heroMetricLabel: { color: "#bfdbfe", fontSize: 12, fontWeight: 900 },
   heroMetricValue: {
     marginTop: 4,
     color: "#ffffff",
@@ -1262,7 +1373,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
-    previewImageWrap: {
+  previewImageWrap: {
     height: 240,
     borderRadius: 20,
     background: "#ffffff",
@@ -1272,17 +1383,19 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
   },
+  placeholderImage: {
+    width: "min(82%, 218px)",
+    height: "min(82%, 218px)",
+    objectFit: "contain",
+    display: "block",
+  },
   previewCardBody: {
     padding: 14,
     borderRadius: 18,
     background: "#ffffff",
     color: "#0f172a",
   },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: 950,
-    letterSpacing: "-0.03em",
-  },
+  previewTitle: { fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em" },
   previewText: {
     marginTop: 6,
     color: "#64748b",
@@ -1317,11 +1430,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
+  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: 900 },
   summaryValue: {
     color: "#0f172a",
     fontSize: 21,
@@ -1329,6 +1438,44 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     wordBreak: "break-word",
   },
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 14,
+  },
+  readinessCard: {
+    padding: 18,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  readinessEyebrow: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  readinessTitle: {
+    margin: "8px 0 0",
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1.1,
+    letterSpacing: "-0.03em",
+  },
+  readinessBody: { display: "grid", gap: 10, marginTop: 14 },
+  previewLine: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    color: "#334155",
+    fontSize: 14,
+  },
+  previewLineLabel: { color: "#64748b", fontWeight: 800 },
+  previewLineValue: { color: "#0f172a", fontWeight: 950, textAlign: "right" },
   sectionCard: {
     padding: "clamp(18px, 4vw, 22px)",
     borderRadius: 24,
@@ -1344,6 +1491,23 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
     marginBottom: 16,
+  },
+  sectionSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  sectionSummaryText: { minWidth: 0 },
+  sectionActions: {
+    display: "flex",
+    gap: 7,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    flexShrink: 0,
   },
   sectionNumber: {
     color: "#2563eb",
@@ -1376,31 +1540,87 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
-  sectionBody: {
-    display: "grid",
-    gap: 14,
-    marginTop: 14,
+  openButton: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    flexShrink: 0,
+    whiteSpace: "nowrap",
   },
+  sectionBody: { display: "grid", gap: 14, marginTop: 14 },
   twoColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 14,
+  },
+  dateInputWrap: { position: "relative", width: "100%", minWidth: 0 },
+  dateInput: {
+    width: "100%",
+    minHeight: 48,
+    padding: "12px 13px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 16,
+    boxSizing: "border-box",
+    minWidth: 0,
+    WebkitAppearance: "none",
+    appearance: "none",
+  },
+  fakePlaceholder: {
+    position: "absolute",
+    left: 13,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    color: "#94a3b8",
+    fontSize: 16,
+    fontWeight: 500,
+    background: "#ffffff",
+    paddingRight: 8,
+  },
+  drawPreviewField: { display: "grid", alignContent: "end", minWidth: 0 },
+  drawPreviewInline: {
+    width: "100%",
+    minHeight: 48,
+    display: "grid",
+    alignContent: "center",
+    padding: "8px 13px",
+    borderRadius: 14,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    boxSizing: "border-box",
+  },
+  previewInfoLabel: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    lineHeight: 1.2,
+    marginBottom: 2,
+  },
+  previewInfoValue: {
+    color: "#1e3a8a",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
   },
   fourColumn: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 14,
   },
-  field: {
-    display: "grid",
-    gap: 7,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
+  field: { display: "grid", gap: 7, minWidth: 0 },
+  label: { color: "#334155", fontSize: 13, fontWeight: 900 },
   input: {
     width: "100%",
     minHeight: 48,
@@ -1424,41 +1644,6 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
-  },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 16,
-    padding: 14,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-  },
-  mediaControls: {
-    minWidth: 0,
-  },
-  subTitle: {
-    margin: "0 0 10px",
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
-  helpText: {
-    color: "#64748b",
-    fontSize: 13,
-    margin: 0,
-    overflowWrap: "anywhere",
-  },
-  previewBoxLarge: {
-    height: 230,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
   },
   boardPreviewCard: {
     padding: 16,
@@ -1497,10 +1682,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
   },
-  boardGrid: {
-    display: "grid",
-    gap: 7,
-  },
+  boardGrid: { display: "grid", gap: 7 },
   boardCell: {
     aspectRatio: "1 / 1",
     minHeight: 34,
@@ -1514,12 +1696,47 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     fontSize: 12,
     fontWeight: 950,
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.9), 0 6px 14px rgba(15,23,42,0.04)",
   },
   boardFootnote: {
     color: "#64748b",
     fontSize: 13,
     lineHeight: 1.5,
     margin: "12px 0 0",
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 16,
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: { minWidth: 0 },
+  subTitle: {
+    margin: "0 0 10px",
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
+  },
+  previewBoxLarge: {
+    height: 230,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewPlaceholderImage: {
+    width: "min(82%, 205px)",
+    height: "min(82%, 205px)",
+    objectFit: "contain",
+    display: "block",
   },
   prizeSectionShell: {
     display: "grid",
@@ -1560,10 +1777,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
-  prizeList: {
-    display: "grid",
-    gap: 12,
-  },
+  prizeList: { display: "grid", gap: 12 },
   prizeRow: {
     display: "grid",
     gap: 12,
@@ -1605,6 +1819,41 @@ const styles: Record<string, CSSProperties> = {
     color: "#b91c1c",
     fontWeight: 900,
   },
+  legalBody: { display: "grid", gap: 14 },
+  complianceRow: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  checkItem: {
+    display: "flex",
+    gap: 9,
+    alignItems: "center",
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: 800,
+  },
+  checkIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 13,
+    margin: 0,
+    overflowWrap: "anywhere",
+  },
+  mutedSmall: { color: "#64748b", fontSize: 13, marginTop: 3 },
   submitBar: {
     display: "flex",
     justifyContent: "space-between",
@@ -1619,10 +1868,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 18,
     boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
   },
-  submitText: {
-    minWidth: 0,
-    flex: "1 1 240px",
-  },
+  submitText: { minWidth: 0, flex: "1 1 240px" },
   submitEyebrow: {
     color: "#2563eb",
     fontSize: 12,
@@ -1637,11 +1883,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.03em",
-  },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
   },
   submitButton: {
     padding: "13px 20px",
