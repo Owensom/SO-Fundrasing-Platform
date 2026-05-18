@@ -169,6 +169,18 @@ export default function NewSquaresGamePage() {
     makePrize("prize-1", "1", "1st Prize", ""),
   ]);
 
+  const [campaignLimitReached, setCampaignLimitReached] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+
+      setCampaignLimitReached(
+        params.get("error") === "campaign_limit",
+      );
+    }
+  }, []);
+
   useEffect(() => {
     if (!slugEdited) {
       setSlug(slugify(title));
@@ -274,6 +286,39 @@ export default function NewSquaresGamePage() {
         </Link>
       </div>
 
+      {campaignLimitReached ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Plan limit reached</div>
+
+          <h1 style={styles.upgradeTitle}>
+            Community plans can publish up to 2 active campaigns.
+          </h1>
+
+          <p style={styles.upgradeText}>
+            This squares campaign was not published because this tenant already
+            has the maximum number of active published campaigns allowed on the
+            Community plan. Save this campaign as a draft, close an existing
+            campaign, or upgrade to Professional for unlimited active campaigns.
+          </p>
+
+          <div style={styles.upgradeActions}>
+            <Link
+              href="/admin/billing"
+              style={styles.primaryUpgradeButton}
+            >
+              View billing options
+            </Link>
+
+            <Link
+              href="/admin/squares"
+              style={styles.secondaryUpgradeButton}
+            >
+              Manage campaigns
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Squares builder</div>
@@ -371,8 +416,7 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </section>
-
-      <section style={styles.summaryGrid}>
+            <section style={styles.summaryGrid}>
         <SummaryCard
           label="Board layout"
           value={`${board.columns} × ${board.rows}`}
@@ -457,7 +501,8 @@ export default function NewSquaresGamePage() {
           </CheckItem>
         </ReadinessCard>
       </section>
-            <SectionCard
+
+      <SectionCard
         number="01"
         title="Campaign details"
         description="Set the public title, URL, description and draw date."
@@ -623,8 +668,7 @@ export default function NewSquaresGamePage() {
           </p>
         </div>
       </SectionCard>
-
-      <SectionCard
+            <SectionCard
         number="03"
         title="Squares image"
         description="Upload a strong public image and choose the crop focus."
@@ -665,7 +709,8 @@ export default function NewSquaresGamePage() {
           </div>
         </div>
       </SectionCard>
-            <SectionCard
+
+      <SectionCard
         number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
@@ -804,8 +849,7 @@ export default function NewSquaresGamePage() {
           </p>
         </div>
       </SectionCard>
-
-      <SectionCard
+            <SectionCard
         number="06"
         title="Free postal entry"
         description="Add no-purchase entry instructions shown on the public squares page."
@@ -1155,7 +1199,6 @@ const responsiveStyles = `
     }
   }
 `;
-
 const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
@@ -1201,6 +1244,74 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
   },
+  upgradeBanner: {
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  upgradeEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  upgradeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(26px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  upgradeText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 780,
+  },
+  upgradeActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  primaryUpgradeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #1683f8",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
+  },
+  secondaryUpgradeButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+  },
   hero: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
@@ -1245,7 +1356,7 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     maxWidth: 680,
   },
-  statusPill: {
+    statusPill: {
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid rgba(255,255,255,0.22)",
@@ -1433,49 +1544,46 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 14,
   },
-  previewLineLabel: {
+    previewLineLabel: {
     color: "#64748b",
-    fontWeight: 800,
+    fontWeight: 700,
   },
   previewLineValue: {
     color: "#0f172a",
     fontWeight: 950,
     textAlign: "right",
+    wordBreak: "break-word",
   },
   sectionCard: {
-    padding: "clamp(18px, 4vw, 22px)",
-    borderRadius: 24,
+    borderRadius: 28,
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
     overflow: "hidden",
-  },
-  sectionTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 16,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
   },
   sectionSummary: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 14,
     alignItems: "flex-start",
+    gap: 16,
+    padding: "22px 22px 20px",
     cursor: "pointer",
-    listStyle: "none",
   },
   sectionSummaryText: {
     minWidth: 0,
   },
+  sectionTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    padding: "22px 22px 0",
+    flexWrap: "wrap",
+  },
   sectionActions: {
     display: "flex",
-    gap: 7,
     alignItems: "center",
-    justifyContent: "flex-end",
+    gap: 10,
     flexWrap: "wrap",
-    flexShrink: 0,
   },
   sectionNumber: {
     color: "#2563eb",
@@ -1483,62 +1591,70 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 5,
   },
   sectionTitle: {
-    margin: 0,
+    margin: "6px 0 0",
     color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.03em",
+    fontSize: 32,
+    lineHeight: 1.02,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
   sectionDescription: {
-    margin: "5px 0 0",
+    margin: "10px 0 0",
     color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
+    lineHeight: 1.6,
+    maxWidth: 760,
     overflowWrap: "anywhere",
   },
   sectionBadge: {
-    padding: "7px 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    padding: "8px 14px",
     borderRadius: 999,
     background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #dbe3ef",
-    fontSize: 11,
+    border: "1px solid #dbeafe",
+    color: "#1d4ed8",
+    fontSize: 12,
     fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
     whiteSpace: "nowrap",
   },
   openButton: {
-    padding: "7px 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 11,
+    background: "#0f172a",
+    color: "#ffffff",
+    fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    flexShrink: 0,
-    whiteSpace: "nowrap",
+    letterSpacing: "0.08em",
   },
   sectionBody: {
     display: "grid",
-    gap: 14,
-    marginTop: 14,
+    gap: 18,
+    padding: 22,
   },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 16,
   },
   fourColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 16,
   },
   field: {
     display: "grid",
-    gap: 7,
+    gap: 8,
     minWidth: 0,
   },
   label: {
@@ -1548,68 +1664,62 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
-    minHeight: 48,
-    padding: "12px 13px",
-    borderRadius: 14,
+    minHeight: 52,
+    borderRadius: 16,
     border: "1px solid #cbd5e1",
+    padding: "0 14px",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 16,
-    boxSizing: "border-box",
-    minWidth: 0,
+    fontSize: 15,
+    outline: "none",
   },
   textarea: {
     width: "100%",
-    padding: "12px 13px",
-    borderRadius: 14,
+    borderRadius: 18,
     border: "1px solid #cbd5e1",
+    padding: "14px",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 1.55,
     resize: "vertical",
-    boxSizing: "border-box",
-    minWidth: 0,
+    outline: "none",
   },
   previewInfoCard: {
-    width: "100%",
-    minHeight: 48,
     display: "grid",
     alignContent: "center",
-    padding: "8px 13px",
-    borderRadius: 14,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    color: "#1e3a8a",
-    boxSizing: "border-box",
+    gap: 6,
+    padding: 18,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
   },
   previewInfoLabel: {
-    color: "#2563eb",
-    fontSize: 11,
-    fontWeight: 950,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
-    lineHeight: 1.2,
-    marginBottom: 2,
   },
   previewInfoValue: {
-    color: "#1e3a8a",
-    fontSize: 15,
-    lineHeight: 1.25,
+    color: "#0f172a",
+    fontSize: 18,
     fontWeight: 950,
+    lineHeight: 1.2,
   },
   boardPreviewCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #dbeafe",
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #eff6ff 0%, #ffffff 52%, #f8fafc 100%)",
+    border: "1px solid #bfdbfe",
   },
   boardPreviewTop: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
     alignItems: "flex-start",
+    gap: 12,
     flexWrap: "wrap",
-    marginBottom: 14,
   },
   boardPreviewLabel: {
     color: "#2563eb",
@@ -1625,237 +1735,3 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     letterSpacing: "-0.04em",
   },
-  boardPreviewBadge: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    color: "#1d4ed8",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-  boardGrid: {
-    display: "grid",
-    gap: 7,
-  },
-  boardCell: {
-    aspectRatio: "1 / 1",
-    minHeight: 34,
-    borderRadius: 11,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    color: "#1e3a8a",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 950,
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.9), 0 6px 14px rgba(15,23,42,0.04)",
-  },
-  boardFootnote: {
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.5,
-    margin: "12px 0 0",
-  },
-  mediaBox: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 16,
-    padding: 14,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-  },
-  mediaControls: {
-    minWidth: 0,
-  },
-  subTitle: {
-    margin: "0 0 10px",
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
-  previewBoxLarge: {
-    height: 230,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  prizeSectionShell: {
-    display: "grid",
-    gap: 14,
-    padding: "clamp(14px, 4vw, 16px)",
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #fde68a",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  prizeSectionTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  prizeSectionTitle: {
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 950,
-    letterSpacing: "-0.02em",
-  },
-  prizeSectionText: {
-    marginTop: 4,
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-  },
-  prizeAddButton: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    border: "1px solid #facc15",
-    background: "#fef3c7",
-    color: "#92400e",
-    cursor: "pointer",
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  },
-  prizeList: {
-    display: "grid",
-    gap: 12,
-  },
-  prizeRow: {
-    display: "grid",
-    gap: 12,
-    padding: 14,
-    border: "1px solid #fde68a",
-    borderRadius: 18,
-    background:
-      "linear-gradient(135deg, #fffbeb 0%, #ffffff 55%, #f8fafc 100%)",
-    minWidth: 0,
-  },
-  rowHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-    color: "#0f172a",
-  },
-  prizeGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(96px, 120px) minmax(0, 1fr)",
-    gap: 12,
-  },
-  checkboxLabel: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 44,
-    fontWeight: 900,
-    color: "#334155",
-    cursor: "pointer",
-  },
-  removePrizeButton: {
-    width: "fit-content",
-    padding: "10px 12px",
-    borderRadius: 999,
-    border: "1px solid #fecaca",
-    background: "#ffffff",
-    color: "#b91c1c",
-    fontWeight: 900,
-  },
-  legalBody: {
-    display: "grid",
-    gap: 14,
-  },
-  complianceRow: {
-    display: "grid",
-    gap: 10,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  checkItem: {
-    display: "flex",
-    gap: 9,
-    alignItems: "center",
-    color: "#334155",
-    fontSize: 14,
-    fontWeight: 800,
-  },
-  checkIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 999,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 950,
-    flexShrink: 0,
-  },
-  helpText: {
-    color: "#64748b",
-    fontSize: 13,
-    margin: 0,
-    overflowWrap: "anywhere",
-  },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 22,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    marginTop: 18,
-    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-  },
-  submitText: {
-    minWidth: 0,
-    flex: "1 1 240px",
-  },
-  submitEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 6,
-  },
-  submitTitle: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.03em",
-  },
-  submitButton: {
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-  },
-};
