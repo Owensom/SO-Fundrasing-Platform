@@ -32,6 +32,9 @@ type VerifiedSquaresCheckoutRow = {
   squares: number[] | null;
 };
 
+const STRIPE_STANDARD_UK_PERCENT = 0.015;
+const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
+
 function safePercent(value: unknown) {
   const number = Number(value);
 
@@ -57,6 +60,30 @@ function calculateApplicationFeeAmount(params: {
     0,
     Math.round(totalAmountCents * (platformFeePercent / 100)),
   );
+}
+
+function calculateSupporterCoverFeeCents(params: {
+  baseAmountCents: number;
+  platformCommissionCents: number;
+}) {
+  const baseAmountCents = Math.max(0, Math.round(params.baseAmountCents));
+  const platformCommissionCents = Math.max(
+    0,
+    Math.round(params.platformCommissionCents),
+  );
+
+  if (!baseAmountCents && !platformCommissionCents) {
+    return 0;
+  }
+
+  const grossAmountCents = Math.ceil(
+    (baseAmountCents +
+      platformCommissionCents +
+      STRIPE_STANDARD_UK_FIXED_CENTS) /
+      (1 - STRIPE_STANDARD_UK_PERCENT),
+  );
+
+  return Math.max(grossAmountCents - baseAmountCents, 0);
 }
 
 function getUsableConnectAccountId(params: {
@@ -240,7 +267,10 @@ export async function POST(req: NextRequest) {
 
     const supporterContributionCents =
       requestedCoverFees && buyerFeeContributionsEnabled
-        ? platformCommissionCents
+        ? calculateSupporterCoverFeeCents({
+            baseAmountCents: baseAmount,
+            platformCommissionCents,
+          })
         : 0;
 
     const totalAmount = baseAmount + supporterContributionCents;
@@ -319,16 +349,20 @@ export async function POST(req: NextRequest) {
         tenant_slug: tenantSlug,
         reservation_token: reservationToken,
         quantity: String(quantity),
-        base_amount_cents: String(baseAmount),
 
+        base_amount_cents: String(baseAmount),
         platform_fee_cents: String(platformFeeCents),
         platform_commission_cents: String(platformCommissionCents),
         supporter_contribution_cents: String(supporterContributionCents),
+        donor_fee_cents: String(supporterContributionCents),
+        buyer_fee_cents: String(supporterContributionCents),
         buyer_fee_contributions_enabled: buyerFeeContributionsEnabled
           ? "true"
           : "false",
         buyer_requested_cover_fees: requestedCoverFees ? "true" : "false",
+        donor_covered_fees: supporterContributionCents > 0 ? "true" : "false",
         net_amount_cents: String(netAmountCents),
+        stripe_fee_estimate_model: "uk_standard_card_1_5_percent_plus_20p",
 
         stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
         stripe_connect_account_id: shouldUseConnectRouting
