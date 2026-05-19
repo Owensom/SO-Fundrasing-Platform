@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { getTenantSlugFromRequest } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,16 +42,38 @@ export async function POST(request: NextRequest) {
     }
 
     const user = session.user as SessionUserWithTenants;
+    const verifiedTenantSlug = getTenantSlugFromRequest(request);
+
+    const sessionTenantSlugs = Array.isArray(user.tenantSlugs)
+      ? user.tenantSlugs.map((value) => String(value))
+      : [];
+
+    if (
+      !verifiedTenantSlug ||
+      !sessionTenantSlugs.includes(verifiedTenantSlug)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant access denied." },
+        { status: 403 },
+      );
+    }
 
     const body = (await request.json()) as Body;
 
-    const tenantSlug = cleanText(body.tenantSlug);
+    const submittedTenantSlug = cleanText(body.tenantSlug);
     const currency = cleanCurrency(body.currency);
     const reference = cleanText(body.reference);
 
-    if (!tenantSlug || !currency) {
+    if (submittedTenantSlug && submittedTenantSlug !== verifiedTenantSlug) {
       return NextResponse.json(
-        { ok: false, error: "Missing tenant or currency." },
+        { ok: false, error: "Tenant access denied." },
+        { status: 403 },
+      );
+    }
+
+    if (!currency) {
+      return NextResponse.json(
+        { ok: false, error: "Missing currency." },
         { status: 400 },
       );
     }
@@ -62,34 +85,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sessionTenantSlugs = Array.isArray(user.tenantSlugs)
-      ? user.tenantSlugs.map((value) => String(value))
-      : [];
-
-    if (!sessionTenantSlugs.includes(tenantSlug)) {
-      return NextResponse.json(
-        { ok: false, error: "Tenant access denied." },
-        { status: 403 },
-      );
-    }
-
     const updated = await query<UpdatedPaymentRow>(
       `
-      update platform_payments
-      set
-        payout_status = 'paid',
-        payout_reference = $3,
-        paid_out_at = now(),
-        paid_out_by = $4
-      where tenant_slug = $1
-        and coalesce(currency, 'gbp') = $2
-        and payment_status = 'paid'
-        and coalesce(payout_status, 'pending') = 'pending'
-      returning
-        id::text,
-        coalesce(net_amount_cents, 0)::int as net_amount_cents
+        update platform_payments
+        set
+          payout_status = 'paid',
+          payout_reference = $3,
+          paid_out_at = now(),
+          paid_out_by = $4
+        where tenant_slug = $1
+          and lower(coalesce(currency, 'gbp')) = $2
+          and payment_status = 'paid'
+          and coalesce(payout_status, 'pending') = 'pending'
+        returning
+          id::text,
+          coalesce(net_amount_cents, 0)::int as net_amount_cents
       `,
-      [tenantSlug, currency, reference, user.email || null],
+      [verifiedTenantSlug, currency, reference, user.email || null],
     );
 
     const paidTotalCents = updated.reduce(
