@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type TierKey = "community" | "professional" | "foundation";
 
@@ -158,12 +159,120 @@ function tierCapabilityEnabled(tier: TierKey, key: string) {
   return false;
 }
 
+function getConnectMessage(value: string | null) {
+  if (value === "returned") {
+    return {
+      tone: "success" as const,
+      title: "Returned from Stripe",
+      text: "Stripe returned you to billing. Sync the Stripe status to refresh charges, payouts and onboarding readiness.",
+    };
+  }
+
+  if (value === "return") {
+    return {
+      tone: "success" as const,
+      title: "Stripe onboarding returned",
+      text: "You returned from the Stripe onboarding flow. Sync the Stripe status to refresh this page.",
+    };
+  }
+
+  if (value === "missing_secret") {
+    return {
+      tone: "error" as const,
+      title: "Stripe secret key missing",
+      text: "Stripe Connect cannot start until STRIPE_SECRET_KEY is configured in Vercel.",
+    };
+  }
+
+  if (value === "failed") {
+    return {
+      tone: "error" as const,
+      title: "Stripe onboarding failed",
+      text: "Stripe could not create or continue the onboarding session. Check Vercel logs and Stripe configuration.",
+    };
+  }
+
+  if (value === "refresh_failed") {
+    return {
+      tone: "error" as const,
+      title: "Stripe onboarding refresh failed",
+      text: "Stripe could not create a fresh onboarding link. Try syncing the account status, then continue onboarding again.",
+    };
+  }
+
+  return null;
+}
+
+function getStatusMessage(value: string | null) {
+  if (value === "refreshed") {
+    return {
+      tone: "success" as const,
+      title: "Stripe status synced",
+      text: "The latest Stripe Connect status has been saved to this tenant.",
+    };
+  }
+
+  if (value === "missing") {
+    return {
+      tone: "warning" as const,
+      title: "No Stripe Connect account found",
+      text: "Start Stripe onboarding to create this tenant’s payout account.",
+    };
+  }
+
+  if (value === "missing_secret") {
+    return {
+      tone: "error" as const,
+      title: "Stripe secret key missing",
+      text: "Stripe status cannot sync until STRIPE_SECRET_KEY is configured in Vercel.",
+    };
+  }
+
+  if (value === "failed") {
+    return {
+      tone: "error" as const,
+      title: "Stripe status sync failed",
+      text: "Stripe could not refresh this tenant’s Connect status. Check the account ID and Vercel logs.",
+    };
+  }
+
+  return null;
+}
+
+function StatusMessage({
+  message,
+}: {
+  message: {
+    tone: "success" | "warning" | "error";
+    title: string;
+    text: string;
+  } | null;
+}) {
+  if (!message) return null;
+
+  const style =
+    message.tone === "success"
+      ? styles.messageSuccess
+      : message.tone === "warning"
+        ? styles.messageWarning
+        : styles.messageError;
+
+  return (
+    <section className="billing-message" style={style}>
+      <strong style={styles.messageTitle}>{message.title}</strong>
+      <span style={styles.messageText}>{message.text}</span>
+    </section>
+  );
+}
+
 export default function BillingSettingsForm({
   tenantSlug,
   formState,
   connectStatus,
   updateAction,
 }: Props) {
+  const searchParams = useSearchParams();
+
   const tier = formState.subscription_tier;
   const [buyerContributions, setBuyerContributions] = useState(
     formState.buyer_fee_contributions_enabled,
@@ -176,6 +285,12 @@ export default function BillingSettingsForm({
     ? Number(formState.platform_fee_percent)
     : currentTier.feeNumber;
 
+  const connectAccountId =
+    formState.stripe_connect_account_id ||
+    connectStatus?.stripe_connect_account_id ||
+    "";
+
+  const hasConnectAccount = Boolean(connectAccountId);
   const onboardingComplete = Boolean(
     connectStatus?.stripe_connect_onboarding_complete,
   );
@@ -185,7 +300,18 @@ export default function BillingSettingsForm({
     connectStatus?.stripe_connect_details_submitted,
   );
 
-  const capabilities = useMemo(
+  const readyForLivePayments =
+    hasConnectAccount && onboardingComplete && chargesEnabled && payoutsEnabled;
+
+  const connectMessage = getConnectMessage(searchParams.get("stripe_connect"));
+  const statusMessage = getStatusMessage(searchParams.get("stripe_status"));
+
+  const readinessText = readyForLivePayments
+    ? "Ready for live payments and payouts"
+    : hasConnectAccount
+      ? "Stripe account started — complete onboarding and sync status"
+      : "Stripe Connect not started";
+    const capabilities = useMemo(
     () => [
       {
         label: "CRM",
@@ -236,6 +362,9 @@ export default function BillingSettingsForm({
   return (
     <main className="billing-page" style={styles.page}>
       <style>{responsiveStyles}</style>
+
+      <StatusMessage message={connectMessage} />
+      <StatusMessage message={statusMessage} />
 
       <section className="hero" style={styles.hero}>
         <div style={styles.heroGlow} />
@@ -292,22 +421,63 @@ export default function BillingSettingsForm({
 
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Stripe payouts</div>
-            <div
-              style={enabledStyle(Boolean(formState.stripe_connect_account_id))}
-            >
-              {onboardingComplete
+            <div style={enabledStyle(hasConnectAccount)}>
+              {readyForLivePayments
                 ? "Ready"
-                : formState.stripe_connect_account_id
+                : hasConnectAccount
                   ? "Started"
                   : "Not started"}
             </div>
-            <div style={styles.summarySub}>
-              Tenant payout onboarding through Stripe Connect
-            </div>
+            <div style={styles.summarySub}>{readinessText}</div>
           </div>
         </div>
       </section>
-            <section className="contentGrid" style={styles.contentGrid}>
+
+      <section className="stripeActionPanel" style={styles.stripeActionPanel}>
+        <div style={styles.stripeActionContent}>
+          <div style={styles.cardEyebrow}>Stripe Connect</div>
+
+          <h2 style={styles.cardTitle}>Tenant payout readiness</h2>
+
+          <p style={styles.stripeActionText}>
+            Connect this tenant to Stripe so ticket, raffle and squares payments
+            can be routed to the tenant account with platform commission handled
+            separately.
+          </p>
+
+          <div className="readinessGrid" style={styles.readinessGrid}>
+            <ReadinessItem label="Account" ready={hasConnectAccount} />
+            <ReadinessItem label="Onboarding" ready={onboardingComplete} />
+            <ReadinessItem label="Charges" ready={chargesEnabled} />
+            <ReadinessItem label="Payouts" ready={payoutsEnabled} />
+          </div>
+        </div>
+
+        <div className="stripeActionButtons" style={styles.stripeActionButtons}>
+          <a
+            href="/api/admin/stripe/connect/onboard"
+            style={styles.connectPrimaryButton}
+          >
+            {hasConnectAccount ? "Continue onboarding" : "Start onboarding"}
+          </a>
+
+          <a
+            href="/api/stripe/connect/refresh"
+            style={styles.connectSecondaryButton}
+          >
+            Refresh onboarding link
+          </a>
+
+          <a
+            href="/api/stripe/connect/status"
+            style={styles.connectSecondaryButton}
+          >
+            Sync Stripe status
+          </a>
+        </div>
+      </section>
+
+      <section className="contentGrid" style={styles.contentGrid}>
         <form action={updateAction} style={styles.formCard}>
           <div style={styles.cardHeader}>
             <div>
@@ -351,7 +521,7 @@ export default function BillingSettingsForm({
 
             <ReadOnlyField
               label="Stripe Connect account"
-              value={displayValue(formState.stripe_connect_account_id)}
+              value={displayValue(connectAccountId)}
               helper="Tenant payout account for Stripe Connect."
             />
           </div>
@@ -372,8 +542,7 @@ export default function BillingSettingsForm({
                 </div>
               </div>
             </label>
-
-            {capabilities.map((item) => (
+                        {capabilities.map((item) => (
               <div key={item.key} style={styles.readOnlyToggleCard}>
                 <span
                   style={{
@@ -445,11 +614,7 @@ export default function BillingSettingsForm({
             <div style={styles.statusList}>
               <div className="statusRow" style={styles.statusRow}>
                 <span>Connected account</span>
-                <strong>
-                  {formState.stripe_connect_account_id
-                    ? "Created"
-                    : "Not created"}
-                </strong>
+                <strong>{hasConnectAccount ? "Created" : "Not created"}</strong>
               </div>
 
               <div className="statusRow" style={styles.statusRow}>
@@ -522,6 +687,27 @@ function ReadOnlyField({
     </div>
   );
 }
+
+function ReadinessItem({ label, ready }: { label: string; ready: boolean }) {
+  return (
+    <div style={styles.readinessItem}>
+      <span
+        style={{
+          ...styles.statusDot,
+          ...(ready ? styles.statusDotOn : styles.statusDotOff),
+        }}
+      />
+
+      <div>
+        <strong style={styles.readinessLabel}>{label}</strong>
+        <span style={styles.readinessText}>
+          {ready ? "Ready" : "Needs attention"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 const responsiveStyles = `
 .billing-page,
 .billing-page * {
@@ -542,13 +728,15 @@ const responsiveStyles = `
 
 @media (max-width: 980px) {
   .billing-page .hero,
-  .billing-page .contentGrid {
+  .billing-page .contentGrid,
+  .billing-page .stripeActionPanel {
     grid-template-columns: 1fr !important;
   }
 
   .billing-page .heroSummaryGrid,
   .billing-page .formGrid,
-  .billing-page .toggleGrid {
+  .billing-page .toggleGrid,
+  .billing-page .readinessGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -560,7 +748,8 @@ const responsiveStyles = `
 
   .billing-page .hero,
   .billing-page .formCard,
-  .billing-page .sideCard {
+  .billing-page .sideCard,
+  .billing-page .stripeActionPanel {
     padding: 18px !important;
     border-radius: 24px !important;
   }
@@ -574,6 +763,8 @@ const responsiveStyles = `
   .billing-page .heroSummaryGrid,
   .billing-page .formGrid,
   .billing-page .toggleGrid,
+  .billing-page .readinessGrid,
+  .billing-page .stripeActionButtons,
   .billing-page .submitRow,
   .billing-page .statusRow,
   .billing-page .cardHeader,
@@ -583,14 +774,15 @@ const responsiveStyles = `
 
   .billing-page .heroButton,
   .billing-page .heroButtonLight,
-  .billing-page .saveButton {
+  .billing-page .saveButton,
+  .billing-page .connectPrimaryButton,
+  .billing-page .connectSecondaryButton {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -602,6 +794,45 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
     color: "#0f172a",
     overflowX: "hidden",
+  },
+  messageSuccess: {
+    display: "grid",
+    gap: 5,
+    marginBottom: 14,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+  },
+  messageWarning: {
+    display: "grid",
+    gap: 5,
+    marginBottom: 14,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+  },
+  messageError: {
+    display: "grid",
+    gap: 5,
+    marginBottom: 14,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+  },
+  messageTitle: {
+    fontSize: 14,
+    fontWeight: 950,
+  },
+  messageText: {
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
   },
   hero: {
     position: "relative",
@@ -625,7 +856,11 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
-  heroContent: { position: "relative", zIndex: 1, minWidth: 0 },
+  heroContent: {
+    position: "relative",
+    zIndex: 1,
+    minWidth: 0,
+  },
   eyebrow: {
     display: "inline-flex",
     padding: "8px 14px",
@@ -730,6 +965,97 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
+  stripeActionPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.45fr)",
+    gap: 16,
+    alignItems: "center",
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 54%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
+  stripeActionContent: {
+    minWidth: 0,
+  },
+  stripeActionText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    maxWidth: 820,
+  },
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+  readinessItem: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  readinessLabel: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  readinessText: {
+    display: "block",
+    marginTop: 2,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
+    lineHeight: 1.35,
+  },
+  stripeActionButtons: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 10,
+    minWidth: 0,
+  },
+  connectPrimaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
+    textAlign: "center",
+  },
+  connectSecondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+    textAlign: "center",
+  },
   contentGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
@@ -786,8 +1112,12 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
   },
-  fieldLabel: { color: "#334155", fontSize: 13, fontWeight: 950 },
-    readOnlyField: {
+  fieldLabel: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  readOnlyField: {
     display: "grid",
     gap: 7,
     minWidth: 0,
@@ -843,6 +1173,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     marginTop: 4,
     display: "inline-flex",
+    flexShrink: 0,
   },
   statusDotOn: {
     background: "#16a34a",
@@ -883,7 +1214,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
-  sideColumn: { display: "grid", gap: 16, minWidth: 0 },
+  sideColumn: {
+    display: "grid",
+    gap: 16,
+    minWidth: 0,
+  },
   sideCard: {
     display: "grid",
     gap: 14,
@@ -894,7 +1229,10 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-  tiersList: { display: "grid", gap: 12 },
+  tiersList: {
+    display: "grid",
+    gap: 12,
+  },
   tierCard: {
     display: "grid",
     gap: 10,
@@ -961,8 +1299,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 750,
   },
-  featureItem: { paddingLeft: 2 },
-  statusList: { display: "grid", gap: 9 },
+  featureItem: {
+    paddingLeft: 2,
+  },
+  statusList: {
+    display: "grid",
+    gap: 9,
+  },
   statusRow: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
