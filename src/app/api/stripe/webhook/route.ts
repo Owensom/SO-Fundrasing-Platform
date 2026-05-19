@@ -311,30 +311,14 @@ async function getCheckoutFinancials({
 
   const rawPlatformFeeCents = safeNumber(metadata.platform_fee_cents, 0);
 
-  const platformCommissionCents = safeNumber(
-    metadata.platform_commission_cents ||
-      applicationFeeAmountCents ||
-      Math.max(rawPlatformFeeCents - supporterContributionCents, 0),
-    0,
+  const platformFeeCents = Math.min(
+    grossAmountCents,
+    Math.max(applicationFeeAmountCents, rawPlatformFeeCents),
   );
-
-  const platformFeeCents = stripeConnectRouted
-    ? applicationFeeAmountCents || platformCommissionCents
-    : platformCommissionCents || rawPlatformFeeCents;
 
   const donorFeeCents = supporterContributionCents;
 
-  const metadataNetAmountCents = safeNumber(metadata.net_amount_cents, 0);
-
-  const calculatedNetAmountCents = Math.max(
-    grossAmountCents - platformFeeCents,
-    0,
-  );
-
-  const netAmountCents =
-    metadataNetAmountCents > 0
-      ? metadataNetAmountCents
-      : calculatedNetAmountCents;
+  const netAmountCents = Math.max(grossAmountCents - platformFeeCents, 0);
 
   const stripeDestinationAccountId =
     paymentIntentDetails.stripeDestinationAccountId || stripeConnectAccountId;
