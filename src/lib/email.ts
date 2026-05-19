@@ -30,6 +30,35 @@ const DEFAULT_BRANDING = {
   primaryColor: "#16a34a",
 };
 
+const NAMED_COLOURS: Record<string, string> = {
+  amber: "#f59e0b",
+  black: "#111827",
+  blue: "#2563eb",
+  bronze: "#92400e",
+  brown: "#92400e",
+  burgundy: "#7f1d1d",
+  cyan: "#06b6d4",
+  gold: "#facc15",
+  green: "#16a34a",
+  grey: "#64748b",
+  gray: "#64748b",
+  indigo: "#4f46e5",
+  lime: "#84cc16",
+  navy: "#1e3a8a",
+  orange: "#f97316",
+  pink: "#ec4899",
+  purple: "#9333ea",
+  red: "#dc2626",
+  rose: "#e11d48",
+  silver: "#94a3b8",
+  sky: "#0ea5e9",
+  slate: "#475569",
+  teal: "#0d9488",
+  violet: "#7c3aed",
+  white: "#ffffff",
+  yellow: "#eab308",
+};
+
 function getBranding(branding?: EmailBranding) {
   return {
     name: branding?.name?.trim() || DEFAULT_BRANDING.name,
@@ -71,11 +100,31 @@ function formatDrawDate(value?: string | null) {
   }).format(date);
 }
 
-function colourDot(colour?: string | null) {
-  if (!colour) return "";
+function getColourCss(value?: string | null) {
+  const clean = String(value || "").trim();
 
-  const safeColour = escapeHtml(colour);
-  const isHex = /^#[0-9A-Fa-f]{6}$/.test(colour.trim());
+  if (/^#[0-9A-Fa-f]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  const named = NAMED_COLOURS[clean.toLowerCase()];
+
+  if (named) {
+    return named;
+  }
+
+  return "#94a3b8";
+}
+
+function getColourLabel(value?: string | null) {
+  const clean = String(value || "").trim();
+
+  return clean || "Default";
+}
+
+function colourDot(colour?: string | null) {
+  const label = getColourLabel(colour);
+  const background = getColourCss(colour);
 
   return `
     <span style="
@@ -85,9 +134,111 @@ function colourDot(colour?: string | null) {
       border-radius:999px;
       margin-right:8px;
       vertical-align:-1px;
-      background:${isHex ? safeColour : "#94a3b8"};
+      background:${escapeHtml(background)};
       border:1px solid #cbd5e1;
-    "></span>
+      box-shadow:0 1px 3px rgba(15,23,42,0.12);
+    " title="${escapeHtml(label)}"></span>
+  `;
+}
+
+function renderGoldTicketBadge() {
+  return `
+    <div style="
+      width:58px;
+      min-width:58px;
+      height:42px;
+      border-radius:13px;
+      background:
+        radial-gradient(circle at 0% 50%, #ffffff 0 5px, transparent 6px),
+        radial-gradient(circle at 100% 50%, #ffffff 0 5px, transparent 6px),
+        linear-gradient(135deg, #fef3c7 0%, #facc15 42%, #d97706 100%);
+      border:1px solid #f59e0b;
+      box-shadow:
+        0 8px 18px rgba(217,119,6,0.24),
+        inset 0 1px 0 rgba(255,255,255,0.5);
+      text-align:center;
+      line-height:42px;
+      color:#78350f;
+      font-size:22px;
+      font-weight:900;
+    ">
+      🎟
+    </div>
+  `;
+}
+
+function renderPremiumRaffleTicketItem(ticket: {
+  ticket_number: number;
+  colour?: string | null;
+}) {
+  const colourLabel = getColourLabel(ticket.colour);
+  const colourBackground = getColourCss(ticket.colour);
+
+  return `
+    <div style="
+      border:1px solid #fde68a;
+      border-radius:20px;
+      padding:14px;
+      margin-bottom:12px;
+      background:
+        linear-gradient(135deg, #ffffff 0%, #fffbeb 58%, #fef3c7 100%);
+      box-shadow:0 8px 22px rgba(15,23,42,0.06);
+    ">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td width="70" valign="middle" style="width:70px;padding-right:12px;">
+            ${renderGoldTicketBadge()}
+          </td>
+
+          <td valign="middle" style="min-width:0;">
+            <div style="
+              margin:0 0 4px;
+              color:#92400e;
+              font-size:11px;
+              font-weight:900;
+              letter-spacing:0.12em;
+              text-transform:uppercase;
+            ">
+              Raffle Ticket
+            </div>
+
+            <div style="
+              color:#0f172a;
+              font-size:20px;
+              font-weight:900;
+              line-height:1.15;
+            ">
+              #${escapeHtml(ticket.ticket_number)}
+            </div>
+
+            <div style="
+              margin-top:8px;
+              display:inline-block;
+              padding:7px 10px;
+              border-radius:999px;
+              background:#ffffff;
+              border:1px solid #e2e8f0;
+              color:#334155;
+              font-size:13px;
+              font-weight:800;
+            ">
+              <span style="
+                display:inline-block;
+                width:13px;
+                height:13px;
+                border-radius:999px;
+                margin-right:7px;
+                vertical-align:-2px;
+                background:${escapeHtml(colourBackground)};
+                border:1px solid #cbd5e1;
+                box-shadow:0 1px 3px rgba(15,23,42,0.12);
+              "></span>
+              ${escapeHtml(colourLabel)}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
   `;
 }
 
@@ -233,7 +384,6 @@ function renderWinnerTrophyHero(label = "Winner trophy") {
     </div>
   `;
 }
-
 function renderEmailShell(params: {
   branding?: EmailBranding;
   heading: string;
@@ -404,6 +554,7 @@ async function sendEmail(params: {
     id: result.data?.id,
   });
 }
+
 export async function sendReceiptEmail({
   to,
   name,
@@ -429,26 +580,7 @@ export async function sendReceiptEmail({
   const formattedDrawDate = formatDrawDate(drawAt);
 
   const ticketItems = tickets
-    .map((ticket) => {
-      const colour = ticket.colour || "Default";
-
-      return `
-        <div style="
-          border:1px solid #e2e8f0;
-          border-radius:14px;
-          padding:13px 14px;
-          margin-bottom:10px;
-          background:#ffffff;
-        ">
-          <div style="font-size:16px;font-weight:800;color:#0f172a;">
-            Ticket #${escapeHtml(ticket.ticket_number)}
-          </div>
-          <div style="margin-top:5px;font-size:14px;color:#475569;">
-            ${colourDot(ticket.colour)}${escapeHtml(colour)}
-          </div>
-        </div>
-      `;
-    })
+    .map((ticket) => renderPremiumRaffleTicketItem(ticket))
     .join("");
 
   const html = renderEmailShell({
