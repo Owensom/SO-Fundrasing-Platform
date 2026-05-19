@@ -202,24 +202,22 @@ export async function GET(
       `
         select ticket_number, colour
         from raffle_ticket_sales
-        where tenant_slug = $1
-          and raffle_id = $2
+        where raffle_id = $1
         order by ticket_number asc
       `,
-      [tenantSlug, raffleId],
+      [raffleId],
     );
 
     const reserved = await query<TicketRow>(
       `
         select ticket_number, colour
         from raffle_ticket_reservations
-        where tenant_slug = $1
-          and raffle_id = $2
+        where raffle_id = $1
           and status = 'reserved'
           and expires_at > now()
         order by ticket_number asc
       `,
-      [tenantSlug, raffleId],
+      [raffleId],
     );
 
     const winners = await query<WinnerRow>(
@@ -231,11 +229,10 @@ export async function GET(
           buyer_name,
           drawn_at
         from raffle_winners
-        where tenant_slug = $1
-          and raffle_id = $2
+        where raffle_id = $1
         order by prize_position asc
       `,
-      [tenantSlug, raffleId],
+      [raffleId],
     );
 
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
@@ -273,13 +270,13 @@ export async function GET(
         colours: coloursRaw.map(normalizeColourItem),
         offers: offersRaw.map(normalizeOfferItem),
         prizes,
-        soldTickets: sold.map((t) => ({
-          number: Number(t.ticket_number),
-          colour: t.colour || "default",
+        soldTickets: sold.map((ticket) => ({
+          number: Number(ticket.ticket_number),
+          colour: ticket.colour || "default",
         })),
-        reservedTickets: reserved.map((t) => ({
-          number: Number(t.ticket_number),
-          colour: t.colour || "default",
+        reservedTickets: reserved.map((ticket) => ({
+          number: Number(ticket.ticket_number),
+          colour: ticket.colour || "default",
         })),
         winnerTicketNumber:
           raffle.winner_ticket_number != null
