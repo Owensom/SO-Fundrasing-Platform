@@ -2,11 +2,53 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  canPublishAnotherCampaign,
+  getMaximumActiveCampaignsForTier,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import { listEvents } from "../../../../api/_lib/events-repo";
 
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 const EVENTS_LOGO_IMAGE = "/brand/event-champagne-gold.png";
+
+type ActiveCampaignCountRow = {
+  total: number | string;
+};
+
+async function getActiveCampaignCount(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
+    `
+      select count(*)::int as total
+      from (
+        select 1
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
+    `,
+    [tenantSlug],
+  );
+
+  return Number(rows[0]?.total || 0);
+}
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -61,6 +103,40 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   };
 }
 
+function formatCampaignLimit(value: number) {
+  if (!Number.isFinite(value)) return "unlimited active campaigns";
+
+  return `${value} active campaign${value === 1 ? "" : "s"}`;
+}
+
+function formatTierName(value: string) {
+  if (value === "foundation") return "Foundation";
+  if (value === "professional") return "Professional";
+  return "Community";
+}
+
+function CreateEventAction({
+  canCreate,
+  reason,
+}: {
+  canCreate: boolean;
+  reason: string;
+}) {
+  if (canCreate) {
+    return (
+      <Link href="/admin/events/new" style={styles.createButton}>
+        + Create event
+      </Link>
+    );
+  }
+
+  return (
+    <div style={styles.createButtonDisabled} title={reason}>
+      Limit reached
+    </div>
+  );
+}
+
 export default async function AdminEventsPage() {
   const session = await auth();
 
@@ -78,15 +154,35 @@ export default async function AdminEventsPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const events = await listEvents(tenantSlug);
+  const [events, tenantSettings, activeCampaignCount] = await Promise.all([
+    listEvents(tenantSlug),
+    getTenantSettings(tenantSlug),
+    getActiveCampaignCount(tenantSlug),
+  ]);
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const maxActiveCampaigns = getMaximumActiveCampaignsForTier(subscriptionTier);
+
+  const canCreateCampaign = canPublishAnotherCampaign({
+    subscription_tier: tenantSettings?.subscription_tier,
+    currentActiveCampaigns: activeCampaignCount,
+  });
+
+  const limitMessage = canCreateCampaign
+    ? `Your current plan allows ${formatCampaignLimit(maxActiveCampaigns)}.`
+    : `Your current plan has reached its ${formatCampaignLimit(
+        maxActiveCampaigns,
+      )} limit across raffles, squares and events. Close or unpublish a campaign, or upgrade the tenant plan.`;
 
   const totalEvents = events.length;
   const publishedCount = events.filter(
     (event) => event.status === "published",
   ).length;
-  const draftCount = events.filter(
-    (event) => event.status !== "published",
-  ).length;
+  const draftCount = events.filter((event) => event.status !== "published")
+    .length;
   const totalCapacity = events.reduce(
     (sum, event) => sum + Number(event.capacity || 0),
     0,
@@ -120,8 +216,7 @@ export default async function AdminEventsPage() {
             Tenant: <strong>{tenantSlug}</strong>
           </p>
         </div>
-
-        <div className="events-hero-stats" style={styles.heroStats}>
+                <div className="events-hero-stats" style={styles.heroStats}>
           <HeroStat label="Total events" value={totalEvents} />
           <HeroStat label="Published" value={publishedCount} />
           <HeroStat label="Combined capacity" value={totalCapacity} />
@@ -154,10 +249,42 @@ export default async function AdminEventsPage() {
             Public site
           </Link>
 
-          <Link href="/admin/events/new" style={styles.createButton}>
-            + Create event
-          </Link>
+          <CreateEventAction
+            canCreate={canCreateCampaign}
+            reason={limitMessage}
+          />
         </nav>
+      </section>
+
+      <section className="events-limit-panel" style={styles.limitPanel}>
+        <div>
+          <p style={styles.limitKicker}>Subscription limit</p>
+
+          <h2 style={styles.limitTitle}>
+            {canCreateCampaign
+              ? "You can create another event."
+              : "Active campaign limit reached."}
+          </h2>
+
+          <p style={styles.limitText}>{limitMessage}</p>
+        </div>
+
+        <div className="events-limit-stats" style={styles.limitStats}>
+          <div style={styles.limitStat}>
+            <span>Current plan</span>
+            <strong>{formatTierName(subscriptionTier)}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Active campaigns</span>
+            <strong>{activeCampaignCount}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Allowed</span>
+            <strong>{formatCampaignLimit(maxActiveCampaigns)}</strong>
+          </div>
+        </div>
       </section>
 
       <section className="events-stats-grid" style={styles.statsGrid}>
@@ -193,15 +320,17 @@ export default async function AdminEventsPage() {
           tint="#f8fafc"
         />
       </section>
-            {events.length === 0 ? (
+
+      {events.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>No events yet</h2>
 
           <p style={styles.muted}>Create your first fundraising event.</p>
 
-          <Link href="/admin/events/new" style={styles.createButton}>
-            + Create event
-          </Link>
+          <CreateEventAction
+            canCreate={canCreateCampaign}
+            reason={limitMessage}
+          />
         </section>
       ) : (
         <section style={styles.list}>
@@ -276,8 +405,7 @@ export default async function AdminEventsPage() {
                           : event.description}
                       </p>
                     ) : null}
-
-                    <div
+                                        <div
                       className="events-detail-grid"
                       style={styles.detailGrid}
                     >
@@ -286,10 +414,7 @@ export default async function AdminEventsPage() {
                         value={formatDate(event.starts_at)}
                       />
 
-                      <InfoBlock
-                        label="Ends"
-                        value={formatDate(event.ends_at)}
-                      />
+                      <InfoBlock label="Ends" value={formatDate(event.ends_at)} />
 
                       <InfoBlock label="Capacity" value={capacity} />
 
@@ -465,7 +590,16 @@ const responsiveStyles = `
   .events-card-top {
     grid-template-columns: 160px minmax(0, 1fr) !important;
   }
+
+  .events-limit-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .events-limit-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }
+
 @media (max-width: 640px) {
   .events-admin-page {
     width: 100% !important;
@@ -513,7 +647,8 @@ const responsiveStyles = `
   }
 
   .events-hero-stats,
-  .events-stats-grid {
+  .events-stats-grid,
+  .events-limit-stats {
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
@@ -541,8 +676,7 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
     gap: 16px !important;
   }
-
-  .events-image-wrap {
+    .events-image-wrap {
     width: 100% !important;
     height: auto !important;
     aspect-ratio: 16 / 9 !important;
@@ -793,6 +927,74 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
     textAlign: "center",
     lineHeight: 1.2,
+  },
+
+  createButtonDisabled: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "11px 16px",
+    borderRadius: 9999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#cbd5e1",
+    border: "1px solid rgba(203,213,225,0.42)",
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
+    cursor: "not-allowed",
+  },
+
+  limitPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.8fr)",
+    gap: 16,
+    alignItems: "center",
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
+    marginBottom: 18,
+  },
+
+  limitKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  limitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.04em",
+  },
+
+  limitText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  limitStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  limitStat: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   statsGrid: {
