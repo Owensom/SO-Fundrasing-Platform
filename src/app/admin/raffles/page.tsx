@@ -3,7 +3,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { headers, cookies } from "next/headers";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  canPublishAnotherCampaign,
+  getMaximumActiveCampaignsForTier,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 
 const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
 const TICKET_LOGO_IMAGE = "/brand/so-ticket-placeholder.png";
@@ -32,6 +39,10 @@ type ApiResponse = {
   error?: string;
 };
 
+type ActiveCampaignCountRow = {
+  total: number | string;
+};
+
 async function getAdminRaffles(): Promise<RaffleItem[]> {
   const headerStore = await headers();
   const cookieStore = await cookies();
@@ -57,6 +68,37 @@ async function getAdminRaffles(): Promise<RaffleItem[]> {
   }
 
   return data.items;
+}
+
+async function getActiveCampaignCount(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
+    `
+      select count(*)::int as total
+      from (
+        select 1
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
+    `,
+    [tenantSlug],
+  );
+
+  return Number(rows[0]?.total || 0);
 }
 
 function formatDrawDate(value: string | null) {
@@ -129,6 +171,34 @@ function getRaisedTotal(raffle: RaffleItem) {
   return Number(raffle.sold_tickets || 0) * Number(raffle.ticket_price || 0);
 }
 
+function formatCampaignLimit(value: number) {
+  if (!Number.isFinite(value)) return "unlimited active campaigns";
+
+  return `${value} active campaign${value === 1 ? "" : "s"}`;
+}
+
+function CreateRaffleAction({
+  canCreate,
+  reason,
+}: {
+  canCreate: boolean;
+  reason: string;
+}) {
+  if (canCreate) {
+    return (
+      <Link href="/admin/raffles/new" style={styles.createButton}>
+        + Create draw
+      </Link>
+    );
+  }
+
+  return (
+    <div style={styles.createButtonDisabled} title={reason}>
+      Limit reached
+    </div>
+  );
+}
+
 export default async function AdminRafflesPage() {
   const session = await auth();
 
@@ -145,7 +215,28 @@ export default async function AdminRafflesPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const raffles = await getAdminRaffles();
+  const [raffles, tenantSettings, activeCampaignCount] = await Promise.all([
+    getAdminRaffles(),
+    getTenantSettings(tenantSlug),
+    getActiveCampaignCount(tenantSlug),
+  ]);
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const maxActiveCampaigns = getMaximumActiveCampaignsForTier(subscriptionTier);
+
+  const canCreateCampaign = canPublishAnotherCampaign({
+    subscription_tier: tenantSettings?.subscription_tier,
+    currentActiveCampaigns: activeCampaignCount,
+  });
+
+  const limitMessage = canCreateCampaign
+    ? `Your current plan allows ${formatCampaignLimit(maxActiveCampaigns)}.`
+    : `Your current plan has reached its ${formatCampaignLimit(
+        maxActiveCampaigns,
+      )} limit across raffles, squares and events. Close or unpublish a campaign, or upgrade the tenant plan.`;
 
   const totalRaffles = raffles.length;
   const publishedCount = raffles.filter((r) => r.status === "published").length;
@@ -159,8 +250,7 @@ export default async function AdminRafflesPage() {
   );
   const totalRaised = raffles.reduce((sum, r) => sum + getRaisedTotal(r), 0);
   const dashboardCurrency = raffles[0]?.currency || "GBP";
-
-  return (
+    return (
     <main className="raffles-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -225,10 +315,42 @@ export default async function AdminRafflesPage() {
             Public site
           </Link>
 
-          <Link href="/admin/raffles/new" style={styles.createButton}>
-            + Create draw
-          </Link>
+          <CreateRaffleAction
+            canCreate={canCreateCampaign}
+            reason={limitMessage}
+          />
         </nav>
+      </section>
+
+      <section style={styles.limitPanel}>
+        <div>
+          <p style={styles.limitKicker}>Subscription limit</p>
+
+          <h2 style={styles.limitTitle}>
+            {canCreateCampaign
+              ? "You can create another raffle."
+              : "Active campaign limit reached."}
+          </h2>
+
+          <p style={styles.limitText}>{limitMessage}</p>
+        </div>
+
+        <div style={styles.limitStats}>
+          <div style={styles.limitStat}>
+            <span>Current plan</span>
+            <strong>{subscriptionTier}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Active campaigns</span>
+            <strong>{activeCampaignCount}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Allowed</span>
+            <strong>{formatCampaignLimit(maxActiveCampaigns)}</strong>
+          </div>
+        </div>
       </section>
 
       <section className="raffles-stats-grid" style={styles.statsGrid}>
@@ -272,7 +394,8 @@ export default async function AdminRafflesPage() {
           tint="#f8fafc"
         />
       </section>
-            {raffles.length === 0 ? (
+
+      {raffles.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>No raffles yet</h2>
 
@@ -280,9 +403,10 @@ export default async function AdminRafflesPage() {
             Create your first raffle and publish it when ready.
           </p>
 
-          <Link href="/admin/raffles/new" style={styles.createButton}>
-            + Create draw
-          </Link>
+          <CreateRaffleAction
+            canCreate={canCreateCampaign}
+            reason={limitMessage}
+          />
         </section>
       ) : (
         <section style={styles.list}>
@@ -334,8 +458,7 @@ export default async function AdminRafflesPage() {
                         {raffle.status}
                       </div>
                     </div>
-
-                    <div
+                                        <div
                       className="raffle-headline-grid"
                       style={styles.headlineGrid}
                     >
@@ -511,6 +634,7 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .raffles-admin-page,
 .raffles-admin-page * {
@@ -549,6 +673,14 @@ const responsiveStyles = `
 
   .raffle-card-top {
     grid-template-columns: 160px minmax(0, 1fr) !important;
+  }
+
+  .raffles-limit-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .raffles-limit-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
@@ -597,12 +729,12 @@ const responsiveStyles = `
   }
 
   .raffles-hero-stats,
-  .raffles-stats-grid {
+  .raffles-stats-grid,
+  .raffles-limit-stats {
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
-
-  .raffles-stat-card,
+    .raffles-stat-card,
   .raffles-hero-stat {
     min-height: 112px !important;
     border-radius: 24px !important;
@@ -878,6 +1010,75 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     lineHeight: 1.2,
     whiteSpace: "nowrap",
+  },
+
+  createButtonDisabled: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "11px 16px",
+    borderRadius: 9999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#cbd5e1",
+    border: "1px solid rgba(203,213,225,0.42)",
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "nowrap",
+    cursor: "not-allowed",
+  },
+
+  limitPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.8fr)",
+    gap: 16,
+    alignItems: "center",
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
+    marginBottom: 18,
+  },
+
+  limitKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  limitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.04em",
+  },
+
+  limitText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  limitStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  limitStat: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   statsGrid: {
