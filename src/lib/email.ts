@@ -152,42 +152,32 @@ function renderPremiumRaffleTicketItem(ticket: {
     <div style="
       border:1px solid #fde68a;
       border-radius:22px;
-      padding:14px;
+      padding:14px 16px;
       margin-bottom:12px;
       background:
-        radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 38%),
-        linear-gradient(135deg, #ffffff 0%, #fffbeb 58%, #fef3c7 100%);
+        radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 40%),
+        linear-gradient(135deg, #ffffff 0%, #fffbeb 54%, #fef3c7 100%);
       box-shadow:0 10px 24px rgba(15,23,42,0.07);
     ">
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
         <tr>
-          <td width="92" valign="middle" style="width:92px;padding-right:14px;">
-            <div style="
-              width:78px;
-              height:58px;
-              border-radius:16px;
-              background:#ffffff;
-              border:1px solid #fde68a;
-              box-shadow:0 8px 18px rgba(217,119,6,0.16);
-              padding:7px;
-              text-align:center;
-            ">
-              <img
-                src="${escapeHtml(DEFAULT_TICKET_IMAGE_URL)}"
-                alt="Raffle ticket"
-                width="64"
-                style="
-                  display:block;
-                  width:64px;
-                  max-width:64px;
-                  height:auto;
-                  margin:0 auto;
-                  border:0;
-                  outline:none;
-                  text-decoration:none;
-                "
-              />
-            </div>
+          <td width="88" valign="middle" style="width:88px;padding-right:14px;">
+            <img
+              src="${escapeHtml(DEFAULT_TICKET_IMAGE_URL)}"
+              alt="Raffle ticket"
+              width="74"
+              style="
+                display:block;
+                width:74px;
+                max-width:74px;
+                height:auto;
+                margin:0;
+                border:0;
+                outline:none;
+                text-decoration:none;
+                filter:drop-shadow(0 8px 14px rgba(217,119,6,0.18));
+              "
+            />
           </td>
 
           <td valign="middle" style="min-width:0;">
@@ -216,7 +206,7 @@ function renderPremiumRaffleTicketItem(ticket: {
               display:inline-block;
               padding:7px 10px;
               border-radius:999px;
-              background:#ffffff;
+              background:rgba(255,255,255,0.72);
               border:1px solid #e2e8f0;
               color:#334155;
               font-size:13px;
