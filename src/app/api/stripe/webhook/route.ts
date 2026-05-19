@@ -27,14 +27,6 @@ type PaymentFinancials = {
   stripeDestinationAccountId: string;
 };
 
-type TenantConnectStatus = {
-  stripe_connect_account_id: string | null;
-  stripe_connect_onboarding_complete: boolean | null;
-  stripe_connect_charges_enabled: boolean | null;
-  stripe_connect_payouts_enabled: boolean | null;
-  stripe_connect_details_submitted: boolean | null;
-};
-
 type VerifiedEventOrder = {
   id: string;
   tenant_slug: string;
@@ -215,10 +207,6 @@ function normalisePaymentType(value: unknown) {
   return "raffle";
 }
 
-function cleanEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
-}
-
 function parseSquaresMetadata(value: unknown): number[] {
   try {
     const parsed = JSON.parse(String(value || "[]"));
@@ -339,7 +327,7 @@ async function getCheckoutFinancials({
   const metadataNetAmountCents = safeNumber(metadata.net_amount_cents, 0);
 
   const calculatedNetAmountCents = Math.max(
-    grossAmountCents - platformFeeCents - donorFeeCents,
+    grossAmountCents - platformFeeCents,
     0,
   );
 
@@ -364,6 +352,7 @@ async function getCheckoutFinancials({
     stripeDestinationAccountId,
   };
 }
+
 async function getVerifiedEventOrder(input: {
   orderId: string;
   eventId: string;
@@ -434,7 +423,7 @@ async function getVerifiedRaffleReservations(input: {
     `
       select
         r.id,
-        r.tenant_slug,
+        ra.tenant_slug,
         r.raffle_id,
         r.reservation_token,
         r.reservation_group_id,
@@ -445,7 +434,6 @@ async function getVerifiedRaffleReservations(input: {
       from raffle_ticket_reservations r
       inner join raffles ra
         on ra.id = r.raffle_id
-       and ra.tenant_slug = r.tenant_slug
       where r.raffle_id = $1
         and r.reservation_token = $2
         and r.status in ('reserved', 'sold')
@@ -635,6 +623,7 @@ async function recordPlatformPayment(input: {
     ],
   );
 }
+
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -882,7 +871,8 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-        const reservationToken = String(
+
+    const reservationToken = String(
       metadata.reservation_token ||
         metadata.reservationToken ||
         metadata.reservation_id ||
@@ -979,10 +969,11 @@ export async function POST(request: NextRequest) {
             payment_id = $2,
             gross_amount_cents = $3,
             platform_fee_cents = $4,
-            net_amount_cents = $5
-          where tenant_slug = $6
-            and raffle_id = $7
-            and reservation_token = $8
+            net_amount_cents = $5,
+            donor_fee_cents = $6,
+            donor_covered_fees = $7
+          where raffle_id = $8
+            and reservation_token = $9
         `,
         [
           session.id,
@@ -990,7 +981,8 @@ export async function POST(request: NextRequest) {
           grossAmountCents,
           platformFeeCents,
           netAmountCents,
-          tenantSlug,
+          financials.donorFeeCents,
+          financials.donorCoveredFees,
           raffleId,
           reservationToken,
         ],
@@ -999,7 +991,6 @@ export async function POST(request: NextRequest) {
       await query(
         `
           insert into raffle_ticket_sales (
-            tenant_slug,
             raffle_id,
             ticket_number,
             colour,
@@ -1016,7 +1007,6 @@ export async function POST(request: NextRequest) {
             sold_at
           )
           select
-            r.tenant_slug,
             r.raffle_id,
             r.ticket_number,
             coalesce(nullif(r.colour, ''), 'default'),
@@ -1032,15 +1022,13 @@ export async function POST(request: NextRequest) {
             r.reservation_group_id,
             now()
           from raffle_ticket_reservations r
-          where r.tenant_slug = $9
-            and r.raffle_id = $1
+          where r.raffle_id = $1
             and r.reservation_token = $2
             and r.status = 'sold'
             and not exists (
               select 1
               from raffle_ticket_sales s
-              where s.tenant_slug = r.tenant_slug
-                and s.raffle_id = r.raffle_id
+              where s.raffle_id = r.raffle_id
                 and s.ticket_number = r.ticket_number
                 and s.colour = coalesce(nullif(r.colour, ''), 'default')
             )
@@ -1054,7 +1042,6 @@ export async function POST(request: NextRequest) {
           session.id,
           name,
           email,
-          tenantSlug,
         ],
       );
 
@@ -1065,8 +1052,7 @@ export async function POST(request: NextRequest) {
             sold_tickets = (
               select count(*)::int
               from raffle_ticket_sales
-              where tenant_slug = $2
-                and raffle_id = $1
+              where raffle_id = $1
             ),
             updated_at = now()
           where id = $1
@@ -1082,12 +1068,11 @@ export async function POST(request: NextRequest) {
         `
           select ticket_number, colour
           from raffle_ticket_sales
-          where tenant_slug = $1
-            and raffle_id = $2
-            and reservation_id = $3
+          where raffle_id = $1
+            and reservation_id = $2
           order by ticket_number asc
         `,
-        [tenantSlug, raffleId, reservationToken],
+        [raffleId, reservationToken],
       );
 
       await recordPlatformPayment({
@@ -1193,7 +1178,8 @@ export async function POST(request: NextRequest) {
       }
 
       const squares = parseSquaresMetadata(metadata.squares_json);
-            await query(
+
+      await query(
         `
           update squares_reservations
           set
