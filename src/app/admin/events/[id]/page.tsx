@@ -2,9 +2,14 @@ import { randomInt } from "crypto";
 import type { CSSProperties, ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
-import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import {
+  canPublishAnotherCampaign,
+  checkSubscriptionCapability,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import AdminSeatManager from "@/components/admin/events/AdminSeatManager";
 import TableNamesEditor from "@/components/admin/events/TableNamesEditor";
@@ -51,6 +56,10 @@ type ParsedPrizeSelection = {
   id: string;
   title: string;
   position: number | null;
+};
+
+type ActiveCampaignCountRow = {
+  active_count: string | number;
 };
 
 type TableShape = "round" | "square" | "rectangle";
@@ -313,7 +322,6 @@ function expandRows(value: string): string[] {
 
   return Array.from(new Set(rows));
 }
-
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Tables";
@@ -377,6 +385,52 @@ function formatMoney(cents: number | null | undefined, currency = "GBP") {
   }
 }
 
+async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
+    `
+      select count(*)::int as active_count
+      from (
+        select 1
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
+    `,
+    [tenantSlug],
+  );
+
+  return Number(rows[0]?.active_count || 0);
+}
+
+async function canPublishEventForTenant(tenantSlug: string) {
+  const tenantSettings = await getTenantSettings(tenantSlug);
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const currentActiveCampaigns =
+    await getActivePublishedCampaignCountForTenant(tenantSlug);
+
+  return canPublishAnotherCampaign({
+    subscription_tier: subscriptionTier,
+    currentActiveCampaigns,
+  });
+}
+
 async function requireEventAccess(eventId: string) {
   const session = await auth();
   if (!session?.user) redirect("/admin/login");
@@ -434,6 +488,14 @@ async function updateEventAction(formData: FormData) {
   }
 
   const event = await requireEventAccess(id);
+
+  if (status === "published" && event.status !== "published") {
+    const allowedToPublish = await canPublishEventForTenant(event.tenant_slug);
+
+    if (!allowedToPublish) {
+      redirect(`/admin/events/${id}?error=campaign-limit#overview`);
+    }
+  }
 
   await updateEvent(id, {
     title,
@@ -499,6 +561,7 @@ async function updateMenuOptionsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
+
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
@@ -549,7 +612,6 @@ async function updateTableNamesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
-
 async function updateTableShapeAction(formData: FormData) {
   "use server";
 
@@ -837,7 +899,6 @@ async function generateSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
-
 async function generateTablesAction(formData: FormData) {
   "use server";
 
@@ -875,6 +936,7 @@ async function generateTablesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
+
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -1203,7 +1265,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1245,6 +1306,7 @@ export default async function AdminEventManagePage({
   const seats = event.seats || [];
   const winners = await listEventWinners(event.id);
   const hasCustomImage = Boolean(event.image_url);
+  const campaignLimitReached = searchParams?.error === "campaign-limit";
 
   const imageFocusStyle: CSSProperties = {
     objectFit: "cover",
@@ -1340,7 +1402,8 @@ export default async function AdminEventManagePage({
   return (
     <main className="event-edit-page" style={styles.page}>
       <style>{responsiveStyles}</style>
-            <section className="hero" style={styles.hero}>
+
+      <section className="hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Events editor</div>
 
@@ -1413,6 +1476,36 @@ export default async function AdminEventManagePage({
         </a>
       </section>
 
+      {campaignLimitReached ? (
+        <section style={styles.campaignLimitBanner}>
+          <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
+
+          <h2 style={styles.campaignLimitTitle}>
+            This event was not published.
+          </h2>
+
+          <p style={styles.campaignLimitText}>
+            This tenant has reached its active campaign allowance across
+            raffles, squares and events. Your event changes were not published.
+            Close or unpublish another campaign, save this event as a draft, or
+            upgrade the tenant plan from the billing page.
+          </p>
+
+          <div style={styles.campaignLimitActions}>
+            <a href="/admin/events" style={styles.campaignLimitSecondary}>
+              Manage events
+            </a>
+
+            <a
+              href="/admin/settings/billing"
+              style={styles.campaignLimitPrimary}
+            >
+              View billing
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       <nav className="tabs" style={styles.tabs}>
         <a href="#overview" className="tab" style={styles.tab}>
           Overview
@@ -1445,7 +1538,7 @@ export default async function AdminEventManagePage({
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
-      {searchParams?.error ? (
+      {searchParams?.error && !campaignLimitReached ? (
         <div style={styles.errorBox}>
           Please check the missing fields and try again.
         </div>
@@ -1550,8 +1643,7 @@ export default async function AdminEventManagePage({
                 />
               </div>
             </div>
-
-            <div className="twoCol" style={styles.twoCol}>
+                        <div className="twoCol" style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -1950,7 +2042,8 @@ export default async function AdminEventManagePage({
           clearWinnersAction={clearWinnersAction}
         />
       </CollapsibleSection>
-            {isReservedSeating ? (
+
+      {isReservedSeating ? (
         <CollapsibleSection
           id="row-seating"
           eyebrow="Section 5"
@@ -2564,6 +2657,75 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 950,
+  },
+  campaignLimitBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  campaignLimitEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  campaignLimitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  campaignLimitText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
+  },
+  campaignLimitActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  campaignLimitPrimary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #1683f8",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
+  },
+  campaignLimitSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
   },
   tabs: {
     display: "flex",
