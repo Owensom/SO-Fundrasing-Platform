@@ -469,7 +469,6 @@ function hasGuestCateringDetail(row: EventGuestCateringRow) {
       String(row.menu_choice || "").trim(),
   );
 }
-
 async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   const rows = await query<ActiveCampaignCountRow>(
     `
@@ -673,6 +672,7 @@ async function updateGuestCateringItemAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=guest-catering#guest-catering`);
 }
+
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -904,7 +904,6 @@ async function updateTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=ticket-updated#tickets`);
 }
-
 async function deleteTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -1182,6 +1181,7 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
+
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -1419,7 +1419,8 @@ const responsiveStyles = `
   .event-edit-page .dangerButton,
   .event-edit-page .dangerOutlineButton,
   .event-edit-page .primaryLink,
-  .event-edit-page .secondaryButton {
+  .event-edit-page .secondaryButton,
+  .event-edit-page .exportButton {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
@@ -1487,7 +1488,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1625,6 +1625,9 @@ export default async function AdminEventManagePage({
   );
 
   const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+  const guestCateringCsvHref = `/api/admin/events/${encodeURIComponent(
+    event.id,
+  )}/guest-catering.csv`;
 
   const capacitySummary = isGeneralAdmission
     ? event.capacity
@@ -1806,7 +1809,8 @@ export default async function AdminEventManagePage({
           Please check the missing fields and try again.
         </div>
       ) : null}
-            <section style={styles.summaryGrid}>
+
+      <section style={styles.summaryGrid}>
         <SummaryCard label="Ticket types" value={ticketTypes.length} />
         <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
         <SummaryCard
@@ -2314,6 +2318,14 @@ export default async function AdminEventManagePage({
                 abandoned checkout sessions are excluded.
               </p>
             </div>
+
+            <a
+              href={guestCateringCsvHref}
+              className="exportButton"
+              style={styles.exportButton}
+            >
+              Export CSV
+            </a>
           </div>
 
           <div className="guestCateringGrid" style={styles.guestCateringStats}>
@@ -2450,7 +2462,10 @@ export default async function AdminEventManagePage({
                           >
                             <option value="">No menu choice selected</option>
                             {(event.menu_options || [])
-                              .filter((option) => option.isActive ?? option.is_active ?? true)
+                              .filter(
+                                (option) =>
+                                  option.isActive ?? option.is_active ?? true,
+                              )
                               .map((option, index) => {
                                 const name = String(
                                   option.name || option.title || "",
@@ -3641,6 +3656,20 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+  },
+  exportButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(15,23,42,0.14)",
   },
   dangerButton: {
     minHeight: 44,
