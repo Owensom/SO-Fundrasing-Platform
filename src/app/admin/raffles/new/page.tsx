@@ -2,9 +2,15 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
-import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import {
+  canPublishAnotherCampaign,
+  checkSubscriptionCapability,
+  getMaximumActiveCampaignsForTier,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import NewRaffleForm from "@/components/admin/NewRaffleForm";
 
 type PageProps = {
@@ -12,6 +18,53 @@ type PageProps = {
     error?: string;
   }>;
 };
+
+type ActiveCampaignCountRow = {
+  total: number | string;
+};
+
+async function getActiveCampaignCount(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
+    `
+      select count(*)::int as total
+      from (
+        select 1
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
+    `,
+    [tenantSlug],
+  );
+
+  return Number(rows[0]?.total || 0);
+}
+
+function formatCampaignLimit(value: number) {
+  if (!Number.isFinite(value)) return "unlimited active campaigns";
+
+  return `${value} active campaign${value === 1 ? "" : "s"}`;
+}
+
+function formatTierName(value: string) {
+  if (value === "foundation") return "Foundation";
+  if (value === "professional") return "Professional";
+  return "Community";
+}
 
 export default async function NewRafflePage({ searchParams }: PageProps) {
   const session = await auth();
@@ -31,15 +84,47 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const [tenantSettings, activeCampaignCount] = await Promise.all([
+    getTenantSettings(tenantSlug),
+    getActiveCampaignCount(tenantSlug),
+  ]);
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const maxActiveCampaigns = getMaximumActiveCampaignsForTier(subscriptionTier);
+
+  const canPublishCampaign = canPublishAnotherCampaign({
+    subscription_tier: tenantSettings?.subscription_tier,
+    currentActiveCampaigns: activeCampaignCount,
+  });
 
   const customImagesCapability = checkSubscriptionCapability(
     tenantSettings,
     "custom_campaign_images",
   );
 
-  const campaignLimitReached =
+  const campaignLimitRedirect =
     resolvedSearchParams?.error === "campaign_limit";
+
+  const showCampaignLimitBanner =
+    campaignLimitRedirect || !canPublishCampaign;
+
+  const limitTitle = campaignLimitRedirect
+    ? "This raffle was saved as a draft because the active campaign limit was reached."
+    : canPublishCampaign
+      ? "You can publish another raffle."
+      : "Active campaign limit reached.";
+
+  const limitText = canPublishCampaign
+    ? `This tenant is currently using ${activeCampaignCount} of ${formatCampaignLimit(
+        maxActiveCampaigns,
+      )}. You can create and publish this raffle when ready.`
+    : `This tenant is currently using ${activeCampaignCount} of ${formatCampaignLimit(
+        maxActiveCampaigns,
+      )} across raffles, squares and events. You can still create this raffle as a draft, but publishing will be blocked until an active campaign is closed/unpublished or the tenant plan is upgraded.`;
 
   return (
     <main className="new-raffle-page" style={styles.page}>
@@ -55,24 +140,55 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
         </Link>
       </section>
 
-      {campaignLimitReached ? (
-        <section style={styles.upgradeBanner}>
-          <div style={styles.upgradeEyebrow}>Plan limit reached</div>
+      <section style={styles.limitPanel}>
+        <div>
+          <div style={styles.limitEyebrow}>Subscription enforcement</div>
 
-          <h1 style={styles.upgradeTitle}>
-            Community plans can publish up to 2 active campaigns.
+          <h1 style={styles.limitTitle}>
+            {canPublishCampaign
+              ? "Raffle publishing is available."
+              : "Draft creation remains available."}
           </h1>
 
-          <p style={styles.upgradeText}>
-            Your raffle was not published because this tenant already has the
-            maximum number of active published campaigns for the Community plan.
-            Save this raffle as a draft, close an existing campaign, or upgrade
-            to Professional for unlimited active campaigns.
+          <p style={styles.limitText}>
+            {canPublishCampaign
+              ? "This tenant is within the current active campaign allowance."
+              : "This tenant has reached the current active campaign allowance. The form remains available so you can prepare a draft, but the API will block publishing until capacity is available."}
           </p>
+        </div>
+
+        <div style={styles.limitStats}>
+          <div style={styles.limitStat}>
+            <span>Plan</span>
+            <strong>{formatTierName(subscriptionTier)}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Active campaigns</span>
+            <strong>{activeCampaignCount}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Allowed</span>
+            <strong>{formatCampaignLimit(maxActiveCampaigns)}</strong>
+          </div>
+        </div>
+      </section>
+
+      {showCampaignLimitBanner ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Plan limit notice</div>
+
+          <h1 style={styles.upgradeTitle}>{limitTitle}</h1>
+
+          <p style={styles.upgradeText}>{limitText}</p>
 
           <div style={styles.upgradeActions}>
-            <Link href="/admin/billing" style={styles.primaryUpgradeButton}>
-              View billing options
+            <Link
+              href="/admin/settings/billing"
+              style={styles.primaryUpgradeButton}
+            >
+              View billing
             </Link>
 
             <Link href="/admin/raffles" style={styles.secondaryUpgradeButton}>
@@ -90,7 +206,6 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
     </main>
   );
 }
-
 const responsiveStyles = `
   .new-raffle-page,
   .new-raffle-page * {
@@ -101,7 +216,7 @@ const responsiveStyles = `
     overflow-x: hidden;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 760px) {
     .new-raffle-page {
       width: 100% !important;
       max-width: 100% !important;
@@ -121,6 +236,14 @@ const responsiveStyles = `
       min-height: 50px !important;
       text-align: center !important;
       padding: 13px 16px !important;
+    }
+
+    .new-raffle-limit-panel {
+      grid-template-columns: 1fr !important;
+    }
+
+    .new-raffle-limit-stats {
+      grid-template-columns: 1fr !important;
     }
   }
 `;
@@ -166,6 +289,60 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
+  },
+  limitPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.8fr)",
+    gap: 16,
+    alignItems: "center",
+    marginBottom: 18,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #eff6ff 52%, #f8fafc 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.06)",
+  },
+  limitEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  limitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(26px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  limitText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 780,
+  },
+  limitStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  limitStat: {
+    display: "grid",
+    gap: 4,
+    padding: 13,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   upgradeBanner: {
     marginBottom: 18,
