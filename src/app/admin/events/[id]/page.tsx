@@ -9,6 +9,7 @@ import {
   canPublishAnotherCampaign,
   checkSubscriptionCapability,
   getEventGuestCateringEditUpgradeMessage,
+  getEventGuestMenuRequestEmailsUpgradeMessage,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
@@ -50,6 +51,9 @@ type PageProps = {
   searchParams?: {
     saved?: string;
     error?: string;
+    sent?: string;
+    skipped?: string;
+    failed?: string;
   };
 };
 
@@ -904,6 +908,7 @@ async function updateTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=ticket-updated#tickets`);
 }
+
 async function deleteTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -928,7 +933,6 @@ async function clearTicketTypesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
-
 async function applySeatTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -1383,6 +1387,7 @@ const responsiveStyles = `
   .event-edit-page .guestCateringGrid,
   .event-edit-page .guestUpgradeGrid,
   .event-edit-page .guestEditGrid,
+  .event-edit-page .guestHeaderActions,
   .event-edit-page .twoPanel,
   .event-edit-page .twoCol,
   .event-edit-page .threeCol,
@@ -1420,7 +1425,8 @@ const responsiveStyles = `
   .event-edit-page .dangerOutlineButton,
   .event-edit-page .primaryLink,
   .event-edit-page .secondaryButton,
-  .event-edit-page .exportButton {
+  .event-edit-page .exportButton,
+  .event-edit-page .menuRequestButton {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
@@ -1530,7 +1536,13 @@ export default async function AdminEventManagePage({
     "event_guest_catering_edit",
   );
 
+  const guestMenuRequestCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_guest_menu_request_emails",
+  );
+
   const canEditGuestCatering = guestCateringEditCapability.allowed;
+  const canSendMenuRequests = guestMenuRequestCapability.allowed;
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
@@ -1542,6 +1554,7 @@ export default async function AdminEventManagePage({
   const hasCustomImage = Boolean(event.image_url);
   const campaignLimitReached = searchParams?.error === "campaign-limit";
   const upgradeRequired = searchParams?.error === "upgrade-required";
+  const menuRequestFailed = searchParams?.error === "menu-request-failed";
 
   const imageFocusStyle: CSSProperties = {
     objectFit: "cover",
@@ -1628,6 +1641,9 @@ export default async function AdminEventManagePage({
   const guestCateringCsvHref = `/api/admin/events/${encodeURIComponent(
     event.id,
   )}/guest-catering.csv`;
+  const menuRequestHref = `/api/admin/events/${encodeURIComponent(
+    event.id,
+  )}/send-menu-requests?redirect=1`;
 
   const capacitySummary = isGeneralAdmission
     ? event.capacity
@@ -1648,6 +1664,11 @@ export default async function AdminEventManagePage({
   const missingMenuResponses = guestCateringRows.filter(
     (row) => !String(row.menu_choice || "").trim(),
   ).length;
+
+  const sentCount = Number(searchParams?.sent || 0);
+  const skippedCount = Number(searchParams?.skipped || 0);
+  const failedCount = Number(searchParams?.failed || 0);
+  const menuRequestsSent = searchParams?.saved === "menu-requests-sent";
 
   return (
     <main className="event-edit-page" style={styles.page}>
@@ -1769,6 +1790,17 @@ export default async function AdminEventManagePage({
         </section>
       ) : null}
 
+      {menuRequestFailed ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Menu request failed</div>
+          <h2 style={styles.upgradeTitle}>The request emails were not sent.</h2>
+          <p style={styles.upgradeText}>
+            Please check the event still has paid guests missing menu choices and
+            that this tenant has the Foundation menu-request capability enabled.
+          </p>
+        </section>
+      ) : null}
+
       <nav className="tabs" style={styles.tabs}>
         <a href="#overview" className="tab" style={styles.tab}>
           Overview
@@ -1800,11 +1832,14 @@ export default async function AdminEventManagePage({
         </a>
       </nav>
 
-      {searchParams?.saved ? (
+      {searchParams?.saved && !menuRequestsSent ? (
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
-      {searchParams?.error && !campaignLimitReached && !upgradeRequired ? (
+      {searchParams?.error &&
+      !campaignLimitReached &&
+      !upgradeRequired &&
+      !menuRequestFailed ? (
         <div style={styles.errorBox}>
           Please check the missing fields and try again.
         </div>
@@ -1819,6 +1854,7 @@ export default async function AdminEventManagePage({
         />
         <SummaryCard label="Paid guests" value={guestCateringRows.length} />
         <SummaryCard label="Menu choices" value={menuResponses} />
+        <SummaryCard label="Missing menu" value={missingMenuResponses} />
         <SummaryCard label="Dietary notes" value={dietaryResponses} />
         <SummaryCard label="Winners" value={winners.length} />
         <SummaryCard label="Available" value={availableSeats} />
@@ -2319,14 +2355,44 @@ export default async function AdminEventManagePage({
               </p>
             </div>
 
-            <a
-              href={guestCateringCsvHref}
-              className="exportButton"
-              style={styles.exportButton}
-            >
-              Export CSV
-            </a>
+            <div className="guestHeaderActions" style={styles.guestHeaderActions}>
+              <a
+                href={guestCateringCsvHref}
+                className="exportButton"
+                style={styles.exportButton}
+              >
+                Export CSV
+              </a>
+
+              {canSendMenuRequests ? (
+                <form
+                  action={menuRequestHref}
+                  method="post"
+                  style={styles.inlineForm}
+                >
+                  <button
+                    type="submit"
+                    className="menuRequestButton"
+                    style={styles.menuRequestButton}
+                    disabled={missingMenuResponses === 0}
+                  >
+                    Send missing menu requests
+                  </button>
+                </form>
+              ) : null}
+            </div>
           </div>
+
+          {menuRequestsSent ? (
+            <div style={styles.menuRequestSuccess}>
+              <strong>Menu request emails processed.</strong>
+              <span>
+                Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no
+                email: {Number.isFinite skippedCount ? skippedCount : 0} • Failed:{" "}
+                {Number.isFinite(failedCount) ? failedCount : 0}
+              </span>
+            </div>
+          ) : null}
 
           <div className="guestCateringGrid" style={styles.guestCateringStats}>
             <SummaryCard label="Paid guests" value={guestCateringRows.length} />
@@ -2354,8 +2420,8 @@ export default async function AdminEventManagePage({
                   Request missing menu choices
                 </h4>
                 <p style={styles.lockedFeatureText}>
-                  Planned upgrade: email paid guests a secure link to update
-                  menu choices or dietary notes when menus are confirmed later.
+                  {guestMenuRequestCapability.reason ||
+                    getEventGuestMenuRequestEmailsUpgradeMessage()}
                 </p>
               </div>
             </div>
@@ -2368,6 +2434,16 @@ export default async function AdminEventManagePage({
               </span>
             </div>
           )}
+
+          {canSendMenuRequests ? (
+            <div style={styles.menuRequestNotice}>
+              <strong>Foundation menu requests enabled.</strong>
+              <span>
+                The request button sends secure update links only to paid guests
+                missing a menu choice. Links expire after 21 days.
+              </span>
+            </div>
+          ) : null}
 
           {guestCateringRows.length === 0 ? (
             <div style={styles.emptyBox}>
@@ -3511,6 +3587,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     minWidth: 0,
   },
+  inlineForm: {
+    margin: 0,
+  },
   field: {
     display: "grid",
     gap: 6,
@@ -3671,6 +3750,20 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     boxShadow: "0 10px 20px rgba(15,23,42,0.14)",
   },
+  menuRequestButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#f59e0b",
+    color: "#111827",
+    border: "1px solid #f59e0b",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(245,158,11,0.2)",
+  },
   dangerButton: {
     minHeight: 44,
     padding: "13px 18px",
@@ -3706,6 +3799,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 900,
+  },
+  guestHeaderActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexWrap: "wrap",
   },
   guestCateringStats: {
     display: "grid",
@@ -3760,6 +3860,30 @@ const styles: Record<string, CSSProperties> = {
     color: "#166534",
     fontSize: 13,
     fontWeight: 800,
+    lineHeight: 1.45,
+  },
+  menuRequestNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+  menuRequestSuccess: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#dcfce7",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: 850,
     lineHeight: 1.45,
   },
   guestCardList: {
