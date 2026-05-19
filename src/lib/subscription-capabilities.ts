@@ -10,7 +10,9 @@ export type SubscriptionCapability =
   | "custom_commission"
   | "custom_domain"
   | "priority_support"
-  | "platform_owner_bypass";
+  | "platform_owner_bypass"
+  | "event_guest_catering_edit"
+  | "event_guest_menu_request_emails";
 
 export type SubscriptionCapabilityResult = {
   allowed: boolean;
@@ -83,6 +85,8 @@ export function getTierCapabilities(
       "custom_domain",
       "priority_support",
       "platform_owner_bypass",
+      "event_guest_catering_edit",
+      "event_guest_menu_request_emails",
     ];
   }
 
@@ -95,6 +99,7 @@ export function getTierCapabilities(
       "custom_campaign_images",
       "advanced_branding",
       "custom_commission",
+      "event_guest_catering_edit",
     ];
   }
 
@@ -134,7 +139,8 @@ export function checkSubscriptionCapability(
     capability === "auctions" ||
     capability === "custom_campaign_images" ||
     capability === "advanced_branding" ||
-    capability === "custom_commission"
+    capability === "custom_commission" ||
+    capability === "event_guest_catering_edit"
   ) {
     return {
       allowed: false,
@@ -146,7 +152,8 @@ export function checkSubscriptionCapability(
   if (
     capability === "custom_domain" ||
     capability === "priority_support" ||
-    capability === "platform_owner_bypass"
+    capability === "platform_owner_bypass" ||
+    capability === "event_guest_menu_request_emails"
   ) {
     return {
       allowed: false,
@@ -202,4 +209,12 @@ export function getCampaignLimitMessage(tier: SubscriptionTier) {
 
 export function getCustomCampaignImagesUpgradeMessage() {
   return "Custom campaign images require the Professional plan or higher. Community campaigns use the platform default images.";
+}
+
+export function getEventGuestCateringEditUpgradeMessage() {
+  return "Editing guest names, dietary requirements and menu choices after purchase requires the Professional plan or higher.";
+}
+
+export function getEventGuestMenuRequestEmailsUpgradeMessage() {
+  return "Sending secure menu-choice request emails requires the Foundation plan.";
 }
