@@ -12,14 +12,18 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 });
 
 type ConnectAccountRow = {
-  stripe_connect_account_id: string | null;
+  settings_stripe_connect_account_id: string | null;
+  tenant_stripe_connect_account_id: string | null;
 };
 
 function getBaseUrl(request: Request) {
   const envUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL ||
-    process.env.VERCEL_URL;
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL ||
+    "";
 
   if (envUrl) {
     return envUrl.startsWith("http") ? envUrl : `https://${envUrl}`;
@@ -28,7 +32,7 @@ function getBaseUrl(request: Request) {
   return new URL(request.url).origin;
 }
 
-async function requireTenantSlug() {
+async function requireCurrentTenantAccess() {
   const session = await auth();
 
   if (!session?.user) {
@@ -48,6 +52,83 @@ async function requireTenantSlug() {
   return tenantSlug;
 }
 
+async function getStripeConnectAccountId(tenantSlug: string) {
+  const rows = (await query(
+    `
+      select
+        ts.stripe_connect_account_id as settings_stripe_connect_account_id,
+        t.stripe_connect_account_id as tenant_stripe_connect_account_id
+      from tenants t
+      left join tenant_settings ts
+        on ts.tenant_slug = t.slug
+      where t.slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  )) as ConnectAccountRow[];
+
+  const settingsAccountId = String(
+    rows[0]?.settings_stripe_connect_account_id || "",
+  ).trim();
+
+  const tenantAccountId = String(
+    rows[0]?.tenant_stripe_connect_account_id || "",
+  ).trim();
+
+  return settingsAccountId || tenantAccountId;
+}
+
+async function saveStripeConnectStatus({
+  tenantSlug,
+  account,
+}: {
+  tenantSlug: string;
+  account: Stripe.Account;
+}) {
+  await query(
+    `
+      update tenants
+      set
+        stripe_connect_account_id = $1,
+        stripe_connect_charges_enabled = $2,
+        stripe_connect_payouts_enabled = $3,
+        stripe_connect_details_submitted = $4,
+        stripe_connect_onboarding_complete = $5,
+        stripe_connect_country = $6,
+        stripe_connect_default_currency = $7,
+        stripe_connect_last_synced_at = now(),
+        updated_at = now()
+      where slug = $8
+    `,
+    [
+      account.id,
+      Boolean(account.charges_enabled),
+      Boolean(account.payouts_enabled),
+      Boolean(account.details_submitted),
+      Boolean(account.details_submitted && account.charges_enabled),
+      account.country || null,
+      account.default_currency || null,
+      tenantSlug,
+    ],
+  );
+
+  await query(
+    `
+      insert into tenant_settings (
+        tenant_slug,
+        stripe_connect_account_id,
+        updated_at
+      )
+      values ($1, $2, now())
+      on conflict (tenant_slug)
+      do update set
+        stripe_connect_account_id = excluded.stripe_connect_account_id,
+        updated_at = now()
+    `,
+    [tenantSlug, account.id],
+  );
+}
+
 export async function GET(request: Request) {
   const baseUrl = getBaseUrl(request);
 
@@ -59,74 +140,41 @@ export async function GET(request: Request) {
       );
     }
 
-    const tenantSlug = await requireTenantSlug();
+    const tenantSlug = await requireCurrentTenantAccess();
 
     if (!tenantSlug) {
       return NextResponse.redirect(
         new URL("/admin/login?error=tenant_access_denied", baseUrl),
+        303,
       );
     }
 
-    const rows = (await query(
-      `
-        select
-          coalesce(
-            ts.stripe_connect_account_id,
-            t.stripe_connect_account_id
-          ) as stripe_connect_account_id
-        from tenants t
-        left join tenant_settings ts
-          on ts.tenant_slug = t.slug
-        where t.slug = $1
-        limit 1
-      `,
-      [tenantSlug],
-    )) as ConnectAccountRow[];
-
-    const accountId = rows[0]?.stripe_connect_account_id || null;
+    const accountId = await getStripeConnectAccountId(tenantSlug);
 
     if (!accountId) {
       return NextResponse.redirect(
         new URL("/admin/settings/billing?stripe_status=missing", baseUrl),
+        303,
       );
     }
 
     const account = await stripe.accounts.retrieve(accountId);
 
-    await query(
-      `
-        update tenants
-        set
-          stripe_connect_account_id = $1,
-          stripe_connect_charges_enabled = $2,
-          stripe_connect_payouts_enabled = $3,
-          stripe_connect_details_submitted = $4,
-          stripe_connect_onboarding_complete = $5,
-          stripe_connect_country = $6,
-          stripe_connect_default_currency = $7,
-          stripe_connect_last_synced_at = now()
-        where slug = $8
-      `,
-      [
-        account.id,
-        Boolean(account.charges_enabled),
-        Boolean(account.payouts_enabled),
-        Boolean(account.details_submitted),
-        Boolean(account.details_submitted && account.charges_enabled),
-        account.country || null,
-        account.default_currency || null,
-        tenantSlug,
-      ],
-    );
+    await saveStripeConnectStatus({
+      tenantSlug,
+      account,
+    });
 
     return NextResponse.redirect(
       new URL("/admin/settings/billing?stripe_status=refreshed", baseUrl),
+      303,
     );
   } catch (error) {
     console.error("Stripe Connect status refresh error:", error);
 
     return NextResponse.redirect(
       new URL("/admin/settings/billing?stripe_status=failed", baseUrl),
+      303,
     );
   }
 }
