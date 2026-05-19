@@ -35,10 +35,11 @@ type TenantSummaryRow = {
 
 type PaymentRow = {
   id: string;
-  stripe_checkout_session_id: string;
+  stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
-  raffle_id: string;
+  raffle_id: string | null;
   tenant_slug: string | null;
+  reservation_token: string | null;
   currency: string | null;
   gross_amount_cents: number;
   platform_fee_cents: number;
@@ -51,8 +52,9 @@ type PaymentRow = {
   payment_status: string | null;
   customer_email: string | null;
   created_at: string;
-  raffle_title: string | null;
+  campaign_title: string | null;
   payment_type: string | null;
+  squares_game_id: string | null;
   stripe_transfer_id: string | null;
   stripe_destination_account_id: string | null;
   stripe_payout_id: string | null;
@@ -93,6 +95,39 @@ function shortId(value?: string | null) {
   if (value.length <= 18) return value;
 
   return `${value.slice(0, 10)}…${value.slice(-6)}`;
+}
+
+function paymentReference(payment: PaymentRow) {
+  return (
+    payment.payout_reference ||
+    payment.reservation_token ||
+    payment.stripe_checkout_session_id ||
+    payment.stripe_payment_intent_id ||
+    payment.id ||
+    ""
+  );
+}
+
+function paymentPaidAt(payment: PaymentRow) {
+  return payment.created_at || payment.payout_reconciled_at || null;
+}
+
+function payoutPaidAt(payment: PaymentRow) {
+  return payment.paid_out_at || payment.payout_reconciled_at || null;
+}
+
+function campaignLabel(payment: PaymentRow) {
+  if (payment.campaign_title) return payment.campaign_title;
+
+  if (payment.payment_type === "squares" && payment.squares_game_id) {
+    return payment.squares_game_id;
+  }
+
+  if (payment.payment_type === "raffle" && payment.raffle_id) {
+    return payment.raffle_id;
+  }
+
+  return "—";
 }
 
 function reconciliationLabel(payment: PaymentRow) {
@@ -176,6 +211,7 @@ export default async function AdminRevenuePage() {
         p.stripe_payment_intent_id,
         p.raffle_id,
         p.tenant_slug,
+        p.reservation_token,
         p.currency,
         p.gross_amount_cents,
         p.platform_fee_cents,
@@ -188,15 +224,25 @@ export default async function AdminRevenuePage() {
         p.payment_status,
         p.customer_email,
         p.created_at,
-        r.title as raffle_title,
+        coalesce(r.title, sg.title, e.title) as campaign_title,
         p.payment_type,
+        p.squares_game_id,
         p.stripe_transfer_id,
         p.stripe_destination_account_id,
         p.stripe_payout_id,
         p.stripe_payout_status,
         p.payout_reconciled_at
       from platform_payments p
-      left join raffles r on r.id = p.raffle_id
+      left join raffles r
+        on r.id::text = p.raffle_id::text
+      left join squares_games sg
+        on sg.id::text = p.squares_game_id::text
+      left join event_orders eo
+        on eo.id::text = p.reservation_token::text
+       and eo.tenant_slug = p.tenant_slug
+      left join events e
+        on e.id = eo.event_id
+       and e.tenant_slug = eo.tenant_slug
       order by p.created_at desc
       limit 100
     `,
@@ -269,7 +315,8 @@ export default async function AdminRevenuePage() {
           <HeroStat label="Reconciled rows" value={reconciledPayments} />
         </div>
       </section>
-            <section className="revenue-cards" style={styles.cards}>
+
+      <section className="revenue-cards" style={styles.cards}>
         <div style={styles.card}>
           <div style={styles.cardLabel}>Total payments</div>
           <div style={styles.cardValue}>{totalPayments}</div>
@@ -443,9 +490,9 @@ export default async function AdminRevenuePage() {
             </h2>
 
             <p style={styles.sectionText}>
-              Times shown in UK platform time. Stripe reconciliation appears
-              when the payment has a destination transfer and connected account
-              recorded.
+              Times shown in UK platform time. Reference now falls back to the
+              reservation token or Stripe checkout session when no payout
+              reference exists.
             </p>
           </div>
         </div>
@@ -482,6 +529,7 @@ export default async function AdminRevenuePage() {
                   const currency = payment.currency || "gbp";
                   const payoutStatus = payment.payout_status || "pending";
                   const tone = reconciliationTone(payment);
+                  const reference = paymentReference(payment);
 
                   return (
                     <tr key={payment.id}>
@@ -495,9 +543,7 @@ export default async function AdminRevenuePage() {
                         </span>
                       </td>
 
-                      <td style={styles.td}>
-                        {payment.raffle_title || payment.raffle_id || "—"}
-                      </td>
+                      <td style={styles.td}>{campaignLabel(payment)}</td>
 
                       <td style={styles.td}>{payment.tenant_slug || "—"}</td>
 
@@ -581,10 +627,14 @@ export default async function AdminRevenuePage() {
                         </span>
                       </td>
 
-                      <td style={styles.td}>{payment.payout_reference || "—"}</td>
+                      <td style={styles.td}>
+                        <span title={reference || undefined}>
+                          {shortId(reference)}
+                        </span>
+                      </td>
 
                       <td style={styles.td}>
-                        {formatDate(payment.paid_out_at)}
+                        {formatDate(paymentPaidAt(payment))}
                       </td>
 
                       <td style={styles.td}>{payment.payment_status || "—"}</td>
@@ -610,6 +660,7 @@ function HeroStat({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .revenue-page,
 .revenue-page * {
