@@ -205,11 +205,9 @@ export default async function TenantCampaignsPage({
   );
 
   const isTenantAdmin = userTenantSlugs.includes(tenantSlug);
-  const canShowAdminReturn = isTenantAdmin;
+  const canShowAdminReturn = isTenantAdmin && Boolean(requestedAdminReturn);
 
-  const adminReturn = canShowAdminReturn
-    ? requestedAdminReturn || "/admin"
-    : "";
+  const adminReturn = canShowAdminReturn ? requestedAdminReturn : "";
 
   const activeType = getActiveType(resolvedSearchParams?.type);
 
@@ -258,8 +256,7 @@ export default async function TenantCampaignsPage({
   const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
-
-  return (
+    return (
     <main className="campaigns-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -283,7 +280,11 @@ export default async function TenantCampaignsPage({
           </Link>
 
           {canShowAdminReturn ? (
-            <Link href={adminReturn} className="adminBackTop" style={styles.adminBackTop}>
+            <Link
+              href={adminReturn}
+              className="adminBackTop"
+              style={styles.adminBackTop}
+            >
               <span style={styles.adminBackIcon}>↩</span>
               <span>Back to admin</span>
             </Link>
@@ -324,7 +325,8 @@ export default async function TenantCampaignsPage({
             </Link>
           </div>
         </div>
-                <div className="heroPanel" style={styles.heroPanel}>
+
+        <div className="heroPanel" style={styles.heroPanel}>
           <div style={styles.heroPanelTitle}>Live now</div>
 
           <div className="heroStats" style={styles.heroStats}>
@@ -502,8 +504,7 @@ export default async function TenantCampaignsPage({
 
                       <span style={styles.statusPill}>Live</span>
                     </div>
-
-                    <h2
+                                        <h2
                       className="so-brand-card-title"
                       style={styles.cardTitle}
                     >
