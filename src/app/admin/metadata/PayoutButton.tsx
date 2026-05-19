@@ -9,22 +9,47 @@ type Props = {
   disabled?: boolean;
 };
 
+function normaliseCurrency(value: string) {
+  const clean = String(value || "GBP").trim().toLowerCase();
+
+  return clean || "gbp";
+}
+
 export default function PayoutButton({ tenantSlug, currency, disabled }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
+  const safeTenantSlug = String(tenantSlug || "").trim();
+  const safeCurrency = normaliseCurrency(currency);
+  const currencyLabel = safeCurrency.toUpperCase();
+
   async function markPaid() {
-    const reference = window.prompt(
-      `Enter payout reference for ${tenantSlug} (${currency.toUpperCase()}), e.g. bank transfer ref:`
+    if (!safeTenantSlug || disabled || loading) {
+      return;
+    }
+
+    const enteredReference = window.prompt(
+      `Enter payout reference for ${safeTenantSlug} (${currencyLabel}), e.g. bank transfer ref:`,
     );
 
-    if (reference === null) return;
+    if (enteredReference === null) {
+      return;
+    }
+
+    const reference = enteredReference.trim();
+
+    if (!reference) {
+      window.alert("Please enter a payout reference before marking this as paid.");
+      return;
+    }
 
     const confirmed = window.confirm(
-      `Mark all pending ${currency.toUpperCase()} payouts for ${tenantSlug} as paid?`
+      `Mark all pending ${currencyLabel} payouts for ${safeTenantSlug} as paid?`,
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     setLoading(true);
 
@@ -35,42 +60,46 @@ export default function PayoutButton({ tenantSlug, currency, disabled }: Props) 
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tenantSlug,
-          currency,
+          tenantSlug: safeTenantSlug,
+          currency: safeCurrency,
           reference,
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
       if (!response.ok || !data?.ok) {
-        alert(data?.error || "Failed to mark payout paid.");
+        window.alert(data?.error || "Failed to mark payout paid.");
         return;
       }
 
-      alert(`Marked ${data.paidCount} payment(s) as paid.`);
+      window.alert(`Marked ${data.paidCount || 0} payment(s) as paid.`);
       router.refresh();
     } catch (error) {
-      console.error(error);
-      alert("Failed to mark payout paid.");
+      console.error("Mark payout paid failed:", error);
+      window.alert("Failed to mark payout paid.");
     } finally {
       setLoading(false);
     }
   }
 
+  const isDisabled = Boolean(disabled || loading || !safeTenantSlug);
+
   return (
     <button
       type="button"
       onClick={markPaid}
-      disabled={disabled || loading}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+      aria-busy={loading}
       style={{
         padding: "8px 10px",
         borderRadius: 8,
         border: "1px solid #16a34a",
-        background: disabled || loading ? "#dcfce7" : "#16a34a",
-        color: disabled || loading ? "#166534" : "#ffffff",
+        background: isDisabled ? "#dcfce7" : "#16a34a",
+        color: isDisabled ? "#166534" : "#ffffff",
         fontWeight: 700,
-        cursor: disabled || loading ? "not-allowed" : "pointer",
+        cursor: isDisabled ? "not-allowed" : "pointer",
       }}
     >
       {loading ? "Marking..." : "Mark paid"}
