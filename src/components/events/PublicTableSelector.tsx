@@ -36,14 +36,54 @@ type TableShape = "round" | "square" | "rectangle";
 type SeatingLayoutJson = Record<string, unknown>;
 
 const TICKET_PLACEHOLDER_IMAGE = "/brand/so-ticket-placeholder.png";
+const STRIPE_STANDARD_UK_PERCENT = 0.015;
+const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
-function calculatePlatformFeeCents(subtotalCents: number) {
-  if (!subtotalCents || subtotalCents <= 0) return 0;
-  return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+function safePercent(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.min(100, number);
+}
+
+function calculatePlatformCommissionCents(
+  subtotalCents: number,
+  platformFeePercent: number,
+) {
+  const subtotal = Math.max(0, Math.round(Number(subtotalCents || 0)));
+  const percent = safePercent(platformFeePercent);
+
+  if (!subtotal || !percent) return 0;
+
+  return Math.max(0, Math.ceil(subtotal * (percent / 100)));
+}
+
+function calculatePlatformFeeCents(
+  subtotalCents: number,
+  platformFeePercent: number,
+) {
+  const subtotal = Math.max(0, Math.round(Number(subtotalCents || 0)));
+
+  if (!subtotal || subtotal <= 0) return 0;
+
+  const platformCommissionCents = calculatePlatformCommissionCents(
+    subtotal,
+    platformFeePercent,
+  );
+
+  const grossTotalCents = Math.ceil(
+    (subtotal + platformCommissionCents + STRIPE_STANDARD_UK_FIXED_CENTS) /
+      (1 - STRIPE_STANDARD_UK_PERCENT),
+  );
+
+  return Math.max(0, grossTotalCents - subtotal);
 }
 
 function tableSortValue(value: string | null | undefined) {
@@ -390,6 +430,7 @@ export default function PublicTableSelector({
   seats,
   ticketTypes,
   currency,
+  platformFeePercent = 0,
   menuOptions = [],
   seatingLayoutJson = {},
 }: {
@@ -397,6 +438,7 @@ export default function PublicTableSelector({
   seats: Seat[];
   ticketTypes: TicketType[];
   currency: string;
+  platformFeePercent?: number;
   menuOptions?: string[];
   seatingLayoutJson?: SeatingLayoutJson | null;
 }) {
@@ -466,7 +508,12 @@ export default function PublicTableSelector({
     0,
   );
 
-  const platformFeeCents = coverFees ? calculatePlatformFeeCents(ticketTotal) : 0;
+  const estimatedCoverFeeCents = calculatePlatformFeeCents(
+    ticketTotal,
+    platformFeePercent,
+  );
+
+  const platformFeeCents = coverFees ? estimatedCoverFeeCents : 0;
   const totalTodayCents = ticketTotal + platformFeeCents;
 
   function getSeatTicketType(seat: Seat) {
@@ -1024,10 +1071,10 @@ export default function PublicTableSelector({
                   disabled={ticketTotal <= 0}
                 />
                 <span>
-                  <strong>I’d like to cover platform fees</strong>
+                  <strong>I’d like to cover platform and payment costs</strong>
                   <small>
                     Adds approximately {currency}{" "}
-                    {moneyFromCents(calculatePlatformFeeCents(ticketTotal))} so
+                    {moneyFromCents(estimatedCoverFeeCents)} so
                     the organiser receives the full ticket value.
                   </small>
                 </span>
