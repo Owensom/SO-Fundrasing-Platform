@@ -60,17 +60,76 @@ function normaliseEmail(value: string | null | undefined) {
   return clean || null;
 }
 
+function wantsRedirect(request: Request) {
+  const url = new URL(request.url);
+  const contentType = request.headers.get("content-type") || "";
+
+  return (
+    url.searchParams.get("redirect") === "1" ||
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  );
+}
+
+function redirectBack(request: Request, eventId: string, params: URLSearchParams) {
+  const url = new URL(request.url);
+  const backTo = new URL(`/admin/events/${eventId}`, url.origin);
+
+  params.forEach((value, key) => {
+    backTo.searchParams.set(key, value);
+  });
+
+  backTo.hash = "guest-catering";
+
+  return NextResponse.redirect(backTo);
+}
+
+function jsonOrRedirect(
+  request: Request,
+  eventId: string,
+  payload: Record<string, unknown>,
+  status = 200,
+) {
+  if (wantsRedirect(request)) {
+    const params = new URLSearchParams();
+
+    if (status >= 200 && status < 300) {
+      params.set("saved", "menu-requests-sent");
+
+      if (typeof payload.sent === "number") {
+        params.set("sent", String(payload.sent));
+      }
+
+      if (typeof payload.skippedNoEmail === "number") {
+        params.set("skipped", String(payload.skippedNoEmail));
+      }
+
+      if (typeof payload.failed === "number") {
+        params.set("failed", String(payload.failed));
+      }
+    } else {
+      params.set("error", "menu-request-failed");
+    }
+
+    return redirectBack(request, eventId, params);
+  }
+
+  return NextResponse.json(payload, { status });
+}
+
 export async function POST(request: Request, context: RouteContext) {
+  const eventId = String(context.params.id || "").trim();
+
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.json(
+    return jsonOrRedirect(
+      request,
+      eventId,
       { ok: false, error: "Unauthorised" },
-      { status: 401 },
+      401,
     );
   }
-
-  const eventId = String(context.params.id || "").trim();
 
   if (!eventId) {
     return NextResponse.json(
@@ -86,9 +145,11 @@ export async function POST(request: Request, context: RouteContext) {
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    return NextResponse.json(
+    return jsonOrRedirect(
+      request,
+      eventId,
       { ok: false, error: "Tenant access denied" },
-      { status: 403 },
+      403,
     );
   }
 
@@ -100,14 +161,16 @@ export async function POST(request: Request, context: RouteContext) {
   );
 
   if (!menuRequestCapability.allowed) {
-    return NextResponse.json(
+    return jsonOrRedirect(
+      request,
+      eventId,
       {
         ok: false,
         error:
           menuRequestCapability.reason ||
           "Menu request emails require the Foundation plan.",
       },
-      { status: 403 },
+      403,
     );
   }
 
@@ -129,16 +192,20 @@ export async function POST(request: Request, context: RouteContext) {
   const event = eventRows[0];
 
   if (!event) {
-    return NextResponse.json(
+    return jsonOrRedirect(
+      request,
+      eventId,
       { ok: false, error: "Event not found" },
-      { status: 404 },
+      404,
     );
   }
 
   if (event.tenant_slug !== tenantSlug) {
-    return NextResponse.json(
+    return jsonOrRedirect(
+      request,
+      eventId,
       { ok: false, error: "Tenant access denied" },
-      { status: 403 },
+      403,
     );
   }
 
@@ -254,7 +321,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
   }
 
-  return NextResponse.json({
+  return jsonOrRedirect(request, event.id, {
     ok: failed === 0,
     eventId: event.id,
     checked: guests.length,
