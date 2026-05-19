@@ -189,7 +189,7 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         sale.colour,
         sale.buyer_name,
         sale.buyer_email,
-        sale.created_at,
+        sale.sold_at as created_at,
         raffle.title as campaign_title,
         raffle.slug as campaign_slug,
         raffle.currency,
@@ -197,10 +197,8 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
       from raffle_ticket_sales sale
       join raffles raffle
         on raffle.id = sale.raffle_id
-       and raffle.tenant_slug = sale.tenant_slug
-      where sale.tenant_slug = $1
-        and raffle.tenant_slug = $1
-      order by sale.created_at desc
+      where raffle.tenant_slug = $1
+      order by sale.sold_at desc
       limit 500
     `,
     [tenantSlug],
@@ -297,6 +295,7 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
+
 async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "events",
@@ -584,7 +583,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           </a>
         </div>
       </section>
-            <section className="summaryGrid" style={styles.summaryGrid}>
+
+      <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Visible orders" value={filteredOrders.length} />
         <SummaryCard label="All orders" value={allOrders.length} />
         <SummaryCard label="Unique customers" value={uniqueCustomers} />
@@ -639,7 +639,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
         </form>
       </section>
 
-      <section style={styles.ordersCard}>
+      <section className="ordersCard" style={styles.ordersCard}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Unified orders</p>
@@ -649,8 +649,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
             </h2>
 
             <p style={styles.sectionText}>
-              This page reads from raffle sales, squares sales, event orders and
-              silent auction bids.
+              This page reads from raffle ticket sales, squares sales, event
+              orders and silent auction bids.
             </p>
           </div>
 
@@ -960,6 +960,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
