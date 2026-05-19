@@ -44,15 +44,13 @@ function createRawToken() {
 function getRequestOrigin(request: Request) {
   const url = new URL(request.url);
 
-  if (process.env.NEXT_PUBLIC_SITE_URL?.trim()) {
-    return process.env.NEXT_PUBLIC_SITE_URL.trim().replace(/\/+$/, "");
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (configuredSiteUrl) {
+    return configuredSiteUrl.replace(/\/+$/, "");
   }
 
-  if (process.env.VERCEL_URL?.trim()) {
-    return `https://${process.env.VERCEL_URL.trim().replace(/\/+$/, "")}`;
-  }
-
-  return `${url.protocol}//${url.host}`;
+  return `${url.protocol}//${url.host}`.replace(/\/+$/, "");
 }
 
 function normaliseEmail(value: string | null | undefined) {
