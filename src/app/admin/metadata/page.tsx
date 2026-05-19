@@ -477,75 +477,57 @@ export default async function AdminRevenuePage() {
         </div>
 
         {payments.length ? (
-          <div
-            className="revenue-table-wrap revenue-latest-table-wrap"
-            style={styles.tableWrap}
-          >
-            <table style={styles.latestTable}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Date</th>
-                  <th style={styles.th}>Campaign</th>
-                  <th style={styles.th}>Tenant</th>
-                  <th style={styles.th}>Customer</th>
-                  <th style={styles.th}>Gross</th>
-                  <th style={styles.th}>Fee</th>
-                  <th style={styles.th}>Donor fee</th>
-                  <th style={styles.th}>Net</th>
-                  <th style={styles.th}>Covered?</th>
-                  <th style={styles.th}>Payout</th>
-                  <th style={styles.th}>Reference</th>
-                  <th style={styles.th}>Paid at</th>
-                  <th style={styles.th}>Status</th>
-                </tr>
-              </thead>
+          <div className="revenue-payment-list" style={styles.paymentList}>
+            {payments.map((payment) => {
+              const currency = payment.currency || "gbp";
+              const payoutStatus = payment.payout_status || "pending";
+              const campaignName =
+                payment.raffle_title || payment.raffle_id || "Payment";
 
-              <tbody>
-                {payments.map((payment) => {
-                  const currency = payment.currency || "gbp";
-                  const payoutStatus = payment.payout_status || "pending";
+              return (
+                <article key={payment.id} style={styles.paymentCard}>
+                  <div style={styles.paymentCardTop}>
+                    <div style={styles.paymentTitleBlock}>
+                      <div style={styles.paymentDate}>
+                        {formatDate(payment.created_at)}
+                      </div>
 
-                  return (
-                    <tr key={payment.id}>
-                      <td style={styles.td}>{formatDate(payment.created_at)}</td>
+                      <h3 style={styles.paymentTitle}>{campaignName}</h3>
 
-                      <td style={styles.td}>
-                        <strong style={styles.primaryText}>
-                          {payment.raffle_title ||
-                            payment.raffle_id ||
-                            "Payment"}
-                        </strong>
-                      </td>
+                      <div style={styles.paymentCustomer}>
+                        {payment.customer_email || "No customer email"}
+                      </div>
+                    </div>
 
-                      <td style={styles.td}>{payment.tenant_slug || "—"}</td>
+                    <div style={styles.paymentNetBlock}>
+                      <span style={styles.paymentLabel}>Net</span>
+                      <strong style={styles.paymentNet}>
+                        {money(payment.net_amount_cents, currency)}
+                      </strong>
+                    </div>
+                  </div>
 
-                      <td style={styles.td}>
-                        {payment.customer_email || "—"}
-                      </td>
-
-                      <td style={styles.td}>
-                        {money(payment.gross_amount_cents, currency)}
-                      </td>
-
-                      <td style={styles.td}>
-                        {money(payment.platform_fee_cents, currency)}
-                      </td>
-
-                      <td style={styles.td}>
-                        {money(payment.donor_fee_cents, currency)}
-                      </td>
-
-                      <td style={styles.td}>
-                        <strong style={styles.primaryText}>
-                          {money(payment.net_amount_cents, currency)}
-                        </strong>
-                      </td>
-
-                      <td style={styles.td}>
-                        {payment.donor_covered_fees ? "Yes" : "No"}
-                      </td>
-
-                      <td style={styles.td}>
+                  <div style={styles.paymentMetricsGrid}>
+                    <PaymentMini label="Tenant" value={payment.tenant_slug || "—"} />
+                    <PaymentMini
+                      label="Gross"
+                      value={money(payment.gross_amount_cents, currency)}
+                    />
+                    <PaymentMini
+                      label="Fee"
+                      value={money(payment.platform_fee_cents, currency)}
+                    />
+                    <PaymentMini
+                      label="Donor fee"
+                      value={money(payment.donor_fee_cents, currency)}
+                    />
+                    <PaymentMini
+                      label="Covered?"
+                      value={payment.donor_covered_fees ? "Yes" : "No"}
+                    />
+                    <PaymentMini
+                      label="Payout"
+                      value={
                         <span
                           style={{
                             ...styles.badge,
@@ -556,24 +538,24 @@ export default async function AdminRevenuePage() {
                         >
                           {payoutStatus}
                         </span>
-                      </td>
-
-                      <td style={styles.td}>
-                        {payment.payout_reference || "—"}
-                      </td>
-
-                      <td style={styles.td}>
-                        {formatDate(payment.paid_out_at)}
-                      </td>
-
-                      <td style={styles.td}>
-                        {payment.payment_status || "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      }
+                    />
+                    <PaymentMini
+                      label="Reference"
+                      value={payment.payout_reference || "—"}
+                    />
+                    <PaymentMini
+                      label="Paid at"
+                      value={formatDate(payment.paid_out_at)}
+                    />
+                    <PaymentMini
+                      label="Status"
+                      value={payment.payment_status || "—"}
+                    />
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : (
           <div style={styles.emptyState}>No payments yet.</div>
@@ -655,6 +637,22 @@ function MetricBlock({
   );
 }
 
+function PaymentMini({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div style={styles.paymentMini}>
+      <div style={styles.paymentMiniLabel}>{label}</div>
+
+      <div style={styles.paymentMiniValue}>{value}</div>
+    </div>
+  );
+}
+
 const responsiveStyles = `
 .revenue-page,
 .revenue-page * {
@@ -685,10 +683,6 @@ const responsiveStyles = `
   width: max-content !important;
 }
 
-.revenue-page .revenue-latest-table-wrap {
-  border-radius: 20px;
-}
-
 @media (max-width: 1180px) {
   .revenue-page .revenue-hero {
     grid-template-columns: 1fr !important;
@@ -716,8 +710,18 @@ const responsiveStyles = `
 
   .revenue-page .revenue-hero-stats,
   .revenue-page .revenue-summary-grid,
-  .revenue-page .revenue-hero-panel-grid {
+  .revenue-page .revenue-hero-panel-grid,
+  .revenue-page .revenue-payment-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .revenue-page .revenue-payment-card-top {
+    grid-template-columns: 1fr !important;
+  }
+
+  .revenue-page .revenue-payment-net-block {
+    align-items: flex-start !important;
+    text-align: left !important;
   }
 }
 
@@ -739,7 +743,8 @@ const responsiveStyles = `
 
   .revenue-page .revenue-hero-stats,
   .revenue-page .revenue-summary-grid,
-  .revenue-page .revenue-hero-panel-grid {
+  .revenue-page .revenue-hero-panel-grid,
+  .revenue-page .revenue-payment-metrics-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -1167,13 +1172,6 @@ const styles: Record<string, CSSProperties> = {
     borderSpacing: "0 10px",
   },
 
-  latestTable: {
-    width: "max-content",
-    minWidth: 1720,
-    borderCollapse: "separate",
-    borderSpacing: "0 10px",
-  },
-
   th: {
     padding: "8px 10px",
     color: "#64748b",
@@ -1237,6 +1235,111 @@ const styles: Record<string, CSSProperties> = {
     background: "#ecfdf5",
     color: "#047857",
     border: "1px solid #a7f3d0",
+  },
+
+  paymentList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  paymentCard: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+  },
+
+  paymentCardTop: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 16,
+    alignItems: "start",
+  },
+
+  paymentTitleBlock: {
+    minWidth: 0,
+  },
+
+  paymentDate: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+    marginBottom: 5,
+  },
+
+  paymentTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 20,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  paymentCustomer: {
+    marginTop: 6,
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+
+  paymentNetBlock: {
+    display: "grid",
+    gap: 4,
+    justifyItems: "end",
+    textAlign: "right",
+    minWidth: 120,
+  },
+
+  paymentLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  paymentNet: {
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
+  paymentMetricsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  paymentMini: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  paymentMiniLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  paymentMiniValue: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
   },
 
   emptyCard: {
