@@ -19,6 +19,9 @@ type PageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    error?: string;
+  }>;
 };
 
 type WinnerRow = {
@@ -221,8 +224,14 @@ function isConfigured(value: unknown) {
   return String(value ?? "").trim().length > 0;
 }
 
-export default async function AdminRafflePage({ params }: PageProps) {
+export default async function AdminRafflePage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const campaignLimitReached =
+    resolvedSearchParams.error === "campaign_limit";
 
   const session = await auth();
 
@@ -235,6 +244,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
   const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
+
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     redirect("/admin/login?error=tenant_access_denied");
   }
@@ -292,7 +302,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-    const winners = await query<WinnerRow>(
+
+  const winners = await query<WinnerRow>(
     `
       select *
       from raffle_winners
@@ -360,11 +371,40 @@ export default async function AdminRafflePage({ params }: PageProps) {
         </Link>
       </section>
 
+      {campaignLimitReached ? (
+        <section style={styles.campaignLimitBanner}>
+          <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
+
+          <h2 style={styles.campaignLimitTitle}>
+            This raffle was not published.
+          </h2>
+
+          <p style={styles.campaignLimitText}>
+            This tenant has reached its active campaign allowance across
+            raffles, squares and events. Your raffle changes were not published.
+            Close or unpublish another campaign, save this raffle as a draft, or
+            upgrade the tenant plan from the owner billing page.
+          </p>
+
+          <div style={styles.campaignLimitActions}>
+            <Link href="/admin/raffles" style={styles.campaignLimitSecondary}>
+              Manage raffles
+            </Link>
+
+            <Link
+              href="/admin/settings/billing"
+              style={styles.campaignLimitPrimary}
+            >
+              View billing
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="raffle-hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Raffle editor</div>
-
-          <div style={styles.heroTitleRow}>
+                    <div style={styles.heroTitleRow}>
             <h1 style={styles.heroTitle}>{raffle.title}</h1>
 
             <div style={{ ...styles.statusPill, ...statusStyle }}>
@@ -419,10 +459,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
       <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Ticket price"
-          value={formatMoney(
-            raffle.ticket_price_cents,
-            raffle.currency,
-          )}
+          value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
         />
 
         <SummaryCard
@@ -440,9 +477,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
       <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
           <div>
-            <strong style={{ color: "#0f172a" }}>
-              Sales progress
-            </strong>
+            <strong style={{ color: "#0f172a" }}>Sales progress</strong>
 
             <div style={styles.mutedSmall}>
               {soldTicketsCount} sold from {totalTickets} tickets
@@ -467,15 +502,12 @@ export default async function AdminRafflePage({ params }: PageProps) {
           <h2 style={styles.sectionTitle}>Raffle actions</h2>
 
           <p style={styles.sectionDescription}>
-            Publish, close, draw or remove this raffle using the
-            existing action controls.
+            Publish, close, draw or remove this raffle using the existing action
+            controls.
           </p>
         </div>
 
-        <RaffleAdminActions
-          raffleId={raffle.id}
-          status={raffle.status}
-        />
+        <RaffleAdminActions raffleId={raffle.id} status={raffle.status} />
       </section>
 
       <section style={styles.section}>
@@ -490,8 +522,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <h2 style={styles.sectionTitle}>Edit raffle</h2>
 
               <p style={styles.sectionDescription}>
-                Update the public details, pricing, legal settings,
-                colours and offer bundles.
+                Update the public details, pricing, legal settings, colours and
+                offer bundles.
               </p>
             </div>
 
@@ -499,19 +531,11 @@ export default async function AdminRafflePage({ params }: PageProps) {
               className="raffle-summary-pills"
               style={styles.summaryPillRow}
             >
-              <StatusMiniPill
-                label="Legal"
-                active={legalQuestionEnabled}
-              />
+              <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
 
-              <StatusMiniPill
-                label="Postal"
-                active={postalEntryEnabled}
-              />
+              <StatusMiniPill label="Postal" active={postalEntryEnabled} />
 
-              <span style={styles.adminSummaryToggle}>
-                Open / close
-              </span>
+              <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
           </summary>
 
@@ -530,20 +554,17 @@ export default async function AdminRafflePage({ params }: PageProps) {
               <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <div style={styles.innerEyebrow}>
-                      Public overview
-                    </div>
+                    <div style={styles.innerEyebrow}>Public overview</div>
 
-                    <h3 style={styles.subTitle}>
-                      Campaign details
-                    </h3>
+                    <h3 style={styles.subTitle}>Campaign details</h3>
 
                     <p style={styles.sectionDescription}>
                       These details are shown on the public raffle page.
                     </p>
                   </div>
                 </div>
-                                <div className="raffle-two-column" style={styles.twoColumn}>
+
+                <div className="raffle-two-column" style={styles.twoColumn}>
                   <Field label="Title">
                     <input
                       name="title"
@@ -696,8 +717,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
                     />
                   </Field>
                 </div>
-
-                <div className="raffle-colour-grid" style={styles.colourGrid}>
+                                <div className="raffle-colour-grid" style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
                     const selected = colours.includes(colour);
                     const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
@@ -807,7 +827,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                   ))}
                 </div>
               </section>
-                            <section style={styles.innerPanel}>
+
+              <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Compliance</div>
@@ -1033,8 +1054,7 @@ export default async function AdminRafflePage({ params }: PageProps) {
             ) : (
               <div style={styles.emptyBox}>No winners yet.</div>
             )}
-
-            <details open style={styles.drawDetails}>
+                        <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
@@ -1098,7 +1118,8 @@ export default async function AdminRafflePage({ params }: PageProps) {
                 </button>
               </form>
             </details>
-                        <details open style={styles.drawDetails}>
+
+            <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Live draw tools</h3>
@@ -1305,7 +1326,6 @@ const responsiveStyles = `
     }
   }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1351,6 +1371,75 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
     fontSize: 14,
+  },
+  campaignLimitBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  campaignLimitEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  campaignLimitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  campaignLimitText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
+  },
+  campaignLimitActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  campaignLimitPrimary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #1683f8",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
+  },
+  campaignLimitSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
   },
   hero: {
     display: "grid",
