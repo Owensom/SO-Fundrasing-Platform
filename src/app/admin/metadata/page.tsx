@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import PayoutButton from "./PayoutButton";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ type TenantSummaryRow = {
 type PaymentRow = {
   id: string;
   stripe_checkout_session_id: string;
-  raffle_id: string;
+  raffle_id: string | null;
   tenant_slug: string | null;
   currency: string | null;
   gross_amount_cents: number;
@@ -77,8 +78,18 @@ function formatDate(value?: string | null) {
 export default async function AdminRevenuePage() {
   const session = await auth();
 
-  if (!session) {
+  if (!session?.user) {
     redirect("/admin/login");
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
   }
 
   const currencySummaries = await query<CurrencySummaryRow>(
@@ -94,9 +105,11 @@ export default async function AdminRevenuePage() {
         coalesce(sum(case when payout_status = 'paid' then net_amount_cents else 0 end), 0)::int as paid_net_amount_cents
       from platform_payments
       where payment_status = 'paid'
+        and tenant_slug = $1
       group by coalesce(currency, 'gbp')
       order by currency asc
     `,
+    [tenantSlug],
   );
 
   const tenantSummaries = await query<TenantSummaryRow>(
@@ -114,9 +127,11 @@ export default async function AdminRevenuePage() {
         coalesce(sum(case when payout_status = 'pending' then 1 else 0 end), 0)::int as pending_payment_count
       from platform_payments
       where payment_status = 'paid'
+        and tenant_slug = $1
       group by tenant_slug, coalesce(currency, 'gbp')
       order by tenant_slug asc, currency asc
     `,
+    [tenantSlug],
   );
 
   const payments = await query<PaymentRow>(
@@ -140,10 +155,14 @@ export default async function AdminRevenuePage() {
         p.created_at,
         r.title as raffle_title
       from platform_payments p
-      left join raffles r on r.id = p.raffle_id
+      left join raffles r
+        on r.id = p.raffle_id
+       and r.tenant_slug = p.tenant_slug
+      where p.tenant_slug = $1
       order by p.created_at desc
       limit 100
     `,
+    [tenantSlug],
   );
 
   const totalPayments = currencySummaries.reduce(
@@ -167,8 +186,7 @@ export default async function AdminRevenuePage() {
   );
 
   const primaryCurrency = currencySummaries[0]?.currency || "gbp";
-
-  return (
+    return (
     <main className="revenue-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -184,13 +202,13 @@ export default async function AdminRevenuePage() {
 
           <p style={styles.subtitle}>
             Platform fee accounting, donor-covered fees, payout tracking and
-            financial oversight across your fundraising platform.
+            financial oversight for this tenant.
           </p>
 
           <div className="revenue-hero-stats" style={styles.heroStats}>
             <HeroStat label="Payments" value={totalPayments} />
             <HeroStat label="Currencies" value={currencySummaries.length} />
-            <HeroStat label="Tenants" value={tenantSummaries.length} />
+            <HeroStat label="Tenant rows" value={tenantSummaries.length} />
             <HeroStat label="Latest rows" value={payments.length} />
           </div>
         </div>
@@ -200,15 +218,20 @@ export default async function AdminRevenuePage() {
 
           <p style={styles.heroPanelText}>
             Review gross revenue, platform fees, donor-covered fees and payout
-            obligations from one operational dashboard.
+            obligations for the current tenant only.
           </p>
 
           <div className="revenue-hero-panel-grid" style={styles.heroPanelGrid}>
-            <MiniMetric label="Gross" value={money(totalGrossCents, primaryCurrency)} />
+            <MiniMetric
+              label="Gross"
+              value={money(totalGrossCents, primaryCurrency)}
+            />
+
             <MiniMetric
               label="Platform fees"
               value={money(totalPlatformFeeCents, primaryCurrency)}
             />
+
             <MiniMetric
               label="Pending payouts"
               value={money(totalPendingPayoutCents, primaryCurrency)}
@@ -238,10 +261,11 @@ export default async function AdminRevenuePage() {
       <section className="revenue-summary-grid" style={styles.summaryGrid}>
         <SummaryCard label="Total payments" value={totalPayments} />
         <SummaryCard label="Currencies" value={currencySummaries.length} />
-        <SummaryCard label="Tenants" value={tenantSummaries.length} />
+        <SummaryCard label="Tenant" value={tenantSlug} />
         <SummaryCard label="Latest payment rows" value={payments.length} />
       </section>
-            <section className="revenue-currency-grid" style={styles.currencyGrid}>
+
+      <section className="revenue-currency-grid" style={styles.currencyGrid}>
         {currencySummaries.length ? (
           currencySummaries.map((row) => {
             const currency = row.currency || "gbp";
@@ -317,23 +341,21 @@ export default async function AdminRevenuePage() {
       <section className="revenue-panel" style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
-            <p style={styles.kicker}>Tenant payouts</p>
+            <p style={styles.kicker}>Tenant payout</p>
 
-            <h2
-              className="so-brand-card-title"
-              style={styles.sectionTitle}
-            >
-              Payouts by tenant and currency
+            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+              Payouts for this tenant
             </h2>
 
             <p style={styles.sectionText}>
               Track platform fees, donor contributions, pending payouts and
-              completed payout batches across each tenant.
+              completed payout batches for the verified current tenant.
             </p>
           </div>
 
           <div style={styles.countPill}>
-            {tenantSummaries.length} tenant rows
+            {tenantSummaries.length} currency row
+            {tenantSummaries.length === 1 ? "" : "s"}
           </div>
         </div>
 
@@ -358,21 +380,17 @@ export default async function AdminRevenuePage() {
               <tbody>
                 {tenantSummaries.map((row) => {
                   const currency = row.currency || "gbp";
-                  const tenantSlug = row.tenant_slug || "";
+                  const rowTenantSlug = row.tenant_slug || tenantSlug;
                   const pendingAmount = Number(
                     row.pending_net_amount_cents ?? 0,
                   );
-                  const pendingCount = Number(
-                    row.pending_payment_count ?? 0,
-                  );
+                  const pendingCount = Number(row.pending_payment_count ?? 0);
 
                   return (
-                    <tr
-                      key={`${tenantSlug || "unknown"}-${currency}`}
-                    >
+                    <tr key={`${rowTenantSlug}-${currency}`}>
                       <td style={styles.td}>
                         <strong style={styles.primaryText}>
-                          {tenantSlug || "—"}
+                          {rowTenantSlug}
                         </strong>
                       </td>
 
@@ -382,9 +400,7 @@ export default async function AdminRevenuePage() {
                         </span>
                       </td>
 
-                      <td style={styles.td}>
-                        {Number(row.payment_count)}
-                      </td>
+                      <td style={styles.td}>{Number(row.payment_count)}</td>
 
                       <td style={styles.td}>
                         {money(row.gross_amount_cents, currency)}
@@ -422,15 +438,11 @@ export default async function AdminRevenuePage() {
                       </td>
 
                       <td style={styles.td}>
-                        {tenantSlug ? (
-                          <PayoutButton
-                            tenantSlug={tenantSlug}
-                            currency={currency}
-                            disabled={pendingAmount <= 0}
-                          />
-                        ) : (
-                          "—"
-                        )}
+                        <PayoutButton
+                          tenantSlug={tenantSlug}
+                          currency={currency}
+                          disabled={pendingAmount <= 0}
+                        />
                       </td>
                     </tr>
                   );
@@ -444,28 +456,22 @@ export default async function AdminRevenuePage() {
           </div>
         )}
       </section>
-
-      <section className="revenue-panel" style={styles.panel}>
+            <section className="revenue-panel" style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Latest activity</p>
 
-            <h2
-              className="so-brand-card-title"
-              style={styles.sectionTitle}
-            >
+            <h2 className="so-brand-card-title" style={styles.sectionTitle}>
               Latest payments
             </h2>
 
             <p style={styles.sectionText}>
               Review recent checkout activity, donor fee coverage and payout
-              tracking from one unified finance feed.
+              tracking for this tenant.
             </p>
           </div>
 
-          <div style={styles.countPill}>
-            {payments.length} rows
-          </div>
+          <div style={styles.countPill}>{payments.length} rows</div>
         </div>
 
         {payments.length ? (
@@ -492,8 +498,7 @@ export default async function AdminRevenuePage() {
               <tbody>
                 {payments.map((payment) => {
                   const currency = payment.currency || "gbp";
-                  const payoutStatus =
-                    payment.payout_status || "pending";
+                  const payoutStatus = payment.payout_status || "pending";
 
                   return (
                     <tr key={payment.id}>
@@ -503,13 +508,13 @@ export default async function AdminRevenuePage() {
 
                       <td style={styles.td}>
                         <strong style={styles.primaryText}>
-                          {payment.raffle_title || payment.raffle_id}
+                          {payment.raffle_title ||
+                            payment.raffle_id ||
+                            "Payment"}
                         </strong>
                       </td>
 
-                      <td style={styles.td}>
-                        {payment.tenant_slug || "—"}
-                      </td>
+                      <td style={styles.td}>{payment.tenant_slug || "—"}</td>
 
                       <td style={styles.td}>
                         {payment.customer_email || "—"}
@@ -664,6 +669,7 @@ const responsiveStyles = `
 .revenue-page table {
   min-width: 0;
 }
+
 @media (max-width: 1180px) {
   .revenue-page .revenue-hero {
     grid-template-columns: 1fr !important;
@@ -734,7 +740,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
