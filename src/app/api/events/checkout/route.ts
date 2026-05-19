@@ -28,6 +28,15 @@ type CheckoutItem = {
   tableName?: string;
 };
 
+type EventCheckoutPaymentSummary = {
+  ticketTotalCents: number;
+  amountTotalCents: number;
+  buyerContributionCents: number;
+  platformCommissionCents: number;
+  applicationFeeCents: number;
+  tenantNetCents: number;
+};
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
@@ -52,6 +61,54 @@ function positiveQuantity(value: unknown) {
 
 function truthy(value: unknown) {
   return value === true || value === "true" || value === "yes" || value === "1";
+}
+
+function safeMoneyCents(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(number));
+}
+
+function normaliseEventPaymentSummary(input: {
+  ticketTotalCents: number;
+  coverFees: boolean;
+  platformFeePercent: number;
+}): EventCheckoutPaymentSummary {
+  const paymentSummary = buildPaymentSummary({
+    ticketTotalCents: input.ticketTotalCents,
+    coverFees: input.coverFees,
+    platformFeePercent: input.platformFeePercent,
+  });
+
+  const ticketTotalCents = safeMoneyCents(paymentSummary.ticketTotalCents);
+  const amountTotalCents = safeMoneyCents(paymentSummary.amountTotalCents);
+  const buyerContributionCents = safeMoneyCents(
+    paymentSummary.buyerContributionCents,
+  );
+
+  const platformCommissionCents = safeMoneyCents(
+    paymentSummary.applicationFeeCents,
+  );
+
+  const applicationFeeCents =
+    input.coverFees && buyerContributionCents > 0
+      ? buyerContributionCents
+      : platformCommissionCents;
+
+  const tenantNetCents = Math.max(amountTotalCents - applicationFeeCents, 0);
+
+  return {
+    ticketTotalCents,
+    amountTotalCents,
+    buyerContributionCents,
+    platformCommissionCents,
+    applicationFeeCents,
+    tenantNetCents,
+  };
 }
 
 function seatLabel(input: {
@@ -86,9 +143,11 @@ function eventCheckoutMetadata(input: {
   coverFees: boolean;
   buyerContributionCents: number;
   platformFeePercent: number;
+  platformCommissionCents: number;
   applicationFeeCents: number;
   ticketTotalCents: number;
   amountTotalCents: number;
+  tenantNetCents: number;
 }) {
   return {
     type: "event",
@@ -102,11 +161,22 @@ function eventCheckoutMetadata(input: {
     buyer_name: input.buyerName,
     buyer_email: input.buyerEmail,
     cover_fees: input.coverFees ? "true" : "false",
+    buyer_requested_cover_fees: input.coverFees ? "true" : "false",
+    buyer_fee_contributions_enabled: input.buyerContributionCents > 0 ? "true" : "false",
+    donor_covered_fees: input.buyerContributionCents > 0 ? "true" : "false",
     buyer_contribution_cents: String(input.buyerContributionCents),
+    supporter_contribution_cents: String(input.buyerContributionCents),
+    donor_fee_cents: String(input.buyerContributionCents),
+    buyer_fee_cents: String(input.buyerContributionCents),
     platform_fee_percent: String(input.platformFeePercent),
+    platform_commission_cents: String(input.platformCommissionCents),
     platform_fee_cents: String(input.applicationFeeCents),
+    application_fee_amount: String(input.applicationFeeCents),
     ticket_total_cents: String(input.ticketTotalCents),
+    base_amount_cents: String(input.ticketTotalCents),
     amount_total_cents: String(input.amountTotalCents),
+    checkout_total_cents: String(input.amountTotalCents),
+    net_amount_cents: String(input.tenantNetCents),
   };
 }
 
@@ -206,7 +276,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const paymentSummary = buildPaymentSummary({
+      const paymentSummary = normaliseEventPaymentSummary({
         ticketTotalCents,
         coverFees,
         platformFeePercent,
@@ -285,9 +355,11 @@ export async function POST(req: Request) {
           coverFees,
           buyerContributionCents: paymentSummary.buyerContributionCents,
           platformFeePercent,
+          platformCommissionCents: paymentSummary.platformCommissionCents,
           applicationFeeCents: paymentSummary.applicationFeeCents,
           ticketTotalCents: paymentSummary.ticketTotalCents,
           amountTotalCents: paymentSummary.amountTotalCents,
+          tenantNetCents: paymentSummary.tenantNetCents,
         }),
       });
 
@@ -364,7 +436,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const paymentSummary = buildPaymentSummary({
+    const paymentSummary = normaliseEventPaymentSummary({
       ticketTotalCents,
       coverFees,
       platformFeePercent,
@@ -464,9 +536,11 @@ export async function POST(req: Request) {
         coverFees,
         buyerContributionCents: paymentSummary.buyerContributionCents,
         platformFeePercent,
+        platformCommissionCents: paymentSummary.platformCommissionCents,
         applicationFeeCents: paymentSummary.applicationFeeCents,
         ticketTotalCents: paymentSummary.ticketTotalCents,
         amountTotalCents: paymentSummary.amountTotalCents,
+        tenantNetCents: paymentSummary.tenantNetCents,
       }),
     });
 
