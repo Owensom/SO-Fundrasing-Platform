@@ -31,16 +31,22 @@ function getBaseUrl(request: Request) {
   return `${url.protocol}//${url.host}`;
 }
 
-async function requireCurrentTenantAccess() {
+function billingRedirect(request: Request, status: string) {
+  return NextResponse.redirect(
+    new URL(`/admin/settings/billing?stripe_connect=${status}`, request.url),
+    { status: 303 },
+  );
+}
+
+async function requireCurrentTenantAccess(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
     return {
       ok: false as const,
-      response: NextResponse.json(
-        { ok: false, error: "unauthenticated" },
-        { status: 401 },
-      ),
+      response: NextResponse.redirect(new URL("/admin/login", request.url), {
+        status: 303,
+      }),
     };
   }
 
@@ -53,9 +59,9 @@ async function requireCurrentTenantAccess() {
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     return {
       ok: false as const,
-      response: NextResponse.json(
-        { ok: false, error: "tenant_access_denied" },
-        { status: 403 },
+      response: NextResponse.redirect(
+        new URL("/admin/login?error=tenant_access_denied", request.url),
+        { status: 303 },
       ),
     };
   }
@@ -114,16 +120,10 @@ async function saveStripeConnectAccountId(
 export async function GET(request: Request) {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "missing_stripe_secret_key",
-        },
-        { status: 500 },
-      );
+      return billingRedirect(request, "missing_secret");
     }
 
-    const access = await requireCurrentTenantAccess();
+    const access = await requireCurrentTenantAccess(request);
 
     if (!access.ok) {
       return access.response;
@@ -176,12 +176,6 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Stripe Connect onboarding failed:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "stripe_connect_onboarding_failed",
-      },
-      { status: 500 },
-    );
+    return billingRedirect(request, "failed");
   }
 }
