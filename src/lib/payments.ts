@@ -25,6 +25,18 @@ export type BuildCheckoutSessionInput = {
   applicationFeeCents: number;
 };
 
+export type PaymentSummary = {
+  ticketTotalCents: number;
+  platformCommissionCents: number;
+  buyerContributionCents: number;
+  applicationFeeCents: number;
+  amountTotalCents: number;
+  tenantNetCents: number;
+};
+
+const STRIPE_STANDARD_UK_PERCENT = 0.015;
+const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
+
 export function cleanPaymentText(value: unknown) {
   return String(value || "").trim();
 }
@@ -39,23 +51,56 @@ export function safePaymentPercent(value: unknown, fallback = 0) {
   return Math.min(100, Number(number.toFixed(2)));
 }
 
-export function calculateBuyerContributionCents(subtotalCents: number) {
-  if (!subtotalCents || subtotalCents <= 0) {
+export function safePaymentCents(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
     return 0;
   }
 
-  return Math.max(0, Math.ceil(subtotalCents * 0.02 + 20));
+  return Math.max(0, Math.round(number));
 }
 
 export function calculateApplicationFeeCents(
   subtotalCents: number,
   platformFeePercent: number,
 ) {
-  if (!subtotalCents || subtotalCents <= 0 || platformFeePercent <= 0) {
+  const safeSubtotalCents = safePaymentCents(subtotalCents);
+  const safePlatformFeePercent = safePaymentPercent(platformFeePercent, 0);
+
+  if (safeSubtotalCents <= 0 || safePlatformFeePercent <= 0) {
     return 0;
   }
 
-  return Math.max(0, Math.ceil(subtotalCents * (platformFeePercent / 100)));
+  return Math.max(
+    0,
+    Math.ceil(safeSubtotalCents * (safePlatformFeePercent / 100)),
+  );
+}
+
+export function calculateBuyerContributionCents(
+  subtotalCents: number,
+  platformFeePercent = 0,
+) {
+  const safeSubtotalCents = safePaymentCents(subtotalCents);
+
+  if (safeSubtotalCents <= 0) {
+    return 0;
+  }
+
+  const platformCommissionCents = calculateApplicationFeeCents(
+    safeSubtotalCents,
+    platformFeePercent,
+  );
+
+  const grossTotalCents = Math.ceil(
+    (safeSubtotalCents +
+      platformCommissionCents +
+      STRIPE_STANDARD_UK_FIXED_CENTS) /
+      (1 - STRIPE_STANDARD_UK_PERCENT),
+  );
+
+  return Math.max(0, grossTotalCents - safeSubtotalCents);
 }
 
 export function canUseStripeConnectDestination(
@@ -119,6 +164,23 @@ export function buildStripeCheckoutSessionParams(
     Math.floor(Number(input.applicationFeeCents || 0)),
   );
 
+  const supporterContributionCents = safePaymentCents(
+    input.metadata.supporter_contribution_cents ??
+      input.metadata.buyer_contribution_cents ??
+      input.metadata.donor_fee_cents ??
+      0,
+  );
+
+  const platformCommissionCents = safePaymentCents(
+    input.metadata.platform_commission_cents ??
+      input.metadata.subscription_commission_cents ??
+      applicationFeeCents,
+  );
+
+  const platformFeeCents = safePaymentCents(
+    input.metadata.platform_fee_cents ?? applicationFeeCents,
+  );
+
   const metadata = normaliseStripeMetadata({
     ...input.metadata,
 
@@ -129,20 +191,20 @@ export function buildStripeCheckoutSessionParams(
     application_fee_cents: applicationFeeCents,
     application_fee_amount: applicationFeeCents,
 
-    platform_commission_cents: applicationFeeCents,
-    platform_fee_cents:
-      input.metadata.platform_fee_cents ?? applicationFeeCents,
+    platform_commission_cents: platformCommissionCents,
+    subscription_commission_cents: platformCommissionCents,
+    platform_fee_cents: platformFeeCents,
 
-    supporter_contribution_cents:
-      input.metadata.supporter_contribution_cents ??
-      input.metadata.buyer_contribution_cents ??
-      0,
+    supporter_contribution_cents: supporterContributionCents,
+    buyer_contribution_cents:
+      input.metadata.buyer_contribution_cents ?? supporterContributionCents,
 
     donor_fee_cents:
-      input.metadata.donor_fee_cents ??
-      input.metadata.supporter_contribution_cents ??
-      input.metadata.buyer_contribution_cents ??
-      0,
+      input.metadata.donor_fee_cents ?? supporterContributionCents,
+
+    donor_covered_fees:
+      input.metadata.donor_covered_fees ??
+      (supporterContributionCents > 0 ? "true" : "false"),
   });
 
   const params: Stripe.Checkout.SessionCreateParams = {
@@ -183,22 +245,34 @@ export function buildPaymentSummary(input: {
   ticketTotalCents: number;
   coverFees: boolean;
   platformFeePercent: number;
-}) {
-  const buyerContributionCents = input.coverFees
-    ? calculateBuyerContributionCents(input.ticketTotalCents)
-    : 0;
+}): PaymentSummary {
+  const ticketTotalCents = safePaymentCents(input.ticketTotalCents);
+  const platformFeePercent = safePaymentPercent(input.platformFeePercent, 0);
 
-  const applicationFeeCents = calculateApplicationFeeCents(
-    input.ticketTotalCents,
-    input.platformFeePercent,
+  const platformCommissionCents = calculateApplicationFeeCents(
+    ticketTotalCents,
+    platformFeePercent,
   );
 
-  const amountTotalCents = input.ticketTotalCents + buyerContributionCents;
+  const buyerContributionCents = input.coverFees
+    ? calculateBuyerContributionCents(ticketTotalCents, platformFeePercent)
+    : 0;
+
+  const amountTotalCents = ticketTotalCents + buyerContributionCents;
+
+  const applicationFeeCents =
+    buyerContributionCents > 0
+      ? buyerContributionCents
+      : platformCommissionCents;
+
+  const tenantNetCents = Math.max(amountTotalCents - applicationFeeCents, 0);
 
   return {
-    ticketTotalCents: input.ticketTotalCents,
+    ticketTotalCents,
+    platformCommissionCents,
     buyerContributionCents,
     applicationFeeCents,
     amountTotalCents,
+    tenantNetCents,
   };
 }
