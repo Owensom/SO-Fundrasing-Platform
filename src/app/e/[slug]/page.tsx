@@ -2,6 +2,10 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import {
+  getPlatformFeePercent,
+  getTenantFinanceSettings,
+} from "@/lib/payments";
 import { getEventBySlug } from "../../../../api/_lib/events-repo";
 import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
 import PublicReservedSeatSelector from "@/components/events/PublicReservedSeatSelector";
@@ -62,6 +66,9 @@ export default async function EventSlugPage({
   if (!event || event.status !== "published") {
     notFound();
   }
+
+  const finance = await getTenantFinanceSettings(event.tenant_slug);
+  const platformFeePercent = getPlatformFeePercent(finance);
 
   const ticketTypes = (event.ticket_types || []).filter(
     (ticketType) => ticketType.is_active,
@@ -292,6 +299,7 @@ export default async function EventSlugPage({
               eventId={event.id}
               ticketTypes={ticketTypes}
               currency={event.currency}
+              platformFeePercent={platformFeePercent}
             />
           ) : event.event_type === "tables" ? (
             seats.length === 0 ? (
@@ -306,6 +314,7 @@ export default async function EventSlugPage({
                 seats={tableSeatsWithNames}
                 ticketTypes={ticketTypes}
                 currency={event.currency}
+                platformFeePercent={platformFeePercent}
                 menuOptions={menuOptions}
                 seatingLayoutJson={{
                   ...(event.seating_layout_json || {}),
@@ -327,6 +336,7 @@ export default async function EventSlugPage({
               seats={seats}
               ticketTypes={ticketTypes}
               currency={event.currency}
+              platformFeePercent={platformFeePercent}
               menuOptions={menuOptions}
               initialSeatingLayout={event.seating_layout_json || {}}
             />
