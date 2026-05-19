@@ -31,15 +31,22 @@ function getBaseUrl(request: Request) {
   return new URL(request.url).origin;
 }
 
-async function requireCurrentTenantAccess() {
+function billingRedirect(request: Request, status: string) {
+  return NextResponse.redirect(
+    new URL(`/admin/settings/billing?stripe_connect=${status}`, request.url),
+    { status: 303 },
+  );
+}
+
+async function requireCurrentTenantAccess(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
     return {
       ok: false as const,
-      response: NextResponse.redirect(
-        new URL("/admin/login?error=unauthenticated", "https://placeholder.local"),
-      ),
+      response: NextResponse.redirect(new URL("/admin/login", request.url), {
+        status: 303,
+      }),
     };
   }
 
@@ -53,10 +60,8 @@ async function requireCurrentTenantAccess() {
     return {
       ok: false as const,
       response: NextResponse.redirect(
-        new URL(
-          "/admin/login?error=tenant_access_denied",
-          "https://placeholder.local",
-        ),
+        new URL("/admin/login?error=tenant_access_denied", request.url),
+        { status: 303 },
       ),
     };
   }
@@ -92,17 +97,13 @@ export async function GET(request: Request) {
 
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json(
-        { ok: false, error: "Missing STRIPE_SECRET_KEY." },
-        { status: 500 },
-      );
+      return billingRedirect(request, "missing_secret");
     }
 
-    const access = await requireCurrentTenantAccess();
+    const access = await requireCurrentTenantAccess(request);
 
     if (!access.ok) {
-      const redirectUrl = new URL(access.response.headers.get("location") || "/", baseUrl);
-      return NextResponse.redirect(redirectUrl, 303);
+      return access.response;
     }
 
     const { tenantSlug } = access;
@@ -111,13 +112,13 @@ export async function GET(request: Request) {
     if (!accountId) {
       return NextResponse.redirect(
         new URL("/api/admin/stripe/connect/onboard", baseUrl),
-        303,
+        { status: 303 },
       );
     }
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${baseUrl}/api/admin/stripe/connect/refresh`,
+      refresh_url: `${baseUrl}/api/stripe/connect/refresh`,
       return_url: `${baseUrl}/admin/settings/billing?stripe_connect=return`,
       type: "account_onboarding",
     });
@@ -126,15 +127,6 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Stripe Connect refresh error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to refresh Stripe Connect onboarding.",
-      },
-      { status: 500 },
-    );
+    return billingRedirect(request, "refresh_failed");
   }
 }
