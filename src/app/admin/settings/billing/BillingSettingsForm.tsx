@@ -133,6 +133,21 @@ function formatSyncDate(value: string | null | undefined) {
   });
 }
 
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return "0.0%";
+
+  return `${Number(value).toLocaleString("en-GB", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function displayValue(value: string | null | undefined, fallback = "Not set") {
+  const clean = String(value || "").trim();
+
+  return clean || fallback;
+}
+
 function tierCapabilityEnabled(tier: TierKey, key: string) {
   if (key === "crm_enabled") return tier !== "community";
   if (key === "auctions_enabled") return tier !== "community";
@@ -143,41 +158,22 @@ function tierCapabilityEnabled(tier: TierKey, key: string) {
   return false;
 }
 
-function customCommissionAllowed(tier: TierKey) {
-  return tier === "professional" || tier === "foundation";
-}
-
-function clampPlatformFeeForTier(value: number, tier: TierKey) {
-  const minimum = TIER_DETAILS[tier].feeNumber;
-
-  if (!Number.isFinite(value)) {
-    return minimum;
-  }
-
-  return Math.min(100, Math.max(minimum, Number(value.toFixed(2))));
-}
-
 export default function BillingSettingsForm({
   tenantSlug,
   formState,
   connectStatus,
   updateAction,
 }: Props) {
-  const [tier, setTier] = useState<TierKey>(formState.subscription_tier);
-  const [platformFeePercent, setPlatformFeePercent] = useState<number>(() =>
-    clampPlatformFeeForTier(
-      formState.platform_fee_percent,
-      formState.subscription_tier,
-    ),
-  );
+  const tier = formState.subscription_tier;
   const [buyerContributions, setBuyerContributions] = useState(
     formState.buyer_fee_contributions_enabled,
   );
 
   const currentTier = TIER_DETAILS[tier];
-  const commissionEditable = customCommissionAllowed(tier);
-  const displayedPlatformFeePercent = commissionEditable
-    ? clampPlatformFeeForTier(platformFeePercent, tier)
+  const displayedPlatformFeePercent = Number.isFinite(
+    Number(formState.platform_fee_percent),
+  )
+    ? Number(formState.platform_fee_percent)
     : currentTier.feeNumber;
 
   const onboardingComplete = Boolean(
@@ -194,41 +190,48 @@ export default function BillingSettingsForm({
       {
         label: "CRM",
         key: "crm_enabled" as const,
-        enabled: tierCapabilityEnabled(tier, "crm_enabled"),
+        enabled:
+          Boolean(formState.crm_enabled) ||
+          tierCapabilityEnabled(tier, "crm_enabled"),
       },
       {
         label: "Auctions",
         key: "auctions_enabled" as const,
-        enabled: tierCapabilityEnabled(tier, "auctions_enabled"),
+        enabled:
+          Boolean(formState.auctions_enabled) ||
+          tierCapabilityEnabled(tier, "auctions_enabled"),
       },
       {
         label: "Reserved seating",
         key: "reserved_seating_enabled" as const,
-        enabled: tierCapabilityEnabled(tier, "reserved_seating_enabled"),
+        enabled:
+          Boolean(formState.reserved_seating_enabled) ||
+          tierCapabilityEnabled(tier, "reserved_seating_enabled"),
       },
       {
         label: "Finance dashboard",
         key: "finance_dashboard_enabled" as const,
-        enabled: tierCapabilityEnabled(tier, "finance_dashboard_enabled"),
+        enabled:
+          Boolean(formState.finance_dashboard_enabled) ||
+          tierCapabilityEnabled(tier, "finance_dashboard_enabled"),
       },
       {
         label: "White label",
         key: "white_label_enabled" as const,
-        enabled: tierCapabilityEnabled(tier, "white_label_enabled"),
+        enabled:
+          Boolean(formState.white_label_enabled) ||
+          tierCapabilityEnabled(tier, "white_label_enabled"),
       },
       {
         label: "Custom domain",
         key: "custom_domain_enabled" as const,
-        enabled: tierCapabilityEnabled(tier, "custom_domain_enabled"),
+        enabled:
+          Boolean(formState.custom_domain_enabled) ||
+          tierCapabilityEnabled(tier, "custom_domain_enabled"),
       },
     ],
-    [tier],
+    [formState, tier],
   );
-
-  function handleTierChange(value: TierKey) {
-    setTier(value);
-    setPlatformFeePercent(TIER_DETAILS[value].feeNumber);
-  }
 
   return (
     <main className="billing-page" style={styles.page}>
@@ -245,7 +248,7 @@ export default function BillingSettingsForm({
           </h1>
 
           <p style={styles.subtitle}>
-            Manage this tenant’s plan, platform commission, Stripe readiness and
+            View this tenant’s plan, platform commission, Stripe readiness and
             commercial feature settings.
           </p>
 
@@ -280,12 +283,10 @@ export default function BillingSettingsForm({
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Platform commission</div>
             <div style={styles.summaryValue}>
-              {Number(displayedPlatformFeePercent || 0).toFixed(1)}%
+              {formatPercent(displayedPlatformFeePercent)}
             </div>
             <div style={styles.summarySub}>
-              {commissionEditable
-                ? `Editable, with a minimum of ${currentTier.fee}`
-                : "Community uses the fixed default platform fee"}
+              Managed by platform billing controls.
             </div>
           </div>
 
@@ -306,8 +307,7 @@ export default function BillingSettingsForm({
           </div>
         </div>
       </section>
-
-      <section className="contentGrid" style={styles.contentGrid}>
+            <section className="contentGrid" style={styles.contentGrid}>
         <form action={updateAction} style={styles.formCard}>
           <div style={styles.cardHeader}>
             <div>
@@ -315,117 +315,45 @@ export default function BillingSettingsForm({
               <h2 style={styles.cardTitle}>Tenant billing configuration</h2>
             </div>
 
-            <div style={styles.liveBadge}>LIVE SETTINGS</div>
+            <div style={styles.liveBadge}>VIEW SETTINGS</div>
           </div>
 
           <div className="formGrid" style={styles.formGrid}>
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Subscription tier</span>
-              <select
-                name="subscription_tier"
-                value={tier}
-                onChange={(event) =>
-                  handleTierChange(event.target.value as TierKey)
-                }
-                style={styles.select}
-              >
-                <option value="community">Community — Free + 7%</option>
-                <option value="professional">
-                  Professional — £25/month + 3.5%
-                </option>
-                <option value="foundation">
-                  Foundation — £99/month + 1.5%
-                </option>
-              </select>
-            </label>
+            <ReadOnlyField
+              label="Subscription tier"
+              value={`${currentTier.name} — ${currentTier.monthly}`}
+              helper="Plan changes are managed through platform billing controls."
+            />
 
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Platform fee percentage</span>
-              <input
-                type="number"
-                name="platform_fee_percent"
-                min={currentTier.feeNumber}
-                max="100"
-                step="0.1"
-                value={displayedPlatformFeePercent}
-                readOnly={!commissionEditable}
-                aria-readonly={!commissionEditable}
-                onChange={(event) => {
-                  if (!commissionEditable) return;
+            <ReadOnlyField
+              label="Platform fee percentage"
+              value={formatPercent(displayedPlatformFeePercent)}
+              helper={`Current plan minimum is ${currentTier.fee}.`}
+            />
 
-                  setPlatformFeePercent(Number(event.target.value));
-                }}
-                onBlur={() => {
-                  setPlatformFeePercent((current) =>
-                    clampPlatformFeeForTier(current, tier),
-                  );
-                }}
-                style={
-                  commissionEditable
-                    ? styles.input
-                    : { ...styles.input, ...styles.lockedInput }
-                }
-              />
+            <ReadOnlyField
+              label="Subscription status"
+              value={displayValue(formState.subscription_status, "Active")}
+              helper="Subscription status is controlled by billing records."
+            />
 
-              {!commissionEditable ? (
-                <span style={styles.upgradeNotice}>
-                  Custom commission requires Professional or Foundation.
-                  Community is fixed at 7%.
-                </span>
-              ) : (
-                <span style={styles.helperText}>
-                  Custom commission is enabled. Minimum for this plan is{" "}
-                  {currentTier.fee}.
-                </span>
-              )}
-            </label>
+            <ReadOnlyField
+              label="Stripe customer ID"
+              value={displayValue(formState.stripe_customer_id)}
+              helper="Linked Stripe billing customer."
+            />
 
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Subscription status</span>
-              <select
-                name="subscription_status"
-                defaultValue={formState.subscription_status}
-                style={styles.select}
-              >
-                <option value="active">Active</option>
-                <option value="trialing">Trialing</option>
-                <option value="past_due">Past due</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </label>
+            <ReadOnlyField
+              label="Stripe subscription ID"
+              value={displayValue(formState.stripe_subscription_id)}
+              helper="Linked Stripe subscription record."
+            />
 
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Stripe customer ID</span>
-              <input
-                type="text"
-                name="stripe_customer_id"
-                defaultValue={formState.stripe_customer_id}
-                placeholder="cus_xxxxxxxxx"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Stripe subscription ID</span>
-              <input
-                type="text"
-                name="stripe_subscription_id"
-                defaultValue={formState.stripe_subscription_id}
-                placeholder="sub_xxxxxxxxx"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Stripe Connect account</span>
-              <input
-                type="text"
-                name="stripe_connect_account_id"
-                defaultValue={formState.stripe_connect_account_id}
-                placeholder="acct_xxxxxxxxx"
-                style={styles.input}
-              />
-            </label>
+            <ReadOnlyField
+              label="Stripe Connect account"
+              value={displayValue(formState.stripe_connect_account_id)}
+              helper="Tenant payout account for Stripe Connect."
+            />
           </div>
 
           <div className="toggleGrid" style={styles.toggleGrid}>
@@ -446,12 +374,12 @@ export default function BillingSettingsForm({
             </label>
 
             {capabilities.map((item) => (
-              <label key={item.key} style={styles.toggleCard}>
-                <input
-                  type="checkbox"
-                  name={item.key}
-                  checked={item.enabled}
-                  readOnly
+              <div key={item.key} style={styles.readOnlyToggleCard}>
+                <span
+                  style={{
+                    ...styles.statusDot,
+                    ...(item.enabled ? styles.statusDotOn : styles.statusDotOff),
+                  }}
                 />
 
                 <div>
@@ -460,13 +388,13 @@ export default function BillingSettingsForm({
                     {enabledLabel(item.enabled)}
                   </div>
                 </div>
-              </label>
+              </div>
             ))}
           </div>
 
           <div className="submitRow" style={styles.submitRow}>
             <button type="submit" style={styles.saveButton}>
-              Save billing settings
+              Save contribution setting
             </button>
           </div>
         </form>
@@ -577,6 +505,23 @@ export default function BillingSettingsForm({
   );
 }
 
+function ReadOnlyField({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
+  return (
+    <div style={styles.readOnlyField}>
+      <span style={styles.fieldLabel}>{label}</span>
+      <strong style={styles.readOnlyValue}>{value}</strong>
+      <span style={styles.helperTextMuted}>{helper}</span>
+    </div>
+  );
+}
 const responsiveStyles = `
 .billing-page,
 .billing-page * {
@@ -828,9 +773,9 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: "7px 10px",
     borderRadius: 999,
-    background: "#dcfce7",
-    color: "#166534",
-    border: "1px solid #bbf7d0",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
@@ -841,54 +786,28 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
   },
-  field: { display: "grid", gap: 7, minWidth: 0 },
   fieldLabel: { color: "#334155", fontSize: 13, fontWeight: 950 },
-  input: {
-    width: "100%",
+    readOnlyField: {
+    display: "grid",
+    gap: 7,
     minWidth: 0,
-    minHeight: 46,
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    padding: "10px 12px",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-  lockedInput: {
+    padding: 13,
+    borderRadius: 18,
     background: "#f8fafc",
-    color: "#64748b",
-    borderColor: "#e2e8f0",
-    cursor: "not-allowed",
+    border: "1px solid #e2e8f0",
   },
-  helperText: {
-    color: "#166534",
-    fontSize: 12,
-    fontWeight: 850,
-    lineHeight: 1.35,
-  },
-  upgradeNotice: {
-    display: "inline-flex",
-    padding: "9px 11px",
-    borderRadius: 14,
-    background: "#fffbeb",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 850,
-    lineHeight: 1.35,
-  },
-  select: {
-    width: "100%",
-    minWidth: 0,
-    minHeight: 46,
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+  readOnlyValue: {
     color: "#0f172a",
-    padding: "10px 12px",
-    fontSize: 15,
-    boxSizing: "border-box",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  helperTextMuted: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
   },
   toggleGrid: {
     display: "grid",
@@ -906,6 +825,32 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     cursor: "pointer",
     minWidth: 0,
+  },
+  readOnlyToggleCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    marginTop: 4,
+    display: "inline-flex",
+  },
+  statusDotOn: {
+    background: "#16a34a",
+    boxShadow: "0 0 0 4px rgba(22,163,74,0.12)",
+  },
+  statusDotOff: {
+    background: "#94a3b8",
+    boxShadow: "0 0 0 4px rgba(148,163,184,0.14)",
   },
   toggleCardTitle: {
     color: "#0f172a",
