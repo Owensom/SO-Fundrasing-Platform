@@ -8,6 +8,7 @@ import { getTenantSettings } from "@/lib/tenant-settings";
 import {
   canPublishAnotherCampaign,
   checkSubscriptionCapability,
+  getEventGuestCateringEditUpgradeMessage,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
@@ -88,6 +89,10 @@ type EventGuestCateringRow = {
   seat_customer_email: string | null;
 };
 
+type UpdatedGuestCateringRow = {
+  seat_id: string | null;
+};
+
 type TableShape = "round" | "square" | "rectangle";
 
 const TABLE_SHAPE_KEY = "__table_shape";
@@ -142,6 +147,10 @@ function cleanImageFocus(value: FormDataEntryValue | null) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 50;
   return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function cleanOptionalText(value: FormDataEntryValue | null) {
+  return String(value || "").trim() || null;
 }
 
 function parseAisleAfterList(value: FormDataEntryValue | null) {
@@ -593,6 +602,77 @@ async function requireEventAccess(eventId: string) {
   return event;
 }
 
+async function requireEventGuestCateringEditAccess(eventId: string) {
+  const event = await requireEventAccess(eventId);
+  const tenantSettings = await getTenantSettings(event.tenant_slug);
+
+  const editCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_guest_catering_edit",
+  );
+
+  if (!editCapability.allowed) {
+    redirect(`/admin/events/${eventId}?error=upgrade-required#guest-catering`);
+  }
+
+  return event;
+}
+
+async function updateGuestCateringItemAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const orderItemId = String(formData.get("order_item_id") || "").trim();
+
+  if (!eventId || !orderItemId) {
+    redirect(`/admin/events/${eventId}?error=missing-guest#guest-catering`);
+  }
+
+  await requireEventGuestCateringEditAccess(eventId);
+
+  const guestName = cleanOptionalText(formData.get("guest_name"));
+  const dietaryRequirements = cleanOptionalText(
+    formData.get("dietary_requirements"),
+  );
+  const menuChoice = cleanOptionalText(formData.get("menu_choice"));
+
+  const updatedRows = await query<UpdatedGuestCateringRow>(
+    `
+      update event_order_items eoi
+      set
+        guest_name = $3,
+        dietary_requirements = $4,
+        menu_choice = $5
+      from event_orders eo
+      where eoi.order_id = eo.id
+        and eo.event_id = $1
+        and eo.status = 'paid'
+        and eoi.id = $2
+      returning eoi.seat_id
+    `,
+    [eventId, orderItemId, guestName, dietaryRequirements, menuChoice],
+  );
+
+  const seatId = updatedRows[0]?.seat_id;
+
+  if (seatId) {
+    await query(
+      `
+        update event_seats
+        set
+          customer_name = $3,
+          guest_name = $3,
+          dietary_requirements = $4,
+          menu_choice = $5
+        where event_id = $1
+          and id = $2
+      `,
+      [eventId, seatId, guestName, dietaryRequirements, menuChoice],
+    );
+  }
+
+  redirect(`/admin/events/${eventId}?saved=guest-catering#guest-catering`);
+}
 async function updateEventAction(formData: FormData) {
   "use server";
 
@@ -699,6 +779,7 @@ async function updateMenuOptionsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
+
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
@@ -1101,7 +1182,6 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
-
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -1302,6 +1382,7 @@ const responsiveStyles = `
   .event-edit-page .ticketLayout,
   .event-edit-page .guestCateringGrid,
   .event-edit-page .guestUpgradeGrid,
+  .event-edit-page .guestEditGrid,
   .event-edit-page .twoPanel,
   .event-edit-page .twoCol,
   .event-edit-page .threeCol,
@@ -1406,6 +1487,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1443,6 +1525,13 @@ export default async function AdminEventManagePage({
     "custom_campaign_images",
   );
 
+  const guestCateringEditCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_guest_catering_edit",
+  );
+
+  const canEditGuestCatering = guestCateringEditCapability.allowed;
+
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
   const [winners, guestCateringRows] = await Promise.all([
@@ -1452,6 +1541,7 @@ export default async function AdminEventManagePage({
 
   const hasCustomImage = Boolean(event.image_url);
   const campaignLimitReached = searchParams?.error === "campaign-limit";
+  const upgradeRequired = searchParams?.error === "upgrade-required";
 
   const imageFocusStyle: CSSProperties = {
     objectFit: "cover",
@@ -1663,6 +1753,19 @@ export default async function AdminEventManagePage({
         </section>
       ) : null}
 
+      {upgradeRequired ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Upgrade required</div>
+          <h2 style={styles.upgradeTitle}>Guest editing is locked.</h2>
+          <p style={styles.upgradeText}>
+            {getEventGuestCateringEditUpgradeMessage()}
+          </p>
+          <a href="/admin/settings/billing" style={styles.campaignLimitPrimary}>
+            View billing
+          </a>
+        </section>
+      ) : null}
+
       <nav className="tabs" style={styles.tabs}>
         <a href="#overview" className="tab" style={styles.tab}>
           Overview
@@ -1698,13 +1801,12 @@ export default async function AdminEventManagePage({
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
-      {searchParams?.error && !campaignLimitReached ? (
+      {searchParams?.error && !campaignLimitReached && !upgradeRequired ? (
         <div style={styles.errorBox}>
           Please check the missing fields and try again.
         </div>
       ) : null}
-
-      <section style={styles.summaryGrid}>
+            <section style={styles.summaryGrid}>
         <SummaryCard label="Ticket types" value={ticketTypes.length} />
         <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
         <SummaryCard
@@ -2076,7 +2178,8 @@ export default async function AdminEventManagePage({
                             />
                           </Field>
                         </div>
-                                                <div className="fourCol" style={styles.fourCol}>
+
+                        <div className="fourCol" style={styles.fourCol}>
                           <Field label="Price">
                             <input
                               name="price"
@@ -2192,13 +2295,19 @@ export default async function AdminEventManagePage({
         id="guest-catering"
         eyebrow="Section 4"
         title="Guest & Catering"
-        description="Read-only list of paid event guests, menu choices and dietary requirements."
+        description={
+          canEditGuestCatering
+            ? "Review and update paid guest names, menu choices and dietary requirements."
+            : "Read-only list of paid event guests, menu choices and dietary requirements."
+        }
         badge={`${guestCateringRows.length} paid guests`}
       >
         <div className="panel" style={styles.panel}>
           <div style={styles.panelHeader}>
             <div>
-              <div style={styles.innerEyebrow}>Confirmed guests</div>
+              <div style={styles.innerEyebrow}>
+                {canEditGuestCatering ? "Editable guests" : "Confirmed guests"}
+              </div>
               <h3 style={styles.panelTitle}>Guest & catering list</h3>
               <p style={styles.sectionText}>
                 This list only includes paid event order items. Pending or
@@ -2214,30 +2323,39 @@ export default async function AdminEventManagePage({
             <SummaryCard label="Dietary notes" value={dietaryResponses} />
           </div>
 
-          <div className="guestUpgradeGrid" style={styles.guestUpgradeGrid}>
-            <div style={styles.lockedFeatureCard}>
-              <div style={styles.lockedFeatureEyebrow}>Professional</div>
-              <h4 style={styles.lockedFeatureTitle}>
-                Edit guest details after purchase
-              </h4>
-              <p style={styles.lockedFeatureText}>
-                Planned upgrade: edit guest names, dietary requirements and menu
-                choices after checkout while keeping the original paid order
-                intact.
-              </p>
-            </div>
+          {!canEditGuestCatering ? (
+            <div className="guestUpgradeGrid" style={styles.guestUpgradeGrid}>
+              <div style={styles.lockedFeatureCard}>
+                <div style={styles.lockedFeatureEyebrow}>Professional</div>
+                <h4 style={styles.lockedFeatureTitle}>
+                  Edit guest details after purchase
+                </h4>
+                <p style={styles.lockedFeatureText}>
+                  {guestCateringEditCapability.reason ||
+                    getEventGuestCateringEditUpgradeMessage()}
+                </p>
+              </div>
 
-            <div style={styles.lockedFeatureCard}>
-              <div style={styles.lockedFeatureEyebrow}>Foundation</div>
-              <h4 style={styles.lockedFeatureTitle}>
-                Request missing menu choices
-              </h4>
-              <p style={styles.lockedFeatureText}>
-                Planned upgrade: email paid guests a secure link to update menu
-                choices or dietary notes when menus are confirmed later.
-              </p>
+              <div style={styles.lockedFeatureCard}>
+                <div style={styles.lockedFeatureEyebrow}>Foundation</div>
+                <h4 style={styles.lockedFeatureTitle}>
+                  Request missing menu choices
+                </h4>
+                <p style={styles.lockedFeatureText}>
+                  Planned upgrade: email paid guests a secure link to update
+                  menu choices or dietary notes when menus are confirmed later.
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={styles.editEnabledNotice}>
+              <strong>Professional editing enabled.</strong>
+              <span>
+                Updates are saved to the guest/order item record and mirrored to
+                linked seats where applicable. Payment records are not changed.
+              </span>
+            </div>
+          )}
 
           {guestCateringRows.length === 0 ? (
             <div style={styles.emptyBox}>
@@ -2271,7 +2389,10 @@ export default async function AdminEventManagePage({
                   </div>
 
                   <div style={styles.guestMetaGrid}>
-                    <InfoTile label="Seat / ticket" value={seatDisplayLabel(row)} />
+                    <InfoTile
+                      label="Seat / ticket"
+                      value={seatDisplayLabel(row)}
+                    />
                     <InfoTile label="Ticket" value={ticketDisplayLabel(row)} />
                     <InfoTile
                       label="Quantity"
@@ -2291,51 +2412,129 @@ export default async function AdminEventManagePage({
                     />
                     <InfoTile
                       label="Buyer"
-                      value={`${fallbackText(row.buyer_name, "Unknown buyer")} • ${fallbackText(
-                        row.buyer_email,
-                        "No email",
-                      )}`}
+                      value={`${fallbackText(
+                        row.buyer_name,
+                        "Unknown buyer",
+                      )} • ${fallbackText(row.buyer_email, "No email")}`}
                     />
                   </div>
 
-                  <div style={styles.cateringDetailGrid}>
-                    <div
-                      style={{
-                        ...styles.cateringDetailCard,
-                        ...(String(row.menu_choice || "").trim()
-                          ? styles.cateringDetailPositive
-                          : styles.cateringDetailMissing),
-                      }}
+                  {canEditGuestCatering ? (
+                    <form
+                      action={updateGuestCateringItemAction}
+                      className="guestEditGrid"
+                      style={styles.guestEditForm}
                     >
-                      <span style={styles.cateringLabel}>Menu choice</span>
-                      <strong style={styles.cateringValue}>
-                        {fallbackText(row.menu_choice)}
-                      </strong>
-                    </div>
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input
+                        type="hidden"
+                        name="order_item_id"
+                        value={row.order_item_id}
+                      />
 
-                    <div
-                      style={{
-                        ...styles.cateringDetailCard,
-                        ...(String(row.dietary_requirements || "").trim()
-                          ? styles.cateringDetailPositive
-                          : styles.cateringDetailNeutral),
-                      }}
-                    >
-                      <span style={styles.cateringLabel}>
-                        Dietary requirements
-                      </span>
-                      <strong style={styles.cateringValue}>
-                        {fallbackText(row.dietary_requirements)}
-                      </strong>
-                    </div>
-                  </div>
+                      <Field label="Guest name">
+                        <input
+                          name="guest_name"
+                          defaultValue={row.guest_name || ""}
+                          placeholder="Guest name"
+                          style={styles.input}
+                        />
+                      </Field>
 
-                  {!hasGuestCateringDetail(row) ? (
-                    <p style={styles.guestNote}>
-                      No menu choice or dietary requirement was supplied at
-                      checkout.
-                    </p>
-                  ) : null}
+                      <Field label="Menu choice">
+                        {event.menu_options && event.menu_options.length > 0 ? (
+                          <select
+                            name="menu_choice"
+                            defaultValue={row.menu_choice || ""}
+                            style={styles.input}
+                          >
+                            <option value="">No menu choice selected</option>
+                            {(event.menu_options || [])
+                              .filter((option) => option.isActive ?? option.is_active ?? true)
+                              .map((option, index) => {
+                                const name = String(
+                                  option.name || option.title || "",
+                                ).trim();
+
+                                if (!name) return null;
+
+                                return (
+                                  <option key={`${name}-${index}`} value={name}>
+                                    {name}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                        ) : (
+                          <input
+                            name="menu_choice"
+                            defaultValue={row.menu_choice || ""}
+                            placeholder="Menu choice"
+                            style={styles.input}
+                          />
+                        )}
+                      </Field>
+
+                      <Field label="Dietary requirements">
+                        <textarea
+                          name="dietary_requirements"
+                          defaultValue={row.dietary_requirements || ""}
+                          placeholder="None, vegetarian, gluten free, allergies..."
+                          rows={3}
+                          style={styles.textarea}
+                        />
+                      </Field>
+
+                      <button
+                        type="submit"
+                        className="primaryButton"
+                        style={styles.primaryButton}
+                      >
+                        Save guest details
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <div style={styles.cateringDetailGrid}>
+                        <div
+                          style={{
+                            ...styles.cateringDetailCard,
+                            ...(String(row.menu_choice || "").trim()
+                              ? styles.cateringDetailPositive
+                              : styles.cateringDetailMissing),
+                          }}
+                        >
+                          <span style={styles.cateringLabel}>Menu choice</span>
+                          <strong style={styles.cateringValue}>
+                            {fallbackText(row.menu_choice)}
+                          </strong>
+                        </div>
+
+                        <div
+                          style={{
+                            ...styles.cateringDetailCard,
+                            ...(String(row.dietary_requirements || "").trim()
+                              ? styles.cateringDetailPositive
+                              : styles.cateringDetailNeutral),
+                          }}
+                        >
+                          <span style={styles.cateringLabel}>
+                            Dietary requirements
+                          </span>
+                          <strong style={styles.cateringValue}>
+                            {fallbackText(row.dietary_requirements)}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {!hasGuestCateringDetail(row) ? (
+                        <p style={styles.guestNote}>
+                          No menu choice or dietary requirement was supplied at
+                          checkout.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                 </article>
               ))}
             </div>
@@ -2447,7 +2646,9 @@ export default async function AdminEventManagePage({
                 />
                 <SummaryCard
                   label="Sold"
-                  value={rowSeats.filter((seat) => seat.status === "sold").length}
+                  value={
+                    rowSeats.filter((seat) => seat.status === "sold").length
+                  }
                 />
               </div>
             </CompactPanel>
@@ -2577,12 +2778,15 @@ export default async function AdminEventManagePage({
                 <SummaryCard
                   label="Blocked"
                   value={
-                    tableSeats.filter((seat) => seat.status === "blocked").length
+                    tableSeats.filter((seat) => seat.status === "blocked")
+                      .length
                   }
                 />
                 <SummaryCard
                   label="Sold"
-                  value={tableSeats.filter((seat) => seat.status === "sold").length}
+                  value={
+                    tableSeats.filter((seat) => seat.status === "sold").length
+                  }
                 />
               </div>
             </CompactPanel>
@@ -3054,6 +3258,42 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #cbd5e1",
   },
+  upgradeBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fef3c7 0%, #ffffff 52%, #eff6ff 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  upgradeEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  upgradeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  upgradeText: {
+    margin: "10px 0 16px",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
+  },
   tabs: {
     display: "flex",
     flexWrap: "wrap",
@@ -3481,6 +3721,18 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
   },
+  editEnabledNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
   guestCardList: {
     display: "grid",
     gap: 12,
@@ -3523,6 +3775,16 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
     gap: 10,
+  },
+  guestEditForm: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gap: 12,
+    alignItems: "end",
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
   },
   infoTile: {
     padding: 12,
