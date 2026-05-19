@@ -2384,15 +2384,15 @@ export default async function AdminEventManagePage({
           </div>
 
           {menuRequestsSent ? (
-            <div style={styles.menuRequestSuccess}>
-              <strong>Menu request emails processed.</strong>
-              <span>
-                Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no
-                email: {Number.isFinite skippedCount ? skippedCount : 0} • Failed:{" "}
-                {Number.isFinite(failedCount) ? failedCount : 0}
-              </span>
-            </div>
-          ) : null}
+           <div style={styles.menuRequestSuccess}>
+           <strong>Menu request emails processed.</strong>
+           <span>
+           Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no email:{" "}
+           {Number.isFinite(skippedCount) ? skippedCount : 0} • Failed:{" "}
+           {Number.isFinite(failedCount) ? failedCount : 0}
+          </span>
+        </div>
+      ) : null}
 
           <div className="guestCateringGrid" style={styles.guestCateringStats}>
             <SummaryCard label="Paid guests" value={guestCateringRows.length} />
