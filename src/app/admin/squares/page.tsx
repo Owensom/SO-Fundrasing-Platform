@@ -2,13 +2,55 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  canPublishAnotherCampaign,
+  getMaximumActiveCampaignsForTier,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 import { listSquaresGames } from "../../../../api/_lib/squares-repo";
 
 const DEFAULT_SQUARES_IMAGE = "/brand/so-default-squares.png";
 const SQUARES_LOGO_IMAGE = "/brand/squares-square-gold.png";
 
 type SquaresGame = Awaited<ReturnType<typeof listSquaresGames>>[number];
+
+type ActiveCampaignCountRow = {
+  total: number | string;
+};
+
+async function getActiveCampaignCount(tenantSlug: string) {
+  const rows = await query<ActiveCampaignCountRow>(
+    `
+      select count(*)::int as total
+      from (
+        select 1
+        from raffles
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from squares_games
+        where tenant_slug = $1
+          and status = 'published'
+
+        union all
+
+        select 1
+        from events
+        where tenant_slug = $1
+          and status = 'published'
+      ) active_campaigns
+    `,
+    [tenantSlug],
+  );
+
+  return Number(rows[0]?.total || 0);
+}
 
 function formatMoney(
   cents: number | null | undefined,
@@ -90,6 +132,40 @@ function getRaisedCents(game: SquaresGame) {
   return getSoldSquares(game) * Number(game.price_per_square_cents || 0);
 }
 
+function formatCampaignLimit(value: number) {
+  if (!Number.isFinite(value)) return "unlimited active campaigns";
+
+  return `${value} active campaign${value === 1 ? "" : "s"}`;
+}
+
+function formatTierName(value: string) {
+  if (value === "foundation") return "Foundation";
+  if (value === "professional") return "Professional";
+  return "Community";
+}
+
+function CreateSquaresAction({
+  canCreate,
+  reason,
+}: {
+  canCreate: boolean;
+  reason: string;
+}) {
+  if (canCreate) {
+    return (
+      <Link href="/admin/squares/new" style={styles.createButton}>
+        + Create game
+      </Link>
+    );
+  }
+
+  return (
+    <div style={styles.createButtonDisabled} title={reason}>
+      Limit reached
+    </div>
+  );
+}
+
 export default async function AdminSquaresListPage() {
   const session = await auth();
 
@@ -107,7 +183,28 @@ export default async function AdminSquaresListPage() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  const games = await listSquaresGames(tenantSlug);
+  const [games, tenantSettings, activeCampaignCount] = await Promise.all([
+    listSquaresGames(tenantSlug),
+    getTenantSettings(tenantSlug),
+    getActiveCampaignCount(tenantSlug),
+  ]);
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const maxActiveCampaigns = getMaximumActiveCampaignsForTier(subscriptionTier);
+
+  const canCreateCampaign = canPublishAnotherCampaign({
+    subscription_tier: tenantSettings?.subscription_tier,
+    currentActiveCampaigns: activeCampaignCount,
+  });
+
+  const limitMessage = canCreateCampaign
+    ? `Your current plan allows ${formatCampaignLimit(maxActiveCampaigns)}.`
+    : `Your current plan has reached its ${formatCampaignLimit(
+        maxActiveCampaigns,
+      )} limit across raffles, squares and events. Close or unpublish a campaign, or upgrade the tenant plan.`;
 
   const totalGames = games.length;
   const publishedCount = games.filter(
@@ -161,8 +258,7 @@ export default async function AdminSquaresListPage() {
             Tenant: <strong>{tenantSlug}</strong>
           </p>
         </div>
-
-        <div className="squares-hero-stats" style={styles.heroStats}>
+                <div className="squares-hero-stats" style={styles.heroStats}>
           <HeroStat label="Total games" value={totalGames} />
           <HeroStat label="Published" value={publishedCount} />
           <HeroStat label="Squares sold" value={soldSquares} />
@@ -198,10 +294,42 @@ export default async function AdminSquaresListPage() {
             Public site
           </Link>
 
-          <Link href="/admin/squares/new" style={styles.createButton}>
-            + Create game
-          </Link>
+          <CreateSquaresAction
+            canCreate={canCreateCampaign}
+            reason={limitMessage}
+          />
         </nav>
+      </section>
+
+      <section className="squares-limit-panel" style={styles.limitPanel}>
+        <div>
+          <p style={styles.limitKicker}>Subscription limit</p>
+
+          <h2 style={styles.limitTitle}>
+            {canCreateCampaign
+              ? "You can create another squares game."
+              : "Active campaign limit reached."}
+          </h2>
+
+          <p style={styles.limitText}>{limitMessage}</p>
+        </div>
+
+        <div className="squares-limit-stats" style={styles.limitStats}>
+          <div style={styles.limitStat}>
+            <span>Current plan</span>
+            <strong>{formatTierName(subscriptionTier)}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Active campaigns</span>
+            <strong>{activeCampaignCount}</strong>
+          </div>
+
+          <div style={styles.limitStat}>
+            <span>Allowed</span>
+            <strong>{formatCampaignLimit(maxActiveCampaigns)}</strong>
+          </div>
+        </div>
       </section>
 
       <section className="squares-stats-grid" style={styles.statsGrid}>
@@ -245,22 +373,19 @@ export default async function AdminSquaresListPage() {
           tint="#f8fafc"
         />
       </section>
-            {games.length === 0 ? (
+
+      {games.length === 0 ? (
         <section style={styles.emptyCard}>
           <h2 style={{ margin: 0, color: "#0f172a" }}>
             No squares games yet
           </h2>
 
-          <p style={styles.muted}>
-            Create your first squares game.
-          </p>
+          <p style={styles.muted}>Create your first squares game.</p>
 
-          <Link
-            href="/admin/squares/new"
-            style={styles.createButton}
-          >
-            + Create game
-          </Link>
+          <CreateSquaresAction
+            canCreate={canCreateCampaign}
+            reason={limitMessage}
+          />
         </section>
       ) : (
         <section style={styles.list}>
@@ -278,25 +403,17 @@ export default async function AdminSquaresListPage() {
                 className="squares-card"
                 style={styles.card}
               >
-                <div
-                  className="squares-card-top"
-                  style={styles.cardTop}
-                >
+                <div className="squares-card-top" style={styles.cardTop}>
                   <div
                     className="squares-image-wrap"
                     style={styles.imageWrap}
                   >
                     <img
-                      src={
-                        game.image_url ||
-                        DEFAULT_SQUARES_IMAGE
-                      }
+                      src={game.image_url || DEFAULT_SQUARES_IMAGE}
                       alt={game.title || "Squares"}
                       style={{
                         ...styles.image,
-                        objectFit: game.image_url
-                          ? "cover"
-                          : "contain",
+                        objectFit: game.image_url ? "cover" : "contain",
                         padding: game.image_url ? 0 : 10,
                         background: game.image_url
                           ? "#f1f5f9"
@@ -316,21 +433,13 @@ export default async function AdminSquaresListPage() {
                           className="squares-card-title"
                           style={styles.cardTitle}
                         >
-                          {game.title ||
-                            "Untitled squares game"}
+                          {game.title || "Untitled squares game"}
                         </h2>
 
-                        <p style={styles.slug}>
-                          /s/{game.slug}
-                        </p>
+                        <p style={styles.slug}>/s/{game.slug}</p>
                       </div>
 
-                      <div
-                        style={{
-                          ...styles.status,
-                          ...statusStyle,
-                        }}
-                      >
+                      <div style={{ ...styles.status, ...statusStyle }}>
                         {game.status}
                       </div>
                     </div>
@@ -340,30 +449,20 @@ export default async function AdminSquaresListPage() {
                       style={styles.headlineGrid}
                     >
                       <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>
-                          Sales progress
-                        </div>
+                        <div style={styles.headlineLabel}>Sales progress</div>
 
-                        <div style={styles.headlineValue}>
-                          {progress}% sold
-                        </div>
+                        <div style={styles.headlineValue}>{progress}% sold</div>
                       </div>
 
                       <div style={styles.headlineBox}>
-                        <div style={styles.headlineLabel}>
-                          Raised so far
-                        </div>
+                        <div style={styles.headlineLabel}>Raised so far</div>
 
                         <div style={styles.headlineValue}>
-                          {formatMoney(
-                            raisedCents,
-                            game.currency,
-                          )}
+                          {formatMoney(raisedCents, game.currency)}
                         </div>
                       </div>
                     </div>
-
-                    <div
+                                        <div
                       className="squares-detail-grid"
                       style={styles.detailGrid}
                     >
@@ -380,20 +479,11 @@ export default async function AdminSquaresListPage() {
                         value={formatDrawDate(game.draw_at)}
                       />
 
-                      <InfoBlock
-                        label="Total"
-                        value={total}
-                      />
+                      <InfoBlock label="Total" value={total} />
 
-                      <InfoBlock
-                        label="Sold"
-                        value={sold}
-                      />
+                      <InfoBlock label="Sold" value={sold} />
 
-                      <InfoBlock
-                        label="Remaining"
-                        value={remaining}
-                      />
+                      <InfoBlock label="Remaining" value={remaining} />
                     </div>
 
                     <div style={styles.progressSection}>
@@ -436,10 +526,7 @@ export default async function AdminSquaresListPage() {
                         method="post"
                         style={styles.deleteForm}
                       >
-                        <button
-                          type="submit"
-                          style={styles.deleteButton}
-                        >
+                        <button type="submit" style={styles.deleteButton}>
                           Delete
                         </button>
                       </form>
@@ -463,10 +550,7 @@ function HeroStat({
   value: ReactNode;
 }) {
   return (
-    <div
-      className="squares-hero-stat"
-      style={styles.heroStat}
-    >
+    <div className="squares-hero-stat" style={styles.heroStat}>
       <div style={styles.heroStatLabel}>{label}</div>
 
       <div style={styles.heroStatValue}>{value}</div>
@@ -501,10 +585,7 @@ function StatCard({
         <div style={{ minWidth: 0 }}>
           <div style={styles.statLabel}>{label}</div>
 
-          <div
-            className="squares-stat-value"
-            style={styles.statValue}
-          >
+          <div className="squares-stat-value" style={styles.statValue}>
             {value}
           </div>
         </div>
@@ -554,6 +635,7 @@ function InfoBlock({
     </div>
   );
 }
+
 const responsiveStyles = `
 .squares-admin-page,
 .squares-admin-page * {
@@ -592,6 +674,14 @@ const responsiveStyles = `
 
   .squares-card-top {
     grid-template-columns: 160px minmax(0, 1fr) !important;
+  }
+
+  .squares-limit-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .squares-limit-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
@@ -642,7 +732,8 @@ const responsiveStyles = `
   }
 
   .squares-hero-stats,
-  .squares-stats-grid {
+  .squares-stats-grid,
+  .squares-limit-stats {
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
@@ -670,8 +761,7 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
     gap: 16px !important;
   }
-
-  .squares-image-wrap {
+    .squares-image-wrap {
     width: 100% !important;
     height: auto !important;
     aspect-ratio: 16 / 9 !important;
@@ -929,6 +1019,75 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     lineHeight: 1.2,
     whiteSpace: "nowrap",
+  },
+
+  createButtonDisabled: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "11px 16px",
+    borderRadius: 9999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#cbd5e1",
+    border: "1px solid rgba(203,213,225,0.42)",
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "nowrap",
+    cursor: "not-allowed",
+  },
+
+  limitPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.8fr)",
+    gap: 16,
+    alignItems: "center",
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
+    marginBottom: 18,
+  },
+
+  limitKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  limitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.04em",
+  },
+
+  limitText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  limitStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  limitStat: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
 
   statsGrid: {
