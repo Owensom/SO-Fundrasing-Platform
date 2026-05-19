@@ -26,6 +26,28 @@ type ReservationRow = {
   buyer_email: string | null;
 };
 
+type NormalisedOffer = {
+  id: string;
+  label: string;
+  quantity: number;
+  priceCents: number;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+type BestPriceResult = {
+  quantity: number;
+  standardTotalCents: number;
+  checkoutTotalCents: number;
+  savingsCents: number;
+  appliedOffers: Array<{
+    label: string;
+    quantity: number;
+    priceCents: number;
+    times: number;
+  }>;
+};
+
 function clean(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -52,6 +74,16 @@ function safePercent(value: unknown) {
   }
 
   return Math.min(100, number);
+}
+
+function safeMoneyCents(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(number));
 }
 
 function calculateApplicationFeeAmount(params: {
@@ -123,6 +155,164 @@ function parseSelectedTickets(body: any) {
 
 function ticketKey(ticketNumber: unknown, colour: unknown) {
   return `${Number(ticketNumber)}::${cleanText(colour).toLowerCase()}`;
+}
+
+function normaliseOfferPriceCents(offer: any) {
+  const explicitCents = Number(
+    offer?.price_cents ?? offer?.priceCents ?? offer?.amount_cents,
+  );
+
+  if (Number.isFinite(explicitCents) && explicitCents > 0) {
+    return Math.round(explicitCents);
+  }
+
+  const price = Number(offer?.price ?? offer?.amount ?? 0);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    return 0;
+  }
+
+  return Math.round(price * 100);
+}
+
+function normaliseOffers(rawOffers: unknown): NormalisedOffer[] {
+  if (!Array.isArray(rawOffers)) return [];
+
+  return rawOffers
+    .map((offer: any, index) => {
+      const quantity = Number(offer?.quantity ?? offer?.tickets ?? 0);
+      const priceCents = normaliseOfferPriceCents(offer);
+      const isActive = Boolean(offer?.isActive ?? offer?.is_active ?? true);
+
+      return {
+        id: cleanText(offer?.id || `offer-${index + 1}`),
+        label: cleanText(offer?.label || `Offer ${index + 1}`),
+        quantity:
+          Number.isFinite(quantity) && quantity > 0
+            ? Math.floor(quantity)
+            : 0,
+        priceCents,
+        isActive,
+        sortOrder: Number.isFinite(Number(offer?.sortOrder ?? offer?.sort_order))
+          ? Number(offer?.sortOrder ?? offer?.sort_order)
+          : index,
+      };
+    })
+    .filter(
+      (offer) => offer.isActive && offer.quantity > 0 && offer.priceCents > 0,
+    )
+    .sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.quantity - b.quantity;
+    });
+}
+
+function calculateBestRafflePrice(params: {
+  quantity: number;
+  ticketPriceCents: number;
+  rawOffers: unknown;
+}): BestPriceResult {
+  const quantity = Math.max(0, Math.floor(Number(params.quantity) || 0));
+  const ticketPriceCents = safeMoneyCents(params.ticketPriceCents);
+  const standardTotalCents = quantity * ticketPriceCents;
+  const offers = normaliseOffers(params.rawOffers);
+
+  if (!quantity || !ticketPriceCents || !offers.length) {
+    return {
+      quantity,
+      standardTotalCents,
+      checkoutTotalCents: standardTotalCents,
+      savingsCents: 0,
+      appliedOffers: [],
+    };
+  }
+
+  const dp: Array<{
+    total: number;
+    appliedOffers: Array<{
+      label: string;
+      quantity: number;
+      priceCents: number;
+      times: number;
+    }>;
+  }> = Array.from({ length: quantity + 1 }, () => ({
+    total: Number.POSITIVE_INFINITY,
+    appliedOffers: [],
+  }));
+
+  dp[0] = {
+    total: 0,
+    appliedOffers: [],
+  };
+
+  for (let index = 1; index <= quantity; index += 1) {
+    dp[index] = {
+      total: dp[index - 1].total + ticketPriceCents,
+      appliedOffers: [...dp[index - 1].appliedOffers],
+    };
+
+    for (const offer of offers) {
+      if (index < offer.quantity) continue;
+
+      const previous = dp[index - offer.quantity];
+      const candidateTotal = previous.total + offer.priceCents;
+
+      if (candidateTotal < dp[index].total) {
+        const existing = previous.appliedOffers.find(
+          (item) => item.label === offer.label,
+        );
+
+        dp[index] = {
+          total: candidateTotal,
+          appliedOffers: existing
+            ? previous.appliedOffers.map((item) =>
+                item.label === offer.label
+                  ? {
+                      ...item,
+                      times: item.times + 1,
+                    }
+                  : item,
+              )
+            : [
+                ...previous.appliedOffers,
+                {
+                  label: offer.label,
+                  quantity: offer.quantity,
+                  priceCents: offer.priceCents,
+                  times: 1,
+                },
+              ],
+        };
+      }
+    }
+  }
+
+  const bestTotal = Number.isFinite(dp[quantity]?.total)
+    ? Math.max(0, Math.round(dp[quantity].total))
+    : standardTotalCents;
+
+  const checkoutTotalCents = Math.min(bestTotal, standardTotalCents);
+  const savingsCents = Math.max(standardTotalCents - checkoutTotalCents, 0);
+
+  return {
+    quantity,
+    standardTotalCents,
+    checkoutTotalCents,
+    savingsCents,
+    appliedOffers: dp[quantity]?.appliedOffers ?? [],
+  };
+}
+
+function formatAppliedOffers(
+  appliedOffers: BestPriceResult["appliedOffers"],
+) {
+  if (!appliedOffers.length) return "";
+
+  return appliedOffers
+    .map((offer) => {
+      return `${offer.label}${offer.times > 1 ? ` × ${offer.times}` : ""}`;
+    })
+    .join(", ");
 }
 
 async function getTenantConnectStatus(
@@ -329,6 +519,22 @@ export async function POST(req: NextRequest) {
     }
 
     const quantity = reservations.length;
+    const config = (raffle.config_json as any) ?? {};
+
+    const pricing = calculateBestRafflePrice({
+      quantity,
+      ticketPriceCents,
+      rawOffers: config.offers,
+    });
+
+    const totalAmountCents = pricing.checkoutTotalCents;
+
+    if (!totalAmountCents || totalAmountCents <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid checkout total" },
+        { status: 400 },
+      );
+    }
 
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
@@ -346,8 +552,6 @@ export async function POST(req: NextRequest) {
       settingsAccountId: tenantSettings?.stripe_connect_account_id,
       connectStatus,
     });
-
-    const totalAmountCents = ticketPriceCents * quantity;
 
     const applicationFeeAmount = calculateApplicationFeeAmount({
       totalAmountCents,
@@ -375,6 +579,8 @@ export async function POST(req: NextRequest) {
         }
       : undefined;
 
+    const appliedOfferSummary = formatAppliedOffers(pricing.appliedOffers);
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -386,10 +592,14 @@ export async function POST(req: NextRequest) {
             currency: String(raffle.currency || "GBP").toLowerCase(),
             product_data: {
               name: raffle.title,
+              description:
+                pricing.savingsCents > 0 && appliedOfferSummary
+                  ? `${quantity} raffle tickets · ${appliedOfferSummary}`
+                  : `${quantity} raffle ticket${quantity === 1 ? "" : "s"}`,
             },
-            unit_amount: ticketPriceCents,
+            unit_amount: totalAmountCents,
           },
-          quantity,
+          quantity: 1,
         },
       ],
 
@@ -419,6 +629,12 @@ export async function POST(req: NextRequest) {
         reservation_token: reservationToken,
 
         raffle_title: raffle.title,
+
+        ticket_price_cents: String(ticketPriceCents),
+        standard_total_cents: String(pricing.standardTotalCents),
+        checkout_total_cents: String(pricing.checkoutTotalCents),
+        offer_savings_cents: String(pricing.savingsCents),
+        applied_offers: appliedOfferSummary,
 
         stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
         stripe_connect_account_id: shouldUseConnectRouting
