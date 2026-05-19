@@ -186,7 +186,8 @@ export default async function AdminRevenuePage() {
   );
 
   const primaryCurrency = currencySummaries[0]?.currency || "gbp";
-    return (
+
+  return (
     <main className="revenue-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -456,7 +457,8 @@ export default async function AdminRevenuePage() {
           </div>
         )}
       </section>
-            <section className="revenue-panel" style={styles.panel}>
+
+      <section className="revenue-panel" style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Latest activity</p>
@@ -475,8 +477,11 @@ export default async function AdminRevenuePage() {
         </div>
 
         {payments.length ? (
-          <div className="revenue-table-wrap" style={styles.tableWrap}>
-            <table style={styles.table}>
+          <div
+            className="revenue-table-wrap revenue-latest-table-wrap"
+            style={styles.tableWrap}
+          >
+            <table style={styles.latestTable}>
               <thead>
                 <tr>
                   <th style={styles.th}>Date</th>
@@ -502,9 +507,7 @@ export default async function AdminRevenuePage() {
 
                   return (
                     <tr key={payment.id}>
-                      <td style={styles.td}>
-                        {formatDate(payment.created_at)}
-                      </td>
+                      <td style={styles.td}>{formatDate(payment.created_at)}</td>
 
                       <td style={styles.td}>
                         <strong style={styles.primaryText}>
@@ -579,7 +582,6 @@ export default async function AdminRevenuePage() {
     </main>
   );
 }
-
 function HeroStat({
   label,
   value,
@@ -665,9 +667,26 @@ const responsiveStyles = `
 
 .revenue-page section,
 .revenue-page article,
-.revenue-page div,
-.revenue-page table {
+.revenue-page div {
   min-width: 0;
+}
+
+.revenue-page .revenue-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  padding-bottom: 8px;
+}
+
+.revenue-page .revenue-table-wrap table {
+  width: max-content !important;
+}
+
+.revenue-page .revenue-latest-table-wrap {
+  border-radius: 20px;
 }
 
 @media (max-width: 1180px) {
@@ -734,12 +753,9 @@ const responsiveStyles = `
     justify-content: center !important;
     text-align: center !important;
   }
-
-  .revenue-page .revenue-table-wrap {
-    overflow-x: auto !important;
-  }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1086,6 +1102,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   sectionHeader: {
@@ -1135,12 +1153,23 @@ const styles: Record<string, CSSProperties> = {
 
   tableWrap: {
     width: "100%",
+    maxWidth: "100%",
     overflowX: "auto",
+    overflowY: "visible",
+    WebkitOverflowScrolling: "touch",
+    paddingBottom: 8,
   },
 
   table: {
-    width: "100%",
-    minWidth: 1100,
+    width: "max-content",
+    minWidth: 1120,
+    borderCollapse: "separate",
+    borderSpacing: "0 10px",
+  },
+
+  latestTable: {
+    width: "max-content",
+    minWidth: 1720,
     borderCollapse: "separate",
     borderSpacing: "0 10px",
   },
