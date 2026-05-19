@@ -62,6 +62,32 @@ type ActiveCampaignCountRow = {
   active_count: string | number;
 };
 
+type EventGuestCateringRow = {
+  order_id: string;
+  order_item_id: string;
+  order_created_at: string;
+  order_status: string;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  order_amount_total: number | string | null;
+  currency: string | null;
+  ticket_label: string | null;
+  ticket_type_name: string | null;
+  quantity: number | string | null;
+  unit_amount: number | string | null;
+  guest_name: string | null;
+  dietary_requirements: string | null;
+  menu_choice: string | null;
+  seat_id: string | null;
+  ticket_type_id: string | null;
+  table_number: string | null;
+  row_label: string | null;
+  seat_number: string | null;
+  seat_purpose: string | null;
+  seat_customer_name: string | null;
+  seat_customer_email: string | null;
+};
+
 type TableShape = "round" | "square" | "rectangle";
 
 const TABLE_SHAPE_KEY = "__table_shape";
@@ -322,6 +348,7 @@ function expandRows(value: string): string[] {
 
   return Array.from(new Set(rows));
 }
+
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Tables";
@@ -385,6 +412,55 @@ function formatMoney(cents: number | null | undefined, currency = "GBP") {
   }
 }
 
+function fallbackText(value: unknown, fallback = "Not provided") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
+function guestDisplayName(row: EventGuestCateringRow) {
+  return (
+    String(row.guest_name || "").trim() ||
+    String(row.seat_customer_name || "").trim() ||
+    String(row.buyer_name || "").trim() ||
+    "Guest name not provided"
+  );
+}
+
+function guestDisplayEmail(row: EventGuestCateringRow) {
+  return (
+    String(row.seat_customer_email || "").trim() ||
+    String(row.buyer_email || "").trim() ||
+    "Email not provided"
+  );
+}
+
+function ticketDisplayLabel(row: EventGuestCateringRow) {
+  return (
+    String(row.ticket_label || "").trim() ||
+    String(row.ticket_type_name || "").trim() ||
+    "Ticket"
+  );
+}
+
+function seatDisplayLabel(row: EventGuestCateringRow) {
+  if (row.table_number) {
+    return `Table ${row.table_number}, Seat ${row.seat_number || "?"}`;
+  }
+
+  if (row.row_label || row.seat_number) {
+    return `Row ${row.row_label || "?"}, Seat ${row.seat_number || "?"}`;
+  }
+
+  return "General admission";
+}
+
+function hasGuestCateringDetail(row: EventGuestCateringRow) {
+  return Boolean(
+    String(row.dietary_requirements || "").trim() ||
+      String(row.menu_choice || "").trim(),
+  );
+}
+
 async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   const rows = await query<ActiveCampaignCountRow>(
     `
@@ -414,6 +490,68 @@ async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   );
 
   return Number(rows[0]?.active_count || 0);
+}
+
+async function listEventGuestCateringRows(eventId: string) {
+  return query<EventGuestCateringRow>(
+    `
+      select
+        eo.id as order_id,
+        eoi.id as order_item_id,
+        eo.created_at as order_created_at,
+        eo.status as order_status,
+        eo.customer_name as buyer_name,
+        eo.customer_email as buyer_email,
+        eo.amount_total as order_amount_total,
+        eo.currency,
+        eoi.label as ticket_label,
+        ett.name as ticket_type_name,
+        eoi.quantity,
+        eoi.unit_amount,
+        eoi.guest_name,
+        eoi.dietary_requirements,
+        eoi.menu_choice,
+        eoi.seat_id,
+        eoi.ticket_type_id,
+        es.table_number,
+        es.row_label,
+        es.seat_number,
+        es.seat_purpose,
+        es.customer_name as seat_customer_name,
+        es.customer_email as seat_customer_email
+      from event_orders eo
+      inner join event_order_items eoi
+        on eoi.order_id = eo.id
+      left join event_seats es
+        on es.id = eoi.seat_id
+      left join event_ticket_types ett
+        on ett.id = eoi.ticket_type_id
+      where eo.event_id = $1
+        and eo.status = 'paid'
+      order by
+        eo.created_at desc,
+        case
+          when es.table_number ~ '^[0-9]+$'
+          then es.table_number::int
+          else null
+        end asc nulls last,
+        es.table_number asc nulls last,
+        case
+          when es.row_label ~ '^[0-9]+$'
+          then es.row_label::int
+          else null
+        end asc nulls last,
+        es.row_label asc nulls last,
+        case
+          when es.seat_number ~ '^[0-9]+$'
+          then es.seat_number::int
+          else null
+        end asc nulls last,
+        es.seat_number asc nulls last,
+        eoi.created_at asc
+    `,
+    [eventId],
+  );
 }
 
 async function canPublishEventForTenant(tenantSlug: string) {
@@ -561,7 +699,6 @@ async function updateMenuOptionsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
-
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
@@ -612,6 +749,7 @@ async function updateTableNamesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-names#table-seating`);
 }
+
 async function updateTableShapeAction(formData: FormData) {
   "use server";
 
@@ -899,6 +1037,7 @@ async function generateSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
+
 async function generateTablesAction(formData: FormData) {
   "use server";
 
@@ -1161,6 +1300,8 @@ const responsiveStyles = `
   .event-edit-page .hero,
   .event-edit-page .mediaBox,
   .event-edit-page .ticketLayout,
+  .event-edit-page .guestCateringGrid,
+  .event-edit-page .guestUpgradeGrid,
   .event-edit-page .twoPanel,
   .event-edit-page .twoCol,
   .event-edit-page .threeCol,
@@ -1304,7 +1445,11 @@ export default async function AdminEventManagePage({
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
-  const winners = await listEventWinners(event.id);
+  const [winners, guestCateringRows] = await Promise.all([
+    listEventWinners(event.id),
+    listEventGuestCateringRows(event.id),
+  ]);
+
   const hasCustomImage = Boolean(event.image_url);
   const campaignLimitReached = searchParams?.error === "campaign-limit";
 
@@ -1398,6 +1543,18 @@ export default async function AdminEventManagePage({
     : isReservedSeating
       ? `${rowSeats.length} row seats`
       : `${tableSeats.length} table seats`;
+
+  const dietaryResponses = guestCateringRows.filter((row) =>
+    String(row.dietary_requirements || "").trim(),
+  ).length;
+
+  const menuResponses = guestCateringRows.filter((row) =>
+    String(row.menu_choice || "").trim(),
+  ).length;
+
+  const missingMenuResponses = guestCateringRows.filter(
+    (row) => !String(row.menu_choice || "").trim(),
+  ).length;
 
   return (
     <main className="event-edit-page" style={styles.page}>
@@ -1516,6 +1673,9 @@ export default async function AdminEventManagePage({
         <a href="#prizes-menu" className="tab" style={styles.tab}>
           Prizes & Menu
         </a>
+        <a href="#guest-catering" className="tab" style={styles.tab}>
+          Guest & Catering
+        </a>
         <a href="#winner-draw" className="tab" style={styles.tab}>
           Winner Draw
         </a>
@@ -1551,6 +1711,9 @@ export default async function AdminEventManagePage({
           label="Menu options"
           value={(event.menu_options || []).length}
         />
+        <SummaryCard label="Paid guests" value={guestCateringRows.length} />
+        <SummaryCard label="Menu choices" value={menuResponses} />
+        <SummaryCard label="Dietary notes" value={dietaryResponses} />
         <SummaryCard label="Winners" value={winners.length} />
         <SummaryCard label="Available" value={availableSeats} />
         <SummaryCard label="Reserved" value={reservedSeats} />
@@ -1643,7 +1806,8 @@ export default async function AdminEventManagePage({
                 />
               </div>
             </div>
-                        <div className="twoCol" style={styles.twoCol}>
+
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -1912,8 +2076,7 @@ export default async function AdminEventManagePage({
                             />
                           </Field>
                         </div>
-
-                        <div className="fourCol" style={styles.fourCol}>
+                                                <div className="fourCol" style={styles.fourCol}>
                           <Field label="Price">
                             <input
                               name="price"
@@ -2026,8 +2189,163 @@ export default async function AdminEventManagePage({
       </CollapsibleSection>
 
       <CollapsibleSection
-        id="winner-draw"
+        id="guest-catering"
         eyebrow="Section 4"
+        title="Guest & Catering"
+        description="Read-only list of paid event guests, menu choices and dietary requirements."
+        badge={`${guestCateringRows.length} paid guests`}
+      >
+        <div className="panel" style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <div style={styles.innerEyebrow}>Confirmed guests</div>
+              <h3 style={styles.panelTitle}>Guest & catering list</h3>
+              <p style={styles.sectionText}>
+                This list only includes paid event order items. Pending or
+                abandoned checkout sessions are excluded.
+              </p>
+            </div>
+          </div>
+
+          <div className="guestCateringGrid" style={styles.guestCateringStats}>
+            <SummaryCard label="Paid guests" value={guestCateringRows.length} />
+            <SummaryCard label="Menu choices" value={menuResponses} />
+            <SummaryCard label="Missing menu" value={missingMenuResponses} />
+            <SummaryCard label="Dietary notes" value={dietaryResponses} />
+          </div>
+
+          <div className="guestUpgradeGrid" style={styles.guestUpgradeGrid}>
+            <div style={styles.lockedFeatureCard}>
+              <div style={styles.lockedFeatureEyebrow}>Professional</div>
+              <h4 style={styles.lockedFeatureTitle}>
+                Edit guest details after purchase
+              </h4>
+              <p style={styles.lockedFeatureText}>
+                Planned upgrade: edit guest names, dietary requirements and menu
+                choices after checkout while keeping the original paid order
+                intact.
+              </p>
+            </div>
+
+            <div style={styles.lockedFeatureCard}>
+              <div style={styles.lockedFeatureEyebrow}>Foundation</div>
+              <h4 style={styles.lockedFeatureTitle}>
+                Request missing menu choices
+              </h4>
+              <p style={styles.lockedFeatureText}>
+                Planned upgrade: email paid guests a secure link to update menu
+                choices or dietary notes when menus are confirmed later.
+              </p>
+            </div>
+          </div>
+
+          {guestCateringRows.length === 0 ? (
+            <div style={styles.emptyBox}>
+              No paid guest or catering data has been recorded for this event
+              yet.
+            </div>
+          ) : (
+            <div style={styles.guestCardList}>
+              {guestCateringRows.map((row) => (
+                <article key={row.order_item_id} style={styles.guestCard}>
+                  <div style={styles.guestCardHeader}>
+                    <div style={styles.guestPrimary}>
+                      <div style={styles.guestName}>
+                        {guestDisplayName(row)}
+                      </div>
+                      <div style={styles.guestEmail}>
+                        {guestDisplayEmail(row)}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        ...styles.statusMiniPill,
+                        background: "#dcfce7",
+                        color: "#166534",
+                        borderColor: "#bbf7d0",
+                      }}
+                    >
+                      Paid
+                    </span>
+                  </div>
+
+                  <div style={styles.guestMetaGrid}>
+                    <InfoTile label="Seat / ticket" value={seatDisplayLabel(row)} />
+                    <InfoTile label="Ticket" value={ticketDisplayLabel(row)} />
+                    <InfoTile
+                      label="Quantity"
+                      value={String(Number(row.quantity || 1))}
+                    />
+                    <InfoTile
+                      label="Value"
+                      value={formatMoney(
+                        Number(row.unit_amount || 0) *
+                          Math.max(1, Number(row.quantity || 1)),
+                        row.currency || event.currency,
+                      )}
+                    />
+                    <InfoTile
+                      label="Order date"
+                      value={formatDisplayDate(row.order_created_at)}
+                    />
+                    <InfoTile
+                      label="Buyer"
+                      value={`${fallbackText(row.buyer_name, "Unknown buyer")} • ${fallbackText(
+                        row.buyer_email,
+                        "No email",
+                      )}`}
+                    />
+                  </div>
+
+                  <div style={styles.cateringDetailGrid}>
+                    <div
+                      style={{
+                        ...styles.cateringDetailCard,
+                        ...(String(row.menu_choice || "").trim()
+                          ? styles.cateringDetailPositive
+                          : styles.cateringDetailMissing),
+                      }}
+                    >
+                      <span style={styles.cateringLabel}>Menu choice</span>
+                      <strong style={styles.cateringValue}>
+                        {fallbackText(row.menu_choice)}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.cateringDetailCard,
+                        ...(String(row.dietary_requirements || "").trim()
+                          ? styles.cateringDetailPositive
+                          : styles.cateringDetailNeutral),
+                      }}
+                    >
+                      <span style={styles.cateringLabel}>
+                        Dietary requirements
+                      </span>
+                      <strong style={styles.cateringValue}>
+                        {fallbackText(row.dietary_requirements)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {!hasGuestCateringDetail(row) ? (
+                    <p style={styles.guestNote}>
+                      No menu choice or dietary requirement was supplied at
+                      checkout.
+                    </p>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="winner-draw"
+        eyebrow="Section 5"
         title="Winner Draw"
         description="Draw event winners from eligible paid event entries and keep winner history."
         badge={`${winners.length} winners`}
@@ -2046,7 +2364,7 @@ export default async function AdminEventManagePage({
       {isReservedSeating ? (
         <CollapsibleSection
           id="row-seating"
-          eyebrow="Section 5"
+          eyebrow="Section 6"
           title="Row Seating"
           description="Generate seats, block seats, mark VIP/complimentary seats and save row layout nudges."
           badge={`${rowSeats.length} seats`}
@@ -2185,7 +2503,7 @@ export default async function AdminEventManagePage({
       {isTables ? (
         <CollapsibleSection
           id="table-seating"
-          eyebrow="Section 5"
+          eyebrow="Section 6"
           title="Table Seating"
           description="Generate table layouts, choose a table shape, name tables and manage allocations."
           badge={`${tableSeats.length} seats • ${uniqueTableNumbers.length} tables`}
@@ -2487,6 +2805,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span style={styles.label}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.infoTile}>
+      <span style={styles.infoTileLabel}>{label}</span>
+      <strong style={styles.infoTileValue}>{value}</strong>
+    </div>
   );
 }
 
@@ -3110,6 +3437,167 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 900,
+  },
+  guestCateringStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 10,
+  },
+  guestUpgradeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 12,
+  },
+  lockedFeatureCard: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 10px rgba(15,23,42,0.04)",
+  },
+  lockedFeatureEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 8,
+  },
+  lockedFeatureTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  lockedFeatureText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  guestCardList: {
+    display: "grid",
+    gap: 12,
+  },
+  guestCard: {
+    display: "grid",
+    gap: 13,
+    padding: 15,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
+    minWidth: 0,
+  },
+  guestCardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  guestPrimary: {
+    minWidth: 0,
+  },
+  guestName: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+  guestEmail: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+  guestMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+    gap: 10,
+  },
+  infoTile: {
+    padding: 12,
+    borderRadius: 15,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  infoTileLabel: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+  infoTileValue: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 13,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
+  },
+  cateringDetailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gap: 10,
+  },
+  cateringDetailCard: {
+    padding: 13,
+    borderRadius: 16,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    minWidth: 0,
+  },
+  cateringDetailPositive: {
+    background: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  cateringDetailMissing: {
+    background: "#fff7ed",
+    borderColor: "#fed7aa",
+  },
+  cateringDetailNeutral: {
+    background: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+  cateringLabel: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+  cateringValue: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+    whiteSpace: "pre-wrap",
+  },
+  guestNote: {
+    margin: 0,
+    padding: 12,
+    borderRadius: 15,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+    lineHeight: 1.4,
   },
   dangerSectionInner: {
     padding: 16,
