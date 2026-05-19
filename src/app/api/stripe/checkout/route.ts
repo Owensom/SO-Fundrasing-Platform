@@ -527,9 +527,9 @@ export async function POST(req: NextRequest) {
       rawOffers: config.offers,
     });
 
-    const totalAmountCents = pricing.checkoutTotalCents;
+    const baseAmountCents = pricing.checkoutTotalCents;
 
-    if (!totalAmountCents || totalAmountCents <= 0) {
+    if (!baseAmountCents || baseAmountCents <= 0) {
       return NextResponse.json(
         { ok: false, error: "Invalid checkout total" },
         { status: 400 },
@@ -548,14 +548,41 @@ export async function POST(req: NextRequest) {
     const tenantSettings = await getTenantSettings(tenantSlug);
     const connectStatus = await getTenantConnectStatus(tenantSlug);
 
+    const buyerFeeContributionsEnabled = Boolean(
+      tenantSettings?.buyer_fee_contributions_enabled,
+    );
+
+    const requestedCoverFees = Boolean(
+      body.coverFees ??
+        body.cover_fees ??
+        body.donorCoveredFees ??
+        body.donor_covered_fees ??
+        body.buyerCoversFees ??
+        body.buyer_covers_fees,
+    );
+
+    const platformCommissionCents = calculateApplicationFeeAmount({
+      totalAmountCents: baseAmountCents,
+      platformFeePercent: tenantSettings?.platform_fee_percent ?? 0,
+    });
+
+    const supporterContributionCents =
+      requestedCoverFees && buyerFeeContributionsEnabled
+        ? platformCommissionCents
+        : 0;
+
+    const checkoutTotalCents = baseAmountCents + supporterContributionCents;
+
+    const platformFeeCents =
+      supporterContributionCents > 0
+        ? supporterContributionCents
+        : platformCommissionCents;
+
+    const netAmountCents = Math.max(checkoutTotalCents - platformFeeCents, 0);
+
     const connectAccountId = getUsableConnectAccountId({
       settingsAccountId: tenantSettings?.stripe_connect_account_id,
       connectStatus,
-    });
-
-    const applicationFeeAmount = calculateApplicationFeeAmount({
-      totalAmountCents,
-      platformFeePercent: tenantSettings?.platform_fee_percent ?? 0,
     });
 
     const shouldUseConnectRouting =
@@ -563,8 +590,8 @@ export async function POST(req: NextRequest) {
 
     const shouldApplyApplicationFee =
       shouldUseConnectRouting &&
-      applicationFeeAmount > 0 &&
-      applicationFeeAmount < totalAmountCents;
+      platformFeeCents > 0 &&
+      platformFeeCents < checkoutTotalCents;
 
     const paymentIntentData = shouldUseConnectRouting
       ? {
@@ -573,7 +600,7 @@ export async function POST(req: NextRequest) {
           },
           ...(shouldApplyApplicationFee
             ? {
-                application_fee_amount: applicationFeeAmount,
+                application_fee_amount: platformFeeCents,
               }
             : {}),
         }
@@ -597,7 +624,7 @@ export async function POST(req: NextRequest) {
                   ? `${quantity} raffle tickets · ${appliedOfferSummary}`
                   : `${quantity} raffle ticket${quantity === 1 ? "" : "s"}`,
             },
-            unit_amount: totalAmountCents,
+            unit_amount: checkoutTotalCents,
           },
           quantity: 1,
         },
@@ -632,9 +659,22 @@ export async function POST(req: NextRequest) {
 
         ticket_price_cents: String(ticketPriceCents),
         standard_total_cents: String(pricing.standardTotalCents),
-        checkout_total_cents: String(pricing.checkoutTotalCents),
+        checkout_total_cents: String(checkoutTotalCents),
         offer_savings_cents: String(pricing.savingsCents),
         applied_offers: appliedOfferSummary,
+
+        base_amount_cents: String(baseAmountCents),
+        supporter_contribution_cents: String(supporterContributionCents),
+        donor_fee_cents: String(supporterContributionCents),
+        buyer_fee_cents: String(supporterContributionCents),
+        buyer_fee_contributions_enabled: buyerFeeContributionsEnabled
+          ? "true"
+          : "false",
+        buyer_requested_cover_fees: requestedCoverFees ? "true" : "false",
+        donor_covered_fees: supporterContributionCents > 0 ? "true" : "false",
+        platform_fee_cents: String(platformFeeCents),
+        platform_commission_cents: String(platformCommissionCents),
+        net_amount_cents: String(netAmountCents),
 
         stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
         stripe_connect_account_id: shouldUseConnectRouting
@@ -644,7 +684,7 @@ export async function POST(req: NextRequest) {
           tenantSettings?.platform_fee_percent ?? "",
         ),
         application_fee_amount: shouldApplyApplicationFee
-          ? String(applicationFeeAmount)
+          ? String(platformFeeCents)
           : "0",
       },
 
