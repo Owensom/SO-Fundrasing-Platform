@@ -156,7 +156,6 @@ export async function POST(req: NextRequest) {
 
     const gameId = String(body.gameId || "").trim();
     const reservationToken = String(body.reservationToken || "").trim();
-    const coverFees = Boolean(body.coverFees);
 
     if (!gameId || !reservationToken) {
       return NextResponse.json(
@@ -217,13 +216,22 @@ export async function POST(req: NextRequest) {
     }
 
     const baseAmount = pricePerSquareCents * quantity;
-    const supporterContributionCents = coverFees
-      ? Math.round(baseAmount * 0.1)
-      : 0;
-    const totalAmount = baseAmount + supporterContributionCents;
 
     const tenantSettings = await getTenantSettings(tenantSlug);
     const connectStatus = await getTenantConnectStatus(tenantSlug);
+
+    const buyerFeeContributionsEnabled = Boolean(
+      tenantSettings?.buyer_fee_contributions_enabled,
+    );
+
+    const requestedCoverFees = Boolean(body.coverFees);
+
+    const supporterContributionCents =
+      requestedCoverFees && buyerFeeContributionsEnabled
+        ? Math.round(baseAmount * 0.1)
+        : 0;
+
+    const totalAmount = baseAmount + supporterContributionCents;
 
     const connectAccountId = getUsableConnectAccountId({
       settingsAccountId: tenantSettings?.stripe_connect_account_id,
@@ -241,10 +249,25 @@ export async function POST(req: NextRequest) {
     const netAmountCents = Math.max(totalAmount - platformFeeCents, 0);
 
     const shouldUseConnectRouting =
-      Boolean(connectAccountId) &&
-      isConnectReady(connectStatus) &&
-      platformCommissionCents > 0 &&
-      platformCommissionCents < totalAmount;
+      Boolean(connectAccountId) && isConnectReady(connectStatus);
+
+    const shouldApplyApplicationFee =
+      shouldUseConnectRouting &&
+      platformFeeCents > 0 &&
+      platformFeeCents < totalAmount;
+
+    const paymentIntentData = shouldUseConnectRouting
+      ? {
+          transfer_data: {
+            destination: connectAccountId,
+          },
+          ...(shouldApplyApplicationFee
+            ? {
+                application_fee_amount: platformFeeCents,
+              }
+            : {}),
+        }
+      : undefined;
 
     const origin = req.nextUrl.origin;
     const successUrl = `${origin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
@@ -270,14 +293,9 @@ export async function POST(req: NextRequest) {
         },
       ],
 
-      ...(shouldUseConnectRouting
+      ...(paymentIntentData
         ? {
-            payment_intent_data: {
-              application_fee_amount: platformCommissionCents,
-              transfer_data: {
-                destination: connectAccountId,
-              },
-            },
+            payment_intent_data: paymentIntentData,
           }
         : {}),
 
@@ -296,6 +314,10 @@ export async function POST(req: NextRequest) {
         platform_fee_cents: String(platformFeeCents),
         platform_commission_cents: String(platformCommissionCents),
         supporter_contribution_cents: String(supporterContributionCents),
+        buyer_fee_contributions_enabled: buyerFeeContributionsEnabled
+          ? "true"
+          : "false",
+        buyer_requested_cover_fees: requestedCoverFees ? "true" : "false",
         net_amount_cents: String(netAmountCents),
 
         stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
@@ -305,8 +327,8 @@ export async function POST(req: NextRequest) {
         platform_fee_percent: String(
           tenantSettings?.platform_fee_percent ?? "",
         ),
-        application_fee_amount: shouldUseConnectRouting
-          ? String(platformCommissionCents)
+        application_fee_amount: shouldApplyApplicationFee
+          ? String(platformFeeCents)
           : "0",
 
         squares_json: squaresJson,
