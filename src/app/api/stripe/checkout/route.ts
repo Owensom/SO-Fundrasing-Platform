@@ -147,7 +147,6 @@ async function getTenantConnectStatus(
 }
 
 async function getActiveReservations(input: {
-  tenantSlug: string;
   raffleId: string;
   reservationToken: string;
 }) {
@@ -160,14 +159,13 @@ async function getActiveReservations(input: {
         buyer_name,
         buyer_email
       from raffle_ticket_reservations
-      where tenant_slug = $1
-        and raffle_id = $2
-        and reservation_token = $3
+      where raffle_id = $1
+        and reservation_token = $2
         and status = 'reserved'
         and expires_at > now()
       order by ticket_number asc, colour asc nulls last
     `,
-    [input.tenantSlug, input.raffleId, input.reservationToken],
+    [input.raffleId, input.reservationToken],
   );
 }
 
@@ -266,7 +264,6 @@ export async function POST(req: NextRequest) {
     }
 
     const reservations = await getActiveReservations({
-      tenantSlug,
       raffleId,
       reservationToken,
     });
