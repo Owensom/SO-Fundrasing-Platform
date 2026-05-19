@@ -12,6 +12,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2023-10-16",
 });
 
+type TenantConnectRow = {
+  stripe_connect_account_id: string | null;
+};
+
 function getBaseUrl(request: Request) {
   const envUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -33,7 +37,10 @@ async function requireCurrentTenantAccess() {
   if (!session?.user) {
     return {
       ok: false as const,
-      response: NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 }),
+      response: NextResponse.json(
+        { ok: false, error: "unauthenticated" },
+        { status: 401 },
+      ),
     };
   }
 
@@ -46,7 +53,10 @@ async function requireCurrentTenantAccess() {
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     return {
       ok: false as const,
-      response: NextResponse.json({ ok: false, error: "tenant_access_denied" }, { status: 403 }),
+      response: NextResponse.json(
+        { ok: false, error: "tenant_access_denied" },
+        { status: 403 },
+      ),
     };
   }
 
@@ -54,6 +64,20 @@ async function requireCurrentTenantAccess() {
     ok: true as const,
     tenantSlug,
   };
+}
+
+async function getTenantStoredStripeConnectAccountId(tenantSlug: string) {
+  const rows = await query<TenantConnectRow>(
+    `
+      select stripe_connect_account_id
+      from tenants
+      where slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+
+  return String(rows[0]?.stripe_connect_account_id || "").trim();
 }
 
 async function saveStripeConnectAccountId(
@@ -73,6 +97,17 @@ async function saveStripeConnectAccountId(
         updated_at = now()
     `,
     [tenantSlug, stripeConnectAccountId],
+  );
+
+  await query(
+    `
+      update tenants
+      set
+        stripe_connect_account_id = $1,
+        updated_at = now()
+      where slug = $2
+    `,
+    [stripeConnectAccountId, tenantSlug],
   );
 }
 
@@ -95,10 +130,15 @@ export async function GET(request: Request) {
     }
 
     const { tenantSlug } = access;
+
     const settings = await getTenantSettings(tenantSlug);
+    const storedTenantConnectAccountId =
+      await getTenantStoredStripeConnectAccountId(tenantSlug);
 
     let stripeConnectAccountId =
-      settings?.stripe_connect_account_id?.trim() || "";
+      settings?.stripe_connect_account_id?.trim() ||
+      storedTenantConnectAccountId ||
+      "";
 
     if (!stripeConnectAccountId) {
       const account = await stripe.accounts.create({
@@ -119,9 +159,9 @@ export async function GET(request: Request) {
       });
 
       stripeConnectAccountId = account.id;
-
-      await saveStripeConnectAccountId(tenantSlug, stripeConnectAccountId);
     }
+
+    await saveStripeConnectAccountId(tenantSlug, stripeConnectAccountId);
 
     const baseUrl = getBaseUrl(request);
 
