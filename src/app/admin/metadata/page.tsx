@@ -34,8 +34,11 @@ type TenantSummaryRow = {
 
 type PaymentRow = {
   id: string;
-  stripe_checkout_session_id: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
   raffle_id: string | null;
+  squares_game_id: string | null;
+  reservation_token: string | null;
   tenant_slug: string | null;
   currency: string | null;
   gross_amount_cents: number;
@@ -46,10 +49,12 @@ type PaymentRow = {
   payout_status: string | null;
   payout_reference: string | null;
   paid_out_at: string | null;
+  payout_reconciled_at: string | null;
   payment_status: string | null;
+  payment_type: string | null;
   customer_email: string | null;
   created_at: string;
-  raffle_title: string | null;
+  campaign_title: string | null;
 };
 
 function money(cents: number | string | null | undefined, currency = "GBP") {
@@ -73,6 +78,47 @@ function formatDate(value?: string | null) {
   if (Number.isNaN(date.getTime())) return value;
 
   return date.toLocaleString("en-GB");
+}
+
+function shortReference(value?: string | null) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return "—";
+  if (clean.length <= 24) return clean;
+
+  return `${clean.slice(0, 12)}…${clean.slice(-8)}`;
+}
+
+function paymentReference(payment: PaymentRow) {
+  return (
+    payment.payout_reference ||
+    payment.reservation_token ||
+    payment.stripe_checkout_session_id ||
+    payment.stripe_payment_intent_id ||
+    payment.id ||
+    ""
+  );
+}
+
+function paymentPaidAt(payment: PaymentRow) {
+  return (
+    payment.created_at ||
+    payment.payout_reconciled_at ||
+    payment.paid_out_at ||
+    null
+  );
+}
+
+function paymentCampaignName(payment: PaymentRow) {
+  if (payment.campaign_title) return payment.campaign_title;
+  if (payment.payment_type === "raffle" && payment.raffle_id) {
+    return payment.raffle_id;
+  }
+  if (payment.payment_type === "squares" && payment.squares_game_id) {
+    return payment.squares_game_id;
+  }
+
+  return "Payment";
 }
 
 export default async function AdminRevenuePage() {
@@ -139,7 +185,10 @@ export default async function AdminRevenuePage() {
       select
         p.id::text,
         p.stripe_checkout_session_id,
+        p.stripe_payment_intent_id,
         p.raffle_id,
+        p.squares_game_id,
+        p.reservation_token,
         p.tenant_slug,
         p.currency,
         p.gross_amount_cents,
@@ -150,14 +199,25 @@ export default async function AdminRevenuePage() {
         coalesce(p.payout_status, 'pending') as payout_status,
         p.payout_reference,
         p.paid_out_at,
+        p.payout_reconciled_at,
         p.payment_status,
+        p.payment_type,
         p.customer_email,
         p.created_at,
-        r.title as raffle_title
+        coalesce(r.title, sg.title, e.title) as campaign_title
       from platform_payments p
       left join raffles r
-        on r.id = p.raffle_id
+        on r.id::text = p.raffle_id::text
        and r.tenant_slug = p.tenant_slug
+      left join squares_games sg
+        on sg.id::text = p.squares_game_id::text
+       and sg.tenant_slug = p.tenant_slug
+      left join event_orders eo
+        on eo.id::text = p.reservation_token::text
+       and eo.tenant_slug = p.tenant_slug
+      left join events e
+        on e.id = eo.event_id
+       and e.tenant_slug = eo.tenant_slug
       where p.tenant_slug = $1
       order by p.created_at desc
       limit 100
@@ -481,12 +541,16 @@ export default async function AdminRevenuePage() {
             {payments.map((payment) => {
               const currency = payment.currency || "gbp";
               const payoutStatus = payment.payout_status || "pending";
-              const campaignName =
-                payment.raffle_title || payment.raffle_id || "Payment";
+              const campaignName = paymentCampaignName(payment);
+              const reference = paymentReference(payment);
+              const paidAt = paymentPaidAt(payment);
 
               return (
                 <article key={payment.id} style={styles.paymentCard}>
-                  <div style={styles.paymentCardTop}>
+                  <div
+                    className="revenue-payment-card-top"
+                    style={styles.paymentCardTop}
+                  >
                     <div style={styles.paymentTitleBlock}>
                       <div style={styles.paymentDate}>
                         {formatDate(payment.created_at)}
@@ -499,7 +563,10 @@ export default async function AdminRevenuePage() {
                       </div>
                     </div>
 
-                    <div style={styles.paymentNetBlock}>
+                    <div
+                      className="revenue-payment-net-block"
+                      style={styles.paymentNetBlock}
+                    >
                       <span style={styles.paymentLabel}>Net</span>
                       <strong style={styles.paymentNet}>
                         {money(payment.net_amount_cents, currency)}
@@ -507,8 +574,14 @@ export default async function AdminRevenuePage() {
                     </div>
                   </div>
 
-                  <div style={styles.paymentMetricsGrid}>
-                    <PaymentMini label="Tenant" value={payment.tenant_slug || "—"} />
+                  <div
+                    className="revenue-payment-metrics-grid"
+                    style={styles.paymentMetricsGrid}
+                  >
+                    <PaymentMini
+                      label="Tenant"
+                      value={payment.tenant_slug || "—"}
+                    />
                     <PaymentMini
                       label="Gross"
                       value={money(payment.gross_amount_cents, currency)}
@@ -542,12 +615,13 @@ export default async function AdminRevenuePage() {
                     />
                     <PaymentMini
                       label="Reference"
-                      value={payment.payout_reference || "—"}
+                      value={
+                        <span title={reference || undefined}>
+                          {shortReference(reference)}
+                        </span>
+                      }
                     />
-                    <PaymentMini
-                      label="Paid at"
-                      value={formatDate(payment.paid_out_at)}
-                    />
+                    <PaymentMini label="Paid at" value={formatDate(paidAt)} />
                     <PaymentMini
                       label="Status"
                       value={payment.payment_status || "—"}
@@ -564,6 +638,7 @@ export default async function AdminRevenuePage() {
     </main>
   );
 }
+
 function HeroStat({
   label,
   value,
