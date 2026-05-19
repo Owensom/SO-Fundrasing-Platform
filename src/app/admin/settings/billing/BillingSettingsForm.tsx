@@ -303,8 +303,13 @@ export default function BillingSettingsForm({
   const readyForLivePayments =
     hasConnectAccount && onboardingComplete && chargesEnabled && payoutsEnabled;
 
-  const connectMessage = getConnectMessage(searchParams.get("stripe_connect"));
-  const statusMessage = getStatusMessage(searchParams.get("stripe_status"));
+   const connectMessage = getConnectMessage(
+    searchParams?.get("stripe_connect") ?? null,
+  );
+
+  const statusMessage = getStatusMessage(
+    searchParams?.get("stripe_status") ?? null,
+  );
 
   const readinessText = readyForLivePayments
     ? "Ready for live payments and payouts"
