@@ -1223,6 +1223,7 @@ export async function POST(request: NextRequest) {
             application_fee_amount: String(applicationFeeAmountCents),
             normalized_platform_fee_cents: String(platformFeeCents),
             normalized_net_amount_cents: String(netAmountCents),
+            normalized_donor_fee_cents: String(financials.donorFeeCents),
           }),
         ],
       );
