@@ -17,9 +17,12 @@ type ConnectAccountRow = {
 
 function getBaseUrl(request: Request) {
   const envUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL ||
-    process.env.VERCEL_URL;
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL ||
+    "";
 
   if (envUrl) {
     return envUrl.startsWith("http") ? envUrl : `https://${envUrl}`;
@@ -28,11 +31,16 @@ function getBaseUrl(request: Request) {
   return new URL(request.url).origin;
 }
 
-async function requireTenantSlug() {
+async function requireCurrentTenantAccess() {
   const session = await auth();
 
   if (!session?.user) {
-    return null;
+    return {
+      ok: false as const,
+      response: NextResponse.redirect(
+        new URL("/admin/login?error=unauthenticated", "https://placeholder.local"),
+      ),
+    };
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
@@ -42,10 +50,41 @@ async function requireTenantSlug() {
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    return null;
+    return {
+      ok: false as const,
+      response: NextResponse.redirect(
+        new URL(
+          "/admin/login?error=tenant_access_denied",
+          "https://placeholder.local",
+        ),
+      ),
+    };
   }
 
-  return tenantSlug;
+  return {
+    ok: true as const,
+    tenantSlug,
+  };
+}
+
+async function getStripeConnectAccountId(tenantSlug: string) {
+  const result = (await query(
+    `
+      select
+        coalesce(
+          ts.stripe_connect_account_id,
+          t.stripe_connect_account_id
+        ) as stripe_connect_account_id
+      from tenants t
+      left join tenant_settings ts
+        on ts.tenant_slug = t.slug
+      where t.slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  )) as ConnectAccountRow[];
+
+  return String(result[0]?.stripe_connect_account_id || "").trim();
 }
 
 export async function GET(request: Request) {
@@ -59,46 +98,31 @@ export async function GET(request: Request) {
       );
     }
 
-    const tenantSlug = await requireTenantSlug();
+    const access = await requireCurrentTenantAccess();
 
-    if (!tenantSlug) {
-      return NextResponse.redirect(
-        new URL("/admin/login?error=tenant_access_denied", baseUrl),
-      );
+    if (!access.ok) {
+      const redirectUrl = new URL(access.response.headers.get("location") || "/", baseUrl);
+      return NextResponse.redirect(redirectUrl, 303);
     }
 
-    const result = (await query(
-      `
-        SELECT
-          COALESCE(
-            ts.stripe_connect_account_id,
-            t.stripe_connect_account_id
-          ) AS stripe_connect_account_id
-        FROM tenants t
-        LEFT JOIN tenant_settings ts
-          ON ts.tenant_slug = t.slug
-        WHERE t.slug = $1
-        LIMIT 1
-      `,
-      [tenantSlug],
-    )) as ConnectAccountRow[];
-
-    const accountId = result[0]?.stripe_connect_account_id || null;
+    const { tenantSlug } = access;
+    const accountId = await getStripeConnectAccountId(tenantSlug);
 
     if (!accountId) {
       return NextResponse.redirect(
-        new URL("/api/stripe/connect/create", baseUrl),
+        new URL("/api/admin/stripe/connect/onboard", baseUrl),
+        303,
       );
     }
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${baseUrl}/api/stripe/connect/refresh`,
+      refresh_url: `${baseUrl}/api/admin/stripe/connect/refresh`,
       return_url: `${baseUrl}/admin/settings/billing?stripe_connect=return`,
       type: "account_onboarding",
     });
 
-    return NextResponse.redirect(accountLink.url);
+    return NextResponse.redirect(accountLink.url, 303);
   } catch (error) {
     console.error("Stripe Connect refresh error:", error);
 
