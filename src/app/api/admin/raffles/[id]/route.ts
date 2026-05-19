@@ -115,7 +115,7 @@ export async function POST(
       999,
     );
 
-    const status = String(formData.get("status") || "draft");
+    const status = String(formData.get("status") || "draft").trim();
 
     if (status === "published" && raffle.status !== "published") {
       const activeCampaignCounts = await queryOne<{
@@ -156,13 +156,9 @@ export async function POST(
       });
 
       if (!allowedToPublish) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Community tier is limited to 2 active published campaigns. Upgrade to Professional for unlimited campaigns.",
-          },
-          { status: 403 },
+        return NextResponse.redirect(
+          new URL(`/admin/raffles/${params.id}?error=campaign_limit`, req.url),
+          { status: 303 },
         );
       }
     }
