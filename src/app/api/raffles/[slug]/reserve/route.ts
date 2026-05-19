@@ -206,13 +206,12 @@ export async function POST(
         `
           select id
           from raffle_ticket_sales
-          where tenant_slug = $1
-            and raffle_id = $2
-            and ticket_number = $3
-            and coalesce(colour, '') = $4
+          where raffle_id = $1
+            and ticket_number = $2
+            and coalesce(colour, '') = $3
           limit 1
         `,
-        [tenantSlug, raffle.id, ticket.ticketNumber, ticket.colour],
+        [raffle.id, ticket.ticketNumber, ticket.colour],
       );
 
       if (existingSoldTicket) {
@@ -229,15 +228,14 @@ export async function POST(
         `
           select id
           from raffle_ticket_reservations
-          where tenant_slug = $1
-            and raffle_id = $2
-            and ticket_number = $3
-            and coalesce(colour, '') = $4
+          where raffle_id = $1
+            and ticket_number = $2
+            and coalesce(colour, '') = $3
             and status = 'reserved'
             and expires_at > now()
           limit 1
         `,
-        [tenantSlug, raffle.id, ticket.ticketNumber, ticket.colour],
+        [raffle.id, ticket.ticketNumber, ticket.colour],
       );
 
       if (existingReservedTicket) {
@@ -259,7 +257,6 @@ export async function POST(
       await query(
         `
           insert into raffle_ticket_reservations (
-            tenant_slug,
             raffle_id,
             ticket_number,
             colour,
@@ -271,10 +268,9 @@ export async function POST(
             expires_at,
             created_at
           )
-          values ($1,$2,$3,$4,$5,$6,'reserved',$7,$8,$9,now())
+          values ($1,$2,$3,$4,$5,'reserved',$6,$7,$8,now())
         `,
         [
-          tenantSlug,
           raffle.id,
           ticket.ticketNumber,
           ticket.colour,
