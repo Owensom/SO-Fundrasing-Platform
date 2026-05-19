@@ -32,6 +32,13 @@ function getBaseUrl(request: Request) {
   return new URL(request.url).origin;
 }
 
+function billingStatusRedirect(request: Request, status: string) {
+  return NextResponse.redirect(
+    new URL(`/admin/settings/billing?stripe_status=${status}`, request.url),
+    { status: 303 },
+  );
+}
+
 async function requireCurrentTenantAccess() {
   const session = await auth();
 
@@ -134,10 +141,7 @@ export async function GET(request: Request) {
 
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json(
-        { ok: false, error: "Missing STRIPE_SECRET_KEY." },
-        { status: 500 },
-      );
+      return billingStatusRedirect(request, "missing_secret");
     }
 
     const tenantSlug = await requireCurrentTenantAccess();
@@ -145,17 +149,14 @@ export async function GET(request: Request) {
     if (!tenantSlug) {
       return NextResponse.redirect(
         new URL("/admin/login?error=tenant_access_denied", baseUrl),
-        303,
+        { status: 303 },
       );
     }
 
     const accountId = await getStripeConnectAccountId(tenantSlug);
 
     if (!accountId) {
-      return NextResponse.redirect(
-        new URL("/admin/settings/billing?stripe_status=missing", baseUrl),
-        303,
-      );
+      return billingStatusRedirect(request, "missing");
     }
 
     const account = await stripe.accounts.retrieve(accountId);
@@ -165,16 +166,10 @@ export async function GET(request: Request) {
       account,
     });
 
-    return NextResponse.redirect(
-      new URL("/admin/settings/billing?stripe_status=refreshed", baseUrl),
-      303,
-    );
+    return billingStatusRedirect(request, "refreshed");
   } catch (error) {
     console.error("Stripe Connect status refresh error:", error);
 
-    return NextResponse.redirect(
-      new URL("/admin/settings/billing?stripe_status=failed", baseUrl),
-      303,
-    );
+    return billingStatusRedirect(request, "failed");
   }
 }
