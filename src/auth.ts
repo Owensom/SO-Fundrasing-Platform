@@ -20,7 +20,20 @@ type AdminUser = {
   name: string | null;
   tenantSlugs: string[];
   emailVerified: null;
+  isPlatformOwner?: boolean;
 };
+
+function getPlatformOwnerEmail() {
+  return String(
+    process.env.PLATFORM_OWNER_EMAIL || "sofundraisingplatform@gmail.com",
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function isPlatformOwnerEmail(value: string) {
+  return value.trim().toLowerCase() === getPlatformOwnerEmail();
+}
 
 function maskEmail(value: string) {
   const [name, domain] = value.split("@");
@@ -104,6 +117,7 @@ async function findAdminUserByCredentials(
       name: user.name || user.email,
       tenantSlugs,
       emailVerified: null,
+      isPlatformOwner: isPlatformOwnerEmail(user.email),
     };
   } catch (error) {
     console.error("DATABASE_ADMIN_AUTH_FAILED", error);
@@ -136,11 +150,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? credentials.password
             : "";
 
+        const isOwnerEmail = isPlatformOwnerEmail(email);
+
         console.log("ADMIN_AUTH_AUTHORIZE_START", {
           email: maskEmail(email),
           hasEmail: Boolean(email),
           hasPassword: Boolean(password),
-          isOwnerEmail: email === "sofundraisingplatform@gmail.com",
+          isOwnerEmail,
           isForceEmail: email === "force@test.com",
           hasPlatformOwnerPasswordEnv: Boolean(
             process.env.PLATFORM_OWNER_PASSWORD,
@@ -157,7 +173,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         if (
-          email === "sofundraisingplatform@gmail.com" &&
+          isOwnerEmail &&
           process.env.PLATFORM_OWNER_PASSWORD &&
           password === process.env.PLATFORM_OWNER_PASSWORD
         ) {
@@ -165,10 +181,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           return {
             id: "platform-owner",
-            email: "sofundraisingplatform@gmail.com",
+            email: getPlatformOwnerEmail(),
             name: "Owen Somerville",
             tenantSlugs: ["demo-a"],
             emailVerified: null,
+            isPlatformOwner: true,
           };
         }
 
@@ -182,6 +199,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.log("ADMIN_AUTH_DB_SUCCESS", {
             email: maskEmail(adminUser.email),
             tenantSlugs: adminUser.tenantSlugs,
+            isPlatformOwner: Boolean(adminUser.isPlatformOwner),
           });
 
           return adminUser;
@@ -200,6 +218,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: "Force User",
             tenantSlugs: ["demo-a"],
             emailVerified: null,
+            isPlatformOwner: false,
           };
         }
 
@@ -222,6 +241,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           : [];
         token.email = adminUser.email ?? "";
         token.name = adminUser.name ?? null;
+        (token as any).isPlatformOwner = Boolean(
+          adminUser.isPlatformOwner || isPlatformOwnerEmail(adminUser.email),
+        );
       }
 
       return token;
@@ -233,6 +255,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.tenantSlugs = Array.isArray(token.tenantSlugs)
         ? token.tenantSlugs.map((value) => String(value))
         : [];
+      (session.user as any).isPlatformOwner = Boolean(
+        (token as any).isPlatformOwner,
+      );
 
       return session;
     },
