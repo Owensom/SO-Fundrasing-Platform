@@ -358,10 +358,25 @@ export async function POST(req: NextRequest) {
     });
 
     const shouldUseConnectRouting =
-      Boolean(connectAccountId) &&
-      isConnectReady(connectStatus) &&
+      Boolean(connectAccountId) && isConnectReady(connectStatus);
+
+    const shouldApplyApplicationFee =
+      shouldUseConnectRouting &&
       applicationFeeAmount > 0 &&
       applicationFeeAmount < totalAmountCents;
+
+    const paymentIntentData = shouldUseConnectRouting
+      ? {
+          transfer_data: {
+            destination: connectAccountId,
+          },
+          ...(shouldApplyApplicationFee
+            ? {
+                application_fee_amount: applicationFeeAmount,
+              }
+            : {}),
+        }
+      : undefined;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -381,14 +396,9 @@ export async function POST(req: NextRequest) {
         },
       ],
 
-      ...(shouldUseConnectRouting
+      ...(paymentIntentData
         ? {
-            payment_intent_data: {
-              application_fee_amount: applicationFeeAmount,
-              transfer_data: {
-                destination: connectAccountId,
-              },
-            },
+            payment_intent_data: paymentIntentData,
           }
         : {}),
 
@@ -420,7 +430,7 @@ export async function POST(req: NextRequest) {
         platform_fee_percent: String(
           tenantSettings?.platform_fee_percent ?? "",
         ),
-        application_fee_amount: shouldUseConnectRouting
+        application_fee_amount: shouldApplyApplicationFee
           ? String(applicationFeeAmount)
           : "0",
       },
