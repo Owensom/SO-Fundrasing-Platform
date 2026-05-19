@@ -224,29 +224,38 @@ export async function POST(req: NextRequest) {
       tenantSettings?.buyer_fee_contributions_enabled,
     );
 
-    const requestedCoverFees = Boolean(body.coverFees);
-
-    const supporterContributionCents =
-      requestedCoverFees && buyerFeeContributionsEnabled
-        ? Math.round(baseAmount * 0.1)
-        : 0;
-
-    const totalAmount = baseAmount + supporterContributionCents;
-
-    const connectAccountId = getUsableConnectAccountId({
-      settingsAccountId: tenantSettings?.stripe_connect_account_id,
-      connectStatus,
-    });
+    const requestedCoverFees = Boolean(
+      body.coverFees ??
+        body.cover_fees ??
+        body.donorCoveredFees ??
+        body.donor_covered_fees ??
+        body.buyerCoversFees ??
+        body.buyer_covers_fees,
+    );
 
     const platformCommissionCents = calculateApplicationFeeAmount({
       totalAmountCents: baseAmount,
       platformFeePercent: tenantSettings?.platform_fee_percent ?? 0,
     });
 
+    const supporterContributionCents =
+      requestedCoverFees && buyerFeeContributionsEnabled
+        ? platformCommissionCents
+        : 0;
+
+    const totalAmount = baseAmount + supporterContributionCents;
+
     const platformFeeCents =
-      platformCommissionCents + supporterContributionCents;
+      supporterContributionCents > 0
+        ? supporterContributionCents
+        : platformCommissionCents;
 
     const netAmountCents = Math.max(totalAmount - platformFeeCents, 0);
+
+    const connectAccountId = getUsableConnectAccountId({
+      settingsAccountId: tenantSettings?.stripe_connect_account_id,
+      connectStatus,
+    });
 
     const shouldUseConnectRouting =
       Boolean(connectAccountId) && isConnectReady(connectStatus);
@@ -310,6 +319,7 @@ export async function POST(req: NextRequest) {
         tenant_slug: tenantSlug,
         reservation_token: reservationToken,
         quantity: String(quantity),
+        base_amount_cents: String(baseAmount),
 
         platform_fee_cents: String(platformFeeCents),
         platform_commission_cents: String(platformCommissionCents),
