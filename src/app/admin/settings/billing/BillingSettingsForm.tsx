@@ -20,6 +20,7 @@ type TenantSettingsFormState = {
   finance_dashboard_enabled: boolean;
   white_label_enabled: boolean;
   custom_domain_enabled: boolean;
+  platform_owner_bypass: boolean;
 };
 
 type TenantConnectStatus = {
@@ -38,6 +39,7 @@ type Props = {
   formState: TenantSettingsFormState;
   connectStatus: TenantConnectStatus | null;
   updateAction: (formData: FormData) => Promise<void>;
+  isPlatformOwner: boolean;
 };
 
 const TIER_DETAILS: Record<
@@ -126,6 +128,7 @@ function formatSyncDate(value: string | null | undefined) {
   if (!value) return "Not synced yet";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not synced yet";
 
   return date.toLocaleString("en-GB", {
@@ -156,6 +159,7 @@ function tierCapabilityEnabled(tier: TierKey, key: string) {
   if (key === "finance_dashboard_enabled") return tier !== "community";
   if (key === "white_label_enabled") return tier === "foundation";
   if (key === "custom_domain_enabled") return tier === "foundation";
+
   return false;
 }
 
@@ -270,6 +274,7 @@ export default function BillingSettingsForm({
   formState,
   connectStatus,
   updateAction,
+  isPlatformOwner,
 }: Props) {
   const searchParams = useSearchParams();
 
@@ -279,6 +284,7 @@ export default function BillingSettingsForm({
   );
 
   const currentTier = TIER_DETAILS[tier];
+
   const displayedPlatformFeePercent = Number.isFinite(
     Number(formState.platform_fee_percent),
   )
@@ -303,7 +309,7 @@ export default function BillingSettingsForm({
   const readyForLivePayments =
     hasConnectAccount && onboardingComplete && chargesEnabled && payoutsEnabled;
 
-   const connectMessage = getConnectMessage(
+  const connectMessage = getConnectMessage(
     searchParams?.get("stripe_connect") ?? null,
   );
 
@@ -316,49 +322,56 @@ export default function BillingSettingsForm({
     : hasConnectAccount
       ? "Stripe account started — complete onboarding and sync status"
       : "Stripe Connect not started";
-    const capabilities = useMemo(
+
+  const capabilities = useMemo(
     () => [
       {
         label: "CRM",
         key: "crm_enabled" as const,
         enabled:
           Boolean(formState.crm_enabled) ||
-          tierCapabilityEnabled(tier, "crm_enabled"),
+          tierCapabilityEnabled(tier, "crm_enabled") ||
+          Boolean(formState.platform_owner_bypass),
       },
       {
         label: "Auctions",
         key: "auctions_enabled" as const,
         enabled:
           Boolean(formState.auctions_enabled) ||
-          tierCapabilityEnabled(tier, "auctions_enabled"),
+          tierCapabilityEnabled(tier, "auctions_enabled") ||
+          Boolean(formState.platform_owner_bypass),
       },
       {
         label: "Reserved seating",
         key: "reserved_seating_enabled" as const,
         enabled:
           Boolean(formState.reserved_seating_enabled) ||
-          tierCapabilityEnabled(tier, "reserved_seating_enabled"),
+          tierCapabilityEnabled(tier, "reserved_seating_enabled") ||
+          Boolean(formState.platform_owner_bypass),
       },
       {
         label: "Finance dashboard",
         key: "finance_dashboard_enabled" as const,
         enabled:
           Boolean(formState.finance_dashboard_enabled) ||
-          tierCapabilityEnabled(tier, "finance_dashboard_enabled"),
+          tierCapabilityEnabled(tier, "finance_dashboard_enabled") ||
+          Boolean(formState.platform_owner_bypass),
       },
       {
         label: "White label",
         key: "white_label_enabled" as const,
         enabled:
           Boolean(formState.white_label_enabled) ||
-          tierCapabilityEnabled(tier, "white_label_enabled"),
+          tierCapabilityEnabled(tier, "white_label_enabled") ||
+          Boolean(formState.platform_owner_bypass),
       },
       {
         label: "Custom domain",
         key: "custom_domain_enabled" as const,
         enabled:
           Boolean(formState.custom_domain_enabled) ||
-          tierCapabilityEnabled(tier, "custom_domain_enabled"),
+          tierCapabilityEnabled(tier, "custom_domain_enabled") ||
+          Boolean(formState.platform_owner_bypass),
       },
     ],
     [formState, tier],
@@ -404,8 +417,7 @@ export default function BillingSettingsForm({
             </Link>
           </div>
         </div>
-
-        <div className="heroSummaryGrid" style={styles.heroSummaryGrid}>
+                <div className="heroSummaryGrid" style={styles.heroSummaryGrid}>
           <div style={styles.summaryCard}>
             <div style={styles.summaryLabel}>Current plan</div>
             <div style={styles.summaryValue}>{currentTier.name}</div>
@@ -420,7 +432,9 @@ export default function BillingSettingsForm({
               {formatPercent(displayedPlatformFeePercent)}
             </div>
             <div style={styles.summarySub}>
-              Managed by platform billing controls.
+              {formState.platform_owner_bypass
+                ? "Owner bypass enabled for this tenant."
+                : "Managed by platform billing controls."}
             </div>
           </div>
 
@@ -490,46 +504,152 @@ export default function BillingSettingsForm({
               <h2 style={styles.cardTitle}>Tenant billing configuration</h2>
             </div>
 
-            <div style={styles.liveBadge}>VIEW SETTINGS</div>
+            <div style={styles.liveBadge}>
+              {isPlatformOwner ? "OWNER CONTROLS" : "VIEW SETTINGS"}
+            </div>
           </div>
 
-          <div className="formGrid" style={styles.formGrid}>
-            <ReadOnlyField
-              label="Subscription tier"
-              value={`${currentTier.name} — ${currentTier.monthly}`}
-              helper="Plan changes are managed through platform billing controls."
-            />
+          {isPlatformOwner ? (
+            <section style={styles.ownerPanel}>
+              <div>
+                <div style={styles.ownerPanelEyebrow}>Platform owner only</div>
+                <h3 style={styles.ownerPanelTitle}>
+                  Commercial controls for this tenant
+                </h3>
+                <p style={styles.ownerPanelText}>
+                  These controls are only available to the platform owner. Normal
+                  tenant admins can still manage their supporter contribution
+                  setting, but cannot self-upgrade tiers, reduce platform fees or
+                  enable premium features.
+                </p>
+              </div>
 
-            <ReadOnlyField
-              label="Platform fee percentage"
-              value={formatPercent(displayedPlatformFeePercent)}
-              helper={`Current plan minimum is ${currentTier.fee}.`}
-            />
+              <div className="formGrid" style={styles.formGrid}>
+                <label style={styles.inputField}>
+                  <span style={styles.fieldLabel}>Subscription tier</span>
+                  <select
+                    name="subscription_tier"
+                    defaultValue={formState.subscription_tier}
+                    style={styles.selectInput}
+                  >
+                    <option value="community">Community</option>
+                    <option value="professional">Professional</option>
+                    <option value="foundation">Foundation</option>
+                  </select>
+                  <span style={styles.helperTextMuted}>
+                    Controls tier labels and default capability expectations.
+                  </span>
+                </label>
 
-            <ReadOnlyField
-              label="Subscription status"
-              value={displayValue(formState.subscription_status, "Active")}
-              helper="Subscription status is controlled by billing records."
-            />
+                <label style={styles.inputField}>
+                  <span style={styles.fieldLabel}>Platform fee percentage</span>
+                  <input
+                    name="platform_fee_percent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    defaultValue={formState.platform_fee_percent}
+                    style={styles.textInput}
+                  />
+                  <span style={styles.helperTextMuted}>
+                    Used by checkout finance calculations for platform
+                    commission.
+                  </span>
+                </label>
 
-            <ReadOnlyField
-              label="Stripe customer ID"
-              value={displayValue(formState.stripe_customer_id)}
-              helper="Linked Stripe billing customer."
-            />
+                <label style={styles.inputField}>
+                  <span style={styles.fieldLabel}>Subscription status</span>
+                  <input
+                    name="subscription_status"
+                    defaultValue={formState.subscription_status}
+                    placeholder="active"
+                    style={styles.textInput}
+                  />
+                  <span style={styles.helperTextMuted}>
+                    Examples: active, trialing, manual, free, exempt.
+                  </span>
+                </label>
 
-            <ReadOnlyField
-              label="Stripe subscription ID"
-              value={displayValue(formState.stripe_subscription_id)}
-              helper="Linked Stripe subscription record."
-            />
+                <label style={styles.inputField}>
+                  <span style={styles.fieldLabel}>Stripe customer ID</span>
+                  <input
+                    name="stripe_customer_id"
+                    defaultValue={formState.stripe_customer_id}
+                    placeholder="cus_..."
+                    style={styles.textInput}
+                  />
+                  <span style={styles.helperTextMuted}>
+                    Optional Stripe billing customer record.
+                  </span>
+                </label>
 
-            <ReadOnlyField
-              label="Stripe Connect account"
-              value={displayValue(connectAccountId)}
-              helper="Tenant payout account for Stripe Connect."
-            />
-          </div>
+                <label style={styles.inputField}>
+                  <span style={styles.fieldLabel}>Stripe subscription ID</span>
+                  <input
+                    name="stripe_subscription_id"
+                    defaultValue={formState.stripe_subscription_id}
+                    placeholder="sub_..."
+                    style={styles.textInput}
+                  />
+                  <span style={styles.helperTextMuted}>
+                    Optional Stripe subscription record.
+                  </span>
+                </label>
+
+                <label style={styles.inputField}>
+                  <span style={styles.fieldLabel}>Stripe Connect account</span>
+                  <input
+                    name="stripe_connect_account_id"
+                    defaultValue={connectAccountId}
+                    placeholder="acct_..."
+                    style={styles.textInput}
+                  />
+                  <span style={styles.helperTextMuted}>
+                    Usually created through Stripe Connect onboarding.
+                  </span>
+                </label>
+              </div>
+            </section>
+          ) : (
+            <div className="formGrid" style={styles.formGrid}>
+              <ReadOnlyField
+                label="Subscription tier"
+                value={`${currentTier.name} — ${currentTier.monthly}`}
+                helper="Plan changes are managed through platform billing controls."
+              />
+
+              <ReadOnlyField
+                label="Platform fee percentage"
+                value={formatPercent(displayedPlatformFeePercent)}
+                helper={`Current plan minimum is ${currentTier.fee}.`}
+              />
+
+              <ReadOnlyField
+                label="Subscription status"
+                value={displayValue(formState.subscription_status, "Active")}
+                helper="Subscription status is controlled by billing records."
+              />
+
+              <ReadOnlyField
+                label="Stripe customer ID"
+                value={displayValue(formState.stripe_customer_id)}
+                helper="Linked Stripe billing customer."
+              />
+
+              <ReadOnlyField
+                label="Stripe subscription ID"
+                value={displayValue(formState.stripe_subscription_id)}
+                helper="Linked Stripe subscription record."
+              />
+
+              <ReadOnlyField
+                label="Stripe Connect account"
+                value={displayValue(connectAccountId)}
+                helper="Tenant payout account for Stripe Connect."
+              />
+            </div>
+          )}
 
           <div className="toggleGrid" style={styles.toggleGrid}>
             <label style={styles.toggleCard}>
@@ -547,33 +667,157 @@ export default function BillingSettingsForm({
                 </div>
               </div>
             </label>
-                        {capabilities.map((item) => (
-              <div key={item.key} style={styles.readOnlyToggleCard}>
-                <span
-                  style={{
-                    ...styles.statusDot,
-                    ...(item.enabled ? styles.statusDotOn : styles.statusDotOff),
-                  }}
-                />
 
-                <div>
-                  <div style={styles.toggleCardTitle}>{item.label}</div>
-                  <div style={styles.toggleCardText}>
-                    {enabledLabel(item.enabled)}
+            {isPlatformOwner ? (
+              <>
+                <label style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name="crm_enabled"
+                    defaultChecked={formState.crm_enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>CRM</div>
+                    <div style={styles.toggleCardText}>
+                      Enable CRM/customer management features for this tenant.
+                    </div>
+                  </div>
+                </label>
+
+                <label style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name="auctions_enabled"
+                    defaultChecked={formState.auctions_enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>Auctions</div>
+                    <div style={styles.toggleCardText}>
+                      Enable silent auction campaign tools.
+                    </div>
+                  </div>
+                </label>
+
+                <label style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name="reserved_seating_enabled"
+                    defaultChecked={formState.reserved_seating_enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>Reserved seating</div>
+                    <div style={styles.toggleCardText}>
+                      Enable reserved seating and table event controls.
+                    </div>
+                  </div>
+                </label>
+
+                <label style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name="finance_dashboard_enabled"
+                    defaultChecked={formState.finance_dashboard_enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>Finance dashboard</div>
+                    <div style={styles.toggleCardText}>
+                      Enable tenant finance reporting views.
+                    </div>
+                  </div>
+                </label>
+
+                <label style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name="white_label_enabled"
+                    defaultChecked={formState.white_label_enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>White label</div>
+                    <div style={styles.toggleCardText}>
+                      Enable reduced SO branding / white-label direction.
+                    </div>
+                  </div>
+                </label>
+
+                <label style={styles.toggleCard}>
+                  <input
+                    type="checkbox"
+                    name="custom_domain_enabled"
+                    defaultChecked={formState.custom_domain_enabled}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>Custom domain</div>
+                    <div style={styles.toggleCardText}>
+                      Mark this tenant as eligible for custom-domain support.
+                    </div>
+                  </div>
+                </label>
+
+                <label style={styles.ownerBypassCard}>
+                  <input
+                    type="checkbox"
+                    name="platform_owner_bypass"
+                    defaultChecked={formState.platform_owner_bypass}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>
+                      Platform owner bypass
+                    </div>
+                    <div style={styles.toggleCardText}>
+                      Gives this tenant all platform capabilities and can be used
+                      for internal/free owner tenants. Use carefully.
+                    </div>
+                  </div>
+                </label>
+              </>
+            ) : (
+              capabilities.map((item) => (
+                <div key={item.key} style={styles.readOnlyToggleCard}>
+                  <span
+                    style={{
+                      ...styles.statusDot,
+                      ...(item.enabled
+                        ? styles.statusDotOn
+                        : styles.statusDotOff),
+                    }}
+                  />
+
+                  <div>
+                    <div style={styles.toggleCardTitle}>{item.label}</div>
+                    <div style={styles.toggleCardText}>
+                      {enabledLabel(item.enabled)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
+
+          {isPlatformOwner ? (
+            <div style={styles.ownerWarning}>
+              <strong>Owner control warning:</strong> these settings affect
+              subscription access, platform commission and premium feature
+              gating for this tenant. They should only be changed intentionally.
+            </div>
+          ) : null}
 
           <div className="submitRow" style={styles.submitRow}>
             <button type="submit" style={styles.saveButton}>
-              Save contribution setting
+              {isPlatformOwner
+                ? "Save billing and feature settings"
+                : "Save contribution setting"}
             </button>
           </div>
         </form>
-
-        <section style={styles.sideColumn}>
+                <section style={styles.sideColumn}>
           <article style={styles.sideCard}>
             <div style={styles.cardEyebrow}>Subscription tiers</div>
             <h2 style={styles.cardTitle}>Platform positioning</h2>
@@ -788,6 +1032,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -800,6 +1045,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     overflowX: "hidden",
   },
+
   messageSuccess: {
     display: "grid",
     gap: 5,
@@ -810,6 +1056,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #bbf7d0",
     color: "#166534",
   },
+
   messageWarning: {
     display: "grid",
     gap: 5,
@@ -820,6 +1067,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
     color: "#92400e",
   },
+
   messageError: {
     display: "grid",
     gap: 5,
@@ -830,15 +1078,18 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fecaca",
     color: "#991b1b",
   },
+
   messageTitle: {
     fontSize: 14,
     fontWeight: 950,
   },
+
   messageText: {
     fontSize: 14,
     lineHeight: 1.45,
     fontWeight: 750,
   },
+
   hero: {
     position: "relative",
     display: "grid",
@@ -854,6 +1105,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
+
   heroGlow: {
     position: "absolute",
     inset: 0,
@@ -861,11 +1113,13 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
+
   heroContent: {
     position: "relative",
     zIndex: 1,
     minWidth: 0,
   },
+
   eyebrow: {
     display: "inline-flex",
     padding: "8px 14px",
@@ -879,6 +1133,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 16,
   },
+
   title: {
     margin: 0,
     fontSize: "clamp(48px, 7vw, 74px)",
@@ -886,6 +1141,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
   },
+
   subtitle: {
     margin: "18px 0 0",
     maxWidth: 780,
@@ -894,18 +1150,21 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.6,
     fontWeight: 700,
   },
+
   tenantLine: {
     margin: "14px 0 0",
     color: "#bfdbfe",
     fontWeight: 850,
     overflowWrap: "anywhere",
   },
+
   heroActions: {
     marginTop: 24,
     display: "grid",
     gridTemplateColumns: "repeat(2, max-content)",
     gap: 10,
   },
+
   heroButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -919,6 +1178,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
   },
+
   heroButtonLight: {
     display: "inline-flex",
     alignItems: "center",
@@ -932,6 +1192,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid rgba(148,163,184,0.52)",
   },
+
   heroSummaryGrid: {
     position: "relative",
     zIndex: 1,
@@ -940,6 +1201,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignContent: "start",
   },
+
   summaryCard: {
     display: "grid",
     gap: 7,
@@ -949,6 +1211,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(148,163,184,0.26)",
     minWidth: 0,
   },
+
   summaryLabel: {
     color: "#bfdbfe",
     fontSize: 12,
@@ -956,6 +1219,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   summaryValue: {
     color: "#ffffff",
     fontSize: 28,
@@ -963,6 +1227,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.055em",
     overflowWrap: "anywhere",
   },
+
   summarySub: {
     color: "#dbeafe",
     fontSize: 13,
@@ -970,6 +1235,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
   },
+
   stripeActionPanel: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.45fr)",
@@ -984,9 +1250,11 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 18,
     minWidth: 0,
   },
+
   stripeActionContent: {
     minWidth: 0,
   },
+
   stripeActionText: {
     margin: "8px 0 0",
     color: "#475569",
@@ -995,12 +1263,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     maxWidth: 820,
   },
+
   readinessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 10,
     marginTop: 16,
   },
+
   readinessItem: {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
@@ -1012,6 +1282,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   readinessLabel: {
     display: "block",
     color: "#0f172a",
@@ -1019,6 +1290,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
+
   readinessText: {
     display: "block",
     marginTop: 2,
@@ -1027,12 +1299,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     lineHeight: 1.35,
   },
+
   stripeActionButtons: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 10,
     minWidth: 0,
   },
+
   connectPrimaryButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1047,6 +1321,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
     textAlign: "center",
   },
+
   connectSecondaryButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1061,12 +1336,14 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textAlign: "center",
   },
+
   contentGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
     gap: 16,
     alignItems: "start",
   },
+
   formCard: {
     display: "grid",
     gap: 18,
@@ -1077,12 +1354,105 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
+
+  ownerPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 16,
+    borderRadius: 22,
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)",
+    border: "1px solid #fde68a",
+  },
+
+  ownerPanelEyebrow: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  ownerPanelTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.04em",
+  },
+
+  ownerPanelText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  inputField: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  textInput: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 800,
+    background: "#ffffff",
+  },
+
+  selectInput: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 800,
+    background: "#ffffff",
+  },
+
+  ownerBypassCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  ownerWarning: {
+    padding: 13,
+    borderRadius: 18,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    color: "#9a3412",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
   cardHeader: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "start",
   },
+
   cardEyebrow: {
     color: "#2563eb",
     fontSize: 12,
@@ -1091,6 +1461,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
     marginBottom: 7,
   },
+
   cardTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1098,6 +1469,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
+
   liveBadge: {
     display: "inline-flex",
     alignItems: "center",
@@ -1112,16 +1484,19 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     width: "fit-content",
   },
+
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
   },
+
   fieldLabel: {
     color: "#334155",
     fontSize: 13,
     fontWeight: 950,
   },
+
   readOnlyField: {
     display: "grid",
     gap: 7,
@@ -1131,12 +1506,14 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
+
   readOnlyValue: {
     color: "#0f172a",
     fontSize: 16,
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
+
   helperTextMuted: {
     color: "#64748b",
     fontSize: 12,
@@ -1144,11 +1521,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     overflowWrap: "anywhere",
   },
+
   toggleGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
+
   toggleCard: {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
@@ -1161,6 +1540,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     minWidth: 0,
   },
+
   readOnlyToggleCard: {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
@@ -1172,6 +1552,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   statusDot: {
     width: 12,
     height: 12,
@@ -1180,19 +1561,23 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     flexShrink: 0,
   },
+
   statusDotOn: {
     background: "#16a34a",
     boxShadow: "0 0 0 4px rgba(22,163,74,0.12)",
   },
+
   statusDotOff: {
     background: "#94a3b8",
     boxShadow: "0 0 0 4px rgba(148,163,184,0.14)",
   },
+
   toggleCardTitle: {
     color: "#0f172a",
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
+
   toggleCardText: {
     marginTop: 3,
     color: "#64748b",
@@ -1201,11 +1586,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
+
   submitRow: {
     display: "grid",
     gridTemplateColumns: "max-content",
     justifyContent: "end",
   },
+
   saveButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1219,11 +1606,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
+
   sideColumn: {
     display: "grid",
     gap: 16,
     minWidth: 0,
   },
+
   sideCard: {
     display: "grid",
     gap: 14,
@@ -1234,10 +1623,12 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
+
   tiersList: {
     display: "grid",
     gap: 12,
   },
+
   tierCard: {
     display: "grid",
     gap: 10,
@@ -1247,6 +1638,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   activeTierCard: {
     display: "grid",
     gap: 10,
@@ -1256,24 +1648,28 @@ const styles: Record<string, CSSProperties> = {
     border: "2px solid #1683f8",
     minWidth: 0,
   },
+
   tierTop: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 10,
     alignItems: "start",
   },
+
   tierName: {
     color: "#0f172a",
     fontSize: 20,
     fontWeight: 950,
     letterSpacing: "-0.04em",
   },
+
   tierPrice: {
     marginTop: 3,
     color: "#64748b",
     fontSize: 13,
     fontWeight: 850,
   },
+
   tierFee: {
     display: "inline-flex",
     alignItems: "center",
@@ -1288,12 +1684,14 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     width: "fit-content",
   },
+
   tierDescription: {
     margin: 0,
     color: "#475569",
     lineHeight: 1.45,
     fontWeight: 750,
   },
+
   featureList: {
     display: "grid",
     gap: 6,
@@ -1304,13 +1702,16 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 750,
   },
+
   featureItem: {
     paddingLeft: 2,
   },
+
   statusList: {
     display: "grid",
     gap: 9,
   },
+
   statusRow: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
@@ -1324,6 +1725,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     minWidth: 0,
   },
+
   enabledPill: {
     display: "inline-flex",
     width: "fit-content",
@@ -1335,6 +1737,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   disabledPill: {
     display: "inline-flex",
     width: "fit-content",
