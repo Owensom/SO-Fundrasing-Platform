@@ -43,6 +43,82 @@ function maskEmail(value: string) {
   return `${name.slice(0, 3)}***@${domain}`;
 }
 
+function uniqueTenantSlugs(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+async function getTenantSlugsForAdminUser(params: {
+  adminUserId: string;
+  fallbackTenantId?: string | null;
+}) {
+  const linkedTenantRows = await query<AdminTenantRow>(
+    `
+      select tenant_slug
+      from admin_user_tenants
+      where admin_user_id = $1
+      order by
+        case
+          when role = 'platform_owner' then 0
+          when role = 'owner' then 1
+          else 2
+        end,
+        tenant_slug asc
+    `,
+    [params.adminUserId],
+  );
+
+  const linkedTenantSlugs = uniqueTenantSlugs(
+    linkedTenantRows.map((row) => row.tenant_slug),
+  );
+
+  if (linkedTenantSlugs.length > 0) {
+    return linkedTenantSlugs;
+  }
+
+  const fallbackTenantRows = await query<AdminTenantRow>(
+    `
+      select slug as tenant_slug
+      from tenants
+      where id::text = $1::text
+      limit 1
+    `,
+    [params.fallbackTenantId || ""],
+  );
+
+  return uniqueTenantSlugs(fallbackTenantRows.map((row) => row.tenant_slug));
+}
+
+async function getPlatformOwnerTenantSlugs() {
+  const ownerEmail = getPlatformOwnerEmail();
+
+  const rows = await query<AdminTenantRow>(
+    `
+      select distinct aut.tenant_slug
+      from admin_users au
+      join admin_user_tenants aut
+        on aut.admin_user_id = au.id
+      where lower(au.email) = lower($1)
+        and au.is_active = true
+      order by aut.tenant_slug asc
+    `,
+    [ownerEmail],
+  );
+
+  const tenantSlugs = uniqueTenantSlugs(rows.map((row) => row.tenant_slug));
+
+  if (tenantSlugs.length > 0) {
+    return tenantSlugs;
+  }
+
+  return ["demo-a"];
+}
+
 async function findAdminUserByCredentials(
   email: string,
   password: string,
@@ -58,7 +134,7 @@ async function findAdminUserByCredentials(
         select
           id::text,
           email,
-          name,
+          coalesce(name, full_name, email) as name,
           tenant_id::text,
           password_hash = crypt($2, password_hash) as password_matches
         from admin_users
@@ -90,19 +166,10 @@ async function findAdminUserByCredentials(
       return null;
     }
 
-    const tenantRows = await query<AdminTenantRow>(
-      `
-        select slug as tenant_slug
-        from tenants
-        where id::text = $1::text
-        limit 1
-      `,
-      [user.tenant_id || ""],
-    );
-
-    const tenantSlugs = tenantRows
-      .map((row) => String(row.tenant_slug || "").trim())
-      .filter(Boolean);
+    const tenantSlugs = await getTenantSlugsForAdminUser({
+      adminUserId: user.id,
+      fallbackTenantId: user.tenant_id,
+    });
 
     console.log("ADMIN_AUTH_DB_TENANTS_RESOLVED", {
       email: maskEmail(user.email),
@@ -177,13 +244,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           process.env.PLATFORM_OWNER_PASSWORD &&
           password === process.env.PLATFORM_OWNER_PASSWORD
         ) {
-          console.log("ADMIN_AUTH_PLATFORM_OWNER_ENV_SUCCESS");
+          const tenantSlugs = await getPlatformOwnerTenantSlugs();
+
+          console.log("ADMIN_AUTH_PLATFORM_OWNER_ENV_SUCCESS", {
+            tenantSlugs,
+          });
 
           return {
             id: "platform-owner",
             email: getPlatformOwnerEmail(),
             name: "Owen Somerville",
-            tenantSlugs: ["demo-a"],
+            tenantSlugs,
             emailVerified: null,
             isPlatformOwner: true,
           };
@@ -237,7 +308,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         token.userId = adminUser.id;
         token.tenantSlugs = Array.isArray(adminUser.tenantSlugs)
-          ? adminUser.tenantSlugs.map((value) => String(value))
+          ? uniqueTenantSlugs(adminUser.tenantSlugs)
           : [];
         token.email = adminUser.email ?? "";
         token.name = adminUser.name ?? null;
@@ -248,12 +319,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return token;
     },
+
     async session({ session, token }) {
       session.user.id = String(token.userId ?? "");
       session.user.email = String(token.email ?? "");
       session.user.name = token.name ? String(token.name) : null;
       session.user.tenantSlugs = Array.isArray(token.tenantSlugs)
-        ? token.tenantSlugs.map((value) => String(value))
+        ? uniqueTenantSlugs(token.tenantSlugs.map((value) => String(value)))
         : [];
       (session.user as any).isPlatformOwner = Boolean(
         (token as any).isPlatformOwner,
