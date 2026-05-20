@@ -71,7 +71,7 @@ export default function RegisterForm() {
           required
           value={organisationName}
           onChange={(event) => updateOrganisationName(event.target.value)}
-          placeholder="Brave Ceilidh"
+          placeholder="Example Charity"
           autoComplete="off"
           spellCheck={false}
           style={styles.input}
@@ -85,7 +85,7 @@ export default function RegisterForm() {
           required
           value={tenantSlug}
           onChange={(event) => updateTenantSlug(event.target.value)}
-          placeholder="brave-ceilidh"
+          placeholder="example-charity"
           pattern="[a-z0-9][a-z0-9-]{1,58}[a-z0-9]"
           autoComplete="off"
           spellCheck={false}
@@ -93,7 +93,7 @@ export default function RegisterForm() {
         />
         <span style={styles.helpText}>
           This becomes the tenant identifier, for example{" "}
-          <strong>{tenantSlug || "brave-ceilidh"}</strong>.
+          <strong>{tenantSlug || "example-charity"}</strong>.
         </span>
       </label>
 
