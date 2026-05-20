@@ -25,6 +25,7 @@ type TenantSettingsFormState = {
   finance_dashboard_enabled: boolean;
   white_label_enabled: boolean;
   custom_domain_enabled: boolean;
+  platform_owner_bypass: boolean;
 };
 
 type TenantConnectStatus = {
@@ -60,6 +61,10 @@ function safePercent(value: unknown, fallback: number) {
   return Math.min(100, Number(number.toFixed(2)));
 }
 
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
 function checkboxValue(formData: FormData, key: keyof TenantSettingsFormState) {
   return formData.get(key) === "on";
 }
@@ -81,7 +86,10 @@ async function requireCurrentTenantAccess() {
     redirect("/admin/login?error=tenant_access_denied");
   }
 
-  return tenantSlug;
+  return {
+    tenantSlug,
+    isPlatformOwner: Boolean((session.user as any).isPlatformOwner),
+  };
 }
 
 async function getTenantConnectStatus(
@@ -111,14 +119,78 @@ async function getTenantConnectStatus(
 async function updateTenantBillingSettings(formData: FormData) {
   "use server";
 
-  const tenantSlug = await requireCurrentTenantAccess();
+  const access = await requireCurrentTenantAccess();
+  const tenantSlug = access.tenantSlug;
+  const isPlatformOwner = access.isPlatformOwner;
 
   const existingSettings = await getTenantSettings(tenantSlug);
   const existingTier = safeTier(existingSettings?.subscription_tier);
+
+  const submittedTier = safeTier(formData.get("subscription_tier"));
+  const nextTier = isPlatformOwner ? submittedTier : existingTier;
+
   const existingPlatformFeePercent = safePercent(
     existingSettings?.platform_fee_percent,
     defaultFeeForTier(existingTier),
   );
+
+  const nextPlatformFeePercent = isPlatformOwner
+    ? safePercent(
+        formData.get("platform_fee_percent"),
+        defaultFeeForTier(nextTier),
+      )
+    : existingPlatformFeePercent;
+
+  const nextSubscriptionStatus = isPlatformOwner
+    ? cleanText(formData.get("subscription_status")) ||
+      existingSettings?.subscription_status ||
+      "active"
+    : existingSettings?.subscription_status || "active";
+
+  const nextStripeCustomerId = isPlatformOwner
+    ? cleanText(formData.get("stripe_customer_id"))
+    : existingSettings?.stripe_customer_id || "";
+
+  const nextStripeSubscriptionId = isPlatformOwner
+    ? cleanText(formData.get("stripe_subscription_id"))
+    : existingSettings?.stripe_subscription_id || "";
+
+  const nextStripeConnectAccountId = isPlatformOwner
+    ? cleanText(formData.get("stripe_connect_account_id"))
+    : existingSettings?.stripe_connect_account_id || "";
+
+  const nextBuyerFeeContributionsEnabled = checkboxValue(
+    formData,
+    "buyer_fee_contributions_enabled",
+  );
+
+  const nextCrmEnabled = isPlatformOwner
+    ? checkboxValue(formData, "crm_enabled")
+    : Boolean(existingSettings?.crm_enabled);
+
+  const nextAuctionsEnabled = isPlatformOwner
+    ? checkboxValue(formData, "auctions_enabled")
+    : Boolean(existingSettings?.auctions_enabled);
+
+  const nextReservedSeatingEnabled = isPlatformOwner
+    ? checkboxValue(formData, "reserved_seating_enabled")
+    : Boolean(existingSettings?.reserved_seating_enabled);
+
+  const nextFinanceDashboardEnabled = isPlatformOwner
+    ? checkboxValue(formData, "finance_dashboard_enabled")
+    : Boolean(existingSettings?.finance_dashboard_enabled);
+
+  const nextWhiteLabelEnabled = isPlatformOwner
+    ? checkboxValue(formData, "white_label_enabled")
+    : Boolean(existingSettings?.white_label_enabled);
+
+  const nextCustomDomainEnabled = isPlatformOwner
+    ? checkboxValue(formData, "custom_domain_enabled")
+    : Boolean(existingSettings?.custom_domain_enabled);
+
+  const nextPlatformOwnerBypass = isPlatformOwner
+    ? checkboxValue(formData, "platform_owner_bypass")
+    : Boolean(existingSettings?.platform_owner_bypass);
 
   await query(
     `
@@ -136,32 +208,47 @@ async function updateTenantBillingSettings(formData: FormData) {
         reserved_seating_enabled,
         finance_dashboard_enabled,
         white_label_enabled,
-        custom_domain_enabled
+        custom_domain_enabled,
+        platform_owner_bypass
       )
       values (
         $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13, $14
+        $8, $9, $10, $11, $12, $13, $14, $15
       )
       on conflict (tenant_slug)
       do update set
+        subscription_tier = excluded.subscription_tier,
+        platform_fee_percent = excluded.platform_fee_percent,
+        stripe_customer_id = excluded.stripe_customer_id,
+        stripe_subscription_id = excluded.stripe_subscription_id,
+        stripe_connect_account_id = excluded.stripe_connect_account_id,
+        subscription_status = excluded.subscription_status,
         buyer_fee_contributions_enabled = excluded.buyer_fee_contributions_enabled,
+        crm_enabled = excluded.crm_enabled,
+        auctions_enabled = excluded.auctions_enabled,
+        reserved_seating_enabled = excluded.reserved_seating_enabled,
+        finance_dashboard_enabled = excluded.finance_dashboard_enabled,
+        white_label_enabled = excluded.white_label_enabled,
+        custom_domain_enabled = excluded.custom_domain_enabled,
+        platform_owner_bypass = excluded.platform_owner_bypass,
         updated_at = now()
     `,
     [
       tenantSlug,
-      existingTier,
-      existingPlatformFeePercent,
-      existingSettings?.stripe_customer_id || null,
-      existingSettings?.stripe_subscription_id || null,
-      existingSettings?.stripe_connect_account_id || null,
-      existingSettings?.subscription_status || "active",
-      checkboxValue(formData, "buyer_fee_contributions_enabled"),
-      Boolean(existingSettings?.crm_enabled),
-      Boolean(existingSettings?.auctions_enabled),
-      Boolean(existingSettings?.reserved_seating_enabled),
-      Boolean(existingSettings?.finance_dashboard_enabled),
-      Boolean(existingSettings?.white_label_enabled),
-      Boolean(existingSettings?.custom_domain_enabled),
+      nextTier,
+      nextPlatformFeePercent,
+      nextStripeCustomerId || null,
+      nextStripeSubscriptionId || null,
+      nextStripeConnectAccountId || null,
+      nextSubscriptionStatus,
+      nextBuyerFeeContributionsEnabled,
+      nextCrmEnabled,
+      nextAuctionsEnabled,
+      nextReservedSeatingEnabled,
+      nextFinanceDashboardEnabled,
+      nextWhiteLabelEnabled,
+      nextCustomDomainEnabled,
+      nextPlatformOwnerBypass,
     ],
   );
 
@@ -169,8 +256,12 @@ async function updateTenantBillingSettings(formData: FormData) {
   revalidatePath("/admin");
   redirect("/admin/settings/billing?saved=1");
 }
+
 export default async function AdminBillingSettingsPage() {
-  const tenantSlug = await requireCurrentTenantAccess();
+  const access = await requireCurrentTenantAccess();
+  const tenantSlug = access.tenantSlug;
+  const isPlatformOwner = access.isPlatformOwner;
+
   const settings = await getTenantSettings(tenantSlug);
   const connectStatus = await getTenantConnectStatus(tenantSlug);
 
@@ -202,6 +293,7 @@ export default async function AdminBillingSettingsPage() {
     finance_dashboard_enabled: Boolean(settings?.finance_dashboard_enabled),
     white_label_enabled: Boolean(settings?.white_label_enabled),
     custom_domain_enabled: Boolean(settings?.custom_domain_enabled),
+    platform_owner_bypass: Boolean(settings?.platform_owner_bypass),
   };
 
   return (
@@ -210,6 +302,7 @@ export default async function AdminBillingSettingsPage() {
       formState={formState}
       connectStatus={connectStatus}
       updateAction={updateTenantBillingSettings}
+      isPlatformOwner={isPlatformOwner}
     />
   );
 }
