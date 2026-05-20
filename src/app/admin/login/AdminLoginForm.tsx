@@ -33,6 +33,18 @@ function clearTenantCookie() {
   document.cookie = `${TENANT_COOKIE_NAME}=; path=/; max-age=0; samesite=lax; secure`;
 }
 
+function safeCallbackUrl(value: string | null | undefined) {
+  const clean = String(value || "").trim();
+
+  if (!clean || !clean.startsWith("/") || clean.startsWith("//")) {
+    return "/admin";
+  }
+
+  if (clean.startsWith("/admin/login")) return "/admin";
+
+  return clean;
+}
+
 function getTenantSlugsFromSession(
   session: Awaited<ReturnType<typeof getSession>>,
 ) {
@@ -42,9 +54,13 @@ function getTenantSlugsFromSession(
     return [];
   }
 
-  return rawTenantSlugs
-    .map((value) => slugifyTenant(String(value)))
-    .filter(Boolean);
+  return Array.from(
+    new Set(
+      rawTenantSlugs
+        .map((value) => slugifyTenant(String(value)))
+        .filter(Boolean),
+    ),
+  );
 }
 
 export default function AdminLoginForm() {
@@ -55,7 +71,7 @@ export default function AdminLoginForm() {
   }, [searchParams]);
 
   const callbackUrl = useMemo(() => {
-    return searchParams?.get("callbackUrl") || "/admin";
+    return safeCallbackUrl(searchParams?.get("callbackUrl") || "/admin");
   }, [searchParams]);
 
   const errorCode = useMemo(() => {
@@ -115,21 +131,39 @@ export default function AdminLoginForm() {
     const session = await getSession();
     const tenantSlugs = getTenantSlugsFromSession(session);
 
-    const selectedTenantSlug =
-      queryTenantSlug && tenantSlugs.includes(queryTenantSlug)
-        ? queryTenantSlug
-        : tenantSlugs[0] || "";
-
-    if (!selectedTenantSlug) {
+    if (tenantSlugs.length === 0) {
       setError("No tenant access was found for this account.");
       setLoading(false);
       return;
     }
 
-    setTenantCookie(selectedTenantSlug);
-    setResolvedTenantSlug(selectedTenantSlug);
+    if (queryTenantSlug) {
+      if (!tenantSlugs.includes(queryTenantSlug)) {
+        clearTenantCookie();
+        setError("This account does not have access to that site.");
+        setLoading(false);
+        return;
+      }
 
-    window.location.href = result.url || callbackUrl;
+      setTenantCookie(queryTenantSlug);
+      setResolvedTenantSlug(queryTenantSlug);
+      window.location.href = result.url || callbackUrl;
+      return;
+    }
+
+    if (tenantSlugs.length === 1) {
+      setTenantCookie(tenantSlugs[0]);
+      setResolvedTenantSlug(tenantSlugs[0]);
+      window.location.href = result.url || callbackUrl;
+      return;
+    }
+
+    clearTenantCookie();
+
+    const selectUrl = new URL("/admin/select-tenant", window.location.origin);
+    selectUrl.searchParams.set("callbackUrl", callbackUrl);
+
+    window.location.href = selectUrl.toString();
   }
 
   return (
@@ -140,15 +174,15 @@ export default function AdminLoginForm() {
         <h1 style={styles.title}>Admin login</h1>
 
         <p style={styles.subtitle}>
-          Sign in with your organisation admin account. The correct tenant will
-          be selected automatically after sign in.
+          Sign in with your organisation admin account. If your account has
+          access to more than one site, you will choose which site to manage.
         </p>
       </div>
 
       <div style={styles.siteBox}>
         <span style={styles.siteLabel}>Site</span>
         <strong style={styles.siteValue}>
-          {resolvedTenantSlug || "found automatically after sign in"}
+          {resolvedTenantSlug || "choose after sign in"}
         </strong>
       </div>
 
