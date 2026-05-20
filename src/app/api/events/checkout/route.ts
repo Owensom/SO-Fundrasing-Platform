@@ -33,6 +33,7 @@ type EventCheckoutPaymentSummary = {
   amountTotalCents: number;
   buyerContributionCents: number;
   platformCommissionCents: number;
+  stripeProcessingCoverCents: number;
   applicationFeeCents: number;
   tenantNetCents: number;
 };
@@ -86,12 +87,18 @@ function normaliseEventPaymentSummary(input: {
 
   const ticketTotalCents = safeMoneyCents(paymentSummary.ticketTotalCents);
   const amountTotalCents = safeMoneyCents(paymentSummary.amountTotalCents);
+
   const buyerContributionCents = safeMoneyCents(
     paymentSummary.buyerContributionCents,
   );
 
   const platformCommissionCents = safeMoneyCents(
     paymentSummary.applicationFeeCents,
+  );
+
+  const stripeProcessingCoverCents = Math.max(
+    buyerContributionCents - platformCommissionCents,
+    0,
   );
 
   const applicationFeeCents =
@@ -106,6 +113,7 @@ function normaliseEventPaymentSummary(input: {
     amountTotalCents,
     buyerContributionCents,
     platformCommissionCents,
+    stripeProcessingCoverCents,
     applicationFeeCents,
     tenantNetCents,
   };
@@ -144,6 +152,7 @@ function eventCheckoutMetadata(input: {
   buyerContributionCents: number;
   platformFeePercent: number;
   platformCommissionCents: number;
+  stripeProcessingCoverCents: number;
   applicationFeeCents: number;
   ticketTotalCents: number;
   amountTotalCents: number;
@@ -160,23 +169,39 @@ function eventCheckoutMetadata(input: {
     event_title: input.event.title,
     buyer_name: input.buyerName,
     buyer_email: input.buyerEmail,
+
     cover_fees: input.coverFees ? "true" : "false",
     buyer_requested_cover_fees: input.coverFees ? "true" : "false",
-    buyer_fee_contributions_enabled: input.buyerContributionCents > 0 ? "true" : "false",
+    buyer_fee_contributions_enabled:
+      input.buyerContributionCents > 0 ? "true" : "false",
     donor_covered_fees: input.buyerContributionCents > 0 ? "true" : "false",
+
     buyer_contribution_cents: String(input.buyerContributionCents),
     supporter_contribution_cents: String(input.buyerContributionCents),
     donor_fee_cents: String(input.buyerContributionCents),
     buyer_fee_cents: String(input.buyerContributionCents),
+
     platform_fee_percent: String(input.platformFeePercent),
+    tier_platform_commission_cents: String(input.platformCommissionCents),
     platform_commission_cents: String(input.platformCommissionCents),
-    platform_fee_cents: String(input.applicationFeeCents),
+    platform_fee_cents: String(input.platformCommissionCents),
+
+    stripe_processing_cover_cents: String(input.stripeProcessingCoverCents),
+
     application_fee_amount: String(input.applicationFeeCents),
+    application_fee_amount_cents: String(input.applicationFeeCents),
+    application_fee_includes_supporter_cover:
+      input.buyerContributionCents > 0 ? "true" : "false",
+
     ticket_total_cents: String(input.ticketTotalCents),
+    ticket_subtotal_cents: String(input.ticketTotalCents),
     base_amount_cents: String(input.ticketTotalCents),
+    tenant_target_amount_cents: String(input.ticketTotalCents),
+
     amount_total_cents: String(input.amountTotalCents),
     checkout_total_cents: String(input.amountTotalCents),
     net_amount_cents: String(input.tenantNetCents),
+    tenant_net_after_application_fee_cents: String(input.tenantNetCents),
   };
 }
 
@@ -336,8 +361,7 @@ export async function POST(req: Request) {
           },
         });
       }
-
-      const session = await createStripeCheckoutSession({
+            const session = await createStripeCheckoutSession({
         stripe,
         buyerEmail,
         successUrl: `${siteUrl(
@@ -356,6 +380,8 @@ export async function POST(req: Request) {
           buyerContributionCents: paymentSummary.buyerContributionCents,
           platformFeePercent,
           platformCommissionCents: paymentSummary.platformCommissionCents,
+          stripeProcessingCoverCents:
+            paymentSummary.stripeProcessingCoverCents,
           applicationFeeCents: paymentSummary.applicationFeeCents,
           ticketTotalCents: paymentSummary.ticketTotalCents,
           amountTotalCents: paymentSummary.amountTotalCents,
@@ -537,6 +563,7 @@ export async function POST(req: Request) {
         buyerContributionCents: paymentSummary.buyerContributionCents,
         platformFeePercent,
         platformCommissionCents: paymentSummary.platformCommissionCents,
+        stripeProcessingCoverCents: paymentSummary.stripeProcessingCoverCents,
         applicationFeeCents: paymentSummary.applicationFeeCents,
         ticketTotalCents: paymentSummary.ticketTotalCents,
         amountTotalCents: paymentSummary.amountTotalCents,
