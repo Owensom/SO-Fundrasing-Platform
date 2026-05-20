@@ -1,57 +1,70 @@
+import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import {
+  buildPaymentSummary,
+  createStripeCheckoutSession,
+  getPlatformFeePercent,
+  getTenantFinanceSettings,
+} from "@/lib/payments";
+import {
+  attachStripeSessionToReservedSeats,
+  createEventOrderItem,
+  createPendingEventOrder,
+  deleteEventOrderAndItems,
+  getEventById,
+  reserveEventSeatsForOrder,
+  updateEventOrderStripeSession,
+} from "../../../../../api/_lib/events-repo";
 
-export type TenantFinanceSettings = {
-  tenant_slug: string;
-  stripe_connect_account_id: string | null;
-  stripe_connect_charges_enabled: boolean | null;
-  stripe_connect_payouts_enabled: boolean | null;
-  stripe_connect_details_submitted: boolean | null;
-  stripe_connect_onboarding_complete: boolean | null;
-  platform_fee_percent: number | string | null;
-  subscription_tier: string | null;
+type CheckoutItem = {
+  seatId?: string;
+  ticketTypeId: string;
+  quantity?: number;
+  guestName?: string;
+  dietary?: string;
+  dietaryRequirements?: string;
+  menuChoice?: string;
+  tableName?: string;
 };
 
-export type CheckoutMetadata = Record<string, string | number | boolean | null>;
-
-export type BuildCheckoutSessionInput = {
-  stripe: Stripe;
-  buyerEmail: string;
-  successUrl: string;
-  cancelUrl: string;
-  lineItems: Stripe.Checkout.SessionCreateParams.LineItem[];
-  metadata: CheckoutMetadata;
-  finance: TenantFinanceSettings | null;
-  applicationFeeCents: number;
-};
-
-export type PaymentSummary = {
+type EventCheckoutPaymentSummary = {
   ticketTotalCents: number;
-  platformCommissionCents: number;
-  buyerContributionCents: number;
-  applicationFeeCents: number;
   amountTotalCents: number;
+  buyerContributionCents: number;
+  platformCommissionCents: number;
+  stripeProcessingCoverCents: number;
+  applicationFeeCents: number;
   tenantNetCents: number;
 };
 
-const STRIPE_STANDARD_UK_PERCENT = 0.015;
-const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2023-10-16",
+});
 
-export function cleanPaymentText(value: unknown) {
+function siteUrl(req: Request) {
+  return new URL(req.url).origin;
+}
+
+function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
-export function safePaymentPercent(value: unknown, fallback = 0) {
-  const number = Number(value);
+function positiveQuantity(value: unknown) {
+  const number = Number(value || 0);
 
-  if (!Number.isFinite(number) || number < 0) {
-    return fallback;
+  if (!Number.isFinite(number)) {
+    return 0;
   }
 
-  return Math.min(100, Number(number.toFixed(2)));
+  return Math.max(0, Math.floor(number));
 }
 
-export function safePaymentCents(value: unknown) {
+function truthy(value: unknown) {
+  return value === true || value === "true" || value === "yes" || value === "1";
+}
+
+function safeMoneyCents(value: unknown) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
@@ -61,207 +74,35 @@ export function safePaymentCents(value: unknown) {
   return Math.max(0, Math.round(number));
 }
 
-export function calculateApplicationFeeCents(
-  subtotalCents: number,
-  platformFeePercent: number,
-) {
-  const safeSubtotalCents = safePaymentCents(subtotalCents);
-  const safePlatformFeePercent = safePaymentPercent(platformFeePercent, 0);
-
-  if (safeSubtotalCents <= 0 || safePlatformFeePercent <= 0) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.ceil(safeSubtotalCents * (safePlatformFeePercent / 100)),
-  );
-}
-
-export function calculateBuyerContributionCents(
-  subtotalCents: number,
-  platformFeePercent = 0,
-) {
-  const safeSubtotalCents = safePaymentCents(subtotalCents);
-
-  if (safeSubtotalCents <= 0) {
-    return 0;
-  }
-
-  const platformCommissionCents = calculateApplicationFeeCents(
-    safeSubtotalCents,
-    platformFeePercent,
-  );
-
-  const grossTotalCents = Math.ceil(
-    (safeSubtotalCents +
-      platformCommissionCents +
-      STRIPE_STANDARD_UK_FIXED_CENTS) /
-      (1 - STRIPE_STANDARD_UK_PERCENT),
-  );
-
-  return Math.max(0, grossTotalCents - safeSubtotalCents);
-}
-
-export function canUseStripeConnectDestination(
-  finance: TenantFinanceSettings | null,
-) {
-  return Boolean(
-    finance?.stripe_connect_account_id &&
-      finance.stripe_connect_charges_enabled &&
-      finance.stripe_connect_payouts_enabled &&
-      finance.stripe_connect_details_submitted &&
-      finance.stripe_connect_onboarding_complete,
-  );
-}
-
-export function normaliseStripeMetadata(metadata: CheckoutMetadata) {
-  return Object.fromEntries(
-    Object.entries(metadata).map(([key, value]) => [
-      key,
-      value === null || value === undefined ? "" : String(value),
-    ]),
-  ) as Stripe.MetadataParam;
-}
-
-export async function getTenantFinanceSettings(
-  tenantSlug: string,
-): Promise<TenantFinanceSettings | null> {
-  const rows = (await query(
-    `
-      select
-        t.slug as tenant_slug,
-        coalesce(
-          nullif(ts.stripe_connect_account_id, ''),
-          nullif(t.stripe_connect_account_id, '')
-        ) as stripe_connect_account_id,
-        t.stripe_connect_charges_enabled,
-        t.stripe_connect_payouts_enabled,
-        t.stripe_connect_details_submitted,
-        t.stripe_connect_onboarding_complete,
-        ts.platform_fee_percent,
-        ts.subscription_tier
-      from tenants t
-      left join tenant_settings ts
-        on ts.tenant_slug = t.slug
-      where t.slug = $1
-      limit 1
-    `,
-    [tenantSlug],
-  )) as TenantFinanceSettings[];
-
-  return rows[0] || null;
-}
-
-export function buildStripeCheckoutSessionParams(
-  input: Omit<BuildCheckoutSessionInput, "stripe">,
-): Stripe.Checkout.SessionCreateParams {
-  const useConnect = canUseStripeConnectDestination(input.finance);
-  const destination = input.finance?.stripe_connect_account_id || "";
-
-  const applicationFeeCents = Math.max(
-    0,
-    Math.floor(Number(input.applicationFeeCents || 0)),
-  );
-
-  const supporterContributionCents = safePaymentCents(
-    input.metadata.supporter_contribution_cents ??
-      input.metadata.buyer_contribution_cents ??
-      input.metadata.donor_fee_cents ??
-      0,
-  );
-
-  const platformCommissionCents = safePaymentCents(
-    input.metadata.platform_commission_cents ??
-      input.metadata.subscription_commission_cents ??
-      applicationFeeCents,
-  );
-
-  const platformFeeCents = safePaymentCents(
-    input.metadata.platform_fee_cents ?? applicationFeeCents,
-  );
-
-  const metadata = normaliseStripeMetadata({
-    ...input.metadata,
-
-    stripe_connect_enabled: useConnect,
-    stripe_connect_routed: useConnect,
-    stripe_connect_account_id: useConnect ? destination : "",
-
-    application_fee_cents: applicationFeeCents,
-    application_fee_amount: applicationFeeCents,
-
-    platform_commission_cents: platformCommissionCents,
-    subscription_commission_cents: platformCommissionCents,
-    platform_fee_cents: platformFeeCents,
-
-    supporter_contribution_cents: supporterContributionCents,
-    buyer_contribution_cents:
-      input.metadata.buyer_contribution_cents ?? supporterContributionCents,
-
-    donor_fee_cents:
-      input.metadata.donor_fee_cents ?? supporterContributionCents,
-
-    donor_covered_fees:
-      input.metadata.donor_covered_fees ??
-      (supporterContributionCents > 0 ? "true" : "false"),
-  });
-
-  const params: Stripe.Checkout.SessionCreateParams = {
-    mode: "payment",
-    customer_email: input.buyerEmail,
-    success_url: input.successUrl,
-    cancel_url: input.cancelUrl,
-    line_items: input.lineItems,
-    metadata,
-  };
-
-  if (useConnect && destination) {
-    params.payment_intent_data = {
-      application_fee_amount: applicationFeeCents,
-      transfer_data: {
-        destination,
-      },
-      metadata,
-    };
-  }
-
-  return params;
-}
-
-export async function createStripeCheckoutSession(
-  input: BuildCheckoutSessionInput,
-) {
-  return input.stripe.checkout.sessions.create(
-    buildStripeCheckoutSessionParams(input),
-  );
-}
-
-export function getPlatformFeePercent(finance: TenantFinanceSettings | null) {
-  return safePaymentPercent(finance?.platform_fee_percent, 0);
-}
-
-export function buildPaymentSummary(input: {
+function normaliseEventPaymentSummary(input: {
   ticketTotalCents: number;
   coverFees: boolean;
   platformFeePercent: number;
-}): PaymentSummary {
-  const ticketTotalCents = safePaymentCents(input.ticketTotalCents);
-  const platformFeePercent = safePaymentPercent(input.platformFeePercent, 0);
+}): EventCheckoutPaymentSummary {
+  const paymentSummary = buildPaymentSummary({
+    ticketTotalCents: input.ticketTotalCents,
+    coverFees: input.coverFees,
+    platformFeePercent: input.platformFeePercent,
+  });
 
-  const platformCommissionCents = calculateApplicationFeeCents(
-    ticketTotalCents,
-    platformFeePercent,
+  const ticketTotalCents = safeMoneyCents(paymentSummary.ticketTotalCents);
+  const amountTotalCents = safeMoneyCents(paymentSummary.amountTotalCents);
+
+  const buyerContributionCents = safeMoneyCents(
+    paymentSummary.buyerContributionCents,
   );
 
-  const buyerContributionCents = input.coverFees
-    ? calculateBuyerContributionCents(ticketTotalCents, platformFeePercent)
-    : 0;
+  const platformCommissionCents = safeMoneyCents(
+    paymentSummary.platformCommissionCents,
+  );
 
-  const amountTotalCents = ticketTotalCents + buyerContributionCents;
+  const stripeProcessingCoverCents = Math.max(
+    buyerContributionCents - platformCommissionCents,
+    0,
+  );
 
   const applicationFeeCents =
-    buyerContributionCents > 0
+    input.coverFees && buyerContributionCents > 0
       ? buyerContributionCents
       : platformCommissionCents;
 
@@ -269,13 +110,258 @@ export function buildPaymentSummary(input: {
 
   return {
     ticketTotalCents,
-    platformCommissionCents,
-    buyerContributionCents,
-    applicationFeeCents,
     amountTotalCents,
+    buyerContributionCents,
+    platformCommissionCents,
+    stripeProcessingCoverCents,
+    applicationFeeCents,
     tenantNetCents,
   };
 }
+
+function seatLabel(input: {
+  tableNumber?: string | null;
+  rowLabel?: string | null;
+  seatNumber?: string | null;
+  tableName?: string | null;
+}) {
+  const tableName = cleanText(input.tableName);
+
+  if (input.tableNumber) {
+    return tableName
+      ? `Table ${input.tableNumber} (${tableName}), Seat ${
+          input.seatNumber || ""
+        }`
+      : `Table ${input.tableNumber}, Seat ${input.seatNumber || ""}`;
+  }
+
+  return `Row ${input.rowLabel || ""}, Seat ${input.seatNumber || ""}`;
+}
+
+function eventCheckoutMetadata(input: {
+  event: {
+    id: string;
+    title: string;
+    event_type: string;
+    tenant_slug: string;
+  };
+  orderId: string;
+  buyerName: string;
+  buyerEmail: string;
+  coverFees: boolean;
+  buyerContributionCents: number;
+  platformFeePercent: number;
+  platformCommissionCents: number;
+  stripeProcessingCoverCents: number;
+  applicationFeeCents: number;
+  ticketTotalCents: number;
+  amountTotalCents: number;
+  tenantNetCents: number;
+}) {
+  return {
+    type: "event",
+    tenant_slug: input.event.tenant_slug,
+    event_id: input.event.id,
+    eventId: input.event.id,
+    order_id: input.orderId,
+    orderId: input.orderId,
+    event_type: input.event.event_type,
+    event_title: input.event.title,
+    buyer_name: input.buyerName,
+    buyer_email: input.buyerEmail,
+
+    cover_fees: input.coverFees ? "true" : "false",
+    buyer_requested_cover_fees: input.coverFees ? "true" : "false",
+    buyer_fee_contributions_enabled:
+      input.buyerContributionCents > 0 ? "true" : "false",
+    donor_covered_fees: input.buyerContributionCents > 0 ? "true" : "false",
+
+    buyer_contribution_cents: String(input.buyerContributionCents),
+    supporter_contribution_cents: String(input.buyerContributionCents),
+    donor_fee_cents: String(input.buyerContributionCents),
+    buyer_fee_cents: String(input.buyerContributionCents),
+
+    platform_fee_percent: String(input.platformFeePercent),
+    tier_platform_commission_cents: String(input.platformCommissionCents),
+    platform_commission_cents: String(input.platformCommissionCents),
+    platform_fee_cents: String(input.platformCommissionCents),
+
+    stripe_processing_cover_cents: String(input.stripeProcessingCoverCents),
+
+    application_fee_amount: String(input.applicationFeeCents),
+    application_fee_amount_cents: String(input.applicationFeeCents),
+    application_fee_includes_supporter_cover:
+      input.buyerContributionCents > 0 ? "true" : "false",
+
+    ticket_total_cents: String(input.ticketTotalCents),
+    ticket_subtotal_cents: String(input.ticketTotalCents),
+    base_amount_cents: String(input.ticketTotalCents),
+    tenant_target_amount_cents: String(input.ticketTotalCents),
+
+    amount_total_cents: String(input.amountTotalCents),
+    checkout_total_cents: String(input.amountTotalCents),
+    net_amount_cents: String(input.tenantNetCents),
+    tenant_net_after_application_fee_cents: String(input.tenantNetCents),
+  };
+}
+
+export async function POST(req: Request) {
+  let orderId: string | null = null;
+
+  try {
+    const tenantSlug = await getTenantSlugFromHeaders();
+    const body = await req.json();
+
+    const eventId = cleanText(body.eventId);
+    const buyerName = cleanText(body.buyerName);
+    const buyerEmail = cleanText(body.buyerEmail);
+    const coverFees = truthy(body.coverFees);
+
+    const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
+
+    if (!eventId || items.length === 0) {
+      return NextResponse.json(
+        { error: "Missing checkout data." },
+        { status: 400 },
+      );
+    }
+
+    if (!buyerName || !buyerEmail) {
+      return NextResponse.json(
+        { error: "Name and email address are required." },
+        { status: 400 },
+      );
+    }
+
+    const event = await getEventById(eventId);
+
+    if (!event || event.status !== "published") {
+      return NextResponse.json(
+        { error: "Event unavailable." },
+        { status: 404 },
+      );
+    }
+
+    if (!tenantSlug || event.tenant_slug !== tenantSlug) {
+      return NextResponse.json(
+        { error: "Event unavailable for this tenant." },
+        { status: 404 },
+      );
+    }
+
+    const finance = await getTenantFinanceSettings(event.tenant_slug);
+    const platformFeePercent = getPlatformFeePercent(finance);
+
+    const ticketTypes = (event.ticket_types || []).filter(
+      (ticketType) => ticketType.is_active,
+    );
+
+    const isGeneralAdmission = event.event_type === "general_admission";
+
+    if (isGeneralAdmission) {
+      const checkoutRows = items
+        .map((item) => {
+          const ticketTypeId = cleanText(item.ticketTypeId);
+          const quantity = positiveQuantity(item.quantity);
+
+          const ticketType = ticketTypes.find(
+            (currentTicketType) => currentTicketType.id === ticketTypeId,
+          );
+
+          if (!ticketType || quantity <= 0) {
+            return null;
+          }
+
+          return {
+            ticketType,
+            quantity,
+          };
+        })
+        .filter(Boolean) as {
+        ticketType: (typeof ticketTypes)[number];
+        quantity: number;
+      }[];
+
+      if (checkoutRows.length === 0) {
+        return NextResponse.json(
+          { error: "Please choose at least one ticket." },
+          { status: 400 },
+        );
+      }
+
+      const ticketTotalCents = checkoutRows.reduce(
+        (sum, row) => sum + Number(row.ticketType.price || 0) * row.quantity,
+        0,
+      );
+
+      if (ticketTotalCents <= 0) {
+        return NextResponse.json(
+          { error: "Invalid checkout total." },
+          { status: 400 },
+        );
+      }
+
+      const paymentSummary = normaliseEventPaymentSummary({
+        ticketTotalCents,
+        coverFees,
+        platformFeePercent,
+      });
+
+      const order = await createPendingEventOrder({
+        tenantSlug: event.tenant_slug,
+        eventId: event.id,
+        amountTotal: paymentSummary.amountTotalCents,
+        currency: event.currency,
+        buyerName,
+        buyerEmail,
+        buyer_name: buyerName,
+        buyer_email: buyerEmail,
+      } as never);
+
+      orderId = order.id;
+
+      for (const row of checkoutRows) {
+        await createEventOrderItem({
+          orderId: order.id,
+          eventId: event.id,
+          ticketTypeId: row.ticketType.id,
+          seatId: null,
+          label: row.ticketType.name,
+          quantity: row.quantity,
+          unitAmount: row.ticketType.price,
+          guest_name: buyerName,
+          dietary_requirements: null,
+          menu_choice: null,
+        });
+      }
+
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
+        checkoutRows.map((row) => ({
+          quantity: row.quantity,
+          price_data: {
+            currency: event.currency.toLowerCase(),
+            unit_amount: Number(row.ticketType.price || 0),
+            product_data: {
+              name: `${event.title} — ${row.ticketType.name}`,
+            },
+          },
+        }));
+
+      if (paymentSummary.buyerContributionCents > 0) {
+        lineItems.push({
+          quantity: 1,
+          price_data: {
+            currency: event.currency.toLowerCase(),
+            unit_amount: paymentSummary.buyerContributionCents,
+            product_data: {
+              name: `${event.title} — Cover processing costs`,
+              description:
+                "Optional contribution to help cover platform and payment processing costs.",
+            },
+          },
+        });
+      }
+
       const session = await createStripeCheckoutSession({
         stripe,
         buyerEmail,
@@ -311,8 +397,7 @@ export function buildPaymentSummary(input: {
 
       return NextResponse.json({ url: session.url });
     }
-
-    const seats = event.seats || [];
+        const seats = event.seats || [];
 
     const seatIds = Array.from(
       new Set(items.map((item) => cleanText(item.seatId)).filter(Boolean)),
