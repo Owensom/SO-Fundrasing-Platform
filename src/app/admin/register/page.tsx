@@ -1,12 +1,15 @@
-"use client";
-
 import Link from "next/link";
-import { Suspense, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import RegisterForm from "./RegisterForm";
 
 export const dynamic = "force-dynamic";
 
-function getErrorMessage(error?: string | null) {
+type RegisterPageProps = {
+  searchParams?: Promise<{
+    error?: string;
+  }>;
+};
+
+function getErrorMessage(error?: string) {
   switch (error) {
     case "organisation_required":
       return "Enter the organisation name.";
@@ -31,190 +34,12 @@ function getErrorMessage(error?: string | null) {
   }
 }
 
-function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
+export default async function AdminRegisterPage({
+  searchParams,
+}: RegisterPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const errorMessage = getErrorMessage(resolvedSearchParams.error);
 
-function RegisterContent() {
-  const searchParams = useSearchParams();
-  const errorMessage = getErrorMessage(searchParams?.get("error") || null);
-
-  const [organisationName, setOrganisationName] = useState("");
-  const [manualSlug, setManualSlug] = useState("");
-  const [hasEditedSlug, setHasEditedSlug] = useState(false);
-
-  const generatedSlug = useMemo(
-    () => slugify(organisationName),
-    [organisationName],
-  );
-
-  const tenantSlug = hasEditedSlug ? slugify(manualSlug) : generatedSlug;
-
-  function updateOrganisationName(value: string) {
-    setOrganisationName(value);
-
-    if (!hasEditedSlug) {
-      setManualSlug(slugify(value));
-    }
-  }
-
-  function updateTenantSlug(value: string) {
-    setHasEditedSlug(true);
-    setManualSlug(slugify(value));
-  }
-
-  return (
-    <section className="register-shell" style={styles.shell}>
-      <div style={styles.heroCard}>
-        <div style={styles.eyebrow}>SO Fundraising Platform</div>
-
-        <h1 style={styles.title}>Create your organisation account</h1>
-
-        <p style={styles.subtitle}>
-          Set up a new tenant workspace with secure admin access, Community
-          defaults, campaign tools and tenant-scoped billing settings.
-        </p>
-
-        <div style={styles.checkList}>
-          {[
-            "Creates a tenant workspace",
-            "Creates the first organisation admin",
-            "Starts on the Community tier",
-            "Generates a safe tenant slug automatically",
-          ].map((item) => (
-            <div key={item} style={styles.checkItem}>
-              <span style={styles.checkIcon}>✓</span>
-              {item}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={styles.formCard}>
-        <h2 style={styles.formTitle}>Register</h2>
-
-        <p style={styles.formIntro}>
-          Enter the organisation name and the site slug will be generated
-          automatically. You can still edit it before creating the account.
-        </p>
-
-        {errorMessage ? <div style={styles.errorBox}>{errorMessage}</div> : null}
-
-        <form action="/api/admin/register" method="post" style={styles.form}>
-          <label style={styles.label}>
-            Organisation name
-            <input
-              name="organisationName"
-              required
-              value={organisationName}
-              onChange={(event) => updateOrganisationName(event.target.value)}
-              placeholder="Brave Ceilidh"
-              style={styles.input}
-            />
-          </label>
-
-          <label style={styles.label}>
-            Site slug
-            <input
-              name="tenantSlug"
-              required
-              value={tenantSlug}
-              onChange={(event) => updateTenantSlug(event.target.value)}
-              placeholder="brave-ceilidh"
-              pattern="[a-z0-9][a-z0-9-]{1,58}[a-z0-9]"
-              style={styles.input}
-            />
-            <span style={styles.helpText}>
-              This becomes the tenant identifier, for example{" "}
-              <strong>{tenantSlug || "brave-ceilidh"}</strong>.
-            </span>
-          </label>
-
-          <label style={styles.label}>
-            Admin name
-            <input
-              name="adminName"
-              required
-              placeholder="Organisation Admin"
-              style={styles.input}
-            />
-          </label>
-
-          <label style={styles.label}>
-            Admin email
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="admin@example.org"
-              style={styles.input}
-            />
-          </label>
-
-          <label style={styles.label}>
-            Password
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={10}
-              placeholder="At least 10 characters"
-              style={styles.input}
-            />
-          </label>
-
-          <label style={styles.label}>
-            Confirm password
-            <input
-              name="confirmPassword"
-              type="password"
-              required
-              minLength={10}
-              placeholder="Repeat password"
-              style={styles.input}
-            />
-          </label>
-
-          <button type="submit" style={styles.submitButton}>
-            Create organisation account
-          </button>
-        </form>
-
-        <p style={styles.footerText}>
-          Already registered?{" "}
-          <Link href="/admin/login" style={styles.footerLink}>
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function RegisterLoading() {
-  return (
-    <section className="register-shell" style={styles.shell}>
-      <div style={styles.heroCard}>
-        <div style={styles.eyebrow}>SO Fundraising Platform</div>
-        <h1 style={styles.title}>Create your organisation account</h1>
-        <p style={styles.subtitle}>Loading registration form…</p>
-      </div>
-
-      <div style={styles.formCard}>
-        <h2 style={styles.formTitle}>Register</h2>
-        <p style={styles.formIntro}>Preparing the secure registration form.</p>
-      </div>
-    </section>
-  );
-}
-
-export default function AdminRegisterPage() {
   return (
     <main
       style={{
@@ -228,9 +53,54 @@ export default function AdminRegisterPage() {
     >
       <style>{responsiveStyles}</style>
 
-      <Suspense fallback={<RegisterLoading />}>
-        <RegisterContent />
-      </Suspense>
+      <section className="register-shell" style={styles.shell}>
+        <div style={styles.heroCard}>
+          <div style={styles.eyebrow}>SO Fundraising Platform</div>
+
+          <h1 style={styles.title}>Create your organisation account</h1>
+
+          <p style={styles.subtitle}>
+            Set up a new tenant workspace with secure admin access, Community
+            defaults, campaign tools and tenant-scoped billing settings.
+          </p>
+
+          <div style={styles.checkList}>
+            {[
+              "Creates a tenant workspace",
+              "Creates the first organisation admin",
+              "Starts on the Community tier",
+              "Generates a safe tenant slug automatically",
+            ].map((item) => (
+              <div key={item} style={styles.checkItem}>
+                <span style={styles.checkIcon}>✓</span>
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.formCard}>
+          <h2 style={styles.formTitle}>Register</h2>
+
+          <p style={styles.formIntro}>
+            Enter the organisation name and the site slug will be generated
+            automatically. You can still edit it before creating the account.
+          </p>
+
+          {errorMessage ? (
+            <div style={styles.errorBox}>{errorMessage}</div>
+          ) : null}
+
+          <RegisterForm />
+
+          <p style={styles.footerText}>
+            Already registered?{" "}
+            <Link href="/admin/login" style={styles.footerLink}>
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </section>
     </main>
   );
 }
@@ -358,50 +228,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#991b1b",
     fontWeight: 800,
     marginBottom: 16,
-  },
-
-  form: {
-    display: "grid",
-    gap: 12,
-  },
-
-  label: {
-    display: "grid",
-    gap: 6,
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
-
-  input: {
-    width: "100%",
-    height: 48,
-    padding: "0 14px",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-
-  helpText: {
-    color: "#64748b",
-    fontSize: 12,
-    lineHeight: 1.45,
-    fontWeight: 650,
-  },
-
-  submitButton: {
-    marginTop: 8,
-    height: 52,
-    border: "none",
-    borderRadius: 999,
-    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
-    color: "#ffffff",
-    fontWeight: 950,
-    fontSize: 16,
-    cursor: "pointer",
-    boxShadow: "0 16px 32px rgba(37,99,235,0.24)",
   },
 
   footerText: {
