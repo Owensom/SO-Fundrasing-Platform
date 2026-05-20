@@ -2,7 +2,18 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const TENANT_COOKIE_NAME = "so_tenant_slug";
+
+function slugifyTenant(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 function getTenantFromBrowserHost() {
   if (typeof window === "undefined") {
@@ -30,8 +41,24 @@ function getTenantFromBrowserHost() {
   return "default";
 }
 
+function setTenantCookie(tenantSlug: string) {
+  if (typeof document === "undefined") return;
+
+  const safeTenantSlug = slugifyTenant(tenantSlug);
+
+  if (!safeTenantSlug) return;
+
+  document.cookie = `${TENANT_COOKIE_NAME}=${safeTenantSlug}; path=/; max-age=${
+    60 * 60 * 24 * 30
+  }; samesite=lax; secure`;
+}
+
 export default function AdminLoginForm() {
   const searchParams = useSearchParams();
+
+  const queryTenantSlug = useMemo(() => {
+    return slugifyTenant(searchParams?.get("tenant") || "");
+  }, [searchParams]);
 
   const callbackUrl = useMemo(() => {
     return searchParams?.get("callbackUrl") || "/admin";
@@ -41,17 +68,34 @@ export default function AdminLoginForm() {
     return searchParams?.get("error") || "";
   }, [searchParams]);
 
+  const registeredTenant = useMemo(() => {
+    return slugifyTenant(searchParams?.get("tenant") || "");
+  }, [searchParams]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [tenantSlug, setTenantSlug] = useState("default");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const tenantSlug = useMemo(() => getTenantFromBrowserHost(), []);
+  useEffect(() => {
+    const resolvedTenant = queryTenantSlug || getTenantFromBrowserHost();
+
+    setTenantSlug(resolvedTenant);
+
+    if (queryTenantSlug) {
+      setTenantCookie(queryTenantSlug);
+    }
+  }, [queryTenantSlug]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    if (tenantSlug && tenantSlug !== "default") {
+      setTenantCookie(tenantSlug);
+    }
 
     const result = await signIn("credentials", {
       email,
@@ -77,6 +121,12 @@ export default function AdminLoginForm() {
         Site: <strong>{tenantSlug}</strong>
       </p>
 
+      {registeredTenant ? (
+        <p style={{ color: "#166534", fontWeight: 700 }}>
+          Account created for {registeredTenant}. Sign in to continue.
+        </p>
+      ) : null}
+
       {errorCode === "tenant_access_denied" ? (
         <p style={{ color: "#b91c1c" }}>
           This account does not have access to this site.
@@ -91,6 +141,7 @@ export default function AdminLoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           style={{ padding: 12 }}
         />
+
         <input
           type="password"
           placeholder="Password"
@@ -98,6 +149,7 @@ export default function AdminLoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           style={{ padding: 12 }}
         />
+
         <button type="submit" disabled={loading} style={{ padding: 12 }}>
           {loading ? "Signing in..." : "Sign in"}
         </button>
