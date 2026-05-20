@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -15,32 +15,6 @@ function slugifyTenant(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function getTenantFromBrowserHost() {
-  if (typeof window === "undefined") {
-    return "default";
-  }
-
-  const host = window.location.host.split(":")[0].toLowerCase();
-
-  if (host === "localhost" || host.endsWith(".localhost")) {
-    const parts = host.split(".").filter(Boolean);
-    return parts.length >= 2 ? parts[0] : "default";
-  }
-
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.toLowerCase() || "";
-
-  if (rootDomain && host.endsWith(`.${rootDomain}`)) {
-    return host.replace(`.${rootDomain}`, "").split(".")[0] || "default";
-  }
-
-  if (host.endsWith(".vercel.app") || host.endsWith(".now.sh")) {
-    const parts = host.split(".").filter(Boolean);
-    return parts.length >= 3 ? parts[0] : "default";
-  }
-
-  return "default";
-}
-
 function setTenantCookie(tenantSlug: string) {
   if (typeof document === "undefined") return;
 
@@ -48,9 +22,21 @@ function setTenantCookie(tenantSlug: string) {
 
   if (!safeTenantSlug) return;
 
-  document.cookie = `${TENANT_COOKIE_NAME}=${safeTenantSlug}; path=/; max-age=${
-    60 * 60 * 24 * 30
-  }; samesite=lax; secure`;
+  document.cookie = `${TENANT_COOKIE_NAME}=${encodeURIComponent(
+    safeTenantSlug,
+  )}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax; secure`;
+}
+
+function getTenantSlugsFromSession(session: Awaited<ReturnType<typeof getSession>>) {
+  const rawTenantSlugs = (session?.user as any)?.tenantSlugs;
+
+  if (!Array.isArray(rawTenantSlugs)) {
+    return [];
+  }
+
+  return rawTenantSlugs
+    .map((value) => slugifyTenant(String(value)))
+    .filter(Boolean);
 }
 
 export default function AdminLoginForm() {
@@ -68,33 +54,35 @@ export default function AdminLoginForm() {
     return searchParams?.get("error") || "";
   }, [searchParams]);
 
-  const registeredTenant = useMemo(() => {
-    return slugifyTenant(searchParams?.get("tenant") || "");
+  const registered = useMemo(() => {
+    return searchParams?.get("registered") === "1";
   }, [searchParams]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [tenantSlug, setTenantSlug] = useState("default");
+
+  const [resolvedTenantSlug, setResolvedTenantSlug] = useState(
+    queryTenantSlug || "",
+  );
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const resolvedTenant = queryTenantSlug || getTenantFromBrowserHost();
-
-    setTenantSlug(resolvedTenant);
-
     if (queryTenantSlug) {
+      setResolvedTenantSlug(queryTenantSlug);
       setTenantCookie(queryTenantSlug);
     }
   }, [queryTenantSlug]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
     setLoading(true);
     setError("");
 
-    if (tenantSlug && tenantSlug !== "default") {
-      setTenantCookie(tenantSlug);
+    if (queryTenantSlug) {
+      setTenantCookie(queryTenantSlug);
     }
 
     const result = await signIn("credentials", {
@@ -110,6 +98,23 @@ export default function AdminLoginForm() {
       return;
     }
 
+    const session = await getSession();
+    const tenantSlugs = getTenantSlugsFromSession(session);
+
+    const selectedTenantSlug =
+      queryTenantSlug && tenantSlugs.includes(queryTenantSlug)
+        ? queryTenantSlug
+        : tenantSlugs[0] || "";
+
+    if (!selectedTenantSlug) {
+      setError("No tenant access was found for this account.");
+      setLoading(false);
+      return;
+    }
+
+    setTenantCookie(selectedTenantSlug);
+    setResolvedTenantSlug(selectedTenantSlug);
+
     window.location.href = result.url || callbackUrl;
   }
 
@@ -118,12 +123,15 @@ export default function AdminLoginForm() {
       <h1>Admin login</h1>
 
       <p>
-        Site: <strong>{tenantSlug}</strong>
+        Site:{" "}
+        <strong>
+          {resolvedTenantSlug || "found automatically after sign in"}
+        </strong>
       </p>
 
-      {registeredTenant ? (
+      {registered && queryTenantSlug ? (
         <p style={{ color: "#166534", fontWeight: 700 }}>
-          Account created for {registeredTenant}. Sign in to continue.
+          Account created for {queryTenantSlug}. Sign in to continue.
         </p>
       ) : null}
 
@@ -138,6 +146,7 @@ export default function AdminLoginForm() {
           type="email"
           placeholder="Email"
           value={email}
+          autoComplete="email"
           onChange={(e) => setEmail(e.target.value)}
           style={{ padding: 12 }}
         />
@@ -146,6 +155,7 @@ export default function AdminLoginForm() {
           type="password"
           placeholder="Password"
           value={password}
+          autoComplete="current-password"
           onChange={(e) => setPassword(e.target.value)}
           style={{ padding: 12 }}
         />
@@ -155,7 +165,9 @@ export default function AdminLoginForm() {
         </button>
       </form>
 
-      {error ? <p style={{ color: "#b91c1c", marginTop: 16 }}>{error}</p> : null}
+      {error ? (
+        <p style={{ color: "#b91c1c", marginTop: 16 }}>{error}</p>
+      ) : null}
     </div>
   );
 }
