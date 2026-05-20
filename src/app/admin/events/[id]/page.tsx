@@ -10,6 +10,7 @@ import {
   checkSubscriptionCapability,
   getEventGuestCateringEditUpgradeMessage,
   getEventGuestMenuRequestEmailsUpgradeMessage,
+  getEventVipAccessCodesUpgradeMessage,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
@@ -93,6 +94,24 @@ type EventGuestCateringRow = {
   seat_customer_email: string | null;
 };
 
+type EventAccessCodeRow = {
+  id: string;
+  tenant_slug: string;
+  event_id: string;
+  code: string;
+  label: string | null;
+  access_type: string;
+  max_uses: number | null;
+  used_count: number;
+  ticket_type_id: string | null;
+  ticket_type_name: string | null;
+  is_active: boolean;
+  expires_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type UpdatedGuestCateringRow = {
   seat_id: string | null;
 };
@@ -155,6 +174,54 @@ function cleanImageFocus(value: FormDataEntryValue | null) {
 
 function cleanOptionalText(value: FormDataEntryValue | null) {
   return String(value || "").trim() || null;
+}
+
+function cleanAccessCode(value: FormDataEntryValue | null) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function cleanAccessType(value: FormDataEntryValue | null) {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (
+    clean === "vip" ||
+    clean === "sponsor" ||
+    clean === "staff" ||
+    clean === "guestlist"
+  ) {
+    return clean;
+  }
+
+  return "complimentary";
+}
+
+function parseNullablePositiveInteger(value: FormDataEntryValue | null) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return null;
+
+  const number = Number(clean);
+
+  if (!Number.isFinite(number) || number <= 0) return null;
+
+  return Math.floor(number);
+}
+
+function parseNullableDateTime(value: FormDataEntryValue | null) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return null;
+
+  const date = new Date(clean);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
 }
 
 function parseAisleAfterList(value: FormDataEntryValue | null) {
@@ -373,7 +440,6 @@ function statusLabel(status: string) {
   if (status === "closed") return "Closed";
   return "Draft";
 }
-
 function statusStyle(status: string): CSSProperties {
   if (status === "published") {
     return {
@@ -395,6 +461,52 @@ function statusStyle(status: string): CSSProperties {
     background: "#f1f5f9",
     color: "#475569",
     borderColor: "#e2e8f0",
+  };
+}
+
+function accessTypeLabel(value: string) {
+  if (value === "vip") return "VIP";
+  if (value === "sponsor") return "Sponsor";
+  if (value === "staff") return "Staff";
+  if (value === "guestlist") return "Guest list";
+  return "Complimentary";
+}
+
+function accessStatusLabel(row: EventAccessCodeRow) {
+  if (!row.is_active) return "Inactive";
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+    return "Expired";
+  }
+  if (row.max_uses !== null && Number(row.used_count) >= Number(row.max_uses)) {
+    return "Used up";
+  }
+
+  return "Active";
+}
+
+function accessStatusStyle(row: EventAccessCodeRow): CSSProperties {
+  const status = accessStatusLabel(row);
+
+  if (status === "Active") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (status === "Inactive") {
+    return {
+      background: "#f8fafc",
+      color: "#64748b",
+      borderColor: "#cbd5e1",
+    };
+  }
+
+  return {
+    background: "#fff7ed",
+    color: "#9a3412",
+    borderColor: "#fed7aa",
   };
 }
 
@@ -473,6 +585,7 @@ function hasGuestCateringDetail(row: EventGuestCateringRow) {
       String(row.menu_choice || "").trim(),
   );
 }
+
 async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   const rows = await query<ActiveCampaignCountRow>(
     `
@@ -502,6 +615,37 @@ async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   );
 
   return Number(rows[0]?.active_count || 0);
+}
+
+async function listEventAccessCodes(eventId: string) {
+  return query<EventAccessCodeRow>(
+    `
+      select
+        eac.id::text,
+        eac.tenant_slug,
+        eac.event_id::text,
+        eac.code,
+        eac.label,
+        eac.access_type,
+        eac.max_uses,
+        eac.used_count,
+        eac.ticket_type_id::text,
+        ett.name as ticket_type_name,
+        eac.is_active,
+        eac.expires_at::text,
+        eac.notes,
+        eac.created_at::text,
+        eac.updated_at::text
+      from event_access_codes eac
+      left join event_ticket_types ett
+        on ett.id = eac.ticket_type_id
+      where eac.event_id = $1
+      order by
+        eac.is_active desc,
+        eac.created_at desc
+    `,
+    [eventId],
+  );
 }
 
 async function listEventGuestCateringRows(eventId: string) {
@@ -621,6 +765,181 @@ async function requireEventGuestCateringEditAccess(eventId: string) {
   return event;
 }
 
+async function requireEventVipAccessCodeAccess(eventId: string) {
+  const event = await requireEventAccess(eventId);
+  const tenantSettings = await getTenantSettings(event.tenant_slug);
+
+  const accessCodeCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_vip_access_codes",
+  );
+
+  if (!accessCodeCapability.allowed) {
+    redirect(`/admin/events/${eventId}?error=vip-upgrade-required#access-codes`);
+  }
+
+  return event;
+}
+
+async function createEventAccessCodeAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const code = cleanAccessCode(formData.get("code"));
+
+  if (!eventId || !code) {
+    redirect(`/admin/events/${eventId}?error=missing-access-code#access-codes`);
+  }
+
+  const event = await requireEventVipAccessCodeAccess(eventId);
+
+  const label = cleanOptionalText(formData.get("label"));
+  const accessType = cleanAccessType(formData.get("access_type"));
+  const maxUses = parseNullablePositiveInteger(formData.get("max_uses"));
+  const rawTicketTypeId = String(formData.get("ticket_type_id") || "").trim();
+  const ticketTypeId = rawTicketTypeId || null;
+  const expiresAt = parseNullableDateTime(formData.get("expires_at"));
+  const notes = cleanOptionalText(formData.get("notes"));
+
+  const validTicketType =
+    !ticketTypeId ||
+    (event.ticket_types || []).some((ticketType) => ticketType.id === ticketTypeId);
+
+  if (!validTicketType) {
+    redirect(`/admin/events/${eventId}?error=invalid-ticket-type#access-codes`);
+  }
+
+  try {
+    await query(
+      `
+        insert into event_access_codes (
+          tenant_slug,
+          event_id,
+          code,
+          label,
+          access_type,
+          max_uses,
+          ticket_type_id,
+          is_active,
+          expires_at,
+          notes
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)
+      `,
+      [
+        event.tenant_slug,
+        event.id,
+        code,
+        label,
+        accessType,
+        maxUses,
+        ticketTypeId,
+        expiresAt,
+        notes,
+      ],
+    );
+  } catch (error) {
+    console.error("CREATE_EVENT_ACCESS_CODE_FAILED", error);
+    redirect(`/admin/events/${eventId}?error=access-code-exists#access-codes`);
+  }
+
+  redirect(`/admin/events/${eventId}?saved=access-code#access-codes`);
+}
+
+async function updateEventAccessCodeAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const accessCodeId = String(formData.get("access_code_id") || "").trim();
+  const code = cleanAccessCode(formData.get("code"));
+
+  if (!eventId || !accessCodeId || !code) {
+    redirect(`/admin/events/${eventId}?error=missing-access-code#access-codes`);
+  }
+
+  const event = await requireEventVipAccessCodeAccess(eventId);
+
+  const label = cleanOptionalText(formData.get("label"));
+  const accessType = cleanAccessType(formData.get("access_type"));
+  const maxUses = parseNullablePositiveInteger(formData.get("max_uses"));
+  const rawTicketTypeId = String(formData.get("ticket_type_id") || "").trim();
+  const ticketTypeId = rawTicketTypeId || null;
+  const expiresAt = parseNullableDateTime(formData.get("expires_at"));
+  const notes = cleanOptionalText(formData.get("notes"));
+  const isActive = String(formData.get("is_active") || "") === "true";
+
+  const validTicketType =
+    !ticketTypeId ||
+    (event.ticket_types || []).some((ticketType) => ticketType.id === ticketTypeId);
+
+  if (!validTicketType) {
+    redirect(`/admin/events/${eventId}?error=invalid-ticket-type#access-codes`);
+  }
+
+  try {
+    await query(
+      `
+        update event_access_codes
+        set
+          code = $4,
+          label = $5,
+          access_type = $6,
+          max_uses = $7,
+          ticket_type_id = $8,
+          is_active = $9,
+          expires_at = $10,
+          notes = $11,
+          updated_at = now()
+        where id = $1
+          and event_id = $2
+          and tenant_slug = $3
+      `,
+      [
+        accessCodeId,
+        event.id,
+        event.tenant_slug,
+        code,
+        label,
+        accessType,
+        maxUses,
+        ticketTypeId,
+        isActive,
+        expiresAt,
+        notes,
+      ],
+    );
+  } catch (error) {
+    console.error("UPDATE_EVENT_ACCESS_CODE_FAILED", error);
+    redirect(`/admin/events/${eventId}?error=access-code-exists#access-codes`);
+  }
+
+  redirect(`/admin/events/${eventId}?saved=access-code-updated#access-codes`);
+}
+
+async function deleteEventAccessCodeAction(formData: FormData) {
+  "use server";
+
+  const eventId = String(formData.get("event_id") || "").trim();
+  const accessCodeId = String(formData.get("access_code_id") || "").trim();
+
+  if (!eventId || !accessCodeId) {
+    redirect(`/admin/events/${eventId}?error=missing-access-code#access-codes`);
+  }
+
+  const event = await requireEventVipAccessCodeAccess(eventId);
+
+  await query(
+    `
+      delete from event_access_codes
+      where id = $1
+        and event_id = $2
+        and tenant_slug = $3
+    `,
+    [accessCodeId, event.id, event.tenant_slug],
+  );
+
+  redirect(`/admin/events/${eventId}?saved=access-code-deleted#access-codes`);
+}
 async function updateGuestCateringItemAction(formData: FormData) {
   "use server";
 
@@ -933,6 +1252,7 @@ async function clearTicketTypesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tickets-cleared#tickets`);
 }
+
 async function applySeatTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -960,7 +1280,6 @@ async function applySeatTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-marking#${returnAnchor}`);
 }
-
 async function updateSelectedSeatsMetadataAction(formData: FormData) {
   "use server";
 
@@ -1361,7 +1680,6 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
-
 const responsiveStyles = `
 @media (max-width: 980px) {
   .event-edit-page {
@@ -1384,6 +1702,7 @@ const responsiveStyles = `
   .event-edit-page .hero,
   .event-edit-page .mediaBox,
   .event-edit-page .ticketLayout,
+  .event-edit-page .accessCodeGrid,
   .event-edit-page .guestCateringGrid,
   .event-edit-page .guestUpgradeGrid,
   .event-edit-page .guestEditGrid,
@@ -1467,7 +1786,8 @@ const responsiveStyles = `
   }
 
   .event-edit-page .collapsibleSummary,
-  .event-edit-page .ticketSummary {
+  .event-edit-page .ticketSummary,
+  .event-edit-page .accessCodeSummary {
     align-items: flex-start !important;
   }
 
@@ -1494,6 +1814,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -1541,19 +1862,28 @@ export default async function AdminEventManagePage({
     "event_guest_menu_request_emails",
   );
 
+  const accessCodeCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_vip_access_codes",
+  );
+
   const canEditGuestCatering = guestCateringEditCapability.allowed;
   const canSendMenuRequests = guestMenuRequestCapability.allowed;
+  const canManageAccessCodes = accessCodeCapability.allowed;
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
-  const [winners, guestCateringRows] = await Promise.all([
+
+  const [winners, guestCateringRows, accessCodes] = await Promise.all([
     listEventWinners(event.id),
     listEventGuestCateringRows(event.id),
+    listEventAccessCodes(event.id),
   ]);
 
   const hasCustomImage = Boolean(event.image_url);
   const campaignLimitReached = searchParams?.error === "campaign-limit";
   const upgradeRequired = searchParams?.error === "upgrade-required";
+  const vipUpgradeRequired = searchParams?.error === "vip-upgrade-required";
   const menuRequestFailed = searchParams?.error === "menu-request-failed";
 
   const imageFocusStyle: CSSProperties = {
@@ -1790,6 +2120,19 @@ export default async function AdminEventManagePage({
         </section>
       ) : null}
 
+      {vipUpgradeRequired ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Upgrade required</div>
+          <h2 style={styles.upgradeTitle}>Access codes are locked.</h2>
+          <p style={styles.upgradeText}>
+            {getEventVipAccessCodesUpgradeMessage()}
+          </p>
+          <a href="/admin/settings/billing" style={styles.campaignLimitPrimary}>
+            View billing
+          </a>
+        </section>
+      ) : null}
+
       {menuRequestFailed ? (
         <section style={styles.upgradeBanner}>
           <div style={styles.upgradeEyebrow}>Menu request failed</div>
@@ -1807,6 +2150,9 @@ export default async function AdminEventManagePage({
         </a>
         <a href="#tickets" className="tab" style={styles.tab}>
           Tickets
+        </a>
+        <a href="#access-codes" className="tab" style={styles.tab}>
+          Access Codes
         </a>
         <a href="#prizes-menu" className="tab" style={styles.tab}>
           Prizes & Menu
@@ -1839,6 +2185,7 @@ export default async function AdminEventManagePage({
       {searchParams?.error &&
       !campaignLimitReached &&
       !upgradeRequired &&
+      !vipUpgradeRequired &&
       !menuRequestFailed ? (
         <div style={styles.errorBox}>
           Please check the missing fields and try again.
@@ -1847,6 +2194,7 @@ export default async function AdminEventManagePage({
 
       <section style={styles.summaryGrid}>
         <SummaryCard label="Ticket types" value={ticketTypes.length} />
+        <SummaryCard label="Access codes" value={accessCodes.length} />
         <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
         <SummaryCard
           label="Menu options"
@@ -1948,8 +2296,7 @@ export default async function AdminEventManagePage({
                 />
               </div>
             </div>
-
-            <div className="twoCol" style={styles.twoCol}>
+                        <div className="twoCol" style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -2314,8 +2661,339 @@ export default async function AdminEventManagePage({
       </CollapsibleSection>
 
       <CollapsibleSection
-        id="prizes-menu"
+        id="access-codes"
         eyebrow="Section 3"
+        title="VIP / Complimentary Access Codes"
+        description={
+          canManageAccessCodes
+            ? "Create event-scoped codes for VIP, complimentary, sponsor, staff or guest-list bookings."
+            : "VIP and complimentary access codes are a Professional/Foundation events feature."
+        }
+        badge={
+          canManageAccessCodes
+            ? `${accessCodes.length} codes`
+            : "Upgrade required"
+        }
+      >
+        <div className="accessCodeGrid" style={styles.accessCodeGrid}>
+          <CompactPanel title="Create access code" eyebrow="VIP tools">
+            {canManageAccessCodes ? (
+              <form action={createEventAccessCodeAction} style={styles.form}>
+                <input type="hidden" name="event_id" value={event.id} />
+
+                <Field label="Code">
+                  <input
+                    name="code"
+                    required
+                    placeholder="VIP2026"
+                    style={styles.input}
+                  />
+                  <p style={styles.helperText}>
+                    Letters, numbers and dashes only. Codes are saved in
+                    uppercase.
+                  </p>
+                </Field>
+
+                <Field label="Label">
+                  <input
+                    name="label"
+                    placeholder="Sponsor table, VIP guests, committee"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <div className="twoCol" style={styles.twoCol}>
+                  <Field label="Access type">
+                    <select
+                      name="access_type"
+                      defaultValue="complimentary"
+                      style={styles.input}
+                    >
+                      <option value="complimentary">Complimentary</option>
+                      <option value="vip">VIP</option>
+                      <option value="sponsor">Sponsor</option>
+                      <option value="staff">Staff</option>
+                      <option value="guestlist">Guest list</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Maximum uses">
+                    <input
+                      name="max_uses"
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Restrict to ticket type">
+                  <select name="ticket_type_id" defaultValue="" style={styles.input}>
+                    <option value="">Any ticket type</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Expires at">
+                  <input
+                    name="expires_at"
+                    type="datetime-local"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Notes">
+                  <textarea
+                    name="notes"
+                    rows={3}
+                    placeholder="Internal note only"
+                    style={styles.textarea}
+                  />
+                </Field>
+
+                <button
+                  type="submit"
+                  className="primaryButton"
+                  style={styles.primaryButton}
+                >
+                  Create access code
+                </button>
+              </form>
+            ) : (
+              <div style={styles.lockedFeatureCard}>
+                <div style={styles.lockedFeatureEyebrow}>Professional</div>
+                <h4 style={styles.lockedFeatureTitle}>
+                  Access codes are locked
+                </h4>
+                <p style={styles.lockedFeatureText}>
+                  {accessCodeCapability.reason ||
+                    getEventVipAccessCodesUpgradeMessage()}
+                </p>
+                <a
+                  href="/admin/settings/billing"
+                  style={styles.campaignLimitPrimary}
+                >
+                  View billing
+                </a>
+              </div>
+            )}
+          </CompactPanel>
+
+          <CompactPanel title="Current access codes" eyebrow="Existing codes">
+            {accessCodes.length === 0 ? (
+              <div style={styles.emptyBox}>No access codes yet.</div>
+            ) : (
+              <div style={styles.accessCodeList}>
+                {accessCodes.map((accessCode) => (
+                  <details key={accessCode.id} style={styles.accessCodeDetails}>
+                    <summary
+                      className="accessCodeSummary"
+                      style={styles.accessCodeSummary}
+                    >
+                      <div style={styles.accessCodePrimary}>
+                        <strong style={styles.accessCodeValue}>
+                          {accessCode.code}
+                        </strong>
+                        <span style={styles.mutedSmall}>
+                          {accessTypeLabel(accessCode.access_type)}
+                          {accessCode.label ? ` • ${accessCode.label}` : ""}
+                        </span>
+                      </div>
+
+                      <span
+                        style={{
+                          ...styles.statusMiniPill,
+                          ...accessStatusStyle(accessCode),
+                        }}
+                      >
+                        {accessStatusLabel(accessCode)}
+                      </span>
+                    </summary>
+
+                    <div style={styles.accessCodeBody}>
+                      <div style={styles.guestMetaGrid}>
+                        <InfoTile
+                          label="Used"
+                          value={
+                            accessCode.max_uses === null
+                              ? `${accessCode.used_count} / Unlimited`
+                              : `${accessCode.used_count} / ${accessCode.max_uses}`
+                          }
+                        />
+                        <InfoTile
+                          label="Ticket restriction"
+                          value={
+                            accessCode.ticket_type_name || "Any ticket type"
+                          }
+                        />
+                        <InfoTile
+                          label="Expires"
+                          value={
+                            accessCode.expires_at
+                              ? formatDisplayDate(accessCode.expires_at)
+                              : "No expiry"
+                          }
+                        />
+                        <InfoTile
+                          label="Created"
+                          value={formatDisplayDate(accessCode.created_at)}
+                        />
+                      </div>
+
+                      <form
+                        action={updateEventAccessCodeAction}
+                        style={styles.form}
+                      >
+                        <input type="hidden" name="event_id" value={event.id} />
+                        <input
+                          type="hidden"
+                          name="access_code_id"
+                          value={accessCode.id}
+                        />
+
+                        <div className="twoCol" style={styles.twoCol}>
+                          <Field label="Code">
+                            <input
+                              name="code"
+                              required
+                              defaultValue={accessCode.code}
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Label">
+                            <input
+                              name="label"
+                              defaultValue={accessCode.label || ""}
+                              style={styles.input}
+                            />
+                          </Field>
+                        </div>
+
+                        <div className="threeCol" style={styles.threeCol}>
+                          <Field label="Access type">
+                            <select
+                              name="access_type"
+                              defaultValue={accessCode.access_type}
+                              style={styles.input}
+                            >
+                              <option value="complimentary">
+                                Complimentary
+                              </option>
+                              <option value="vip">VIP</option>
+                              <option value="sponsor">Sponsor</option>
+                              <option value="staff">Staff</option>
+                              <option value="guestlist">Guest list</option>
+                            </select>
+                          </Field>
+
+                          <Field label="Maximum uses">
+                            <input
+                              name="max_uses"
+                              type="number"
+                              min="1"
+                              defaultValue={accessCode.max_uses || ""}
+                              placeholder="Unlimited"
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Active">
+                            <select
+                              name="is_active"
+                              defaultValue={
+                                accessCode.is_active ? "true" : "false"
+                              }
+                              style={styles.input}
+                            >
+                              <option value="true">Active</option>
+                              <option value="false">Inactive</option>
+                            </select>
+                          </Field>
+                        </div>
+
+                        <div className="twoCol" style={styles.twoCol}>
+                          <Field label="Restrict to ticket type">
+                            <select
+                              name="ticket_type_id"
+                              defaultValue={accessCode.ticket_type_id || ""}
+                              style={styles.input}
+                            >
+                              <option value="">Any ticket type</option>
+                              {ticketTypes.map((ticketType) => (
+                                <option
+                                  key={ticketType.id}
+                                  value={ticketType.id}
+                                >
+                                  {ticketType.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+
+                          <Field label="Expires at">
+                            <input
+                              name="expires_at"
+                              type="datetime-local"
+                              defaultValue={formatDateTimeLocal(
+                                accessCode.expires_at,
+                              )}
+                              style={styles.input}
+                            />
+                          </Field>
+                        </div>
+
+                        <Field label="Notes">
+                          <textarea
+                            name="notes"
+                            rows={3}
+                            defaultValue={accessCode.notes || ""}
+                            style={styles.textarea}
+                          />
+                        </Field>
+
+                        <button
+                          type="submit"
+                          className="primaryButton"
+                          style={styles.primaryButton}
+                        >
+                          Save access code
+                        </button>
+                      </form>
+
+                      <form action={deleteEventAccessCodeAction}>
+                        <input type="hidden" name="event_id" value={event.id} />
+                        <input
+                          type="hidden"
+                          name="access_code_id"
+                          value={accessCode.id}
+                        />
+
+                        <button
+                          type="submit"
+                          className="dangerOutlineButton"
+                          style={styles.dangerOutlineButton}
+                        >
+                          Delete access code
+                        </button>
+                      </form>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
+          </CompactPanel>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="prizes-menu"
+        eyebrow="Section 4"
         title="Prizes & Menu"
         description="Manage optional golden-ticket prizes and event menu choices."
         badge={`${(event.prizes_json || []).length} prizes • ${
@@ -2333,7 +3011,7 @@ export default async function AdminEventManagePage({
 
       <CollapsibleSection
         id="guest-catering"
-        eyebrow="Section 4"
+        eyebrow="Section 5"
         title="Guest & Catering"
         description={
           canEditGuestCatering
@@ -2384,15 +3062,15 @@ export default async function AdminEventManagePage({
           </div>
 
           {menuRequestsSent ? (
-           <div style={styles.menuRequestSuccess}>
-           <strong>Menu request emails processed.</strong>
-           <span>
-           Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no email:{" "}
-           {Number.isFinite(skippedCount) ? skippedCount : 0} • Failed:{" "}
-           {Number.isFinite(failedCount) ? failedCount : 0}
-          </span>
-        </div>
-      ) : null}
+            <div style={styles.menuRequestSuccess}>
+              <strong>Menu request emails processed.</strong>
+              <span>
+                Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no
+                email: {Number.isFinite(skippedCount) ? skippedCount : 0} •
+                Failed: {Number.isFinite(failedCount) ? failedCount : 0}
+              </span>
+            </div>
+          ) : null}
 
           <div className="guestCateringGrid" style={styles.guestCateringStats}>
             <SummaryCard label="Paid guests" value={guestCateringRows.length} />
@@ -2635,7 +3313,7 @@ export default async function AdminEventManagePage({
 
       <CollapsibleSection
         id="winner-draw"
-        eyebrow="Section 5"
+        eyebrow="Section 6"
         title="Winner Draw"
         description="Draw event winners from eligible paid event entries and keep winner history."
         badge={`${winners.length} winners`}
@@ -2654,7 +3332,7 @@ export default async function AdminEventManagePage({
       {isReservedSeating ? (
         <CollapsibleSection
           id="row-seating"
-          eyebrow="Section 6"
+          eyebrow="Section 7"
           title="Row Seating"
           description="Generate seats, block seats, mark VIP/complimentary seats and save row layout nudges."
           badge={`${rowSeats.length} seats`}
@@ -2795,7 +3473,7 @@ export default async function AdminEventManagePage({
       {isTables ? (
         <CollapsibleSection
           id="table-seating"
-          eyebrow="Section 6"
+          eyebrow="Section 7"
           title="Table Seating"
           description="Generate table layouts, choose a table shape, name tables and manage allocations."
           badge={`${tableSeats.length} seats • ${uniqueTableNumbers.length} tables`}
@@ -3027,7 +3705,12 @@ function CollapsibleSection({
   children: ReactNode;
 }) {
   return (
-    <details id={id} open={defaultOpen} className="section" style={styles.section}>
+    <details
+      id={id}
+      open={defaultOpen}
+      className="section"
+      style={styles.section}
+    >
       <summary className="collapsibleSummary" style={styles.collapsibleSummary}>
         <div style={styles.collapsibleHeading}>
           {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
@@ -3673,6 +4356,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     alignItems: "start",
   },
+  accessCodeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 14,
+    alignItems: "start",
+  },
   ticketListScroll: {
     display: "grid",
     gap: 10,
@@ -3697,6 +4386,45 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
   ticketDetailsBody: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderTop: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  accessCodeList: {
+    display: "grid",
+    gap: 10,
+  },
+  accessCodeDetails: {
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+  },
+  accessCodeSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    padding: 14,
+    flexWrap: "wrap",
+  },
+  accessCodePrimary: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+  accessCodeValue: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+  accessCodeBody: {
     display: "grid",
     gap: 12,
     padding: 14,
@@ -3845,7 +4573,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.02em",
   },
   lockedFeatureText: {
-    margin: "7px 0 0",
+    margin: "7px 0 14px",
     color: "#64748b",
     fontSize: 13,
     lineHeight: 1.45,
