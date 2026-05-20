@@ -16,6 +16,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 type PaymentFinancials = {
   grossAmountCents: number;
+  ticketSubtotalCents: number;
   platformFeeCents: number;
   donorFeeCents: number;
   donorCoveredFees: boolean;
@@ -222,7 +223,6 @@ function parseSquaresMetadata(value: unknown): number[] {
     return [];
   }
 }
-
 async function getPaymentIntentDetails(paymentIntentId: string | null) {
   if (!paymentIntentId) {
     return {
@@ -290,41 +290,61 @@ async function getCheckoutFinancials({
     metadata.stripe_connect_account_id,
   );
 
+  const paymentIntentDetails = await getPaymentIntentDetails(paymentIntentId);
+
   const metadataApplicationFeeAmount = safeNumber(
-    metadata.application_fee_amount,
+    metadata.application_fee_amount_cents ||
+      metadata.application_fee_amount,
     0,
   );
-
-  const paymentIntentDetails = await getPaymentIntentDetails(paymentIntentId);
 
   const applicationFeeAmountCents =
     paymentIntentDetails.applicationFeeAmountCents ||
     metadataApplicationFeeAmount;
 
-  const supporterContributionCents = safeNumber(
+  const ticketSubtotalCents = safeNumber(
+    metadata.ticket_subtotal_cents ||
+      metadata.tenant_target_amount_cents ||
+      metadata.base_amount_cents ||
+      metadata.offer_total_cents ||
+      session.amount_subtotal ||
+      grossAmountCents,
+    grossAmountCents,
+  );
+
+  const donorFeeCents = safeNumber(
     metadata.supporter_contribution_cents ||
       metadata.donor_fee_cents ||
       metadata.buyer_fee_cents ||
       metadata.buyer_contribution_cents,
+    Math.max(grossAmountCents - ticketSubtotalCents, 0),
+  );
+
+  const explicitTierPlatformFeeCents = safeNumber(
+    metadata.tier_platform_commission_cents ||
+      metadata.platform_commission_cents ||
+      metadata.platform_fee_cents,
     0,
   );
 
-  const rawPlatformFeeCents = safeNumber(metadata.platform_fee_cents, 0);
-
   const platformFeeCents = Math.min(
     grossAmountCents,
-    Math.max(applicationFeeAmountCents, rawPlatformFeeCents),
+    explicitTierPlatformFeeCents,
   );
 
-  const donorFeeCents = supporterContributionCents;
-
-  const netAmountCents = Math.max(grossAmountCents - platformFeeCents, 0);
+  const netAmountCents = safeNumber(
+    metadata.net_amount_cents ||
+      metadata.tenant_target_amount_cents ||
+      ticketSubtotalCents,
+    ticketSubtotalCents,
+  );
 
   const stripeDestinationAccountId =
     paymentIntentDetails.stripeDestinationAccountId || stripeConnectAccountId;
 
   return {
     grossAmountCents,
+    ticketSubtotalCents,
     platformFeeCents,
     donorFeeCents,
     donorCoveredFees: donorFeeCents > 0,
@@ -547,6 +567,7 @@ async function recordPlatformPayment(input: {
         net_amount_cents,
         donor_fee_cents,
         donor_covered_fees,
+        ticket_subtotal_cents,
         payment_status,
         customer_email,
         payment_type,
@@ -556,7 +577,7 @@ async function recordPlatformPayment(input: {
         stripe_payout_status,
         payout_reconciled_at
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -569,6 +590,7 @@ async function recordPlatformPayment(input: {
         net_amount_cents = excluded.net_amount_cents,
         donor_fee_cents = excluded.donor_fee_cents,
         donor_covered_fees = excluded.donor_covered_fees,
+        ticket_subtotal_cents = excluded.ticket_subtotal_cents,
         payment_status = excluded.payment_status,
         customer_email = excluded.customer_email,
         payment_type = excluded.payment_type,
@@ -590,6 +612,7 @@ async function recordPlatformPayment(input: {
       input.financials.netAmountCents,
       input.financials.donorFeeCents,
       input.financials.donorCoveredFees,
+      input.financials.ticketSubtotalCents,
       input.session.payment_status || null,
       input.email,
       input.paymentType,
@@ -755,8 +778,7 @@ export async function POST(request: NextRequest) {
       }
 
       const tenantSlug = verifiedOrder.tenant_slug;
-
-      await query(
+            await query(
         `
           update event_orders
           set
@@ -824,8 +846,7 @@ export async function POST(request: NextRequest) {
           await sendEventReceiptEmail({
             to: email,
             name,
-            eventTitle:
-              eventDetails?.title || metadata.event_title || "Event",
+            eventTitle: eventDetails?.title || metadata.event_title || "Event",
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
             orderReference: orderId,
@@ -955,9 +976,10 @@ export async function POST(request: NextRequest) {
             platform_fee_cents = $4,
             net_amount_cents = $5,
             donor_fee_cents = $6,
-            donor_covered_fees = $7
-          where raffle_id = $8
-            and reservation_token = $9
+            donor_covered_fees = $7,
+            ticket_subtotal_cents = $8
+          where raffle_id = $9
+            and reservation_token = $10
         `,
         [
           session.id,
@@ -967,6 +989,7 @@ export async function POST(request: NextRequest) {
           netAmountCents,
           financials.donorFeeCents,
           financials.donorCoveredFees,
+          financials.ticketSubtotalCents,
           raffleId,
           reservationToken,
         ],
@@ -1076,8 +1099,7 @@ export async function POST(request: NextRequest) {
           await sendReceiptEmail({
             to: email,
             name,
-            raffleTitle:
-              raffleDetails.title || metadata.raffle_title || "Raffle",
+            raffleTitle: raffleDetails.title || metadata.raffle_title || "Raffle",
             tickets,
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
@@ -1224,6 +1246,9 @@ export async function POST(request: NextRequest) {
             normalized_platform_fee_cents: String(platformFeeCents),
             normalized_net_amount_cents: String(netAmountCents),
             normalized_donor_fee_cents: String(financials.donorFeeCents),
+            normalized_ticket_subtotal_cents: String(
+              financials.ticketSubtotalCents,
+            ),
           }),
         ],
       );
@@ -1278,8 +1303,7 @@ export async function POST(request: NextRequest) {
           await sendSquaresReceiptEmail({
             to: email,
             name,
-            gameTitle:
-              squaresGame.title || metadata.game_title || "Squares Game",
+            gameTitle: squaresGame.title || metadata.game_title || "Squares Game",
             squares,
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
