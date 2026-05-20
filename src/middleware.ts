@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { extractTenantSlugFromHost } from "@/lib/tenant";
+import {
+  extractTenantSlugFromHost,
+  normalizeTenantSlug,
+  TENANT_COOKIE_NAME,
+} from "@/lib/tenant";
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -11,22 +15,54 @@ export default auth((req) => {
 
   const isPublicAdminPage =
     pathname.startsWith("/admin/login") ||
+    pathname.startsWith("/admin/register") ||
     pathname.startsWith("/admin/setup");
 
   const isPublicAdminApi =
+    pathname === "/api/admin/register" ||
+    pathname.startsWith("/api/admin/register/") ||
     pathname === "/api/admin/setup" ||
     pathname.startsWith("/api/admin/setup/");
 
+  const host = req.headers.get("host");
+  const hostTenantSlug = extractTenantSlugFromHost(host) || "";
+  const cookieTenantSlug = normalizeTenantSlug(
+    req.cookies.get(TENANT_COOKIE_NAME)?.value,
+  );
+
+  const queryTenantSlug = normalizeTenantSlug(
+    req.nextUrl.searchParams.get("tenant"),
+  );
+
+  const isMainVercelHost =
+    String(host || "")
+      .split(":")[0]
+      .toLowerCase() === "so-fundraising-platform.vercel.app";
+
+  const tenantSlug =
+    isMainVercelHost && (queryTenantSlug || cookieTenantSlug)
+      ? queryTenantSlug || cookieTenantSlug
+      : hostTenantSlug;
+
   if (isPublicAdminPage || isPublicAdminApi) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+
+    if (queryTenantSlug && isMainVercelHost) {
+      response.cookies.set(TENANT_COOKIE_NAME, queryTenantSlug, {
+        path: "/",
+        sameSite: "lax",
+        secure: true,
+        httpOnly: false,
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    }
+
+    return response;
   }
 
   if (!isAdminPath && !isAdminApiPath) {
     return NextResponse.next();
   }
-
-  const host = req.headers.get("host");
-  const tenantSlug = extractTenantSlugFromHost(host) || "";
 
   if (!tenantSlug) {
     if (isAdminApiPath) {
@@ -40,7 +76,6 @@ export default auth((req) => {
     url.pathname = "/";
     url.searchParams.set("error", "tenant_not_found");
 
-    // ✅ FIX: absolute redirect
     return NextResponse.redirect(new URL(url.toString(), req.url));
   }
 
@@ -55,12 +90,44 @@ export default auth((req) => {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     loginUrl.searchParams.set("error", "tenant_access_denied");
+    loginUrl.searchParams.set("tenant", tenantSlug);
 
-    // ✅ FIX: absolute redirect
     return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
   }
 
-  return NextResponse.next();
+  const sessionTenantSlugs = Array.isArray(req.auth.user.tenantSlugs)
+    ? req.auth.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!sessionTenantSlugs.includes(tenantSlug)) {
+    if (isAdminApiPath) {
+      return NextResponse.json(
+        { ok: false, error: "Tenant access denied" },
+        { status: 403 },
+      );
+    }
+
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/admin/login";
+    loginUrl.searchParams.set("error", "tenant_access_denied");
+    loginUrl.searchParams.set("tenant", tenantSlug);
+
+    return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
+  }
+
+  const response = NextResponse.next();
+
+  if (isMainVercelHost && tenantSlug) {
+    response.cookies.set(TENANT_COOKIE_NAME, tenantSlug, {
+      path: "/",
+      sameSite: "lax",
+      secure: true,
+      httpOnly: false,
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  }
+
+  return response;
 });
 
 export const config = {
