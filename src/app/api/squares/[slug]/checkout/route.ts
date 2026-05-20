@@ -99,7 +99,7 @@ function squaresCheckoutMetadata(input: {
     id: string;
     slug: string;
     title: string;
-    currency: string;
+    currency?: string | null;
     price_per_square_cents: number;
   };
   reservationToken: string;
@@ -228,7 +228,8 @@ export async function POST(
         { status: 404 },
       );
     }
-        if (new Date(reservation.expires_at).getTime() <= Date.now()) {
+
+    if (new Date(reservation.expires_at).getTime() <= Date.now()) {
       return NextResponse.json(
         { ok: false, error: "Reservation expired." },
         { status: 400 },
@@ -262,6 +263,8 @@ export async function POST(
       platformFeePercent,
     });
 
+    const currency = String(game.currency || "GBP").toLowerCase();
+
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
@@ -279,7 +282,7 @@ export async function POST(
       {
         quantity: 1,
         price_data: {
-          currency: String(game.currency ?? "GBP").toLowerCase(),
+          currency,
           unit_amount: squareSubtotalCents,
           product_data: {
             name: game.title,
@@ -293,7 +296,7 @@ export async function POST(
       lineItems.push({
         quantity: 1,
         price_data: {
-          currency: String(game.currency ?? "GBP").toLowerCase(),
+          currency,
           unit_amount: paymentSummary.buyerContributionCents,
           product_data: {
             name: `${game.title} — Cover processing costs`,
