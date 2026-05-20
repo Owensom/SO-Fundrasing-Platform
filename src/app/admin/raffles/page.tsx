@@ -250,7 +250,8 @@ export default async function AdminRafflesPage() {
   );
   const totalRaised = raffles.reduce((sum, r) => sum + getRaisedTotal(r), 0);
   const dashboardCurrency = raffles[0]?.currency || "GBP";
-    return (
+
+  return (
     <main className="raffles-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -322,8 +323,8 @@ export default async function AdminRafflesPage() {
         </nav>
       </section>
 
-      <section style={styles.limitPanel}>
-        <div>
+      <section className="raffles-limit-panel" style={styles.limitPanel}>
+        <div style={{ minWidth: 0 }}>
           <p style={styles.limitKicker}>Subscription limit</p>
 
           <h2 style={styles.limitTitle}>
@@ -335,7 +336,7 @@ export default async function AdminRafflesPage() {
           <p style={styles.limitText}>{limitMessage}</p>
         </div>
 
-        <div style={styles.limitStats}>
+        <div className="raffles-limit-stats" style={styles.limitStats}>
           <div style={styles.limitStat}>
             <span>Current plan</span>
             <strong>{subscriptionTier}</strong>
@@ -352,8 +353,7 @@ export default async function AdminRafflesPage() {
           </div>
         </div>
       </section>
-
-      <section className="raffles-stats-grid" style={styles.statsGrid}>
+            <section className="raffles-stats-grid" style={styles.statsGrid}>
         <StatCard
           label="Total raffles"
           value={totalRaffles}
@@ -409,7 +409,7 @@ export default async function AdminRafflesPage() {
           />
         </section>
       ) : (
-        <section style={styles.list}>
+        <section className="raffles-list" style={styles.list}>
           {raffles.map((raffle) => {
             const progress = getProgressPercent(raffle);
             const statusStyle = getStatusStyle(raffle.status);
@@ -458,7 +458,8 @@ export default async function AdminRafflesPage() {
                         {raffle.status}
                       </div>
                     </div>
-                                        <div
+
+                    <div
                       className="raffle-headline-grid"
                       style={styles.headlineGrid}
                     >
@@ -634,7 +635,6 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .raffles-admin-page,
 .raffles-admin-page * {
@@ -651,6 +651,29 @@ const responsiveStyles = `
 .raffles-admin-page a,
 .raffles-admin-page nav {
   min-width: 0;
+}
+
+.raffles-list {
+  width: 100%;
+  min-width: 0;
+}
+
+.raffle-card {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.raffle-card-top,
+.raffle-headline-grid,
+.raffle-detail-grid,
+.raffle-card-actions,
+.raffles-stats-grid,
+.raffles-limit-stats,
+.raffles-hero-stats,
+.raffles-admin-nav {
+  width: 100%;
+  max-width: 100%;
 }
 
 @media (max-width: 980px) {
@@ -684,7 +707,7 @@ const responsiveStyles = `
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .raffles-admin-page {
     width: 100% !important;
     max-width: 100% !important;
@@ -694,10 +717,11 @@ const responsiveStyles = `
   .raffles-admin-hero {
     padding: 20px !important;
     border-radius: 28px !important;
+    gap: 18px !important;
   }
 
   .raffles-admin-title {
-    font-size: clamp(44px, 14vw, 60px) !important;
+    font-size: clamp(42px, 13vw, 60px) !important;
     line-height: 0.96 !important;
     letter-spacing: -0.075em !important;
     overflow-wrap: anywhere !important;
@@ -705,6 +729,7 @@ const responsiveStyles = `
 
   .raffles-admin-subtitle {
     font-size: 16px !important;
+    line-height: 1.55 !important;
     overflow-wrap: anywhere !important;
   }
 
@@ -717,10 +742,13 @@ const responsiveStyles = `
   .raffles-admin-nav a,
   .raffles-admin-nav div {
     width: 100% !important;
+    max-width: 100% !important;
     min-height: 48px !important;
-    padding: 12px 14px !important;
+    padding: 12px 10px !important;
     text-align: center !important;
     font-size: 14px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
   }
 
   .raffles-admin-nav a:first-child,
@@ -734,32 +762,60 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
-    .raffles-stat-card,
+
+  .raffles-limit-panel {
+    grid-template-columns: 1fr !important;
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .raffles-limit-panel h2 {
+    font-size: 22px !important;
+    line-height: 1.1 !important;
+  }
+
+  .raffles-limit-panel p {
+    overflow-wrap: anywhere !important;
+  }
+
+  .raffles-limit-stats > div {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .raffles-stat-card,
   .raffles-hero-stat {
-    min-height: 112px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
     border-radius: 24px !important;
     padding: 18px !important;
   }
 
   .raffles-stat-value {
-    font-size: clamp(36px, 12vw, 52px) !important;
+    font-size: clamp(32px, 10vw, 46px) !important;
     line-height: 1 !important;
     overflow-wrap: anywhere !important;
   }
 
   .raffle-card {
+    width: 100% !important;
+    max-width: 100% !important;
     padding: 16px !important;
     border-radius: 26px !important;
+    overflow: hidden !important;
   }
 
   .raffle-card-top {
     display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 16px !important;
+    width: 100% !important;
   }
 
   .raffle-image-wrap {
     width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
     aspect-ratio: 16 / 9 !important;
     border-radius: 22px !important;
@@ -769,29 +825,43 @@ const responsiveStyles = `
     display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 10px !important;
+    width: 100% !important;
   }
 
   .raffle-card-title {
-    font-size: clamp(30px, 10vw, 42px) !important;
+    font-size: clamp(28px, 9vw, 40px) !important;
     line-height: 1.05 !important;
     letter-spacing: -0.055em !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 
   .raffle-headline-grid,
   .raffle-detail-grid {
     grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .raffle-headline-grid > div,
+  .raffle-detail-grid > div {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .raffle-card-actions {
     display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 10px !important;
+    width: 100% !important;
   }
 
   .raffle-card-actions a {
     width: 100% !important;
+    max-width: 100% !important;
     min-height: 50px !important;
     font-size: 16px !important;
+    white-space: normal !important;
+    text-align: center !important;
   }
 }
 
@@ -802,7 +872,7 @@ const responsiveStyles = `
   }
 
   .raffles-admin-title {
-    font-size: 40px !important;
+    font-size: 38px !important;
   }
 
   .raffles-admin-nav {
@@ -815,7 +885,11 @@ const responsiveStyles = `
   }
 
   .raffles-stat-value {
-    font-size: 36px !important;
+    font-size: 34px !important;
+  }
+
+  .raffle-card-title {
+    font-size: 30px !important;
   }
 }
 `;
@@ -937,6 +1011,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(148,163,184,0.26)",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
+    minWidth: 0,
   },
 
   heroStatLabel: {
@@ -952,8 +1027,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
-
-  nav: {
+    nav: {
     position: "relative",
     zIndex: 1,
     gridArea: "nav",
@@ -961,6 +1035,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
     gap: 10,
     width: "100%",
+    minWidth: 0,
   },
 
   navButton: {
@@ -978,6 +1053,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     lineHeight: 1.2,
     backdropFilter: "blur(10px)",
+    minWidth: 0,
   },
 
   navButtonActive: {
@@ -993,6 +1069,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textAlign: "center",
     lineHeight: 1.2,
+    minWidth: 0,
   },
 
   createButton: {
@@ -1009,7 +1086,8 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
     textAlign: "center",
     lineHeight: 1.2,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    minWidth: 0,
   },
 
   createButtonDisabled: {
@@ -1025,8 +1103,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textAlign: "center",
     lineHeight: 1.2,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
     cursor: "not-allowed",
+    minWidth: 0,
   },
 
   limitPanel: {
@@ -1040,6 +1119,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbeafe",
     boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
     marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   limitKicker: {
@@ -1056,6 +1137,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 24,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   limitText: {
@@ -1063,12 +1145,14 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   limitStats: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
+    minWidth: 0,
   },
 
   limitStat: {
@@ -1079,6 +1163,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   statsGrid: {
@@ -1086,6 +1171,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 12,
     marginBottom: 22,
+    minWidth: 0,
   },
 
   statCard: {
@@ -1096,6 +1182,7 @@ const styles: Record<string, CSSProperties> = {
     borderTop: "4px solid #1683f8",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   statTop: {
@@ -1103,6 +1190,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 14,
     alignItems: "flex-start",
+    minWidth: 0,
   },
 
   statIcon: {
@@ -1130,6 +1218,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     marginTop: 4,
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
 
   emptyCard: {
@@ -1138,6 +1227,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "#ffffff",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   muted: {
@@ -1148,6 +1239,8 @@ const styles: Record<string, CSSProperties> = {
   list: {
     display: "grid",
     gap: 16,
+    minWidth: 0,
+    width: "100%",
   },
 
   card: {
@@ -1157,6 +1250,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     minWidth: 0,
+    width: "100%",
+    overflow: "hidden",
   },
 
   cardTop: {
@@ -1164,6 +1259,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "104px minmax(0, 1fr)",
     gap: 16,
     alignItems: "start",
+    minWidth: 0,
+    width: "100%",
   },
 
   imageWrap: {
@@ -1174,6 +1271,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f1f5f9",
     border: "1px solid #e2e8f0",
     boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
+    minWidth: 0,
   },
 
   image: {
@@ -1185,6 +1283,7 @@ const styles: Record<string, CSSProperties> = {
 
   cardMain: {
     minWidth: 0,
+    width: "100%",
   },
 
   cardHeader: {
@@ -1193,6 +1292,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
+    minWidth: 0,
+    width: "100%",
   },
 
   cardTitle: {
@@ -1201,6 +1302,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     letterSpacing: "-0.02em",
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
 
   slug: {
@@ -1208,6 +1310,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
 
   status: {
@@ -1218,6 +1321,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "capitalize",
     fontWeight: 800,
     width: "fit-content",
+    maxWidth: "100%",
   },
 
   headlineGrid: {
@@ -1225,6 +1329,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 10,
     marginTop: 14,
+    minWidth: 0,
+    width: "100%",
   },
 
   headlineBox: {
@@ -1233,6 +1339,7 @@ const styles: Record<string, CSSProperties> = {
     background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   headlineLabel: {
@@ -1255,6 +1362,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.5,
     margin: "10px 0 0",
+    overflowWrap: "anywhere",
   },
 
   detailGrid: {
@@ -1262,6 +1370,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
     marginTop: 16,
+    minWidth: 0,
+    width: "100%",
   },
 
   detail: {
@@ -1270,6 +1380,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   detailLabel: {
@@ -1283,10 +1394,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontWeight: 900,
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
 
   progressSection: {
     marginTop: 16,
+    minWidth: 0,
   },
 
   progressHeader: {
@@ -1317,6 +1430,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     marginTop: 18,
     flexWrap: "wrap",
+    minWidth: 0,
   },
 
   primaryLink: {
@@ -1330,6 +1444,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 800,
     fontSize: 14,
+    minWidth: 0,
   },
 
   secondaryLink: {
@@ -1345,5 +1460,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: 14,
     boxShadow: "none",
+    minWidth: 0,
   },
 };
