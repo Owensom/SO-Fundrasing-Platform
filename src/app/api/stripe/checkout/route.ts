@@ -89,45 +89,53 @@ function safeMoneyCents(value: unknown) {
   return Math.max(0, Math.round(number));
 }
 
-function calculateApplicationFeeAmount(params: {
-  totalAmountCents: number;
+function calculateTierPlatformCommissionCents(params: {
+  ticketSubtotalCents: number;
   platformFeePercent: number;
 }) {
-  const totalAmountCents = Math.max(0, Math.round(params.totalAmountCents));
+  const ticketSubtotalCents = Math.max(
+    0,
+    Math.round(params.ticketSubtotalCents),
+  );
+
   const platformFeePercent = safePercent(params.platformFeePercent);
 
-  if (!totalAmountCents || !platformFeePercent) {
+  if (!ticketSubtotalCents || !platformFeePercent) {
     return 0;
   }
 
   return Math.max(
     0,
-    Math.round(totalAmountCents * (platformFeePercent / 100)),
+    Math.round(ticketSubtotalCents * (platformFeePercent / 100)),
   );
 }
 
 function calculateSupporterCoverFeeCents(params: {
-  baseAmountCents: number;
-  platformCommissionCents: number;
+  ticketSubtotalCents: number;
+  tierPlatformCommissionCents: number;
 }) {
-  const baseAmountCents = Math.max(0, Math.round(params.baseAmountCents));
-  const platformCommissionCents = Math.max(
+  const ticketSubtotalCents = Math.max(
     0,
-    Math.round(params.platformCommissionCents),
+    Math.round(params.ticketSubtotalCents),
   );
 
-  if (!baseAmountCents && !platformCommissionCents) {
+  const tierPlatformCommissionCents = Math.max(
+    0,
+    Math.round(params.tierPlatformCommissionCents),
+  );
+
+  if (!ticketSubtotalCents && !tierPlatformCommissionCents) {
     return 0;
   }
 
   const grossAmountCents = Math.ceil(
-    (baseAmountCents +
-      platformCommissionCents +
+    (ticketSubtotalCents +
+      tierPlatformCommissionCents +
       STRIPE_STANDARD_UK_FIXED_CENTS) /
       (1 - STRIPE_STANDARD_UK_PERCENT),
   );
 
-  return Math.max(grossAmountCents - baseAmountCents, 0);
+  return Math.max(grossAmountCents - ticketSubtotalCents, 0);
 }
 
 function getUsableConnectAccountId(params: {
@@ -313,8 +321,7 @@ function calculateBestRafflePrice(params: {
       }
     }
   }
-
-  const bestTotal = Number.isFinite(dp[quantity]?.total)
+    const bestTotal = Number.isFinite(dp[quantity]?.total)
     ? Math.max(0, Math.round(dp[quantity].total))
     : standardTotalCents;
 
@@ -554,9 +561,9 @@ export async function POST(req: NextRequest) {
       rawOffers: config.offers,
     });
 
-    const baseAmountCents = pricing.checkoutTotalCents;
+    const ticketSubtotalCents = pricing.checkoutTotalCents;
 
-    if (!baseAmountCents || baseAmountCents <= 0) {
+    if (!ticketSubtotalCents || ticketSubtotalCents <= 0) {
       return NextResponse.json(
         { ok: false, error: "Invalid checkout total" },
         { status: 400 },
@@ -588,27 +595,38 @@ export async function POST(req: NextRequest) {
         body.buyer_covers_fees,
     );
 
-    const platformCommissionCents = calculateApplicationFeeAmount({
-      totalAmountCents: baseAmountCents,
+    const tierPlatformCommissionCents = calculateTierPlatformCommissionCents({
+      ticketSubtotalCents,
       platformFeePercent: tenantSettings?.platform_fee_percent ?? 0,
     });
 
     const supporterContributionCents =
       requestedCoverFees && buyerFeeContributionsEnabled
         ? calculateSupporterCoverFeeCents({
-            baseAmountCents,
-            platformCommissionCents,
+            ticketSubtotalCents,
+            tierPlatformCommissionCents,
           })
         : 0;
 
-    const checkoutTotalCents = baseAmountCents + supporterContributionCents;
+    const checkoutTotalCents =
+      ticketSubtotalCents + supporterContributionCents;
 
-    const platformFeeCents =
+    const stripeProcessingCoverCents = Math.max(
+      supporterContributionCents - tierPlatformCommissionCents,
+      0,
+    );
+
+    const applicationFeeAmountCents =
       supporterContributionCents > 0
         ? supporterContributionCents
-        : platformCommissionCents;
+        : tierPlatformCommissionCents;
 
-    const netAmountCents = Math.max(checkoutTotalCents - platformFeeCents, 0);
+    const tenantTargetAmountCents = ticketSubtotalCents;
+
+    const tenantNetAfterApplicationFeeCents = Math.max(
+      checkoutTotalCents - applicationFeeAmountCents,
+      0,
+    );
 
     const connectAccountId = getUsableConnectAccountId({
       settingsAccountId: tenantSettings?.stripe_connect_account_id,
@@ -620,8 +638,8 @@ export async function POST(req: NextRequest) {
 
     const shouldApplyApplicationFee =
       shouldUseConnectRouting &&
-      platformFeeCents > 0 &&
-      platformFeeCents < checkoutTotalCents;
+      applicationFeeAmountCents > 0 &&
+      applicationFeeAmountCents < checkoutTotalCents;
 
     const paymentIntentData = shouldUseConnectRouting
       ? {
@@ -630,15 +648,14 @@ export async function POST(req: NextRequest) {
           },
           ...(shouldApplyApplicationFee
             ? {
-                application_fee_amount: platformFeeCents,
+                application_fee_amount: applicationFeeAmountCents,
               }
             : {}),
         }
       : undefined;
 
     const appliedOfferSummary = formatAppliedOffers(pricing.appliedOffers);
-
-    const session = await stripe.checkout.sessions.create({
+        const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       customer_email: buyerEmail || undefined,
@@ -690,22 +707,44 @@ export async function POST(req: NextRequest) {
         ticket_price_cents: String(ticketPriceCents),
         standard_total_cents: String(pricing.standardTotalCents),
         checkout_total_cents: String(checkoutTotalCents),
-        offer_total_cents: String(baseAmountCents),
+        offer_total_cents: String(ticketSubtotalCents),
         offer_savings_cents: String(pricing.savingsCents),
         applied_offers: appliedOfferSummary,
 
-        base_amount_cents: String(baseAmountCents),
-        platform_commission_cents: String(platformCommissionCents),
+        base_amount_cents: String(ticketSubtotalCents),
+        ticket_subtotal_cents: String(ticketSubtotalCents),
+        tenant_target_amount_cents: String(tenantTargetAmountCents),
+
+        tier_platform_commission_cents: String(tierPlatformCommissionCents),
+        platform_commission_cents: String(tierPlatformCommissionCents),
+        platform_fee_cents: String(tierPlatformCommissionCents),
+
+        stripe_processing_cover_cents: String(stripeProcessingCoverCents),
         supporter_contribution_cents: String(supporterContributionCents),
         donor_fee_cents: String(supporterContributionCents),
         buyer_fee_cents: String(supporterContributionCents),
+
         buyer_fee_contributions_enabled: buyerFeeContributionsEnabled
           ? "true"
           : "false",
         buyer_requested_cover_fees: requestedCoverFees ? "true" : "false",
         donor_covered_fees: supporterContributionCents > 0 ? "true" : "false",
-        platform_fee_cents: String(platformFeeCents),
-        net_amount_cents: String(netAmountCents),
+
+        application_fee_amount: shouldApplyApplicationFee
+          ? String(applicationFeeAmountCents)
+          : "0",
+        application_fee_amount_cents: shouldApplyApplicationFee
+          ? String(applicationFeeAmountCents)
+          : "0",
+
+        application_fee_includes_supporter_cover:
+          supporterContributionCents > 0 ? "true" : "false",
+
+        tenant_net_after_application_fee_cents: String(
+          tenantNetAfterApplicationFeeCents,
+        ),
+
+        net_amount_cents: String(tenantTargetAmountCents),
         stripe_fee_estimate_model: "uk_standard_card_1_5_percent_plus_20p",
 
         stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
@@ -715,9 +754,6 @@ export async function POST(req: NextRequest) {
         platform_fee_percent: String(
           tenantSettings?.platform_fee_percent ?? "",
         ),
-        application_fee_amount: shouldApplyApplicationFee
-          ? String(platformFeeCents)
-          : "0",
       },
 
       success_url: `${baseUrl}${publicRafflePath}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
