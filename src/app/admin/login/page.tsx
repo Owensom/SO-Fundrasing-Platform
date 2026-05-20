@@ -1,80 +1,8 @@
-import { redirect } from "next/navigation";
-import { AuthError } from "next-auth";
-import { signIn } from "@/auth";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import AdminLoginForm from "./AdminLoginForm";
 
-type LoginPageProps = {
-  searchParams?: {
-    error?: string;
-  };
-};
+export const dynamic = "force-dynamic";
 
-function getErrorMessage(error?: string) {
-  switch (error) {
-    case "tenant_access_denied":
-      return "This account does not have access to this site.";
-    case "invalid_credentials":
-    case "CredentialsSignin":
-    case "CallbackRouteError":
-      return "Invalid email or password.";
-    default:
-      return "";
-  }
-}
-
-function isRedirectError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "digest" in error &&
-    typeof (error as { digest?: unknown }).digest === "string" &&
-    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
-  );
-}
-
-export default async function AdminLoginPage({
-  searchParams,
-}: LoginPageProps) {
-  const tenantSlug = await getTenantSlugFromHeaders();
-  const errorMessage = getErrorMessage(searchParams?.error);
-
-  async function loginAction(formData: FormData) {
-    "use server";
-
-    const email = String(formData.get("email") ?? "").trim().toLowerCase();
-    const password = String(formData.get("password") ?? "");
-
-    if (!email || !password) {
-      redirect("/admin/login?error=invalid_credentials");
-    }
-
-    try {
-      await signIn("credentials", {
-        email,
-        password,
-        redirectTo: "/admin",
-      });
-    } catch (error) {
-      if (isRedirectError(error)) {
-        throw error;
-      }
-
-      if (error instanceof AuthError) {
-        console.error("Admin login AuthError", {
-          type: error.type,
-          message: error.message,
-          cause: error.cause,
-        });
-
-        redirect(`/admin/login?error=${encodeURIComponent(error.type)}`);
-      }
-
-      console.error("Admin login unexpected error", error);
-
-      redirect("/admin/login?error=invalid_credentials");
-    }
-  }
-
+export default function AdminLoginPage() {
   return (
     <main
       style={{
@@ -95,47 +23,7 @@ export default async function AdminLoginPage({
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
-        <h1 style={{ fontSize: 44, marginBottom: 16 }}>Admin login</h1>
-
-        <p style={{ marginBottom: 16 }}>
-          Site: <strong>{tenantSlug || "unknown"}</strong>
-        </p>
-
-        {errorMessage && (
-          <p style={{ color: "red", marginBottom: 16 }}>{errorMessage}</p>
-        )}
-
-        <form action={loginAction}>
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            required
-            style={{ width: "100%", marginBottom: 12, height: 48 }}
-          />
-
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            required
-            style={{ width: "100%", marginBottom: 16, height: 48 }}
-          />
-
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              height: 48,
-              background: "#1683f8",
-              color: "#fff",
-              border: "none",
-              borderRadius: 9999,
-            }}
-          >
-            Sign in
-          </button>
-        </form>
+        <AdminLoginForm />
       </div>
     </main>
   );
