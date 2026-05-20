@@ -123,10 +123,24 @@ async function saveStripeConnectStatus({
     `
       insert into tenant_settings (
         tenant_slug,
+        subscription_tier,
+        platform_fee_percent,
+        stripe_customer_id,
+        stripe_subscription_id,
         stripe_connect_account_id,
-        updated_at
+        subscription_status,
+        buyer_fee_contributions_enabled,
+        crm_enabled,
+        auctions_enabled,
+        reserved_seating_enabled,
+        finance_dashboard_enabled,
+        white_label_enabled,
+        custom_domain_enabled
       )
-      values ($1, $2, now())
+      values (
+        $1, 'community', 7, null, null, $2, 'active',
+        false, false, false, false, false, false, false
+      )
       on conflict (tenant_slug)
       do update set
         stripe_connect_account_id = excluded.stripe_connect_account_id,
