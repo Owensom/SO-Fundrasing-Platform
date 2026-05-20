@@ -24,12 +24,29 @@ function setTenantCookie(response: NextResponse, tenantSlug: string) {
   });
 }
 
+function safeCallbackPath(req: Parameters<Parameters<typeof auth>[0]>[0]) {
+  const path = `${req.nextUrl.pathname}${req.nextUrl.search || ""}`;
+
+  if (!path.startsWith("/") || path.startsWith("//")) {
+    return "/admin";
+  }
+
+  if (path.startsWith("/admin/login")) {
+    return "/admin";
+  }
+
+  return path;
+}
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAdminApiPath =
     pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+
+  const isTenantSelectPage = pathname === "/admin/select-tenant";
+  const isTenantSelectApi = pathname === "/api/admin/select-tenant";
 
   const isPublicAdminPage =
     pathname.startsWith("/admin/login") ||
@@ -45,7 +62,9 @@ export default auth((req) => {
   const host = req.headers.get("host");
   const mainVercelHost = isMainVercelHost(host);
 
-  const hostTenantSlug = extractTenantSlugFromHost(host) || "";
+  const hostTenantSlug = mainVercelHost
+    ? ""
+    : extractTenantSlugFromHost(host) || "";
 
   const cookieTenantSlug = normalizeTenantSlug(
     req.cookies.get(TENANT_COOKIE_NAME)?.value,
@@ -75,13 +94,75 @@ export default auth((req) => {
         .filter(Boolean)
     : [];
 
-  const firstSessionTenantSlug = sessionTenantSlugs[0] || "";
+  if (isTenantSelectPage || isTenantSelectApi) {
+    if (!req.auth?.user) {
+      if (isTenantSelectApi) {
+        return NextResponse.json(
+          { ok: false, error: "Unauthorized" },
+          { status: 401 },
+        );
+      }
+
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = "/admin/login";
+      loginUrl.searchParams.set("callbackUrl", "/admin/select-tenant");
+
+      return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
+    }
+
+    return NextResponse.next();
+  }
+
+  if (!req.auth?.user) {
+    if (isAdminApiPath) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/admin/login";
+
+    if (mainVercelHost && (queryTenantSlug || cookieTenantSlug)) {
+      loginUrl.searchParams.set(
+        "tenant",
+        queryTenantSlug || cookieTenantSlug,
+      );
+    }
+
+    loginUrl.searchParams.set("callbackUrl", safeCallbackPath(req));
+
+    return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
+  }
+
+  if (
+    mainVercelHost &&
+    !queryTenantSlug &&
+    !cookieTenantSlug &&
+    sessionTenantSlugs.length > 1
+  ) {
+    if (isAdminApiPath) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Tenant selection required",
+        },
+        { status: 409 },
+      );
+    }
+
+    const selectUrl = req.nextUrl.clone();
+    selectUrl.pathname = "/admin/select-tenant";
+    selectUrl.searchParams.set("callbackUrl", safeCallbackPath(req));
+
+    return NextResponse.redirect(new URL(selectUrl.toString(), req.url));
+  }
 
   const tenantSlug = mainVercelHost
     ? queryTenantSlug ||
       cookieTenantSlug ||
-      firstSessionTenantSlug ||
-      hostTenantSlug
+      (sessionTenantSlugs.length === 1 ? sessionTenantSlugs[0] : "")
     : hostTenantSlug;
 
   if (!tenantSlug) {
@@ -99,30 +180,21 @@ export default auth((req) => {
     return NextResponse.redirect(new URL(url.toString(), req.url));
   }
 
-  if (!req.auth?.user) {
-    if (isAdminApiPath) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-
-    const loginUrl = req.nextUrl.clone();
-    loginUrl.pathname = "/admin/login";
-
-    if (mainVercelHost && tenantSlug) {
-      loginUrl.searchParams.set("tenant", tenantSlug);
-    }
-
-    return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
-  }
-
   if (!sessionTenantSlugs.includes(tenantSlug)) {
     if (isAdminApiPath) {
       return NextResponse.json(
         { ok: false, error: "Tenant access denied" },
         { status: 403 },
       );
+    }
+
+    if (mainVercelHost && sessionTenantSlugs.length > 1) {
+      const selectUrl = req.nextUrl.clone();
+      selectUrl.pathname = "/admin/select-tenant";
+      selectUrl.searchParams.set("error", "tenant_access_denied");
+      selectUrl.searchParams.set("callbackUrl", "/admin");
+
+      return NextResponse.redirect(new URL(selectUrl.toString(), req.url));
     }
 
     const loginUrl = req.nextUrl.clone();
