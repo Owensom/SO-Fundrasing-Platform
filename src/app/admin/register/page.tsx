@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ function slugify(value: string) {
     .slice(0, 60);
 }
 
-export default function AdminRegisterPage() {
+function RegisterContent() {
   const searchParams = useSearchParams();
   const errorMessage = getErrorMessage(searchParams?.get("error") || null);
 
@@ -70,6 +70,152 @@ export default function AdminRegisterPage() {
   }
 
   return (
+    <section className="register-shell" style={styles.shell}>
+      <div style={styles.heroCard}>
+        <div style={styles.eyebrow}>SO Fundraising Platform</div>
+
+        <h1 style={styles.title}>Create your organisation account</h1>
+
+        <p style={styles.subtitle}>
+          Set up a new tenant workspace with secure admin access, Community
+          defaults, campaign tools and tenant-scoped billing settings.
+        </p>
+
+        <div style={styles.checkList}>
+          {[
+            "Creates a tenant workspace",
+            "Creates the first organisation admin",
+            "Starts on the Community tier",
+            "Generates a safe tenant slug automatically",
+          ].map((item) => (
+            <div key={item} style={styles.checkItem}>
+              <span style={styles.checkIcon}>✓</span>
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={styles.formCard}>
+        <h2 style={styles.formTitle}>Register</h2>
+
+        <p style={styles.formIntro}>
+          Enter the organisation name and the site slug will be generated
+          automatically. You can still edit it before creating the account.
+        </p>
+
+        {errorMessage ? <div style={styles.errorBox}>{errorMessage}</div> : null}
+
+        <form action="/api/admin/register" method="post" style={styles.form}>
+          <label style={styles.label}>
+            Organisation name
+            <input
+              name="organisationName"
+              required
+              value={organisationName}
+              onChange={(event) => updateOrganisationName(event.target.value)}
+              placeholder="Brave Ceilidh"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Site slug
+            <input
+              name="tenantSlug"
+              required
+              value={tenantSlug}
+              onChange={(event) => updateTenantSlug(event.target.value)}
+              placeholder="brave-ceilidh"
+              pattern="[a-z0-9][a-z0-9-]{1,58}[a-z0-9]"
+              style={styles.input}
+            />
+            <span style={styles.helpText}>
+              This becomes the tenant identifier, for example{" "}
+              <strong>{tenantSlug || "brave-ceilidh"}</strong>.
+            </span>
+          </label>
+
+          <label style={styles.label}>
+            Admin name
+            <input
+              name="adminName"
+              required
+              placeholder="Organisation Admin"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Admin email
+            <input
+              name="email"
+              type="email"
+              required
+              placeholder="admin@example.org"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Password
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={10}
+              placeholder="At least 10 characters"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Confirm password
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              minLength={10}
+              placeholder="Repeat password"
+              style={styles.input}
+            />
+          </label>
+
+          <button type="submit" style={styles.submitButton}>
+            Create organisation account
+          </button>
+        </form>
+
+        <p style={styles.footerText}>
+          Already registered?{" "}
+          <Link href="/admin/login" style={styles.footerLink}>
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function RegisterLoading() {
+  return (
+    <section className="register-shell" style={styles.shell}>
+      <div style={styles.heroCard}>
+        <div style={styles.eyebrow}>SO Fundraising Platform</div>
+        <h1 style={styles.title}>Create your organisation account</h1>
+        <p style={styles.subtitle}>Loading registration form…</p>
+      </div>
+
+      <div style={styles.formCard}>
+        <h2 style={styles.formTitle}>Register</h2>
+        <p style={styles.formIntro}>Preparing the secure registration form.</p>
+      </div>
+    </section>
+  );
+}
+
+export default function AdminRegisterPage() {
+  return (
     <main
       style={{
         minHeight: "100vh",
@@ -82,132 +228,9 @@ export default function AdminRegisterPage() {
     >
       <style>{responsiveStyles}</style>
 
-      <section className="register-shell" style={styles.shell}>
-        <div style={styles.heroCard}>
-          <div style={styles.eyebrow}>SO Fundraising Platform</div>
-
-          <h1 style={styles.title}>Create your organisation account</h1>
-
-          <p style={styles.subtitle}>
-            Set up a new tenant workspace with secure admin access, Community
-            defaults, campaign tools and tenant-scoped billing settings.
-          </p>
-
-          <div style={styles.checkList}>
-            {[
-              "Creates a tenant workspace",
-              "Creates the first organisation admin",
-              "Starts on the Community tier",
-              "Generates a safe tenant slug automatically",
-            ].map((item) => (
-              <div key={item} style={styles.checkItem}>
-                <span style={styles.checkIcon}>✓</span>
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={styles.formCard}>
-          <h2 style={styles.formTitle}>Register</h2>
-
-          <p style={styles.formIntro}>
-            Enter the organisation name and the site slug will be generated
-            automatically. You can still edit it before creating the account.
-          </p>
-
-          {errorMessage ? (
-            <div style={styles.errorBox}>{errorMessage}</div>
-          ) : null}
-
-          <form action="/api/admin/register" method="post" style={styles.form}>
-            <label style={styles.label}>
-              Organisation name
-              <input
-                name="organisationName"
-                required
-                value={organisationName}
-                onChange={(event) => updateOrganisationName(event.target.value)}
-                placeholder="Brave Ceilidh"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Site slug
-              <input
-                name="tenantSlug"
-                required
-                value={tenantSlug}
-                onChange={(event) => updateTenantSlug(event.target.value)}
-                placeholder="brave-ceilidh"
-                pattern="[a-z0-9][a-z0-9-]{1,58}[a-z0-9]"
-                style={styles.input}
-              />
-              <span style={styles.helpText}>
-                This becomes the tenant identifier, for example{" "}
-                <strong>{tenantSlug || "brave-ceilidh"}</strong>.
-              </span>
-            </label>
-
-            <label style={styles.label}>
-              Admin name
-              <input
-                name="adminName"
-                required
-                placeholder="Organisation Admin"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Admin email
-              <input
-                name="email"
-                type="email"
-                required
-                placeholder="admin@example.org"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Password
-              <input
-                name="password"
-                type="password"
-                required
-                minLength={10}
-                placeholder="At least 10 characters"
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              Confirm password
-              <input
-                name="confirmPassword"
-                type="password"
-                required
-                minLength={10}
-                placeholder="Repeat password"
-                style={styles.input}
-              />
-            </label>
-
-            <button type="submit" style={styles.submitButton}>
-              Create organisation account
-            </button>
-          </form>
-
-          <p style={styles.footerText}>
-            Already registered?{" "}
-            <Link href="/admin/login" style={styles.footerLink}>
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </section>
+      <Suspense fallback={<RegisterLoading />}>
+        <RegisterContent />
+      </Suspense>
     </main>
   );
 }
