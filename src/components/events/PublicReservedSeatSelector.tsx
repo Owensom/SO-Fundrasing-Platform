@@ -58,6 +58,14 @@ function safePercent(value: unknown) {
   return Math.min(100, number);
 }
 
+function cleanAccessCode(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function calculatePlatformCommissionCents(
   subtotalCents: number,
   platformFeePercent: number,
@@ -248,8 +256,12 @@ export default function PublicReservedSeatSelector({
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
   const [coverFees, setCoverFees] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  const cleanedAccessCode = cleanAccessCode(accessCode);
+  const hasAccessCode = cleanedAccessCode.length > 0;
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
@@ -290,8 +302,8 @@ export default function PublicReservedSeatSelector({
     platformFeePercent,
   );
 
-  const platformFeeCents = coverFees ? estimatedCoverFeeCents : 0;
-  const totalTodayCents = ticketTotal + platformFeeCents;
+  const platformFeeCents = coverFees && !hasAccessCode ? estimatedCoverFeeCents : 0;
+  const totalTodayCents = hasAccessCode ? 0 : ticketTotal + platformFeeCents;
 
   function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
@@ -360,8 +372,9 @@ export default function PublicReservedSeatSelector({
           eventId,
           buyerName,
           buyerEmail,
-          coverFees,
+          coverFees: hasAccessCode ? false : coverFees,
           platformFeeCents,
+          accessCode: cleanedAccessCode || null,
           items: cartItems.map((item) => {
             const data = guestData[item.seatId] || getDefaultGuestData();
 
@@ -606,6 +619,22 @@ export default function PublicReservedSeatSelector({
                 onBuyerEmailChange={setBuyerEmail}
                 dark
               />
+
+              <div style={styles.summarySpacer} />
+
+              <label style={styles.accessCodeBox}>
+                <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
+                <input
+                  value={accessCode}
+                  onChange={(event) => setAccessCode(event.target.value)}
+                  placeholder="Enter access code"
+                  style={styles.accessCodeInput}
+                />
+                <small style={styles.accessCodeHelp}>
+                  Use this for VIP, sponsor, staff or complimentary bookings.
+                  Codes are validated securely before booking.
+                </small>
+              </label>
             </div>
 
             <div>
@@ -759,25 +788,34 @@ export default function PublicReservedSeatSelector({
                 </strong>
               </div>
 
-              <label style={styles.feeBox}>
-                <input
-                  type="checkbox"
-                  checked={coverFees}
-                  onChange={(event) => setCoverFees(event.target.checked)}
-                  disabled={ticketTotal <= 0}
-                />
-                <span>
-                  <strong>I’d like to cover platform and payment costs</strong>
-                  <small style={styles.feeSmall}>
-                    Adds approximately {currency}{" "}
-                    {moneyFromCents(estimatedCoverFeeCents)} so the organiser
-                    receives the full ticket value.
-                  </small>
-                </span>
-              </label>
+              {hasAccessCode ? (
+                <div style={styles.accessCodeNotice}>
+                  <strong>Access code entered.</strong>
+                  <span>
+                    If valid, this booking will complete without Stripe payment.
+                  </span>
+                </div>
+              ) : (
+                <label style={styles.feeBox}>
+                  <input
+                    type="checkbox"
+                    checked={coverFees}
+                    onChange={(event) => setCoverFees(event.target.checked)}
+                    disabled={ticketTotal <= 0}
+                  />
+                  <span>
+                    <strong>I’d like to cover platform and payment costs</strong>
+                    <small style={styles.feeSmall}>
+                      Adds approximately {currency}{" "}
+                      {moneyFromCents(estimatedCoverFeeCents)} so the organiser
+                      receives the full ticket value.
+                    </small>
+                  </span>
+                </label>
+              )}
 
-              <div style={styles.totalBoxStrong}>
-                <span>Total today</span>
+              <div style={hasAccessCode ? styles.totalBoxComplimentary : styles.totalBoxStrong}>
+                <span>{hasAccessCode ? "Due after valid code" : "Total today"}</span>
                 <strong>
                   {currency} {moneyFromCents(totalTodayCents)}
                 </strong>
@@ -800,7 +838,11 @@ export default function PublicReservedSeatSelector({
                       : "pointer",
                 }}
               >
-                {isCheckingOut ? "Processing..." : "Continue to checkout"}
+                {isCheckingOut
+                  ? "Processing..."
+                  : hasAccessCode
+                    ? "Validate code and book"
+                    : "Continue to checkout"}
               </button>
             </div>
           </div>
@@ -1180,6 +1222,20 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(187,247,208,0.18)",
   },
+  totalBoxComplimentary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.18)",
+    color: "#bfdbfe",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(147,197,253,0.22)",
+  },
   feeBox: {
     display: "flex",
     gap: 10,
@@ -1198,6 +1254,53 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
     color: "#cbd5e1",
     lineHeight: 1.4,
+  },
+  accessCodeBox: {
+    display: "grid",
+    gap: 7,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+  accessCodeLabel: {
+    color: "#facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  accessCodeInput: {
+    width: "100%",
+    minHeight: 42,
+    padding: "10px 11px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 850,
+    boxSizing: "border-box",
+    textTransform: "uppercase",
+  },
+  accessCodeHelp: {
+    color: "#cbd5e1",
+    lineHeight: 1.4,
+    fontSize: 12,
+    fontWeight: 750,
+  },
+  accessCodeNotice: {
+    display: "grid",
+    gap: 4,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.16)",
+    border: "1px solid rgba(147,197,253,0.2)",
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
   },
   checkout: {
     marginTop: 14,
@@ -1218,5 +1321,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#fee2e2",
     color: "#991b1b",
     fontWeight: 900,
+  },
+  summarySpacer: {
+    height: 16,
   },
 };
