@@ -43,7 +43,7 @@ function slugify(value: string) {
 
 export default function AdminRegisterPage() {
   const searchParams = useSearchParams();
-  const errorMessage = getErrorMessage(searchParams.get("error"));
+  const errorMessage = getErrorMessage(searchParams?.get("error") || null);
 
   const [organisationName, setOrganisationName] = useState("");
   const [manualSlug, setManualSlug] = useState("");
