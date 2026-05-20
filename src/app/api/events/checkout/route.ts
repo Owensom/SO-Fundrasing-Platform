@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   buildPaymentSummary,
@@ -38,6 +39,20 @@ type EventCheckoutPaymentSummary = {
   tenantNetCents: number;
 };
 
+type EventAccessCodeRow = {
+  id: string;
+  tenant_slug: string;
+  event_id: string;
+  code: string;
+  label: string | null;
+  access_type: string;
+  max_uses: number | null;
+  used_count: number;
+  ticket_type_id: string | null;
+  is_active: boolean;
+  expires_at: string | null;
+};
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
@@ -48,6 +63,14 @@ function siteUrl(req: Request) {
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
+}
+
+function cleanAccessCode(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function positiveQuantity(value: unknown) {
@@ -205,6 +228,173 @@ function eventCheckoutMetadata(input: {
   };
 }
 
+async function getValidEventAccessCode(input: {
+  tenantSlug: string;
+  eventId: string;
+  code: string;
+}) {
+  const rows = await query<EventAccessCodeRow>(
+    `
+      select
+        id::text,
+        tenant_slug,
+        event_id::text,
+        code,
+        label,
+        access_type,
+        max_uses,
+        used_count,
+        ticket_type_id::text,
+        is_active,
+        expires_at::text
+      from event_access_codes
+      where tenant_slug = $1
+        and event_id = $2
+        and lower(code) = lower($3)
+      limit 1
+    `,
+    [input.tenantSlug, input.eventId, input.code],
+  );
+
+  const accessCode = rows[0] || null;
+
+  if (!accessCode) {
+    throw new Error("Invalid access code.");
+  }
+
+  if (!accessCode.is_active) {
+    throw new Error("This access code is no longer active.");
+  }
+
+  if (
+    accessCode.expires_at &&
+    new Date(accessCode.expires_at).getTime() <= Date.now()
+  ) {
+    throw new Error("This access code has expired.");
+  }
+
+  if (
+    accessCode.max_uses !== null &&
+    Number(accessCode.used_count) >= Number(accessCode.max_uses)
+  ) {
+    throw new Error("This access code has already been used.");
+  }
+
+  return accessCode;
+}
+
+async function incrementAccessCodeUsage(input: {
+  tenantSlug: string;
+  eventId: string;
+  accessCodeId: string;
+}) {
+  const rows = await query<{ id: string }>(
+    `
+      update event_access_codes
+      set
+        used_count = used_count + 1,
+        updated_at = now()
+      where id = $1
+        and tenant_slug = $2
+        and event_id = $3
+        and is_active = true
+        and (expires_at is null or expires_at > now())
+        and (max_uses is null or used_count < max_uses)
+      returning id::text
+    `,
+    [input.accessCodeId, input.tenantSlug, input.eventId],
+  );
+
+  if (!rows[0]) {
+    throw new Error("This access code is no longer available.");
+  }
+}
+
+async function markEventOrderComplimentaryPaid(input: {
+  orderId: string;
+  accessCode: EventAccessCodeRow;
+}) {
+  await query(
+    `
+      update event_orders
+      set
+        status = 'paid',
+        amount_total = 0,
+        stripe_session_id = null,
+        updated_at = now()
+      where id = $1
+    `,
+    [input.orderId],
+  );
+}
+
+async function markSeatsComplimentarySold(input: {
+  eventId: string;
+  orderId: string;
+  buyerName: string;
+  buyerEmail: string;
+  accessType: string;
+  rows: Array<{
+    seat: {
+      id: string;
+    };
+    guestName: string;
+    dietaryRequirements: string;
+    menuChoice: string;
+  }>;
+}) {
+  for (const row of input.rows) {
+    await query(
+      `
+        update event_seats
+        set
+          status = 'sold',
+          order_id = $3,
+          customer_name = $4,
+          customer_email = $5,
+          guest_name = $6,
+          guest_email = $5,
+          dietary_requirements = $7,
+          menu_choice = $8,
+          seat_purpose = $9,
+          updated_at = now()
+        where event_id = $1
+          and id = $2
+      `,
+      [
+        input.eventId,
+        row.seat.id,
+        input.orderId,
+        input.buyerName,
+        input.buyerEmail,
+        row.guestName || input.buyerName,
+        row.dietaryRequirements || null,
+        row.menuChoice || null,
+        input.accessType || "complimentary",
+      ],
+    );
+  }
+}
+
+function validateAccessCodeTicketRestriction(input: {
+  accessCode: EventAccessCodeRow;
+  ticketTypeIds: string[];
+}) {
+  if (!input.accessCode.ticket_type_id) return;
+
+  const invalid = input.ticketTypeIds.some(
+    (ticketTypeId) => ticketTypeId !== input.accessCode.ticket_type_id,
+  );
+
+  if (invalid) {
+    throw new Error("This access code is not valid for the selected ticket type.");
+  }
+}
+
+function complimentarySuccessUrl(req: Request, slug: string) {
+  return `${siteUrl(req)}/e/${slug}?checkout=success&access=complimentary`;
+}
+
 export async function POST(req: Request) {
   let orderId: string | null = null;
 
@@ -215,7 +405,10 @@ export async function POST(req: Request) {
     const eventId = cleanText(body.eventId);
     const buyerName = cleanText(body.buyerName);
     const buyerEmail = cleanText(body.buyerEmail);
-    const coverFees = truthy(body.coverFees);
+    const requestedAccessCode = cleanAccessCode(body.accessCode);
+    const hasAccessCode = Boolean(requestedAccessCode);
+
+    const coverFees = hasAccessCode ? false : truthy(body.coverFees);
 
     const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
 
@@ -248,6 +441,14 @@ export async function POST(req: Request) {
         { status: 404 },
       );
     }
+
+    const accessCode = hasAccessCode
+      ? await getValidEventAccessCode({
+          tenantSlug: event.tenant_slug,
+          eventId: event.id,
+          code: requestedAccessCode,
+        })
+      : null;
 
     const finance = await getTenantFinanceSettings(event.tenant_slug);
     const platformFeePercent = getPlatformFeePercent(finance);
@@ -289,6 +490,23 @@ export async function POST(req: Request) {
         );
       }
 
+      validateAccessCodeTicketRestriction({
+        accessCode: accessCode || {
+          id: "",
+          tenant_slug: event.tenant_slug,
+          event_id: event.id,
+          code: "",
+          label: null,
+          access_type: "complimentary",
+          max_uses: null,
+          used_count: 0,
+          ticket_type_id: null,
+          is_active: true,
+          expires_at: null,
+        },
+        ticketTypeIds: checkoutRows.map((row) => row.ticketType.id),
+      });
+
       const ticketTotalCents = checkoutRows.reduce(
         (sum, row) => sum + Number(row.ticketType.price || 0) * row.quantity,
         0,
@@ -299,6 +517,53 @@ export async function POST(req: Request) {
           { error: "Invalid checkout total." },
           { status: 400 },
         );
+      }
+
+      if (accessCode) {
+        const order = await createPendingEventOrder({
+          tenantSlug: event.tenant_slug,
+          eventId: event.id,
+          amountTotal: 0,
+          currency: event.currency,
+          buyerName,
+          buyerEmail,
+          buyer_name: buyerName,
+          buyer_email: buyerEmail,
+        } as never);
+
+        orderId = order.id;
+
+        for (const row of checkoutRows) {
+          await createEventOrderItem({
+            orderId: order.id,
+            eventId: event.id,
+            ticketTypeId: row.ticketType.id,
+            seatId: null,
+            label: `${accessCode.access_type.toUpperCase()} — ${
+              row.ticketType.name
+            }`,
+            quantity: row.quantity,
+            unitAmount: 0,
+            guest_name: buyerName,
+            dietary_requirements: null,
+            menu_choice: null,
+          });
+        }
+
+        await markEventOrderComplimentaryPaid({
+          orderId: order.id,
+          accessCode,
+        });
+
+        await incrementAccessCodeUsage({
+          tenantSlug: event.tenant_slug,
+          eventId: event.id,
+          accessCodeId: accessCode.id,
+        });
+
+        return NextResponse.json({
+          url: complimentarySuccessUrl(req, event.slug),
+        });
       }
 
       const paymentSummary = normaliseEventPaymentSummary({
@@ -397,7 +662,8 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ url: session.url });
     }
-        const seats = event.seats || [];
+
+    const seats = event.seats || [];
 
     const seatIds = Array.from(
       new Set(items.map((item) => cleanText(item.seatId)).filter(Boolean)),
@@ -450,6 +716,23 @@ export async function POST(req: Request) {
       };
     });
 
+    validateAccessCodeTicketRestriction({
+      accessCode: accessCode || {
+        id: "",
+        tenant_slug: event.tenant_slug,
+        event_id: event.id,
+        code: "",
+        label: null,
+        access_type: "complimentary",
+        max_uses: null,
+        used_count: 0,
+        ticket_type_id: null,
+        is_active: true,
+        expires_at: null,
+      },
+      ticketTypeIds: checkoutRows.map((row) => row.ticketType.id),
+    });
+
     const ticketTotalCents = checkoutRows.reduce(
       (sum, row) => sum + Number(row.ticketType.price || 0),
       0,
@@ -460,6 +743,88 @@ export async function POST(req: Request) {
         { error: "Invalid checkout total." },
         { status: 400 },
       );
+    }
+
+    if (accessCode) {
+      const order = await createPendingEventOrder({
+        tenantSlug: event.tenant_slug,
+        eventId: event.id,
+        amountTotal: 0,
+        currency: event.currency,
+        buyerName,
+        buyerEmail,
+        buyer_name: buyerName,
+        buyer_email: buyerEmail,
+      } as never);
+
+      orderId = order.id;
+
+      const reservedCount = await reserveEventSeatsForOrder({
+        eventId: event.id,
+        orderId: order.id,
+        seatIds,
+      });
+
+      if (reservedCount !== seatIds.length) {
+        await deleteEventOrderAndItems(order.id);
+        orderId = null;
+
+        return NextResponse.json(
+          { error: "Seats unavailable." },
+          { status: 409 },
+        );
+      }
+
+      for (const row of checkoutRows) {
+        await createEventOrderItem({
+          orderId: order.id,
+          eventId: event.id,
+          ticketTypeId: row.ticketType.id,
+          seatId: row.seat.id,
+          label: `${accessCode.access_type.toUpperCase()} — ${seatLabel({
+            tableNumber: row.seat.table_number,
+            rowLabel: row.seat.row_label,
+            seatNumber: row.seat.seat_number,
+            tableName: row.tableName,
+          })}`,
+          quantity: 1,
+          unitAmount: 0,
+          guest_name: row.guestName || buyerName,
+          dietary_requirements: row.dietaryRequirements || null,
+          menu_choice: row.menuChoice || null,
+        });
+      }
+
+      await markEventOrderComplimentaryPaid({
+        orderId: order.id,
+        accessCode,
+      });
+
+      await markSeatsComplimentarySold({
+        eventId: event.id,
+        orderId: order.id,
+        buyerName,
+        buyerEmail,
+        accessType: accessCode.access_type || "complimentary",
+        rows: checkoutRows.map((row) => ({
+          seat: {
+            id: row.seat.id,
+          },
+          guestName: row.guestName || buyerName,
+          dietaryRequirements: row.dietaryRequirements,
+          menuChoice: row.menuChoice,
+        })),
+      });
+
+      await incrementAccessCodeUsage({
+        tenantSlug: event.tenant_slug,
+        eventId: event.id,
+        accessCodeId: accessCode.id,
+      });
+
+      return NextResponse.json({
+        url: complimentarySuccessUrl(req, event.slug),
+      });
     }
 
     const paymentSummary = normaliseEventPaymentSummary({
@@ -489,6 +854,7 @@ export async function POST(req: Request) {
 
     if (reservedCount !== seatIds.length) {
       await deleteEventOrderAndItems(order.id);
+      orderId = null;
 
       return NextResponse.json(
         { error: "Seats unavailable." },
