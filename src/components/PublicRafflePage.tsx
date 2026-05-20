@@ -357,6 +357,7 @@ function toSafeRaffle(input: any): SafeRaffle {
     },
   };
 }
+
 function calculateBestPrice(
   quantity: number,
   ticketPrice: number,
@@ -427,8 +428,7 @@ function calculateBestPrice(
       }
     }
   }
-
-  const total = Number.isFinite(dp[safeQuantity]?.total)
+    const total = Number.isFinite(dp[safeQuantity]?.total)
     ? dp[safeQuantity].total
     : 0;
 
@@ -542,6 +542,218 @@ function statusPillStyle(status: SafeRaffleStatus): React.CSSProperties {
     border: "1px solid #e2e8f0",
   };
 }
+
+const responsiveStyles = `
+  @media (max-width: 760px) {
+    .public-raffle-page {
+      background: linear-gradient(180deg, #020617 0px, #0f172a 560px, #f8fafc 560px, #f8fafc 100%) !important;
+      overflow-x: hidden;
+    }
+
+    .public-raffle-hero {
+      min-height: 560px !important;
+      align-items: flex-end !important;
+    }
+
+    .public-raffle-hero-inner {
+      padding: 18px 14px 34px !important;
+    }
+
+    .public-raffle-hero-nav {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      margin-bottom: 34px !important;
+    }
+
+    .public-raffle-hero-nav a {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+      box-sizing: border-box !important;
+    }
+
+    .public-raffle-badge-row {
+      gap: 8px !important;
+      margin-bottom: 18px !important;
+    }
+
+    .public-raffle-type-badge,
+    .public-raffle-status-pill {
+      font-size: 11px !important;
+      padding: 7px 11px !important;
+    }
+
+    .public-raffle-hero-title {
+      font-size: clamp(36px, 14vw, 56px) !important;
+      line-height: 0.96 !important;
+      letter-spacing: -0.055em !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .public-raffle-hero-description {
+      font-size: 15px !important;
+      line-height: 1.55 !important;
+      margin-top: 16px !important;
+    }
+
+    .public-raffle-hero-meta {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 10px !important;
+      margin-top: 22px !important;
+    }
+
+    .public-raffle-meta-card {
+      padding: 13px !important;
+      border-radius: 18px !important;
+      min-width: 0 !important;
+    }
+
+    .public-raffle-meta-card strong {
+      font-size: 14px !important;
+      line-height: 1.25 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .public-raffle-hero-footer {
+      margin-top: 18px !important;
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 6px !important;
+    }
+
+    .public-raffle-content-wrap {
+      margin-top: -42px !important;
+      padding-bottom: 44px !important;
+    }
+
+    .public-raffle-container {
+      padding: 0 12px !important;
+      gap: 16px !important;
+    }
+
+    .public-raffle-heading {
+      font-size: 26px !important;
+      margin: 6px 0 8px !important;
+    }
+
+    .public-raffle-disclaimer,
+    .public-raffle-prizes,
+    .public-raffle-winners,
+    .public-raffle-quick-select,
+    .public-raffle-total-box {
+      border-radius: 22px !important;
+      padding: 16px !important;
+    }
+
+    .public-raffle-prize-card {
+      gap: 12px !important;
+      padding: 14px !important;
+      border-radius: 18px !important;
+    }
+
+    .public-raffle-prize-position {
+      width: 54px !important;
+      height: 54px !important;
+      border-radius: 16px !important;
+      font-size: 18px !important;
+    }
+
+    .public-raffle-prize-title {
+      font-size: 18px !important;
+    }
+
+    .public-raffle-winner-card {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .public-raffle-quick-controls {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      align-items: stretch !important;
+    }
+
+    .public-raffle-quantity-input,
+    .public-raffle-auto-button,
+    .public-raffle-clear-button {
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .public-raffle-offer-grid,
+    .public-raffle-colour-row {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .public-raffle-offer-pill,
+    .public-raffle-colour-button {
+      width: 100% !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+    }
+
+    .public-raffle-number-grid {
+      grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)) !important;
+      gap: 8px !important;
+    }
+
+    .public-raffle-number-button {
+      height: 48px !important;
+      border-radius: 14px !important;
+      font-size: 14px !important;
+      padding: 0 !important;
+    }
+
+    .public-raffle-basket-row {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      align-items: stretch !important;
+    }
+
+    .public-raffle-remove-button {
+      justify-self: start !important;
+    }
+
+    .public-raffle-cover-fees,
+    .public-raffle-terms-box {
+      display: grid !important;
+      grid-template-columns: auto 1fr !important;
+      gap: 10px !important;
+    }
+
+    .public-raffle-input,
+    .public-raffle-primary-button {
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .public-raffle-free-entry-address {
+      overflow-x: auto !important;
+      white-space: pre-wrap !important;
+      word-break: break-word !important;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .public-raffle-hero-meta {
+      grid-template-columns: 1fr !important;
+    }
+
+    .public-raffle-hero {
+      min-height: 620px !important;
+    }
+
+    .public-raffle-page {
+      background: linear-gradient(180deg, #020617 0px, #0f172a 620px, #f8fafc 620px, #f8fafc 100%) !important;
+    }
+  }
+`;
 
 export default function PublicRafflePage({ slug }: Props) {
   const [raffle, setRaffle] = useState<SafeRaffle | null>(null);
@@ -688,8 +900,7 @@ export default function PublicRafflePage({ slug }: Props) {
       isPublished ? raffle.offers : [],
     );
   }, [basket.length, raffle, isPublished]);
-
-  const estimatedFee =
+    const estimatedFee =
     pricing.total > 0 ? Math.round(pricing.total * 0.1 * 100) / 100 : 0;
 
   const displayTotal = coverFees ? pricing.total + estimatedFee : pricing.total;
@@ -758,7 +969,8 @@ export default function PublicRafflePage({ slug }: Props) {
     setError("");
     setReservationMessage("");
   }
-    function autoSelectTicketQuantity(quantity: number) {
+
+  function autoSelectTicketQuantity(quantity: number) {
     if (!raffle || !canReserve) return;
 
     const requested = Math.max(1, Math.floor(Number(quantity) || 0));
@@ -1007,8 +1219,10 @@ export default function PublicRafflePage({ slug }: Props) {
   if (!raffle) return <div style={styles.wrap}>Raffle not found.</div>;
 
   return (
-    <div style={styles.page}>
-      <section style={styles.hero}>
+    <div className="public-raffle-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="public-raffle-hero" style={styles.hero}>
         <img
           src={heroImageUrl}
           alt={raffle.title}
@@ -1024,8 +1238,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
         <div style={styles.heroOverlay} />
 
-        <div style={styles.heroInner}>
-          <nav style={styles.heroNav}>
+        <div className="public-raffle-hero-inner" style={styles.heroInner}>
+          <nav className="public-raffle-hero-nav" style={styles.heroNav}>
             <Link href={"/c/" + raffle.tenantSlug} style={styles.heroBackLink}>
               ← Back to campaigns
             </Link>
@@ -1037,10 +1251,13 @@ export default function PublicRafflePage({ slug }: Props) {
             ) : null}
           </nav>
 
-          <div style={styles.badgeRow}>
-            <span style={styles.typeBadge}>Raffle</span>
+          <div className="public-raffle-badge-row" style={styles.badgeRow}>
+            <span className="public-raffle-type-badge" style={styles.typeBadge}>
+              Raffle
+            </span>
 
             <span
+              className="public-raffle-status-pill"
               style={{
                 ...styles.statusPill,
                 ...statusPillStyle(raffle.status),
@@ -1050,39 +1267,46 @@ export default function PublicRafflePage({ slug }: Props) {
             </span>
           </div>
 
-          <h1 style={styles.heroTitle}>{raffle.title}</h1>
+          <h1 className="public-raffle-hero-title" style={styles.heroTitle}>
+            {raffle.title}
+          </h1>
 
           {raffle.description ? (
-            <p style={styles.heroDescription}>{raffle.description}</p>
+            <p
+              className="public-raffle-hero-description"
+              style={styles.heroDescription}
+            >
+              {raffle.description}
+            </p>
           ) : null}
 
-          <div style={styles.heroMeta}>
-            <div style={styles.metaCard}>
+          <div className="public-raffle-hero-meta" style={styles.heroMeta}>
+            <div className="public-raffle-meta-card" style={styles.metaCard}>
               <span style={styles.metaLabel}>Ticket price</span>
               <strong>
                 {formatCurrency(raffle.ticketPrice, raffle.currency)}
               </strong>
             </div>
 
-            <div style={styles.metaCard}>
+            <div className="public-raffle-meta-card" style={styles.metaCard}>
               <span style={styles.metaLabel}>Draw date</span>
               <strong>{formatDateTime(raffle.drawAt)}</strong>
             </div>
 
-            <div style={styles.metaCard}>
+            <div className="public-raffle-meta-card" style={styles.metaCard}>
               <span style={styles.metaLabel}>Ticket range</span>
               <strong>
                 {raffle.startNumber}–{raffle.endNumber}
               </strong>
             </div>
 
-            <div style={styles.metaCard}>
+            <div className="public-raffle-meta-card" style={styles.metaCard}>
               <span style={styles.metaLabel}>Available now</span>
               <strong>{availableCount}</strong>
             </div>
           </div>
 
-          <div style={styles.heroFooter}>
+          <div className="public-raffle-hero-footer" style={styles.heroFooter}>
             <span>Supporting the organiser</span>
             <strong>
               {basket.length > 0
@@ -1093,9 +1317,12 @@ export default function PublicRafflePage({ slug }: Props) {
         </div>
       </section>
 
-      <main style={styles.contentWrap}>
-        <div style={styles.container}>
-          <div style={styles.disclaimerBox}>
+      <main className="public-raffle-content-wrap" style={styles.contentWrap}>
+        <div className="public-raffle-container" style={styles.container}>
+          <div
+            className="public-raffle-disclaimer"
+            style={styles.disclaimerBox}
+          >
             This campaign is run by the organiser. The platform provides software
             only and is not responsible for the operation of this draw. The
             organiser is responsible for ensuring compliance with all applicable
@@ -1103,7 +1330,7 @@ export default function PublicRafflePage({ slug }: Props) {
           </div>
 
           {raffle.prizes.length > 0 ? (
-            <section style={styles.prizesBox}>
+            <section className="public-raffle-prizes" style={styles.prizesBox}>
               <div style={styles.prizesTitle}>Prizes</div>
 
               <div style={{ display: "grid", gap: 10 }}>
@@ -1111,14 +1338,23 @@ export default function PublicRafflePage({ slug }: Props) {
                   (prize) => (
                     <div
                       key={String(prize.position) + "-" + prize.title}
+                      className="public-raffle-prize-card"
                       style={styles.prizeCard}
                     >
-                      <div style={styles.prizePosition}>
+                      <div
+                        className="public-raffle-prize-position"
+                        style={styles.prizePosition}
+                      >
                         {ordinal(prize.position)}
                       </div>
 
                       <div style={styles.prizeContent}>
-                        <div style={styles.prizeTitle}>{prize.title}</div>
+                        <div
+                          className="public-raffle-prize-title"
+                          style={styles.prizeTitle}
+                        >
+                          {prize.title}
+                        </div>
 
                         {prize.description ? (
                           <div style={styles.prizeDescription}>
@@ -1144,7 +1380,10 @@ export default function PublicRafflePage({ slug }: Props) {
           ) : null}
 
           {isDrawn ? (
-            <section style={styles.winnersBox}>
+            <section
+              className="public-raffle-winners"
+              style={styles.winnersBox}
+            >
               <div style={styles.winnersTitle}>Winning tickets</div>
 
               {raffle.winners.length > 0 ? (
@@ -1158,6 +1397,7 @@ export default function PublicRafflePage({ slug }: Props) {
                         "-" +
                         String(winner.colour || "")
                       }
+                      className="public-raffle-winner-card"
                       style={styles.winnerCard}
                     >
                       <div style={styles.winnerBlock}>
@@ -1185,7 +1425,10 @@ export default function PublicRafflePage({ slug }: Props) {
                   ))}
                 </div>
               ) : (
-                <div style={styles.winnerCard}>
+                <div
+                  className="public-raffle-winner-card"
+                  style={styles.winnerCard}
+                >
                   <div style={styles.winnerBlock}>
                     <div style={styles.winnerLabel}>Prize</div>
                     <div style={styles.winnerPrize}>1st</div>
@@ -1216,7 +1459,8 @@ export default function PublicRafflePage({ slug }: Props) {
               </div>
             </section>
           ) : null}
-                    {isClosed ? (
+
+          {isClosed ? (
             <div style={styles.noticeDark}>
               This raffle is now closed. Reservations and payments are no longer
               available.
@@ -1228,7 +1472,10 @@ export default function PublicRafflePage({ slug }: Props) {
           ) : null}
 
           {canReserve ? (
-            <section style={styles.quickSelect}>
+            <section
+              className="public-raffle-quick-select"
+              style={styles.quickSelect}
+            >
               <div>
                 <h2 style={{ margin: 0 }}>Quick buy</h2>
 
@@ -1238,7 +1485,10 @@ export default function PublicRafflePage({ slug }: Props) {
                 </p>
               </div>
 
-              <div style={styles.quickControls}>
+              <div
+                className="public-raffle-quick-controls"
+                style={styles.quickControls}
+              >
                 <label style={{ display: "grid", gap: 6 }}>
                   <span
                     style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}
@@ -1247,6 +1497,7 @@ export default function PublicRafflePage({ slug }: Props) {
                   </span>
 
                   <input
+                    className="public-raffle-quantity-input"
                     type="number"
                     min={1}
                     max={availableCount || 1}
@@ -1269,6 +1520,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 </label>
 
                 <button
+                  className="public-raffle-auto-button"
                   type="button"
                   onClick={autoSelectTickets}
                   style={styles.autoButton}
@@ -1277,6 +1529,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 </button>
 
                 <button
+                  className="public-raffle-clear-button"
                   type="button"
                   onClick={clearBasket}
                   style={styles.clearButton}
@@ -1293,7 +1546,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 Available offers
               </div>
 
-              <div style={styles.offerGrid}>
+              <div className="public-raffle-offer-grid" style={styles.offerGrid}>
                 {raffle.offers
                   .filter((offer) => offer.isActive)
                   .slice()
@@ -1301,6 +1554,7 @@ export default function PublicRafflePage({ slug }: Props) {
                   .map((offer) => (
                     <button
                       key={offer.id}
+                      className="public-raffle-offer-pill"
                       type="button"
                       onClick={() => autoSelectTicketQuantity(offer.quantity)}
                       style={styles.offerPill}
@@ -1313,15 +1567,18 @@ export default function PublicRafflePage({ slug }: Props) {
             </section>
           ) : null}
 
-          <h2 style={styles.heading}>Choose colour</h2>
+          <h2 className="public-raffle-heading" style={styles.heading}>
+            Choose colour
+          </h2>
 
-          <div style={styles.colourRow}>
+          <div className="public-raffle-colour-row" style={styles.colourRow}>
             {raffle.colours.length === 0 ? (
               <div style={styles.notice}>No colours configured.</div>
             ) : (
               raffle.colours.map((colour) => (
                 <button
                   key={colour.id}
+                  className="public-raffle-colour-button"
                   type="button"
                   onClick={() => setSelectedColour(colour.name)}
                   disabled={!canReserve}
@@ -1341,10 +1598,12 @@ export default function PublicRafflePage({ slug }: Props) {
             )}
           </div>
 
-          <h2 style={styles.heading}>Choose numbers</h2>
+          <h2 className="public-raffle-heading" style={styles.heading}>
+            Choose numbers
+          </h2>
 
           {selectedColour ? (
-            <div style={styles.numberGrid}>
+            <div className="public-raffle-number-grid" style={styles.numberGrid}>
               {visibleNumbers.map((number) => {
                 const key = makeTicketKey(selectedColour, number);
                 const isSold = availability.sold.has(key);
@@ -1354,6 +1613,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 return (
                   <button
                     key={key}
+                    className="public-raffle-number-button"
                     type="button"
                     onClick={() => toggleTicket(number)}
                     disabled={isSold || isReserved || !canReserve}
@@ -1387,8 +1647,9 @@ export default function PublicRafflePage({ slug }: Props) {
               Select a colour to view available numbers.
             </div>
           )}
-
-          <h2 style={styles.heading}>Basket</h2>
+                    <h2 className="public-raffle-heading" style={styles.heading}>
+            Basket
+          </h2>
 
           {basket.length === 0 ? (
             <div style={styles.notice}>No tickets selected yet.</div>
@@ -1397,6 +1658,7 @@ export default function PublicRafflePage({ slug }: Props) {
               {basket.map((ticket) => (
                 <div
                   key={makeTicketKey(ticket.colour, ticket.number)}
+                  className="public-raffle-basket-row"
                   style={styles.basketRow}
                 >
                   <span>
@@ -1404,6 +1666,7 @@ export default function PublicRafflePage({ slug }: Props) {
                   </span>
 
                   <button
+                    className="public-raffle-remove-button"
                     type="button"
                     onClick={() => removeFromBasket(ticket)}
                     style={styles.removeButton}
@@ -1415,7 +1678,7 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
           )}
 
-          <div style={styles.totalBox}>
+          <div className="public-raffle-total-box" style={styles.totalBox}>
             <div>Tickets: {pricing.quantity}</div>
 
             <div>
@@ -1447,7 +1710,7 @@ export default function PublicRafflePage({ slug }: Props) {
               </div>
             ) : null}
 
-            <label style={styles.coverFeesBox}>
+            <label className="public-raffle-cover-fees" style={styles.coverFeesBox}>
               <input
                 type="checkbox"
                 checked={coverFees}
@@ -1471,10 +1734,13 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
           </div>
 
-          <h2 style={styles.heading}>Your details</h2>
+          <h2 className="public-raffle-heading" style={styles.heading}>
+            Your details
+          </h2>
 
           <div style={styles.form}>
             <input
+              className="public-raffle-input"
               value={buyerName}
               onChange={(event) => setBuyerName(event.target.value)}
               placeholder="Your name"
@@ -1483,6 +1749,7 @@ export default function PublicRafflePage({ slug }: Props) {
             />
 
             <input
+              className="public-raffle-input"
               value={buyerEmail}
               onChange={(event) => setBuyerEmail(event.target.value)}
               placeholder="Your email"
@@ -1492,7 +1759,10 @@ export default function PublicRafflePage({ slug }: Props) {
             />
 
             {raffle.legalQuestion ? (
-              <div style={styles.legalQuestionBox}>
+              <div
+                className="public-raffle-legal-question"
+                style={styles.legalQuestionBox}
+              >
                 <div style={styles.legalQuestionTitle}>Entry question</div>
 
                 <div style={styles.legalQuestionText}>
@@ -1500,6 +1770,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 </div>
 
                 <input
+                  className="public-raffle-input"
                   value={entryAnswer}
                   onChange={(event) => setEntryAnswer(event.target.value)}
                   placeholder="Your answer"
@@ -1510,7 +1781,10 @@ export default function PublicRafflePage({ slug }: Props) {
             ) : null}
 
             {raffle.freeEntry.address ? (
-              <details style={styles.freeEntryBox}>
+              <details
+                className="public-raffle-free-entry"
+                style={styles.freeEntryBox}
+              >
                 <summary style={styles.freeEntrySummary}>
                   No purchase necessary — free postal entry available
                 </summary>
@@ -1523,7 +1797,10 @@ export default function PublicRafflePage({ slug }: Props) {
                     applicable to:
                   </p>
 
-                  <pre style={styles.freeEntryAddress}>
+                  <pre
+                    className="public-raffle-free-entry-address"
+                    style={styles.freeEntryAddress}
+                  >
                     {raffle.freeEntry.address}
                   </pre>
 
@@ -1553,7 +1830,7 @@ export default function PublicRafflePage({ slug }: Props) {
               </details>
             ) : null}
 
-            <label style={styles.termsBox}>
+            <label className="public-raffle-terms-box" style={styles.termsBox}>
               <input
                 type="checkbox"
                 checked={termsAccepted}
@@ -1575,6 +1852,7 @@ export default function PublicRafflePage({ slug }: Props) {
             </label>
 
             <button
+              className="public-raffle-primary-button"
               type="button"
               onClick={reserveTickets}
               disabled={saving || basket.length === 0 || !canReserve}
@@ -1602,6 +1880,7 @@ export default function PublicRafflePage({ slug }: Props) {
     </div>
   );
 }
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
