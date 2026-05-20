@@ -6,6 +6,12 @@ import {
   markSquaresReservationCheckoutSession,
 } from "../../../../../../api/_lib/squares-repo";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
+import {
+  buildPaymentSummary,
+  createStripeCheckoutSession,
+  getPlatformFeePercent,
+  getTenantFinanceSettings,
+} from "@/lib/payments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,14 +20,164 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
-function calculatePlatformFee(subtotalCents: number) {
-  const platformFeePercent = Number(process.env.PLATFORM_FEE_PERCENT ?? 10);
+type SquaresCheckoutPaymentSummary = {
+  squareSubtotalCents: number;
+  amountTotalCents: number;
+  buyerContributionCents: number;
+  platformCommissionCents: number;
+  stripeProcessingCoverCents: number;
+  applicationFeeCents: number;
+  tenantNetCents: number;
+};
 
-  if (!Number.isFinite(platformFeePercent) || platformFeePercent < 0) {
-    return Math.round(subtotalCents * 0.1);
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function truthy(value: unknown) {
+  return value === true || value === "true" || value === "yes" || value === "1";
+}
+
+function safeMoneyCents(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
   }
 
-  return Math.round(subtotalCents * (platformFeePercent / 100));
+  return Math.max(0, Math.round(number));
+}
+
+function normaliseSquaresPaymentSummary(input: {
+  squareSubtotalCents: number;
+  coverFees: boolean;
+  platformFeePercent: number;
+}): SquaresCheckoutPaymentSummary {
+  const paymentSummary = buildPaymentSummary({
+    ticketTotalCents: input.squareSubtotalCents,
+    coverFees: input.coverFees,
+    platformFeePercent: input.platformFeePercent,
+  });
+
+  const squareSubtotalCents = safeMoneyCents(paymentSummary.ticketTotalCents);
+  const amountTotalCents = safeMoneyCents(paymentSummary.amountTotalCents);
+
+  const buyerContributionCents = safeMoneyCents(
+    paymentSummary.buyerContributionCents,
+  );
+
+  const platformCommissionCents = safeMoneyCents(
+    paymentSummary.platformCommissionCents,
+  );
+
+  const stripeProcessingCoverCents = Math.max(
+    buyerContributionCents - platformCommissionCents,
+    0,
+  );
+
+  const applicationFeeCents =
+    input.coverFees && buyerContributionCents > 0
+      ? buyerContributionCents
+      : platformCommissionCents;
+
+  const tenantNetCents = Math.max(amountTotalCents - applicationFeeCents, 0);
+
+  return {
+    squareSubtotalCents,
+    amountTotalCents,
+    buyerContributionCents,
+    platformCommissionCents,
+    stripeProcessingCoverCents,
+    applicationFeeCents,
+    tenantNetCents,
+  };
+}
+
+function squaresCheckoutMetadata(input: {
+  tenantSlug: string;
+  game: {
+    id: string;
+    slug: string;
+    title: string;
+    currency: string;
+    price_per_square_cents: number;
+  };
+  reservationToken: string;
+  quantity: number;
+  squares: number[];
+  coverFees: boolean;
+  platformFeePercent: number;
+  paymentSummary: SquaresCheckoutPaymentSummary;
+}) {
+  return {
+    type: "squares",
+    tenant_slug: input.tenantSlug,
+
+    squares_game_id: input.game.id,
+    game_id: input.game.id,
+    gameId: input.game.id,
+    game_slug: input.game.slug,
+    game_title: input.game.title,
+
+    reservation_token: input.reservationToken,
+    reservationToken: input.reservationToken,
+
+    square_quantity: String(input.quantity),
+    price_per_square_cents: String(input.game.price_per_square_cents),
+
+    cover_fees: input.coverFees ? "true" : "false",
+    buyer_requested_cover_fees: input.coverFees ? "true" : "false",
+    buyer_fee_contributions_enabled:
+      input.paymentSummary.buyerContributionCents > 0 ? "true" : "false",
+    donor_covered_fees:
+      input.paymentSummary.buyerContributionCents > 0 ? "true" : "false",
+
+    buyer_contribution_cents: String(
+      input.paymentSummary.buyerContributionCents,
+    ),
+    supporter_contribution_cents: String(
+      input.paymentSummary.buyerContributionCents,
+    ),
+    donor_fee_cents: String(input.paymentSummary.buyerContributionCents),
+    buyer_fee_cents: String(input.paymentSummary.buyerContributionCents),
+
+    platform_fee_percent: String(input.platformFeePercent),
+    tier_platform_commission_cents: String(
+      input.paymentSummary.platformCommissionCents,
+    ),
+    platform_commission_cents: String(
+      input.paymentSummary.platformCommissionCents,
+    ),
+    platform_fee_cents: String(input.paymentSummary.platformCommissionCents),
+
+    stripe_processing_cover_cents: String(
+      input.paymentSummary.stripeProcessingCoverCents,
+    ),
+
+    application_fee_amount: String(input.paymentSummary.applicationFeeCents),
+    application_fee_amount_cents: String(
+      input.paymentSummary.applicationFeeCents,
+    ),
+    application_fee_includes_supporter_cover:
+      input.paymentSummary.buyerContributionCents > 0 ? "true" : "false",
+
+    square_subtotal_cents: String(input.paymentSummary.squareSubtotalCents),
+    subtotal_cents: String(input.paymentSummary.squareSubtotalCents),
+    ticket_subtotal_cents: String(input.paymentSummary.squareSubtotalCents),
+    base_amount_cents: String(input.paymentSummary.squareSubtotalCents),
+    tenant_target_amount_cents: String(input.paymentSummary.squareSubtotalCents),
+
+    gross_amount_cents: String(input.paymentSummary.amountTotalCents),
+    amount_total_cents: String(input.paymentSummary.amountTotalCents),
+    checkout_total_cents: String(input.paymentSummary.amountTotalCents),
+
+    net_amount_cents: String(input.paymentSummary.tenantNetCents),
+    tenant_net_after_application_fee_cents: String(
+      input.paymentSummary.tenantNetCents,
+    ),
+
+    squares_json: JSON.stringify(input.squares),
+  };
 }
 
 export async function POST(
@@ -40,12 +196,8 @@ export async function POST(
   try {
     const body = await request.json();
 
-    const reservationToken =
-      typeof body.reservationToken === "string"
-        ? body.reservationToken.trim()
-        : "";
-
-    const donorCoveredFees = body.coverFees === true;
+    const reservationToken = cleanText(body.reservationToken);
+    const donorCoveredFees = truthy(body.coverFees);
 
     if (!reservationToken) {
       return NextResponse.json(
@@ -76,8 +228,7 @@ export async function POST(
         { status: 404 },
       );
     }
-
-    if (new Date(reservation.expires_at).getTime() <= Date.now()) {
+        if (new Date(reservation.expires_at).getTime() <= Date.now()) {
       return NextResponse.json(
         { ok: false, error: "Reservation expired." },
         { status: 400 },
@@ -95,13 +246,21 @@ export async function POST(
 
     const squareSubtotalCents = quantity * game.price_per_square_cents;
 
-    const platformFeeCents = calculatePlatformFee(squareSubtotalCents);
-    const donorFeeCents = donorCoveredFees ? platformFeeCents : 0;
-    const grossAmountCents = squareSubtotalCents + donorFeeCents;
+    if (squareSubtotalCents <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid checkout total." },
+        { status: 400 },
+      );
+    }
 
-    const netAmountCents = donorCoveredFees
-      ? squareSubtotalCents
-      : Math.max(squareSubtotalCents - platformFeeCents, 0);
+    const finance = await getTenantFinanceSettings(tenantSlug);
+    const platformFeePercent = getPlatformFeePercent(finance);
+
+    const paymentSummary = normaliseSquaresPaymentSummary({
+      squareSubtotalCents,
+      coverFees: donorCoveredFees,
+      platformFeePercent,
+    });
 
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
@@ -116,54 +275,53 @@ export async function POST(
         ? body.cancelUrl.trim()
         : `${baseUrl}/s/${game.slug}`;
 
-    const feeDescription = donorCoveredFees
-      ? ` | Donor covered platform fee: ${(donorFeeCents / 100).toFixed(2)} ${
-          game.currency
-        }`
-      : "";
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: String(game.currency ?? "GBP").toLowerCase(),
-            product_data: {
-              name: game.title,
-              description: `${quantity} square${
-                quantity > 1 ? "s" : ""
-              }${feeDescription}`,
-            },
-            unit_amount: grossAmountCents,
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        quantity: 1,
+        price_data: {
+          currency: String(game.currency ?? "GBP").toLowerCase(),
+          unit_amount: squareSubtotalCents,
+          product_data: {
+            name: game.title,
+            description: `${quantity} square${quantity > 1 ? "s" : ""}`,
           },
-          quantity: 1,
         },
-      ],
-      customer_email: reservation.customer_email || undefined,
-      metadata: {
-        type: "squares",
-        squares_game_id: game.id,
-        game_id: game.id,
-        reservation_token: reservationToken,
-        tenant_slug: tenantSlug,
-
-        square_quantity: String(quantity),
-        price_per_square_cents: String(game.price_per_square_cents),
-
-        square_subtotal_cents: String(squareSubtotalCents),
-        subtotal_cents: String(squareSubtotalCents),
-        gross_amount_cents: String(grossAmountCents),
-
-        platform_fee_cents: String(platformFeeCents),
-        donor_covered_fees: donorCoveredFees ? "true" : "false",
-        donor_fee_cents: String(donorFeeCents),
-        net_amount_cents: String(netAmountCents),
-
-        squares_json: JSON.stringify(reservation.squares),
       },
-      success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl,
+    ];
+
+    if (paymentSummary.buyerContributionCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: String(game.currency ?? "GBP").toLowerCase(),
+          unit_amount: paymentSummary.buyerContributionCents,
+          product_data: {
+            name: `${game.title} — Cover processing costs`,
+            description:
+              "Optional contribution to help cover platform and payment processing costs.",
+          },
+        },
+      });
+    }
+
+    const session = await createStripeCheckoutSession({
+      stripe,
+      buyerEmail: reservation.customer_email || "",
+      successUrl: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl,
+      lineItems,
+      finance,
+      applicationFeeCents: paymentSummary.applicationFeeCents,
+      metadata: squaresCheckoutMetadata({
+        tenantSlug,
+        game,
+        reservationToken,
+        quantity,
+        squares: reservation.squares,
+        coverFees: donorCoveredFees,
+        platformFeePercent,
+        paymentSummary,
+      }),
     });
 
     if (session.id) {
@@ -182,12 +340,15 @@ export async function POST(
       url: session.url,
       pricing: {
         quantity,
-        square_subtotal_cents: squareSubtotalCents,
-        gross_amount_cents: grossAmountCents,
-        platform_fee_cents: platformFeeCents,
-        donor_covered_fees: donorCoveredFees,
-        donor_fee_cents: donorFeeCents,
-        net_amount_cents: netAmountCents,
+        square_subtotal_cents: paymentSummary.squareSubtotalCents,
+        gross_amount_cents: paymentSummary.amountTotalCents,
+        platform_fee_cents: paymentSummary.platformCommissionCents,
+        donor_covered_fees: paymentSummary.buyerContributionCents > 0,
+        donor_fee_cents: paymentSummary.buyerContributionCents,
+        stripe_processing_cover_cents:
+          paymentSummary.stripeProcessingCoverCents,
+        application_fee_cents: paymentSummary.applicationFeeCents,
+        net_amount_cents: paymentSummary.tenantNetCents,
       },
     });
   } catch (error: any) {
