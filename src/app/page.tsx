@@ -109,7 +109,7 @@ export default function HomePage() {
           }}
         >
           <a
-            href="/admin/login"
+            href="/admin/register"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -122,11 +122,35 @@ export default function HomePage() {
               color: "#0d1b3d",
               textDecoration: "none",
               borderRadius: "999px",
-              fontWeight: 800,
+              fontWeight: 900,
               fontSize: "16px",
               letterSpacing: "0.03em",
               boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
               border: "1px solid rgba(255,255,255,0.2)",
+              boxSizing: "border-box",
+            }}
+          >
+            Create Organisation Account
+          </a>
+
+          <a
+            href="/admin/login"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px 28px",
+              minWidth: "260px",
+              maxWidth: "100%",
+              background: "rgba(255,255,255,0.08)",
+              backdropFilter: "blur(10px)",
+              color: "#ffffff",
+              textDecoration: "none",
+              borderRadius: "999px",
+              fontWeight: 800,
+              fontSize: "16px",
+              letterSpacing: "0.03em",
+              border: "1px solid rgba(255,255,255,0.18)",
               boxSizing: "border-box",
             }}
           >
