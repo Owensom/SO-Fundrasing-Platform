@@ -23,6 +23,8 @@ type AdminUser = {
   isPlatformOwner?: boolean;
 };
 
+const DEFAULT_OWNER_TENANT_SLUG = "demo-a";
+
 function getPlatformOwnerEmail() {
   return String(
     process.env.PLATFORM_OWNER_EMAIL || "sofundraisingplatform@gmail.com",
@@ -43,14 +45,34 @@ function maskEmail(value: string) {
   return `${name.slice(0, 3)}***@${domain}`;
 }
 
+function normaliseTenantSlug(value: string | null | undefined) {
+  return String(value || "").trim();
+}
+
+function sortTenantSlugs(values: string[]) {
+  return [...values].sort((a, b) => {
+    if (a === DEFAULT_OWNER_TENANT_SLUG && b !== DEFAULT_OWNER_TENANT_SLUG) {
+      return -1;
+    }
+
+    if (b === DEFAULT_OWNER_TENANT_SLUG && a !== DEFAULT_OWNER_TENANT_SLUG) {
+      return 1;
+    }
+
+    return a.localeCompare(b);
+  });
+}
+
 function uniqueTenantSlugs(values: Array<string | null | undefined>) {
-  return Array.from(
+  const unique = Array.from(
     new Set(
       values
-        .map((value) => String(value || "").trim())
+        .map((value) => normaliseTenantSlug(value))
         .filter(Boolean),
     ),
   );
+
+  return sortTenantSlugs(unique);
 }
 
 async function getTenantSlugsForAdminUser(params: {
@@ -64,13 +86,14 @@ async function getTenantSlugsForAdminUser(params: {
       where admin_user_id = $1
       order by
         case
-          when role = 'platform_owner' then 0
-          when role = 'owner' then 1
-          else 2
+          when tenant_slug = $2 then 0
+          when role = 'platform_owner' then 1
+          when role = 'owner' then 2
+          else 3
         end,
         tenant_slug asc
     `,
-    [params.adminUserId],
+    [params.adminUserId, DEFAULT_OWNER_TENANT_SLUG],
   );
 
   const linkedTenantSlugs = uniqueTenantSlugs(
@@ -105,9 +128,14 @@ async function getPlatformOwnerTenantSlugs() {
         on aut.admin_user_id = au.id
       where lower(au.email) = lower($1)
         and au.is_active = true
-      order by aut.tenant_slug asc
+      order by
+        case
+          when aut.tenant_slug = $2 then 0
+          else 1
+        end,
+        aut.tenant_slug asc
     `,
-    [ownerEmail],
+    [ownerEmail, DEFAULT_OWNER_TENANT_SLUG],
   );
 
   const tenantSlugs = uniqueTenantSlugs(rows.map((row) => row.tenant_slug));
@@ -116,7 +144,7 @@ async function getPlatformOwnerTenantSlugs() {
     return tenantSlugs;
   }
 
-  return ["demo-a"];
+  return [DEFAULT_OWNER_TENANT_SLUG];
 }
 
 async function findAdminUserByCredentials(
@@ -287,7 +315,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: "force-user",
             email: "force@test.com",
             name: "Force User",
-            tenantSlugs: ["demo-a"],
+            tenantSlugs: [DEFAULT_OWNER_TENANT_SLUG],
             emailVerified: null,
             isPlatformOwner: false,
           };
