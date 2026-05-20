@@ -27,7 +27,15 @@ function setTenantCookie(tenantSlug: string) {
   )}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax; secure`;
 }
 
-function getTenantSlugsFromSession(session: Awaited<ReturnType<typeof getSession>>) {
+function clearTenantCookie() {
+  if (typeof document === "undefined") return;
+
+  document.cookie = `${TENANT_COOKIE_NAME}=; path=/; max-age=0; samesite=lax; secure`;
+}
+
+function getTenantSlugsFromSession(
+  session: Awaited<ReturnType<typeof getSession>>,
+) {
   const rawTenantSlugs = (session?.user as any)?.tenantSlugs;
 
   if (!Array.isArray(rawTenantSlugs)) {
@@ -72,7 +80,11 @@ export default function AdminLoginForm() {
     if (queryTenantSlug) {
       setResolvedTenantSlug(queryTenantSlug);
       setTenantCookie(queryTenantSlug);
+      return;
     }
+
+    setResolvedTenantSlug("");
+    clearTenantCookie();
   }, [queryTenantSlug]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -83,6 +95,8 @@ export default function AdminLoginForm() {
 
     if (queryTenantSlug) {
       setTenantCookie(queryTenantSlug);
+    } else {
+      clearTenantCookie();
     }
 
     const result = await signIn("credentials", {
