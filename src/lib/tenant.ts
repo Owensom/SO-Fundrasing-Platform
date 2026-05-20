@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 export type ResolvedTenant =
   | {
@@ -12,8 +12,25 @@ export type ResolvedTenant =
       tenantSlug: string;
     };
 
+const TENANT_COOKIE_NAME = "so_tenant_slug";
+
 function normalizeHostname(hostname: string) {
   return hostname.split(":")[0].toLowerCase();
+}
+
+function normalizeTenantSlug(value: string | null | undefined) {
+  const clean = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(clean)) {
+    return "";
+  }
+
+  return clean;
 }
 
 export function resolveTenantFromHost(
@@ -37,20 +54,10 @@ export function resolveTenantFromHost(
     };
   }
 
-  // Temporary migration/testing rule:
-  // map the main Vercel project hostname to demo-a
-  if (hostname === "so-fundraising-platform.vercel.app") {
-    return {
-      kind: "tenant",
-      hostname,
-      tenantSlug: "demo-a",
-    };
-  }
-
   const parts = hostname.split(".");
 
   if (parts.length >= 3) {
-    const subdomain = parts[0];
+    const subdomain = normalizeTenantSlug(parts[0]);
 
     if (subdomain && subdomain !== "www") {
       return {
@@ -59,6 +66,16 @@ export function resolveTenantFromHost(
         tenantSlug: subdomain,
       };
     }
+  }
+
+  // Temporary migration/testing rule:
+  // map the main Vercel project hostname to demo-a unless a tenant cookie is used.
+  if (hostname === "so-fundraising-platform.vercel.app") {
+    return {
+      kind: "tenant",
+      hostname,
+      tenantSlug: "demo-a",
+    };
   }
 
   return {
@@ -78,6 +95,19 @@ export function extractTenantSlugFromHost(
 export function getTenantSlugFromHeaders(): string {
   const headerStore = headers();
   const host = headerStore.get("host");
+  const hostname = normalizeHostname(host || "");
+
+  const cookieTenantSlug = normalizeTenantSlug(
+    cookies().get(TENANT_COOKIE_NAME)?.value,
+  );
+
+  if (
+    cookieTenantSlug &&
+    hostname === "so-fundraising-platform.vercel.app"
+  ) {
+    return cookieTenantSlug;
+  }
+
   return extractTenantSlugFromHost(host) || "";
 }
 
@@ -87,3 +117,5 @@ export function getTenantSlugFromRequest(
   const host = request.headers.get("host");
   return extractTenantSlugFromHost(host) || "";
 }
+
+export { TENANT_COOKIE_NAME, normalizeTenantSlug };
