@@ -4,6 +4,12 @@ import { normalizeTenantSlug, TENANT_COOKIE_NAME } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
+type AdminSessionLike = {
+  user?: {
+    tenantSlugs?: unknown;
+  } | null;
+} | null;
+
 function safeCallbackUrl(value: string | null | undefined) {
   const clean = String(value || "").trim();
 
@@ -27,16 +33,20 @@ function setTenantCookie(response: NextResponse, tenantSlug: string) {
   });
 }
 
-function getSessionTenantSlugs(session: Awaited<ReturnType<typeof auth>>) {
-  return Array.isArray(session?.user?.tenantSlugs)
-    ? session.user.tenantSlugs
-        .map((value) => normalizeTenantSlug(String(value)))
-        .filter(Boolean)
-    : [];
+function getSessionTenantSlugs(session: AdminSessionLike) {
+  const tenantSlugs = session?.user?.tenantSlugs;
+
+  if (!Array.isArray(tenantSlugs)) {
+    return [];
+  }
+
+  return tenantSlugs
+    .map((value) => normalizeTenantSlug(String(value)))
+    .filter(Boolean);
 }
 
 export async function GET(req: Request) {
-  const session = await auth();
+  const session = (await auth()) as AdminSessionLike;
 
   if (!session?.user) {
     return NextResponse.redirect(new URL("/admin/login", req.url));
@@ -60,7 +70,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  const session = (await auth()) as AdminSessionLike;
 
   if (!session?.user) {
     return NextResponse.json(
@@ -70,8 +80,10 @@ export async function POST(req: Request) {
   }
 
   const formData = await req.formData();
-  const tenantSlug = normalizeTenantSlug(formData.get("tenantSlug") as string);
-  const callbackUrl = safeCallbackUrl(formData.get("callbackUrl") as string);
+  const tenantSlug = normalizeTenantSlug(
+    String(formData.get("tenantSlug") || ""),
+  );
+  const callbackUrl = safeCallbackUrl(String(formData.get("callbackUrl") || ""));
   const sessionTenantSlugs = getSessionTenantSlugs(session);
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
