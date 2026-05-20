@@ -6,6 +6,24 @@ import {
   TENANT_COOKIE_NAME,
 } from "@/lib/tenant";
 
+function hostnameFromHost(host: string | null) {
+  return String(host || "").split(":")[0].toLowerCase();
+}
+
+function isMainVercelHost(host: string | null) {
+  return hostnameFromHost(host) === "so-fundraising-platform.vercel.app";
+}
+
+function setTenantCookie(response: NextResponse, tenantSlug: string) {
+  response.cookies.set(TENANT_COOKIE_NAME, tenantSlug, {
+    path: "/",
+    sameSite: "lax",
+    secure: true,
+    httpOnly: false,
+    maxAge: 60 * 60 * 24 * 30,
+  });
+}
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
@@ -25,7 +43,10 @@ export default auth((req) => {
     pathname.startsWith("/api/admin/setup/");
 
   const host = req.headers.get("host");
+  const mainVercelHost = isMainVercelHost(host);
+
   const hostTenantSlug = extractTenantSlugFromHost(host) || "";
+
   const cookieTenantSlug = normalizeTenantSlug(
     req.cookies.get(TENANT_COOKIE_NAME)?.value,
   );
@@ -34,27 +55,11 @@ export default auth((req) => {
     req.nextUrl.searchParams.get("tenant"),
   );
 
-  const isMainVercelHost =
-    String(host || "")
-      .split(":")[0]
-      .toLowerCase() === "so-fundraising-platform.vercel.app";
-
-  const tenantSlug =
-    isMainVercelHost && (queryTenantSlug || cookieTenantSlug)
-      ? queryTenantSlug || cookieTenantSlug
-      : hostTenantSlug;
-
   if (isPublicAdminPage || isPublicAdminApi) {
     const response = NextResponse.next();
 
-    if (queryTenantSlug && isMainVercelHost) {
-      response.cookies.set(TENANT_COOKIE_NAME, queryTenantSlug, {
-        path: "/",
-        sameSite: "lax",
-        secure: true,
-        httpOnly: false,
-        maxAge: 60 * 60 * 24 * 30,
-      });
+    if (mainVercelHost && queryTenantSlug) {
+      setTenantCookie(response, queryTenantSlug);
     }
 
     return response;
@@ -63,6 +68,21 @@ export default auth((req) => {
   if (!isAdminPath && !isAdminApiPath) {
     return NextResponse.next();
   }
+
+  const sessionTenantSlugs = Array.isArray(req.auth?.user?.tenantSlugs)
+    ? req.auth.user.tenantSlugs
+        .map((value) => normalizeTenantSlug(String(value)))
+        .filter(Boolean)
+    : [];
+
+  const firstSessionTenantSlug = sessionTenantSlugs[0] || "";
+
+  const tenantSlug = mainVercelHost
+    ? queryTenantSlug ||
+      cookieTenantSlug ||
+      firstSessionTenantSlug ||
+      hostTenantSlug
+    : hostTenantSlug;
 
   if (!tenantSlug) {
     if (isAdminApiPath) {
@@ -89,15 +109,13 @@ export default auth((req) => {
 
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
-    loginUrl.searchParams.set("error", "tenant_access_denied");
-    loginUrl.searchParams.set("tenant", tenantSlug);
+
+    if (mainVercelHost && tenantSlug) {
+      loginUrl.searchParams.set("tenant", tenantSlug);
+    }
 
     return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
   }
-
-  const sessionTenantSlugs = Array.isArray(req.auth.user.tenantSlugs)
-    ? req.auth.user.tenantSlugs.map((value) => String(value))
-    : [];
 
   if (!sessionTenantSlugs.includes(tenantSlug)) {
     if (isAdminApiPath) {
@@ -110,21 +128,29 @@ export default auth((req) => {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     loginUrl.searchParams.set("error", "tenant_access_denied");
-    loginUrl.searchParams.set("tenant", tenantSlug);
+
+    if (mainVercelHost && tenantSlug) {
+      loginUrl.searchParams.set("tenant", tenantSlug);
+    }
 
     return NextResponse.redirect(new URL(loginUrl.toString(), req.url));
   }
 
+  if (mainVercelHost && tenantSlug && cookieTenantSlug !== tenantSlug) {
+    const redirectUrl = req.nextUrl.clone();
+    const response = NextResponse.redirect(
+      new URL(redirectUrl.toString(), req.url),
+    );
+
+    setTenantCookie(response, tenantSlug);
+
+    return response;
+  }
+
   const response = NextResponse.next();
 
-  if (isMainVercelHost && tenantSlug) {
-    response.cookies.set(TENANT_COOKIE_NAME, tenantSlug, {
-      path: "/",
-      sameSite: "lax",
-      secure: true,
-      httpOnly: false,
-      maxAge: 60 * 60 * 24 * 30,
-    });
+  if (mainVercelHost && tenantSlug) {
+    setTenantCookie(response, tenantSlug);
   }
 
   return response;
