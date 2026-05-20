@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function slugify(value: string) {
   return value
@@ -13,9 +13,28 @@ function slugify(value: string) {
 }
 
 export default function RegisterForm() {
+  const formRef = useRef<HTMLFormElement | null>(null);
+
   const [organisationName, setOrganisationName] = useState("");
   const [manualSlug, setManualSlug] = useState("");
   const [hasEditedSlug, setHasEditedSlug] = useState(false);
+
+  useEffect(() => {
+    function resetForm() {
+      setOrganisationName("");
+      setManualSlug("");
+      setHasEditedSlug(false);
+      formRef.current?.reset();
+    }
+
+    resetForm();
+
+    window.addEventListener("pageshow", resetForm);
+
+    return () => {
+      window.removeEventListener("pageshow", resetForm);
+    };
+  }, []);
 
   const generatedSlug = useMemo(
     () => slugify(organisationName),
@@ -38,7 +57,13 @@ export default function RegisterForm() {
   }
 
   return (
-    <form action="/api/admin/register" method="post" style={styles.form}>
+    <form
+      ref={formRef}
+      action="/api/admin/register"
+      method="post"
+      autoComplete="off"
+      style={styles.form}
+    >
       <label style={styles.label}>
         Organisation name
         <input
@@ -47,6 +72,8 @@ export default function RegisterForm() {
           value={organisationName}
           onChange={(event) => updateOrganisationName(event.target.value)}
           placeholder="Brave Ceilidh"
+          autoComplete="off"
+          spellCheck={false}
           style={styles.input}
         />
       </label>
@@ -60,6 +87,8 @@ export default function RegisterForm() {
           onChange={(event) => updateTenantSlug(event.target.value)}
           placeholder="brave-ceilidh"
           pattern="[a-z0-9][a-z0-9-]{1,58}[a-z0-9]"
+          autoComplete="off"
+          spellCheck={false}
           style={styles.input}
         />
         <span style={styles.helpText}>
@@ -74,6 +103,8 @@ export default function RegisterForm() {
           name="adminName"
           required
           placeholder="Organisation Admin"
+          autoComplete="off"
+          spellCheck={false}
           style={styles.input}
         />
       </label>
@@ -85,6 +116,8 @@ export default function RegisterForm() {
           type="email"
           required
           placeholder="admin@example.org"
+          autoComplete="off"
+          spellCheck={false}
           style={styles.input}
         />
       </label>
@@ -97,6 +130,7 @@ export default function RegisterForm() {
           required
           minLength={10}
           placeholder="At least 10 characters"
+          autoComplete="new-password"
           style={styles.input}
         />
       </label>
@@ -109,6 +143,7 @@ export default function RegisterForm() {
           required
           minLength={10}
           placeholder="Repeat password"
+          autoComplete="new-password"
           style={styles.input}
         />
       </label>
