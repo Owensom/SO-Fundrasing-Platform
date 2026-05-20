@@ -17,7 +17,7 @@ export type TenantSettings = {
   finance_dashboard_enabled: boolean;
   white_label_enabled: boolean;
   custom_domain_enabled: boolean;
-  platform_owner_bypass?: boolean | null;
+  platform_owner_bypass: boolean;
 };
 
 export async function getTenantSettings(
@@ -39,7 +39,8 @@ export async function getTenantSettings(
         reserved_seating_enabled,
         finance_dashboard_enabled,
         white_label_enabled,
-        custom_domain_enabled
+        custom_domain_enabled,
+        platform_owner_bypass
       from tenant_settings
       where tenant_slug = $1
       limit 1
