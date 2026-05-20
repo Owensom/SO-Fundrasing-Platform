@@ -69,6 +69,7 @@ async function requireCurrentTenantAccess(request: Request) {
   return {
     ok: true as const,
     tenantSlug,
+    email: session.user.email || null,
   };
 }
 
@@ -86,34 +87,71 @@ async function getTenantStoredStripeConnectAccountId(tenantSlug: string) {
   return String(rows[0]?.stripe_connect_account_id || "").trim();
 }
 
-async function saveStripeConnectAccountId(
+async function saveStripeConnectAccount(
   tenantSlug: string,
-  stripeConnectAccountId: string,
+  account: Stripe.Account,
 ) {
-  await query(
-    `
-      insert into tenant_settings (
-        tenant_slug,
-        stripe_connect_account_id
-      )
-      values ($1, $2)
-      on conflict (tenant_slug)
-      do update set
-        stripe_connect_account_id = excluded.stripe_connect_account_id,
-        updated_at = now()
-    `,
-    [tenantSlug, stripeConnectAccountId],
-  );
+  const stripeConnectAccountId = String(account.id || "").trim();
+
+  if (!stripeConnectAccountId) {
+    throw new Error("Missing Stripe Connect account ID.");
+  }
 
   await query(
     `
       update tenants
       set
         stripe_connect_account_id = $1,
+        stripe_connect_onboarding_complete = $2,
+        stripe_connect_charges_enabled = $3,
+        stripe_connect_payouts_enabled = $4,
+        stripe_connect_details_submitted = $5,
+        stripe_connect_country = $6,
+        stripe_connect_default_currency = $7,
+        stripe_connect_last_synced_at = now(),
         updated_at = now()
-      where slug = $2
+      where slug = $8
     `,
-    [stripeConnectAccountId, tenantSlug],
+    [
+      stripeConnectAccountId,
+      Boolean(account.details_submitted),
+      Boolean(account.charges_enabled),
+      Boolean(account.payouts_enabled),
+      Boolean(account.details_submitted),
+      account.country || null,
+      account.default_currency || null,
+      tenantSlug,
+    ],
+  );
+
+  await query(
+    `
+      insert into tenant_settings (
+        tenant_slug,
+        subscription_tier,
+        platform_fee_percent,
+        stripe_customer_id,
+        stripe_subscription_id,
+        stripe_connect_account_id,
+        subscription_status,
+        buyer_fee_contributions_enabled,
+        crm_enabled,
+        auctions_enabled,
+        reserved_seating_enabled,
+        finance_dashboard_enabled,
+        white_label_enabled,
+        custom_domain_enabled
+      )
+      values (
+        $1, 'community', 7, null, null, $2, 'active',
+        false, false, false, false, false, false, false
+      )
+      on conflict (tenant_slug)
+      do update set
+        stripe_connect_account_id = excluded.stripe_connect_account_id,
+        updated_at = now()
+    `,
+    [tenantSlug, stripeConnectAccountId],
   );
 }
 
@@ -129,7 +167,7 @@ export async function GET(request: Request) {
       return access.response;
     }
 
-    const { tenantSlug } = access;
+    const { tenantSlug, email } = access;
 
     const settings = await getTenantSettings(tenantSlug);
     const storedTenantConnectAccountId =
@@ -140,10 +178,15 @@ export async function GET(request: Request) {
       storedTenantConnectAccountId ||
       "";
 
-    if (!stripeConnectAccountId) {
-      const account = await stripe.accounts.create({
+    let account: Stripe.Account;
+
+    if (stripeConnectAccountId) {
+      account = await stripe.accounts.retrieve(stripeConnectAccountId);
+    } else {
+      account = await stripe.accounts.create({
         type: "express",
         country: "GB",
+        email: email || undefined,
         capabilities: {
           card_payments: {
             requested: true,
@@ -161,7 +204,7 @@ export async function GET(request: Request) {
       stripeConnectAccountId = account.id;
     }
 
-    await saveStripeConnectAccountId(tenantSlug, stripeConnectAccountId);
+    await saveStripeConnectAccount(tenantSlug, account);
 
     const baseUrl = getBaseUrl(request);
 
