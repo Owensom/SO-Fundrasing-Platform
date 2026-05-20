@@ -25,10 +25,14 @@ export default async function AdminLayout({
         <div style={styles.adminBarShell}>
           <div style={styles.adminBar}>
             <div style={styles.adminIdentity}>
-              <span style={styles.adminLabel}>Admin</span>
-              <strong style={styles.tenantName}>
-                {tenantSlug || "Select site"}
-              </strong>
+              <span style={styles.adminBadge}>Admin</span>
+
+              <div style={styles.tenantBlock}>
+                <span style={styles.tenantLabel}>Current site</span>
+                <strong style={styles.tenantName}>
+                  {tenantSlug || "Select site"}
+                </strong>
+              </div>
             </div>
 
             <nav style={styles.adminActions} aria-label="Admin actions">
@@ -58,14 +62,18 @@ export default async function AdminLayout({
 const styles: Record<string, CSSProperties> = {
   adminBarShell: {
     width: "100%",
-    background: "#0f172a",
-    borderBottom: "1px solid rgba(148,163,184,0.24)",
+    background:
+      "linear-gradient(180deg, #ffffff 0%, rgba(248,250,252,0.98) 100%)",
+    borderBottom: "1px solid #e2e8f0",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.045)",
     boxSizing: "border-box",
+    position: "relative",
+    zIndex: 20,
   },
 
   adminBar: {
     width: "100%",
-    maxWidth: 1200,
+    maxWidth: 1180,
     margin: "0 auto",
     padding: "10px 16px",
     display: "flex",
@@ -84,24 +92,42 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
 
-  adminLabel: {
+  adminBadge: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 28,
     padding: "6px 10px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.1)",
-    color: "#bfdbfe",
-    border: "1px solid rgba(191,219,254,0.22)",
-    fontSize: 12,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
+  tenantBlock: {
+    display: "grid",
+    gap: 1,
+    minWidth: 0,
+  },
+
+  tenantLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    lineHeight: 1.1,
+  },
+
   tenantName: {
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 14,
     fontWeight: 950,
+    lineHeight: 1.2,
     overflowWrap: "anywhere",
   },
 
@@ -120,12 +146,13 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 34,
     padding: "8px 12px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontSize: 13,
-    fontWeight: 850,
+    fontWeight: 900,
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
   },
 
   signOutLink: {
@@ -133,13 +160,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 34,
-    padding: "8px 12px",
+    padding: "8px 13px",
     borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #ffffff",
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
+    boxShadow: "0 8px 18px rgba(15,23,42,0.16)",
   },
 };
