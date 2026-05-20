@@ -156,30 +156,6 @@ export default function HomePage() {
           >
             Admin Login
           </a>
-
-          <a
-            href="/c/demo-a"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px 28px",
-              minWidth: "260px",
-              maxWidth: "100%",
-              background: "rgba(255,255,255,0.08)",
-              backdropFilter: "blur(10px)",
-              color: "#ffffff",
-              textDecoration: "none",
-              borderRadius: "999px",
-              fontWeight: 700,
-              fontSize: "16px",
-              letterSpacing: "0.03em",
-              border: "1px solid rgba(255,255,255,0.18)",
-              boxSizing: "border-box",
-            }}
-          >
-            View Campaigns
-          </a>
         </div>
 
         <div
