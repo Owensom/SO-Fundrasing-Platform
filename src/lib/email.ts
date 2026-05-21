@@ -724,7 +724,6 @@ export async function sendWinnerEmail({
     console.error("winner email failed", err);
   }
 }
-
 export async function sendSquaresReceiptEmail({
   to,
   name,
@@ -889,6 +888,7 @@ export async function sendSquaresWinnerEmail({
     console.error("squares winner email failed", err);
   }
 }
+
 export async function sendEventReceiptEmail({
   to,
   name,
@@ -1079,7 +1079,6 @@ export async function sendEventWinnerEmail({
     console.error("event winner email failed", err);
   }
 }
-
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
@@ -1229,6 +1228,7 @@ export async function sendAuctionWinnerEmail({
   itemTitle,
   winningAmountCents,
   currency,
+  paymentUrl,
   branding,
 }: {
   to: string;
@@ -1237,10 +1237,66 @@ export async function sendAuctionWinnerEmail({
   itemTitle: string;
   winningAmountCents: number;
   currency: string;
+  paymentUrl?: string | null;
   branding?: EmailBranding;
 }) {
   const winningAmount = formatCurrency(winningAmountCents, currency);
   const prizeName = cleanPrizeTitle(itemTitle);
+  const safePaymentUrl = String(paymentUrl || "").trim();
+
+  const paymentBlock = safePaymentUrl
+    ? `
+      <div style="
+        border-radius:20px;
+        padding:20px;
+        margin:24px 0 0;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+        text-align:center;
+      ">
+        <p style="
+          margin:0 0 14px;
+          color:#1e3a8a;
+          font-size:16px;
+          line-height:1.6;
+          font-weight:800;
+        ">
+          Please complete your winning bid payment securely using the button below.
+        </p>
+
+        <a
+          href="${escapeHtml(safePaymentUrl)}"
+          style="
+            display:inline-block;
+            padding:14px 22px;
+            border-radius:999px;
+            background:#1683f8;
+            color:#ffffff;
+            text-decoration:none;
+            font-size:16px;
+            font-weight:900;
+            box-shadow:0 10px 22px rgba(22,131,248,0.22);
+          "
+        >
+          Pay winning bid
+        </a>
+
+        <p style="
+          margin:14px 0 0;
+          color:#475569;
+          font-size:13px;
+          line-height:1.5;
+        ">
+          If the button does not work, copy and paste this secure link into your browser:<br />
+          <span style="word-break:break-all;">${escapeHtml(safePaymentUrl)}</span>
+        </p>
+      </div>
+    `
+    : `
+      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
+        The organiser will be in touch soon with payment or collection details.
+      </p>
+    `;
 
   const html = renderEmailShell({
     branding,
@@ -1249,7 +1305,9 @@ export async function sendAuctionWinnerEmail({
     showWinnerTrophy: true,
     showTicketImage: false,
     winnerTrophyLabel: "Winning auction trophy",
-    intro: `Hi ${name || "there"}, congratulations — you placed the winning bid in the silent auction.`,
+    intro: `Hi ${
+      name || "there"
+    }, congratulations — you placed the winning bid in the silent auction.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
@@ -1290,9 +1348,7 @@ export async function sendAuctionWinnerEmail({
         </div>
       </div>
 
-      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
-        The organiser will be in touch soon with payment or collection details.
-      </p>
+      ${paymentBlock}
     `,
   });
 
