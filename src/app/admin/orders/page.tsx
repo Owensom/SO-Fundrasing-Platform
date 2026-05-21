@@ -137,6 +137,7 @@ function statusStyle(status: string): CSSProperties {
   if (
     clean.includes("reserved") ||
     clean.includes("pending") ||
+    clean.includes("checkout") ||
     clean.includes("open")
   ) {
     return {
@@ -163,6 +164,16 @@ function statusStyle(status: string): CSSProperties {
     color: "#475569",
     border: "1px solid #e2e8f0",
   };
+}
+
+function auctionPaymentStatusLabel(value: unknown) {
+  const clean = String(value || "unpaid").trim().toLowerCase();
+
+  if (clean === "paid") return "Paid";
+  if (clean === "checkout_started") return "Checkout started";
+  if (clean === "cancelled") return "Cancelled";
+
+  return "Bid placed";
 }
 
 async function safeQuery<T extends RawRow>(
@@ -347,7 +358,6 @@ async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-
 async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "auctions",
@@ -358,6 +368,8 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         bid.bidder_name,
         bid.bidder_email,
         bid.amount_cents,
+        bid.payment_status,
+        bid.paid_at,
         bid.created_at,
         item.auction_id,
         item.title as item_title,
@@ -379,6 +391,7 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   return rows.map((row) => {
     const campaignId = cleanText(row.auction_id);
     const slug = cleanText(row.campaign_slug);
+    const status = auctionPaymentStatusLabel(row.payment_status);
 
     return {
       id: `auction-${cleanText(row.id, `${campaignId}-${row.item_id}`)}`,
@@ -391,7 +404,7 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
       detail: `Bid · ${cleanText(row.item_title, "Auction item")}`,
       amountCents: safeNumber(row.amount_cents, 0),
       currency: cleanText(row.currency, "GBP"),
-      status: "Bid placed",
+      status,
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/auctions/${campaignId}` : null,
       publicHref: slug ? `/a/${slug}` : null,
