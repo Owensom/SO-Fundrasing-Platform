@@ -27,6 +27,7 @@ import {
   updateAuctionItem,
   type AuctionItemStatus,
   type AuctionStatus,
+  type SilentAuctionBid,
 } from "../../../../../api/_lib/auctions-repo";
 
 const DEFAULT_AUCTION_IMAGE = "/brand/so-default-auctions.png";
@@ -48,6 +49,19 @@ type RaffleItem = {
 type RafflesApiResponse = {
   ok: boolean;
   items?: RaffleItem[];
+};
+
+type WinningBidSummary = {
+  bid_id: string;
+  bidder_name: string | null;
+  bidder_email: string | null;
+  amount_cents: number;
+  payment_token: string | null;
+  payment_status: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  paid_at: string | null;
+  created_at: string;
 };
 
 function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
@@ -187,7 +201,23 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
     };
   }
 
-  if (clean === "withdrawn") {
+  if (clean === "paid") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      border: "1px solid #bbf7d0",
+    };
+  }
+
+  if (clean === "checkout_started") {
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      border: "1px solid #bfdbfe",
+    };
+  }
+
+  if (clean === "withdrawn" || clean === "cancelled") {
     return {
       background: "#fee2e2",
       color: "#991b1b",
@@ -210,6 +240,15 @@ function auctionStatusLabel(status: string | null | undefined) {
   return "Draft";
 }
 
+function paymentStatusLabel(status: string | null | undefined) {
+  const clean = String(status || "unpaid").toLowerCase();
+
+  if (clean === "paid") return "Paid";
+  if (clean === "checkout_started") return "Checkout started";
+  if (clean === "cancelled") return "Cancelled";
+  return "Unpaid";
+}
+
 function getErrorMessage(value: string | undefined) {
   if (!value) return "";
 
@@ -218,6 +257,36 @@ function getErrorMessage(value: string | undefined) {
   }
 
   return value;
+}
+
+async function getAppBaseUrl() {
+  const headerStore = await headers();
+  const host = headerStore.get("host") || "";
+  const protocol = host.includes("localhost") ? "http" : "https";
+
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    "";
+
+  if (configured) {
+    return configured.startsWith("http") ? configured : `https://${configured}`;
+  }
+
+  return `${protocol}://${host}`;
+}
+
+function buildAuctionPaymentUrl(params: {
+  baseUrl: string;
+  paymentToken: string | null | undefined;
+}) {
+  const paymentToken = String(params.paymentToken || "").trim();
+
+  if (!paymentToken) return "";
+
+  return `${params.baseUrl}/api/stripe/checkout/auction-winning-bid?token=${encodeURIComponent(
+    paymentToken,
+  )}`;
 }
 
 async function requireAuctionAccess(id: string) {
@@ -305,6 +374,35 @@ async function getActiveCampaignCountForTenant(tenantSlug: string) {
     auctions.filter((item) => item.status === "published").length
   );
 }
+
+function buildHighestBidMap(bids: SilentAuctionBid[]) {
+  const winnerByItemId = new Map<string, WinningBidSummary>();
+
+  for (const bid of bids) {
+    const itemId = String(bid.item_id || "");
+    if (!itemId) continue;
+
+    const amountCents = Number(bid.amount_cents || 0);
+    const existing = winnerByItemId.get(itemId);
+
+    if (!existing || amountCents > Number(existing.amount_cents || 0)) {
+      winnerByItemId.set(itemId, {
+        bid_id: bid.id,
+        bidder_name: bid.bidder_name || null,
+        bidder_email: bid.bidder_email || null,
+        amount_cents: amountCents,
+        payment_token: bid.payment_token || null,
+        payment_status: bid.payment_status || "unpaid",
+        stripe_checkout_session_id: bid.stripe_checkout_session_id || null,
+        stripe_payment_intent_id: bid.stripe_payment_intent_id || null,
+        paid_at: bid.paid_at || null,
+        created_at: bid.created_at,
+      });
+    }
+  }
+
+  return winnerByItemId;
+}
 async function updateAuctionAction(formData: FormData) {
   "use server";
 
@@ -367,31 +465,9 @@ async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
   const { auction } = await requireAuctionWriteAccess(auctionId);
   const items = await listAuctionItems(auction.id);
   const bids = await listAuctionBids(auction.id);
+  const baseUrl = await getAppBaseUrl();
 
-  const winnerByItemId = new Map<
-    string,
-    {
-      bidder_name: string | null;
-      bidder_email: string | null;
-      amount_cents: number;
-    }
-  >();
-
-  for (const bid of bids) {
-    const itemId = String(bid.item_id || "");
-    if (!itemId) continue;
-
-    const amountCents = Number(bid.amount_cents || 0);
-    const existing = winnerByItemId.get(itemId);
-
-    if (!existing || amountCents > Number(existing.amount_cents || 0)) {
-      winnerByItemId.set(itemId, {
-        bidder_name: bid.bidder_name || null,
-        bidder_email: bid.bidder_email || null,
-        amount_cents: amountCents,
-      });
-    }
-  }
+  const winnerByItemId = buildHighestBidMap(bids);
 
   for (const item of items) {
     if (item.status !== "active") continue;
@@ -422,6 +498,14 @@ async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
       continue;
     }
 
+    const paymentUrl =
+      winner.payment_status === "paid"
+        ? ""
+        : buildAuctionPaymentUrl({
+            baseUrl,
+            paymentToken: winner.payment_token,
+          });
+
     await sendAuctionWinnerEmail({
       to: winner.bidder_email,
       name: winner.bidder_name,
@@ -429,6 +513,7 @@ async function closeAuctionAndNotifyWinnersAction(formData: FormData) {
       itemTitle: item.title,
       winningAmountCents: Number(winner.amount_cents || 0),
       currency: auction.currency || "GBP",
+      paymentUrl,
     });
   }
 
@@ -488,12 +573,8 @@ async function createAuctionItemAction(formData: FormData) {
     startingBidCents: poundsToCents(formData.get("starting_bid")),
     minimumIncrementCents:
       poundsToCents(formData.get("minimum_increment")) || 100,
-    reservePriceCents: optionalPoundsToCents(
-      formData.get("reserve_price"),
-    ),
-    status: String(
-      formData.get("status") || "draft",
-    ) as AuctionItemStatus,
+    reservePriceCents: optionalPoundsToCents(formData.get("reserve_price")),
+    status: String(formData.get("status") || "draft") as AuctionItemStatus,
     sortOrder: Number(formData.get("sort_order") || 0),
   });
 
@@ -521,12 +602,8 @@ async function updateAuctionItemAction(formData: FormData) {
     startingBidCents: poundsToCents(formData.get("starting_bid")),
     minimumIncrementCents:
       poundsToCents(formData.get("minimum_increment")) || 100,
-    reservePriceCents: optionalPoundsToCents(
-      formData.get("reserve_price"),
-    ),
-    status: String(
-      formData.get("status") || "draft",
-    ) as AuctionItemStatus,
+    reservePriceCents: optionalPoundsToCents(formData.get("reserve_price")),
+    status: String(formData.get("status") || "draft") as AuctionItemStatus,
     sortOrder: Number(formData.get("sort_order") || 0),
   });
 
@@ -571,33 +648,8 @@ export default async function AdminAuctionPage({
 
   const items = await listAuctionItems(auction.id);
   const bids = await listAuctionBids(auction.id);
-
-  const highestBidByItemId = new Map<
-    string,
-    {
-      bidder_name: string | null;
-      bidder_email: string | null;
-      amount_cents: number;
-      created_at: string;
-    }
-  >();
-
-  for (const bid of bids) {
-    const itemId = String(bid.item_id || "");
-    if (!itemId) continue;
-
-    const amountCents = Number(bid.amount_cents || 0);
-    const existing = highestBidByItemId.get(itemId);
-
-    if (!existing || amountCents > Number(existing.amount_cents || 0)) {
-      highestBidByItemId.set(itemId, {
-        bidder_name: bid.bidder_name || null,
-        bidder_email: bid.bidder_email || null,
-        amount_cents: amountCents,
-        created_at: bid.created_at,
-      });
-    }
-  }
+  const highestBidByItemId = buildHighestBidMap(bids);
+  const baseUrl = await getAppBaseUrl();
 
   const publishedItems = items.filter((item) => item.status === "active");
   const errorMessage = getErrorMessage(resolvedSearchParams?.error);
@@ -825,7 +877,8 @@ export default async function AdminAuctionPage({
                 <option value="closed">Closed</option>
               </select>
             </label>
-                        <label style={styles.field}>
+
+            <label style={styles.field}>
               <span style={styles.label}>Opens at</span>
 
               <input
@@ -889,8 +942,7 @@ export default async function AdminAuctionPage({
           </form>
         )}
       </section>
-
-      <section id="auction-items" style={styles.sectionCard}>
+            <section id="auction-items" style={styles.sectionCard}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionEyebrow}>Lots</div>
@@ -1007,6 +1059,10 @@ export default async function AdminAuctionPage({
           ) : (
             items.map((item) => {
               const highest = highestBidByItemId.get(item.id);
+              const paymentUrl = buildAuctionPaymentUrl({
+                baseUrl,
+                paymentToken: highest?.payment_token,
+              });
 
               return (
                 <details key={item.id} style={styles.itemCard}>
@@ -1027,6 +1083,61 @@ export default async function AdminAuctionPage({
 
                     <span style={styles.chevron}>Open</span>
                   </summary>
+
+                  {highest ? (
+                    <div style={styles.winnerPaymentCard}>
+                      <div style={styles.winnerPaymentHeader}>
+                        <div>
+                          <div style={styles.infoLabel}>Current highest bid</div>
+                          <div style={styles.winnerPaymentTitle}>
+                            {highest.bidder_name || "Unknown bidder"}
+                          </div>
+                          <div style={styles.itemMeta}>
+                            {highest.bidder_email || "No email"} ·{" "}
+                            {moneyFromCents(
+                              highest.amount_cents,
+                              auction.currency,
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            ...styles.statusBadge,
+                            ...getStatusStyle(highest.payment_status),
+                          }}
+                        >
+                          {paymentStatusLabel(highest.payment_status)}
+                        </span>
+                      </div>
+
+                      {highest.paid_at ? (
+                        <div style={styles.itemMeta}>
+                          Paid: {formatDate(highest.paid_at)}
+                        </div>
+                      ) : null}
+
+                      {highest.payment_status !== "paid" &&
+                      highest.payment_token ? (
+                        <div style={styles.paymentLinkBox}>
+                          <div style={styles.infoLabel}>
+                            Winner payment link
+                          </div>
+
+                          <a
+                            href={paymentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={styles.paymentLink}
+                          >
+                            Open Stripe payment link
+                          </a>
+
+                          <div style={styles.paymentUrlText}>{paymentUrl}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {isReadOnly ? (
                     <div style={styles.readOnlyGrid}>
@@ -1063,6 +1174,10 @@ export default async function AdminAuctionPage({
                       />
                       <InfoCard label="Sort order" value={item.sort_order || 0} />
                       <InfoCard label="Status" value={item.status} />
+                      <InfoCard
+                        label="Payment status"
+                        value={paymentStatusLabel(highest?.payment_status)}
+                      />
                       <InfoCard
                         label="Description"
                         value={
@@ -1233,8 +1348,7 @@ export default async function AdminAuctionPage({
           )}
         </div>
       </section>
-
-      <section id="winner-tools" style={styles.sectionCard}>
+            <section id="winner-tools" style={styles.sectionCard}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionEyebrow}>Winner tools</div>
@@ -1244,13 +1358,115 @@ export default async function AdminAuctionPage({
 
         <p style={styles.sectionText}>
           Closing the auction closes active lots and emails the highest valid
-          bidder for each lot where the reserve has been met.
+          bidder for each lot where the reserve has been met. Winner emails now
+          include a secure Stripe payment link for unpaid winning bids.
         </p>
+
+        <div style={styles.winnerSummaryGrid}>
+          {items.length === 0 ? (
+            <div style={styles.emptyState}>No auction items added yet.</div>
+          ) : (
+            items.map((item) => {
+              const highest = highestBidByItemId.get(item.id);
+              const reserveMet =
+                item.reserve_price_cents === null ||
+                item.reserve_price_cents === undefined ||
+                Number(highest?.amount_cents || 0) >=
+                  Number(item.reserve_price_cents || 0);
+
+              const paymentUrl = buildAuctionPaymentUrl({
+                baseUrl,
+                paymentToken: highest?.payment_token,
+              });
+
+              return (
+                <article key={`winner-${item.id}`} style={styles.winnerCard}>
+                  <div style={styles.winnerPaymentHeader}>
+                    <div>
+                      <div style={styles.infoLabel}>{item.title}</div>
+
+                      <div style={styles.winnerPaymentTitle}>
+                        {highest?.bidder_name || "No winning bid yet"}
+                      </div>
+
+                      <div style={styles.itemMeta}>
+                        {highest?.bidder_email || "No bidder email"}{" "}
+                        {highest
+                          ? `· ${moneyFromCents(
+                              highest.amount_cents,
+                              auction.currency,
+                            )}`
+                          : ""}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        ...styles.statusBadge,
+                        ...getStatusStyle(highest?.payment_status),
+                      }}
+                    >
+                      {paymentStatusLabel(highest?.payment_status)}
+                    </span>
+                  </div>
+
+                  <div style={styles.winnerMiniGrid}>
+                    <InfoCard
+                      label="Reserve"
+                      value={
+                        item.reserve_price_cents === null ||
+                        item.reserve_price_cents === undefined
+                          ? "No reserve"
+                          : moneyFromCents(
+                              item.reserve_price_cents,
+                              auction.currency,
+                            )
+                      }
+                    />
+
+                    <InfoCard
+                      label="Reserve status"
+                      value={reserveMet ? "Reserve met" : "Reserve not met"}
+                    />
+
+                    <InfoCard label="Item status" value={item.status} />
+
+                    <InfoCard
+                      label="Paid at"
+                      value={highest?.paid_at ? formatDate(highest.paid_at) : "Not paid"}
+                    />
+                  </div>
+
+                  {highest &&
+                  highest.payment_status !== "paid" &&
+                  highest.payment_token &&
+                  reserveMet ? (
+                    <div style={styles.paymentLinkBox}>
+                      <div style={styles.infoLabel}>Payment link</div>
+
+                      <a
+                        href={paymentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.paymentLink}
+                      >
+                        Open Stripe payment link
+                      </a>
+
+                      <div style={styles.paymentUrlText}>{paymentUrl}</div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
+          )}
+        </div>
 
         {isReadOnly ? (
           <div style={styles.lockedNotice}>
             🔒 Winner tools are locked on the Community plan. Upgrade to
-            Professional to close auctions and email winners.
+            Professional to close auctions, email winners and collect winning
+            bid payments.
           </div>
         ) : (
           <form
@@ -1342,6 +1558,8 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 34%), #f8fafc",
     color: "#0f172a",
+    boxSizing: "border-box",
+    overflowX: "hidden",
   },
 
   hero: {
@@ -1355,6 +1573,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   heroImageWrap: {
@@ -1362,12 +1582,14 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     overflow: "hidden",
     background: "#ffffff",
+    minWidth: 0,
   },
 
   heroContent: {
     display: "grid",
     gap: 14,
     alignContent: "start",
+    minWidth: 0,
   },
 
   heroTopRow: {
@@ -1375,6 +1597,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
+    minWidth: 0,
   },
 
   badgeRow: {
@@ -1382,6 +1605,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
     flexWrap: "wrap",
     alignItems: "center",
+    minWidth: 0,
   },
 
   heroTitle: {
@@ -1389,6 +1613,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(36px, 6vw, 58px)",
     lineHeight: 0.96,
     letterSpacing: "-0.07em",
+    overflowWrap: "anywhere",
   },
 
   heroDescription: {
@@ -1396,12 +1621,14 @@ const styles: Record<string, CSSProperties> = {
     color: "#dbeafe",
     lineHeight: 1.6,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
+    minWidth: 0,
   },
 
   heroMeta: {
@@ -1410,6 +1637,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#bfdbfe",
     fontSize: 14,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   statusBadge: {
@@ -1418,6 +1646,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     fontSize: 13,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   planBadge: {
@@ -1429,6 +1658,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(191,219,254,0.36)",
     fontSize: 13,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   lockedBadge: {
@@ -1440,6 +1670,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(251,191,36,0.54)",
     fontSize: 13,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   secondaryButton: {
@@ -1460,6 +1691,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(255,255,255,0.16)",
+    minWidth: 0,
   },
 
   statLabel: {
@@ -1473,6 +1705,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 22,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   errorBanner: {
@@ -1483,6 +1716,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fed7aa",
     fontWeight: 900,
     marginBottom: 18,
+    overflowWrap: "anywhere",
   },
 
   upgradeBanner: {
@@ -1497,6 +1731,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(217,119,6,0.32)",
     boxShadow: "0 16px 40px rgba(15,23,42,0.07)",
     marginBottom: 18,
+    minWidth: 0,
   },
 
   upgradeEyebrow: {
@@ -1514,6 +1749,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 24,
     lineHeight: 1.1,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   upgradeText: {
@@ -1521,6 +1757,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     lineHeight: 1.55,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   upgradeActions: {
@@ -1568,6 +1805,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   dangerCard: {
@@ -1578,6 +1817,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#fef2f2",
     border: "1px solid #fecaca",
     marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   sectionHeader: {
@@ -1585,6 +1826,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 14,
     flexWrap: "wrap",
+    minWidth: 0,
   },
 
   sectionEyebrow: {
@@ -1610,6 +1852,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 28,
     letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
   sectionText: {
@@ -1617,18 +1860,21 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.6,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 14,
+    minWidth: 0,
   },
 
   readOnlyGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 14,
+    minWidth: 0,
   },
 
   infoCard: {
@@ -1663,11 +1909,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
     lineHeight: 1.5,
     fontWeight: 850,
+    overflowWrap: "anywhere",
   },
 
   field: {
     display: "grid",
     gap: 7,
+    minWidth: 0,
   },
 
   label: {
@@ -1684,6 +1932,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 12px",
     fontSize: 15,
     boxSizing: "border-box",
+    minWidth: 0,
   },
 
   select: {
@@ -1694,6 +1943,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 12px",
     fontSize: 15,
     boxSizing: "border-box",
+    minWidth: 0,
   },
 
   textarea: {
@@ -1704,6 +1954,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     fontFamily: "inherit",
     boxSizing: "border-box",
+    minWidth: 0,
   },
 
   submitRow: {
@@ -1724,8 +1975,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
-
-  deleteButton: {
+    deleteButton: {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
@@ -1758,6 +2008,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     padding: 14,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   itemSummary: {
@@ -1766,6 +2018,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
     alignItems: "center",
+    flexWrap: "wrap",
+    minWidth: 0,
   },
 
   itemMeta: {
@@ -1773,6 +2027,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   chevron: {
@@ -1783,12 +2038,14 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     fontSize: 12,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   deleteRow: {
     display: "flex",
     justifyContent: "flex-end",
     marginTop: 12,
+    flexWrap: "wrap",
   },
 
   emptyState: {
@@ -1799,5 +2056,93 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     textAlign: "center",
     fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  winnerPaymentCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    margin: "14px 0",
+    minWidth: 0,
+  },
+
+  winnerPaymentHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+
+  winnerPaymentTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.025em",
+    overflowWrap: "anywhere",
+  },
+
+  paymentLinkBox: {
+    display: "grid",
+    gap: 8,
+    padding: 13,
+    borderRadius: 16,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    minWidth: 0,
+  },
+
+  paymentLink: {
+    width: "fit-content",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+  },
+
+  paymentUrlText: {
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+    wordBreak: "break-all",
+  },
+
+  winnerSummaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 14,
+    minWidth: 0,
+  },
+
+  winnerCard: {
+    display: "grid",
+    gap: 13,
+    padding: 15,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 54%, #eff6ff 100%)",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  winnerMiniGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
+    gap: 10,
+    minWidth: 0,
   },
 };
