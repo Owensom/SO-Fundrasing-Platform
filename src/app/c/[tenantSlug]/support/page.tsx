@@ -351,12 +351,106 @@ export default async function PublicSupportPage({
               />
             </label>
 
+            <section style={styles.giftAidBox}>
+              <label style={styles.giftAidToggle}>
+                <input
+                  type="checkbox"
+                  name="giftAidClaimed"
+                  value="yes"
+                  style={styles.checkbox}
+                />
+
+                <span style={styles.giftAidToggleText}>
+                  <strong>Add Gift Aid to this donation</strong>
+                  <span>
+                    I am a UK taxpayer and want the charity to treat this
+                    donation as a Gift Aid donation.
+                  </span>
+                </span>
+              </label>
+
+              <div style={styles.giftAidNotice}>
+                <strong>Gift Aid declaration</strong>
+                <span>
+                  I confirm that I am a UK taxpayer and understand that if I pay
+                  less Income Tax and/or Capital Gains Tax than the amount of
+                  Gift Aid claimed on all my donations in that tax year, it is my
+                  responsibility to pay any difference.
+                </span>
+              </div>
+
+              <div style={styles.giftAidGrid}>
+                <label style={styles.field}>
+                  <span style={styles.label}>Gift Aid first name</span>
+                  <input
+                    name="giftAidFirstName"
+                    autoComplete="given-name"
+                    placeholder="Required if claiming Gift Aid"
+                    style={styles.input}
+                  />
+                </label>
+
+                <label style={styles.field}>
+                  <span style={styles.label}>Gift Aid last name</span>
+                  <input
+                    name="giftAidLastName"
+                    autoComplete="family-name"
+                    placeholder="Required if claiming Gift Aid"
+                    style={styles.input}
+                  />
+                </label>
+              </div>
+
+              <label style={styles.field}>
+                <span style={styles.label}>Address line 1</span>
+                <input
+                  name="giftAidAddressLine1"
+                  autoComplete="address-line1"
+                  placeholder="Required if claiming Gift Aid"
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.field}>
+                <span style={styles.label}>Address line 2</span>
+                <input
+                  name="giftAidAddressLine2"
+                  autoComplete="address-line2"
+                  placeholder="Optional"
+                  style={styles.input}
+                />
+              </label>
+
+              <div style={styles.giftAidGrid}>
+                <label style={styles.field}>
+                  <span style={styles.label}>Town or city</span>
+                  <input
+                    name="giftAidTownOrCity"
+                    autoComplete="address-level2"
+                    placeholder="Required if claiming Gift Aid"
+                    style={styles.input}
+                  />
+                </label>
+
+                <label style={styles.field}>
+                  <span style={styles.label}>Postcode</span>
+                  <input
+                    name="giftAidPostcode"
+                    autoComplete="postal-code"
+                    placeholder="Required if claiming Gift Aid"
+                    style={styles.input}
+                  />
+                </label>
+              </div>
+            </section>
+
             <button type="submit" style={styles.primaryButton}>
               Continue to secure payment
             </button>
           </form>
         </section>
-                <aside style={styles.infoCard}>
+
+        <aside style={styles.infoCard}>
           <div style={styles.sectionEyebrow}>What this is</div>
           <h2 style={styles.infoTitle}>A simple support payment</h2>
 
@@ -382,9 +476,11 @@ export default async function PublicSupportPage({
             </div>
 
             <div style={styles.infoItem}>
-              <strong>Gift Aid later</strong>
+              <strong>Gift Aid for pure donations</strong>
               <span>
-                Gift Aid can be added safely to this pure donation flow later.
+                Gift Aid is available only on this straightforward donation
+                flow. It is not applied to raffle tickets, squares, event
+                tickets, auction bids or competition-style payments.
               </span>
             </div>
           </div>
@@ -415,6 +511,12 @@ const responsiveStyles = `
 @media (max-width: 860px) {
   .support-page .support-hero,
   .support-page .support-content-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .support-page .gift-aid-grid {
     grid-template-columns: 1fr !important;
   }
 }
@@ -721,6 +823,57 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontSize: 14,
     fontWeight: 750,
+    minWidth: 0,
+  },
+
+  giftAidBox: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 58%, #f8fafc 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 10px 24px rgba(217,119,6,0.06)",
+    minWidth: 0,
+  },
+
+  giftAidToggle: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  giftAidToggleText: {
+    display: "grid",
+    gap: 4,
+    color: "#92400e",
+    lineHeight: 1.45,
+    fontSize: 14,
+    fontWeight: 750,
+    minWidth: 0,
+  },
+
+  giftAidNotice: {
+    display: "grid",
+    gap: 5,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #fed7aa",
+    color: "#7c2d12",
+    fontSize: 13,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    minWidth: 0,
+  },
+
+  giftAidGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
     minWidth: 0,
   },
 
