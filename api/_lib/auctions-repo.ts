@@ -2,6 +2,11 @@ import { query, queryOne } from "@/lib/db";
 
 export type AuctionStatus = "draft" | "published" | "closed";
 export type AuctionItemStatus = "active" | "closed" | "withdrawn";
+export type AuctionBidPaymentStatus =
+  | "unpaid"
+  | "checkout_started"
+  | "paid"
+  | "cancelled";
 
 export type SilentAuction = {
   id: string;
@@ -51,6 +56,35 @@ export type SilentAuctionBid = {
   amount_cents: number;
   is_winning: boolean;
   created_at: string;
+  payment_token: string | null;
+  payment_status: AuctionBidPaymentStatus;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  paid_at: string | null;
+};
+
+export type AuctionWinningBidPayment = {
+  bid_id: string;
+  auction_id: string;
+  item_id: string;
+  tenant_slug: string;
+  auction_slug: string;
+  auction_title: string;
+  auction_status: AuctionStatus;
+  currency: string;
+  item_title: string;
+  item_status: AuctionItemStatus;
+  reserve_price_cents: number | null;
+  bidder_name: string;
+  bidder_email: string;
+  bidder_phone: string | null;
+  amount_cents: number;
+  is_winning: boolean;
+  payment_token: string;
+  payment_status: AuctionBidPaymentStatus;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  paid_at: string | null;
 };
 
 function cleanStatus(value: unknown): AuctionStatus {
@@ -63,6 +97,20 @@ function cleanItemStatus(value: unknown): AuctionItemStatus {
   const status = String(value || "active").toLowerCase();
   if (status === "closed" || status === "withdrawn") return status;
   return "active";
+}
+
+function cleanBidPaymentStatus(value: unknown): AuctionBidPaymentStatus {
+  const status = String(value || "unpaid").toLowerCase();
+
+  if (
+    status === "checkout_started" ||
+    status === "paid" ||
+    status === "cancelled"
+  ) {
+    return status;
+  }
+
+  return "unpaid";
 }
 
 function cleanFocus(value: unknown, fallback = 50) {
@@ -476,4 +524,157 @@ export async function getHighestBidForItem(itemId: string) {
     `,
     [itemId],
   );
+}
+
+export async function getAuctionWinningBidPaymentByToken(
+  paymentToken: string,
+) {
+  return queryOne<AuctionWinningBidPayment>(
+    `
+      select
+        bid.id::text as bid_id,
+        bid.auction_id::text as auction_id,
+        bid.item_id::text as item_id,
+        auction.tenant_slug,
+        auction.slug as auction_slug,
+        auction.title as auction_title,
+        auction.status as auction_status,
+        auction.currency,
+        item.title as item_title,
+        item.status as item_status,
+        item.reserve_price_cents,
+        bid.bidder_name,
+        bid.bidder_email,
+        bid.bidder_phone,
+        bid.amount_cents,
+        bid.is_winning,
+        bid.payment_token::text as payment_token,
+        bid.payment_status,
+        bid.stripe_checkout_session_id,
+        bid.stripe_payment_intent_id,
+        bid.paid_at::text
+      from silent_auction_bids bid
+      inner join silent_auction_items item
+        on item.id = bid.item_id
+       and item.auction_id = bid.auction_id
+      inner join silent_auctions auction
+        on auction.id = bid.auction_id
+      where bid.payment_token = $1::uuid
+      limit 1
+    `,
+    [paymentToken],
+  );
+}
+
+export async function getAuctionWinningBidPaymentByBidId(bidId: string) {
+  return queryOne<AuctionWinningBidPayment>(
+    `
+      select
+        bid.id::text as bid_id,
+        bid.auction_id::text as auction_id,
+        bid.item_id::text as item_id,
+        auction.tenant_slug,
+        auction.slug as auction_slug,
+        auction.title as auction_title,
+        auction.status as auction_status,
+        auction.currency,
+        item.title as item_title,
+        item.status as item_status,
+        item.reserve_price_cents,
+        bid.bidder_name,
+        bid.bidder_email,
+        bid.bidder_phone,
+        bid.amount_cents,
+        bid.is_winning,
+        bid.payment_token::text as payment_token,
+        bid.payment_status,
+        bid.stripe_checkout_session_id,
+        bid.stripe_payment_intent_id,
+        bid.paid_at::text
+      from silent_auction_bids bid
+      inner join silent_auction_items item
+        on item.id = bid.item_id
+       and item.auction_id = bid.auction_id
+      inner join silent_auctions auction
+        on auction.id = bid.auction_id
+      where bid.id = $1::uuid
+      limit 1
+    `,
+    [bidId],
+  );
+}
+
+export async function markAuctionWinningBidCheckoutStarted(input: {
+  bidId: string;
+  stripeCheckoutSessionId: string;
+}) {
+  return queryOne<SilentAuctionBid>(
+    `
+      update silent_auction_bids
+      set
+        payment_status = 'checkout_started',
+        stripe_checkout_session_id = $2
+      where id = $1
+        and payment_status <> 'paid'
+      returning *
+    `,
+    [input.bidId, input.stripeCheckoutSessionId],
+  );
+}
+
+export async function markAuctionWinningBidPaid(input: {
+  bidId: string;
+  stripeCheckoutSessionId: string;
+  stripePaymentIntentId: string | null;
+}) {
+  return queryOne<SilentAuctionBid>(
+    `
+      update silent_auction_bids
+      set
+        payment_status = 'paid',
+        stripe_checkout_session_id = $2,
+        stripe_payment_intent_id = $3,
+        paid_at = now()
+      where id = $1
+      returning *
+    `,
+    [
+      input.bidId,
+      input.stripeCheckoutSessionId,
+      input.stripePaymentIntentId,
+    ],
+  );
+}
+
+export async function markAuctionWinningBidCancelled(input: {
+  bidId: string;
+}) {
+  return queryOne<SilentAuctionBid>(
+    `
+      update silent_auction_bids
+      set payment_status = 'cancelled'
+      where id = $1
+        and payment_status <> 'paid'
+      returning *
+    `,
+    [input.bidId],
+  );
+}
+
+export function isAuctionWinningBidPayable(
+  payment: AuctionWinningBidPayment | null,
+) {
+  if (!payment) return false;
+  if (!payment.is_winning) return false;
+  if (payment.payment_status === "paid") return false;
+
+  if (
+    payment.reserve_price_cents !== null &&
+    payment.reserve_price_cents !== undefined &&
+    Number(payment.amount_cents || 0) < Number(payment.reserve_price_cents || 0)
+  ) {
+    return false;
+  }
+
+  return true;
 }
