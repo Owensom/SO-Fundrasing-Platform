@@ -99,6 +99,7 @@ type DonationDetails = {
   stripe_payment_intent_id: string | null;
   created_at: string;
   paid_at: string | null;
+  gift_aid_claimed: boolean;
 };
 
 async function syncStripeConnectAccountById(accountId: string) {
@@ -594,7 +595,8 @@ async function getDonationDetails(input: {
         stripe_checkout_session_id,
         stripe_payment_intent_id,
         created_at::text,
-        paid_at::text
+        paid_at::text,
+        gift_aid_claimed
       from public_donations
       where id = $1::uuid
       limit 1
@@ -928,6 +930,7 @@ export async function POST(request: NextRequest) {
             currency: session.currency || donation.currency || "GBP",
             donationReference: donation.id,
             message: donation.message,
+            giftAidClaimed: Boolean(donation.gift_aid_claimed),
           });
         } catch (emailError) {
           console.error("Donation receipt email failed:", emailError);
