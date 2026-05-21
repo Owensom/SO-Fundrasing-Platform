@@ -8,6 +8,9 @@ export const dynamic = "force-dynamic";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
+const GIFT_AID_DECLARATION_TEXT =
+  "I confirm that I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year, it is my responsibility to pay any difference.";
+
 type TenantConnectStatus = {
   stripe_connect_account_id: string | null;
   stripe_connect_onboarding_complete: boolean | null;
@@ -259,6 +262,7 @@ async function lookupCampaign(params: {
 
   return null;
 }
+
 async function createDonation(input: {
   tenantSlug: string;
   campaignType: string;
@@ -274,6 +278,14 @@ async function createDonation(input: {
   grossAmountCents: number;
   platformFeeCents: number;
   netAmountCents: number;
+  giftAidClaimed: boolean;
+  giftAidFirstName: string | null;
+  giftAidLastName: string | null;
+  giftAidAddressLine1: string | null;
+  giftAidAddressLine2: string | null;
+  giftAidTownOrCity: string | null;
+  giftAidPostcode: string | null;
+  giftAidDeclarationText: string | null;
 }) {
   return queryOne<DonationRow>(
     `
@@ -292,9 +304,18 @@ async function createDonation(input: {
         donor_fee_cents,
         gross_amount_cents,
         platform_fee_cents,
-        net_amount_cents
+        net_amount_cents,
+        gift_aid_claimed,
+        gift_aid_first_name,
+        gift_aid_last_name,
+        gift_aid_address_line_1,
+        gift_aid_address_line_2,
+        gift_aid_town_or_city,
+        gift_aid_postcode,
+        gift_aid_declaration_text,
+        gift_aid_declaration_accepted_at
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12,$13,$14)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
       returning *
     `,
     [
@@ -312,6 +333,15 @@ async function createDonation(input: {
       input.grossAmountCents,
       input.platformFeeCents,
       input.netAmountCents,
+      input.giftAidClaimed,
+      input.giftAidFirstName,
+      input.giftAidLastName,
+      input.giftAidAddressLine1,
+      input.giftAidAddressLine2,
+      input.giftAidTownOrCity,
+      input.giftAidPostcode,
+      input.giftAidDeclarationText,
+      input.giftAidClaimed ? new Date().toISOString() : null,
     ],
   );
 }
@@ -367,6 +397,37 @@ export async function POST(request: NextRequest) {
       body.coverFees || body.cover_fees || body.donorCoveredFees,
     );
 
+    const giftAidClaimed = boolValue(
+      body.giftAidClaimed ||
+        body.gift_aid_claimed ||
+        body.giftAid ||
+        body.gift_aid,
+    );
+
+    const giftAidFirstName = cleanText(
+      body.giftAidFirstName || body.gift_aid_first_name,
+    );
+
+    const giftAidLastName = cleanText(
+      body.giftAidLastName || body.gift_aid_last_name,
+    );
+
+    const giftAidAddressLine1 = cleanText(
+      body.giftAidAddressLine1 || body.gift_aid_address_line_1,
+    );
+
+    const giftAidAddressLine2 = cleanText(
+      body.giftAidAddressLine2 || body.gift_aid_address_line_2,
+    );
+
+    const giftAidTownOrCity = cleanText(
+      body.giftAidTownOrCity || body.gift_aid_town_or_city,
+    );
+
+    const giftAidPostcode = cleanText(
+      body.giftAidPostcode || body.gift_aid_postcode,
+    );
+
     if (!tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Tenant is required." },
@@ -384,6 +445,24 @@ export async function POST(request: NextRequest) {
     if (amountCents < 100) {
       return NextResponse.json(
         { ok: false, error: "Minimum donation is £1.00." },
+        { status: 400 },
+      );
+    }
+
+    if (
+      giftAidClaimed &&
+      (!giftAidFirstName ||
+        !giftAidLastName ||
+        !giftAidAddressLine1 ||
+        !giftAidTownOrCity ||
+        !giftAidPostcode)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Please complete the Gift Aid name and address fields, or untick Gift Aid.",
+        },
         { status: 400 },
       );
     }
@@ -443,6 +522,14 @@ export async function POST(request: NextRequest) {
       grossAmountCents,
       platformFeeCents: platformCommissionCents,
       netAmountCents,
+      giftAidClaimed,
+      giftAidFirstName: giftAidClaimed ? giftAidFirstName : null,
+      giftAidLastName: giftAidClaimed ? giftAidLastName : null,
+      giftAidAddressLine1: giftAidClaimed ? giftAidAddressLine1 : null,
+      giftAidAddressLine2: giftAidClaimed ? giftAidAddressLine2 || null : null,
+      giftAidTownOrCity: giftAidClaimed ? giftAidTownOrCity : null,
+      giftAidPostcode: giftAidClaimed ? giftAidPostcode : null,
+      giftAidDeclarationText: giftAidClaimed ? GIFT_AID_DECLARATION_TEXT : null,
     });
 
     if (!donation) {
@@ -542,6 +629,8 @@ export async function POST(request: NextRequest) {
 
         donor_name: donorName || "",
         donor_email: donorEmail,
+
+        gift_aid_claimed: giftAidClaimed ? "true" : "false",
 
         base_amount_cents: String(amountCents),
         donation_amount_cents: String(amountCents),
