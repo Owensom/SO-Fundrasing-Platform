@@ -17,6 +17,9 @@ const SQUARES_SQUARE_IMAGE_URL =
 const EVENT_CHAMPAGNE_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/event-champagne-gold.png";
 
+const DONATION_HEART_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/donation-heart-gold.png";
+
 type EmailBranding = {
   name?: string | null;
   logoUrl?: string | null;
@@ -326,6 +329,13 @@ function renderEventChampagneHero(label = "Event ticket confirmation") {
   });
 }
 
+function renderDonationHeartHero(label = "Donation confirmation") {
+  return renderStandardHero({
+    imageUrl: DONATION_HEART_IMAGE_URL,
+    label,
+  });
+}
+
 function renderWinnerTrophyHero(label = "Winner trophy") {
   return `
     <div style="
@@ -374,6 +384,7 @@ function renderWinnerTrophyHero(label = "Winner trophy") {
     </div>
   `;
 }
+
 function renderEmailShell(params: {
   branding?: EmailBranding;
   heading: string;
@@ -386,11 +397,13 @@ function renderEmailShell(params: {
   auctionGavelLabel?: string;
   squaresSquareLabel?: string;
   eventChampagneLabel?: string;
+  donationHeartLabel?: string;
   showTicketImage?: boolean;
   showWinnerTrophy?: boolean;
   showAuctionGavel?: boolean;
   showSquaresSquare?: boolean;
   showEventChampagne?: boolean;
+  showDonationHeart?: boolean;
 }) {
   const brand = getBranding(params.branding);
   const showTicketImage = params.showTicketImage !== false;
@@ -439,9 +452,11 @@ function renderEmailShell(params: {
                       ? renderSquaresSquareHero(params.squaresSquareLabel)
                       : params.showEventChampagne
                         ? renderEventChampagneHero(params.eventChampagneLabel)
-                        : showTicketImage
-                          ? renderTicketHero(params.ticketImageLabel)
-                          : ""
+                        : params.showDonationHeart
+                          ? renderDonationHeartHero(params.donationHeartLabel)
+                          : showTicketImage
+                            ? renderTicketHero(params.ticketImageLabel)
+                            : ""
               }
 
               ${
@@ -724,6 +739,7 @@ export async function sendWinnerEmail({
     console.error("winner email failed", err);
   }
 }
+
 export async function sendSquaresReceiptEmail({
   to,
   name,
@@ -1008,6 +1024,109 @@ export async function sendEventReceiptEmail({
   }
 }
 
+export async function sendDonationReceiptEmail({
+  to,
+  name,
+  campaignTitle,
+  amountCents,
+  currency,
+  donationReference,
+  message,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  campaignTitle?: string | null;
+  amountCents: number;
+  currency: string;
+  donationReference: string;
+  message?: string | null;
+  branding?: EmailBranding;
+}) {
+  const formattedAmount = formatCurrency(amountCents, currency);
+  const safeCampaignTitle =
+    String(campaignTitle || "").trim() || "General donation";
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Donation confirmation",
+    heading: "Thank you for your donation",
+    showDonationHeart: true,
+    showTicketImage: false,
+    donationHeartLabel: "Donation confirmation",
+    intro: `Hi ${name || "there"}, thank you for supporting this cause. Your donation has been received successfully.`,
+    body: `
+      <div style="
+        border:1px solid #bbf7d0;
+        border-radius:20px;
+        padding:20px;
+        margin:20px 0;
+        background:#ecfdf5;
+      ">
+        <p style="
+          margin:0 0 8px;
+          color:#166534;
+          font-size:13px;
+          font-weight:900;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        ">
+          Donation received
+        </p>
+
+        <h2 style="
+          margin:0;
+          color:#0f172a;
+          font-size:28px;
+          line-height:1.2;
+          font-weight:900;
+        ">
+          ${escapeHtml(formattedAmount)}
+        </h2>
+      </div>
+
+      <div style="
+        border:1px solid #e2e8f0;
+        border-radius:18px;
+        padding:18px;
+        margin:20px 0;
+        background:#f8fafc;
+      ">
+        ${renderInfoRow("Donation", safeCampaignTitle)}
+        ${renderInfoRow("Amount", formattedAmount)}
+        ${renderInfoRow("Message", message)}
+
+        <p style="margin:0;font-size:15px;color:#334155;word-break:break-word;">
+          <strong style="color:#0f172a;">Reference:</strong>
+          ${escapeHtml(donationReference)}
+        </p>
+      </div>
+
+      <div style="
+        border-radius:18px;
+        padding:18px;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+      ">
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#1e3a8a;font-weight:800;">
+          Your support makes a real difference. Thank you.
+        </p>
+      </div>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `Thank you for your donation`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("donation receipt email failed", err);
+  }
+}
+
 export async function sendEventWinnerEmail({
   to,
   name,
@@ -1079,6 +1198,7 @@ export async function sendEventWinnerEmail({
     console.error("event winner email failed", err);
   }
 }
+
 export async function sendAuctionBidConfirmationEmail({
   to,
   name,
