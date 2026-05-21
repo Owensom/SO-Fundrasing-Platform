@@ -799,6 +799,26 @@ export default function EventWinnerDrawPanel({
     }, DRAW_DURATION_MS);
   }
 
+  function renderOverlayStartButton(extraStyle?: CSSProperties) {
+    if (revealedWinner) return null;
+
+    return (
+      <button
+        type="button"
+        onClick={() => void runDramaticDraw()}
+        disabled={drawing || saving}
+        style={{
+          ...styles.startButton,
+          ...extraStyle,
+          opacity: drawing || saving ? 0.45 : 1,
+          cursor: drawing || saving ? "not-allowed" : "pointer",
+        }}
+      >
+        {drawing ? "Drawing..." : saving ? "Confirming..." : "Start draw"}
+      </button>
+    );
+  }
+
   useEffect(() => {
     return () => {
       clearDrawTimers();
@@ -1195,7 +1215,7 @@ export default function EventWinnerDrawPanel({
       </div>
 
       {drawOverlayOpen ? (
-        <div style={styles.overlay}>
+        <div className="event-dramatic-draw-overlay" style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
               0% { transform: translate3d(0, -20vh, 0) rotate(0deg); opacity: 1; }
@@ -1220,6 +1240,141 @@ export default function EventWinnerDrawPanel({
             @keyframes shimmer {
               0% { transform: translateX(-120%); }
               100% { transform: translateX(120%); }
+            }
+
+            .event-dramatic-draw-mobile-action-bar {
+              display: none;
+            }
+
+            @media (max-width: 760px) {
+              .event-dramatic-draw-overlay {
+                display: block !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 74px 12px calc(112px + env(safe-area-inset-bottom)) !important;
+                -webkit-overflow-scrolling: touch !important;
+              }
+
+              .event-dramatic-draw-top-controls {
+                position: fixed !important;
+                top: 10px !important;
+                left: 10px !important;
+                right: 10px !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                gap: 8px !important;
+                z-index: 10002 !important;
+              }
+
+              .event-dramatic-draw-top-controls button {
+                flex: 1 1 0 !important;
+                padding: 10px 12px !important;
+                font-size: 13px !important;
+              }
+
+              .event-dramatic-draw-stage {
+                width: 100% !important;
+                min-height: auto !important;
+                padding: 0 0 18px !important;
+              }
+
+              .event-dramatic-draw-stage-title {
+                font-size: clamp(34px, 11vw, 52px) !important;
+                margin: 10px 0 12px !important;
+              }
+
+              .event-dramatic-draw-stage-sub-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 7px !important;
+                margin-bottom: 12px !important;
+              }
+
+              .event-dramatic-draw-stage-sub-card {
+                padding: 8px 7px !important;
+                border-radius: 13px !important;
+              }
+
+              .event-dramatic-draw-stage-sub-card span {
+                font-size: 10px !important;
+              }
+
+              .event-dramatic-draw-stage-sub-card strong {
+                font-size: 13px !important;
+                line-height: 1.2 !important;
+                overflow-wrap: anywhere !important;
+              }
+
+              .event-dramatic-draw-sound-mode-row {
+                gap: 8px !important;
+                margin-bottom: 12px !important;
+              }
+
+              .event-dramatic-draw-sound-mode-row button {
+                flex: 1 1 145px !important;
+                padding: 10px 11px !important;
+                font-size: 13px !important;
+              }
+
+              .event-dramatic-draw-ticket-reveal {
+                width: min(250px, 72vw) !important;
+                height: min(250px, 72vw) !important;
+                margin-bottom: 12px !important;
+              }
+
+              .event-dramatic-draw-ticket-label {
+                bottom: 26px !important;
+                font-size: 11px !important;
+              }
+
+              .event-dramatic-draw-result-panel {
+                min-height: 76px !important;
+              }
+
+              .event-dramatic-draw-desktop-start,
+              .event-dramatic-draw-desktop-close {
+                display: none !important;
+              }
+
+              .event-dramatic-draw-mobile-action-bar {
+                position: fixed !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                z-index: 10003 !important;
+                display: grid !important;
+                gap: 8px !important;
+                padding: 12px 12px calc(12px + env(safe-area-inset-bottom)) !important;
+                background: linear-gradient(180deg, rgba(2,6,23,0), rgba(2,6,23,0.94) 18%, rgba(2,6,23,0.98) 100%) !important;
+                border-top: 1px solid rgba(255,255,255,0.12) !important;
+                box-sizing: border-box !important;
+              }
+
+              .event-dramatic-draw-mobile-action-bar button {
+                width: 100% !important;
+                margin: 0 !important;
+                border-radius: 999px !important;
+              }
+
+              .event-dramatic-draw-mobile-hint {
+                color: #cbd5e1 !important;
+                font-size: 11px !important;
+                font-weight: 850 !important;
+                text-align: center !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+              }
+            }
+
+            @media (max-width: 420px) {
+              .event-dramatic-draw-stage-sub-grid {
+                grid-template-columns: 1fr !important;
+              }
+
+              .event-dramatic-draw-ticket-reveal {
+                width: min(220px, 68vw) !important;
+                height: min(220px, 68vw) !important;
+              }
             }
           `}</style>
 
@@ -1251,7 +1406,7 @@ export default function EventWinnerDrawPanel({
             </div>
           ) : null}
 
-          <div style={styles.topControls}>
+          <div className="event-dramatic-draw-top-controls" style={styles.topControls}>
             <button
               type="button"
               onClick={() => {
@@ -1281,28 +1436,45 @@ export default function EventWinnerDrawPanel({
             </button>
           </div>
 
-          <div style={styles.stage}>
+          <div className="event-dramatic-draw-stage" style={styles.stage}>
             <p style={styles.stageEyebrow}>SO Foundation Platform</p>
-            <h1 style={styles.stageTitle}>Event Winner Draw</h1>
+            <h1 className="event-dramatic-draw-stage-title" style={styles.stageTitle}>
+              Event Winner Draw
+            </h1>
 
-            <div style={styles.stageSubGrid}>
-              <div style={styles.stageSubCard}>
+            <div
+              className="event-dramatic-draw-stage-sub-grid"
+              style={styles.stageSubGrid}
+            >
+              <div
+                className="event-dramatic-draw-stage-sub-card"
+                style={styles.stageSubCard}
+              >
                 <span>Prize</span>
                 <strong>{displayPrize}</strong>
               </div>
 
-              <div style={styles.stageSubCard}>
+              <div
+                className="event-dramatic-draw-stage-sub-card"
+                style={styles.stageSubCard}
+              >
                 <span>Mode</span>
                 <strong>{drawMode === "all_remaining" ? "Range" : "Single"}</strong>
               </div>
 
-              <div style={styles.stageSubCard}>
+              <div
+                className="event-dramatic-draw-stage-sub-card"
+                style={styles.stageSubCard}
+              >
                 <span>Sound</span>
                 <strong>{soundMode === "roll" ? "Roll" : "Riser"}</strong>
               </div>
             </div>
 
-            <div style={styles.soundModeRow}>
+            <div
+              className="event-dramatic-draw-sound-mode-row"
+              style={styles.soundModeRow}
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -1353,6 +1525,7 @@ export default function EventWinnerDrawPanel({
             </div>
 
             <div
+              className="event-dramatic-draw-ticket-reveal"
               style={{
                 ...styles.ticketReveal,
                 animation:
@@ -1371,7 +1544,10 @@ export default function EventWinnerDrawPanel({
                 {displayText}
               </div>
 
-              <div style={styles.ticketLabel}>
+              <div
+                className="event-dramatic-draw-ticket-label"
+                style={styles.ticketLabel}
+              >
                 {drawing
                   ? soundMode === "roll"
                     ? "Classic roll"
@@ -1384,7 +1560,10 @@ export default function EventWinnerDrawPanel({
               </div>
             </div>
 
-            <div style={styles.resultPanel}>
+            <div
+              className="event-dramatic-draw-result-panel"
+              style={styles.resultPanel}
+            >
               {revealedWinner ? (
                 <>
                   <div style={styles.colourBadge}>Winner</div>
@@ -1420,25 +1599,15 @@ export default function EventWinnerDrawPanel({
 
             {error ? <p style={styles.overlayError}>{error}</p> : null}
 
-            {!revealedWinner ? (
-              <button
-                type="button"
-                onClick={() => void runDramaticDraw()}
-                disabled={drawing || saving}
-                style={{
-                  ...styles.startButton,
-                  opacity: drawing || saving ? 0.45 : 1,
-                  cursor: drawing || saving ? "not-allowed" : "pointer",
-                }}
-              >
-                {drawing ? "Drawing..." : saving ? "Confirming..." : "Start draw"}
-              </button>
-            ) : null}
+            <div className="event-dramatic-draw-desktop-start">
+              {renderOverlayStartButton()}
+            </div>
 
             <button
               type="button"
               onClick={closeDraw}
               disabled={saving}
+              className="event-dramatic-draw-desktop-close"
               style={{
                 ...styles.overlaySecondaryButton,
                 opacity: saving ? 0.45 : 1,
@@ -1447,6 +1616,13 @@ export default function EventWinnerDrawPanel({
             >
               {saving ? "Confirming..." : "Close"}
             </button>
+          </div>
+
+          <div className="event-dramatic-draw-mobile-action-bar">
+            {renderOverlayStartButton()}
+            <div className="event-dramatic-draw-mobile-hint">
+              {displayPrize} · {drawMode === "all_remaining" ? "Range" : "Single"} draw
+            </div>
           </div>
         </div>
       ) : null}
@@ -1537,7 +1713,7 @@ const styles: Record<string, CSSProperties> = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.95fr) minmax(320px, 1.2fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 16,
     alignItems: "start",
   },
@@ -1548,6 +1724,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
   },
   panelHeader: {
     display: "flex",
@@ -1584,7 +1761,7 @@ const styles: Record<string, CSSProperties> = {
   },
   twoCol: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
     gap: 10,
   },
   rangeBox: {
@@ -1606,7 +1783,7 @@ const styles: Record<string, CSSProperties> = {
   },
   checkGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 8,
   },
   checkboxLabel: {
@@ -1631,7 +1808,7 @@ const styles: Record<string, CSSProperties> = {
   },
   drawButtonGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
     gap: 10,
   },
   primaryButton: {
@@ -1705,6 +1882,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    flexWrap: "wrap",
   },
   winnerPrize: {
     margin: 0,
@@ -1736,7 +1914,8 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     placeItems: "center",
     padding: 24,
-    overflow: "hidden",
+    overflowY: "auto",
+    overflowX: "hidden",
   },
   backgroundOrbOne: {
     position: "absolute",
@@ -1747,6 +1926,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "50%",
     background: "rgba(22,131,248,0.22)",
     filter: "blur(10px)",
+    pointerEvents: "none",
   },
   backgroundOrbTwo: {
     position: "absolute",
@@ -1757,6 +1937,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "50%",
     background: "rgba(250,204,21,0.14)",
     filter: "blur(12px)",
+    pointerEvents: "none",
   },
   ring: {
     position: "absolute",
@@ -1765,6 +1946,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "50%",
     border: "1px solid rgba(255,255,255,0.08)",
     animation: "slowSpin 24s linear infinite",
+    pointerEvents: "none",
   },
   confettiLayer: {
     position: "absolute",
@@ -1832,6 +2014,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.12)",
+    minWidth: 0,
   },
   soundModeRow: {
     display: "flex",
@@ -1915,12 +2098,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(28px, 5vw, 44px)",
     fontWeight: 950,
     lineHeight: 1.05,
+    overflowWrap: "anywhere",
   },
   revealedWinnerMeta: {
     margin: "5px 0 0",
     color: "#d1d5db",
     fontSize: 16,
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
   overlayError: {
     margin: "14px auto 0",
