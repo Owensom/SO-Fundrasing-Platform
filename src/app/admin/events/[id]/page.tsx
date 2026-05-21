@@ -440,6 +440,7 @@ function statusLabel(status: string) {
   if (status === "closed") return "Closed";
   return "Draft";
 }
+
 function statusStyle(status: string): CSSProperties {
   if (status === "published") {
     return {
@@ -1280,6 +1281,7 @@ async function applySeatTicketTypeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-marking#${returnAnchor}`);
 }
+
 async function updateSelectedSeatsMetadataAction(formData: FormData) {
   "use server";
 
@@ -1504,7 +1506,6 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
-
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -1680,10 +1681,30 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
+
 const responsiveStyles = `
+@media (max-width: 1180px) {
+  .event-edit-page {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  .event-edit-page * {
+    box-sizing: border-box !important;
+  }
+
+  .event-edit-page img,
+  .event-edit-page video,
+  .event-edit-page canvas,
+  .event-edit-page svg {
+    max-width: 100% !important;
+  }
+}
+
 @media (max-width: 980px) {
   .event-edit-page {
-    overflow-x: hidden;
+    overflow-x: hidden !important;
   }
 
   .event-edit-page * {
@@ -1695,7 +1716,8 @@ const responsiveStyles = `
   .event-edit-page details,
   .event-edit-page summary,
   .event-edit-page div,
-  .event-edit-page label {
+  .event-edit-page label,
+  .event-edit-page article {
     min-width: 0 !important;
   }
 
@@ -1714,10 +1736,26 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .event-edit-page .hero {
+    gap: 16px !important;
+  }
+
+  .event-edit-page .heroTitleRow,
+  .event-edit-page .panelHeader,
+  .event-edit-page .guestCardHeader,
+  .event-edit-page .ticketSummary,
+  .event-edit-page .accessCodeSummary,
+  .event-edit-page .collapsibleSummary,
+  .event-edit-page .submitBar,
+  .event-edit-page .topActions {
+    align-items: stretch !important;
+  }
+
   .event-edit-page .tabs {
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
     -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: thin !important;
   }
 
   .event-edit-page .tab,
@@ -1735,7 +1773,11 @@ const responsiveStyles = `
   }
 
   .event-edit-page .topActions,
-  .event-edit-page .submitBar {
+  .event-edit-page .submitBar,
+  .event-edit-page .guestHeaderActions,
+  .event-edit-page .campaignLimitActions,
+  .event-edit-page .collapsibleActions {
+    width: 100% !important;
     align-items: stretch !important;
   }
 
@@ -1745,23 +1787,84 @@ const responsiveStyles = `
   .event-edit-page .primaryLink,
   .event-edit-page .secondaryButton,
   .event-edit-page .exportButton,
-  .event-edit-page .menuRequestButton {
+  .event-edit-page .menuRequestButton,
+  .event-edit-page .campaignLimitPrimary,
+  .event-edit-page .campaignLimitSecondary {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
     box-sizing: border-box !important;
   }
 
+  .event-edit-page .inlineForm {
+    width: 100% !important;
+  }
+
   .event-edit-page .seatManagerShell {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
     width: 100% !important;
+    max-width: 100% !important;
+    padding-bottom: 10px !important;
   }
 
   .event-edit-page .ticketListScroll {
     max-height: none !important;
     overflow: visible !important;
     padding-right: 0 !important;
+  }
+
+  .event-edit-page .guestCardList,
+  .event-edit-page .accessCodeList,
+  .event-edit-page .winnerList {
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .event-edit-page .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .event-edit-page .heroMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .event-edit-page .guestMetaGrid,
+  .event-edit-page .cateringDetailGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-edit-page .guestEditGrid {
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+
+  .event-edit-page .guestCard {
+    padding: 13px !important;
+    border-radius: 18px !important;
+  }
+
+  .event-edit-page .guestName {
+    font-size: 16px !important;
+  }
+
+  .event-edit-page .guestEmail,
+  .event-edit-page .winnerMeta,
+  .event-edit-page .mutedSmall {
+    font-size: 12px !important;
+  }
+
+  .event-edit-page .statusPill,
+  .event-edit-page .statusMiniPill,
+  .event-edit-page .sectionBadge,
+  .event-edit-page .collapsibleToggle {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: normal !important;
   }
 }
 
@@ -1783,6 +1886,7 @@ const responsiveStyles = `
   .event-edit-page .section,
   .event-edit-page .panel {
     padding: 14px !important;
+    border-radius: 20px !important;
   }
 
   .event-edit-page .collapsibleSummary,
@@ -1811,6 +1915,119 @@ const responsiveStyles = `
 
   .event-edit-page .previewBox {
     height: 150px !important;
+  }
+
+  .event-edit-page .tabs {
+    margin-left: -2px !important;
+    margin-right: -2px !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+  }
+
+  .event-edit-page .tab,
+  .event-edit-page .tabDanger {
+    padding: 9px 11px !important;
+    font-size: 13px !important;
+  }
+
+  .event-edit-page .summaryGrid,
+  .event-edit-page .heroMetricGrid,
+  .event-edit-page .statsGridCompact {
+    gap: 8px !important;
+  }
+
+  .event-edit-page .statBox,
+  .event-edit-page .heroMetric,
+  .event-edit-page .infoTile {
+    padding: 11px !important;
+    border-radius: 15px !important;
+  }
+
+  .event-edit-page .input,
+  .event-edit-page .textarea {
+    font-size: 16px !important;
+  }
+
+  .event-edit-page .guestHeaderActions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-edit-page .guestCardHeader,
+  .event-edit-page .panelHeader,
+  .event-edit-page .submitBar {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-edit-page .accessCodeValue,
+  .event-edit-page .guestName,
+  .event-edit-page .infoTileValue,
+  .event-edit-page .cateringValue,
+  .event-edit-page .sectionText,
+  .event-edit-page .heroDescription,
+  .event-edit-page .heroSlug {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+}
+
+@media (max-width: 460px) {
+  .event-edit-page {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .event-edit-page .summaryGrid,
+  .event-edit-page .heroMetricGrid,
+  .event-edit-page .statsGridCompact {
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-edit-page .hero {
+    padding: 15px !important;
+    border-radius: 22px !important;
+  }
+
+  .event-edit-page .heroPreview {
+    padding: 10px !important;
+    border-radius: 18px !important;
+  }
+
+  .event-edit-page .heroImageWrap {
+    height: 165px !important;
+    border-radius: 16px !important;
+  }
+
+  .event-edit-page .previewBox {
+    height: 135px !important;
+  }
+
+  .event-edit-page .section,
+  .event-edit-page .panel,
+  .event-edit-page .guestCard,
+  .event-edit-page .ticketDetails,
+  .event-edit-page .accessCodeDetails,
+  .event-edit-page .lockedFeatureCard {
+    border-radius: 18px !important;
+  }
+
+  .event-edit-page .ticketDetailsBody,
+  .event-edit-page .accessCodeBody {
+    padding: 12px !important;
+  }
+
+  .event-edit-page .primaryButton,
+  .event-edit-page .dangerButton,
+  .event-edit-page .dangerOutlineButton,
+  .event-edit-page .primaryLink,
+  .event-edit-page .secondaryButton,
+  .event-edit-page .exportButton,
+  .event-edit-page .menuRequestButton,
+  .event-edit-page .campaignLimitPrimary,
+  .event-edit-page .campaignLimitSecondary {
+    min-height: 46px !important;
+    padding: 12px 14px !important;
   }
 }
 `;
@@ -2057,8 +2274,7 @@ export default async function AdminEventManagePage({
           </div>
         </div>
       </section>
-
-      <section className="topActions" style={styles.topActions}>
+            <section className="topActions" style={styles.topActions}>
         <a
           href="/admin/events"
           className="secondaryButton"
@@ -2192,7 +2408,7 @@ export default async function AdminEventManagePage({
         </div>
       ) : null}
 
-      <section style={styles.summaryGrid}>
+      <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Ticket types" value={ticketTypes.length} />
         <SummaryCard label="Access codes" value={accessCodes.length} />
         <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
@@ -2296,7 +2512,8 @@ export default async function AdminEventManagePage({
                 />
               </div>
             </div>
-                        <div className="twoCol" style={styles.twoCol}>
+
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Location">
                 <input
                   name="location"
@@ -2659,8 +2876,7 @@ export default async function AdminEventManagePage({
           </CompactPanel>
         </div>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="access-codes"
         eyebrow="Section 3"
         title="VIP / Complimentary Access Codes"
@@ -2729,7 +2945,11 @@ export default async function AdminEventManagePage({
                 </div>
 
                 <Field label="Restrict to ticket type">
-                  <select name="ticket_type_id" defaultValue="" style={styles.input}>
+                  <select
+                    name="ticket_type_id"
+                    defaultValue=""
+                    style={styles.input}
+                  >
                     <option value="">Any ticket type</option>
                     {ticketTypes.map((ticketType) => (
                       <option key={ticketType.id} value={ticketType.id}>
@@ -2788,7 +3008,7 @@ export default async function AdminEventManagePage({
             {accessCodes.length === 0 ? (
               <div style={styles.emptyBox}>No access codes yet.</div>
             ) : (
-              <div style={styles.accessCodeList}>
+              <div className="accessCodeList" style={styles.accessCodeList}>
                 {accessCodes.map((accessCode) => (
                   <details key={accessCode.id} style={styles.accessCodeDetails}>
                     <summary
@@ -2796,7 +3016,10 @@ export default async function AdminEventManagePage({
                       style={styles.accessCodeSummary}
                     >
                       <div style={styles.accessCodePrimary}>
-                        <strong style={styles.accessCodeValue}>
+                        <strong
+                          className="accessCodeValue"
+                          style={styles.accessCodeValue}
+                        >
                           {accessCode.code}
                         </strong>
                         <span style={styles.mutedSmall}>
@@ -2806,6 +3029,7 @@ export default async function AdminEventManagePage({
                       </div>
 
                       <span
+                        className="statusMiniPill"
                         style={{
                           ...styles.statusMiniPill,
                           ...accessStatusStyle(accessCode),
@@ -2816,7 +3040,7 @@ export default async function AdminEventManagePage({
                     </summary>
 
                     <div style={styles.accessCodeBody}>
-                      <div style={styles.guestMetaGrid}>
+                      <div className="guestMetaGrid" style={styles.guestMetaGrid}>
                         <InfoTile
                           label="Used"
                           value={
@@ -3046,6 +3270,7 @@ export default async function AdminEventManagePage({
                 <form
                   action={menuRequestHref}
                   method="post"
+                  className="inlineForm"
                   style={styles.inlineForm}
                 >
                   <button
@@ -3129,20 +3354,25 @@ export default async function AdminEventManagePage({
               yet.
             </div>
           ) : (
-            <div style={styles.guestCardList}>
+            <div className="guestCardList" style={styles.guestCardList}>
               {guestCateringRows.map((row) => (
-                <article key={row.order_item_id} style={styles.guestCard}>
-                  <div style={styles.guestCardHeader}>
+                <article
+                  key={row.order_item_id}
+                  className="guestCard"
+                  style={styles.guestCard}
+                >
+                  <div className="guestCardHeader" style={styles.guestCardHeader}>
                     <div style={styles.guestPrimary}>
-                      <div style={styles.guestName}>
+                      <div className="guestName" style={styles.guestName}>
                         {guestDisplayName(row)}
                       </div>
-                      <div style={styles.guestEmail}>
+                      <div className="guestEmail" style={styles.guestEmail}>
                         {guestDisplayEmail(row)}
                       </div>
                     </div>
 
                     <span
+                      className="statusMiniPill"
                       style={{
                         ...styles.statusMiniPill,
                         background: "#dcfce7",
@@ -3154,7 +3384,7 @@ export default async function AdminEventManagePage({
                     </span>
                   </div>
 
-                  <div style={styles.guestMetaGrid}>
+                  <div className="guestMetaGrid" style={styles.guestMetaGrid}>
                     <InfoTile
                       label="Seat / ticket"
                       value={seatDisplayLabel(row)}
@@ -3264,7 +3494,10 @@ export default async function AdminEventManagePage({
                     </form>
                   ) : (
                     <>
-                      <div style={styles.cateringDetailGrid}>
+                      <div
+                        className="cateringDetailGrid"
+                        style={styles.cateringDetailGrid}
+                      >
                         <div
                           style={{
                             ...styles.cateringDetailCard,
@@ -3274,7 +3507,10 @@ export default async function AdminEventManagePage({
                           }}
                         >
                           <span style={styles.cateringLabel}>Menu choice</span>
-                          <strong style={styles.cateringValue}>
+                          <strong
+                            className="cateringValue"
+                            style={styles.cateringValue}
+                          >
                             {fallbackText(row.menu_choice)}
                           </strong>
                         </div>
@@ -3290,7 +3526,10 @@ export default async function AdminEventManagePage({
                           <span style={styles.cateringLabel}>
                             Dietary requirements
                           </span>
-                          <strong style={styles.cateringValue}>
+                          <strong
+                            className="cateringValue"
+                            style={styles.cateringValue}
+                          >
                             {fallbackText(row.dietary_requirements)}
                           </strong>
                         </div>
@@ -3310,8 +3549,7 @@ export default async function AdminEventManagePage({
           )}
         </div>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="winner-draw"
         eyebrow="Section 6"
         title="Winner Draw"
@@ -3405,7 +3643,7 @@ export default async function AdminEventManagePage({
             </CompactPanel>
 
             <CompactPanel title="Row seating summary" eyebrow="Seat status">
-              <div style={styles.statsGridCompact}>
+              <div className="statsGridCompact" style={styles.statsGridCompact}>
                 <SummaryCard label="Row seats" value={rowSeats.length} />
                 <SummaryCard
                   label="Blocked"
@@ -3532,7 +3770,7 @@ export default async function AdminEventManagePage({
             </CompactPanel>
 
             <CompactPanel title="Table seating summary" eyebrow="Table status">
-              <div style={styles.statsGridCompact}>
+              <div className="statsGridCompact" style={styles.statsGridCompact}>
                 <SummaryCard label="Table seats" value={tableSeats.length} />
                 <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
                 <SummaryCard label="Shape" value={tableShape} />
@@ -3776,7 +4014,6 @@ function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={styles.field}>
@@ -3788,9 +4025,11 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function InfoTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div style={styles.infoTile}>
+    <div className="infoTile" style={styles.infoTile}>
       <span style={styles.infoTileLabel}>{label}</span>
-      <strong style={styles.infoTileValue}>{value}</strong>
+      <strong className="infoTileValue" style={styles.infoTileValue}>
+        {value}
+      </strong>
     </div>
   );
 }
