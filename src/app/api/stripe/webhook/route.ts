@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { query } from "@/lib/db";
 import {
+  sendDonationReceiptEmail,
   sendEventReceiptEmail,
   sendReceiptEmail,
   sendSquaresReceiptEmail,
@@ -303,6 +304,7 @@ async function getPaymentIntentDetails(paymentIntentId: string | null) {
     };
   }
 }
+
 async function getCheckoutFinancials({
   session,
   metadata,
@@ -749,6 +751,7 @@ async function recordPlatformPayment(input: {
     ],
   );
 }
+
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -911,6 +914,25 @@ export async function POST(request: NextRequest) {
         campaignType: donation.campaign_type || "general",
         campaignId: donation.campaign_id || null,
       });
+
+      const receiptEmail = email || donation.donor_email || null;
+
+      if (receiptEmail) {
+        try {
+          await sendDonationReceiptEmail({
+            to: receiptEmail,
+            name: name || donation.donor_name,
+            campaignTitle:
+              donation.campaign_title || metadata.campaign_title || "Donation",
+            amountCents: grossAmountCents || donation.amount_cents,
+            currency: session.currency || donation.currency || "GBP",
+            donationReference: donation.id,
+            message: donation.message,
+          });
+        } catch (emailError) {
+          console.error("Donation receipt email failed:", emailError);
+        }
+      }
 
       return NextResponse.json({
         ok: true,
@@ -1084,7 +1106,8 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-        if (type === "event") {
+
+    if (type === "event") {
       const orderId = String(
         metadata.order_id ||
           metadata.orderId ||
@@ -1478,7 +1501,8 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-        if (type === "squares") {
+
+    if (type === "squares") {
       if (!squaresGameId) {
         console.error("Stripe webhook missing squares game id", {
           checkoutSessionId: session.id,
