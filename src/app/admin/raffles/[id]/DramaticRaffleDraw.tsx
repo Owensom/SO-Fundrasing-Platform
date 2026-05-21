@@ -220,6 +220,14 @@ export default function DramaticRaffleDraw({
     return position;
   }, [drawnPrizePositions]);
 
+  const startDisabled = drawing || saving || !soldNumbers.length;
+
+  const startButtonLabel = drawing
+    ? "Drawing..."
+    : saving
+      ? "Saving..."
+      : "Start draw";
+
   function getAudioContext() {
     if (typeof window === "undefined" || !soundEnabled) return null;
 
@@ -490,6 +498,29 @@ export default function DramaticRaffleDraw({
     }, DRAW_DURATION_MS);
   }
 
+  function renderStartButton(extraStyle?: CSSProperties) {
+    return (
+      <button
+        type="button"
+        onClick={startDraw}
+        disabled={startDisabled}
+        style={{
+          ...styles.startButton,
+          ...extraStyle,
+          cursor: startDisabled ? "not-allowed" : "pointer",
+          background: startDisabled
+            ? "#9ca3af"
+            : "linear-gradient(135deg, #facc15, #f97316)",
+          boxShadow: startDisabled
+            ? "none"
+            : "0 20px 42px rgba(249,115,22,0.38)",
+        }}
+      >
+        {startButtonLabel}
+      </button>
+    );
+  }
+
   return (
     <>
       <section style={styles.launchCard}>
@@ -539,7 +570,7 @@ export default function DramaticRaffleDraw({
       </section>
 
       {isOpen ? (
-        <div style={styles.overlay}>
+        <div className="dramatic-draw-overlay" style={styles.overlay}>
           <style>{`
             @keyframes confettiFall {
               0% {
@@ -587,6 +618,140 @@ export default function DramaticRaffleDraw({
                 transform: translateX(120%);
               }
             }
+
+            .dramatic-draw-mobile-action-bar {
+              display: none;
+            }
+
+            @media (max-width: 760px) {
+              .dramatic-draw-overlay {
+                display: block !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 74px 12px calc(106px + env(safe-area-inset-bottom)) !important;
+                -webkit-overflow-scrolling: touch !important;
+              }
+
+              .dramatic-draw-top-controls {
+                position: fixed !important;
+                top: 10px !important;
+                left: 10px !important;
+                right: 10px !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                gap: 8px !important;
+                z-index: 10002 !important;
+              }
+
+              .dramatic-draw-top-controls button {
+                flex: 1 1 0 !important;
+                padding: 10px 12px !important;
+                font-size: 13px !important;
+              }
+
+              .dramatic-draw-stage {
+                width: 100% !important;
+                min-height: auto !important;
+                padding: 0 0 18px !important;
+              }
+
+              .dramatic-draw-stage-title {
+                font-size: clamp(34px, 11vw, 52px) !important;
+                margin: 10px 0 12px !important;
+              }
+
+              .dramatic-draw-stage-sub-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 7px !important;
+                margin-bottom: 12px !important;
+              }
+
+              .dramatic-draw-stage-sub-card {
+                padding: 8px 7px !important;
+                border-radius: 13px !important;
+              }
+
+              .dramatic-draw-stage-sub-card span {
+                font-size: 10px !important;
+              }
+
+              .dramatic-draw-stage-sub-card strong {
+                font-size: 15px !important;
+              }
+
+              .dramatic-draw-sound-mode-row {
+                gap: 8px !important;
+                margin-bottom: 12px !important;
+              }
+
+              .dramatic-draw-sound-mode-row button {
+                flex: 1 1 145px !important;
+                padding: 10px 11px !important;
+                font-size: 13px !important;
+              }
+
+              .dramatic-draw-prize-input-wrap {
+                max-width: 100% !important;
+                margin-bottom: 14px !important;
+              }
+
+              .dramatic-draw-ticket-reveal {
+                width: min(250px, 72vw) !important;
+                height: min(250px, 72vw) !important;
+                margin-bottom: 12px !important;
+              }
+
+              .dramatic-draw-ticket-label {
+                bottom: 26px !important;
+                font-size: 11px !important;
+              }
+
+              .dramatic-draw-result-panel {
+                min-height: 72px !important;
+              }
+
+              .dramatic-draw-desktop-start {
+                display: none !important;
+              }
+
+              .dramatic-draw-mobile-action-bar {
+                position: fixed !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                z-index: 10003 !important;
+                display: grid !important;
+                gap: 8px !important;
+                padding: 12px 12px calc(12px + env(safe-area-inset-bottom)) !important;
+                background: linear-gradient(180deg, rgba(2,6,23,0), rgba(2,6,23,0.94) 18%, rgba(2,6,23,0.98) 100%) !important;
+                border-top: 1px solid rgba(255,255,255,0.12) !important;
+                box-sizing: border-box !important;
+              }
+
+              .dramatic-draw-mobile-action-bar button {
+                width: 100% !important;
+                margin: 0 !important;
+                border-radius: 999px !important;
+              }
+
+              .dramatic-draw-mobile-hint {
+                color: #cbd5e1 !important;
+                font-size: 11px !important;
+                font-weight: 850 !important;
+                text-align: center !important;
+              }
+            }
+
+            @media (max-width: 420px) {
+              .dramatic-draw-stage-sub-grid {
+                grid-template-columns: 1fr !important;
+              }
+
+              .dramatic-draw-ticket-reveal {
+                width: min(220px, 68vw) !important;
+                height: min(220px, 68vw) !important;
+              }
+            }
           `}</style>
 
           <div style={styles.backgroundOrbOne} />
@@ -617,7 +782,7 @@ export default function DramaticRaffleDraw({
             </div>
           ) : null}
 
-          <div style={styles.topControls}>
+          <div className="dramatic-draw-top-controls" style={styles.topControls}>
             <button
               type="button"
               onClick={() => {
@@ -638,29 +803,46 @@ export default function DramaticRaffleDraw({
             </button>
           </div>
 
-          <div style={styles.stage}>
+          <div className="dramatic-draw-stage" style={styles.stage}>
             <p style={styles.stageEyebrow}>SO Foundation Platform</p>
 
-            <h1 style={styles.stageTitle}>Raffle Winner Draw</h1>
+            <h1 className="dramatic-draw-stage-title" style={styles.stageTitle}>
+              Raffle Winner Draw
+            </h1>
 
-            <div style={styles.stageSubGrid}>
-              <div style={styles.stageSubCard}>
+            <div
+              className="dramatic-draw-stage-sub-grid"
+              style={styles.stageSubGrid}
+            >
+              <div
+                className="dramatic-draw-stage-sub-card"
+                style={styles.stageSubCard}
+              >
                 <span>Prize</span>
                 <strong>#{prizePosition || nextPrizeNumber}</strong>
               </div>
 
-              <div style={styles.stageSubCard}>
+              <div
+                className="dramatic-draw-stage-sub-card"
+                style={styles.stageSubCard}
+              >
                 <span>Eligible</span>
                 <strong>{soldNumbers.length}</strong>
               </div>
 
-              <div style={styles.stageSubCard}>
+              <div
+                className="dramatic-draw-stage-sub-card"
+                style={styles.stageSubCard}
+              >
                 <span>Already drawn</span>
                 <strong>{drawnPrizePositions.length}</strong>
               </div>
             </div>
 
-            <div style={styles.soundModeRow}>
+            <div
+              className="dramatic-draw-sound-mode-row"
+              style={styles.soundModeRow}
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -710,7 +892,10 @@ export default function DramaticRaffleDraw({
               </button>
             </div>
 
-            <label style={styles.prizeInputWrap}>
+            <label
+              className="dramatic-draw-prize-input-wrap"
+              style={styles.prizeInputWrap}
+            >
               <span>Prize number</span>
               <input
                 value={prizePosition}
@@ -722,6 +907,7 @@ export default function DramaticRaffleDraw({
             </label>
 
             <div
+              className="dramatic-draw-ticket-reveal"
               style={{
                 ...styles.ticketReveal,
                 animation: drawing || winner ? "glowPulse 900ms infinite" : "",
@@ -738,7 +924,10 @@ export default function DramaticRaffleDraw({
                 {displayTicket ? `#${displayTicket}` : "—"}
               </div>
 
-              <div style={styles.ticketLabel}>
+              <div
+                className="dramatic-draw-ticket-label"
+                style={styles.ticketLabel}
+              >
                 {drawing
                   ? soundMode === "roll"
                     ? "Classic roll"
@@ -749,7 +938,10 @@ export default function DramaticRaffleDraw({
               </div>
             </div>
 
-            <div style={styles.resultPanel}>
+            <div
+              className="dramatic-draw-result-panel"
+              style={styles.resultPanel}
+            >
               {winner ? (
                 <>
                   <div style={styles.colourBadge}>{getTicketColour(winner)}</div>
@@ -776,28 +968,16 @@ export default function DramaticRaffleDraw({
 
             {error ? <p style={styles.error}>{error}</p> : null}
 
-            <button
-              type="button"
-              onClick={startDraw}
-              disabled={drawing || saving || !soldNumbers.length}
-              style={{
-                ...styles.startButton,
-                cursor:
-                  drawing || saving || !soldNumbers.length
-                    ? "not-allowed"
-                    : "pointer",
-                background:
-                  drawing || saving || !soldNumbers.length
-                    ? "#9ca3af"
-                    : "linear-gradient(135deg, #facc15, #f97316)",
-                boxShadow:
-                  drawing || saving || !soldNumbers.length
-                    ? "none"
-                    : "0 20px 42px rgba(249,115,22,0.38)",
-              }}
-            >
-              {drawing ? "Drawing..." : saving ? "Saving..." : "Start draw"}
-            </button>
+            <div className="dramatic-draw-desktop-start">
+              {renderStartButton()}
+            </div>
+          </div>
+
+          <div className="dramatic-draw-mobile-action-bar">
+            {renderStartButton()}
+            <div className="dramatic-draw-mobile-hint">
+              Prize #{prizePosition || nextPrizeNumber} · {soldNumbers.length} eligible
+            </div>
           </div>
         </div>
       ) : null}
@@ -892,7 +1072,8 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     placeItems: "center",
     padding: 24,
-    overflow: "hidden",
+    overflowY: "auto",
+    overflowX: "hidden",
   },
   backgroundOrbOne: {
     position: "absolute",
@@ -903,6 +1084,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "50%",
     background: "rgba(22,131,248,0.22)",
     filter: "blur(10px)",
+    pointerEvents: "none",
   },
   backgroundOrbTwo: {
     position: "absolute",
@@ -913,6 +1095,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "50%",
     background: "rgba(250,204,21,0.14)",
     filter: "blur(12px)",
+    pointerEvents: "none",
   },
   ring: {
     position: "absolute",
@@ -921,6 +1104,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "50%",
     border: "1px solid rgba(255,255,255,0.08)",
     animation: "slowSpin 24s linear infinite",
+    pointerEvents: "none",
   },
   confettiLayer: {
     position: "absolute",
@@ -1107,3 +1291,4 @@ const styles: Record<string, CSSProperties> = {
     color: "#111827",
   },
 };
+
