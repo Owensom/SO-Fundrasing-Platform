@@ -302,6 +302,24 @@ export default async function PublicSupportPage({
               </select>
             </label>
 
+            <label style={styles.coverFeesBox}>
+              <input
+                type="checkbox"
+                name="coverFees"
+                value="yes"
+                defaultChecked
+                style={styles.checkbox}
+              />
+
+              <span style={styles.coverFeesText}>
+                <strong>Help cover platform and payment costs</strong>
+                <span>
+                  Add a small contribution so more of your donation reaches the
+                  organisation.
+                </span>
+              </span>
+            </label>
+
             <label style={styles.field}>
               <span style={styles.label}>Your name</span>
               <input
@@ -353,6 +371,14 @@ export default async function PublicSupportPage({
             <div style={styles.infoItem}>
               <strong>Secure checkout</strong>
               <span>Payment is processed through Stripe.</span>
+            </div>
+
+            <div style={styles.infoItem}>
+              <strong>Cover fees option</strong>
+              <span>
+                Donors can choose to add a small contribution to help cover
+                platform and payment costs.
+              </span>
             </div>
 
             <div style={styles.infoItem}>
@@ -666,6 +692,36 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     background: "#ffffff",
     color: "#0f172a",
+  },
+
+  coverFeesBox: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    padding: 14,
+    borderRadius: 18,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  checkbox: {
+    width: 18,
+    height: 18,
+    marginTop: 2,
+    flex: "0 0 auto",
+    accentColor: "#1683f8",
+  },
+
+  coverFeesText: {
+    display: "grid",
+    gap: 4,
+    lineHeight: 1.45,
+    fontSize: 14,
+    fontWeight: 750,
+    minWidth: 0,
   },
 
   primaryButton: {
