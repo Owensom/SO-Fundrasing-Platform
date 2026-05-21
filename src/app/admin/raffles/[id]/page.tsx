@@ -1311,7 +1311,25 @@ const responsiveStyles = `
     .raffle-preview-box {
       height: 190px !important;
     }
+  
+    .raffle-admin-page input[type="datetime-local"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      display: block !important;
+      box-sizing: border-box !important;
+      appearance: none !important;
+      -webkit-appearance: none !important;
+    }
 
+    .raffle-admin-page input[name="draw_at"],
+    .raffle-admin-page input[name="free_entry_closes_at"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
+    }
+    
     .raffle-colour-grid {
       grid-template-columns: 1fr !important;
     }
