@@ -320,8 +320,7 @@ async function markEventOrderComplimentaryPaid(input: {
       set
         status = 'paid',
         amount_total = 0,
-        stripe_session_id = null,
-        updated_at = now()
+        stripe_session_id = null
       where id = $1
     `,
     [input.orderId],
