@@ -82,6 +82,24 @@ type SquaresGameDetails = {
   title: string;
 };
 
+type DonationDetails = {
+  id: string;
+  tenant_slug: string;
+  campaign_type: string | null;
+  campaign_id: string | null;
+  campaign_title: string | null;
+  donor_name: string | null;
+  donor_email: string | null;
+  message: string | null;
+  amount_cents: number;
+  currency: string;
+  payment_status: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  created_at: string;
+  paid_at: string | null;
+};
+
 async function syncStripeConnectAccountById(accountId: string) {
   const account = await stripe.accounts.retrieve(accountId);
 
@@ -210,7 +228,8 @@ function normalisePaymentType(value: unknown) {
     rawType === "event" ||
     rawType === "squares" ||
     rawType === "raffle" ||
-    rawType === "auction_winning_bid"
+    rawType === "auction_winning_bid" ||
+    rawType === "donation"
   ) {
     return rawType;
   }
@@ -552,6 +571,72 @@ async function getSquaresGameDetails(input: {
   return rows[0] || null;
 }
 
+async function getDonationDetails(input: {
+  donationId: string;
+  metadataTenantSlug: string;
+}): Promise<DonationDetails | null> {
+  const rows = await query<DonationDetails>(
+    `
+      select
+        id::text as id,
+        tenant_slug,
+        campaign_type,
+        campaign_id,
+        campaign_title,
+        donor_name,
+        donor_email,
+        message,
+        amount_cents,
+        currency,
+        payment_status,
+        stripe_checkout_session_id,
+        stripe_payment_intent_id,
+        created_at::text,
+        paid_at::text
+      from public_donations
+      where id = $1::uuid
+      limit 1
+    `,
+    [input.donationId],
+  );
+
+  const donation = rows[0] || null;
+
+  if (!donation) return null;
+
+  if (
+    input.metadataTenantSlug &&
+    input.metadataTenantSlug !== donation.tenant_slug
+  ) {
+    return null;
+  }
+
+  return donation;
+}
+
+async function markDonationPaid(input: {
+  donationId: string;
+  stripeCheckoutSessionId: string;
+  stripePaymentIntentId: string | null;
+}) {
+  await query(
+    `
+      update public_donations
+      set
+        payment_status = 'paid',
+        stripe_checkout_session_id = $2,
+        stripe_payment_intent_id = $3,
+        paid_at = now()
+      where id = $1::uuid
+    `,
+    [
+      input.donationId,
+      input.stripeCheckoutSessionId,
+      input.stripePaymentIntentId,
+    ],
+  );
+}
+
 async function recordPlatformPayment(input: {
   session: Stripe.Checkout.Session;
   paymentIntentId: string | null;
@@ -565,6 +650,9 @@ async function recordPlatformPayment(input: {
   auctionId?: string | null;
   auctionItemId?: string | null;
   auctionBidId?: string | null;
+  donationId?: string | null;
+  campaignType?: string | null;
+  campaignId?: string | null;
 }) {
   await query(
     `
@@ -591,9 +679,12 @@ async function recordPlatformPayment(input: {
         payout_reconciled_at,
         auction_id,
         auction_item_id,
-        auction_bid_id
+        auction_bid_id,
+        donation_id,
+        campaign_type,
+        campaign_id
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -617,7 +708,10 @@ async function recordPlatformPayment(input: {
         payout_reconciled_at = excluded.payout_reconciled_at,
         auction_id = excluded.auction_id,
         auction_item_id = excluded.auction_item_id,
-        auction_bid_id = excluded.auction_bid_id
+        auction_bid_id = excluded.auction_bid_id,
+        donation_id = excluded.donation_id,
+        campaign_type = excluded.campaign_type,
+        campaign_id = excluded.campaign_id
     `,
     [
       input.session.id,
@@ -649,10 +743,12 @@ async function recordPlatformPayment(input: {
       input.auctionId || null,
       input.auctionItemId || null,
       input.auctionBidId || null,
+      input.donationId || null,
+      input.campaignType || null,
+      input.campaignId || null,
     ],
   );
 }
-
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -754,7 +850,86 @@ export async function POST(request: NextRequest) {
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
-        if (type === "auction_winning_bid") {
+
+    if (type === "donation") {
+      const donationId = String(
+        metadata.donation_id ||
+          metadata.donationId ||
+          session.client_reference_id ||
+          "",
+      ).trim();
+
+      if (!donationId) {
+        console.error("Stripe donation webhook missing donation id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing donation id",
+        });
+      }
+
+      const donation = await getDonationDetails({
+        donationId,
+        metadataTenantSlug,
+      });
+
+      if (!donation) {
+        console.error("Stripe donation webhook failed donation verification", {
+          checkoutSessionId: session.id,
+          donationId,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Donation verification failed",
+        });
+      }
+
+      await markDonationPaid({
+        donationId: donation.id,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: paymentIntentId,
+      });
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug: donation.tenant_slug,
+        reservationToken: donation.id,
+        paymentType: "donation",
+        squaresGameId: null,
+        email: email || donation.donor_email || null,
+        financials,
+        donationId: donation.id,
+        campaignType: donation.campaign_type || "general",
+        campaignId: donation.campaign_id || null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        donationId: donation.id,
+        tenantSlug: donation.tenant_slug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    if (type === "auction_winning_bid") {
       const auctionBidId = String(
         metadata.auction_bid_id ||
           metadata.auctionBidId ||
@@ -807,10 +982,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (
-        metadataTenantSlug &&
-        metadataTenantSlug !== payment.tenant_slug
-      ) {
+      if (metadataTenantSlug && metadataTenantSlug !== payment.tenant_slug) {
         console.error("Stripe auction webhook failed tenant verification", {
           checkoutSessionId: session.id,
           auctionBidId,
@@ -825,10 +997,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (
-        auctionId !== payment.auction_id ||
-        auctionItemId !== payment.item_id
-      ) {
+      if (auctionId !== payment.auction_id || auctionItemId !== payment.item_id) {
         console.error("Stripe auction webhook failed item verification", {
           checkoutSessionId: session.id,
           auctionBidId,
@@ -915,8 +1084,7 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-
-    if (type === "event") {
+        if (type === "event") {
       const orderId = String(
         metadata.order_id ||
           metadata.orderId ||
@@ -1092,7 +1260,8 @@ export async function POST(request: NextRequest) {
         reason: "Missing reservation token",
       });
     }
-        if (type === "raffle") {
+
+    if (type === "raffle") {
       if (!raffleId) {
         console.error("Stripe webhook missing raffle id", {
           checkoutSessionId: session.id,
@@ -1309,8 +1478,7 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-
-    if (type === "squares") {
+        if (type === "squares") {
       if (!squaresGameId) {
         console.error("Stripe webhook missing squares game id", {
           checkoutSessionId: session.id,
