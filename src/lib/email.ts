@@ -1032,6 +1032,7 @@ export async function sendDonationReceiptEmail({
   currency,
   donationReference,
   message,
+  giftAidClaimed,
   branding,
 }: {
   to: string;
@@ -1041,11 +1042,47 @@ export async function sendDonationReceiptEmail({
   currency: string;
   donationReference: string;
   message?: string | null;
+  giftAidClaimed?: boolean;
   branding?: EmailBranding;
 }) {
   const formattedAmount = formatCurrency(amountCents, currency);
   const safeCampaignTitle =
     String(campaignTitle || "").trim() || "General donation";
+
+  const giftAidBlock = giftAidClaimed
+    ? `
+      <div style="
+        border-radius:18px;
+        padding:18px;
+        margin:20px 0;
+        background:#fffbeb;
+        border:1px solid #fde68a;
+      ">
+        <p style="
+          margin:0 0 6px;
+          color:#92400e;
+          font-size:13px;
+          font-weight:900;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        ">
+          Gift Aid declaration recorded
+        </p>
+
+        <p style="
+          margin:0;
+          font-size:15px;
+          line-height:1.6;
+          color:#78350f;
+          font-weight:750;
+        ">
+          Thank you. Your Gift Aid declaration has been recorded for this pure
+          donation. Gift Aid is not applied to raffle tickets, squares, event
+          tickets, auction bids or competition-style payments.
+        </p>
+      </div>
+    `
+    : "";
 
   const html = renderEmailShell({
     branding,
@@ -1101,6 +1138,8 @@ export async function sendDonationReceiptEmail({
           ${escapeHtml(donationReference)}
         </p>
       </div>
+
+      ${giftAidBlock}
 
       <div style="
         border-radius:18px;
