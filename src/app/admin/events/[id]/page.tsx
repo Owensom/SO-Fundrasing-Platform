@@ -1948,6 +1948,24 @@ const responsiveStyles = `
     font-size: 16px !important;
   }
 
+  .event-edit-page input[type="datetime-local"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+  }
+
+  .event-edit-page input[name="starts_at"],
+  .event-edit-page input[name="ends_at"],
+  .event-edit-page input[name="expires_at"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
   .event-edit-page .guestHeaderActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
