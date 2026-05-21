@@ -92,6 +92,21 @@ function getCampaignUrl(campaign: Campaign) {
   return "#";
 }
 
+function getSupportUrl({
+  tenantSlug,
+  campaign,
+}: {
+  tenantSlug: string;
+  campaign: Campaign;
+}) {
+  const params = new URLSearchParams();
+
+  params.set("campaignType", campaign.type);
+  params.set("campaignId", campaign.id);
+
+  return `/c/${tenantSlug}/support?${params.toString()}`;
+}
+
 function getTypeLabel(type: Campaign["type"]) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
@@ -257,320 +272,246 @@ export default async function TenantCampaignsPage({
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
     return (
-    <main className="campaigns-page" style={styles.page}>
+    <main className="tenant-campaigns-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <header className="topBar" style={styles.topBar}>
-        <Link href={`/c/${tenantSlug}`} style={styles.logoLink}>
-          <img
-            src="/brand/so-logo-full.png"
-            alt="SO Fundraising Platform"
-            className="logoImage"
-            style={styles.logoImage}
-          />
-        </Link>
+      <section className="campaigns-hero" style={styles.hero}>
+        <div style={styles.heroGlow} />
 
-        <nav className="topNav" style={styles.topNav}>
-          <Link href={`/c/${tenantSlug}/terms`} style={styles.topNavLink}>
-            Terms of Use
+        <div className="heroMainGrid" style={styles.heroMainGrid}>
+          <div style={styles.heroCopy}>
+            <div style={styles.eyebrow}>Fundraising campaigns</div>
+
+            <h1 style={styles.title}>Support a live campaign</h1>
+
+            <p style={styles.subtitle}>
+              Browse live {campaignTypeNames} for this organisation. You can
+              view a campaign to take part, or make a simple donation through
+              the new support flow.
+            </p>
+
+            <div className="heroStats" style={styles.heroStats}>
+              <HeroStat
+                label="Live campaigns"
+                value={publicCampaigns.length}
+              />
+              <HeroStat label="Raffles" value={raffles.length} />
+              <HeroStat label="Squares" value={squares.length} />
+              <HeroStat label="Events" value={events.length} />
+              {auctionCapability.allowed ? (
+                <HeroStat label="Auctions" value={auctions.length} />
+              ) : null}
+            </div>
+          </div>
+
+          <div style={styles.heroPanel}>
+            <div style={styles.heroPanelEyebrow}>Support options</div>
+
+            <h2 style={styles.heroPanelTitle}>Two ways to help</h2>
+
+            <div style={styles.heroPanelList}>
+              <div style={styles.heroPanelItem}>
+                <strong>See campaign</strong>
+                <span>Open the campaign page to enter, buy, bid or book.</span>
+              </div>
+
+              <div style={styles.heroPanelItem}>
+                <strong>Support campaign</strong>
+                <span>Make a simple donation without receiving an entry.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {canShowAdminReturn ? (
+          <div className="heroActions" style={styles.heroActions}>
+            <Link href={adminReturn} style={styles.adminReturnButton}>
+              ← Back to admin
+            </Link>
+          </div>
+        ) : null}
+      </section>
+
+      {featuredCampaign ? (
+        <section className="featuredCard" style={styles.featuredCard}>
+          <div style={styles.featuredImageWrap}>
+            <img
+              src={featuredCampaign.imageUrl || getDefaultImage(featuredCampaign.type)}
+              alt={featuredCampaign.title}
+              style={getImageStyle(featuredCampaign)}
+            />
+          </div>
+
+          <div style={styles.featuredContent}>
+            <div style={styles.cardTopRow}>
+              <span
+                style={{
+                  ...styles.typePill,
+                  ...getTypeStyle(featuredCampaign.type),
+                }}
+              >
+                {getTypeLabel(featuredCampaign.type)}
+              </span>
+
+              <span style={styles.statusPill}>Featured</span>
+            </div>
+
+            <h2 style={styles.featuredTitle}>{featuredCampaign.title}</h2>
+
+            <p style={styles.featuredText}>
+              {featuredCampaign.description?.trim() ||
+                getTypeMeta(featuredCampaign.type)}
+            </p>
+
+            <div className="campaignActions" style={styles.campaignActions}>
+              <Link
+                href={getCampaignUrl(featuredCampaign)}
+                style={styles.primaryAction}
+              >
+                See campaign
+              </Link>
+
+              <Link
+                href={getSupportUrl({
+                  tenantSlug,
+                  campaign: featuredCampaign,
+                })}
+                style={styles.secondaryAction}
+              >
+                Support campaign
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="filtersCard" style={styles.filtersCard}>
+        <div style={styles.filtersHeader}>
+          <div>
+            <p style={styles.kicker}>Filter campaigns</p>
+            <h2 style={styles.sectionTitle}>Live campaigns</h2>
+          </div>
+
+          <span style={styles.countPill}>
+            {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
+          </span>
+        </div>
+
+        <nav className="filterNav" style={styles.filterNav}>
+          <Link
+            href={getFilterHref({ tenantSlug, type: "all", adminReturn })}
+            style={{
+              ...styles.filterButton,
+              ...(activeType === "all" ? styles.filterButtonActive : {}),
+            }}
+          >
+            All
           </Link>
 
-          <Link href={`/c/${tenantSlug}/privacy`} style={styles.topNavLink}>
-            Privacy Policy
+          <Link
+            href={getFilterHref({ tenantSlug, type: "raffle", adminReturn })}
+            style={{
+              ...styles.filterButton,
+              ...(activeType === "raffle" ? styles.filterButtonActive : {}),
+            }}
+          >
+            Raffles
           </Link>
 
-          {canShowAdminReturn ? (
+          <Link
+            href={getFilterHref({ tenantSlug, type: "squares", adminReturn })}
+            style={{
+              ...styles.filterButton,
+              ...(activeType === "squares" ? styles.filterButtonActive : {}),
+            }}
+          >
+            Squares
+          </Link>
+
+          <Link
+            href={getFilterHref({ tenantSlug, type: "event", adminReturn })}
+            style={{
+              ...styles.filterButton,
+              ...(activeType === "event" ? styles.filterButtonActive : {}),
+            }}
+          >
+            Events
+          </Link>
+
+          {auctionCapability.allowed ? (
             <Link
-              href={adminReturn}
-              className="adminBackTop"
-              style={styles.adminBackTop}
+              href={getFilterHref({ tenantSlug, type: "auction", adminReturn })}
+              style={{
+                ...styles.filterButton,
+                ...(activeType === "auction" ? styles.filterButtonActive : {}),
+              }}
             >
-              <span style={styles.adminBackIcon}>↩</span>
-              <span>Back to admin</span>
+              Auctions
             </Link>
           ) : null}
         </nav>
-      </header>
-
-      <section className="hero" style={styles.hero}>
-        <div style={styles.heroGlow} />
-
-        <div style={styles.heroContent}>
-          <div style={styles.badge}>SO Foundation Platform</div>
-
-          <h1 className="so-brand-heading title" style={styles.title}>
-            Support an active campaign
-          </h1>
-
-          <p style={styles.subtitle}>
-            Choose from live {campaignTypeNames}. Every campaign helps raise
-            funds and create impact.
-          </p>
-
-          <div className="heroActions" style={styles.heroActions}>
-            <Link
-              href={`/c/${tenantSlug}/terms`}
-              className="primaryHeroButton"
-              style={styles.primaryHeroButton}
-            >
-              Terms of Use
-            </Link>
-
-            <Link
-              href={`/c/${tenantSlug}/privacy`}
-              className="secondaryHeroButton"
-              style={styles.secondaryHeroButton}
-            >
-              Privacy Policy
-            </Link>
-          </div>
-        </div>
-
-        <div className="heroPanel" style={styles.heroPanel}>
-          <div style={styles.heroPanelTitle}>Live now</div>
-
-          <div className="heroStats" style={styles.heroStats}>
-            <HeroStat label="Campaigns" value={publicCampaigns.length} />
-            <HeroStat label="Raffles" value={raffles.length} />
-            <HeroStat label="Squares" value={squares.length} />
-            <HeroStat label="Events" value={events.length} />
-
-            {auctionCapability.allowed ? (
-              <HeroStat label="Auctions" value={auctions.length} />
-            ) : null}
-          </div>
-
-          {featuredCampaign ? (
-            <Link
-              href={getCampaignUrl(featuredCampaign)}
-              style={styles.featuredLink}
-            >
-              <span style={styles.featuredKicker}>Featured campaign</span>
-
-              <strong>{featuredCampaign.title}</strong>
-
-              <span>View campaign →</span>
-            </Link>
-          ) : null}
-        </div>
       </section>
 
-      {publicCampaigns.length === 0 ? (
-        <section style={styles.emptyCard}>
-          <h2 className="so-brand-card-title" style={styles.emptyTitle}>
-            No active campaigns found
-          </h2>
+      <section className="campaignGrid" style={styles.campaignGrid}>
+        {visibleCampaigns.length === 0 ? (
+          <div style={styles.emptyCard}>
+            <h2 style={styles.emptyTitle}>No live campaigns found</h2>
 
-          <p style={styles.muted}>
-            This organiser has no published campaigns at the moment.
-          </p>
-        </section>
-      ) : (
-        <>
-          <section className="filterStrip" style={styles.filterStrip}>
-            <span style={styles.filterLabel}>Browse live campaigns</span>
+            <p style={styles.emptyText}>
+              There are no published campaigns in this category yet.
+            </p>
+          </div>
+        ) : (
+          visibleCampaigns.map((campaign) => (
+            <article key={`${campaign.type}-${campaign.id}`} style={styles.card}>
+              <div style={styles.cardImageWrap}>
+                <img
+                  src={campaign.imageUrl || getDefaultImage(campaign.type)}
+                  alt={campaign.title}
+                  style={getImageStyle(campaign)}
+                />
+              </div>
 
-            <Link
-              href={getFilterHref({
-                tenantSlug,
-                type: "all",
-                adminReturn,
-              })}
-              scroll={false}
-              aria-current={activeType === "all" ? "page" : undefined}
-              style={{
-                ...styles.filterPill,
-                ...(activeType === "all" ? styles.filterPillActive : {}),
-              }}
-            >
-              All {publicCampaigns.length}
-            </Link>
+              <div style={styles.cardBody}>
+                <div style={styles.cardTopRow}>
+                  <span
+                    style={{
+                      ...styles.typePill,
+                      ...getTypeStyle(campaign.type),
+                    }}
+                  >
+                    {getTypeLabel(campaign.type)}
+                  </span>
 
-            <Link
-              href={getFilterHref({
-                tenantSlug,
-                type: "raffle",
-                adminReturn,
-              })}
-              scroll={false}
-              aria-current={activeType === "raffle" ? "page" : undefined}
-              style={{
-                ...styles.filterPill,
-                ...(activeType === "raffle" ? styles.filterPillActive : {}),
-              }}
-            >
-              Raffles {raffles.length}
-            </Link>
+                  <span style={styles.statusPill}>Live</span>
+                </div>
 
-            <Link
-              href={getFilterHref({
-                tenantSlug,
-                type: "squares",
-                adminReturn,
-              })}
-              scroll={false}
-              aria-current={activeType === "squares" ? "page" : undefined}
-              style={{
-                ...styles.filterPill,
-                ...(activeType === "squares" ? styles.filterPillActive : {}),
-              }}
-            >
-              Squares {squares.length}
-            </Link>
+                <h2 style={styles.cardTitle}>{campaign.title}</h2>
 
-            <Link
-              href={getFilterHref({
-                tenantSlug,
-                type: "event",
-                adminReturn,
-              })}
-              scroll={false}
-              aria-current={activeType === "event" ? "page" : undefined}
-              style={{
-                ...styles.filterPill,
-                ...(activeType === "event" ? styles.filterPillActive : {}),
-              }}
-            >
-              Events {events.length}
-            </Link>
+                <p style={styles.cardText}>
+                  {campaign.description?.trim() || getTypeMeta(campaign.type)}
+                </p>
 
-            {auctionCapability.allowed ? (
-              <Link
-                href={getFilterHref({
-                  tenantSlug,
-                  type: "auction",
-                  adminReturn,
-                })}
-                scroll={false}
-                aria-current={activeType === "auction" ? "page" : undefined}
-                style={{
-                  ...styles.filterPill,
-                  ...(activeType === "auction" ? styles.filterPillActive : {}),
-                }}
-              >
-                Auctions {auctions.length}
-              </Link>
-            ) : null}
-          </section>
+                <div className="campaignActions" style={styles.campaignActions}>
+                  <Link
+                    href={getCampaignUrl(campaign)}
+                    style={styles.primaryAction}
+                  >
+                    See campaign
+                  </Link>
 
-          {visibleCampaigns.length === 0 ? (
-            <section style={styles.emptyCard}>
-              <h2 className="so-brand-card-title" style={styles.emptyTitle}>
-                No campaigns in this category
-              </h2>
-
-              <p style={styles.muted}>
-                Try another campaign type or browse all live campaigns.
-              </p>
-
-              <Link
-                href={getFilterHref({
-                  tenantSlug,
-                  type: "all",
-                  adminReturn,
-                })}
-                style={styles.emptyButton}
-              >
-                Browse all campaigns
-              </Link>
-            </section>
-          ) : (
-            <section className="grid" style={styles.grid}>
-              {visibleCampaigns.map((campaign) => (
-                <Link
-                  key={`${campaign.type}-${campaign.id}`}
-                  href={getCampaignUrl(campaign)}
-                  className="campaignCard"
-                  style={styles.card}
-                >
-                  <div className="imageWrap" style={styles.imageWrap}>
-                    <img
-                      src={campaign.imageUrl || getDefaultImage(campaign.type)}
-                      alt={campaign.title}
-                      style={getImageStyle(campaign)}
-                    />
-                  </div>
-
-                  <div style={styles.cardBody}>
-                    <div style={styles.cardTopLine}>
-                      <span
-                        style={{
-                          ...styles.typePill,
-                          ...getTypeStyle(campaign.type),
-                        }}
-                      >
-                        {getTypeLabel(campaign.type)}
-                      </span>
-
-                      <span style={styles.statusPill}>Live</span>
-                    </div>
-                                        <h2
-                      className="so-brand-card-title"
-                      style={styles.cardTitle}
-                    >
-                      {campaign.title}
-                    </h2>
-
-                    <div style={styles.metaLine}>
-                      {getTypeMeta(campaign.type)}
-                    </div>
-
-                    {campaign.description ? (
-                      <p style={styles.description}>
-                        {campaign.description.length > 170
-                          ? `${campaign.description.slice(0, 170)}…`
-                          : campaign.description}
-                      </p>
-                    ) : (
-                      <p style={styles.descriptionMuted}>
-                        Open this campaign to view details and support the cause.
-                      </p>
-                    )}
-
-                    <div className="cardFooter" style={styles.cardFooter}>
-                      <span className="button" style={styles.button}>
-                        View campaign
-                      </span>
-
-                      <span style={styles.cardHint}>Support now →</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </section>
-          )}
-
-          <section className="trustCard" style={styles.trustCard}>
-            <div>
-              <p style={styles.trustKicker}>Secure fundraising</p>
-
-              <h2 className="so-brand-card-title" style={styles.trustTitle}>
-                Choose a campaign and support in minutes.
-              </h2>
-
-              <p style={styles.trustText}>
-                Payments and campaign activity are handled through the SO
-                fundraising platform for this organiser.
-              </p>
-            </div>
-
-            <div className="trustStats" style={styles.trustStats}>
-              <TrustStat
-                label="Live campaign types"
-                value={pluralise(
-                  [raffles, squares, events, auctions].filter(
-                    (items) => items.length > 0,
-                  ).length,
-                  "type",
-                  "types",
-                )}
-              />
-
-              <TrustStat label="Campaign status" value="Published" />
-            </div>
-          </section>
-        </>
-      )}
+                  <Link
+                    href={getSupportUrl({ tenantSlug, campaign })}
+                    style={styles.secondaryAction}
+                  >
+                    Support campaign
+                  </Link>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </section>
     </main>
   );
 }
@@ -583,356 +524,103 @@ function HeroStat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-
-function TrustStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={styles.trustStat}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 const responsiveStyles = `
-.campaigns-page,
-.campaigns-page * {
+.tenant-campaigns-page,
+.tenant-campaigns-page * {
   box-sizing: border-box;
 }
 
-.campaigns-page {
-  width: 100%;
-  max-width: 100%;
+.tenant-campaigns-page {
   overflow-x: hidden;
 }
 
-.campaigns-page section,
-.campaigns-page div,
-.campaigns-page article,
-.campaigns-page a,
-.campaigns-page header,
-.campaigns-page nav {
+.tenant-campaigns-page section,
+.tenant-campaigns-page div,
+.tenant-campaigns-page article,
+.tenant-campaigns-page nav {
   min-width: 0;
 }
 
-.campaigns-page img {
-  max-width: 100%;
-}
-
-.campaigns-page .filterStrip a {
-  text-decoration: none;
-  touch-action: manipulation;
-}
-
-.campaigns-page .filterStrip a:hover,
-.campaigns-page .adminBackTop:hover {
-  transform: translateY(-1px);
-}
-
-.campaigns-page .campaignCard {
-  transition:
-    transform 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease;
-}
-
-.campaigns-page .campaignCard:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 18px 46px rgba(15,23,42,0.11) !important;
-  border-color: #bfdbfe !important;
-}
-
 @media (max-width: 980px) {
-  .campaigns-page .topBar {
-    grid-template-columns: 1fr !important;
-    justify-items: center !important;
-    gap: 12px !important;
-  }
-
-  .campaigns-page .topNav {
-    justify-content: center !important;
-  }
-
-  .campaigns-page .hero,
-  .campaigns-page .trustCard {
+  .tenant-campaigns-page .heroMainGrid,
+  .tenant-campaigns-page .featuredCard {
     grid-template-columns: 1fr !important;
   }
 
-  .campaigns-page .heroPanel {
-    width: 100% !important;
+  .tenant-campaigns-page .heroStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .campaigns-page .heroStats {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  .tenant-campaigns-page .campaignGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
-@media (max-width: 720px) {
-  .campaigns-page {
-    padding: 0 10px 42px !important;
-  }
-
-  .campaigns-page .topBar {
-    margin-left: -10px !important;
-    margin-right: -10px !important;
-    padding: 14px 12px !important;
-  }
-
-  .campaigns-page .logoLink {
+@media (max-width: 680px) {
+  .tenant-campaigns-page {
     width: 100% !important;
-    justify-content: center !important;
+    max-width: 100% !important;
+    padding: 16px 10px 44px !important;
   }
 
-  .campaigns-page .logoImage {
-    width: min(100%, 260px) !important;
-    height: auto !important;
-    max-height: 50px !important;
-    object-fit: contain !important;
-  }
-
-  .campaigns-page .topNav {
-    width: 100% !important;
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-    overflow: visible !important;
-    justify-content: stretch !important;
-  }
-
-  .campaigns-page .topNavLink,
-  .campaigns-page .adminBackTop {
-    width: 100% !important;
-    min-height: 48px !important;
-    justify-content: center !important;
-    text-align: center !important;
-    padding: 12px 16px !important;
-  }
-
-  .campaigns-page .hero {
-    width: 100% !important;
-    margin-top: 14px !important;
-    padding: 20px !important;
-    border-radius: 26px !important;
-  }
-
-  .campaigns-page .title {
-    font-size: clamp(34px, 12vw, 48px) !important;
-    line-height: 1.02 !important;
-    letter-spacing: -0.06em !important;
-  }
-
-  .campaigns-page .subtitle {
-    font-size: 16px !important;
-    line-height: 1.55 !important;
-  }
-
-  .campaigns-page .heroActions,
-  .campaigns-page .trustStats {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-  }
-
-  .campaigns-page .primaryHeroButton,
-  .campaigns-page .secondaryHeroButton {
-    width: 100% !important;
-    justify-content: center !important;
-  }
-
-  .campaigns-page .heroStats,
-  .campaigns-page .grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .campaigns-page .filterStrip {
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important;
-    padding: 10px !important;
-    border-radius: 18px !important;
-  }
-
-  .campaigns-page .filterStrip::-webkit-scrollbar {
-    display: none !important;
-  }
-
-  .campaigns-page .filterStrip > span {
-    flex: 0 0 auto !important;
-  }
-
-  .campaigns-page .filterStrip > a {
-    flex: 0 0 auto !important;
-  }
-
-  .campaigns-page .trustCard {
+  .tenant-campaigns-page .campaigns-hero,
+  .tenant-campaigns-page .featuredCard,
+  .tenant-campaigns-page .filtersCard {
     padding: 18px !important;
     border-radius: 24px !important;
   }
-}
 
-@media (max-width: 480px) {
-  .campaigns-page {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-  }
-
-  .campaigns-page .topBar {
-    margin-left: -8px !important;
-    margin-right: -8px !important;
-  }
-
-  .campaigns-page .hero {
-    padding: 16px !important;
-    border-radius: 22px !important;
-  }
-
-  .campaigns-page .badge {
-    max-width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-    white-space: normal !important;
-  }
-
-  .campaigns-page .title {
-    font-size: clamp(31px, 13vw, 42px) !important;
-  }
-
-  .campaigns-page .heroStats {
-    grid-template-columns: 1fr 1fr !important;
-  }
-
-  .campaigns-page .campaignCard {
-    min-height: auto !important;
-    padding: 12px !important;
-    border-radius: 22px !important;
-  }
-
-  .campaigns-page .imageWrap {
-    height: 178px !important;
-    border-radius: 18px !important;
-  }
-
-  .campaigns-page .cardTitle {
-    font-size: 24px !important;
-    line-height: 1.12 !important;
-  }
-
-  .campaigns-page .cardFooter {
-    display: grid !important;
+  .tenant-campaigns-page .heroStats,
+  .tenant-campaigns-page .campaignGrid {
     grid-template-columns: 1fr !important;
   }
 
-  .campaigns-page .button {
-    width: 100% !important;
-    justify-content: center !important;
+  .tenant-campaigns-page .filterNav,
+  .tenant-campaigns-page .campaignActions,
+  .tenant-campaigns-page .heroActions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
   }
 
-  .campaigns-page .emptyCard {
-    padding: 20px !important;
-    border-radius: 22px !important;
+  .tenant-campaigns-page .primaryAction,
+  .tenant-campaigns-page .secondaryAction,
+  .tenant-campaigns-page .adminReturnButton,
+  .tenant-campaigns-page .filterButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
-    minHeight: "100vh",
     width: "100%",
-    maxWidth: "100%",
+    maxWidth: 1220,
+    margin: "0 auto",
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 28%), radial-gradient(circle at top right, rgba(15,23,42,0.06), transparent 30%), linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
-    padding: "0 16px 64px",
+      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.08), transparent 30%), #f8fafc",
     color: "#0f172a",
-    overflowX: "hidden",
     boxSizing: "border-box",
-  },
-
-  topBar: {
-    maxWidth: "none",
-    margin: "0 -16px 24px",
-    padding: "18px 56px",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    alignItems: "center",
-    gap: 18,
-    background: "#ffffff",
-    borderBottom: "1px solid #e2e8f0",
-    boxShadow: "0 10px 30px rgba(15,23,42,0.045)",
-  },
-
-  logoLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    width: "fit-content",
-    textDecoration: "none",
-  },
-
-  logoImage: {
-    height: 56,
-    width: "auto",
-    display: "block",
-  },
-
-  topNav: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-
-  topNavLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 42,
-    color: "#0f172a",
-    textDecoration: "none",
-    fontWeight: 950,
-    fontSize: 14,
-    whiteSpace: "nowrap",
-  },
-
-  adminBackTop: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    minHeight: 44,
-    padding: "10px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#78350f",
-    border: "1px solid rgba(217,119,6,0.62)",
-    textDecoration: "none",
-    fontWeight: 950,
-    fontSize: 14,
-    whiteSpace: "nowrap",
-    boxShadow: "0 10px 22px rgba(15,23,42,0.045)",
-    transition:
-      "transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease",
-  },
-
-  adminBackIcon: {
-    color: "#d97706",
-    fontWeight: 950,
+    overflowX: "hidden",
   },
 
   hero: {
     position: "relative",
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto 18px",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) minmax(300px, 0.8fr)",
     gap: 22,
     padding: 30,
-    borderRadius: 34,
+    borderRadius: 32,
     background:
-      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.22), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
-    boxShadow: "0 28px 70px rgba(15,23,42,0.20)",
+    marginBottom: 18,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
-    boxSizing: "border-box",
   },
 
   heroGlow: {
@@ -943,13 +631,21 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
 
-  heroContent: {
+  heroMainGrid: {
     position: "relative",
     zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gap: 22,
+    alignItems: "stretch",
     minWidth: 0,
   },
 
-  badge: {
+  heroCopy: {
+    minWidth: 0,
+  },
+
+  eyebrow: {
     display: "inline-flex",
     padding: "8px 14px",
     borderRadius: 999,
@@ -959,312 +655,254 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 16,
+    letterSpacing: "0.1em",
+    marginBottom: 14,
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(48px, 7vw, 74px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
+    fontSize: "clamp(42px, 7vw, 72px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.07em",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
-    margin: "18px 0 0",
+    margin: "16px 0 0",
     maxWidth: 760,
     color: "#dbeafe",
-    fontSize: 18,
-    lineHeight: 1.6,
-    fontWeight: 700,
+    fontSize: 17,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
-  heroActions: {
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 12,
     marginTop: 24,
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
   },
 
-  primaryHeroButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)",
-    color: "#111827",
-    border: "1px solid rgba(251,191,36,0.72)",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 14px 28px rgba(251,191,36,0.18)",
-  },
-
-  secondaryHeroButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.06)",
-    color: "#ffffff",
-    border: "1px solid rgba(148,163,184,0.52)",
-    textDecoration: "none",
-    fontWeight: 950,
-    backdropFilter: "blur(10px)",
+  heroStat: {
+    display: "grid",
+    gap: 5,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
 
   heroPanel: {
-    position: "relative",
-    zIndex: 1,
     display: "grid",
-    gap: 16,
+    gap: 14,
+    alignContent: "start",
     padding: 18,
-    borderRadius: 26,
+    borderRadius: 24,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(148,163,184,0.26)",
-    alignContent: "start",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
     minWidth: 0,
   },
 
-  heroPanelTitle: {
-    fontSize: 24,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-  },
-
-  heroStats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  heroStat: {
-    display: "grid",
-    gap: 4,
-    padding: 13,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(148,163,184,0.25)",
-    minWidth: 0,
-  },
-
-  featuredLink: {
-    display: "grid",
-    gap: 5,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    color: "#0f172a",
-    textDecoration: "none",
-    fontWeight: 900,
-    border: "1px solid rgba(217,119,6,0.44)",
-    overflowWrap: "anywhere",
-  },
-
-  featuredKicker: {
-    color: "#b45309",
+  heroPanelEyebrow: {
+    color: "#facc15",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  filterStrip: {
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto 18px",
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.045)",
-    boxSizing: "border-box",
-  },
-
-  filterLabel: {
-    color: "#0f172a",
-    fontSize: 13,
-    fontWeight: 950,
-    marginRight: 4,
-    whiteSpace: "nowrap",
-  },
-
-  filterPill: {
-    display: "inline-flex",
-    padding: "8px 11px",
-    borderRadius: 999,
-    background: "#f8fafc",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-    textDecoration: "none",
-    transition:
-      "transform 180ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease",
-  },
-
-  filterPillActive: {
-    background: "#0f172a",
+  heroPanelTitle: {
+    margin: 0,
     color: "#ffffff",
-    borderColor: "rgba(250,204,21,0.78)",
-    boxShadow: "0 10px 22px rgba(15,23,42,0.16)",
+    fontSize: 28,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
   },
 
-  grid: {
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto",
+  heroPanelList: {
     display: "grid",
-    gap: 18,
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 330px), 1fr))",
+    gap: 12,
   },
 
-  card: {
+  heroPanelItem: {
     display: "grid",
-    gridTemplateRows: "auto 1fr",
-    gap: 16,
-    padding: 16,
-    borderRadius: 28,
-    border: "1px solid #dbeafe",
-    background: "#ffffff",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(191,219,254,0.22)",
+    color: "#dbeafe",
+    lineHeight: 1.45,
+  },
+
+  heroActions: {
+    position: "relative",
+    zIndex: 1,
+    display: "flex",
+    justifyContent: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+    paddingTop: 16,
+    borderTop: "1px solid rgba(148,163,184,0.24)",
+  },
+
+  adminReturnButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
     textDecoration: "none",
-    color: "#111827",
-    boxShadow: "0 14px 38px rgba(15,23,42,0.075)",
-    minHeight: 460,
+    fontWeight: 950,
+    border: "1px solid rgba(255,255,255,0.28)",
+  },
+
+  featuredCard: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 0.9fr) minmax(0, 1.1fr)",
+    gap: 18,
+    padding: 20,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 14px 36px rgba(15,23,42,0.08)",
+    marginBottom: 18,
     minWidth: 0,
     overflow: "hidden",
   },
 
-  imageWrap: {
-    height: 214,
+  featuredImageWrap: {
+    height: 320,
     borderRadius: 22,
     overflow: "hidden",
-    background: "#f1f5f9",
-    border: "1px solid #dbeafe",
-    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.7)",
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
   },
 
-  cardBody: {
+  featuredContent: {
     display: "grid",
-    gap: 9,
-    alignContent: "start",
+    gap: 14,
+    alignContent: "center",
     minWidth: 0,
   },
 
-  cardTopLine: {
+  cardTopRow: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 8,
-    flexWrap: "wrap",
+    gap: 10,
     alignItems: "center",
+    flexWrap: "wrap",
+    minWidth: 0,
   },
-
-  typePill: {
-    width: "fit-content",
-    padding: "6px 10px",
+    typePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   statusPill: {
-    width: "fit-content",
-    padding: "6px 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
     borderRadius: 999,
-    border: "1px solid #bbf7d0",
     background: "#dcfce7",
     color: "#166534",
+    border: "1px solid #bbf7d0",
     fontSize: 12,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
-  cardTitle: {
+  featuredTitle: {
     margin: 0,
-    fontSize: 28,
-    lineHeight: 1.08,
     color: "#0f172a",
-    letterSpacing: "-0.045em",
+    fontSize: "clamp(32px, 5vw, 52px)",
+    lineHeight: 0.98,
+    letterSpacing: "-0.06em",
     overflowWrap: "anywhere",
   },
 
-  metaLine: {
-    color: "#334155",
-    fontSize: 14,
-    fontWeight: 950,
-  },
-
-  description: {
+  featuredText: {
     margin: 0,
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 700,
+    color: "#475569",
+    lineHeight: 1.65,
+    fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
-  descriptionMuted: {
-    margin: 0,
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 700,
-  },
-
-  cardFooter: {
+  campaignActions: {
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
     gap: 10,
     flexWrap: "wrap",
-    marginTop: 8,
+    alignItems: "center",
   },
 
-  button: {
+  primaryAction: {
     display: "inline-flex",
-    width: "fit-content",
-    padding: "12px 16px",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
+    textDecoration: "none",
     fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.20)",
   },
 
-  cardHint: {
-    color: "#2563eb",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  trustCard: {
-    width: "100%",
-    maxWidth: 1180,
-    margin: "20px auto 0",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.5fr)",
-    gap: 18,
-    padding: 24,
-    borderRadius: 28,
+  secondaryAction: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
-    boxSizing: "border-box",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
   },
 
-  trustKicker: {
-    margin: "0 0 7px",
+  filtersCard: {
+    display: "grid",
+    gap: 14,
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
+
+  filtersHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    minWidth: 0,
+  },
+
+  kicker: {
+    margin: "0 0 6px",
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -1272,74 +910,127 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
 
-  trustTitle: {
+  sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.05em",
+    fontSize: 28,
+    letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
   },
 
-  trustText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.6,
-    fontWeight: 700,
+  countPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
-  trustStats: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
+  filterNav: {
+    display: "flex",
     gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
   },
 
-  trustStat: {
-    display: "grid",
-    gap: 5,
-    padding: 15,
-    borderRadius: 18,
+  filterButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    padding: "9px 13px",
+    borderRadius: 999,
     background: "#f8fafc",
+    color: "#334155",
     border: "1px solid #e2e8f0",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  filterButtonActive: {
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+  },
+
+  campaignGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 16,
     minWidth: 0,
   },
 
-  emptyCard: {
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: 28,
+  card: {
+    display: "grid",
+    gridTemplateRows: "220px 1fr",
     borderRadius: 26,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
-    boxSizing: "border-box",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  cardImageWrap: {
+    width: "100%",
+    height: 220,
+    overflow: "hidden",
+    background: "#f8fafc",
+    borderBottom: "1px solid #e2e8f0",
+  },
+
+  cardBody: {
+    display: "grid",
+    gap: 12,
+    alignContent: "start",
+    padding: 16,
+    minWidth: 0,
+  },
+
+  cardTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  cardText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  emptyCard: {
+    gridColumn: "1 / -1",
+    padding: 28,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    textAlign: "center",
+    minWidth: 0,
   },
 
   emptyTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 28,
-    overflowWrap: "anywhere",
+    letterSpacing: "-0.04em",
   },
 
-  muted: {
+  emptyText: {
+    margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.55,
-    fontWeight: 700,
-  },
-
-  emptyButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 14,
-    minHeight: 44,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+    fontWeight: 750,
   },
 };
