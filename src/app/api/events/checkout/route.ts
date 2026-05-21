@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { query } from "@/lib/db";
+import { sendEventReceiptEmail } from "@/lib/email";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   buildPaymentSummary,
@@ -51,6 +52,12 @@ type EventAccessCodeRow = {
   ticket_type_id: string | null;
   is_active: boolean;
   expires_at: string | null;
+};
+
+type EventReceiptDetails = {
+  title: string;
+  starts_at: string | null;
+  location: string | null;
 };
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -375,6 +382,69 @@ async function markSeatsComplimentarySold(input: {
   }
 }
 
+async function sendComplimentaryEventReceipt(input: {
+  tenantSlug: string;
+  eventId: string;
+  orderId: string;
+  buyerName: string;
+  buyerEmail: string;
+  currency: string;
+}) {
+  if (!input.buyerEmail) {
+    return;
+  }
+
+  try {
+    const eventRows = await query<EventReceiptDetails>(
+      `
+        select
+          title,
+          starts_at::text,
+          location
+        from events
+        where id = $1
+          and tenant_slug = $2
+        limit 1
+      `,
+      [input.eventId, input.tenantSlug],
+    );
+
+    const orderItems = await query<{
+      label: string;
+      quantity: number;
+      unit_amount: number;
+    }>(
+      `
+        select
+          label,
+          quantity,
+          unit_amount
+        from event_order_items
+        where order_id = $1
+          and event_id = $2
+        order by created_at asc
+      `,
+      [input.orderId, input.eventId],
+    );
+
+    const eventDetails = eventRows[0] || null;
+
+    await sendEventReceiptEmail({
+      to: input.buyerEmail,
+      name: input.buyerName,
+      eventTitle: eventDetails?.title || "Event",
+      amountCents: 0,
+      currency: input.currency || "GBP",
+      orderReference: input.orderId,
+      tickets: orderItems,
+      eventDate: eventDetails?.starts_at || null,
+      location: eventDetails?.location || null,
+    });
+  } catch (emailError) {
+    console.error("Complimentary event receipt email failed:", emailError);
+  }
+}
+
 function validateAccessCodeTicketRestriction(input: {
   accessCode: EventAccessCodeRow;
   ticketTypeIds: string[];
@@ -558,6 +628,15 @@ export async function POST(req: Request) {
           tenantSlug: event.tenant_slug,
           eventId: event.id,
           accessCodeId: accessCode.id,
+        });
+
+        await sendComplimentaryEventReceipt({
+          tenantSlug: event.tenant_slug,
+          eventId: event.id,
+          orderId: order.id,
+          buyerName,
+          buyerEmail,
+          currency: event.currency,
         });
 
         return NextResponse.json({
@@ -819,6 +898,15 @@ export async function POST(req: Request) {
         tenantSlug: event.tenant_slug,
         eventId: event.id,
         accessCodeId: accessCode.id,
+      });
+
+      await sendComplimentaryEventReceipt({
+        tenantSlug: event.tenant_slug,
+        eventId: event.id,
+        orderId: order.id,
+        buyerName,
+        buyerEmail,
+        currency: event.currency,
       });
 
       return NextResponse.json({
