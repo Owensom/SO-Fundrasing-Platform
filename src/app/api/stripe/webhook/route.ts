@@ -6,6 +6,10 @@ import {
   sendReceiptEmail,
   sendSquaresReceiptEmail,
 } from "@/lib/email";
+import {
+  getAuctionWinningBidPaymentByBidId,
+  markAuctionWinningBidPaid,
+} from "../../../../../api/_lib/auctions-repo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -201,7 +205,13 @@ function normalisePaymentType(value: unknown) {
   const rawType = String(value || "raffle").trim();
 
   if (rawType === "event_order") return "event";
-  if (rawType === "event" || rawType === "squares" || rawType === "raffle") {
+
+  if (
+    rawType === "event" ||
+    rawType === "squares" ||
+    rawType === "raffle" ||
+    rawType === "auction_winning_bid"
+  ) {
     return rawType;
   }
 
@@ -223,6 +233,7 @@ function parseSquaresMetadata(value: unknown): number[] {
     return [];
   }
 }
+
 async function getPaymentIntentDetails(paymentIntentId: string | null) {
   if (!paymentIntentId) {
     return {
@@ -273,7 +284,6 @@ async function getPaymentIntentDetails(paymentIntentId: string | null) {
     };
   }
 }
-
 async function getCheckoutFinancials({
   session,
   metadata,
@@ -552,6 +562,9 @@ async function recordPlatformPayment(input: {
   squaresGameId: string | null;
   email: string | null;
   financials: PaymentFinancials;
+  auctionId?: string | null;
+  auctionItemId?: string | null;
+  auctionBidId?: string | null;
 }) {
   await query(
     `
@@ -575,9 +588,12 @@ async function recordPlatformPayment(input: {
         stripe_transfer_id,
         stripe_destination_account_id,
         stripe_payout_status,
-        payout_reconciled_at
+        payout_reconciled_at,
+        auction_id,
+        auction_item_id,
+        auction_bid_id
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
       on conflict (stripe_checkout_session_id)
       do update set
         stripe_payment_intent_id = excluded.stripe_payment_intent_id,
@@ -598,7 +614,10 @@ async function recordPlatformPayment(input: {
         stripe_transfer_id = excluded.stripe_transfer_id,
         stripe_destination_account_id = excluded.stripe_destination_account_id,
         stripe_payout_status = excluded.stripe_payout_status,
-        payout_reconciled_at = excluded.payout_reconciled_at
+        payout_reconciled_at = excluded.payout_reconciled_at,
+        auction_id = excluded.auction_id,
+        auction_item_id = excluded.auction_item_id,
+        auction_bid_id = excluded.auction_bid_id
     `,
     [
       input.session.id,
@@ -627,6 +646,9 @@ async function recordPlatformPayment(input: {
       input.financials.stripeConnectRouted
         ? new Date().toISOString()
         : null,
+      input.auctionId || null,
+      input.auctionItemId || null,
+      input.auctionBidId || null,
     ],
   );
 }
@@ -732,6 +754,167 @@ export async function POST(request: NextRequest) {
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
+        if (type === "auction_winning_bid") {
+      const auctionBidId = String(
+        metadata.auction_bid_id ||
+          metadata.auctionBidId ||
+          metadata.bid_id ||
+          metadata.bidId ||
+          session.client_reference_id ||
+          "",
+      ).trim();
+
+      const auctionId = String(
+        metadata.auction_id || metadata.auctionId || "",
+      ).trim();
+
+      const auctionItemId = String(
+        metadata.auction_item_id ||
+          metadata.auctionItemId ||
+          metadata.item_id ||
+          metadata.itemId ||
+          "",
+      ).trim();
+
+      if (!auctionBidId || !auctionId || !auctionItemId) {
+        console.error("Stripe auction webhook missing auction payment data", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing auction winning bid data",
+        });
+      }
+
+      const payment = await getAuctionWinningBidPaymentByBidId(auctionBidId);
+
+      if (!payment) {
+        console.error("Stripe auction webhook failed bid lookup", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+          auctionId,
+          auctionItemId,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction bid verification failed",
+        });
+      }
+
+      if (
+        metadataTenantSlug &&
+        metadataTenantSlug !== payment.tenant_slug
+      ) {
+        console.error("Stripe auction webhook failed tenant verification", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+          metadataTenantSlug,
+          actualTenantSlug: payment.tenant_slug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction tenant verification failed",
+        });
+      }
+
+      if (
+        auctionId !== payment.auction_id ||
+        auctionItemId !== payment.item_id
+      ) {
+        console.error("Stripe auction webhook failed item verification", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+          metadataAuctionId: auctionId,
+          metadataAuctionItemId: auctionItemId,
+          actualAuctionId: payment.auction_id,
+          actualItemId: payment.item_id,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction item verification failed",
+        });
+      }
+
+      if (!payment.is_winning) {
+        console.error("Stripe auction webhook rejected non-winning bid", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction bid is no longer winning",
+        });
+      }
+
+      if (
+        payment.reserve_price_cents !== null &&
+        payment.reserve_price_cents !== undefined &&
+        Number(payment.amount_cents || 0) <
+          Number(payment.reserve_price_cents || 0)
+      ) {
+        console.error("Stripe auction webhook rejected reserve-not-met bid", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction reserve not met",
+        });
+      }
+
+      await markAuctionWinningBidPaid({
+        bidId: payment.bid_id,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: paymentIntentId,
+      });
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug: payment.tenant_slug,
+        reservationToken: payment.payment_token || payment.bid_id,
+        paymentType: "auction_winning_bid",
+        squaresGameId: null,
+        email: email || payment.bidder_email || null,
+        financials,
+        auctionId: payment.auction_id,
+        auctionItemId: payment.item_id,
+        auctionBidId: payment.bid_id,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        auctionId: payment.auction_id,
+        auctionItemId: payment.item_id,
+        auctionBidId: payment.bid_id,
+        tenantSlug: payment.tenant_slug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
 
     if (type === "event") {
       const orderId = String(
@@ -778,7 +961,8 @@ export async function POST(request: NextRequest) {
       }
 
       const tenantSlug = verifiedOrder.tenant_slug;
-            await query(
+
+      await query(
         `
           update event_orders
           set
@@ -908,8 +1092,7 @@ export async function POST(request: NextRequest) {
         reason: "Missing reservation token",
       });
     }
-
-    if (type === "raffle") {
+        if (type === "raffle") {
       if (!raffleId) {
         console.error("Stripe webhook missing raffle id", {
           checkoutSessionId: session.id,
