@@ -29,6 +29,12 @@ type CampaignLookup = {
   image_url: string | null;
 };
 
+type TenantGiftAidSettings = {
+  gift_aid_enabled: boolean | null;
+  charity_registration_type: string | null;
+  charity_registration_number: string | null;
+};
+
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
@@ -156,6 +162,23 @@ async function lookupCampaign(params: {
   return null;
 }
 
+async function getTenantGiftAidSettings(
+  tenantSlug: string,
+): Promise<TenantGiftAidSettings | null> {
+  return queryOne<TenantGiftAidSettings>(
+    `
+      select
+        gift_aid_enabled,
+        charity_registration_type,
+        charity_registration_number
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+}
+
 function getStatusMessage(value: string | undefined) {
   if (value === "success") {
     return {
@@ -192,15 +215,20 @@ export default async function PublicSupportPage({
     notFound();
   }
 
-  const campaign = await lookupCampaign({
-    tenantSlug,
-    campaignType,
-    campaignId,
-  });
+  const [campaign, tenantGiftAidSettings] = await Promise.all([
+    lookupCampaign({
+      tenantSlug,
+      campaignType,
+      campaignId,
+    }),
+    getTenantGiftAidSettings(tenantSlug),
+  ]);
 
   if (campaignType !== "general" && campaignId && !campaign) {
     notFound();
   }
+
+  const giftAidEnabled = Boolean(tenantGiftAidSettings?.gift_aid_enabled);
 
   const campaignTitle =
     campaign?.title ||
@@ -351,98 +379,100 @@ export default async function PublicSupportPage({
               />
             </label>
 
-            <section style={styles.giftAidBox}>
-              <label style={styles.giftAidToggle}>
-                <input
-                  type="checkbox"
-                  name="giftAidClaimed"
-                  value="yes"
-                  style={styles.checkbox}
-                />
+            {giftAidEnabled ? (
+              <section style={styles.giftAidBox}>
+                <label style={styles.giftAidToggle}>
+                  <input
+                    type="checkbox"
+                    name="giftAidClaimed"
+                    value="yes"
+                    style={styles.checkbox}
+                  />
 
-                <span style={styles.giftAidToggleText}>
-                  <strong>Add Gift Aid to this donation</strong>
-                  <span>
-                    I am a UK taxpayer and want the charity to treat this
-                    donation as a Gift Aid donation.
+                  <span style={styles.giftAidToggleText}>
+                    <strong>Add Gift Aid to this donation</strong>
+                    <span>
+                      I am a UK taxpayer and want the charity to treat this
+                      donation as a Gift Aid donation.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
 
-              <div style={styles.giftAidNotice}>
-                <strong>Gift Aid declaration</strong>
-                <span>
-                  I confirm that I am a UK taxpayer and understand that if I pay
-                  less Income Tax and/or Capital Gains Tax than the amount of
-                  Gift Aid claimed on all my donations in that tax year, it is my
-                  responsibility to pay any difference.
-                </span>
-              </div>
+                <div style={styles.giftAidNotice}>
+                  <strong>Gift Aid declaration</strong>
+                  <span>
+                    I confirm that I am a UK taxpayer and understand that if I
+                    pay less Income Tax and/or Capital Gains Tax than the amount
+                    of Gift Aid claimed on all my donations in that tax year, it
+                    is my responsibility to pay any difference.
+                  </span>
+                </div>
 
-              <div style={styles.giftAidGrid}>
+                <div className="gift-aid-grid" style={styles.giftAidGrid}>
+                  <label style={styles.field}>
+                    <span style={styles.label}>Gift Aid first name</span>
+                    <input
+                      name="giftAidFirstName"
+                      autoComplete="given-name"
+                      placeholder="Required if claiming Gift Aid"
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Gift Aid last name</span>
+                    <input
+                      name="giftAidLastName"
+                      autoComplete="family-name"
+                      placeholder="Required if claiming Gift Aid"
+                      style={styles.input}
+                    />
+                  </label>
+                </div>
+
                 <label style={styles.field}>
-                  <span style={styles.label}>Gift Aid first name</span>
+                  <span style={styles.label}>Address line 1</span>
                   <input
-                    name="giftAidFirstName"
-                    autoComplete="given-name"
+                    name="giftAidAddressLine1"
+                    autoComplete="address-line1"
                     placeholder="Required if claiming Gift Aid"
                     style={styles.input}
                   />
                 </label>
 
                 <label style={styles.field}>
-                  <span style={styles.label}>Gift Aid last name</span>
+                  <span style={styles.label}>Address line 2</span>
                   <input
-                    name="giftAidLastName"
-                    autoComplete="family-name"
-                    placeholder="Required if claiming Gift Aid"
-                    style={styles.input}
-                  />
-                </label>
-              </div>
-
-              <label style={styles.field}>
-                <span style={styles.label}>Address line 1</span>
-                <input
-                  name="giftAidAddressLine1"
-                  autoComplete="address-line1"
-                  placeholder="Required if claiming Gift Aid"
-                  style={styles.input}
-                />
-              </label>
-
-              <label style={styles.field}>
-                <span style={styles.label}>Address line 2</span>
-                <input
-                  name="giftAidAddressLine2"
-                  autoComplete="address-line2"
-                  placeholder="Optional"
-                  style={styles.input}
-                />
-              </label>
-
-              <div style={styles.giftAidGrid}>
-                <label style={styles.field}>
-                  <span style={styles.label}>Town or city</span>
-                  <input
-                    name="giftAidTownOrCity"
-                    autoComplete="address-level2"
-                    placeholder="Required if claiming Gift Aid"
+                    name="giftAidAddressLine2"
+                    autoComplete="address-line2"
+                    placeholder="Optional"
                     style={styles.input}
                   />
                 </label>
 
-                <label style={styles.field}>
-                  <span style={styles.label}>Postcode</span>
-                  <input
-                    name="giftAidPostcode"
-                    autoComplete="postal-code"
-                    placeholder="Required if claiming Gift Aid"
-                    style={styles.input}
-                  />
-                </label>
-              </div>
-            </section>
+                <div className="gift-aid-grid" style={styles.giftAidGrid}>
+                  <label style={styles.field}>
+                    <span style={styles.label}>Town or city</span>
+                    <input
+                      name="giftAidTownOrCity"
+                      autoComplete="address-level2"
+                      placeholder="Required if claiming Gift Aid"
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Postcode</span>
+                    <input
+                      name="giftAidPostcode"
+                      autoComplete="postal-code"
+                      placeholder="Required if claiming Gift Aid"
+                      style={styles.input}
+                    />
+                  </label>
+                </div>
+              </section>
+            ) : null}
 
             <button type="submit" style={styles.primaryButton}>
               Continue to secure payment
@@ -475,14 +505,16 @@ export default async function PublicSupportPage({
               </span>
             </div>
 
-            <div style={styles.infoItem}>
-              <strong>Gift Aid for pure donations</strong>
-              <span>
-                Gift Aid is available only on this straightforward donation
-                flow. It is not applied to raffle tickets, squares, event
-                tickets, auction bids or competition-style payments.
-              </span>
-            </div>
+            {giftAidEnabled ? (
+              <div style={styles.infoItem}>
+                <strong>Gift Aid for pure donations</strong>
+                <span>
+                  Gift Aid is available only on this straightforward donation
+                  flow. It is not applied to raffle tickets, squares, event
+                  tickets, auction bids or competition-style payments.
+                </span>
+              </div>
+            ) : null}
           </div>
         </aside>
       </section>
