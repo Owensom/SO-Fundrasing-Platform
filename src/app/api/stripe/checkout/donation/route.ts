@@ -95,6 +95,25 @@ function poundsToCents(value: unknown) {
   return Math.round(amount * 100);
 }
 
+function getDonationAmountCents(body: Record<string, unknown>) {
+  const selectedAmount = cleanText(
+    body.amount || body.amountPounds || body.amount_pounds,
+  ).toLowerCase();
+
+  const otherAmount = cleanText(
+    body.otherAmount ||
+      body.other_amount ||
+      body.customAmount ||
+      body.custom_amount,
+  );
+
+  if (selectedAmount === "other") {
+    return poundsToCents(otherAmount);
+  }
+
+  return poundsToCents(selectedAmount);
+}
+
 function safePercent(value: unknown) {
   const number = Number(value);
 
@@ -398,7 +417,7 @@ export async function POST(request: NextRequest) {
     const donorName = cleanText(body.donorName || body.donor_name) || null;
     const donorEmail = cleanEmail(body.donorEmail || body.donor_email);
     const message = cleanText(body.message) || null;
-    const amountCents = poundsToCents(body.amount || body.amountPounds);
+    const amountCents = getDonationAmountCents(body);
     const donorCoveredFees = boolValue(
       body.coverFees || body.cover_fees || body.donorCoveredFees,
     );
@@ -420,6 +439,13 @@ export async function POST(request: NextRequest) {
     if (amountCents < 100) {
       return NextResponse.json(
         { ok: false, error: "Minimum donation is £1.00." },
+        { status: 400 },
+      );
+    }
+
+    if (amountCents > 5000000) {
+      return NextResponse.json(
+        { ok: false, error: "Maximum donation is £50,000.00." },
         { status: 400 },
       );
     }
