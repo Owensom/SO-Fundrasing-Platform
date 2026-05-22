@@ -385,7 +385,8 @@ export default async function TenantCampaignsPage({
     : "raffles, squares and events";
 
   const publicDisplayName =
-    cleanText(brandingSettings?.public_display_name) || "Support a live campaign";
+    cleanText(brandingSettings?.public_display_name) ||
+    "Support a live campaign";
 
   const publicTagline =
     cleanText(brandingSettings?.public_tagline) ||
@@ -409,12 +410,12 @@ export default async function TenantCampaignsPage({
 
   const brandedPageStyle: CSSProperties = {
     ...styles.page,
-    background: `radial-gradient(circle at top left, ${primaryColour}16, transparent 34%), radial-gradient(circle at top right, ${accentColour}1A, transparent 30%), #f8fafc`,
+    background: `radial-gradient(circle at top left, ${primaryColour}16, transparent 34%), radial-gradient(circle at top right, ${accentColour}18, transparent 30%), #f8fafc`,
   };
 
   const brandedHeroStyle: CSSProperties = {
     ...styles.hero,
-    background: `radial-gradient(circle at bottom right, ${primaryColour}35, transparent 42%), radial-gradient(circle at top left, ${accentColour}18, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}30, transparent 42%), radial-gradient(circle at top left, ${accentColour}14, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
   };
 
   const brandedPrimaryActionStyle: CSSProperties = {
@@ -472,19 +473,19 @@ export default async function TenantCampaignsPage({
           className="brandFeature"
           style={{
             ...styles.brandFeature,
-            borderColor: `${accentColour}88`,
-            background: `linear-gradient(135deg, ${accentColour}14, #ffffff 78%)`,
+            borderColor: `${accentColour}78`,
+            background: `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`,
           }}
         >
-          <span style={styles.brandFeatureKicker}>Featured campaign</span>
+          <span style={styles.brandFeatureKicker}>Campaign hub</span>
 
           <strong style={styles.brandFeatureTitle}>
-            {featuredCampaign?.title || "Live campaigns"}
+            {pluralise(publicCampaigns.length, "live campaign", "live campaigns")}
           </strong>
 
           <span style={styles.brandFeatureText}>
             {featuredCampaign
-              ? `${getTypeLabel(featuredCampaign.type)} selected for the public hub.`
+              ? `Featuring ${featuredCampaign.title}.`
               : "Published campaigns will appear here when available."}
           </span>
         </div>
@@ -533,7 +534,7 @@ export default async function TenantCampaignsPage({
                 <div
                   style={{
                     ...styles.supportIcon,
-                    background: `${primaryColour}28`,
+                    background: `${primaryColour}26`,
                     borderColor: `${primaryColour}66`,
                   }}
                 >
@@ -550,8 +551,8 @@ export default async function TenantCampaignsPage({
                 <div
                   style={{
                     ...styles.supportIcon,
-                    background: `${accentColour}26`,
-                    borderColor: `${accentColour}80`,
+                    background: `${accentColour}24`,
+                    borderColor: `${accentColour}78`,
                   }}
                 >
                   ♥
@@ -601,8 +602,8 @@ export default async function TenantCampaignsPage({
               <span
                 style={{
                   ...styles.statusPill,
-                  background: `${accentColour}22`,
-                  borderColor: `${accentColour}88`,
+                  background: `${accentColour}20`,
+                  borderColor: `${accentColour}78`,
                   color: "#0f172a",
                 }}
               >
@@ -660,8 +661,8 @@ export default async function TenantCampaignsPage({
           <span
             style={{
               ...styles.countPill,
-              borderColor: `${accentColour}88`,
-              background: `${accentColour}1F`,
+              borderColor: `${accentColour}78`,
+              background: `${accentColour}1A`,
             }}
           >
             {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
@@ -788,7 +789,7 @@ export default async function TenantCampaignsPage({
         <footer
           style={{
             ...styles.footer,
-            borderColor: `${accentColour}66`,
+            borderColor: `${accentColour}60`,
           }}
         >
           <p style={styles.footerText}>{publicFooterText}</p>
@@ -849,7 +850,7 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .featuredCard {
-    margin: 14px 18px 16px !important;
+    margin: 12px 18px 16px !important;
   }
 }
 
@@ -901,12 +902,12 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .featuredCard {
-    margin: 12px 0 16px !important;
+    margin: 10px 0 16px !important;
   }
 
   .tenant-campaigns-page .featuredImageWrap {
-    height: 220px !important;
-    min-height: 220px !important;
+    height: 210px !important;
+    min-height: 210px !important;
   }
 
   .tenant-campaigns-page .filterNav,
@@ -1057,12 +1058,12 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gap: 18,
-    padding: 24,
+    gap: 16,
+    padding: 22,
     borderRadius: 24,
     color: "#ffffff",
     marginBottom: 0,
-    boxShadow: "0 24px 56px rgba(15,23,42,0.24)",
+    boxShadow: "0 22px 52px rgba(15,23,42,0.22)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
@@ -1081,7 +1082,7 @@ const styles: Record<string, CSSProperties> = {
     bottom: -130,
     width: 330,
     height: 330,
-    border: "1px solid rgba(250,204,21,0.22)",
+    border: "1px solid rgba(250,204,21,0.18)",
     borderRadius: "999px",
     pointerEvents: "none",
   },
@@ -1092,7 +1093,7 @@ const styles: Record<string, CSSProperties> = {
     bottom: -180,
     width: 440,
     height: 440,
-    border: "1px solid rgba(250,204,21,0.11)",
+    border: "1px solid rgba(250,204,21,0.09)",
     borderRadius: "999px",
     pointerEvents: "none",
   },
@@ -1102,7 +1103,7 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 1,
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.08fr) minmax(270px, 0.82fr)",
-    gap: 20,
+    gap: 18,
     alignItems: "stretch",
     minWidth: 0,
   },
@@ -1121,13 +1122,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
-    marginBottom: 12,
+    marginBottom: 11,
   },
 
   heroTitle: {
     margin: 0,
     maxWidth: 660,
-    fontSize: "clamp(38px, 6vw, 64px)",
+    fontSize: "clamp(38px, 6vw, 60px)",
     lineHeight: 0.94,
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
@@ -1135,11 +1136,11 @@ const styles: Record<string, CSSProperties> = {
   },
 
   subtitle: {
-    margin: "12px 0 0",
+    margin: "11px 0 0",
     maxWidth: 700,
     color: "#dbeafe",
     fontSize: 16,
-    lineHeight: 1.5,
+    lineHeight: 1.48,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
@@ -1148,13 +1149,13 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))",
     gap: 10,
-    marginTop: 18,
+    marginTop: 16,
   },
 
   heroStat: {
     display: "grid",
     gap: 4,
-    padding: 12,
+    padding: 11,
     borderRadius: 16,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(148,163,184,0.25)",
@@ -1180,9 +1181,9 @@ const styles: Record<string, CSSProperties> = {
 
   supportPanel: {
     display: "grid",
-    gap: 12,
+    gap: 11,
     alignContent: "center",
-    padding: 18,
+    padding: 17,
     borderRadius: 22,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(148,163,184,0.28)",
@@ -1201,7 +1202,7 @@ const styles: Record<string, CSSProperties> = {
 
   supportOptionList: {
     display: "grid",
-    gap: 10,
+    gap: 9,
   },
 
   supportOption: {
@@ -1265,13 +1266,13 @@ const styles: Record<string, CSSProperties> = {
   featuredCard: {
     display: "grid",
     gridTemplateColumns: "minmax(300px, 0.96fr) minmax(0, 1.04fr)",
-    gap: 20,
-    padding: 16,
+    gap: 18,
+    padding: 15,
     borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 48px rgba(15,23,42,0.09)",
-    margin: "14px 28px 16px",
+    boxShadow: "0 16px 42px rgba(15,23,42,0.08)",
+    margin: "12px 28px 16px",
     minWidth: 0,
     overflow: "hidden",
     position: "relative",
@@ -1279,8 +1280,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   featuredImageWrap: {
-    height: 250,
-    minHeight: 250,
+    height: 230,
+    minHeight: 230,
     borderRadius: 20,
     overflow: "hidden",
     background: "#f8fafc",
@@ -1289,10 +1290,10 @@ const styles: Record<string, CSSProperties> = {
 
   featuredContent: {
     display: "grid",
-    gap: 12,
+    gap: 11,
     alignContent: "center",
     minWidth: 0,
-    padding: "4px 0",
+    padding: "2px 0",
   },
 
   cardTopRow: {
@@ -1339,7 +1340,7 @@ const styles: Record<string, CSSProperties> = {
   featuredTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(32px, 4.4vw, 48px)",
+    fontSize: "clamp(32px, 4.4vw, 46px)",
     lineHeight: 0.98,
     letterSpacing: "-0.065em",
     overflowWrap: "anywhere",
@@ -1348,7 +1349,7 @@ const styles: Record<string, CSSProperties> = {
   featuredText: {
     margin: 0,
     color: "#475569",
-    lineHeight: 1.55,
+    lineHeight: 1.5,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
