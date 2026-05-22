@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSlugFromRequest } from "@/lib/tenant";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { getSquaresGameByTenantAndSlug } from "../../../../../../api/_lib/squares-repo";
 
 type PublicSquaresWinnerRow = {
@@ -10,12 +10,71 @@ type PublicSquaresWinnerRow = {
   customer_name: string | null;
 };
 
+type TenantBrandingRow = {
+  public_display_name: string | null;
+  public_tagline: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+  public_accent_colour: string | null;
+  public_footer_text: string | null;
+};
+
 function normaliseFocus(value: unknown, fallback = 50) {
   const parsed = Number(value);
 
   if (!Number.isFinite(parsed)) return fallback;
 
   return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+function cleanText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
+}
+
+async function getTenantBranding(tenantSlug: string) {
+  const branding = await queryOne<TenantBrandingRow>(
+    `
+      select
+        public_display_name,
+        public_tagline,
+        public_logo_url,
+        public_logo_mark_url,
+        public_primary_colour,
+        public_accent_colour,
+        public_footer_text
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+
+  return {
+    displayName: cleanText(branding?.public_display_name),
+    tagline: cleanText(branding?.public_tagline),
+    logoUrl: cleanText(branding?.public_logo_url),
+    logoMarkUrl: cleanText(branding?.public_logo_mark_url),
+    primaryColour: normaliseHexColour(
+      branding?.public_primary_colour,
+      "#2563EB",
+    ),
+    accentColour: normaliseHexColour(
+      branding?.public_accent_colour,
+      "#F59E0B",
+    ),
+    footerText: cleanText(branding?.public_footer_text),
+  };
 }
 
 export async function GET(
@@ -46,20 +105,23 @@ export async function GET(
     const imageFocusX = normaliseFocus(config.image_focus_x, 50);
     const imageFocusY = normaliseFocus(config.image_focus_y, 50);
 
-    const winners = await query<PublicSquaresWinnerRow>(
-      `
-        select
-          id,
-          prize_title,
-          square_number,
-          customer_name
-        from squares_winners
-        where tenant_slug = $1
-          and game_id = $2
-        order by prize_index asc, created_at asc
-      `,
-      [tenantSlug, game.id],
-    );
+    const [winners, branding] = await Promise.all([
+      query<PublicSquaresWinnerRow>(
+        `
+          select
+            id,
+            prize_title,
+            square_number,
+            customer_name
+          from squares_winners
+          where tenant_slug = $1
+            and game_id = $2
+          order by prize_index asc, created_at asc
+        `,
+        [tenantSlug, game.id],
+      ),
+      getTenantBranding(tenantSlug),
+    ]);
 
     return NextResponse.json({
       ok: true,
@@ -99,6 +161,7 @@ export async function GET(
               closesAt: config.free_entry.closes_at ?? null,
             }
           : null,
+        branding,
       },
     });
   } catch (error) {
