@@ -466,7 +466,22 @@ export default async function PublicSupportPage({
                 <option value="25.00">£25</option>
                 <option value="50.00">£50</option>
                 <option value="100.00">£100</option>
+                <option value="other">Other amount</option>
               </select>
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Other amount ({currency})</span>
+              <input
+                name="otherAmount"
+                inputMode="decimal"
+                placeholder="Only complete this if choosing Other amount"
+                style={styles.input}
+              />
+              <span style={styles.helpText}>
+                Minimum donation is £1.00. Leave this blank when using one of
+                the suggested amounts above.
+              </span>
             </label>
 
             <label
@@ -1118,6 +1133,13 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     background: "#ffffff",
     color: "#0f172a",
+  },
+
+  helpText: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 750,
   },
 
   textarea: {
