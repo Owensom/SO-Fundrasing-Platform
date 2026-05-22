@@ -19,6 +19,19 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
+type EmailBranding = {
+  name?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+};
+
+type TenantEmailBrandingRow = {
+  public_display_name: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+};
+
 type PaymentFinancials = {
   grossAmountCents: number;
   ticketSubtotalCents: number;
@@ -101,6 +114,74 @@ type DonationDetails = {
   paid_at: string | null;
   gift_aid_claimed: boolean;
 };
+
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function normaliseEmailHexColour(value: unknown) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return null;
+}
+
+async function getTenantEmailBranding(
+  tenantSlug: string,
+): Promise<EmailBranding | undefined> {
+  const cleanTenantSlug = cleanText(tenantSlug);
+
+  if (!cleanTenantSlug) {
+    return undefined;
+  }
+
+  try {
+    const rows = await query<TenantEmailBrandingRow>(
+      `
+        select
+          public_display_name,
+          public_logo_url,
+          public_logo_mark_url,
+          public_primary_colour
+        from tenant_settings
+        where tenant_slug = $1
+        limit 1
+      `,
+      [cleanTenantSlug],
+    );
+
+    const row = rows[0] || null;
+
+    if (!row) {
+      return undefined;
+    }
+
+    const name = cleanText(row.public_display_name);
+    const logoUrl =
+      cleanText(row.public_logo_url) || cleanText(row.public_logo_mark_url);
+    const primaryColor = normaliseEmailHexColour(row.public_primary_colour);
+
+    if (!name && !logoUrl && !primaryColor) {
+      return undefined;
+    }
+
+    return {
+      name: name || undefined,
+      logoUrl: logoUrl || undefined,
+      primaryColor: primaryColor || undefined,
+    };
+  } catch (error) {
+    console.error("Unable to load tenant email branding", {
+      tenantSlug: cleanTenantSlug,
+      error,
+    });
+
+    return undefined;
+  }
+}
 
 async function syncStripeConnectAccountById(accountId: string) {
   const account = await stripe.accounts.retrieve(accountId);
@@ -325,8 +406,7 @@ async function getCheckoutFinancials({
   const paymentIntentDetails = await getPaymentIntentDetails(paymentIntentId);
 
   const metadataApplicationFeeAmount = safeNumber(
-    metadata.application_fee_amount_cents ||
-      metadata.application_fee_amount,
+    metadata.application_fee_amount_cents || metadata.application_fee_amount,
     0,
   );
 
@@ -921,6 +1001,10 @@ export async function POST(request: NextRequest) {
 
       if (receiptEmail) {
         try {
+          const emailBranding = await getTenantEmailBranding(
+            donation.tenant_slug,
+          );
+
           await sendDonationReceiptEmail({
             to: receiptEmail,
             name: name || donation.donor_name,
@@ -931,6 +1015,7 @@ export async function POST(request: NextRequest) {
             donationReference: donation.id,
             message: donation.message,
             giftAidClaimed: Boolean(donation.gift_aid_claimed),
+            branding: emailBranding,
           });
         } catch (emailError) {
           console.error("Donation receipt email failed:", emailError);
@@ -1201,10 +1286,13 @@ export async function POST(request: NextRequest) {
 
       if (email) {
         try {
-          const eventDetails = await getEventDetails({
-            eventId,
-            tenantSlug,
-          });
+          const [eventDetails, emailBranding] = await Promise.all([
+            getEventDetails({
+              eventId,
+              tenantSlug,
+            }),
+            getTenantEmailBranding(tenantSlug),
+          ]);
 
           const orderItems = await query<{
             label: string;
@@ -1231,6 +1319,7 @@ export async function POST(request: NextRequest) {
             tickets: orderItems,
             eventDate: eventDetails?.starts_at || null,
             location: eventDetails?.location || null,
+            branding: emailBranding,
           });
         } catch (emailError) {
           console.error("Event receipt email failed:", emailError);
@@ -1324,10 +1413,13 @@ export async function POST(request: NextRequest) {
 
       const tenantSlug = verifiedReservations[0].tenant_slug;
 
-      const raffleDetails = await getRaffleDetails({
-        raffleId,
-        tenantSlug,
-      });
+      const [raffleDetails, emailBranding] = await Promise.all([
+        getRaffleDetails({
+          raffleId,
+          tenantSlug,
+        }),
+        getTenantEmailBranding(tenantSlug),
+      ]);
 
       if (!raffleDetails) {
         console.error("Stripe raffle webhook failed raffle verification", {
@@ -1482,6 +1574,7 @@ export async function POST(request: NextRequest) {
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
             reservationToken,
+            branding: emailBranding,
           });
         } catch (emailError) {
           console.error("Raffle receipt email failed:", emailError);
@@ -1542,10 +1635,13 @@ export async function POST(request: NextRequest) {
 
       const tenantSlug = verifiedReservation.tenant_slug;
 
-      const squaresGame = await getSquaresGameDetails({
-        gameId: squaresGameId,
-        tenantSlug,
-      });
+      const [squaresGame, emailBranding] = await Promise.all([
+        getSquaresGameDetails({
+          gameId: squaresGameId,
+          tenantSlug,
+        }),
+        getTenantEmailBranding(tenantSlug),
+      ]);
 
       if (!squaresGame) {
         console.error("Stripe squares webhook failed game verification", {
@@ -1686,6 +1782,7 @@ export async function POST(request: NextRequest) {
             amountCents: grossAmountCents,
             currency: session.currency || "GBP",
             reservationToken,
+            branding: emailBranding,
           });
         } catch (emailError) {
           console.error("Squares receipt email failed:", emailError);
