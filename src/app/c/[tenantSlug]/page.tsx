@@ -109,7 +109,7 @@ function getImageStyle(campaign: Campaign): CSSProperties {
           campaign.image_focus_y,
         )}%`,
     display: "block",
-    padding: defaultImage ? 28 : 0,
+    padding: defaultImage ? 26 : 0,
     boxSizing: "border-box",
     background: defaultImage
       ? "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)"
@@ -409,12 +409,12 @@ export default async function TenantCampaignsPage({
 
   const brandedPageStyle: CSSProperties = {
     ...styles.page,
-    background: `radial-gradient(circle at top left, ${primaryColour}1A, transparent 34%), radial-gradient(circle at top right, ${accentColour}20, transparent 30%), #f8fafc`,
+    background: `radial-gradient(circle at top left, ${primaryColour}16, transparent 34%), radial-gradient(circle at top right, ${accentColour}1A, transparent 30%), #f8fafc`,
   };
 
   const brandedHeroStyle: CSSProperties = {
     ...styles.hero,
-    background: `radial-gradient(circle at bottom right, ${primaryColour}40, transparent 40%), radial-gradient(circle at top left, ${accentColour}20, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}35, transparent 42%), radial-gradient(circle at top left, ${accentColour}18, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
   };
 
   const brandedPrimaryActionStyle: CSSProperties = {
@@ -473,7 +473,7 @@ export default async function TenantCampaignsPage({
           style={{
             ...styles.brandFeature,
             borderColor: `${accentColour}88`,
-            background: `linear-gradient(135deg, ${accentColour}1A, #ffffff 78%)`,
+            background: `linear-gradient(135deg, ${accentColour}14, #ffffff 78%)`,
           }}
         >
           <span style={styles.brandFeatureKicker}>Featured campaign</span>
@@ -847,31 +847,47 @@ const responsiveStyles = `
   .tenant-campaigns-page .campaignGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+
+  .tenant-campaigns-page .featuredCard {
+    margin: -24px 18px 16px !important;
+  }
 }
 
 @media (max-width: 680px) {
   .tenant-campaigns-page {
     width: 100% !important;
     max-width: 100% !important;
-    padding: 16px 10px 44px !important;
+    padding: 14px 10px 44px !important;
   }
 
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .campaigns-hero,
   .tenant-campaigns-page .featuredCard,
   .tenant-campaigns-page .filtersCard {
-    padding: 16px !important;
-    border-radius: 24px !important;
+    padding: 14px !important;
+    border-radius: 22px !important;
   }
 
   .tenant-campaigns-page .brandIdentity {
-    grid-template-columns: 1fr !important;
-    text-align: center !important;
-    justify-items: center !important;
+    grid-template-columns: 56px minmax(0, 1fr) !important;
+    text-align: left !important;
+    justify-items: stretch !important;
+  }
+
+  .tenant-campaigns-page .brandLogoWrap,
+  .tenant-campaigns-page .brandLogoFallback {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 16px !important;
+  }
+
+  .tenant-campaigns-page .brandTitle {
+    font-size: clamp(26px, 8vw, 38px) !important;
+    letter-spacing: -0.06em !important;
   }
 
   .tenant-campaigns-page .brandFeature {
-    text-align: center !important;
+    padding: 12px !important;
   }
 
   .tenant-campaigns-page .heroStats,
@@ -881,7 +897,16 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .supportPanel {
-    padding: 16px !important;
+    padding: 14px !important;
+  }
+
+  .tenant-campaigns-page .featuredCard {
+    margin: -18px 8px 16px !important;
+  }
+
+  .tenant-campaigns-page .featuredImageWrap {
+    height: 220px !important;
+    min-height: 220px !important;
   }
 
   .tenant-campaigns-page .filterNav,
@@ -917,22 +942,22 @@ const styles: Record<string, CSSProperties> = {
 
   brandHeader: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.38fr)",
-    gap: 16,
+    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 0.34fr)",
+    gap: 14,
     alignItems: "stretch",
-    padding: 18,
-    borderRadius: 28,
-    background: "rgba(255,255,255,0.92)",
+    padding: 14,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.94)",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 18px 48px rgba(15,23,42,0.08)",
-    marginBottom: 16,
+    boxShadow: "0 14px 38px rgba(15,23,42,0.07)",
+    marginBottom: 12,
     backdropFilter: "blur(14px)",
   },
 
   brandIdentity: {
     display: "grid",
-    gridTemplateColumns: "auto minmax(0, 1fr)",
-    gap: 16,
+    gridTemplateColumns: "72px minmax(0, 1fr)",
+    gap: 14,
     alignItems: "center",
     minWidth: 0,
   },
@@ -941,13 +966,13 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 92,
-    height: 92,
-    borderRadius: 22,
+    width: 72,
+    height: 72,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
-    boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
   },
 
   brandLogo: {
@@ -955,33 +980,33 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     height: "100%",
     objectFit: "contain",
-    padding: 8,
+    padding: 7,
   },
 
   brandLogoFallback: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 92,
-    height: 92,
-    borderRadius: 22,
+    width: 72,
+    height: 72,
+    borderRadius: 18,
     border: "2px solid",
     color: "#0f172a",
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.05em",
   },
 
   brandCopy: {
     display: "grid",
-    gap: 6,
+    gap: 4,
     minWidth: 0,
   },
 
   brandTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(34px, 5vw, 58px)",
+    fontSize: "clamp(34px, 5vw, 54px)",
     lineHeight: 0.94,
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
@@ -990,25 +1015,25 @@ const styles: Record<string, CSSProperties> = {
   brandTagline: {
     margin: 0,
     color: "#475569",
-    fontSize: 15,
-    lineHeight: 1.5,
-    fontWeight: 800,
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 850,
     overflowWrap: "anywhere",
   },
 
   brandFeature: {
     display: "grid",
-    gap: 6,
+    gap: 5,
     alignContent: "center",
-    padding: 16,
-    borderRadius: 20,
+    padding: 12,
+    borderRadius: 18,
     border: "1px solid",
     minWidth: 0,
   },
 
   brandFeatureKicker: {
     color: "#92400e",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
@@ -1016,7 +1041,7 @@ const styles: Record<string, CSSProperties> = {
 
   brandFeatureTitle: {
     color: "#0f172a",
-    fontSize: 20,
+    fontSize: 18,
     lineHeight: 1.1,
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
@@ -1024,20 +1049,20 @@ const styles: Record<string, CSSProperties> = {
 
   brandFeatureText: {
     color: "#475569",
-    fontSize: 13,
-    lineHeight: 1.4,
+    fontSize: 12,
+    lineHeight: 1.35,
     fontWeight: 750,
   },
 
   hero: {
     position: "relative",
     display: "grid",
-    gap: 22,
-    padding: 28,
-    borderRadius: 28,
+    gap: 18,
+    padding: 24,
+    borderRadius: 24,
     color: "#ffffff",
-    marginBottom: 18,
-    boxShadow: "0 28px 70px rgba(15,23,42,0.24)",
+    marginBottom: 0,
+    boxShadow: "0 24px 56px rgba(15,23,42,0.24)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
@@ -1047,27 +1072,27 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.08), transparent 30%)",
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 30%)",
   },
 
   heroLineOne: {
     position: "absolute",
-    left: -80,
-    bottom: -110,
-    width: 360,
-    height: 360,
-    border: "1px solid rgba(250,204,21,0.24)",
+    left: -90,
+    bottom: -130,
+    width: 330,
+    height: 330,
+    border: "1px solid rgba(250,204,21,0.22)",
     borderRadius: "999px",
     pointerEvents: "none",
   },
 
   heroLineTwo: {
     position: "absolute",
-    left: -130,
-    bottom: -160,
-    width: 470,
-    height: 470,
-    border: "1px solid rgba(250,204,21,0.12)",
+    left: -140,
+    bottom: -180,
+    width: 440,
+    height: 440,
+    border: "1px solid rgba(250,204,21,0.11)",
     borderRadius: "999px",
     pointerEvents: "none",
   },
@@ -1076,8 +1101,8 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
-    gap: 22,
+    gridTemplateColumns: "minmax(0, 1.08fr) minmax(270px, 0.82fr)",
+    gap: 20,
     alignItems: "stretch",
     minWidth: 0,
   },
@@ -1088,48 +1113,49 @@ const styles: Record<string, CSSProperties> = {
 
   eyebrow: {
     display: "inline-flex",
-    padding: "8px 14px",
+    padding: "7px 12px",
     borderRadius: 999,
-    background: "rgba(15,23,42,0.34)",
+    background: "rgba(15,23,42,0.36)",
     border: "1px solid",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(42px, 7vw, 72px)",
-    lineHeight: 0.95,
+    maxWidth: 660,
+    fontSize: "clamp(38px, 6vw, 64px)",
+    lineHeight: 0.94,
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
-    margin: "16px 0 0",
-    maxWidth: 760,
+    margin: "12px 0 0",
+    maxWidth: 700,
     color: "#dbeafe",
-    fontSize: 17,
-    lineHeight: 1.55,
+    fontSize: 16,
+    lineHeight: 1.5,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
-    gap: 12,
-    marginTop: 24,
+    gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))",
+    gap: 10,
+    marginTop: 18,
   },
 
   heroStat: {
     display: "grid",
-    gap: 5,
-    padding: 14,
-    borderRadius: 18,
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(148,163,184,0.25)",
     minWidth: 0,
@@ -1138,15 +1164,15 @@ const styles: Record<string, CSSProperties> = {
 
   heroStatLabel: {
     color: "#ffffff",
-    fontSize: 13,
-    lineHeight: 1.2,
+    fontSize: 11,
+    lineHeight: 1.15,
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
   heroStatValue: {
     color: "#ffffff",
-    fontSize: 24,
+    fontSize: 22,
     lineHeight: 1,
     fontWeight: 950,
     letterSpacing: "-0.04em",
@@ -1154,10 +1180,10 @@ const styles: Record<string, CSSProperties> = {
 
   supportPanel: {
     display: "grid",
-    gap: 14,
+    gap: 12,
     alignContent: "center",
-    padding: 20,
-    borderRadius: 24,
+    padding: 18,
+    borderRadius: 22,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(148,163,184,0.28)",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
@@ -1168,7 +1194,7 @@ const styles: Record<string, CSSProperties> = {
   supportPanelTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 24,
+    fontSize: 22,
     lineHeight: 1.05,
     letterSpacing: "-0.04em",
   },
@@ -1180,11 +1206,11 @@ const styles: Record<string, CSSProperties> = {
 
   supportOption: {
     display: "grid",
-    gridTemplateColumns: "52px minmax(0, 1fr)",
-    gap: 12,
+    gridTemplateColumns: "48px minmax(0, 1fr)",
+    gap: 11,
     alignItems: "center",
-    padding: 14,
-    borderRadius: 18,
+    padding: 12,
+    borderRadius: 16,
     background: "rgba(255,255,255,0.10)",
     border: "1px solid rgba(191,219,254,0.18)",
     color: "#dbeafe",
@@ -1194,20 +1220,21 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     border: "1px solid",
     color: "#ffffff",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 950,
   },
 
   supportOptionCopy: {
     display: "grid",
-    gap: 3,
+    gap: 2,
     minWidth: 0,
-    lineHeight: 1.4,
+    lineHeight: 1.35,
+    fontSize: 13,
   },
 
   heroActions: {
@@ -1217,7 +1244,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "flex-start",
     gap: 12,
     flexWrap: "wrap",
-    paddingTop: 16,
+    paddingTop: 14,
     borderTop: "1px solid rgba(148,163,184,0.24)",
   },
 
@@ -1225,8 +1252,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
+    minHeight: 42,
+    padding: "10px 15px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.10)",
     color: "#ffffff",
@@ -1237,14 +1264,14 @@ const styles: Record<string, CSSProperties> = {
 
   featuredCard: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.95fr) minmax(0, 1.05fr)",
-    gap: 22,
-    padding: 18,
-    borderRadius: 28,
+    gridTemplateColumns: "minmax(300px, 0.96fr) minmax(0, 1.04fr)",
+    gap: 20,
+    padding: 16,
+    borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 18px 48px rgba(15,23,42,0.09)",
-    margin: "-44px 32px 18px",
+    margin: "-28px 28px 16px",
     minWidth: 0,
     overflow: "hidden",
     position: "relative",
@@ -1252,9 +1279,9 @@ const styles: Record<string, CSSProperties> = {
   },
 
   featuredImageWrap: {
-    minHeight: 260,
-    height: "100%",
-    borderRadius: 22,
+    height: 250,
+    minHeight: 250,
+    borderRadius: 20,
     overflow: "hidden",
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
@@ -1262,10 +1289,10 @@ const styles: Record<string, CSSProperties> = {
 
   featuredContent: {
     display: "grid",
-    gap: 14,
+    gap: 12,
     alignContent: "center",
     minWidth: 0,
-    padding: "8px 0",
+    padding: "4px 0",
   },
 
   cardTopRow: {
@@ -1279,7 +1306,7 @@ const styles: Record<string, CSSProperties> = {
 
   featuredKicker: {
     margin: 0,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
@@ -1299,12 +1326,12 @@ const styles: Record<string, CSSProperties> = {
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "8px 12px",
+    padding: "7px 10px",
     borderRadius: 999,
     background: "#dcfce7",
     color: "#166534",
     border: "1px solid #bbf7d0",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
@@ -1312,7 +1339,7 @@ const styles: Record<string, CSSProperties> = {
   featuredTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(34px, 5vw, 54px)",
+    fontSize: "clamp(32px, 4.4vw, 48px)",
     lineHeight: 0.98,
     letterSpacing: "-0.065em",
     overflowWrap: "anywhere",
@@ -1321,7 +1348,7 @@ const styles: Record<string, CSSProperties> = {
   featuredText: {
     margin: 0,
     color: "#475569",
-    lineHeight: 1.65,
+    lineHeight: 1.55,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
@@ -1329,24 +1356,24 @@ const styles: Record<string, CSSProperties> = {
   featuredMetaGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
+    gap: 8,
   },
 
   miniMeta: {
     display: "grid",
-    gap: 3,
-    padding: 10,
-    borderRadius: 14,
+    gap: 2,
+    padding: 9,
+    borderRadius: 13,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     color: "#64748b",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 800,
   },
 
   campaignActions: {
     display: "flex",
-    gap: 10,
+    gap: 9,
     flexWrap: "wrap",
     alignItems: "center",
   },
@@ -1355,8 +1382,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
+    minHeight: 42,
+    padding: "10px 15px",
     borderRadius: 999,
     color: "#ffffff",
     textDecoration: "none",
@@ -1367,8 +1394,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
+    minHeight: 42,
+    padding: "10px 15px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -1379,13 +1406,13 @@ const styles: Record<string, CSSProperties> = {
 
   filtersCard: {
     display: "grid",
-    gap: 14,
-    padding: 18,
-    borderRadius: 24,
+    gap: 12,
+    padding: 16,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 18,
+    marginBottom: 16,
     minWidth: 0,
   },
 
@@ -1399,8 +1426,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   kicker: {
-    margin: "0 0 6px",
-    fontSize: 12,
+    margin: "0 0 5px",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
@@ -1409,7 +1436,7 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 28,
+    fontSize: 26,
     letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
   },
@@ -1417,18 +1444,18 @@ const styles: Record<string, CSSProperties> = {
   countPill: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "8px 12px",
+    padding: "7px 11px",
     borderRadius: 999,
     color: "#0f172a",
     border: "1px solid",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
 
   filterNav: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     flexWrap: "wrap",
     alignItems: "center",
   },
@@ -1437,8 +1464,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 40,
-    padding: "9px 13px",
+    minHeight: 38,
+    padding: "8px 13px",
     borderRadius: 999,
     background: "#f8fafc",
     color: "#334155",
@@ -1455,14 +1482,14 @@ const styles: Record<string, CSSProperties> = {
   campaignGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 16,
+    gap: 14,
     minWidth: 0,
   },
 
   card: {
     display: "grid",
-    gridTemplateRows: "220px 1fr",
-    borderRadius: 26,
+    gridTemplateRows: "200px 1fr",
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
@@ -1472,7 +1499,7 @@ const styles: Record<string, CSSProperties> = {
 
   cardImageWrap: {
     width: "100%",
-    height: 220,
+    height: 200,
     overflow: "hidden",
     background: "#f8fafc",
     borderBottom: "1px solid #e2e8f0",
@@ -1480,16 +1507,16 @@ const styles: Record<string, CSSProperties> = {
 
   cardBody: {
     display: "grid",
-    gap: 12,
+    gap: 11,
     alignContent: "start",
-    padding: 16,
+    padding: 15,
     minWidth: 0,
   },
 
   cardTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 24,
+    fontSize: 23,
     lineHeight: 1.05,
     letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
@@ -1498,7 +1525,7 @@ const styles: Record<string, CSSProperties> = {
   cardText: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.55,
+    lineHeight: 1.5,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
@@ -1528,9 +1555,9 @@ const styles: Record<string, CSSProperties> = {
   },
 
   footer: {
-    marginTop: 22,
-    padding: 18,
-    borderRadius: 24,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid",
     textAlign: "center",
