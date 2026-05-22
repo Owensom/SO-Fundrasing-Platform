@@ -50,6 +50,30 @@ type HighlightedCampaignSettings = {
   highlighted_campaign_id: string | null;
 };
 
+type TenantBrandingSettings = {
+  public_display_name: string | null;
+  public_tagline: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+  public_accent_colour: string | null;
+  public_footer_text: string | null;
+};
+
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
+}
+
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
 
@@ -234,6 +258,25 @@ async function getHighlightedCampaignSettings(tenantSlug: string) {
   );
 }
 
+async function getTenantBrandingSettings(tenantSlug: string) {
+  return queryOne<TenantBrandingSettings>(
+    `
+      select
+        public_display_name,
+        public_tagline,
+        public_logo_url,
+        public_logo_mark_url,
+        public_primary_colour,
+        public_accent_colour,
+        public_footer_text
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+}
+
 function getHighlightedCampaign(params: {
   campaigns: Campaign[];
   highlightedSettings: HighlightedCampaignSettings | null;
@@ -286,11 +329,12 @@ export default async function TenantCampaignsPage({
 
   const activeType = getActiveType(resolvedSearchParams?.type);
 
-  const [campaigns, tenantSettingsRaw, highlightedSettings] =
+  const [campaigns, tenantSettingsRaw, highlightedSettings, brandingSettings] =
     await Promise.all([
       getAllCampaignsForTenant(tenantSlug),
       getTenantSettings(tenantSlug),
       getHighlightedCampaignSettings(tenantSlug),
+      getTenantBrandingSettings(tenantSlug),
     ]);
 
   const tenantSettings = tenantSettingsRaw as TenantCampaignSettings | null;
@@ -341,24 +385,75 @@ export default async function TenantCampaignsPage({
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
 
+  const publicDisplayName =
+    cleanText(brandingSettings?.public_display_name) || "Support a live campaign";
+
+  const publicTagline =
+    cleanText(brandingSettings?.public_tagline) ||
+    `Browse live ${campaignTypeNames} for this organisation. You can view a campaign to take part, or make a simple donation through the new support flow.`;
+
+  const publicLogoUrl = cleanText(brandingSettings?.public_logo_url);
+  const publicLogoMarkUrl = cleanText(brandingSettings?.public_logo_mark_url);
+  const publicFooterText = cleanText(brandingSettings?.public_footer_text);
+
+  const primaryColour = normaliseHexColour(
+    brandingSettings?.public_primary_colour,
+    "#1683F8",
+  );
+
+  const accentColour = normaliseHexColour(
+    brandingSettings?.public_accent_colour,
+    "#FACC15",
+  );
+
+  const brandedPageStyle: CSSProperties = {
+    ...styles.page,
+    background: `radial-gradient(circle at top left, ${primaryColour}1A, transparent 34%), radial-gradient(circle at top right, ${accentColour}18, transparent 30%), #f8fafc`,
+  };
+
+  const brandedHeroStyle: CSSProperties = {
+    ...styles.hero,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}38, transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)`,
+  };
+
+  const brandedEyebrowStyle: CSSProperties = {
+    ...styles.eyebrow,
+    color: accentColour,
+    borderColor: `${accentColour}CC`,
+  };
+
+  const brandedPrimaryActionStyle: CSSProperties = {
+    ...styles.primaryAction,
+    background: primaryColour,
+    boxShadow: `0 10px 22px ${primaryColour}33`,
+  };
+
   return (
-    <main className="tenant-campaigns-page" style={styles.page}>
+    <main className="tenant-campaigns-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
-      <section className="campaigns-hero" style={styles.hero}>
+      <section className="campaigns-hero" style={brandedHeroStyle}>
         <div style={styles.heroGlow} />
 
         <div className="heroMainGrid" style={styles.heroMainGrid}>
           <div style={styles.heroCopy}>
-            <div style={styles.eyebrow}>Fundraising campaigns</div>
+            <div style={brandedEyebrowStyle}>Fundraising campaigns</div>
 
-            <h1 style={styles.title}>Support a live campaign</h1>
+            <div style={styles.brandTitleRow}>
+              {publicLogoUrl ? (
+                <div style={styles.brandLogoWrap}>
+                  <img
+                    src={publicLogoUrl}
+                    alt={publicDisplayName}
+                    style={styles.brandLogo}
+                  />
+                </div>
+              ) : null}
 
-            <p style={styles.subtitle}>
-              Browse live {campaignTypeNames} for this organisation. You can
-              view a campaign to take part, or make a simple donation through
-              the new support flow.
-            </p>
+              <h1 style={styles.title}>{publicDisplayName}</h1>
+            </div>
+
+            <p style={styles.subtitle}>{publicTagline}</p>
 
             <div className="heroStats" style={styles.heroStats}>
               <HeroStat
@@ -375,7 +470,19 @@ export default async function TenantCampaignsPage({
           </div>
 
           <div style={styles.heroPanel}>
-            <div style={styles.heroPanelEyebrow}>Support options</div>
+            {publicLogoMarkUrl ? (
+              <div style={styles.heroLogoMarkWrap}>
+                <img
+                  src={publicLogoMarkUrl}
+                  alt={`${publicDisplayName} logo mark`}
+                  style={styles.heroLogoMark}
+                />
+              </div>
+            ) : null}
+
+            <div style={{ ...styles.heroPanelEyebrow, color: accentColour }}>
+              Support options
+            </div>
 
             <h2 style={styles.heroPanelTitle}>Two ways to help</h2>
 
@@ -438,7 +545,7 @@ export default async function TenantCampaignsPage({
             <div className="campaignActions" style={styles.campaignActions}>
               <Link
                 href={getCampaignUrl(featuredCampaign)}
-                style={styles.primaryAction}
+                style={brandedPrimaryActionStyle}
               >
                 See campaign
               </Link>
@@ -460,11 +567,20 @@ export default async function TenantCampaignsPage({
       <section className="filtersCard" style={styles.filtersCard}>
         <div style={styles.filtersHeader}>
           <div>
-            <p style={styles.kicker}>Filter campaigns</p>
+            <p style={{ ...styles.kicker, color: primaryColour }}>
+              Filter campaigns
+            </p>
             <h2 style={styles.sectionTitle}>Live campaigns</h2>
           </div>
 
-          <span style={styles.countPill}>
+          <span
+            style={{
+              ...styles.countPill,
+              color: primaryColour,
+              borderColor: `${primaryColour}55`,
+              background: `${primaryColour}14`,
+            }}
+          >
             {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
           </span>
         </div>
@@ -474,7 +590,13 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "all", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "all" ? styles.filterButtonActive : {}),
+              ...(activeType === "all"
+                ? {
+                    ...styles.filterButtonActive,
+                    background: primaryColour,
+                    borderColor: primaryColour,
+                  }
+                : {}),
             }}
           >
             All
@@ -484,7 +606,13 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "raffle", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "raffle" ? styles.filterButtonActive : {}),
+              ...(activeType === "raffle"
+                ? {
+                    ...styles.filterButtonActive,
+                    background: primaryColour,
+                    borderColor: primaryColour,
+                  }
+                : {}),
             }}
           >
             Raffles
@@ -494,7 +622,13 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "squares", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "squares" ? styles.filterButtonActive : {}),
+              ...(activeType === "squares"
+                ? {
+                    ...styles.filterButtonActive,
+                    background: primaryColour,
+                    borderColor: primaryColour,
+                  }
+                : {}),
             }}
           >
             Squares
@@ -504,7 +638,13 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "event", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "event" ? styles.filterButtonActive : {}),
+              ...(activeType === "event"
+                ? {
+                    ...styles.filterButtonActive,
+                    background: primaryColour,
+                    borderColor: primaryColour,
+                  }
+                : {}),
             }}
           >
             Events
@@ -515,7 +655,13 @@ export default async function TenantCampaignsPage({
               href={getFilterHref({ tenantSlug, type: "auction", adminReturn })}
               style={{
                 ...styles.filterButton,
-                ...(activeType === "auction" ? styles.filterButtonActive : {}),
+                ...(activeType === "auction"
+                  ? {
+                      ...styles.filterButtonActive,
+                      background: primaryColour,
+                      borderColor: primaryColour,
+                    }
+                  : {}),
               }}
             >
               Auctions
@@ -567,7 +713,7 @@ export default async function TenantCampaignsPage({
                 <div className="campaignActions" style={styles.campaignActions}>
                   <Link
                     href={getCampaignUrl(campaign)}
-                    style={styles.primaryAction}
+                    style={brandedPrimaryActionStyle}
                   >
                     See campaign
                   </Link>
@@ -584,6 +730,12 @@ export default async function TenantCampaignsPage({
           ))
         )}
       </section>
+
+      {publicFooterText ? (
+        <footer style={styles.footer}>
+          <p style={styles.footerText}>{publicFooterText}</p>
+        </footer>
+      ) : null}
     </main>
   );
 }
@@ -733,6 +885,33 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
+  brandTitleRow: {
+    display: "grid",
+    gap: 16,
+    alignItems: "start",
+  },
+
+  brandLogoWrap: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: 240,
+    minHeight: 76,
+    padding: 12,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.96)",
+    border: "1px solid rgba(255,255,255,0.32)",
+    boxShadow: "0 18px 42px rgba(0,0,0,0.18)",
+  },
+
+  brandLogo: {
+    display: "block",
+    maxWidth: 210,
+    maxHeight: 74,
+    objectFit: "contain",
+  },
+
   title: {
     margin: 0,
     fontSize: "clamp(42px, 7vw, 72px)",
@@ -797,6 +976,26 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
     minWidth: 0,
+  },
+
+  heroLogoMarkWrap: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 84,
+    height: 84,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.96)",
+    border: "1px solid rgba(255,255,255,0.38)",
+    overflow: "hidden",
+  },
+
+  heroLogoMark: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 10,
   },
 
   heroPanelEyebrow: {
@@ -1122,5 +1321,21 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 750,
+  },
+
+  footer: {
+    marginTop: 22,
+    padding: 18,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    textAlign: "center",
+  },
+
+  footerText: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+    lineHeight: 1.5,
   },
 };
