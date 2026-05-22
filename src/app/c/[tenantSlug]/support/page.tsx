@@ -29,15 +29,32 @@ type CampaignLookup = {
   image_url: string | null;
 };
 
-type TenantGiftAidSettings = {
+type TenantSupportSettings = {
   gift_aid_enabled: boolean | null;
   charity_registration_type: string | null;
   charity_registration_number: string | null;
+  public_display_name: string | null;
+  public_tagline: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+  public_accent_colour: string | null;
+  public_footer_text: string | null;
 };
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
 }
 
 function cleanCampaignType(value: unknown): CampaignType {
@@ -162,15 +179,22 @@ async function lookupCampaign(params: {
   return null;
 }
 
-async function getTenantGiftAidSettings(
+async function getTenantSupportSettings(
   tenantSlug: string,
-): Promise<TenantGiftAidSettings | null> {
-  return queryOne<TenantGiftAidSettings>(
+): Promise<TenantSupportSettings | null> {
+  return queryOne<TenantSupportSettings>(
     `
       select
         gift_aid_enabled,
         charity_registration_type,
-        charity_registration_number
+        charity_registration_number,
+        public_display_name,
+        public_tagline,
+        public_logo_url,
+        public_logo_mark_url,
+        public_primary_colour,
+        public_accent_colour,
+        public_footer_text
       from tenant_settings
       where tenant_slug = $1
       limit 1
@@ -215,20 +239,20 @@ export default async function PublicSupportPage({
     notFound();
   }
 
-  const [campaign, tenantGiftAidSettings] = await Promise.all([
+  const [campaign, tenantSettings] = await Promise.all([
     lookupCampaign({
       tenantSlug,
       campaignType,
       campaignId,
     }),
-    getTenantGiftAidSettings(tenantSlug),
+    getTenantSupportSettings(tenantSlug),
   ]);
 
   if (campaignType !== "general" && campaignId && !campaign) {
     notFound();
   }
 
-  const giftAidEnabled = Boolean(tenantGiftAidSettings?.gift_aid_enabled);
+  const giftAidEnabled = Boolean(tenantSettings?.gift_aid_enabled);
 
   const campaignTitle =
     campaign?.title ||
@@ -239,24 +263,132 @@ export default async function PublicSupportPage({
   const currency = cleanText(campaign?.currency, "GBP").toUpperCase();
   const publicHref = getCampaignPublicHref(campaignType, campaign?.slug || null);
 
+  const publicDisplayName =
+    cleanText(tenantSettings?.public_display_name) || "SO Fundraising Platform";
+
+  const publicTagline =
+    cleanText(tenantSettings?.public_tagline) ||
+    "Supporting causes through premium fundraising campaigns.";
+
+  const publicLogoUrl = cleanText(tenantSettings?.public_logo_url);
+  const publicLogoMarkUrl = cleanText(tenantSettings?.public_logo_mark_url);
+  const publicFooterText = cleanText(tenantSettings?.public_footer_text);
+
+  const primaryColour = normaliseHexColour(
+    tenantSettings?.public_primary_colour,
+    "#1683F8",
+  );
+
+  const accentColour = normaliseHexColour(
+    tenantSettings?.public_accent_colour,
+    "#FACC15",
+  );
+
+  const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
+
+  const brandedPageStyle: CSSProperties = {
+    ...styles.page,
+    background: `radial-gradient(circle at top left, ${accentColour}20, transparent 34%), radial-gradient(circle at 80% 8%, ${primaryColour}14, transparent 28%), #f8fafc`,
+  };
+
+  const brandedHeroStyle: CSSProperties = {
+    ...styles.hero,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}30, transparent 42%), radial-gradient(circle at top left, ${accentColour}14, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
+  };
+
+  const brandedBrandFallbackStyle: CSSProperties = {
+    ...styles.brandLogoFallback,
+    background: primaryColour,
+    borderColor: accentColour,
+  };
+
+  const brandedBadgeStyle: CSSProperties = {
+    ...styles.badge,
+    background: `${accentColour}24`,
+    borderColor: `${accentColour}66`,
+  };
+
+  const brandedSoftBadgeStyle: CSSProperties = {
+    ...styles.softBadge,
+    borderColor: `${primaryColour}66`,
+  };
+
+  const brandedViewCampaignLinkStyle: CSSProperties = {
+    ...styles.viewCampaignLink,
+    border: `1px solid ${accentColour}70`,
+  };
+
+  const brandedPrimaryButtonStyle: CSSProperties = {
+    ...styles.primaryButton,
+    background: primaryColour,
+    boxShadow: `0 12px 24px ${primaryColour}36`,
+  };
+
+  const brandedSectionEyebrowStyle: CSSProperties = {
+    ...styles.sectionEyebrow,
+    color: primaryColour,
+  };
+
   return (
-    <main className="support-page" style={styles.page}>
+    <main className="support-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
-      <section className="support-hero" style={styles.hero}>
+      <section className="brandHeader" style={styles.brandHeader}>
+        <div className="brandIdentity" style={styles.brandIdentity}>
+          {brandLogoSrc ? (
+            <div style={styles.brandLogoWrap}>
+              <img
+                src={brandLogoSrc}
+                alt={publicDisplayName}
+                style={styles.brandLogo}
+              />
+            </div>
+          ) : (
+            <div style={brandedBrandFallbackStyle}>
+              {publicDisplayName.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+
+          <div style={styles.brandCopy}>
+            <p style={{ ...styles.brandKicker, color: primaryColour }}>
+              Support donation
+            </p>
+            <h1 style={styles.brandTitle}>{publicDisplayName}</h1>
+            <p style={styles.brandTagline}>{publicTagline}</p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...styles.brandFeature,
+            borderColor: `${accentColour}78`,
+            background: `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`,
+          }}
+        >
+          <span style={styles.brandFeatureKicker}>Pure donation</span>
+          <strong style={styles.brandFeatureTitle}>{campaignTitle}</strong>
+          <span style={styles.brandFeatureText}>
+            {giftAidEnabled
+              ? "Gift Aid available for eligible pure donations."
+              : "Support this cause through a secure donation."}
+          </span>
+        </div>
+      </section>
+
+      <section className="support-hero" style={brandedHeroStyle}>
         <div style={styles.heroContent}>
           <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
             ← Back to campaigns
           </Link>
 
           <div style={styles.badgeRow}>
-            <span style={styles.badge}>Support campaign</span>
-            <span style={styles.softBadge}>
+            <span style={brandedBadgeStyle}>Support campaign</span>
+            <span style={brandedSoftBadgeStyle}>
               {campaignTypeLabel(campaignType)}
             </span>
           </div>
 
-          <h1 style={styles.title}>{campaignTitle}</h1>
+          <h2 style={styles.title}>{campaignTitle}</h2>
 
           <p style={styles.subtitle}>
             Make a simple donation to support this cause. This is separate from
@@ -264,14 +396,21 @@ export default async function PublicSupportPage({
           </p>
 
           {publicHref ? (
-            <Link href={publicHref} style={styles.viewCampaignLink}>
+            <Link href={publicHref} style={brandedViewCampaignLinkStyle}>
               View campaign page
             </Link>
           ) : null}
         </div>
 
-        <div style={styles.heroPanel}>
-          <div style={styles.panelEyebrow}>Pure donation</div>
+        <div
+          style={{
+            ...styles.heroPanel,
+            borderColor: `${accentColour}48`,
+          }}
+        >
+          <div style={{ ...styles.panelEyebrow, color: accentColour }}>
+            Pure donation
+          </div>
           <h2 style={styles.panelTitle}>No draw entry. No bid. No ticket.</h2>
           <p style={styles.panelText}>
             This payment is treated as a straightforward donation through the
@@ -296,7 +435,7 @@ export default async function PublicSupportPage({
 
       <section className="support-content-grid" style={styles.contentGrid}>
         <section style={styles.formCard}>
-          <div style={styles.sectionEyebrow}>Donation details</div>
+          <div style={brandedSectionEyebrowStyle}>Donation details</div>
           <h2 style={styles.sectionTitle}>Choose your support amount</h2>
 
           <form
@@ -330,13 +469,19 @@ export default async function PublicSupportPage({
               </select>
             </label>
 
-            <label style={styles.coverFeesBox}>
+            <label
+              style={{
+                ...styles.coverFeesBox,
+                borderColor: `${primaryColour}45`,
+                background: `${primaryColour}10`,
+              }}
+            >
               <input
                 type="checkbox"
                 name="coverFees"
                 value="yes"
                 defaultChecked
-                style={styles.checkbox}
+                style={{ ...styles.checkbox, accentColor: primaryColour }}
               />
 
               <span style={styles.coverFeesText}>
@@ -380,13 +525,18 @@ export default async function PublicSupportPage({
             </label>
 
             {giftAidEnabled ? (
-              <section style={styles.giftAidBox}>
+              <section
+                style={{
+                  ...styles.giftAidBox,
+                  borderColor: `${accentColour}78`,
+                }}
+              >
                 <label style={styles.giftAidToggle}>
                   <input
                     type="checkbox"
                     name="giftAidClaimed"
                     value="yes"
-                    style={styles.checkbox}
+                    style={{ ...styles.checkbox, accentColor: primaryColour }}
                   />
 
                   <span style={styles.giftAidToggleText}>
@@ -474,14 +624,19 @@ export default async function PublicSupportPage({
               </section>
             ) : null}
 
-            <button type="submit" style={styles.primaryButton}>
+            <button type="submit" style={brandedPrimaryButtonStyle}>
               Continue to secure payment
             </button>
           </form>
         </section>
 
-        <aside style={styles.infoCard}>
-          <div style={styles.sectionEyebrow}>What this is</div>
+        <aside
+          style={{
+            ...styles.infoCard,
+            borderColor: `${primaryColour}24`,
+          }}
+        >
+          <div style={brandedSectionEyebrowStyle}>What this is</div>
           <h2 style={styles.infoTitle}>A simple support payment</h2>
 
           <div style={styles.infoList}>
@@ -518,6 +673,17 @@ export default async function PublicSupportPage({
           </div>
         </aside>
       </section>
+
+      {publicFooterText ? (
+        <footer
+          style={{
+            ...styles.footer,
+            borderColor: `${accentColour}60`,
+          }}
+        >
+          <p style={styles.footerText}>{publicFooterText}</p>
+        </footer>
+      ) : null}
     </main>
   );
 }
@@ -536,8 +702,15 @@ const responsiveStyles = `
 .support-page div,
 .support-page form,
 .support-page label,
-.support-page aside {
+.support-page aside,
+.support-page footer {
   min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .support-page .brandHeader {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 860px) {
@@ -560,9 +733,26 @@ const responsiveStyles = `
     padding: 16px 10px 44px !important;
   }
 
+  .support-page .brandHeader,
   .support-page .support-hero {
-    padding: 18px !important;
-    border-radius: 24px !important;
+    padding: 14px !important;
+    border-radius: 22px !important;
+  }
+
+  .support-page .brandIdentity {
+    grid-template-columns: 56px minmax(0, 1fr) !important;
+  }
+
+  .support-page .brandLogoWrap,
+  .support-page .brandLogoFallback {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 16px !important;
+  }
+
+  .support-page .brandTitle {
+    font-size: clamp(24px, 8vw, 36px) !important;
+    letter-spacing: -0.06em !important;
   }
 }
 `;
@@ -574,11 +764,131 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 auto",
     padding: "28px 16px 64px",
     minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), #f8fafc",
     color: "#0f172a",
     boxSizing: "border-box",
     overflowX: "hidden",
+  },
+
+  brandHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 0.34fr)",
+    gap: 14,
+    alignItems: "stretch",
+    padding: 14,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.94)",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 14px 38px rgba(15,23,42,0.07)",
+    marginBottom: 12,
+    backdropFilter: "blur(14px)",
+  },
+
+  brandIdentity: {
+    display: "grid",
+    gridTemplateColumns: "72px minmax(0, 1fr)",
+    gap: 14,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  brandLogoWrap: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+  },
+
+  brandLogo: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 7,
+  },
+
+  brandLogoFallback: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    border: "2px solid",
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
+  brandCopy: {
+    display: "grid",
+    gap: 4,
+    minWidth: 0,
+  },
+
+  brandKicker: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  brandTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(30px, 4.6vw, 50px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
+    overflowWrap: "anywhere",
+  },
+
+  brandTagline: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  brandFeature: {
+    display: "grid",
+    gap: 5,
+    alignContent: "center",
+    padding: 12,
+    borderRadius: 18,
+    border: "1px solid",
+    minWidth: 0,
+  },
+
+  brandFeatureKicker: {
+    color: "#92400e",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  brandFeatureTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  brandFeatureText: {
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
   },
 
   hero: {
@@ -587,8 +897,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 20,
     padding: 26,
     borderRadius: 30,
-    background:
-      "linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
     marginBottom: 18,
@@ -629,9 +937,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     padding: "8px 12px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.16)",
     color: "#fef3c7",
-    border: "1px solid rgba(251,191,36,0.32)",
+    border: "1px solid",
     fontSize: 13,
     fontWeight: 950,
   },
@@ -691,7 +998,6 @@ const styles: Record<string, CSSProperties> = {
   },
 
   panelEyebrow: {
-    color: "#facc15",
     fontSize: 12,
     fontWeight: 950,
     letterSpacing: "0.08em",
@@ -769,7 +1075,6 @@ const styles: Record<string, CSSProperties> = {
   },
 
   sectionEyebrow: {
-    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -834,11 +1139,10 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     padding: 14,
     borderRadius: 18,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
     color: "#1e3a8a",
     cursor: "pointer",
     minWidth: 0,
+    border: "1px solid",
   },
 
   checkbox: {
@@ -846,7 +1150,6 @@ const styles: Record<string, CSSProperties> = {
     height: 18,
     marginTop: 2,
     flex: "0 0 auto",
-    accentColor: "#1683f8",
   },
 
   coverFeesText: {
@@ -913,13 +1216,11 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 50,
     padding: "13px 18px",
     borderRadius: 999,
-    background: "#1683f8",
     color: "#ffffff",
     border: "none",
     fontSize: 16,
     fontWeight: 950,
     cursor: "pointer",
-    boxShadow: "0 12px 24px rgba(22,131,248,0.22)",
   },
 
   infoCard: {
@@ -959,5 +1260,21 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     minWidth: 0,
     overflowWrap: "anywhere",
+  },
+
+  footer: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid",
+    textAlign: "center",
+  },
+
+  footerText: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+    lineHeight: 1.5,
   },
 };
