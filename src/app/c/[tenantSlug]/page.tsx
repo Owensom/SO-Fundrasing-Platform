@@ -326,7 +326,6 @@ export default async function TenantCampaignsPage({
   const canShowAdminReturn = isTenantAdmin && Boolean(requestedAdminReturn);
 
   const adminReturn = canShowAdminReturn ? requestedAdminReturn : "";
-
   const activeType = getActiveType(resolvedSearchParams?.type);
 
   const [campaigns, tenantSettingsRaw, highlightedSettings, brandingSettings] =
@@ -406,31 +405,104 @@ export default async function TenantCampaignsPage({
     "#FACC15",
   );
 
+  const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
+
   const brandedPageStyle: CSSProperties = {
     ...styles.page,
-    background: `radial-gradient(circle at top left, ${primaryColour}1A, transparent 34%), radial-gradient(circle at top right, ${accentColour}18, transparent 30%), #f8fafc`,
+    background: `radial-gradient(circle at top left, ${primaryColour}1A, transparent 34%), radial-gradient(circle at top right, ${accentColour}1F, transparent 30%), #f8fafc`,
   };
 
   const brandedHeroStyle: CSSProperties = {
     ...styles.hero,
-    background: `radial-gradient(circle at bottom right, ${primaryColour}38, transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)`,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}42, transparent 38%), radial-gradient(circle at top left, ${accentColour}24, transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)`,
   };
 
   const brandedEyebrowStyle: CSSProperties = {
     ...styles.eyebrow,
     color: accentColour,
     borderColor: `${accentColour}CC`,
+    boxShadow: `0 12px 28px ${accentColour}20`,
   };
 
   const brandedPrimaryActionStyle: CSSProperties = {
     ...styles.primaryAction,
     background: primaryColour,
-    boxShadow: `0 10px 22px ${primaryColour}33`,
+    color: "#0f172a",
+    boxShadow: `0 10px 22px ${primaryColour}44`,
+    border: `1px solid ${primaryColour}`,
+  };
+
+  const brandedFeaturedPillStyle: CSSProperties = {
+    ...styles.statusPill,
+    background: `${accentColour}22`,
+    color: "#0f172a",
+    borderColor: `${accentColour}AA`,
   };
 
   return (
     <main className="tenant-campaigns-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
+
+      <section className="brandMasthead" style={styles.brandMasthead}>
+        <div
+          className="brandIdentity"
+          style={{
+            ...styles.brandIdentity,
+            borderColor: `${primaryColour}33`,
+          }}
+        >
+          {brandLogoSrc ? (
+            <div style={styles.mastheadLogoWrap}>
+              <img
+                src={brandLogoSrc}
+                alt={publicDisplayName}
+                style={styles.mastheadLogo}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                ...styles.mastheadFallbackLogo,
+                background: primaryColour,
+                borderColor: `${accentColour}AA`,
+              }}
+            >
+              {publicDisplayName.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+
+          <div style={styles.mastheadText}>
+            <p style={{ ...styles.brandKicker, color: primaryColour }}>
+              Public campaign hub
+            </p>
+
+            <h1 style={styles.mastheadTitle}>{publicDisplayName}</h1>
+
+            <p style={styles.mastheadTagline}>{publicTagline}</p>
+          </div>
+        </div>
+
+        <div
+          className="brandAccentPanel"
+          style={{
+            ...styles.brandAccentPanel,
+            borderColor: `${accentColour}AA`,
+            background: `linear-gradient(135deg, ${accentColour}24, #ffffff 72%)`,
+          }}
+        >
+          <span style={styles.brandAccentLabel}>Featured campaign</span>
+
+          <strong style={styles.brandAccentTitle}>
+            {featuredCampaign?.title || "Live campaigns"}
+          </strong>
+
+          <span style={styles.brandAccentText}>
+            {featuredCampaign
+              ? `${getTypeLabel(featuredCampaign.type)} selected for the public hub.`
+              : "Published campaigns will appear here when available."}
+          </span>
+        </div>
+      </section>
 
       <section className="campaigns-hero" style={brandedHeroStyle}>
         <div style={styles.heroGlow} />
@@ -439,21 +511,12 @@ export default async function TenantCampaignsPage({
           <div style={styles.heroCopy}>
             <div style={brandedEyebrowStyle}>Fundraising campaigns</div>
 
-            <div style={styles.brandTitleRow}>
-              {publicLogoUrl ? (
-                <div style={styles.brandLogoWrap}>
-                  <img
-                    src={publicLogoUrl}
-                    alt={publicDisplayName}
-                    style={styles.brandLogo}
-                  />
-                </div>
-              ) : null}
+            <h2 style={styles.heroTitle}>Support a live campaign</h2>
 
-              <h1 style={styles.title}>{publicDisplayName}</h1>
-            </div>
-
-            <p style={styles.subtitle}>{publicTagline}</p>
+            <p style={styles.subtitle}>
+              Browse live {campaignTypeNames}. Open a campaign to take part, or
+              make a simple donation through the support flow.
+            </p>
 
             <div className="heroStats" style={styles.heroStats}>
               <HeroStat
@@ -470,11 +533,11 @@ export default async function TenantCampaignsPage({
           </div>
 
           <div style={styles.heroPanel}>
-            {publicLogoMarkUrl ? (
+            {brandLogoSrc ? (
               <div style={styles.heroLogoMarkWrap}>
                 <img
-                  src={publicLogoMarkUrl}
-                  alt={`${publicDisplayName} logo mark`}
+                  src={brandLogoSrc}
+                  alt={`${publicDisplayName} logo`}
                   style={styles.heroLogoMark}
                 />
               </div>
@@ -487,12 +550,22 @@ export default async function TenantCampaignsPage({
             <h2 style={styles.heroPanelTitle}>Two ways to help</h2>
 
             <div style={styles.heroPanelList}>
-              <div style={styles.heroPanelItem}>
+              <div
+                style={{
+                  ...styles.heroPanelItem,
+                  borderColor: `${accentColour}55`,
+                }}
+              >
                 <strong>See campaign</strong>
                 <span>Open the campaign page to enter, buy, bid or book.</span>
               </div>
 
-              <div style={styles.heroPanelItem}>
+              <div
+                style={{
+                  ...styles.heroPanelItem,
+                  borderColor: `${primaryColour}55`,
+                }}
+              >
                 <strong>Support campaign</strong>
                 <span>Make a simple donation without receiving an entry.</span>
               </div>
@@ -532,7 +605,7 @@ export default async function TenantCampaignsPage({
                 {getTypeLabel(featuredCampaign.type)}
               </span>
 
-              <span style={styles.statusPill}>Featured</span>
+              <span style={brandedFeaturedPillStyle}>Featured</span>
             </div>
 
             <h2 style={styles.featuredTitle}>{featuredCampaign.title}</h2>
@@ -576,9 +649,9 @@ export default async function TenantCampaignsPage({
           <span
             style={{
               ...styles.countPill,
-              color: primaryColour,
-              borderColor: `${primaryColour}55`,
-              background: `${primaryColour}14`,
+              color: "#0f172a",
+              borderColor: `${accentColour}AA`,
+              background: `${accentColour}24`,
             }}
           >
             {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
@@ -595,6 +668,7 @@ export default async function TenantCampaignsPage({
                     ...styles.filterButtonActive,
                     background: primaryColour,
                     borderColor: primaryColour,
+                    color: "#0f172a",
                   }
                 : {}),
             }}
@@ -611,6 +685,7 @@ export default async function TenantCampaignsPage({
                     ...styles.filterButtonActive,
                     background: primaryColour,
                     borderColor: primaryColour,
+                    color: "#0f172a",
                   }
                 : {}),
             }}
@@ -627,6 +702,7 @@ export default async function TenantCampaignsPage({
                     ...styles.filterButtonActive,
                     background: primaryColour,
                     borderColor: primaryColour,
+                    color: "#0f172a",
                   }
                 : {}),
             }}
@@ -643,6 +719,7 @@ export default async function TenantCampaignsPage({
                     ...styles.filterButtonActive,
                     background: primaryColour,
                     borderColor: primaryColour,
+                    color: "#0f172a",
                   }
                 : {}),
             }}
@@ -660,6 +737,7 @@ export default async function TenantCampaignsPage({
                       ...styles.filterButtonActive,
                       background: primaryColour,
                       borderColor: primaryColour,
+                      color: "#0f172a",
                     }
                   : {}),
               }}
@@ -732,7 +810,12 @@ export default async function TenantCampaignsPage({
       </section>
 
       {publicFooterText ? (
-        <footer style={styles.footer}>
+        <footer
+          style={{
+            ...styles.footer,
+            borderColor: `${accentColour}66`,
+          }}
+        >
           <p style={styles.footerText}>{publicFooterText}</p>
         </footer>
       ) : null}
@@ -767,6 +850,7 @@ const responsiveStyles = `
 }
 
 @media (max-width: 980px) {
+  .tenant-campaigns-page .brandMasthead,
   .tenant-campaigns-page .heroMainGrid,
   .tenant-campaigns-page .featuredCard {
     grid-template-columns: 1fr !important;
@@ -788,11 +872,23 @@ const responsiveStyles = `
     padding: 16px 10px 44px !important;
   }
 
+  .tenant-campaigns-page .brandMasthead,
   .tenant-campaigns-page .campaigns-hero,
   .tenant-campaigns-page .featuredCard,
   .tenant-campaigns-page .filtersCard {
     padding: 18px !important;
     border-radius: 24px !important;
+  }
+
+  .tenant-campaigns-page .brandIdentity {
+    grid-template-columns: 1fr !important;
+    text-align: center !important;
+    justify-items: center !important;
+  }
+
+  .tenant-campaigns-page .brandAccentPanel {
+    text-align: center !important;
+    justify-items: center !important;
   }
 
   .tenant-campaigns-page .heroStats,
@@ -826,11 +922,137 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 auto",
     padding: "28px 16px 64px",
     minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.10), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.08), transparent 30%), #f8fafc",
     color: "#0f172a",
     boxSizing: "border-box",
     overflowX: "hidden",
+  },
+
+  brandMasthead: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.42fr)",
+    gap: 16,
+    alignItems: "stretch",
+    padding: 18,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.06)",
+    marginBottom: 18,
+    overflow: "hidden",
+  },
+
+  brandIdentity: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 16,
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  mastheadLogoWrap: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 104,
+    height: 104,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+  },
+
+  mastheadLogo: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 10,
+  },
+
+  mastheadFallbackLogo: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 104,
+    height: 104,
+    borderRadius: 26,
+    color: "#0f172a",
+    border: "2px solid",
+    fontSize: 28,
+    fontWeight: 950,
+    letterSpacing: "-0.06em",
+  },
+
+  mastheadText: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  brandKicker: {
+    margin: 0,
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.09em",
+  },
+
+  mastheadTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(32px, 5vw, 56px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.065em",
+    overflowWrap: "anywhere",
+  },
+
+  mastheadTagline: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 16,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  brandAccentPanel: {
+    display: "grid",
+    gap: 8,
+    alignContent: "center",
+    padding: 18,
+    borderRadius: 22,
+    border: "1px solid",
+    minWidth: 0,
+  },
+
+  brandAccentLabel: {
+    color: "#78350f",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  brandAccentTitle: {
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  brandAccentText: {
+    color: "#475569",
+    lineHeight: 1.45,
+    fontSize: 13,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   hero: {
@@ -839,8 +1061,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 22,
     padding: 30,
     borderRadius: 32,
-    background:
-      "radial-gradient(circle at bottom right, rgba(37,99,235,0.22), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
     boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
@@ -875,44 +1095,15 @@ const styles: Record<string, CSSProperties> = {
     padding: "8px 14px",
     borderRadius: 999,
     background: "rgba(15,23,42,0.24)",
-    color: "#facc15",
-    border: "1px solid rgba(250,204,21,0.76)",
+    border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
     marginBottom: 14,
-    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
-  brandTitleRow: {
-    display: "grid",
-    gap: 16,
-    alignItems: "start",
-  },
-
-  brandLogoWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    maxWidth: 240,
-    minHeight: 76,
-    padding: 12,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.96)",
-    border: "1px solid rgba(255,255,255,0.32)",
-    boxShadow: "0 18px 42px rgba(0,0,0,0.18)",
-  },
-
-  brandLogo: {
-    display: "block",
-    maxWidth: 210,
-    maxHeight: 74,
-    objectFit: "contain",
-  },
-
-  title: {
+  heroTitle: {
     margin: 0,
     fontSize: "clamp(42px, 7vw, 72px)",
     lineHeight: 0.95,
@@ -999,7 +1190,6 @@ const styles: Record<string, CSSProperties> = {
   },
 
   heroPanelEyebrow: {
-    color: "#facc15",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -1148,11 +1338,8 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    boxShadow: "0 10px 22px rgba(22,131,248,0.20)",
   },
 
   secondaryAction: {
@@ -1192,7 +1379,6 @@ const styles: Record<string, CSSProperties> = {
 
   kicker: {
     margin: "0 0 6px",
-    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -1212,9 +1398,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     padding: "8px 12px",
     borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
+    border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
@@ -1243,9 +1427,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   filterButtonActive: {
-    background: "#0f172a",
-    color: "#ffffff",
-    border: "1px solid #0f172a",
+    color: "#0f172a",
   },
 
   campaignGrid: {
@@ -1328,7 +1510,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 18,
     borderRadius: 24,
     background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    border: "1px solid",
     textAlign: "center",
   },
 
