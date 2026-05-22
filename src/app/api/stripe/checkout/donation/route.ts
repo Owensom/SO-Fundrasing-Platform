@@ -172,6 +172,57 @@ function getBaseUrl(request: NextRequest) {
   return appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
 }
 
+function getSupportReturnUrl(params: {
+  request: NextRequest;
+  tenantSlug: string;
+  campaignType?: string | null;
+  campaignId?: string | null;
+  donation: "cancelled" | "error" | "success";
+  message?: string | null;
+}) {
+  const baseUrl = getBaseUrl(params.request);
+  const url = new URL(
+    `/c/${encodeURIComponent(params.tenantSlug)}/support`,
+    baseUrl,
+  );
+
+  url.searchParams.set("donation", params.donation);
+
+  if (params.message) {
+    url.searchParams.set("message", params.message);
+  }
+
+  if (params.campaignType && params.campaignType !== "general") {
+    url.searchParams.set("campaignType", params.campaignType);
+  }
+
+  if (params.campaignId) {
+    url.searchParams.set("campaignId", params.campaignId);
+  }
+
+  return url.toString();
+}
+
+function redirectToSupportError(params: {
+  request: NextRequest;
+  tenantSlug: string;
+  campaignType?: string | null;
+  campaignId?: string | null;
+  message: string;
+}) {
+  return NextResponse.redirect(
+    getSupportReturnUrl({
+      request: params.request,
+      tenantSlug: params.tenantSlug,
+      campaignType: params.campaignType,
+      campaignId: params.campaignId,
+      donation: "error",
+      message: params.message,
+    }),
+    { status: 303 },
+  );
+}
+
 async function getTenantConnectStatus(
   tenantSlug: string,
 ): Promise<TenantConnectStatus | null> {
@@ -430,24 +481,33 @@ export async function POST(request: NextRequest) {
     }
 
     if (!donorEmail || !donorEmail.includes("@")) {
-      return NextResponse.json(
-        { ok: false, error: "Please enter a valid email address." },
-        { status: 400 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message: "Please enter a valid email address.",
+      });
     }
 
     if (amountCents < 100) {
-      return NextResponse.json(
-        { ok: false, error: "Minimum donation is £1.00." },
-        { status: 400 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message: "Minimum donation is £1.00.",
+      });
     }
 
     if (amountCents > 5000000) {
-      return NextResponse.json(
-        { ok: false, error: "Maximum donation is £50,000.00." },
-        { status: 400 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message: "Maximum donation is £50,000.00.",
+      });
     }
 
     const campaign = await lookupCampaign({
@@ -457,10 +517,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (campaignType !== "general" && campaignId && !campaign) {
-      return NextResponse.json(
-        { ok: false, error: "Campaign not found for this tenant." },
-        { status: 404 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message: "Campaign not found for this tenant.",
+      });
     }
 
     const currency = cleanText(campaign?.currency || body.currency || "GBP")
@@ -521,14 +584,14 @@ export async function POST(request: NextRequest) {
         !giftAidTownOrCity ||
         !giftAidPostcode)
     ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Please complete the Gift Aid name and address fields, or untick Gift Aid.",
-        },
-        { status: 400 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message:
+          "Please complete the Gift Aid name and address fields, or untick Gift Aid.",
+      });
     }
 
     const platformCommissionCents = calculatePlatformCommissionCents({
@@ -572,10 +635,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!donation) {
-      return NextResponse.json(
-        { ok: false, error: "Could not create donation." },
-        { status: 500 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message: "Could not create donation.",
+      });
     }
 
     const connectAccountId = getUsableConnectAccountId({
@@ -608,9 +674,14 @@ export async function POST(request: NextRequest) {
     const successUrl = `${baseUrl}/c/${encodeURIComponent(
       tenantSlug,
     )}/support?donation=success&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}/c/${encodeURIComponent(
+
+    const cancelUrl = getSupportReturnUrl({
+      request,
       tenantSlug,
-    )}/support?donation=cancelled`;
+      campaignType,
+      campaignId,
+      donation: "cancelled",
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -708,10 +779,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!session.url) {
-      return NextResponse.json(
-        { ok: false, error: "Stripe did not return a checkout URL." },
-        { status: 500 },
-      );
+      return redirectToSupportError({
+        request,
+        tenantSlug,
+        campaignType,
+        campaignId,
+        message: "Stripe did not return a checkout URL.",
+      });
     }
 
     await markDonationCheckoutStarted({
