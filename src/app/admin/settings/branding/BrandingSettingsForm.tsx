@@ -22,12 +22,85 @@ type Props = {
   updateAction: (formData: FormData) => void | Promise<void>;
 };
 
-function cleanInitialColour(value: string, fallback: string) {
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) {
-    return value.toUpperCase();
+const COLOUR_PRESETS = [
+  { label: "SO Blue", value: "#1683F8" },
+  { label: "Gold", value: "#FACC15" },
+  { label: "Navy", value: "#0F172A" },
+  { label: "Royal Blue", value: "#2563EB" },
+  { label: "Sky Blue", value: "#38BDF8" },
+  { label: "Emerald", value: "#10B981" },
+  { label: "Forest Green", value: "#166534" },
+  { label: "Purple", value: "#7C3AED" },
+  { label: "Rose", value: "#E11D48" },
+  { label: "Orange", value: "#F97316" },
+  { label: "Slate", value: "#475569" },
+  { label: "Black", value: "#020617" },
+  { label: "White", value: "#FFFFFF" },
+];
+
+const COLOUR_NAME_MAP: Record<string, string> = {
+  blue: "#1683F8",
+  "so blue": "#1683F8",
+  gold: "#FACC15",
+  yellow: "#FACC15",
+  navy: "#0F172A",
+  "dark blue": "#0F172A",
+  "royal blue": "#2563EB",
+  "sky blue": "#38BDF8",
+  green: "#10B981",
+  emerald: "#10B981",
+  "forest green": "#166534",
+  purple: "#7C3AED",
+  rose: "#E11D48",
+  red: "#DC2626",
+  orange: "#F97316",
+  slate: "#475569",
+  grey: "#64748B",
+  gray: "#64748B",
+  black: "#020617",
+  white: "#FFFFFF",
+};
+
+function normaliseHex(value: string) {
+  const clean = String(value || "").trim().toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
   }
 
+  if (/^[0-9A-F]{6}$/.test(clean)) {
+    return `#${clean}`;
+  }
+
+  return "";
+}
+
+function resolveColourInput(value: string, fallback: string) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return fallback;
+
+  const hex = normaliseHex(clean);
+
+  if (hex) return hex;
+
+  const named = COLOUR_NAME_MAP[clean.toLowerCase()];
+
+  if (named) return named;
+
   return fallback;
+}
+
+function cleanInitialColour(value: string, fallback: string) {
+  return normaliseHex(value) || fallback;
+}
+
+function getPresetValue(hex: string) {
+  const match = COLOUR_PRESETS.find(
+    (preset) => preset.value.toUpperCase() === hex.toUpperCase(),
+  );
+
+  return match?.value || "custom";
 }
 
 export default function BrandingSettingsForm({
@@ -42,15 +115,52 @@ export default function BrandingSettingsForm({
   const [tagline, setTagline] = useState(formState.tagline);
   const [logoUrl, setLogoUrl] = useState(formState.logoUrl);
   const [logoMarkUrl, setLogoMarkUrl] = useState(formState.logoMarkUrl);
+
   const [primaryColour, setPrimaryColour] = useState(
     cleanInitialColour(formState.primaryColour, "#1683F8"),
   );
   const [accentColour, setAccentColour] = useState(
     cleanInitialColour(formState.accentColour, "#FACC15"),
   );
+
+  const [primaryColourText, setPrimaryColourText] = useState(
+    cleanInitialColour(formState.primaryColour, "#1683F8"),
+  );
+  const [accentColourText, setAccentColourText] = useState(
+    cleanInitialColour(formState.accentColour, "#FACC15"),
+  );
+
   const [footerText, setFooterText] = useState(formState.footerText);
   const [logoUploading, setLogoUploading] = useState(false);
   const [markUploading, setMarkUploading] = useState(false);
+
+  function updatePrimaryColour(value: string) {
+    const next = resolveColourInput(value, primaryColour);
+
+    setPrimaryColour(next);
+    setPrimaryColourText(value);
+  }
+
+  function commitPrimaryColour(value: string) {
+    const next = resolveColourInput(value, primaryColour);
+
+    setPrimaryColour(next);
+    setPrimaryColourText(next);
+  }
+
+  function updateAccentColour(value: string) {
+    const next = resolveColourInput(value, accentColour);
+
+    setAccentColour(next);
+    setAccentColourText(value);
+  }
+
+  function commitAccentColour(value: string) {
+    const next = resolveColourInput(value, accentColour);
+
+    setAccentColour(next);
+    setAccentColourText(next);
+  }
 
   async function uploadBrandImage(file: File, target: "logo" | "mark") {
     if (!canUseAdvancedBranding) {
@@ -356,57 +466,141 @@ export default function BrandingSettingsForm({
               </section>
 
               <div className="colour-grid" style={styles.colourGrid}>
-                <label style={styles.colourField}>
+                <section style={styles.colourField}>
                   <span style={styles.label}>Primary colour</span>
 
-                  <div style={styles.colourControl}>
-                    <input
-                      type="color"
-                      value={primaryColour}
-                      onChange={(event) =>
-                        setPrimaryColour(event.target.value.toUpperCase())
-                      }
-                      style={styles.colourPicker}
-                    />
+                  <input
+                    type="hidden"
+                    name="public_primary_colour"
+                    value={primaryColour}
+                  />
 
-                    <input
-                      name="public_primary_colour"
-                      value={primaryColour}
-                      onChange={(event) =>
-                        setPrimaryColour(event.target.value.toUpperCase())
-                      }
-                      placeholder="#1683F8"
-                      pattern="^#[0-9a-fA-F]{6}$"
-                      style={styles.colourTextInput}
-                    />
+                  <div style={styles.colourStack}>
+                    <label style={styles.miniLabel}>
+                      Quick choice
+                      <select
+                        value={getPresetValue(primaryColour)}
+                        onChange={(event) => {
+                          const next = event.target.value;
+
+                          if (next === "custom") return;
+
+                          setPrimaryColour(next);
+                          setPrimaryColourText(next);
+                        }}
+                        style={styles.select}
+                      >
+                        {COLOUR_PRESETS.map((preset) => (
+                          <option key={preset.value} value={preset.value}>
+                            {preset.label}
+                          </option>
+                        ))}
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+
+                    <label style={styles.miniLabel}>
+                      Type name or hex
+                      <input
+                        value={primaryColourText}
+                        onChange={(event) =>
+                          updatePrimaryColour(event.target.value)
+                        }
+                        onBlur={(event) =>
+                          commitPrimaryColour(event.target.value)
+                        }
+                        placeholder="Blue, Gold, #1683F8"
+                        style={styles.input}
+                      />
+                    </label>
+
+                    <label style={styles.miniLabel}>
+                      Click for custom colour
+                      <div style={styles.colourControl}>
+                        <input
+                          type="color"
+                          value={primaryColour}
+                          onChange={(event) => {
+                            const next = event.target.value.toUpperCase();
+
+                            setPrimaryColour(next);
+                            setPrimaryColourText(next);
+                          }}
+                          style={styles.colourPicker}
+                        />
+
+                        <span style={styles.colourValue}>{primaryColour}</span>
+                      </div>
+                    </label>
                   </div>
-                </label>
+                </section>
 
-                <label style={styles.colourField}>
+                <section style={styles.colourField}>
                   <span style={styles.label}>Accent colour</span>
 
-                  <div style={styles.colourControl}>
-                    <input
-                      type="color"
-                      value={accentColour}
-                      onChange={(event) =>
-                        setAccentColour(event.target.value.toUpperCase())
-                      }
-                      style={styles.colourPicker}
-                    />
+                  <input
+                    type="hidden"
+                    name="public_accent_colour"
+                    value={accentColour}
+                  />
 
-                    <input
-                      name="public_accent_colour"
-                      value={accentColour}
-                      onChange={(event) =>
-                        setAccentColour(event.target.value.toUpperCase())
-                      }
-                      placeholder="#FACC15"
-                      pattern="^#[0-9a-fA-F]{6}$"
-                      style={styles.colourTextInput}
-                    />
+                  <div style={styles.colourStack}>
+                    <label style={styles.miniLabel}>
+                      Quick choice
+                      <select
+                        value={getPresetValue(accentColour)}
+                        onChange={(event) => {
+                          const next = event.target.value;
+
+                          if (next === "custom") return;
+
+                          setAccentColour(next);
+                          setAccentColourText(next);
+                        }}
+                        style={styles.select}
+                      >
+                        {COLOUR_PRESETS.map((preset) => (
+                          <option key={preset.value} value={preset.value}>
+                            {preset.label}
+                          </option>
+                        ))}
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+
+                    <label style={styles.miniLabel}>
+                      Type name or hex
+                      <input
+                        value={accentColourText}
+                        onChange={(event) =>
+                          updateAccentColour(event.target.value)
+                        }
+                        onBlur={(event) => commitAccentColour(event.target.value)}
+                        placeholder="Gold, Navy, #FACC15"
+                        style={styles.input}
+                      />
+                    </label>
+
+                    <label style={styles.miniLabel}>
+                      Click for custom colour
+                      <div style={styles.colourControl}>
+                        <input
+                          type="color"
+                          value={accentColour}
+                          onChange={(event) => {
+                            const next = event.target.value.toUpperCase();
+
+                            setAccentColour(next);
+                            setAccentColourText(next);
+                          }}
+                          style={styles.colourPicker}
+                        />
+
+                        <span style={styles.colourValue}>{accentColour}</span>
+                      </div>
+                    </label>
                   </div>
-                </label>
+                </section>
               </div>
 
               <label style={styles.field}>
@@ -779,6 +973,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
   },
 
+  miniLabel: {
+    display: "grid",
+    gap: 7,
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+
   input: {
     width: "100%",
     minHeight: 50,
@@ -789,6 +991,18 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 13px",
     fontSize: 16,
     fontWeight: 750,
+  },
+
+  select: {
+    width: "100%",
+    minHeight: 50,
+    borderRadius: 16,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "12px 13px",
+    fontSize: 15,
+    fontWeight: 800,
   },
 
   hint: {
@@ -920,12 +1134,21 @@ const styles: Record<string, CSSProperties> = {
   colourGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
+    gap: 14,
   },
 
   colourField: {
     display: "grid",
-    gap: 8,
+    gap: 9,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  colourStack: {
+    display: "grid",
+    gap: 10,
   },
 
   colourControl: {
@@ -945,14 +1168,15 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
 
-  colourTextInput: {
-    width: "100%",
+  colourValue: {
+    display: "inline-flex",
+    alignItems: "center",
     minHeight: 50,
-    borderRadius: 16,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
     padding: "12px 13px",
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #cbd5e1",
+    color: "#0f172a",
     fontSize: 16,
     fontWeight: 850,
     letterSpacing: "0.03em",
