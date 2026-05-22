@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
+import { queryOne } from "@/lib/db";
 import {
   checkSubscriptionCapability,
   getMaximumActiveCampaignsForTier,
@@ -42,8 +43,11 @@ type SessionUserWithTenants = {
 
 type TenantCampaignSettings = {
   subscription_tier?: string | null;
-  highlighted_campaign_type?: string | null;
-  highlighted_campaign_id?: string | null;
+};
+
+type HighlightedCampaignSettings = {
+  highlighted_campaign_type: string | null;
+  highlighted_campaign_id: string | null;
 };
 
 function normaliseFocus(value: number | null | undefined) {
@@ -216,16 +220,30 @@ function isCampaignType(value: unknown): value is CampaignType {
   );
 }
 
+async function getHighlightedCampaignSettings(tenantSlug: string) {
+  return queryOne<HighlightedCampaignSettings>(
+    `
+      select
+        highlighted_campaign_type,
+        highlighted_campaign_id
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+}
+
 function getHighlightedCampaign(params: {
   campaigns: Campaign[];
-  settings: TenantCampaignSettings | null;
+  highlightedSettings: HighlightedCampaignSettings | null;
 }) {
   const highlightedType = String(
-    params.settings?.highlighted_campaign_type || "",
+    params.highlightedSettings?.highlighted_campaign_type || "",
   ).trim();
 
   const highlightedId = String(
-    params.settings?.highlighted_campaign_id || "",
+    params.highlightedSettings?.highlighted_campaign_id || "",
   ).trim();
 
   if (isCampaignType(highlightedType) && highlightedId) {
@@ -268,8 +286,13 @@ export default async function TenantCampaignsPage({
 
   const activeType = getActiveType(resolvedSearchParams?.type);
 
-  const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
-  const tenantSettingsRaw = await getTenantSettings(tenantSlug);
+  const [campaigns, tenantSettingsRaw, highlightedSettings] =
+    await Promise.all([
+      getAllCampaignsForTenant(tenantSlug),
+      getTenantSettings(tenantSlug),
+      getHighlightedCampaignSettings(tenantSlug),
+    ]);
+
   const tenantSettings = tenantSettingsRaw as TenantCampaignSettings | null;
 
   const subscriptionTier = normaliseSubscriptionTier(
@@ -311,7 +334,7 @@ export default async function TenantCampaignsPage({
 
   const featuredCampaign = getHighlightedCampaign({
     campaigns: publicCampaigns,
-    settings: tenantSettings,
+    highlightedSettings,
   });
 
   const campaignTypeNames = auctionCapability.allowed
@@ -568,8 +591,8 @@ export default async function TenantCampaignsPage({
 function HeroStat({ label, value }: { label: string; value: number }) {
   return (
     <div style={styles.heroStat}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span style={styles.heroStatLabel}>{label}</span>
+      <strong style={styles.heroStatValue}>{value}</strong>
     </div>
   );
 }
@@ -598,7 +621,7 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .heroStats {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
   }
 
   .tenant-campaigns-page .campaignGrid {
@@ -731,7 +754,7 @@ const styles: Record<string, CSSProperties> = {
 
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
     gap: 12,
     marginTop: 24,
   },
@@ -744,7 +767,23 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(148,163,184,0.25)",
     minWidth: 0,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+  },
+
+  heroStatLabel: {
+    color: "#ffffff",
+    fontSize: 13,
+    lineHeight: 1.2,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  heroStatValue: {
+    color: "#ffffff",
+    fontSize: 24,
+    lineHeight: 1,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
   },
 
   heroPanel: {
