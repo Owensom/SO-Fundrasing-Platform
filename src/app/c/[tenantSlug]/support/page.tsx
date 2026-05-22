@@ -15,6 +15,7 @@ type PageProps = {
     campaignType?: string;
     campaignId?: string;
     donation?: string;
+    message?: string;
   }>;
 };
 
@@ -203,7 +204,7 @@ async function getTenantSupportSettings(
   );
 }
 
-function getStatusMessage(value: string | undefined) {
+function getStatusMessage(value: string | undefined, message?: string) {
   if (value === "success") {
     return {
       tone: "success" as const,
@@ -220,6 +221,16 @@ function getStatusMessage(value: string | undefined) {
     };
   }
 
+  if (value === "error") {
+    return {
+      tone: "error" as const,
+      title: "Please check your donation details.",
+      text:
+        cleanText(message) ||
+        "Something was not quite right. Please check the form and try again.",
+    };
+  }
+
   return null;
 }
 
@@ -233,7 +244,10 @@ export default async function PublicSupportPage({
   const tenantSlug = normalizeTenantSlug(resolvedParams.tenantSlug);
   const campaignType = cleanCampaignType(resolvedSearchParams.campaignType);
   const campaignId = cleanText(resolvedSearchParams.campaignId);
-  const statusMessage = getStatusMessage(resolvedSearchParams.donation);
+  const statusMessage = getStatusMessage(
+    resolvedSearchParams.donation,
+    resolvedSearchParams.message,
+  );
 
   if (!tenantSlug) {
     notFound();
@@ -425,7 +439,9 @@ export default async function PublicSupportPage({
             ...styles.statusCard,
             ...(statusMessage.tone === "success"
               ? styles.successCard
-              : styles.warningCard),
+              : statusMessage.tone === "error"
+                ? styles.errorCard
+                : styles.warningCard),
           }}
         >
           <h2 style={styles.statusTitle}>{statusMessage.title}</h2>
@@ -1054,6 +1070,12 @@ const styles: Record<string, CSSProperties> = {
     background: "#fff7ed",
     color: "#9a3412",
     borderColor: "#fed7aa",
+  },
+
+  errorCard: {
+    background: "#fee2e2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
   },
 
   statusTitle: {
