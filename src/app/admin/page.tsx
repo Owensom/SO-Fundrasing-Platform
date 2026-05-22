@@ -274,12 +274,21 @@ export default async function AdminDashboardPage() {
           >
             View public →
           </Link>
-                    <Link
+
+          <Link
             href="/admin/orders"
             className="secondaryButton"
             style={styles.secondaryButton}
           >
             Orders →
+          </Link>
+
+          <Link
+            href="/admin/donations"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Donations →
           </Link>
 
           <Link
@@ -326,23 +335,11 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="admin-plan-grid" style={styles.planGrid}>
-          <PlanFeature
-            label="Raffles"
-            included
-            text="Included on all plans"
-          />
+          <PlanFeature label="Raffles" included text="Included on all plans" />
 
-          <PlanFeature
-            label="Squares"
-            included
-            text="Included on all plans"
-          />
+          <PlanFeature label="Squares" included text="Included on all plans" />
 
-          <PlanFeature
-            label="Events"
-            included
-            text="Included on all plans"
-          />
+          <PlanFeature label="Events" included text="Included on all plans" />
 
           <PlanFeature
             label="Auctions"
@@ -369,7 +366,7 @@ export default async function AdminDashboardPage() {
             included={customDomainCapability.allowed}
             text={
               customDomainCapability.allowed
-                ? "Included on this plan"
+                ? "Foundation required"
                 : "Foundation required"
             }
           />
@@ -472,6 +469,16 @@ export default async function AdminDashboardPage() {
         />
 
         <DashboardCard
+          href="/admin/donations"
+          badgeText="GIFT"
+          title="Donations & Gift Aid"
+          description="Review pure donations, donor details, payment status and Gift Aid declarations."
+          stats="Donation reporting"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
           href="/admin/customers"
           badgeText="CRM"
           title="Customers"
@@ -539,6 +546,14 @@ export default async function AdminDashboardPage() {
             </Link>
 
             <Link
+              href="/admin/donations"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
+              Donations & Gift Aid →
+            </Link>
+
+            <Link
               href="/admin/customers"
               className="financeButtonSecondary"
               style={styles.financeButtonSecondary}
@@ -603,6 +618,7 @@ export default async function AdminDashboardPage() {
     </main>
   );
 }
+
 function StatCard({
   label,
   value,
@@ -909,6 +925,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1007,7 +1024,7 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 1,
     gridArea: "actions",
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
     gap: 12,
     alignItems: "stretch",
     width: "100%",
