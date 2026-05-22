@@ -40,6 +40,12 @@ type SessionUserWithTenants = {
   tenantSlugs?: string[];
 };
 
+type TenantCampaignSettings = {
+  subscription_tier?: string | null;
+  highlighted_campaign_type?: string | null;
+  highlighted_campaign_id?: string | null;
+};
+
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
 
@@ -201,6 +207,42 @@ function pluralise(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
+function isCampaignType(value: unknown): value is CampaignType {
+  return (
+    value === "raffle" ||
+    value === "squares" ||
+    value === "event" ||
+    value === "auction"
+  );
+}
+
+function getHighlightedCampaign(params: {
+  campaigns: Campaign[];
+  settings: TenantCampaignSettings | null;
+}) {
+  const highlightedType = String(
+    params.settings?.highlighted_campaign_type || "",
+  ).trim();
+
+  const highlightedId = String(
+    params.settings?.highlighted_campaign_id || "",
+  ).trim();
+
+  if (isCampaignType(highlightedType) && highlightedId) {
+    const selectedCampaign = params.campaigns.find(
+      (campaign) =>
+        campaign.type === highlightedType &&
+        String(campaign.id) === highlightedId,
+    );
+
+    if (selectedCampaign) {
+      return selectedCampaign;
+    }
+  }
+
+  return params.campaigns[0] || null;
+}
+
 export default async function TenantCampaignsPage({
   params,
   searchParams,
@@ -227,7 +269,8 @@ export default async function TenantCampaignsPage({
   const activeType = getActiveType(resolvedSearchParams?.type);
 
   const campaigns: Campaign[] = await getAllCampaignsForTenant(tenantSlug);
-  const tenantSettings = await getTenantSettings(tenantSlug);
+  const tenantSettingsRaw = await getTenantSettings(tenantSlug);
+  const tenantSettings = tenantSettingsRaw as TenantCampaignSettings | null;
 
   const subscriptionTier = normaliseSubscriptionTier(
     tenantSettings?.subscription_tier,
@@ -266,12 +309,16 @@ export default async function TenantCampaignsPage({
       ? publicCampaigns
       : publicCampaigns.filter((campaign) => campaign.type === activeType);
 
-  const featuredCampaign = publicCampaigns[0] || null;
+  const featuredCampaign = getHighlightedCampaign({
+    campaigns: publicCampaigns,
+    settings: tenantSettings,
+  });
 
   const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
-    return (
+
+  return (
     <main className="tenant-campaigns-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -336,7 +383,9 @@ export default async function TenantCampaignsPage({
         <section className="featuredCard" style={styles.featuredCard}>
           <div style={styles.featuredImageWrap}>
             <img
-              src={featuredCampaign.imageUrl || getDefaultImage(featuredCampaign.type)}
+              src={
+                featuredCampaign.imageUrl || getDefaultImage(featuredCampaign.type)
+              }
               alt={featuredCampaign.title}
               style={getImageStyle(featuredCampaign)}
             />
@@ -524,6 +573,7 @@ function HeroStat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .tenant-campaigns-page,
 .tenant-campaigns-page * {
@@ -804,7 +854,8 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     minWidth: 0,
   },
-    typePill: {
+
+  typePill: {
     display: "inline-flex",
     alignItems: "center",
     padding: "8px 12px",
