@@ -382,10 +382,14 @@ export default async function AdminDonationsPage() {
           tone="info"
         />
         <StatusCard label="Pending" value={pendingCount} tone="neutral" />
-        <StatusCard label="Gift Aid declarations" value={giftAidCount} tone="gold" />
+        <StatusCard
+          label="Gift Aid declarations"
+          value={giftAidCount}
+          tone="gold"
+        />
       </section>
 
-      <section style={styles.sectionHeader}>
+      <section className="donations-report-header" style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Read-only report</p>
 
@@ -394,10 +398,15 @@ export default async function AdminDonationsPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Showing the latest 250 donation records for this tenant. CSV export
-            can be added after the read-only view is confirmed.
+            Showing the latest 250 donation records for this tenant. Export a
+            tenant-isolated CSV when you need to review donations or Gift Aid
+            declarations outside the platform.
           </p>
         </div>
+
+        <Link href="/admin/donations/export" style={styles.exportButton}>
+          Export CSV →
+        </Link>
       </section>
 
       {donations.length === 0 ? (
@@ -551,7 +560,9 @@ function DonationCard({ donation }: { donation: DonationRow }) {
             label="Campaign"
             value={
               <>
-                <strong>{cleanText(donation.campaign_title, "General donation")}</strong>
+                <strong>
+                  {cleanText(donation.campaign_title, "General donation")}
+                </strong>
                 <span>{campaignTypeLabel(donation.campaign_type)}</span>
               </>
             }
@@ -613,12 +624,10 @@ function DonationCard({ donation }: { donation: DonationRow }) {
 
               <InfoBlock
                 label="Declaration"
-                value={
-                  cleanText(
-                    donation.gift_aid_declaration_text,
-                    "Gift Aid declaration text was not recorded.",
-                  )
-                }
+                value={cleanText(
+                  donation.gift_aid_declaration_text,
+                  "Gift Aid declaration text was not recorded.",
+                )}
               />
             </div>
           </div>
@@ -637,13 +646,7 @@ function MoneyBlock({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function InfoBlock({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.infoBlock}>
       <span style={styles.infoLabel}>{label}</span>
@@ -713,6 +716,14 @@ const responsiveStyles = `
   .admin-donations-page .donation-card-main {
     padding: 16px !important;
     border-radius: 22px !important;
+  }
+
+  .admin-donations-page .donations-report-header {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-donations-page .export-csv-button {
+    width: 100% !important;
   }
 }
 
@@ -982,6 +993,10 @@ const styles: Record<string, CSSProperties> = {
   },
 
   sectionHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    alignItems: "end",
+    gap: 16,
     marginBottom: 16,
   },
 
@@ -1009,6 +1024,23 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 760,
     fontWeight: 700,
     overflowWrap: "anywhere",
+  },
+
+  exportButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontSize: 14,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+    boxShadow: "0 14px 28px rgba(15,23,42,0.16)",
   },
 
   emptyCard: {
