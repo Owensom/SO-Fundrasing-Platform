@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 export const runtime = "nodejs";
@@ -42,6 +42,16 @@ type WinnerRow = {
   colour: string | null;
   buyer_name: string | null;
   drawn_at: string | null;
+};
+
+type TenantBrandingRow = {
+  public_display_name: string | null;
+  public_tagline: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+  public_accent_colour: string | null;
+  public_footer_text: string | null;
 };
 
 function normalizeImagePosition(value: unknown) {
@@ -161,6 +171,10 @@ function normalizePrizeItem(value: unknown, index: number) {
   };
 }
 
+function cleanBrandingText(value: unknown) {
+  return String(value || "").trim();
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { slug: string } },
@@ -193,47 +207,62 @@ export async function GET(
       );
     }
 
+    const [tenantBranding, sold, reserved, winners] = await Promise.all([
+      queryOne<TenantBrandingRow>(
+        `
+          select
+            public_display_name,
+            public_tagline,
+            public_logo_url,
+            public_logo_mark_url,
+            public_primary_colour,
+            public_accent_colour,
+            public_footer_text
+          from tenant_settings
+          where tenant_slug = $1
+          limit 1
+        `,
+        [tenantSlug],
+      ),
+      query<TicketRow>(
+        `
+          select ticket_number, colour
+          from raffle_ticket_sales
+          where raffle_id = $1
+          order by ticket_number asc
+        `,
+        [raffleRows[0].id],
+      ),
+      query<TicketRow>(
+        `
+          select ticket_number, colour
+          from raffle_ticket_reservations
+          where raffle_id = $1
+            and status = 'reserved'
+            and expires_at > now()
+          order by ticket_number asc
+        `,
+        [raffleRows[0].id],
+      ),
+      query<WinnerRow>(
+        `
+          select
+            prize_position::int,
+            ticket_number::int,
+            colour,
+            buyer_name,
+            drawn_at
+          from raffle_winners
+          where raffle_id = $1
+          order by prize_position asc
+        `,
+        [raffleRows[0].id],
+      ),
+    ]);
+
     const raffle = raffleRows[0];
-    const raffleId = raffle.id;
     const config = raffle.config_json ?? {};
     const imagePosition = normalizeImagePosition(config.image_position);
-
-    const sold = await query<TicketRow>(
-      `
-        select ticket_number, colour
-        from raffle_ticket_sales
-        where raffle_id = $1
-        order by ticket_number asc
-      `,
-      [raffleId],
-    );
-
-    const reserved = await query<TicketRow>(
-      `
-        select ticket_number, colour
-        from raffle_ticket_reservations
-        where raffle_id = $1
-          and status = 'reserved'
-          and expires_at > now()
-        order by ticket_number asc
-      `,
-      [raffleId],
-    );
-
-    const winners = await query<WinnerRow>(
-      `
-        select
-          prize_position::int,
-          ticket_number::int,
-          colour,
-          buyer_name,
-          drawn_at
-        from raffle_winners
-        where raffle_id = $1
-        order by prize_position asc
-      `,
-      [raffleId],
-    );
 
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
     const offersRaw = Array.isArray(config.offers) ? config.offers : [];
@@ -243,6 +272,22 @@ export async function GET(
       .map(normalizePrizeItem)
       .filter(Boolean)
       .sort((a: any, b: any) => a.position - b.position);
+
+    const branding = {
+      publicDisplayName: cleanBrandingText(tenantBranding?.public_display_name),
+      publicTagline: cleanBrandingText(tenantBranding?.public_tagline),
+      publicLogoUrl: cleanBrandingText(tenantBranding?.public_logo_url),
+      publicLogoMarkUrl: cleanBrandingText(
+        tenantBranding?.public_logo_mark_url,
+      ),
+      publicPrimaryColour: cleanBrandingText(
+        tenantBranding?.public_primary_colour,
+      ),
+      publicAccentColour: cleanBrandingText(
+        tenantBranding?.public_accent_colour,
+      ),
+      publicFooterText: cleanBrandingText(tenantBranding?.public_footer_text),
+    };
 
     return NextResponse.json({
       ok: true,
@@ -291,6 +336,16 @@ export async function GET(
           buyerName: winner.buyer_name,
           drawnAt: winner.drawn_at,
         })),
+        tenantBranding: branding,
+        tenant_branding: {
+          public_display_name: branding.publicDisplayName,
+          public_tagline: branding.publicTagline,
+          public_logo_url: branding.publicLogoUrl,
+          public_logo_mark_url: branding.publicLogoMarkUrl,
+          public_primary_colour: branding.publicPrimaryColour,
+          public_accent_colour: branding.publicAccentColour,
+          public_footer_text: branding.publicFooterText,
+        },
       },
     });
   } catch (error: any) {
