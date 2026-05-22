@@ -596,14 +596,7 @@ function statusPillStyle(status: SafeRaffleStatus): React.CSSProperties {
     border: "1px solid #e2e8f0",
   };
 }
-
 const responsiveStyles = `
-  @media (min-width: 961px) {
-    .public-raffle-container {
-      max-width: 1120px !important;
-    }
-  }
-
   @media (max-width: 760px) {
     .public-raffle-page {
       background: linear-gradient(180deg, #020617 0px, #0f172a 620px, #f8fafc 620px, #f8fafc 100%) !important;
@@ -709,7 +702,7 @@ const responsiveStyles = `
     }
 
     .public-raffle-content-wrap {
-      margin-top: -42px !important;
+      margin-top: -34px !important;
       padding-bottom: 44px !important;
     }
 
@@ -1324,8 +1317,7 @@ export default function PublicRafflePage({ slug }: Props) {
       setSaving(false);
     }
   }
-
-  if (!slug) return <div style={styles.wrap}>Loading…</div>;
+    if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
   if (!raffle) return <div style={styles.wrap}>Raffle not found.</div>;
@@ -1342,8 +1334,7 @@ export default function PublicRafflePage({ slug }: Props) {
             ...styles.heroBackgroundImage,
             objectFit: heroObjectFit,
             objectPosition: heroObjectPosition,
-            opacity: hasCustomHeroImage ? 1 : 0.52,
-            transform: hasCustomHeroImage ? "none" : "scale(0.76)",
+            opacity: hasCustomHeroImage ? 1 : 0.72,
             background: hasCustomHeroImage
               ? "#0f172a"
               : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
@@ -1400,7 +1391,7 @@ export default function PublicRafflePage({ slug }: Props) {
               )}
 
               <div style={styles.brandCopy}>
-                <p style={{ ...styles.brandKicker, color: primaryColour }}>
+                <p style={{ ...styles.brandKicker, color: accentColour }}>
                   Fundraising campaign
                 </p>
 
@@ -1428,9 +1419,7 @@ export default function PublicRafflePage({ slug }: Props) {
               className="public-raffle-type-badge"
               style={{
                 ...styles.typeBadge,
-                background: `${accentColour}E6`,
-                color: "#0f172a",
-                borderColor: `${accentColour}FF`,
+                borderColor: `${accentColour}88`,
               }}
             >
               Prize draw
@@ -2104,12 +2093,12 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background:
-      "linear-gradient(180deg, #020617 0px, #0f172a 720px, #f8fafc 720px, #f8fafc 100%)",
+      "linear-gradient(180deg, #020617 0px, #0f172a 760px, #f8fafc 760px, #f8fafc 100%)",
   },
 
   hero: {
     position: "relative",
-    minHeight: 720,
+    minHeight: 760,
     overflow: "hidden",
     display: "flex",
     alignItems: "flex-end",
@@ -2121,23 +2110,22 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     height: "100%",
     display: "block",
-    transition: "opacity 160ms ease",
   },
 
   heroOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(2,6,23,0.30) 0%, rgba(2,6,23,0.46) 32%, rgba(2,6,23,0.84) 70%, rgba(2,6,23,0.98) 100%)",
+      "linear-gradient(180deg, rgba(2,6,23,0.20) 0%, rgba(2,6,23,0.42) 34%, rgba(2,6,23,0.84) 72%, rgba(2,6,23,0.97) 100%)",
   },
 
   heroInner: {
     position: "relative",
     zIndex: 2,
     width: "100%",
-    maxWidth: 1180,
+    maxWidth: 1240,
     margin: "0 auto",
-    padding: "30px 20px 52px",
+    padding: "34px 20px 56px",
     color: "#ffffff",
   },
 
@@ -2146,26 +2134,26 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
-    marginBottom: 22,
+    marginBottom: 24,
   },
 
   heroBackLink: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "11px 15px",
+    padding: "12px 16px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
     border: "1px solid rgba(255,255,255,0.18)",
     color: "#ffffff",
     textDecoration: "none",
-    fontWeight: 850,
+    fontWeight: 800,
     backdropFilter: "blur(12px)",
   },
 
   heroAdminLink: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "11px 15px",
+    padding: "12px 16px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -2178,27 +2166,26 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "72px minmax(0, 1fr)",
     gap: 14,
     alignItems: "center",
-    maxWidth: 660,
-    marginBottom: 30,
+    maxWidth: 720,
+    marginBottom: 32,
     padding: 14,
     borderRadius: 24,
-    background: "rgba(255,255,255,0.94)",
-    border: "1px solid rgba(255,255,255,0.42)",
+    background: "linear-gradient(135deg, rgba(15,23,42,0.58), rgba(15,23,42,0.30))",
+    border: "1px solid rgba(255,255,255,0.20)",
     backdropFilter: "blur(16px)",
-    boxShadow: "0 18px 42px rgba(0,0,0,0.20)",
+    boxShadow: "0 16px 38px rgba(0,0,0,0.20)",
   },
 
   brandLogoWrap: {
     width: 72,
     height: 72,
     borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    background: "rgba(255,255,255,0.96)",
+    border: "1px solid rgba(255,255,255,0.30)",
     overflow: "hidden",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 10px 22px rgba(15,23,42,0.10)",
   },
 
   brandLogo: {
@@ -2239,20 +2226,20 @@ const styles: Record<string, React.CSSProperties> = {
 
   brandName: {
     margin: 0,
-    color: "#0f172a",
-    fontSize: 29,
+    color: "#ffffff",
+    fontSize: 28,
     lineHeight: 0.98,
-    letterSpacing: "-0.06em",
+    letterSpacing: "-0.055em",
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
 
   brandTagline: {
     margin: 0,
-    color: "#475569",
+    color: "rgba(255,255,255,0.84)",
     fontSize: 13,
-    lineHeight: 1.42,
-    fontWeight: 800,
+    lineHeight: 1.45,
+    fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
@@ -2261,16 +2248,18 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 20,
   },
 
   typeBadge: {
     display: "inline-flex",
-    padding: "8px 13px",
+    padding: "8px 14px",
     borderRadius: 999,
-    border: "1px solid",
-    fontWeight: 950,
-    fontSize: 12,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#ffffff",
+    fontWeight: 900,
+    fontSize: 13,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     backdropFilter: "blur(12px)",
@@ -2279,10 +2268,10 @@ const styles: Record<string, React.CSSProperties> = {
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "8px 13px",
+    padding: "8px 14px",
     borderRadius: 999,
-    fontWeight: 950,
-    fontSize: 12,
+    fontWeight: 900,
+    fontSize: 13,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
@@ -2290,72 +2279,72 @@ const styles: Record<string, React.CSSProperties> = {
   heroTitle: {
     margin: 0,
     maxWidth: 860,
-    fontSize: "clamp(48px, 8vw, 92px)",
-    lineHeight: 0.9,
-    letterSpacing: "-0.075em",
+    fontSize: "clamp(44px, 8vw, 88px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.07em",
     fontWeight: 950,
     textShadow: "0 8px 32px rgba(0,0,0,0.45)",
   },
 
   heroDescription: {
-    margin: "20px 0 0",
+    margin: "22px 0 0",
     maxWidth: 760,
-    color: "rgba(255,255,255,0.86)",
+    color: "rgba(255,255,255,0.84)",
     fontSize: 18,
-    lineHeight: 1.65,
+    lineHeight: 1.68,
     textShadow: "0 4px 18px rgba(0,0,0,0.34)",
-    fontWeight: 700,
+    fontWeight: 650,
   },
 
   heroMeta: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: 12,
-    marginTop: 28,
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 14,
+    marginTop: 32,
   },
 
   metaCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "rgba(255,255,255,0.13)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    padding: 18,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.14)",
     backdropFilter: "blur(14px)",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.22)",
     display: "grid",
-    gap: 7,
+    gap: 8,
   },
 
   metaLabel: {
     color: "rgba(255,255,255,0.72)",
-    fontSize: 11,
-    fontWeight: 850,
+    fontSize: 12,
+    fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
   heroFooter: {
-    marginTop: 20,
+    marginTop: 22,
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
     color: "rgba(255,255,255,0.80)",
-    fontWeight: 750,
+    fontWeight: 700,
   },
 
   contentWrap: {
     position: "relative",
     zIndex: 5,
-    marginTop: -64,
+    marginTop: -52,
     paddingBottom: 80,
   },
 
   container: {
-    maxWidth: 1180,
+    maxWidth: 1240,
     margin: "0 auto",
     padding: "0 20px",
     display: "grid",
-    gap: 18,
+    gap: 20,
   },
 
   wrap: {
@@ -2364,7 +2353,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   heading: {
-    margin: "8px 0 12px",
+    margin: "10px 0 14px",
     fontSize: "clamp(24px, 5vw, 34px)",
     lineHeight: 1,
     letterSpacing: "-0.05em",
@@ -2373,19 +2362,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   disclaimerBox: {
-    padding: 17,
-    borderRadius: 22,
+    padding: 18,
+    borderRadius: 24,
     background: "#fff7ed",
     border: "1px solid #fed7aa",
     color: "#9a3412",
-    fontWeight: 750,
-    lineHeight: 1.6,
+    fontWeight: 700,
+    lineHeight: 1.65,
     boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
   },
 
   prizesBox: {
-    padding: 22,
-    borderRadius: 26,
+    padding: 24,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
@@ -2402,16 +2391,16 @@ const styles: Record<string, React.CSSProperties> = {
   prizeCard: {
     display: "flex",
     gap: 18,
-    padding: 17,
-    borderRadius: 20,
+    padding: 18,
+    borderRadius: 22,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     alignItems: "flex-start",
   },
 
   prizePosition: {
-    width: 70,
-    height: 70,
+    width: 72,
+    height: 72,
     borderRadius: 20,
     background:
       "linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ea580c 100%)",
@@ -2503,12 +2492,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   quickSelect: {
-    padding: 22,
-    borderRadius: 26,
+    padding: 24,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     display: "grid",
-    gap: 17,
+    gap: 18,
     boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
   },
 
@@ -2552,8 +2541,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   offerBox: {
-    padding: 19,
-    borderRadius: 22,
+    padding: 20,
+    borderRadius: 24,
     background: "#ecfdf5",
     border: "1px solid #bbf7d0",
   },
@@ -2570,7 +2559,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #bbf7d0",
     color: "#166534",
-    fontWeight: 850,
+    fontWeight: 800,
     cursor: "pointer",
   },
 
@@ -2584,7 +2573,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     borderRadius: 999,
     padding: "12px 18px",
-    fontWeight: 850,
+    fontWeight: 800,
   },
 
   numberGrid: {
@@ -2627,8 +2616,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   totalBox: {
-    padding: 21,
-    borderRadius: 26,
+    padding: 22,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     display: "grid",
