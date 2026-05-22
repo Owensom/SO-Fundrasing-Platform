@@ -40,11 +40,35 @@ type AuctionItem = {
   bid_count: number;
 };
 
+type TenantBrandingSettings = {
+  public_display_name: string | null;
+  public_tagline: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+  public_accent_colour: string | null;
+  public_footer_text: string | null;
+};
+
 type Props = {
   params: {
     slug: string;
   };
 };
+
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
+}
 
 function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
   const amount = Number(cents || 0) / 100;
@@ -190,6 +214,7 @@ export default function PublicAuctionPage({ params }: Props) {
 
   const [auction, setAuction] = useState<Auction | null>(null);
   const [items, setItems] = useState<AuctionItem[]>([]);
+  const [branding, setBranding] = useState<TenantBrandingSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -210,6 +235,7 @@ export default function PublicAuctionPage({ params }: Props) {
         error?: string;
         auction?: Auction;
         items?: AuctionItem[];
+        branding?: TenantBrandingSettings | null;
       } | null = null;
 
       try {
@@ -224,6 +250,7 @@ export default function PublicAuctionPage({ params }: Props) {
 
       setAuction(parsed.auction ?? null);
       setItems(Array.isArray(parsed.items) ? parsed.items : []);
+      setBranding(parsed.branding ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load auction");
     } finally {
@@ -257,11 +284,83 @@ export default function PublicAuctionPage({ params }: Props) {
     0,
   );
 
-  if (!slug) return <main style={styles.page}>Loading auction…</main>;
+  const publicDisplayName =
+    cleanText(branding?.public_display_name) || "SO Fundraising Platform";
+
+  const publicTagline =
+    cleanText(branding?.public_tagline) ||
+    "Supporting causes through premium fundraising campaigns.";
+
+  const publicLogoUrl = cleanText(branding?.public_logo_url);
+  const publicLogoMarkUrl = cleanText(branding?.public_logo_mark_url);
+  const publicFooterText = cleanText(branding?.public_footer_text);
+
+  const primaryColour = normaliseHexColour(
+    branding?.public_primary_colour,
+    "#1683F8",
+  );
+
+  const accentColour = normaliseHexColour(
+    branding?.public_accent_colour,
+    "#FACC15",
+  );
+
+  const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
+
+  const brandedPageStyle: CSSProperties = {
+    ...styles.page,
+    background: `radial-gradient(circle at top left, ${accentColour}20, transparent 34%), radial-gradient(circle at 80% 8%, ${primaryColour}14, transparent 28%), #f8fafc`,
+  };
+
+  const brandedBrandFallbackStyle: CSSProperties = {
+    ...styles.brandLogoFallback,
+    background: primaryColour,
+    borderColor: accentColour,
+  };
+
+  const brandedHeroOverlayStyle: CSSProperties = {
+    ...styles.heroOverlay,
+    background: `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.50) 44%, rgba(15,23,42,0.94) 100%), radial-gradient(circle at bottom left, ${primaryColour}36, transparent 42%), radial-gradient(circle at top right, ${accentColour}18, transparent 32%)`,
+  };
+
+  const brandedBadgeStyle: CSSProperties = {
+    ...styles.badge,
+    background: `${accentColour}24`,
+    color: "#fef3c7",
+    borderColor: `${accentColour}66`,
+  };
+
+  const brandedNoticeCardStyle: CSSProperties = {
+    ...styles.noticeCard,
+    borderColor: `${primaryColour}2B`,
+  };
+
+  const brandedNoticeChipStyle: CSSProperties = {
+    ...styles.noticeChip,
+    borderColor: `${accentColour}60`,
+    background: `${accentColour}12`,
+  };
+
+  const brandedBidButtonStyle: CSSProperties = {
+    ...styles.bidButton,
+    background: primaryColour,
+    boxShadow: `0 10px 20px ${primaryColour}36`,
+  };
+
+  if (!slug) {
+    return (
+      <main className="public-auction-page" style={brandedPageStyle}>
+        <style>{responsiveStyles}</style>
+        Loading auction…
+      </main>
+    );
+  }
 
   if (loading) {
     return (
-      <main style={styles.page}>
+      <main className="public-auction-page" style={brandedPageStyle}>
+        <style>{responsiveStyles}</style>
+
         <section style={styles.loadingCard}>
           <div style={styles.loadingIcon}>🔨</div>
           <h1 style={styles.loadingTitle}>Loading silent auction…</h1>
@@ -273,7 +372,9 @@ export default function PublicAuctionPage({ params }: Props) {
 
   if (error && !auction) {
     return (
-      <main style={styles.page}>
+      <main className="public-auction-page" style={brandedPageStyle}>
+        <style>{responsiveStyles}</style>
+
         <section style={styles.errorCard}>{error}</section>
       </main>
     );
@@ -281,14 +382,58 @@ export default function PublicAuctionPage({ params }: Props) {
 
   if (!auction) {
     return (
-      <main style={styles.page}>
+      <main className="public-auction-page" style={brandedPageStyle}>
+        <style>{responsiveStyles}</style>
+
         <section style={styles.emptyCard}>Auction not found.</section>
       </main>
     );
   }
 
   return (
-    <main style={styles.page}>
+    <main className="public-auction-page" style={brandedPageStyle}>
+      <style>{responsiveStyles}</style>
+
+      <section className="brandHeader" style={styles.brandHeader}>
+        <div className="brandIdentity" style={styles.brandIdentity}>
+          {brandLogoSrc ? (
+            <div style={styles.brandLogoWrap}>
+              <img
+                src={brandLogoSrc}
+                alt={publicDisplayName}
+                style={styles.brandLogo}
+              />
+            </div>
+          ) : (
+            <div style={brandedBrandFallbackStyle}>
+              {publicDisplayName.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+
+          <div style={styles.brandCopy}>
+            <p style={{ ...styles.brandKicker, color: primaryColour }}>
+              Silent auction
+            </p>
+            <h1 style={styles.brandTitle}>{publicDisplayName}</h1>
+            <p style={styles.brandTagline}>{publicTagline}</p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...styles.brandFeature,
+            borderColor: `${accentColour}78`,
+            background: `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`,
+          }}
+        >
+          <span style={styles.brandFeatureKicker}>Live auction</span>
+          <strong style={styles.brandFeatureTitle}>{auction.title}</strong>
+          <span style={styles.brandFeatureText}>
+            {totalBids} bids placed · {items.length} lots
+          </span>
+        </div>
+      </section>
+
       <section style={styles.hero}>
         <img
           src={auction.image_url || DEFAULT_AUCTION_IMAGE}
@@ -309,7 +454,7 @@ export default function PublicAuctionPage({ params }: Props) {
           }}
         />
 
-        <div style={styles.heroOverlay} />
+        <div style={brandedHeroOverlayStyle} />
 
         <div style={styles.heroInner}>
           <Link href={`/c/${auction.tenant_slug}`} style={styles.backLink}>
@@ -317,7 +462,7 @@ export default function PublicAuctionPage({ params }: Props) {
           </Link>
 
           <div style={styles.badgeRow}>
-            <span style={styles.badge}>Silent auction</span>
+            <span style={brandedBadgeStyle}>Silent auction</span>
             <span style={{ ...styles.statusPill, ...statusStyle(availability.label) }}>
               {availability.label}
             </span>
@@ -356,7 +501,7 @@ export default function PublicAuctionPage({ params }: Props) {
           </div>
 
           <div style={styles.heroFooter}>
-            <span>Supporting the organiser</span>
+            <span>Supporting {publicDisplayName}</span>
             <strong>{totalBids} bids placed</strong>
           </div>
         </div>
@@ -371,13 +516,13 @@ export default function PublicAuctionPage({ params }: Props) {
 
         {error ? <section style={styles.errorCard}>{error}</section> : null}
 
-        <section style={styles.noticeCard}>
+        <section style={brandedNoticeCardStyle}>
           <div style={styles.noticeTextBlock}>
             <h2 style={styles.noticeTitle}>{availability.label}</h2>
             <p style={styles.noticeText}>{availability.message}</p>
           </div>
 
-          <div style={styles.noticeChip}>
+          <div style={brandedNoticeChipStyle}>
             <span>Opens</span>
             <strong>{formatDate(auction.opens_at)}</strong>
           </div>
@@ -423,7 +568,13 @@ export default function PublicAuctionPage({ params }: Props) {
                       }}
                     />
 
-                    <div style={styles.lotBadge}>
+                    <div
+                      style={{
+                        ...styles.lotBadge,
+                        background: "rgba(15,23,42,0.84)",
+                        border: `1px solid ${accentColour}60`,
+                      }}
+                    >
                       Lot {item.sort_order || index + 1}
                     </div>
                   </div>
@@ -449,7 +600,13 @@ export default function PublicAuctionPage({ params }: Props) {
                       <p style={styles.itemDescription}>{item.description}</p>
                     ) : null}
 
-                    <div style={styles.bidFeature}>
+                    <div
+                      style={{
+                        ...styles.bidFeature,
+                        background: `linear-gradient(135deg, #0f172a, #1e293b)`,
+                        border: `1px solid ${accentColour}36`,
+                      }}
+                    >
                       <span>Current highest bid</span>
                       <strong>
                         {highestBid === null
@@ -541,7 +698,7 @@ export default function PublicAuctionPage({ params }: Props) {
                           </span>
                         </label>
 
-                        <button type="submit" style={styles.bidButton}>
+                        <button type="submit" style={brandedBidButtonStyle}>
                           Place bid
                         </button>
                       </form>
@@ -565,20 +722,202 @@ export default function PublicAuctionPage({ params }: Props) {
             <p style={styles.termsText}>{auction.terms_text}</p>
           </section>
         ) : null}
+
+        {publicFooterText ? (
+          <footer
+            style={{
+              ...styles.footer,
+              borderColor: `${accentColour}60`,
+            }}
+          >
+            <p style={styles.footerText}>{publicFooterText}</p>
+          </footer>
+        ) : null}
       </div>
     </main>
   );
 }
 
+const responsiveStyles = `
+.public-auction-page,
+.public-auction-page * {
+  box-sizing: border-box;
+}
+
+.public-auction-page {
+  overflow-x: hidden;
+}
+
+.public-auction-page section,
+.public-auction-page div,
+.public-auction-page article,
+.public-auction-page form,
+.public-auction-page label {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .public-auction-page .brandHeader {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .public-auction-page .brandHeader {
+    padding: 12px !important;
+    border-radius: 22px !important;
+    margin: 10px 10px 12px !important;
+  }
+
+  .public-auction-page .brandIdentity {
+    grid-template-columns: 56px minmax(0, 1fr) !important;
+  }
+
+  .public-auction-page .brandLogoWrap,
+  .public-auction-page .brandLogoFallback {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 16px !important;
+  }
+
+  .public-auction-page .brandTitle {
+    font-size: clamp(24px, 8vw, 36px) !important;
+    letter-spacing: -0.06em !important;
+  }
+}
+`;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    background:
-      "radial-gradient(circle at top left, rgba(251,191,36,0.18), transparent 34%), radial-gradient(circle at 80% 8%, rgba(22,131,248,0.1), transparent 28%), #f8fafc",
     minHeight: "100vh",
     paddingBottom: 48,
     overflowX: "hidden",
   },
+
+  brandHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 0.34fr)",
+    gap: 14,
+    alignItems: "stretch",
+    maxWidth: 1220,
+    margin: "18px auto 14px",
+    padding: 14,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.94)",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 14px 38px rgba(15,23,42,0.07)",
+    backdropFilter: "blur(14px)",
+  },
+
+  brandIdentity: {
+    display: "grid",
+    gridTemplateColumns: "72px minmax(0, 1fr)",
+    gap: 14,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  brandLogoWrap: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+  },
+
+  brandLogo: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 7,
+  },
+
+  brandLogoFallback: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    border: "2px solid",
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
+  brandCopy: {
+    display: "grid",
+    gap: 4,
+    minWidth: 0,
+  },
+
+  brandKicker: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  brandTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(30px, 4.6vw, 50px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
+    overflowWrap: "anywhere",
+  },
+
+  brandTagline: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  brandFeature: {
+    display: "grid",
+    gap: 5,
+    alignContent: "center",
+    padding: 12,
+    borderRadius: 18,
+    border: "1px solid",
+    minWidth: 0,
+  },
+
+  brandFeatureKicker: {
+    color: "#92400e",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  brandFeatureTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  brandFeatureText: {
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+  },
+
   hero: {
     position: "relative",
     width: "100%",
@@ -587,6 +926,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "flex-end",
   },
+
   heroBackgroundImage: {
     position: "absolute",
     inset: 0,
@@ -594,12 +934,12 @@ const styles: Record<string, CSSProperties> = {
     height: "100%",
     display: "block",
   },
+
   heroOverlay: {
     position: "absolute",
     inset: 0,
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,0.14) 0%, rgba(15,23,42,0.52) 46%, rgba(15,23,42,0.94) 100%)",
   },
+
   heroInner: {
     position: "relative",
     zIndex: 2,
@@ -610,6 +950,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     boxSizing: "border-box",
   },
+
   backLink: {
     display: "inline-flex",
     marginBottom: 14,
@@ -625,6 +966,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "100%",
     boxSizing: "border-box",
   },
+
   badgeRow: {
     display: "flex",
     gap: 8,
@@ -632,17 +974,17 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     marginBottom: 14,
   },
+
   badge: {
     display: "inline-flex",
     padding: "8px 12px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.16)",
-    color: "#fef3c7",
-    border: "1px solid rgba(251,191,36,0.32)",
     fontSize: 13,
     fontWeight: 950,
     backdropFilter: "blur(10px)",
+    border: "1px solid",
   },
+
   statusPill: {
     display: "inline-flex",
     padding: "8px 12px",
@@ -651,6 +993,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     backdropFilter: "blur(10px)",
   },
+
   title: {
     margin: 0,
     maxWidth: 900,
@@ -661,6 +1004,7 @@ const styles: Record<string, CSSProperties> = {
     wordBreak: "break-word",
     overflowWrap: "anywhere",
   },
+
   description: {
     margin: "16px 0 0",
     color: "#e2e8f0",
@@ -669,6 +1013,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 780,
     overflowWrap: "anywhere",
   },
+
   heroMeta: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
@@ -676,6 +1021,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 22,
     maxWidth: 920,
   },
+
   metaCard: {
     padding: 14,
     borderRadius: 18,
@@ -687,6 +1033,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
+
   metaLabel: {
     color: "#cbd5e1",
     fontSize: 11,
@@ -694,6 +1041,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
+
   heroFooter: {
     marginTop: 18,
     width: "fit-content",
@@ -708,6 +1056,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     overflowWrap: "anywhere",
   },
+
   contentWrap: {
     maxWidth: 1220,
     margin: "0 auto",
@@ -715,6 +1064,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     width: "100%",
   },
+
   noticeCard: {
     padding: 16,
     borderRadius: 22,
@@ -728,10 +1078,12 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
   },
+
   noticeTextBlock: {
     minWidth: 0,
     flex: "1 1 260px",
   },
+
   noticeTitle: {
     margin: 0,
     fontSize: "clamp(21px, 6vw, 26px)",
@@ -739,16 +1091,17 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.03em",
     overflowWrap: "anywhere",
   },
+
   noticeText: {
     margin: "8px 0 0",
     color: "#475569",
     lineHeight: 1.55,
     overflowWrap: "anywhere",
   },
+
   noticeChip: {
     padding: 14,
     borderRadius: 18,
-    background: "#f8fafc",
     border: "1px solid #e2e8f0",
     display: "grid",
     gap: 5,
@@ -756,6 +1109,7 @@ const styles: Record<string, CSSProperties> = {
     width: "min(100%, 300px)",
     overflowWrap: "anywhere",
   },
+
   successCard: {
     padding: 16,
     borderRadius: 22,
@@ -766,6 +1120,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 18,
     marginBottom: 16,
   },
+
   errorCard: {
     padding: 16,
     borderRadius: 22,
@@ -777,6 +1132,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     overflowWrap: "anywhere",
   },
+
   loadingCard: {
     maxWidth: 560,
     margin: "80px auto",
@@ -787,17 +1143,21 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
   },
+
   loadingIcon: {
     fontSize: 54,
   },
+
   loadingTitle: {
     margin: "14px 0 0",
     color: "#0f172a",
   },
+
   loadingText: {
     margin: "8px 0 0",
     color: "#64748b",
   },
+
   emptyCard: {
     padding: 22,
     borderRadius: 24,
@@ -805,14 +1165,17 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     overflowWrap: "anywhere",
   },
+
   muted: {
     color: "#64748b",
   },
+
   itemsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 18,
   },
+
   itemCard: {
     borderRadius: 26,
     overflow: "hidden",
@@ -821,31 +1184,35 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 12px 34px rgba(15,23,42,0.08)",
     minWidth: 0,
   },
+
   itemImageWrap: {
     position: "relative",
     width: "100%",
     height: "clamp(210px, 56vw, 300px)",
     background: "#f1f5f9",
   },
+
   image: {
     width: "100%",
     height: "100%",
     display: "block",
   },
+
   lotBadge: {
     position: "absolute",
     left: 14,
     top: 14,
     padding: "8px 11px",
     borderRadius: 999,
-    background: "rgba(15,23,42,0.84)",
     color: "#ffffff",
     fontSize: 13,
     fontWeight: 950,
   },
+
   itemBody: {
     padding: "clamp(16px, 5vw, 22px)",
   },
+
   itemTop: {
     display: "flex",
     justifyContent: "space-between",
@@ -853,10 +1220,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+
   itemTitleWrap: {
     minWidth: 0,
     flex: "1 1 220px",
   },
+
   itemTitle: {
     margin: 0,
     fontSize: "clamp(23px, 7vw, 30px)",
@@ -866,11 +1235,13 @@ const styles: Record<string, CSSProperties> = {
     wordBreak: "break-word",
     overflowWrap: "anywhere",
   },
+
   donor: {
     margin: "7px 0 0",
     color: "#64748b",
     overflowWrap: "anywhere",
   },
+
   itemStatus: {
     display: "inline-flex",
     padding: "7px 10px",
@@ -881,28 +1252,31 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     flexShrink: 0,
   },
+
   itemDescription: {
     color: "#334155",
     lineHeight: 1.6,
     margin: "16px 0 0",
     overflowWrap: "anywhere",
   },
+
   bidFeature: {
     marginTop: 18,
     padding: 16,
     borderRadius: 20,
-    background: "linear-gradient(135deg, #0f172a, #1e293b)",
     color: "#ffffff",
     display: "grid",
     gap: 5,
     overflowWrap: "anywhere",
   },
+
   bidStats: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 132px), 1fr))",
     gap: 10,
     marginTop: 14,
   },
+
   bidStat: {
     padding: 12,
     borderRadius: 16,
@@ -913,6 +1287,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
+
   bidForm: {
     display: "grid",
     gap: 14,
@@ -923,11 +1298,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
+
   label: {
     display: "grid",
     gap: 7,
@@ -935,6 +1312,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     minWidth: 0,
   },
+
   input: {
     width: "100%",
     boxSizing: "border-box",
@@ -946,6 +1324,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     minWidth: 0,
   },
+
   checkboxLabel: {
     display: "flex",
     gap: 10,
@@ -955,18 +1334,18 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     overflowWrap: "anywhere",
   },
+
   bidButton: {
     width: "100%",
     padding: "15px 18px",
     borderRadius: 999,
-    background: "#1683f8",
     color: "#ffffff",
     border: "none",
     fontWeight: 950,
     cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
     fontSize: 16,
   },
+
   closedBox: {
     marginTop: 16,
     padding: 16,
@@ -977,6 +1356,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     overflowWrap: "anywhere",
   },
+
   termsCard: {
     marginTop: 18,
     padding: 20,
@@ -985,11 +1365,28 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
+
   termsText: {
     whiteSpace: "pre-wrap",
     color: "#334155",
     lineHeight: 1.65,
     margin: "10px 0 0",
     overflowWrap: "anywhere",
+  },
+
+  footer: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid",
+    textAlign: "center",
+  },
+
+  footerText: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+    lineHeight: 1.5,
   },
 };
