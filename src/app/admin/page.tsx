@@ -284,6 +284,14 @@ export default async function AdminDashboardPage() {
           </Link>
 
           <Link
+            href="/admin/settings/branding"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Branding →
+          </Link>
+
+          <Link
             href="/admin/orders"
             className="secondaryButton"
             style={styles.secondaryButton}
@@ -477,6 +485,21 @@ export default async function AdminDashboardPage() {
         />
 
         <DashboardCard
+          href="/admin/settings/branding"
+          badgeText="BRAND"
+          title="Branding"
+          description="Manage public display name, logos, colours and tenant-facing brand settings."
+          stats={
+            brandingCapability.allowed ||
+            Boolean(tenantSettings?.platform_owner_bypass)
+              ? "Advanced branding available"
+              : "Basic branding settings"
+          }
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
           href="/admin/orders"
           badgeText="ORDERS"
           title="Orders"
@@ -561,6 +584,14 @@ export default async function AdminDashboardPage() {
               style={styles.financeButtonSecondary}
             >
               Public Hub →
+            </Link>
+
+            <Link
+              href="/admin/settings/branding"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
+              Branding →
             </Link>
 
             <Link
