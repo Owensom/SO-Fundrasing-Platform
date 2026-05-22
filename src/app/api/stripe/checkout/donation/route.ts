@@ -49,6 +49,12 @@ type DonationRow = {
   net_amount_cents: number | null;
 };
 
+type TenantSettingsWithGiftAid = {
+  platform_fee_percent?: number | string | null;
+  stripe_connect_account_id?: string | null;
+  gift_aid_enabled?: boolean | null;
+};
+
 function cleanText(value: unknown) {
   return String(value || "").trim();
 }
@@ -397,37 +403,6 @@ export async function POST(request: NextRequest) {
       body.coverFees || body.cover_fees || body.donorCoveredFees,
     );
 
-    const giftAidClaimed = boolValue(
-      body.giftAidClaimed ||
-        body.gift_aid_claimed ||
-        body.giftAid ||
-        body.gift_aid,
-    );
-
-    const giftAidFirstName = cleanText(
-      body.giftAidFirstName || body.gift_aid_first_name,
-    );
-
-    const giftAidLastName = cleanText(
-      body.giftAidLastName || body.gift_aid_last_name,
-    );
-
-    const giftAidAddressLine1 = cleanText(
-      body.giftAidAddressLine1 || body.gift_aid_address_line_1,
-    );
-
-    const giftAidAddressLine2 = cleanText(
-      body.giftAidAddressLine2 || body.gift_aid_address_line_2,
-    );
-
-    const giftAidTownOrCity = cleanText(
-      body.giftAidTownOrCity || body.gift_aid_town_or_city,
-    );
-
-    const giftAidPostcode = cleanText(
-      body.giftAidPostcode || body.gift_aid_postcode,
-    );
-
     if (!tenantSlug) {
       return NextResponse.json(
         { ok: false, error: "Tenant is required." },
@@ -445,24 +420,6 @@ export async function POST(request: NextRequest) {
     if (amountCents < 100) {
       return NextResponse.json(
         { ok: false, error: "Minimum donation is £1.00." },
-        { status: 400 },
-      );
-    }
-
-    if (
-      giftAidClaimed &&
-      (!giftAidFirstName ||
-        !giftAidLastName ||
-        !giftAidAddressLine1 ||
-        !giftAidTownOrCity ||
-        !giftAidPostcode)
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Please complete the Gift Aid name and address fields, or untick Gift Aid.",
-        },
         { status: 400 },
       );
     }
@@ -489,12 +446,68 @@ export async function POST(request: NextRequest) {
       campaign?.title ||
       "General donation";
 
-    const tenantSettings = await getTenantSettings(tenantSlug);
+    const tenantSettings = (await getTenantSettings(
+      tenantSlug,
+    )) as TenantSettingsWithGiftAid | null;
+
     const connectStatus = await getTenantConnectStatus(tenantSlug);
+
+    const giftAidAllowed = Boolean(tenantSettings?.gift_aid_enabled);
+
+    const requestedGiftAidClaimed = boolValue(
+      body.giftAidClaimed ||
+        body.gift_aid_claimed ||
+        body.giftAid ||
+        body.gift_aid,
+    );
+
+    const giftAidClaimed = giftAidAllowed && requestedGiftAidClaimed;
+
+    const giftAidFirstName = cleanText(
+      body.giftAidFirstName || body.gift_aid_first_name,
+    );
+
+    const giftAidLastName = cleanText(
+      body.giftAidLastName || body.gift_aid_last_name,
+    );
+
+    const giftAidAddressLine1 = cleanText(
+      body.giftAidAddressLine1 || body.gift_aid_address_line_1,
+    );
+
+    const giftAidAddressLine2 = cleanText(
+      body.giftAidAddressLine2 || body.gift_aid_address_line_2,
+    );
+
+    const giftAidTownOrCity = cleanText(
+      body.giftAidTownOrCity || body.gift_aid_town_or_city,
+    );
+
+    const giftAidPostcode = cleanText(
+      body.giftAidPostcode || body.gift_aid_postcode,
+    );
+
+    if (
+      giftAidClaimed &&
+      (!giftAidFirstName ||
+        !giftAidLastName ||
+        !giftAidAddressLine1 ||
+        !giftAidTownOrCity ||
+        !giftAidPostcode)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Please complete the Gift Aid name and address fields, or untick Gift Aid.",
+        },
+        { status: 400 },
+      );
+    }
 
     const platformCommissionCents = calculatePlatformCommissionCents({
       amountCents,
-      platformFeePercent: tenantSettings?.platform_fee_percent ?? 0,
+      platformFeePercent: Number(tenantSettings?.platform_fee_percent ?? 0),
     });
 
     const donorFeeCents = donorCoveredFees
@@ -631,6 +644,7 @@ export async function POST(request: NextRequest) {
         donor_email: donorEmail,
 
         gift_aid_claimed: giftAidClaimed ? "true" : "false",
+        gift_aid_allowed: giftAidAllowed ? "true" : "false",
 
         base_amount_cents: String(amountCents),
         donation_amount_cents: String(amountCents),
