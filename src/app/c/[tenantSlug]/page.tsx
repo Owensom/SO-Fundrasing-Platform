@@ -389,7 +389,7 @@ export default async function TenantCampaignsPage({
 
   const publicTagline =
     cleanText(brandingSettings?.public_tagline) ||
-    `Browse live ${campaignTypeNames} for this organisation. You can view a campaign to take part, or make a simple donation through the new support flow.`;
+    `Browse live ${campaignTypeNames} for this organisation. You can view a campaign to take part, or make a simple donation through the support flow.`;
 
   const publicLogoUrl = cleanText(brandingSettings?.public_logo_url);
   const publicLogoMarkUrl = cleanText(brandingSettings?.public_logo_mark_url);
@@ -409,94 +409,80 @@ export default async function TenantCampaignsPage({
 
   const brandedPageStyle: CSSProperties = {
     ...styles.page,
-    background: `radial-gradient(circle at top left, ${primaryColour}1A, transparent 34%), radial-gradient(circle at top right, ${accentColour}1F, transparent 30%), #f8fafc`,
+    background: `radial-gradient(circle at top left, ${primaryColour}1A, transparent 34%), radial-gradient(circle at top right, ${accentColour}20, transparent 30%), #f8fafc`,
   };
 
   const brandedHeroStyle: CSSProperties = {
     ...styles.hero,
-    background: `radial-gradient(circle at bottom right, ${primaryColour}42, transparent 38%), radial-gradient(circle at top left, ${accentColour}24, transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)`,
-  };
-
-  const brandedEyebrowStyle: CSSProperties = {
-    ...styles.eyebrow,
-    color: accentColour,
-    borderColor: `${accentColour}CC`,
-    boxShadow: `0 12px 28px ${accentColour}20`,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}40, transparent 40%), radial-gradient(circle at top left, ${accentColour}20, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
   };
 
   const brandedPrimaryActionStyle: CSSProperties = {
     ...styles.primaryAction,
-    background: primaryColour,
-    color: "#0f172a",
-    boxShadow: `0 10px 22px ${primaryColour}44`,
+    background: `linear-gradient(135deg, ${primaryColour} 0%, #2563eb 100%)`,
     border: `1px solid ${primaryColour}`,
+    boxShadow: `0 12px 24px ${primaryColour}36`,
   };
 
-  const brandedFeaturedPillStyle: CSSProperties = {
-    ...styles.statusPill,
-    background: `${accentColour}22`,
+  const brandedGhostActionStyle: CSSProperties = {
+    ...styles.secondaryAction,
+    borderColor: `${primaryColour}66`,
+  };
+
+  const activeFilterStyle: CSSProperties = {
+    ...styles.filterButtonActive,
+    background: primaryColour,
+    borderColor: primaryColour,
     color: "#0f172a",
-    borderColor: `${accentColour}AA`,
   };
 
   return (
     <main className="tenant-campaigns-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
-      <section className="brandMasthead" style={styles.brandMasthead}>
-        <div
-          className="brandIdentity"
-          style={{
-            ...styles.brandIdentity,
-            borderColor: `${primaryColour}33`,
-          }}
-        >
+      <section className="brandHeader" style={styles.brandHeader}>
+        <div className="brandIdentity" style={styles.brandIdentity}>
           {brandLogoSrc ? (
-            <div style={styles.mastheadLogoWrap}>
+            <div style={styles.brandLogoWrap}>
               <img
                 src={brandLogoSrc}
                 alt={publicDisplayName}
-                style={styles.mastheadLogo}
+                style={styles.brandLogo}
               />
             </div>
           ) : (
             <div
               style={{
-                ...styles.mastheadFallbackLogo,
+                ...styles.brandLogoFallback,
                 background: primaryColour,
-                borderColor: `${accentColour}AA`,
+                borderColor: accentColour,
               }}
             >
               {publicDisplayName.slice(0, 2).toUpperCase()}
             </div>
           )}
 
-          <div style={styles.mastheadText}>
-            <p style={{ ...styles.brandKicker, color: primaryColour }}>
-              Public campaign hub
-            </p>
-
-            <h1 style={styles.mastheadTitle}>{publicDisplayName}</h1>
-
-            <p style={styles.mastheadTagline}>{publicTagline}</p>
+          <div style={styles.brandCopy}>
+            <h1 style={styles.brandTitle}>{publicDisplayName}</h1>
+            <p style={styles.brandTagline}>{publicTagline}</p>
           </div>
         </div>
 
         <div
-          className="brandAccentPanel"
+          className="brandFeature"
           style={{
-            ...styles.brandAccentPanel,
-            borderColor: `${accentColour}AA`,
-            background: `linear-gradient(135deg, ${accentColour}24, #ffffff 72%)`,
+            ...styles.brandFeature,
+            borderColor: `${accentColour}88`,
+            background: `linear-gradient(135deg, ${accentColour}1A, #ffffff 78%)`,
           }}
         >
-          <span style={styles.brandAccentLabel}>Featured campaign</span>
+          <span style={styles.brandFeatureKicker}>Featured campaign</span>
 
-          <strong style={styles.brandAccentTitle}>
+          <strong style={styles.brandFeatureTitle}>
             {featuredCampaign?.title || "Live campaigns"}
           </strong>
 
-          <span style={styles.brandAccentText}>
+          <span style={styles.brandFeatureText}>
             {featuredCampaign
               ? `${getTypeLabel(featuredCampaign.type)} selected for the public hub.`
               : "Published campaigns will appear here when available."}
@@ -506,10 +492,20 @@ export default async function TenantCampaignsPage({
 
       <section className="campaigns-hero" style={brandedHeroStyle}>
         <div style={styles.heroGlow} />
+        <div style={styles.heroLineOne} />
+        <div style={styles.heroLineTwo} />
 
         <div className="heroMainGrid" style={styles.heroMainGrid}>
           <div style={styles.heroCopy}>
-            <div style={brandedEyebrowStyle}>Fundraising campaigns</div>
+            <div
+              style={{
+                ...styles.eyebrow,
+                color: accentColour,
+                borderColor: `${accentColour}CC`,
+              }}
+            >
+              Public campaign hub
+            </div>
 
             <h2 style={styles.heroTitle}>Support a live campaign</h2>
 
@@ -519,10 +515,7 @@ export default async function TenantCampaignsPage({
             </p>
 
             <div className="heroStats" style={styles.heroStats}>
-              <HeroStat
-                label="Live campaigns"
-                value={publicCampaigns.length}
-              />
+              <HeroStat label="Live campaigns" value={publicCampaigns.length} />
               <HeroStat label="Raffles" value={raffles.length} />
               <HeroStat label="Squares" value={squares.length} />
               <HeroStat label="Events" value={events.length} />
@@ -532,42 +525,42 @@ export default async function TenantCampaignsPage({
             </div>
           </div>
 
-          <div style={styles.heroPanel}>
-            {brandLogoSrc ? (
-              <div style={styles.heroLogoMarkWrap}>
-                <img
-                  src={brandLogoSrc}
-                  alt={`${publicDisplayName} logo`}
-                  style={styles.heroLogoMark}
-                />
-              </div>
-            ) : null}
+          <div style={styles.supportPanel}>
+            <h2 style={styles.supportPanelTitle}>Support options</h2>
 
-            <div style={{ ...styles.heroPanelEyebrow, color: accentColour }}>
-              Support options
-            </div>
+            <div style={styles.supportOptionList}>
+              <div style={styles.supportOption}>
+                <div
+                  style={{
+                    ...styles.supportIcon,
+                    background: `${primaryColour}28`,
+                    borderColor: `${primaryColour}66`,
+                  }}
+                >
+                  →
+                </div>
 
-            <h2 style={styles.heroPanelTitle}>Two ways to help</h2>
-
-            <div style={styles.heroPanelList}>
-              <div
-                style={{
-                  ...styles.heroPanelItem,
-                  borderColor: `${accentColour}55`,
-                }}
-              >
-                <strong>See campaign</strong>
-                <span>Open the campaign page to enter, buy, bid or book.</span>
+                <div style={styles.supportOptionCopy}>
+                  <strong>See campaign</strong>
+                  <span>Open the campaign page to enter, buy, bid or book.</span>
+                </div>
               </div>
 
-              <div
-                style={{
-                  ...styles.heroPanelItem,
-                  borderColor: `${primaryColour}55`,
-                }}
-              >
-                <strong>Support campaign</strong>
-                <span>Make a simple donation without receiving an entry.</span>
+              <div style={styles.supportOption}>
+                <div
+                  style={{
+                    ...styles.supportIcon,
+                    background: `${accentColour}26`,
+                    borderColor: `${accentColour}80`,
+                  }}
+                >
+                  ♥
+                </div>
+
+                <div style={styles.supportOptionCopy}>
+                  <strong>Support campaign</strong>
+                  <span>Make a simple donation without receiving an entry.</span>
+                </div>
               </div>
             </div>
           </div>
@@ -598,14 +591,23 @@ export default async function TenantCampaignsPage({
             <div style={styles.cardTopRow}>
               <span
                 style={{
-                  ...styles.typePill,
-                  ...getTypeStyle(featuredCampaign.type),
+                  ...styles.featuredKicker,
+                  color: "#92400e",
                 }}
               >
-                {getTypeLabel(featuredCampaign.type)}
+                ★ Featured campaign
               </span>
 
-              <span style={brandedFeaturedPillStyle}>Featured</span>
+              <span
+                style={{
+                  ...styles.statusPill,
+                  background: `${accentColour}22`,
+                  borderColor: `${accentColour}88`,
+                  color: "#0f172a",
+                }}
+              >
+                Selected
+              </span>
             </div>
 
             <h2 style={styles.featuredTitle}>{featuredCampaign.title}</h2>
@@ -615,12 +617,21 @@ export default async function TenantCampaignsPage({
                 getTypeMeta(featuredCampaign.type)}
             </p>
 
+            <div style={styles.featuredMetaGrid}>
+              <MiniMeta
+                label="Campaign type"
+                value={getTypeLabel(featuredCampaign.type)}
+              />
+              <MiniMeta label="Status" value="Live" />
+              <MiniMeta label="Support" value="Campaign donations" />
+            </div>
+
             <div className="campaignActions" style={styles.campaignActions}>
               <Link
                 href={getCampaignUrl(featuredCampaign)}
                 style={brandedPrimaryActionStyle}
               >
-                See campaign
+                See campaign →
               </Link>
 
               <Link
@@ -628,7 +639,7 @@ export default async function TenantCampaignsPage({
                   tenantSlug,
                   campaign: featuredCampaign,
                 })}
-                style={styles.secondaryAction}
+                style={brandedGhostActionStyle}
               >
                 Support campaign
               </Link>
@@ -649,9 +660,8 @@ export default async function TenantCampaignsPage({
           <span
             style={{
               ...styles.countPill,
-              color: "#0f172a",
-              borderColor: `${accentColour}AA`,
-              background: `${accentColour}24`,
+              borderColor: `${accentColour}88`,
+              background: `${accentColour}1F`,
             }}
           >
             {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
@@ -663,14 +673,7 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "all", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "all"
-                ? {
-                    ...styles.filterButtonActive,
-                    background: primaryColour,
-                    borderColor: primaryColour,
-                    color: "#0f172a",
-                  }
-                : {}),
+              ...(activeType === "all" ? activeFilterStyle : {}),
             }}
           >
             All
@@ -680,14 +683,7 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "raffle", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "raffle"
-                ? {
-                    ...styles.filterButtonActive,
-                    background: primaryColour,
-                    borderColor: primaryColour,
-                    color: "#0f172a",
-                  }
-                : {}),
+              ...(activeType === "raffle" ? activeFilterStyle : {}),
             }}
           >
             Raffles
@@ -697,14 +693,7 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "squares", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "squares"
-                ? {
-                    ...styles.filterButtonActive,
-                    background: primaryColour,
-                    borderColor: primaryColour,
-                    color: "#0f172a",
-                  }
-                : {}),
+              ...(activeType === "squares" ? activeFilterStyle : {}),
             }}
           >
             Squares
@@ -714,14 +703,7 @@ export default async function TenantCampaignsPage({
             href={getFilterHref({ tenantSlug, type: "event", adminReturn })}
             style={{
               ...styles.filterButton,
-              ...(activeType === "event"
-                ? {
-                    ...styles.filterButtonActive,
-                    background: primaryColour,
-                    borderColor: primaryColour,
-                    color: "#0f172a",
-                  }
-                : {}),
+              ...(activeType === "event" ? activeFilterStyle : {}),
             }}
           >
             Events
@@ -732,14 +714,7 @@ export default async function TenantCampaignsPage({
               href={getFilterHref({ tenantSlug, type: "auction", adminReturn })}
               style={{
                 ...styles.filterButton,
-                ...(activeType === "auction"
-                  ? {
-                      ...styles.filterButtonActive,
-                      background: primaryColour,
-                      borderColor: primaryColour,
-                      color: "#0f172a",
-                    }
-                  : {}),
+                ...(activeType === "auction" ? activeFilterStyle : {}),
               }}
             >
               Auctions
@@ -798,7 +773,7 @@ export default async function TenantCampaignsPage({
 
                   <Link
                     href={getSupportUrl({ tenantSlug, campaign })}
-                    style={styles.secondaryAction}
+                    style={brandedGhostActionStyle}
                   >
                     Support campaign
                   </Link>
@@ -832,6 +807,15 @@ function HeroStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function MiniMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={styles.miniMeta}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 const responsiveStyles = `
 .tenant-campaigns-page,
 .tenant-campaigns-page * {
@@ -850,7 +834,7 @@ const responsiveStyles = `
 }
 
 @media (max-width: 980px) {
-  .tenant-campaigns-page .brandMasthead,
+  .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .heroMainGrid,
   .tenant-campaigns-page .featuredCard {
     grid-template-columns: 1fr !important;
@@ -872,11 +856,11 @@ const responsiveStyles = `
     padding: 16px 10px 44px !important;
   }
 
-  .tenant-campaigns-page .brandMasthead,
+  .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .campaigns-hero,
   .tenant-campaigns-page .featuredCard,
   .tenant-campaigns-page .filtersCard {
-    padding: 18px !important;
+    padding: 16px !important;
     border-radius: 24px !important;
   }
 
@@ -886,14 +870,18 @@ const responsiveStyles = `
     justify-items: center !important;
   }
 
-  .tenant-campaigns-page .brandAccentPanel {
+  .tenant-campaigns-page .brandFeature {
     text-align: center !important;
-    justify-items: center !important;
   }
 
   .tenant-campaigns-page .heroStats,
-  .tenant-campaigns-page .campaignGrid {
+  .tenant-campaigns-page .campaignGrid,
+  .tenant-campaigns-page .featuredMetaGrid {
     grid-template-columns: 1fr !important;
+  }
+
+  .tenant-campaigns-page .supportPanel {
+    padding: 16px !important;
   }
 
   .tenant-campaigns-page .filterNav,
@@ -927,18 +915,18 @@ const styles: Record<string, CSSProperties> = {
     overflowX: "hidden",
   },
 
-  brandMasthead: {
+  brandHeader: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.42fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.38fr)",
     gap: 16,
     alignItems: "stretch",
     padding: 18,
     borderRadius: 28,
-    background: "#ffffff",
+    background: "rgba(255,255,255,0.92)",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 12px 34px rgba(15,23,42,0.06)",
-    marginBottom: 18,
-    overflow: "hidden",
+    boxShadow: "0 18px 48px rgba(15,23,42,0.08)",
+    marginBottom: 16,
+    backdropFilter: "blur(14px)",
   },
 
   brandIdentity: {
@@ -946,124 +934,110 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "auto minmax(0, 1fr)",
     gap: 16,
     alignItems: "center",
-    padding: 16,
-    borderRadius: 22,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
-    border: "1px solid #e2e8f0",
     minWidth: 0,
   },
 
-  mastheadLogoWrap: {
+  brandLogoWrap: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 104,
-    height: 104,
-    borderRadius: 26,
+    width: 92,
+    height: 92,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+    boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
   },
 
-  mastheadLogo: {
+  brandLogo: {
     display: "block",
     width: "100%",
     height: "100%",
     objectFit: "contain",
-    padding: 10,
+    padding: 8,
   },
 
-  mastheadFallbackLogo: {
+  brandLogoFallback: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 104,
-    height: 104,
-    borderRadius: 26,
-    color: "#0f172a",
+    width: 92,
+    height: 92,
+    borderRadius: 22,
     border: "2px solid",
-    fontSize: 28,
+    color: "#0f172a",
+    fontSize: 26,
     fontWeight: 950,
-    letterSpacing: "-0.06em",
+    letterSpacing: "-0.05em",
   },
 
-  mastheadText: {
+  brandCopy: {
     display: "grid",
     gap: 6,
     minWidth: 0,
   },
 
-  brandKicker: {
-    margin: 0,
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.09em",
-  },
-
-  mastheadTitle: {
+  brandTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(32px, 5vw, 56px)",
-    lineHeight: 0.96,
-    letterSpacing: "-0.065em",
+    fontSize: "clamp(34px, 5vw, 58px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
   },
 
-  mastheadTagline: {
+  brandTagline: {
     margin: 0,
     color: "#475569",
-    fontSize: 16,
-    lineHeight: 1.55,
-    fontWeight: 750,
+    fontSize: 15,
+    lineHeight: 1.5,
+    fontWeight: 800,
     overflowWrap: "anywhere",
   },
 
-  brandAccentPanel: {
+  brandFeature: {
     display: "grid",
-    gap: 8,
+    gap: 6,
     alignContent: "center",
-    padding: 18,
-    borderRadius: 22,
+    padding: 16,
+    borderRadius: 20,
     border: "1px solid",
     minWidth: 0,
   },
 
-  brandAccentLabel: {
-    color: "#78350f",
-    fontSize: 12,
+  brandFeatureKicker: {
+    color: "#92400e",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  brandAccentTitle: {
+  brandFeatureTitle: {
     color: "#0f172a",
-    fontSize: 22,
+    fontSize: 20,
     lineHeight: 1.1,
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
   },
 
-  brandAccentText: {
+  brandFeatureText: {
     color: "#475569",
-    lineHeight: 1.45,
     fontSize: 13,
+    lineHeight: 1.4,
     fontWeight: 750,
-    overflowWrap: "anywhere",
   },
 
   hero: {
     position: "relative",
     display: "grid",
     gap: 22,
-    padding: 30,
-    borderRadius: 32,
+    padding: 28,
+    borderRadius: 28,
     color: "#ffffff",
     marginBottom: 18,
-    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
+    boxShadow: "0 28px 70px rgba(15,23,42,0.24)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
@@ -1073,7 +1047,29 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.08), transparent 30%)",
+  },
+
+  heroLineOne: {
+    position: "absolute",
+    left: -80,
+    bottom: -110,
+    width: 360,
+    height: 360,
+    border: "1px solid rgba(250,204,21,0.24)",
+    borderRadius: "999px",
+    pointerEvents: "none",
+  },
+
+  heroLineTwo: {
+    position: "absolute",
+    left: -130,
+    bottom: -160,
+    width: 470,
+    height: 470,
+    border: "1px solid rgba(250,204,21,0.12)",
+    borderRadius: "999px",
+    pointerEvents: "none",
   },
 
   heroMainGrid: {
@@ -1094,7 +1090,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(15,23,42,0.24)",
+    background: "rgba(15,23,42,0.34)",
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
@@ -1107,7 +1103,7 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     fontSize: "clamp(42px, 7vw, 72px)",
     lineHeight: 0.95,
-    letterSpacing: "-0.07em",
+    letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
@@ -1156,68 +1152,62 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
   },
 
-  heroPanel: {
+  supportPanel: {
     display: "grid",
     gap: 14,
-    alignContent: "start",
-    padding: 18,
+    alignContent: "center",
+    padding: 20,
     borderRadius: 24,
     background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.26)",
+    border: "1px solid rgba(148,163,184,0.28)",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
     minWidth: 0,
   },
 
-  heroLogoMarkWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 84,
-    height: 84,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.96)",
-    border: "1px solid rgba(255,255,255,0.38)",
-    overflow: "hidden",
-  },
-
-  heroLogoMark: {
-    display: "block",
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 10,
-  },
-
-  heroPanelEyebrow: {
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  heroPanelTitle: {
+  supportPanelTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 28,
+    fontSize: 24,
     lineHeight: 1.05,
-    letterSpacing: "-0.045em",
+    letterSpacing: "-0.04em",
   },
 
-  heroPanelList: {
+  supportOptionList: {
     display: "grid",
+    gap: 10,
+  },
+
+  supportOption: {
+    display: "grid",
+    gridTemplateColumns: "52px minmax(0, 1fr)",
     gap: 12,
-  },
-
-  heroPanelItem: {
-    display: "grid",
-    gap: 4,
+    alignItems: "center",
     padding: 14,
     borderRadius: 18,
     background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(191,219,254,0.22)",
+    border: "1px solid rgba(191,219,254,0.18)",
     color: "#dbeafe",
-    lineHeight: 1.45,
+  },
+
+  supportIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    border: "1px solid",
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: 950,
+  },
+
+  supportOptionCopy: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+    lineHeight: 1.4,
   },
 
   heroActions: {
@@ -1247,20 +1237,23 @@ const styles: Record<string, CSSProperties> = {
 
   featuredCard: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.9fr) minmax(0, 1.1fr)",
-    gap: 18,
-    padding: 20,
+    gridTemplateColumns: "minmax(280px, 0.95fr) minmax(0, 1.05fr)",
+    gap: 22,
+    padding: 18,
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 14px 36px rgba(15,23,42,0.08)",
-    marginBottom: 18,
+    boxShadow: "0 18px 48px rgba(15,23,42,0.09)",
+    margin: "-44px 32px 18px",
     minWidth: 0,
     overflow: "hidden",
+    position: "relative",
+    zIndex: 2,
   },
 
   featuredImageWrap: {
-    height: 320,
+    minHeight: 260,
+    height: "100%",
     borderRadius: 22,
     overflow: "hidden",
     background: "#f8fafc",
@@ -1272,6 +1265,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     alignContent: "center",
     minWidth: 0,
+    padding: "8px 0",
   },
 
   cardTopRow: {
@@ -1281,6 +1275,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     flexWrap: "wrap",
     minWidth: 0,
+  },
+
+  featuredKicker: {
+    margin: 0,
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
 
   typePill: {
@@ -1310,9 +1312,9 @@ const styles: Record<string, CSSProperties> = {
   featuredTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(32px, 5vw, 52px)",
+    fontSize: "clamp(34px, 5vw, 54px)",
     lineHeight: 0.98,
-    letterSpacing: "-0.06em",
+    letterSpacing: "-0.065em",
     overflowWrap: "anywhere",
   },
 
@@ -1322,6 +1324,24 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.65,
     fontWeight: 750,
     overflowWrap: "anywhere",
+  },
+
+  featuredMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  miniMeta: {
+    display: "grid",
+    gap: 3,
+    padding: 10,
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
   },
 
   campaignActions: {
@@ -1338,6 +1358,7 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
+    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
   },
@@ -1398,6 +1419,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     padding: "8px 12px",
     borderRadius: 999,
+    color: "#0f172a",
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
@@ -1444,7 +1466,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
     minWidth: 0,
   },
 
