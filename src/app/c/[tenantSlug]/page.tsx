@@ -849,7 +849,7 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .featuredCard {
-    margin: -24px 18px 16px !important;
+    margin: 14px 18px 16px !important;
   }
 }
 
@@ -901,7 +901,7 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .featuredCard {
-    margin: -18px 8px 16px !important;
+    margin: 12px 0 16px !important;
   }
 
   .tenant-campaigns-page .featuredImageWrap {
@@ -1271,7 +1271,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 18px 48px rgba(15,23,42,0.09)",
-    margin: "-28px 28px 16px",
+    margin: "14px 28px 16px",
     minWidth: 0,
     overflow: "hidden",
     position: "relative",
