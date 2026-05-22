@@ -276,6 +276,14 @@ export default async function AdminDashboardPage() {
           </Link>
 
           <Link
+            href="/admin/settings/public-hub"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Public Hub →
+          </Link>
+
+          <Link
             href="/admin/orders"
             className="secondaryButton"
             style={styles.secondaryButton}
@@ -459,6 +467,16 @@ export default async function AdminDashboardPage() {
         />
 
         <DashboardCard
+          href="/admin/settings/public-hub"
+          badgeText="HUB"
+          title="Public Hub"
+          description="Choose the highlighted campaign shown on the public campaign hub."
+          stats="Featured campaign settings"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
           href="/admin/orders"
           badgeText="ORDERS"
           title="Orders"
@@ -535,6 +553,14 @@ export default async function AdminDashboardPage() {
               style={styles.financeButton}
             >
               Open finance →
+            </Link>
+
+            <Link
+              href="/admin/settings/public-hub"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
+              Public Hub →
             </Link>
 
             <Link
@@ -1024,7 +1050,7 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 1,
     gridArea: "actions",
     display: "grid",
-    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
     gap: 12,
     alignItems: "stretch",
     width: "100%",
