@@ -70,6 +70,12 @@ function normaliseHexColour(value: unknown, fallback: string) {
   return fallback;
 }
 
+function isDefaultAuctionImage(value: string | null | undefined) {
+  const clean = cleanText(value);
+
+  return !clean || clean.includes("/brand/so-default-auctions.png");
+}
+
 function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
   const amount = Number(cents || 0) / 100;
 
@@ -307,6 +313,9 @@ export default function PublicAuctionPage({ params }: Props) {
 
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
 
+  const auctionUsesDefaultImage = isDefaultAuctionImage(auction?.image_url);
+  const auctionHeroImageSrc = auction?.image_url || DEFAULT_AUCTION_IMAGE;
+
   const brandedPageStyle: CSSProperties = {
     ...styles.page,
     background: `radial-gradient(circle at top left, ${accentColour}20, transparent 34%), radial-gradient(circle at 80% 8%, ${primaryColour}14, transparent 28%), #f8fafc`,
@@ -318,9 +327,21 @@ export default function PublicAuctionPage({ params }: Props) {
     borderColor: accentColour,
   };
 
+  const brandedHeroStyle: CSSProperties = {
+    ...styles.hero,
+    minHeight: auctionUsesDefaultImage
+      ? "clamp(390px, 56vh, 620px)"
+      : styles.hero.minHeight,
+    background: auctionUsesDefaultImage
+      ? "linear-gradient(135deg, #f8fafc 0%, #ffffff 42%, #eef2ff 100%)"
+      : undefined,
+  };
+
   const brandedHeroOverlayStyle: CSSProperties = {
     ...styles.heroOverlay,
-    background: `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.50) 44%, rgba(15,23,42,0.94) 100%), radial-gradient(circle at bottom left, ${primaryColour}36, transparent 42%), radial-gradient(circle at top right, ${accentColour}18, transparent 32%)`,
+    background: auctionUsesDefaultImage
+      ? `linear-gradient(180deg, rgba(15,23,42,0.03) 0%, rgba(15,23,42,0.32) 46%, rgba(15,23,42,0.92) 100%), radial-gradient(circle at bottom left, ${primaryColour}30, transparent 42%), radial-gradient(circle at top right, ${accentColour}14, transparent 32%)`
+      : `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.50) 44%, rgba(15,23,42,0.94) 100%), radial-gradient(circle at bottom left, ${primaryColour}36, transparent 42%), radial-gradient(circle at top right, ${accentColour}18, transparent 32%)`,
   };
 
   const brandedBadgeStyle: CSSProperties = {
@@ -434,23 +455,33 @@ export default function PublicAuctionPage({ params }: Props) {
         </div>
       </section>
 
-      <section style={styles.hero}>
+      <section style={brandedHeroStyle}>
+        <div
+          style={{
+            ...styles.defaultHeroImageHalo,
+            display: auctionUsesDefaultImage ? "block" : "none",
+            background: `radial-gradient(circle, ${accentColour}18 0%, transparent 58%)`,
+          }}
+        />
+
         <img
-          src={auction.image_url || DEFAULT_AUCTION_IMAGE}
+          src={auctionHeroImageSrc}
           alt={auction.title}
           style={{
             ...styles.heroBackgroundImage,
-            objectPosition: auction.image_url
-              ? `${focusValue(auction.image_focus_x)}% ${focusValue(
+            objectPosition: auctionUsesDefaultImage
+              ? "center 38%"
+              : `${focusValue(auction.image_focus_x)}% ${focusValue(
                   auction.image_focus_y,
-                )}%`
-              : "center",
-            objectFit: auction.image_url ? "cover" : "contain",
-            padding: auction.image_url ? 0 : 26,
+                )}%`,
+            objectFit: auctionUsesDefaultImage ? "contain" : "cover",
+            padding: auctionUsesDefaultImage ? "clamp(42px, 7vw, 76px)" : 0,
             boxSizing: "border-box",
-            background: auction.image_url
-              ? "#0f172a"
-              : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+            background: auctionUsesDefaultImage
+              ? "transparent"
+              : "#0f172a",
+            opacity: auctionUsesDefaultImage ? 0.82 : 1,
+            transform: auctionUsesDefaultImage ? "scale(0.88)" : undefined,
           }}
         />
 
@@ -545,25 +576,33 @@ export default function PublicAuctionPage({ params }: Props) {
                     Number(item.minimum_increment_cents || 0);
 
               const itemCanBid = availability.canBid && item.status === "active";
+              const itemUsesDefaultImage = isDefaultAuctionImage(item.image_url);
 
               return (
                 <article key={item.id} style={styles.itemCard}>
-                  <div style={styles.itemImageWrap}>
+                  <div
+                    style={{
+                      ...styles.itemImageWrap,
+                      height: itemUsesDefaultImage
+                        ? "clamp(160px, 34vw, 220px)"
+                        : styles.itemImageWrap.height,
+                    }}
+                  >
                     <img
                       src={item.image_url || DEFAULT_AUCTION_IMAGE}
                       alt={item.title}
                       style={{
                         ...styles.image,
-                        objectPosition: item.image_url
-                          ? `${focusValue(item.image_focus_x)}% ${focusValue(
+                        objectPosition: itemUsesDefaultImage
+                          ? "center"
+                          : `${focusValue(item.image_focus_x)}% ${focusValue(
                               item.image_focus_y,
-                            )}%`
-                          : "center",
-                        objectFit: item.image_url ? "cover" : "contain",
-                        background: item.image_url
-                          ? "#f1f5f9"
-                          : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
-                        padding: item.image_url ? 0 : 24,
+                            )}%`,
+                        objectFit: itemUsesDefaultImage ? "contain" : "cover",
+                        background: itemUsesDefaultImage
+                          ? "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)"
+                          : "#f1f5f9",
+                        padding: itemUsesDefaultImage ? "clamp(24px, 6vw, 42px)" : 0,
                         boxSizing: "border-box",
                       }}
                     />
@@ -603,7 +642,7 @@ export default function PublicAuctionPage({ params }: Props) {
                     <div
                       style={{
                         ...styles.bidFeature,
-                        background: `linear-gradient(135deg, #0f172a, #1e293b)`,
+                        background: "linear-gradient(135deg, #0f172a, #1e293b)",
                         border: `1px solid ${accentColour}36`,
                       }}
                     >
@@ -784,6 +823,10 @@ const responsiveStyles = `
     font-size: clamp(24px, 8vw, 36px) !important;
     letter-spacing: -0.06em !important;
   }
+
+  .public-auction-page .heroTitle {
+    font-size: clamp(38px, 16vw, 76px) !important;
+  }
 }
 `;
 
@@ -927,22 +970,36 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-end",
   },
 
+  defaultHeroImageHalo: {
+    position: "absolute",
+    left: "50%",
+    top: "48%",
+    width: "min(68vw, 760px)",
+    height: "min(68vw, 760px)",
+    transform: "translate(-50%, -50%)",
+    borderRadius: 999,
+    pointerEvents: "none",
+    zIndex: 0,
+  },
+
   heroBackgroundImage: {
     position: "absolute",
     inset: 0,
     width: "100%",
     height: "100%",
     display: "block",
+    zIndex: 1,
   },
 
   heroOverlay: {
     position: "absolute",
     inset: 0,
+    zIndex: 2,
   },
 
   heroInner: {
     position: "relative",
-    zIndex: 2,
+    zIndex: 3,
     width: "100%",
     maxWidth: 1220,
     margin: "0 auto",
