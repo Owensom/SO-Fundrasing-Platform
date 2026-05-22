@@ -216,6 +216,46 @@ function getStatusStyle(status: string | null | undefined): React.CSSProperties 
 }
 
 const responsiveStyles = `
+  @media (min-width: 900px) {
+    .public-squares-hero-inner {
+      max-width: 1180px !important;
+      padding-bottom: 58px !important;
+    }
+
+    .public-squares-brand-strip {
+      max-width: 680px !important;
+      margin-bottom: 30px !important;
+    }
+
+    .public-squares-hero-title {
+      max-width: 780px !important;
+    }
+
+    .public-squares-hero-meta {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      max-width: 1040px !important;
+    }
+
+    .public-squares-content-wrap {
+      margin-top: -44px !important;
+    }
+
+    .public-squares-container {
+      max-width: 1080px !important;
+      gap: 18px !important;
+    }
+
+    .public-squares-number-grid {
+      grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)) !important;
+      gap: 10px !important;
+    }
+
+    .public-squares-number-button {
+      height: 52px !important;
+      border-radius: 15px !important;
+    }
+  }
+
   @media (max-width: 760px) {
     .public-squares-page {
       background: linear-gradient(180deg, #020617 0px, #0f172a 620px, #f8fafc 620px, #f8fafc 100%) !important;
@@ -490,8 +530,7 @@ export default function PublicSquaresPage({ params }: Props) {
     if (!slug) return;
     loadGame();
   }, [slug]);
-
-  const unavailableSquares = useMemo(() => {
+    const unavailableSquares = useMemo(() => {
     const set = new Set<number>();
 
     for (const square of game?.soldSquares ?? []) {
@@ -752,6 +791,7 @@ export default function PublicSquaresPage({ params }: Props) {
       setSaving(false);
     }
   }
+
   if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading squares game…</div>;
   if (error && !game) return <div style={styles.wrap}>{error}</div>;
@@ -781,8 +821,9 @@ export default function PublicSquaresPage({ params }: Props) {
             background: hasCustomImage
               ? "#0f172a"
               : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
-            padding: hasCustomImage ? 0 : 54,
+            padding: hasCustomImage ? 0 : 46,
             boxSizing: "border-box",
+            opacity: hasCustomImage ? 1 : 0.78,
           }}
         />
 
@@ -985,8 +1026,7 @@ export default function PublicSquaresPage({ params }: Props) {
               ) : null}
             </section>
           ) : null}
-
-          {isDrawn ? (
+                    {isDrawn ? (
             <section
               className="public-squares-winners"
               style={styles.winnersBox}
