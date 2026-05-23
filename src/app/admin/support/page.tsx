@@ -24,6 +24,14 @@ type SupportRequestInsertRow = {
   id: string;
 };
 
+type AdminSession = {
+  user?: {
+    tenantSlugs?: unknown;
+    email?: unknown;
+    name?: unknown;
+  } | null;
+} | null;
+
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
@@ -38,17 +46,17 @@ function firstParam(value: string | string[] | undefined) {
   return value || "";
 }
 
-function getSessionTenantSlugs(session: Awaited<ReturnType<typeof auth>>) {
+function getSessionTenantSlugs(session: AdminSession) {
   return Array.isArray(session?.user?.tenantSlugs)
     ? session.user.tenantSlugs.map((value) => String(value))
     : [];
 }
 
-function getSessionUserEmail(session: Awaited<ReturnType<typeof auth>>) {
+function getSessionUserEmail(session: AdminSession) {
   return cleanText(session?.user?.email, "");
 }
 
-function getSessionUserName(session: Awaited<ReturnType<typeof auth>>) {
+function getSessionUserName(session: AdminSession) {
   return cleanText(session?.user?.name, "");
 }
 
@@ -121,7 +129,7 @@ function supportStatusMessage(status: string, ref: string) {
 async function createSupportRequest(formData: FormData) {
   "use server";
 
-  const session = await auth();
+  const session = (await auth()) as AdminSession;
 
   if (!session?.user) {
     redirect("/admin/login");
@@ -288,7 +296,7 @@ export default async function AdminSupportPage({
 }: {
   searchParams?: Promise<SupportSearchParams>;
 }) {
-  const session = await auth();
+  const session = (await auth()) as AdminSession;
 
   if (!session?.user) {
     redirect("/admin/login");
