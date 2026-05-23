@@ -1,8 +1,8 @@
 // src/app/admin/platform/support/page.tsx
 // ===============================
 // Platform Owner Support Dashboard
-// Phase 5B.1 — read-only support request overview
-// Mobile-safe version
+// Phase 5B.2 — support request status updates
+// Mobile-safe, platform-owner-only
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -21,6 +21,8 @@ type SupportFilter =
   | "resolved"
   | "urgent"
   | "email_failed";
+
+type SupportStatus = "new" | "in_progress" | "resolved";
 
 type SupportSearchParams = {
   filter?: string | string[];
@@ -84,6 +86,22 @@ function normaliseFilter(value: unknown): SupportFilter {
   return "all";
 }
 
+function normaliseStatus(value: unknown): SupportStatus | null {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (clean === "new" || clean === "in_progress" || clean === "resolved") {
+    return clean;
+  }
+
+  return null;
+}
+
+function isSafeUuid(value: unknown) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim(),
+  );
+}
+
 function toNumber(value: string | number | null | undefined) {
   const numberValue = Number(value || 0);
   return Number.isFinite(numberValue) ? numberValue : 0;
@@ -140,6 +158,25 @@ function getFilterWhereClause(filter: SupportFilter) {
   }
 
   return "";
+}
+
+function getFilterHref(filter: SupportFilter) {
+  if (filter === "all") return "/admin/platform/support";
+  return `/admin/platform/support?filter=${encodeURIComponent(filter)}`;
+}
+
+async function requirePlatformOwner() {
+  const session = (await auth()) as PlatformSession;
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
+  if (!Boolean(session.user.isPlatformOwner)) {
+    redirect("/admin?error=platform_owner_required");
+  }
+
+  return session;
 }
 
 async function getSupportSummary() {
@@ -199,20 +236,39 @@ async function getSupportRequests(filter: SupportFilter) {
   );
 }
 
+async function updateSupportRequestStatus(formData: FormData) {
+  "use server";
+
+  await requirePlatformOwner();
+
+  const requestId = String(formData.get("request_id") || "").trim();
+  const nextStatus = normaliseStatus(formData.get("status"));
+  const returnFilter = normaliseFilter(formData.get("return_filter"));
+
+  if (!isSafeUuid(requestId) || !nextStatus) {
+    redirect(getFilterHref(returnFilter));
+  }
+
+  await query(
+    `
+      update support_requests
+      set
+        status = $2,
+        updated_at = now()
+      where id = $1
+    `,
+    [requestId, nextStatus],
+  );
+
+  redirect(getFilterHref(returnFilter));
+}
+
 export default async function PlatformSupportDashboardPage({
   searchParams,
 }: {
   searchParams?: Promise<SupportSearchParams>;
 }) {
-  const session = (await auth()) as PlatformSession;
-
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
-
-  if (!Boolean(session.user.isPlatformOwner)) {
-    redirect("/admin?error=platform_owner_required");
-  }
+  await requirePlatformOwner();
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const activeFilter = normaliseFilter(firstParam(resolvedSearchParams.filter));
@@ -245,14 +301,18 @@ export default async function PlatformSupportDashboardPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Review tenant support requests across the platform. This first
-            version is read-only so the support trail can be checked safely
-            before adding status updates, notes or reply actions.
+            Review tenant support requests across the platform and update their
+            support status safely. Notes and reply actions can be layered on
+            after this status-only phase.
           </p>
         </div>
 
         <div className="platform-support-stats" style={styles.heroStats}>
-          <StatCard label="Total requests" value={toNumber(summary.total_count)} dark />
+          <StatCard
+            label="Total requests"
+            value={toNumber(summary.total_count)}
+            dark
+          />
           <StatCard label="New" value={toNumber(summary.new_count)} dark />
           <StatCard label="Urgent" value={toNumber(summary.urgent_count)} dark />
           <StatCard
@@ -273,13 +333,13 @@ export default async function PlatformSupportDashboardPage({
         <SummaryCard
           label="In progress"
           value={toNumber(summary.in_progress_count)}
-          text="Reserved for the next editable phase"
+          text="Requests currently being handled"
         />
 
         <SummaryCard
           label="Resolved"
           value={toNumber(summary.resolved_count)}
-          text="Resolved requests once status updates are added"
+          text="Requests marked as complete"
         />
 
         <SummaryCard
@@ -305,6 +365,8 @@ export default async function PlatformSupportDashboardPage({
 
           <p style={styles.sectionText}>
             Showing the latest 100 support requests for the selected filter.
+            Status changes update the request timestamp and keep the page in the
+            same filter view.
           </p>
         </div>
 
@@ -354,7 +416,11 @@ export default async function PlatformSupportDashboardPage({
         {requests.length > 0 ? (
           <div className="support-request-list" style={styles.requestList}>
             {requests.map((request) => (
-              <SupportRequestCard key={request.id} request={request} />
+              <SupportRequestCard
+                key={request.id}
+                request={request}
+                activeFilter={activeFilter}
+              />
             ))}
           </div>
         ) : (
@@ -435,7 +501,48 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function SupportRequestCard({ request }: { request: SupportRequestRow }) {
+function StatusButton({
+  requestId,
+  status,
+  currentStatus,
+  activeFilter,
+  children,
+}: {
+  requestId: string;
+  status: SupportStatus;
+  currentStatus: string;
+  activeFilter: SupportFilter;
+  children: ReactNode;
+}) {
+  const active = currentStatus === status;
+
+  return (
+    <form action={updateSupportRequestStatus} style={styles.statusForm}>
+      <input type="hidden" name="request_id" value={requestId} />
+      <input type="hidden" name="status" value={status} />
+      <input type="hidden" name="return_filter" value={activeFilter} />
+
+      <button
+        type="submit"
+        disabled={active}
+        style={{
+          ...styles.statusButton,
+          ...(active ? styles.statusButtonActive : {}),
+        }}
+      >
+        {children}
+      </button>
+    </form>
+  );
+}
+
+function SupportRequestCard({
+  request,
+  activeFilter,
+}: {
+  request: SupportRequestRow;
+  activeFilter: SupportFilter;
+}) {
   const hasOptionalContext =
     Boolean(request.page_url) ||
     Boolean(request.campaign_type) ||
@@ -504,6 +611,45 @@ function SupportRequestCard({ request }: { request: SupportRequestRow }) {
         </div>
       </div>
 
+      <div style={styles.statusPanel}>
+        <div>
+          <p style={styles.statusPanelLabel}>Update status</p>
+          <p style={styles.statusPanelText}>
+            Status changes are platform-owner only and update the request
+            timestamp.
+          </p>
+        </div>
+
+        <div className="support-status-actions" style={styles.statusActions}>
+          <StatusButton
+            requestId={request.id}
+            status="new"
+            currentStatus={request.status}
+            activeFilter={activeFilter}
+          >
+            New
+          </StatusButton>
+
+          <StatusButton
+            requestId={request.id}
+            status="in_progress"
+            currentStatus={request.status}
+            activeFilter={activeFilter}
+          >
+            In progress
+          </StatusButton>
+
+          <StatusButton
+            requestId={request.id}
+            status="resolved"
+            currentStatus={request.status}
+            activeFilter={activeFilter}
+          >
+            Resolved
+          </StatusButton>
+        </div>
+      </div>
+
       <div className="support-detail-grid" style={styles.detailGrid}>
         <DetailItem label="Tenant" value={request.tenant_slug} />
         <DetailItem label="Admin email" value={cleanText(request.admin_email)} />
@@ -541,8 +687,8 @@ function SupportRequestCard({ request }: { request: SupportRequestRow }) {
       ) : null}
 
       <div style={styles.readOnlyNotice}>
-        Read-only phase. Status updates, internal notes and Reply to tenant will
-        be added later.
+        Status updates are live. Internal notes and Reply to tenant will be
+        added later.
       </div>
     </article>
   );
@@ -568,7 +714,9 @@ const responsiveStyles = `
 .platform-support-page strong,
 .platform-support-page span,
 .platform-support-page details,
-.platform-support-page summary {
+.platform-support-page summary,
+.platform-support-page form,
+.platform-support-page button {
   min-width: 0;
   max-width: 100%;
 }
@@ -619,14 +767,16 @@ const responsiveStyles = `
   .platform-support-page .platform-support-stats,
   .platform-support-page .support-summary-grid,
   .platform-support-page .support-filter-grid,
-  .platform-support-page .support-detail-grid {
+  .platform-support-page .support-detail-grid,
+  .platform-support-page .support-status-actions {
     grid-template-columns: 1fr !important;
   }
 
   .platform-support-page .support-request-card p,
   .platform-support-page .support-request-card strong,
   .platform-support-page .support-request-card span,
-  .platform-support-page .support-request-card summary {
+  .platform-support-page .support-request-card summary,
+  .platform-support-page .support-request-card button {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
   }
@@ -1101,6 +1251,70 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
     wordBreak: "break-word",
+  },
+
+  statusPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 420px)",
+    gap: 12,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  statusPanelLabel: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  statusPanelText: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  statusActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 8,
+    minWidth: 0,
+  },
+
+  statusForm: {
+    display: "block",
+    minWidth: 0,
+  },
+
+  statusButton: {
+    width: "100%",
+    minHeight: 40,
+    padding: "9px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    fontSize: 12,
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+    lineHeight: 1.2,
+  },
+
+  statusButtonActive: {
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    cursor: "default",
   },
 
   detailGrid: {
