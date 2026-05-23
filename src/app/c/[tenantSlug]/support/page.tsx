@@ -91,13 +91,19 @@ function getDefaultImage(type: Campaign["type"]) {
   return "/brand/so-logo-full.png";
 }
 
+function getCampaignImageSrc(campaign: Campaign) {
+  return cleanText(campaign.imageUrl) || getDefaultImage(campaign.type);
+}
+
 function isDefaultBrandImage(imageUrl: string | null | undefined) {
-  return Boolean(imageUrl && imageUrl.includes("/brand/so-default-"));
+  const clean = cleanText(imageUrl);
+
+  return !clean || clean.includes("/brand/so-default-");
 }
 
 function getImageStyle(campaign: Campaign): CSSProperties {
-  const imageUrl = campaign.imageUrl || "";
-  const defaultImage = !imageUrl || isDefaultBrandImage(imageUrl);
+  const imageUrl = cleanText(campaign.imageUrl);
+  const defaultImage = isDefaultBrandImage(imageUrl);
 
   return {
     width: "100%",
@@ -297,7 +303,6 @@ async function getTenantBrandingSettings(tenantSlug: string) {
     [tenantSlug],
   );
 }
-
 function getHighlightedCampaign(params: {
   campaigns: Campaign[];
   highlightedSettings: HighlightedCampaignSettings | null;
@@ -369,7 +374,8 @@ export default async function TenantCampaignsPage({
     tenantSettings,
     "auctions",
   );
-    const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
+
+  const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
     if (campaign.status !== "published") {
       return false;
     }
@@ -649,9 +655,7 @@ export default async function TenantCampaignsPage({
         <section className="featuredCard" style={styles.featuredCard}>
           <div style={styles.featuredImageWrap}>
             <img
-              src={
-                featuredCampaign.imageUrl || getDefaultImage(featuredCampaign.type)
-              }
+              src={getCampaignImageSrc(featuredCampaign)}
               alt={featuredCampaign.title}
               style={getImageStyle(featuredCampaign)}
             />
@@ -824,10 +828,14 @@ export default async function TenantCampaignsPage({
           </div>
         ) : (
           visibleCampaigns.map((campaign) => (
-            <article key={`${campaign.type}-${campaign.id}`} style={styles.card}>
+            <article
+              key={`${campaign.type}-${campaign.id}`}
+              className="campaignCard"
+              style={styles.card}
+            >
               <div style={styles.cardImageWrap}>
                 <img
-                  src={campaign.imageUrl || getDefaultImage(campaign.type)}
+                  src={getCampaignImageSrc(campaign)}
                   alt={campaign.title}
                   style={getImageStyle(campaign)}
                 />
@@ -1062,106 +1070,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 12,
     backdropFilter: "blur(14px)",
   },
-
-  brandIdentity: {
-    display: "grid",
-    gridTemplateColumns: "72px minmax(0, 1fr)",
-    gap: 14,
-    alignItems: "center",
-    minWidth: 0,
-  },
-
-  brandLogoWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
-  },
-
-  brandLogo: {
-    display: "block",
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 7,
-  },
-
-  brandLogoFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    border: "2px solid",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-
-  brandCopy: {
-    display: "grid",
-    gap: 4,
-    minWidth: 0,
-  },
-
-  brandTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(34px, 5vw, 54px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
-    overflowWrap: "anywhere",
-  },
-
-  brandTagline: {
-    margin: 0,
-    color: "#475569",
-    fontSize: 14,
-    lineHeight: 1.35,
-    fontWeight: 850,
-    overflowWrap: "anywhere",
-  },
-
-  brandFeature: {
-    display: "grid",
-    gap: 5,
-    alignContent: "center",
-    padding: 12,
-    borderRadius: 18,
-    border: "1px solid",
-    minWidth: 0,
-  },
-
-  brandFeatureKicker: {
-    color: "#92400e",
-    fontSize: 10,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  brandFeatureTitle: {
-    color: "#0f172a",
-    fontSize: 18,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  brandFeatureText: {
-    color: "#475569",
-    fontSize: 12,
-    lineHeight: 1.35,
-    fontWeight: 750,
-  },  hero: {
+    hero: {
     position: "relative",
     display: "grid",
     gap: 16,
@@ -1561,27 +1470,35 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "stretch",
     alignSelf: "end",
     marginTop: "auto",
+    width: "100%",
   },
 
   primaryAction: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 12px",
     borderRadius: 999,
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
+    lineHeight: 1.15,
+    whiteSpace: "nowrap",
+    boxSizing: "border-box",
   },
 
   secondaryAction: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 12px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -1589,15 +1506,20 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #cbd5e1",
     textAlign: "center",
+    lineHeight: 1.15,
+    whiteSpace: "nowrap",
+    boxSizing: "border-box",
   },
 
   contactAction: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     gridColumn: "1 / -1",
+    width: "100%",
+    minWidth: 0,
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 12px",
     borderRadius: 999,
     background: "#f8fafc",
     color: "#0f172a",
@@ -1605,6 +1527,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #cbd5e1",
     textAlign: "center",
+    lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   filtersCard: {
