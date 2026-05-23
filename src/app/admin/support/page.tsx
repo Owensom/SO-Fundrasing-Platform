@@ -2,6 +2,7 @@
 // ===============================
 // Admin Help & Support
 // Tenant-isolated support request form
+// Platform Function Cards help hub
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -330,7 +331,7 @@ export default async function AdminSupportPage({
 
           <div style={styles.badgeRow}>
             <span style={styles.badge}>Help & Support</span>
-            <span style={styles.softBadge}>Phase 5A</span>
+            <span style={styles.softBadge}>Admin help hub</span>
           </div>
 
           <h1 className="so-brand-heading support-title" style={styles.title}>
@@ -338,8 +339,8 @@ export default async function AdminSupportPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Report a problem, ask for help, or send useful operational context
-            to platform support without leaving the admin area.
+            Report a problem, ask for help, or find practical ideas for using
+            each fundraising tool in the platform.
           </p>
 
           <p style={styles.tenant}>
@@ -350,7 +351,7 @@ export default async function AdminSupportPage({
         <div className="support-hero-stats" style={styles.heroStats}>
           <StatCard label="Tenant context" value="Included" dark />
           <StatCard label="Support email" value="Automatic" dark />
-          <StatCard label="Database record" value="Stored" dark />
+          <StatCard label="Help guide" value="Built in" dark />
         </div>
       </section>
 
@@ -374,7 +375,7 @@ export default async function AdminSupportPage({
         <SupportOption
           label="Report a problem"
           title="Something is not working"
-          text="Send the platform support team a clear issue report with tenant, page and campaign context."
+          text="Send platform support a clear issue report with tenant, page and campaign context."
         />
 
         <SupportOption
@@ -384,10 +385,108 @@ export default async function AdminSupportPage({
         />
 
         <SupportOption
-          label="Incident-ready"
-          title="Start building a support trail"
-          text="Each request is stored so a future incident/status log can be added without changing checkout flows."
+          label="Plan ideas"
+          title="Explore platform uses"
+          text="Use the function cards below to explain what each area can help a tenant or charity do."
         />
+      </section>
+
+      <section className="function-section" style={styles.functionSection}>
+        <div style={styles.functionHeader}>
+          <div>
+            <p style={styles.functionKicker}>Platform function cards</p>
+
+            <h2 className="so-brand-card-title" style={styles.functionTitle}>
+              What can this platform be used for?
+            </h2>
+
+            <p style={styles.functionText}>
+              A quick guide for tenant admins, event organisers and support
+              users. These cards are informational only and do not change any
+              subscription, payment or campaign logic.
+            </p>
+          </div>
+        </div>
+
+        <div className="function-card-grid" style={styles.functionGrid}>
+          <FunctionCard
+            label="Raffles"
+            title="Prize draws and ticket fundraising"
+            text="Use for paid raffle tickets, colour ticket ranges, bundle offers, legal entry questions, free postal entry details, draw tools and winner emails."
+          />
+
+          <FunctionCard
+            label="Squares"
+            title="Football cards and number-grid games"
+            text="Use for fixed-price square selections, paid entries, legal question checks, free postal entry information and live winner draws."
+          />
+
+          <FunctionCard
+            label="Events"
+            title="Ticketed events and guest experiences"
+            text="Use for ceilidhs, dinners, tables, reserved seating, VIP access codes, complimentary bookings, menus and dietary requirements."
+          />
+
+          <FunctionCard
+            label="Auctions"
+            title="Silent auction fundraising"
+            text="Use for premium lots, bid tracking, bidder emails, reserve-style auction activity and winner/payment follow-up workflows."
+          />
+
+          <FunctionCard
+            label="Donations"
+            title="Pure donation pages"
+            text="Use for general support, campaign-linked giving, suggested amounts, custom donation amounts and optional donor fee cover."
+          />
+
+          <FunctionCard
+            label="Gift Aid"
+            title="Donation declaration reporting"
+            text="Use only for eligible pure donations where the tenant is registered and allowed to claim Gift Aid. It stays separate from competition payments."
+          />
+
+          <FunctionCard
+            label="Public Hub"
+            title="Tenant campaign landing page"
+            text="Use to bring raffles, events, auctions, squares and donations together under one branded public campaign hub."
+          />
+
+          <FunctionCard
+            label="Branding"
+            title="Tenant public identity"
+            text="Use for display names, taglines, logos, logo marks, colours and footer wording across public campaign pages."
+          />
+
+          <FunctionCard
+            label="Orders"
+            title="Supporter activity overview"
+            text="Use to review platform activity across campaign purchases, bookings, bids and supporter transactions."
+          />
+
+          <FunctionCard
+            label="Customers"
+            title="Supporter intelligence"
+            text="Use to understand supporter profiles grouped from orders, bookings, donations and campaign activity."
+          />
+
+          <FunctionCard
+            label="Finance"
+            title="Payment and fee breakdowns"
+            text="Use to review payment metadata, platform fees, donor fee cover, Stripe references and organiser net estimates."
+          />
+
+          <FunctionCard
+            label="Billing"
+            title="Tenant plan and capabilities"
+            text="Use to check subscription tier, platform commission, enabled capabilities and plan-related readiness."
+          />
+
+          <FunctionCard
+            label="Help"
+            title="Support and incident trail"
+            text="Use to report problems, preserve tenant context and build a future support dashboard with notes and reply-to-tenant actions."
+          />
+        </div>
       </section>
 
       <section className="support-layout" style={styles.layoutGrid}>
@@ -534,10 +633,11 @@ export default async function AdminSupportPage({
           </div>
 
           <div style={styles.noticeBox}>
-            <p style={styles.noticeTitle}>Safe first version</p>
+            <p style={styles.noticeTitle}>Reply-to tenant preserved</p>
             <p style={styles.noticeText}>
-              This page only records and emails support requests. Incident logs,
-              support dashboards and status reporting can be layered on later.
+              Support emails are sent from the platform sender, but replies are
+              directed to the admin email where available. A clearer support
+              dashboard and “Reply to tenant” action can be added later.
             </p>
           </div>
         </aside>
@@ -581,6 +681,28 @@ function SupportOption({
   );
 }
 
+function FunctionCard({
+  label,
+  title,
+  text,
+}: {
+  label: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <article className="function-card" style={styles.functionCard}>
+      <div style={styles.functionCardTop}>
+        <span style={styles.functionBadge}>{label}</span>
+      </div>
+
+      <h3 style={styles.functionCardTitle}>{title}</h3>
+
+      <p style={styles.functionCardText}>{text}</p>
+    </article>
+  );
+}
+
 function ContextItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.contextItem}>
@@ -613,6 +735,12 @@ const responsiveStyles = `
   min-width: 0;
 }
 
+@media (max-width: 1180px) {
+  .admin-support-page .function-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 1040px) {
   .admin-support-page .support-hero,
   .admin-support-page .support-layout {
@@ -641,12 +769,14 @@ const responsiveStyles = `
 
   .admin-support-page .support-options-grid,
   .admin-support-page .support-form-grid,
-  .admin-support-page .support-hero-stats {
+  .admin-support-page .support-hero-stats,
+  .admin-support-page .function-card-grid {
     grid-template-columns: 1fr !important;
   }
 
   .admin-support-page .support-form-panel,
-  .admin-support-page .support-context-panel {
+  .admin-support-page .support-context-panel,
+  .admin-support-page .function-section {
     padding: 18px !important;
     border-radius: 24px !important;
   }
@@ -894,6 +1024,108 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontSize: 14,
     fontWeight: 700,
+  },
+
+  functionSection: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+  },
+
+  functionHeader: {
+    display: "grid",
+    gap: 6,
+  },
+
+  functionKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  functionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  functionText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.6,
+    maxWidth: 940,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  functionGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  functionCard: {
+    display: "grid",
+    gap: 10,
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  functionCardTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  functionBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  functionCardTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 19,
+    lineHeight: 1.18,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  functionCardText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontSize: 13,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   layoutGrid: {
