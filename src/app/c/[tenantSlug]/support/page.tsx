@@ -92,6 +92,34 @@ function getCampaignPublicHref(type: CampaignType, slug: string | null) {
   return "";
 }
 
+function getContactHref({
+  tenantSlug,
+  campaignType,
+  campaignId,
+  campaign,
+}: {
+  tenantSlug: string;
+  campaignType: CampaignType;
+  campaignId: string;
+  campaign: CampaignLookup | null;
+}) {
+  const params = new URLSearchParams();
+
+  if (campaignType !== "general") {
+    params.set("campaignType", campaignType);
+  }
+
+  if (campaign?.id || campaignId) {
+    params.set("campaignId", campaign?.id || campaignId);
+  }
+
+  const query = params.toString();
+
+  return query
+    ? `/c/${tenantSlug}/contact?${query}`
+    : `/c/${tenantSlug}/contact`;
+}
+
 async function lookupCampaign(params: {
   tenantSlug: string;
   campaignType: CampaignType;
@@ -277,6 +305,13 @@ export default async function PublicSupportPage({
   const currency = cleanText(campaign?.currency, "GBP").toUpperCase();
   const publicHref = getCampaignPublicHref(campaignType, campaign?.slug || null);
 
+  const contactHref = getContactHref({
+    tenantSlug,
+    campaignType,
+    campaignId,
+    campaign,
+  });
+
   const publicDisplayName =
     cleanText(tenantSettings?.public_display_name) || "SO Fundraising Platform";
 
@@ -338,6 +373,18 @@ export default async function PublicSupportPage({
     boxShadow: `0 12px 24px ${primaryColour}36`,
   };
 
+  const brandedContactButtonStyle: CSSProperties = {
+    ...styles.contactButton,
+    borderColor: `${accentColour}78`,
+  };
+
+  const brandedContactStripButtonStyle: CSSProperties = {
+    ...styles.contactStripButton,
+    background: `linear-gradient(135deg, ${primaryColour} 0%, #2563eb 100%)`,
+    border: `1px solid ${primaryColour}`,
+    boxShadow: `0 12px 24px ${primaryColour}28`,
+  };
+
   const brandedSectionEyebrowStyle: CSSProperties = {
     ...styles.sectionEyebrow,
     color: primaryColour,
@@ -388,8 +435,7 @@ export default async function PublicSupportPage({
           </span>
         </div>
       </section>
-
-      <section className="support-hero" style={brandedHeroStyle}>
+            <section className="support-hero" style={brandedHeroStyle}>
         <div style={styles.heroContent}>
           <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
             ← Back to campaigns
@@ -409,11 +455,17 @@ export default async function PublicSupportPage({
             buying raffle tickets, squares, event tickets or auction bids.
           </p>
 
-          {publicHref ? (
-            <Link href={publicHref} style={brandedViewCampaignLinkStyle}>
-              View campaign page
+          <div className="heroLinkRow" style={styles.heroLinkRow}>
+            {publicHref ? (
+              <Link href={publicHref} style={brandedViewCampaignLinkStyle}>
+                View campaign page
+              </Link>
+            ) : null}
+
+            <Link href={contactHref} style={brandedContactButtonStyle}>
+              Contact organiser
             </Link>
-          ) : null}
+          </div>
         </div>
 
         <div
@@ -431,6 +483,25 @@ export default async function PublicSupportPage({
             platform donation flow.
           </p>
         </div>
+      </section>
+
+      <section style={styles.contactStrip}>
+        <div style={styles.contactStripCopy}>
+          <p style={{ ...styles.contactStripKicker, color: primaryColour }}>
+            Have a question before donating?
+          </p>
+
+          <h2 style={styles.contactStripTitle}>Contact the organiser</h2>
+
+          <p style={styles.contactStripText}>
+            Ask the organiser about this cause, campaign, donation or booking
+            before continuing to payment.
+          </p>
+        </div>
+
+        <Link href={contactHref} style={brandedContactStripButtonStyle}>
+          Contact organiser →
+        </Link>
       </section>
 
       {statusMessage ? (
@@ -660,8 +731,7 @@ export default async function PublicSupportPage({
             </button>
           </form>
         </section>
-
-        <aside
+                <aside
           style={{
             ...styles.infoCard,
             borderColor: `${primaryColour}24`,
@@ -689,6 +759,17 @@ export default async function PublicSupportPage({
                 Donors can choose to add a small contribution to help cover
                 platform and payment costs.
               </span>
+            </div>
+
+            <div style={styles.infoItem}>
+              <strong>Questions before donating?</strong>
+              <span>
+                You can contact the organiser before making a donation.
+              </span>
+
+              <Link href={contactHref} style={styles.infoContactLink}>
+                Contact organiser →
+              </Link>
             </div>
 
             {giftAidEnabled ? (
@@ -746,7 +827,8 @@ const responsiveStyles = `
 
 @media (max-width: 860px) {
   .support-page .support-hero,
-  .support-page .support-content-grid {
+  .support-page .support-content-grid,
+  .support-page .contactStrip {
     grid-template-columns: 1fr !important;
   }
 }
@@ -765,7 +847,8 @@ const responsiveStyles = `
   }
 
   .support-page .brandHeader,
-  .support-page .support-hero {
+  .support-page .support-hero,
+  .support-page .contactStrip {
     padding: 14px !important;
     border-radius: 22px !important;
   }
@@ -784,6 +867,20 @@ const responsiveStyles = `
   .support-page .brandTitle {
     font-size: clamp(24px, 8vw, 36px) !important;
     letter-spacing: -0.06em !important;
+  }
+
+  .support-page .heroLinkRow {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+
+  .support-page .viewCampaignLink,
+  .support-page .contactButton,
+  .support-page .contactStripButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
 }
 `;
@@ -1003,17 +1100,39 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  viewCampaignLink: {
+  heroLinkRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginTop: 18,
+  },
+    viewCampaignLink: {
     display: "inline-flex",
     width: "fit-content",
     maxWidth: "100%",
-    marginTop: 18,
     padding: "11px 15px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 950,
+    boxSizing: "border-box",
+  },
+
+  contactButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "11px 15px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid rgba(255,255,255,0.24)",
     boxSizing: "border-box",
   },
 
@@ -1050,6 +1169,67 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontWeight: 750,
     overflowWrap: "anywhere",
+  },
+
+  contactStrip: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 14,
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 62%, rgba(239,246,255,0.98) 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.055)",
+    margin: "0 0 18px",
+    minWidth: 0,
+  },
+
+  contactStripCopy: {
+    display: "grid",
+    gap: 4,
+    minWidth: 0,
+  },
+
+  contactStripKicker: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  contactStripTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 26,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  contactStripText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontSize: 14,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  contactStripButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 14,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   statusCard: {
@@ -1304,6 +1484,25 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     minWidth: 0,
     overflowWrap: "anywhere",
+  },
+
+  infoContactLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    justifySelf: "start",
+    width: "fit-content",
+    maxWidth: "100%",
+    minHeight: 38,
+    marginTop: 4,
+    padding: "9px 12px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    boxSizing: "border-box",
   },
 
   footer: {
