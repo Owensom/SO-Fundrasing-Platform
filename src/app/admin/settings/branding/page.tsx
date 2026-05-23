@@ -42,16 +42,16 @@ function cleanLimitedText(value: unknown, maxLength: number) {
   return cleanText(value).slice(0, maxLength);
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function cleanEmail(value: unknown) {
   const clean = cleanLimitedText(value, 254).toLowerCase();
 
   if (!clean) return "";
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
-    return "";
-  }
-
-  return clean;
+  return isValidEmail(clean) ? clean : "";
 }
 
 function cleanOptionalUrl(value: unknown) {
@@ -170,7 +170,16 @@ async function updateTenantBranding(formData: FormData) {
     120,
   );
 
-  const nextContactEmail = cleanEmail(formData.get("public_contact_email"));
+  const rawContactEmail = cleanLimitedText(
+    formData.get("public_contact_email"),
+    254,
+  ).toLowerCase();
+
+  if (rawContactEmail && !isValidEmail(rawContactEmail)) {
+    redirect("/admin/settings/branding?error=invalid_contact_email");
+  }
+
+  const nextContactEmail = cleanEmail(rawContactEmail);
 
   const nextLogoUrl = canUseAdvancedBranding
     ? cleanOptionalUrl(formData.get("public_logo_url"))
@@ -253,6 +262,7 @@ export default async function AdminBrandingSettingsPage({
 }: {
   searchParams?: Promise<{
     saved?: string;
+    error?: string;
   }>;
 }) {
   const access = await requireCurrentTenantAccess();
@@ -284,6 +294,7 @@ export default async function AdminBrandingSettingsPage({
       tenantSlug={tenantSlug}
       subscriptionLabel={`${getTierLabel(subscriptionTier)} plan`}
       saved={resolvedSearchParams.saved === "1"}
+      error={resolvedSearchParams.error || ""}
       canUseAdvancedBranding={canUseAdvancedBranding}
       formState={{
         displayName: settings?.public_display_name || "",
