@@ -2,7 +2,7 @@
 // ===============================
 // Admin Help & Support
 // Tenant-isolated support request form
-// Platform Function Cards help hub
+// Functional Platform Cards help hub
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -387,7 +387,7 @@ export default async function AdminSupportPage({
         <SupportOption
           label="Plan ideas"
           title="Explore platform uses"
-          text="Use the function cards below to explain what each area can help a tenant or charity do."
+          text="Use the function cards below to choose the right tool for raffles, events, donations, auctions and future games."
         />
       </section>
 
@@ -397,99 +397,321 @@ export default async function AdminSupportPage({
             <p style={styles.functionKicker}>Platform function cards</p>
 
             <h2 className="so-brand-card-title" style={styles.functionTitle}>
-              What can this platform be used for?
+              Live platform tools
             </h2>
 
             <p style={styles.functionText}>
-              A quick guide for tenant admins, event organisers and support
-              users. These cards are informational only and do not change any
-              subscription, payment or campaign logic.
+              These cards link directly to working admin areas and explain what
+              each tool is best used for. The “report issue” links jump to the
+              support form below.
             </p>
           </div>
         </div>
 
         <div className="function-card-grid" style={styles.functionGrid}>
           <FunctionCard
+            status="Live"
             label="Raffles"
             title="Prize draws and ticket fundraising"
-            text="Use for paid raffle tickets, colour ticket ranges, bundle offers, legal entry questions, free postal entry details, draw tools and winner emails."
+            text="Run paid raffle tickets, colour ticket ranges, bundle offers, legal entry questions, free postal entry details, draw tools and winner emails."
+            useCases={[
+              "Charity prize draws",
+              "Sports club raffles",
+              "School fundraising raffles",
+              "Premium event prize draws",
+            ]}
+            href="/admin/raffles"
+            actionLabel="Open raffles"
           />
 
           <FunctionCard
+            status="Live"
             label="Squares"
             title="Football cards and number-grid games"
-            text="Use for fixed-price square selections, paid entries, legal question checks, free postal entry information and live winner draws."
+            text="Run fixed-price square selections, paid entries, legal question checks, free postal entry information and live winner draws."
+            useCases={[
+              "Football cards",
+              "Number-grid fundraisers",
+              "Limited-entry games",
+              "Simple prize competitions",
+            ]}
+            href="/admin/squares"
+            actionLabel="Open squares"
           />
 
           <FunctionCard
+            status="Live"
             label="Events"
             title="Ticketed events and guest experiences"
-            text="Use for ceilidhs, dinners, tables, reserved seating, VIP access codes, complimentary bookings, menus and dietary requirements."
+            text="Manage ceilidhs, dinners, tables, reserved seating, VIP access codes, complimentary bookings, menus and dietary requirements."
+            useCases={[
+              "Ceilidhs",
+              "Charity dinners",
+              "Quiz nights",
+              "Gala evenings",
+            ]}
+            href="/admin/events"
+            actionLabel="Open events"
           />
 
           <FunctionCard
+            status="Live"
             label="Auctions"
             title="Silent auction fundraising"
-            text="Use for premium lots, bid tracking, bidder emails, reserve-style auction activity and winner/payment follow-up workflows."
+            text="Run premium auction lots, bid tracking, bidder emails, highest-bid workflows and winner/payment follow-up."
+            useCases={[
+              "Silent auctions",
+              "Event auction tables",
+              "Donated prize bidding",
+              "Premium charity lots",
+            ]}
+            href="/admin/auctions"
+            actionLabel="Open auctions"
           />
 
           <FunctionCard
+            status="Live"
             label="Donations"
             title="Pure donation pages"
-            text="Use for general support, campaign-linked giving, suggested amounts, custom donation amounts and optional donor fee cover."
+            text="Collect general support donations, campaign-linked donations, suggested amounts, custom amounts and optional donor fee cover."
+            useCases={[
+              "General giving",
+              "Campaign support pages",
+              "Appeal donations",
+              "Donor fee cover",
+            ]}
+            href={`/c/${tenantSlug}/support`}
+            actionLabel="Open public donation page"
           />
 
           <FunctionCard
+            status="Live"
             label="Gift Aid"
             title="Donation declaration reporting"
-            text="Use only for eligible pure donations where the tenant is registered and allowed to claim Gift Aid. It stays separate from competition payments."
+            text="Review Gift Aid declarations for eligible pure donations only. Gift Aid remains separate from raffles, squares, events, auctions and competitions."
+            useCases={[
+              "Eligible pure donations",
+              "Declaration reporting",
+              "CSV export support",
+              "Tenant donation review",
+            ]}
+            href="/admin/donations"
+            actionLabel="Open Donations & Gift Aid"
           />
 
           <FunctionCard
+            status="Live"
             label="Public Hub"
             title="Tenant campaign landing page"
-            text="Use to bring raffles, events, auctions, squares and donations together under one branded public campaign hub."
+            text="Choose the highlighted campaign and bring raffles, events, auctions, squares and donations together under one branded public hub."
+            useCases={[
+              "Campaign landing page",
+              "Featured campaign",
+              "Supporter navigation",
+              "Tenant public homepage",
+            ]}
+            href="/admin/settings/public-hub"
+            actionLabel="Open Public Hub"
           />
 
           <FunctionCard
+            status="Live"
             label="Branding"
             title="Tenant public identity"
-            text="Use for display names, taglines, logos, logo marks, colours and footer wording across public campaign pages."
+            text="Manage display names, taglines, logos, logo marks, colours and footer wording across public campaign pages."
+            useCases={[
+              "White-label feel",
+              "Tenant colours",
+              "Logo settings",
+              "Public page polish",
+            ]}
+            href="/admin/settings/branding"
+            actionLabel="Open branding"
           />
 
           <FunctionCard
+            status="Live"
             label="Orders"
             title="Supporter activity overview"
-            text="Use to review platform activity across campaign purchases, bookings, bids and supporter transactions."
+            text="Review platform activity across purchases, bookings, bids, donations and campaign-related supporter transactions."
+            useCases={[
+              "Order review",
+              "Supporter lookup",
+              "Campaign activity",
+              "Admin troubleshooting",
+            ]}
+            href="/admin/orders"
+            actionLabel="Open orders"
           />
 
           <FunctionCard
+            status="Live"
             label="Customers"
             title="Supporter intelligence"
-            text="Use to understand supporter profiles grouped from orders, bookings, donations and campaign activity."
+            text="View supporter profiles grouped from orders, bookings, donations and campaign activity."
+            useCases={[
+              "Supporter history",
+              "Customer lookup",
+              "Contact review",
+              "Activity grouping",
+            ]}
+            href="/admin/customers"
+            actionLabel="Open customers"
           />
 
           <FunctionCard
+            status="Live"
             label="Finance"
             title="Payment and fee breakdowns"
-            text="Use to review payment metadata, platform fees, donor fee cover, Stripe references and organiser net estimates."
+            text="Review payment metadata, platform fees, donor fee cover, Stripe references and organiser net estimates."
+            useCases={[
+              "Payment checks",
+              "Fee breakdowns",
+              "Stripe references",
+              "Net amount estimates",
+            ]}
+            href="/admin/metadata"
+            actionLabel="Open finance"
           />
 
           <FunctionCard
+            status="Live"
             label="Billing"
             title="Tenant plan and capabilities"
-            text="Use to check subscription tier, platform commission, enabled capabilities and plan-related readiness."
-          />
-
-          <FunctionCard
-            label="Help"
-            title="Support and incident trail"
-            text="Use to report problems, preserve tenant context and build a future support dashboard with notes and reply-to-tenant actions."
+            text="Check subscription tier, platform commission, enabled capabilities and plan-related readiness."
+            useCases={[
+              "Plan review",
+              "Capability checks",
+              "Commission visibility",
+              "Subscription readiness",
+            ]}
+            href="/admin/settings/billing"
+            actionLabel="Open billing"
           />
         </div>
       </section>
 
-      <section className="support-layout" style={styles.layoutGrid}>
+      <section className="function-section" style={styles.ideaSection}>
+        <div style={styles.functionHeader}>
+          <div>
+            <p style={styles.ideaKicker}>Future formats and subtypes</p>
+
+            <h2 className="so-brand-card-title" style={styles.functionTitle}>
+              Campaign ideas to build next
+            </h2>
+
+            <p style={styles.functionText}>
+              These are planning cards only. They point tenants toward the best
+              existing tool today and keep the future roadmap clear without
+              adding new checkout or payment logic yet.
+            </p>
+          </div>
+        </div>
+
+        <div className="function-card-grid" style={styles.functionGrid}>
+          <FunctionCard
+            status="Future raffle subtype"
+            label="50/50"
+            title="Split-pot raffle fundraiser"
+            text="A raffle format where the prize pot is calculated from ticket sales, with a winner share and organiser/charity share."
+            useCases={[
+              "Sports clubs",
+              "Event-night draws",
+              "Simple cash-pot fundraising",
+              "Fast community campaigns",
+            ]}
+            href="/admin/raffles"
+            actionLabel="Use raffles for now"
+            future
+          />
+
+          <FunctionCard
+            status="Future event subtype"
+            label="Quiz Night"
+            title="Teams, tables and question-night fundraising"
+            text="A quiz-night layer could sit under Events, using tickets, tables, team names, menus and guest information."
+            useCases={[
+              "Pub quizzes",
+              "School quiz nights",
+              "Team tables",
+              "Dinner-and-quiz events",
+            ]}
+            href="/admin/events"
+            actionLabel="Use events for now"
+            future
+          />
+
+          <FunctionCard
+            status="Future games subtype"
+            label="Higher or Lower"
+            title="Card-style live elimination game"
+            text="A simple live game where supporters progress by guessing whether the next card, number or value is higher or lower."
+            useCases={[
+              "Live event games",
+              "Half-time fundraising",
+              "Ceilidh games",
+              "School fair games",
+            ]}
+            href="/admin/squares"
+            actionLabel="Use squares for now"
+            future
+          />
+
+          <FunctionCard
+            status="Future games subtype"
+            label="Heads or Tails"
+            title="Fast live elimination fundraiser"
+            text="Supporters choose heads or tails each round until one winner remains. Ideal for quick, high-energy live fundraising moments."
+            useCases={[
+              "Charity dinners",
+              "Ceilidhs",
+              "Sports club nights",
+              "Half-time fundraising",
+            ]}
+            href="/admin/events"
+            actionLabel="Use events for now"
+            future
+          />
+
+          <FunctionCard
+            status="Future games subtype"
+            label="Lucky Dip"
+            title="Instant-style simple prize picker"
+            text="A quick-entry format where supporters buy a chance and the winner or prize is revealed through a controlled draw."
+            useCases={[
+              "School fairs",
+              "Community stalls",
+              "Low-friction fundraising",
+              "Prize table games",
+            ]}
+            href="/admin/squares"
+            actionLabel="Use squares for now"
+            future
+          />
+
+          <FunctionCard
+            status="Future games subtype"
+            label="Last Person Standing"
+            title="Round-by-round elimination competition"
+            text="A longer-running competition where supporters survive rounds until one winner remains. Useful where communities return weekly."
+            useCases={[
+              "Football predictor games",
+              "Club fundraisers",
+              "Seasonal competitions",
+              "Community leagues",
+            ]}
+            href="/admin/squares"
+            actionLabel="Use squares for now"
+            future
+          />
+        </div>
+      </section>
+
+      <section
+        id="support-form"
+        className="support-layout"
+        style={styles.layoutGrid}
+      >
         <section className="support-form-panel" style={styles.formPanel}>
           <div style={styles.sectionHeader}>
             <p style={styles.kicker}>Report a problem</p>
@@ -682,23 +904,66 @@ function SupportOption({
 }
 
 function FunctionCard({
+  status,
   label,
   title,
   text,
+  useCases,
+  href,
+  actionLabel,
+  future = false,
 }: {
+  status: string;
   label: string;
   title: string;
   text: string;
+  useCases: string[];
+  href: string;
+  actionLabel: string;
+  future?: boolean;
 }) {
   return (
-    <article className="function-card" style={styles.functionCard}>
+    <article
+      className="function-card"
+      style={{
+        ...styles.functionCard,
+        ...(future ? styles.futureFunctionCard : {}),
+      }}
+    >
       <div style={styles.functionCardTop}>
+        <span
+          style={{
+            ...styles.statusBadge,
+            ...(future ? styles.futureStatusBadge : styles.liveStatusBadge),
+          }}
+        >
+          {status}
+        </span>
+
         <span style={styles.functionBadge}>{label}</span>
       </div>
 
       <h3 style={styles.functionCardTitle}>{title}</h3>
 
       <p style={styles.functionCardText}>{text}</p>
+
+      <div style={styles.useCaseWrap}>
+        {useCases.map((item) => (
+          <span key={item} style={styles.useCasePill}>
+            {item}
+          </span>
+        ))}
+      </div>
+
+      <div style={styles.functionActions}>
+        <Link href={href} style={future ? styles.futureAction : styles.cardAction}>
+          {actionLabel} →
+        </Link>
+
+        <Link href="#support-form" style={styles.reportAction}>
+          Report issue →
+        </Link>
+      </div>
     </article>
   );
 }
@@ -720,6 +985,7 @@ const responsiveStyles = `
 
 .admin-support-page {
   overflow-x: hidden;
+  scroll-behavior: smooth;
 }
 
 .admin-support-page section,
@@ -1038,6 +1304,18 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 18,
   },
 
+  ideaSection: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(255,255,255,1) 72%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+  },
+
   functionHeader: {
     display: "grid",
     gap: 6,
@@ -1046,6 +1324,15 @@ const styles: Record<string, CSSProperties> = {
   functionKicker: {
     margin: 0,
     color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  ideaKicker: {
+    margin: 0,
+    color: "#b45309",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -1077,20 +1364,54 @@ const styles: Record<string, CSSProperties> = {
 
   functionCard: {
     display: "grid",
-    gap: 10,
+    gap: 11,
     padding: 16,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
+    alignContent: "start",
+  },
+
+  futureFunctionCard: {
+    background:
+      "linear-gradient(135deg, rgba(255,251,235,0.92), rgba(255,255,255,1) 68%)",
+    border: "1px solid #fde68a",
   },
 
   functionCardTop: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  statusBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  liveStatusBadge: {
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+  },
+
+  futureStatusBadge: {
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
   },
 
   functionBadge: {
@@ -1098,12 +1419,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
-    padding: "7px 10px",
+    padding: "6px 9px",
     borderRadius: 999,
     background: "#eff6ff",
     color: "#1d4ed8",
     border: "1px solid #bfdbfe",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
@@ -1128,11 +1449,88 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  useCaseWrap: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  useCasePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "6px 8px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+    fontSize: 11,
+    fontWeight: 850,
+    lineHeight: 1.2,
+  },
+
+  functionActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 8,
+    marginTop: "auto",
+  },
+
+  cardAction: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 12px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  futureAction: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 12px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  reportAction: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    padding: "9px 12px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
   layoutGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.25fr) minmax(320px, 0.75fr)",
     gap: 16,
     alignItems: "start",
+    scrollMarginTop: 16,
   },
 
   formPanel: {
