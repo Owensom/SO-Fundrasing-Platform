@@ -84,17 +84,17 @@ function renderContactLogo() {
   return `
     <div style="
       text-align:center;
-      padding:26px 22px 16px;
+      padding:30px 22px 18px;
       background:linear-gradient(135deg,#020617 0%,#0f172a 58%,#172554 100%);
     ">
       <img
         src="${escapeHtml(logoUrl)}"
         alt="SO Fundraising Platform contact"
-        width="190"
+        width="260"
         style="
           display:inline-block;
-          width:190px;
-          max-width:72%;
+          width:260px;
+          max-width:86%;
           height:auto;
           border:0;
           outline:none;
