@@ -1162,11 +1162,186 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  brandFeatureText: {
+    brandFeatureText: {
     color: "#475569",
     fontSize: 12,
     lineHeight: 1.35,
     fontWeight: 750,
+  },
+
+  hero: {
+    position: "relative",
+    display: "grid",
+    gap: 16,
+    padding: 22,
+    borderRadius: 24,
+    color: "#ffffff",
+    marginBottom: 0,
+    boxShadow: "0 22px 52px rgba(15,23,42,0.22)",
+    overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 30%)",
+  },
+
+  heroLineOne: {
+    position: "absolute",
+    left: -90,
+    bottom: -130,
+    width: 330,
+    height: 330,
+    border: "1px solid rgba(250,204,21,0.18)",
+    borderRadius: "999px",
+    pointerEvents: "none",
+  },
+
+  heroLineTwo: {
+    position: "absolute",
+    left: -140,
+    bottom: -180,
+    width: 440,
+    height: 440,
+    border: "1px solid rgba(250,204,21,0.09)",
+    borderRadius: "999px",
+    pointerEvents: "none",
+  },
+
+  heroMainGrid: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.08fr) minmax(270px, 0.82fr)",
+    gap: 18,
+    alignItems: "stretch",
+    minWidth: 0,
+  },
+
+  heroCopy: {
+    minWidth: 0,
+  },
+
+  eyebrow: {
+    display: "inline-flex",
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.36)",
+    border: "1px solid",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+    marginBottom: 11,
+  },
+
+  heroTitle: {
+    margin: 0,
+    maxWidth: 660,
+    fontSize: "clamp(38px, 6vw, 60px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
+    overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
+  },
+
+  subtitle: {
+    margin: "11px 0 0",
+    maxWidth: 700,
+    color: "#dbeafe",
+    fontSize: 16,
+    lineHeight: 1.48,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
+
+  heroStat: {
+    display: "grid",
+    gap: 4,
+    padding: 11,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
+    minWidth: 0,
+    overflowWrap: "normal",
+  },
+
+  heroStatLabel: {
+    color: "#ffffff",
+    fontSize: 11,
+    lineHeight: 1.15,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  heroStatValue: {
+    color: "#ffffff",
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+
+  supportPanel: {
+    display: "grid",
+    gap: 11,
+    alignContent: "center",
+    padding: 17,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.28)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+    minWidth: 0,
+  },
+
+  supportPanelTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 22,
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
+  },
+
+  supportOptionList: {
+    display: "grid",
+    gap: 9,
+  },
+
+  supportOption: {
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0, 1fr)",
+    gap: 11,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(191,219,254,0.18)",
+    color: "#dbeafe",
+  },
+
+  supportOptionLink: {
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0, 1fr)",
+    gap: 11,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.13)",
+    border: "1px solid rgba(191,219,254,0.24)",
+    color: "#dbeafe",
+    textDecoration: "none",
   },
 
   supportIcon: {
