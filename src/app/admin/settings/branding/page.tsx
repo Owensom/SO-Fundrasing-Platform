@@ -8,6 +8,7 @@ import {
   getTierLabel,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
+import { sendTenantContactTestEmail } from "@/lib/customer-contact-email";
 import BrandingSettingsForm from "./BrandingSettingsForm";
 
 export const dynamic = "force-dynamic";
@@ -257,12 +258,46 @@ async function updateTenantBranding(formData: FormData) {
   redirect("/admin/settings/branding?saved=1");
 }
 
+async function sendContactEmailTest(formData: FormData) {
+  "use server";
+
+  const access = await requireCurrentTenantAccess();
+  const tenantSlug = access.tenantSlug;
+
+  const settings = await getBrandingSettings(tenantSlug);
+  const contactEmail = cleanEmail(settings?.public_contact_email);
+
+  if (!settings) {
+    redirect("/admin/settings/branding?contactTest=missing_settings");
+  }
+
+  if (!contactEmail) {
+    redirect("/admin/settings/branding?contactTest=missing_contact_email");
+  }
+
+  try {
+    await sendTenantContactTestEmail({
+      tenantSlug,
+      tenantDisplayName:
+        cleanText(settings.public_display_name) || tenantSlug,
+      tenantContactEmail: contactEmail,
+      tenantContactName: settings.public_contact_name,
+    });
+  } catch (error) {
+    console.error("Tenant contact test email failed", error);
+    redirect("/admin/settings/branding?contactTest=email_failed");
+  }
+
+  redirect("/admin/settings/branding?contactTest=sent");
+}
+
 export default async function AdminBrandingSettingsPage({
   searchParams,
 }: {
   searchParams?: Promise<{
     saved?: string;
     error?: string;
+    contactTest?: string;
   }>;
 }) {
   const access = await requireCurrentTenantAccess();
@@ -295,6 +330,7 @@ export default async function AdminBrandingSettingsPage({
       subscriptionLabel={`${getTierLabel(subscriptionTier)} plan`}
       saved={resolvedSearchParams.saved === "1"}
       error={resolvedSearchParams.error || ""}
+      contactTest={resolvedSearchParams.contactTest || ""}
       canUseAdvancedBranding={canUseAdvancedBranding}
       formState={{
         displayName: settings?.public_display_name || "",
@@ -308,6 +344,7 @@ export default async function AdminBrandingSettingsPage({
         footerText: settings?.public_footer_text || "",
       }}
       updateAction={updateTenantBranding}
+      sendContactEmailTestAction={sendContactEmailTest}
     />
   );
 }
