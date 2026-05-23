@@ -611,8 +611,8 @@ function SupportRequestCard({
         </div>
       </div>
 
-      <div style={styles.statusPanel}>
-        <div>
+      <div className="support-status-panel" style={styles.statusPanel}>
+        <div style={styles.statusPanelCopy}>
           <p style={styles.statusPanelLabel}>Update status</p>
           <p style={styles.statusPanelText}>
             Status changes are platform-owner only and update the request
@@ -746,6 +746,10 @@ const responsiveStyles = `
   .platform-support-page .support-request-top {
     grid-template-columns: 1fr !important;
   }
+
+  .platform-support-page .support-status-panel {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 760px) {
@@ -770,6 +774,11 @@ const responsiveStyles = `
   .platform-support-page .support-detail-grid,
   .platform-support-page .support-status-actions {
     grid-template-columns: 1fr !important;
+  }
+
+  .platform-support-page .support-status-panel {
+    padding: 12px !important;
+    border-radius: 18px !important;
   }
 
   .platform-support-page .support-request-card p,
@@ -1255,7 +1264,7 @@ const styles: Record<string, CSSProperties> = {
 
   statusPanel: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 420px)",
+    gridTemplateColumns: "minmax(0, 1fr)",
     gap: 12,
     alignItems: "center",
     padding: 14,
@@ -1263,6 +1272,13 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  statusPanelCopy: {
+    minWidth: 0,
+    maxWidth: "100%",
     overflow: "hidden",
   },
 
@@ -1288,11 +1304,13 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 8,
     minWidth: 0,
+    maxWidth: "100%",
   },
 
   statusForm: {
     display: "block",
     minWidth: 0,
+    maxWidth: "100%",
   },
 
   statusButton: {
@@ -1308,6 +1326,8 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     textAlign: "center",
     lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   statusButtonActive: {
