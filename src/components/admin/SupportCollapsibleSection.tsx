@@ -1,7 +1,7 @@
 // src/components/admin/SupportCollapsibleSection.tsx
 // ===============================
 // Reusable admin collapsible section
-// Server-safe, no client state required
+// Uses native details/summary so the page can stay server-rendered
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -11,7 +11,7 @@ export default function SupportCollapsibleSection({
   title,
   text,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
   tone = "blue",
 }: {
   eyebrow: string;
@@ -132,7 +132,7 @@ const styles: Record<string, CSSProperties> = {
     margin: "2px 0 0",
     color: "#475569",
     lineHeight: 1.6,
-    maxWidth: 940,
+    maxWidth: 980,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
