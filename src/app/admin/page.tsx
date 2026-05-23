@@ -1022,14 +1022,16 @@ const styles: Record<string, CSSProperties> = {
     overflowX: "hidden",
   },
 
-  commandCentre: {
-    position: "relative",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
-    gridTemplateAreas: `
-      "content stats"
-      "actions actions"
-    `,
+ commandActions: {
+  position: "relative",
+  zIndex: 1,
+  gridArea: "actions",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(172px, 1fr))",
+  gap: 12,
+  alignItems: "stretch",
+  width: "100%",
+   },
     gap: 24,
     padding: 30,
     borderRadius: 34,
