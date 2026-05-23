@@ -1,7 +1,7 @@
 // src/app/admin/platform/incidents/page.tsx
 // ===============================
 // Platform Owner Incident Log
-// Phase 5C.2 — internal incident/status log with status updates
+// Phase 5C.3 — internal incident log with status updates + public status controls
 // Mobile-safe, desktop-safe, platform-owner-only
 // ===============================
 
@@ -16,6 +16,7 @@ export const revalidate = 0;
 
 type IncidentStatus = "investigating" | "monitoring" | "resolved";
 type IncidentSeverity = "low" | "medium" | "high" | "critical";
+type IncidentPublicAction = "publish" | "save_public" | "unpublish";
 
 type IncidentSearchParams = {
   status?: string | string[];
@@ -37,6 +38,8 @@ type IncidentRow = {
   affected_area: string;
   summary: string;
   internal_notes: string | null;
+  is_public: boolean;
+  public_message: string | null;
   started_at: string;
   resolved_at: string | null;
   created_at: string;
@@ -50,6 +53,7 @@ type IncidentSummaryRow = {
   resolved_count: string | number;
   critical_count: string | number;
   high_count: string | number;
+  public_count: string | number;
 };
 
 function firstParam(value: string | string[] | undefined) {
@@ -98,6 +102,16 @@ function normaliseSeverity(value: unknown): IncidentSeverity {
   }
 
   return "medium";
+}
+
+function normalisePublicAction(value: unknown): IncidentPublicAction {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (clean === "publish" || clean === "save_public" || clean === "unpublish") {
+    return clean;
+  }
+
+  return "save_public";
 }
 
 function isSafeUuid(value: unknown) {
@@ -188,7 +202,8 @@ async function getIncidentSummary() {
         count(*) filter (where status = 'monitoring')::int as monitoring_count,
         count(*) filter (where status = 'resolved')::int as resolved_count,
         count(*) filter (where severity = 'critical')::int as critical_count,
-        count(*) filter (where severity = 'high')::int as high_count
+        count(*) filter (where severity = 'high')::int as high_count,
+        count(*) filter (where is_public = true)::int as public_count
       from platform_incidents
     `,
   );
@@ -201,6 +216,7 @@ async function getIncidentSummary() {
       resolved_count: 0,
       critical_count: 0,
       high_count: 0,
+      public_count: 0,
     }
   );
 }
@@ -218,6 +234,8 @@ async function getIncidents(status: IncidentStatus | "all") {
         affected_area,
         summary,
         internal_notes,
+        is_public,
+        public_message,
         started_at::text,
         resolved_at::text,
         created_at::text,
@@ -312,6 +330,50 @@ async function updateIncidentStatus(formData: FormData) {
   redirect(getStatusHref(returnStatus));
 }
 
+async function updateIncidentPublicStatus(formData: FormData) {
+  "use server";
+
+  await requirePlatformOwner();
+
+  const incidentId = String(formData.get("incident_id") || "").trim();
+  const publicAction = normalisePublicAction(formData.get("public_action"));
+  const returnStatus = normaliseStatus(formData.get("return_status"));
+  const publicMessage = limitText(formData.get("public_message"), 1200);
+
+  if (!isSafeUuid(incidentId)) {
+    redirect(getStatusHref(returnStatus));
+  }
+
+  if (publicAction === "unpublish") {
+    await query(
+      `
+        update platform_incidents
+        set
+          is_public = false,
+          public_message = $2,
+          updated_at = now()
+        where id = $1
+      `,
+      [incidentId, publicMessage || null],
+    );
+
+    redirect(getStatusHref(returnStatus));
+  }
+
+  await query(
+    `
+      update platform_incidents
+      set
+        is_public = true,
+        public_message = $2,
+        updated_at = now()
+      where id = $1
+    `,
+    [incidentId, publicMessage || null],
+  );
+
+  redirect(getStatusHref(returnStatus));
+}
 export default async function PlatformIncidentsPage({
   searchParams,
 }: {
@@ -350,10 +412,15 @@ export default async function PlatformIncidentsPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Track platform issues, outages, degraded service and operational
-            incidents in one internal owner-only log. Status updates set or clear
-            the resolved timestamp safely.
+            Track platform issues, update internal status, and choose exactly
+            which incidents appear on the public platform status page.
           </p>
+
+          <div style={styles.heroActions}>
+            <Link href="/status" style={styles.statusPageLink}>
+              View public status page →
+            </Link>
+          </div>
         </div>
 
         <div className="platform-incidents-stats" style={styles.heroStats}>
@@ -373,13 +440,14 @@ export default async function PlatformIncidentsPage({
             dark
           />
           <StatCard
-            label="Critical"
-            value={toNumber(summary.critical_count)}
+            label="Public"
+            value={toNumber(summary.public_count)}
             dark
           />
         </div>
       </section>
-            <section className="incident-summary-grid" style={styles.summaryGrid}>
+
+      <section className="incident-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Investigating"
           value={toNumber(summary.investigating_count)}
@@ -399,9 +467,9 @@ export default async function PlatformIncidentsPage({
         />
 
         <SummaryCard
-          label="High severity"
-          value={toNumber(summary.high_count)}
-          text="Important incidents needing attention"
+          label="Public"
+          value={toNumber(summary.public_count)}
+          text="Incidents visible on /status"
         />
 
         <SummaryCard
@@ -421,7 +489,8 @@ export default async function PlatformIncidentsPage({
 
           <p style={styles.sectionText}>
             Record platform issues, degraded service, support spikes or known
-            operational problems. This log is internal only for now.
+            operational problems. New incidents remain private unless you publish
+            them below.
           </p>
         </div>
 
@@ -441,7 +510,11 @@ export default async function PlatformIncidentsPage({
           <div className="incident-form-grid" style={styles.formGrid}>
             <label style={styles.field}>
               <span style={styles.label}>Status</span>
-              <select name="status" defaultValue="investigating" style={styles.select}>
+              <select
+                name="status"
+                defaultValue="investigating"
+                style={styles.select}
+              >
                 <option value="investigating">Investigating</option>
                 <option value="monitoring">Monitoring</option>
                 <option value="resolved">Resolved</option>
@@ -450,7 +523,11 @@ export default async function PlatformIncidentsPage({
 
             <label style={styles.field}>
               <span style={styles.label}>Severity</span>
-              <select name="severity" defaultValue="medium" style={styles.select}>
+              <select
+                name="severity"
+                defaultValue="medium"
+                style={styles.select}
+              >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
@@ -478,7 +555,7 @@ export default async function PlatformIncidentsPage({
               required
               maxLength={1200}
               rows={4}
-              placeholder="Write a clear summary of what happened, who was affected, and what is currently being done."
+              placeholder="Write a clear internal summary of what happened, who was affected, and what is currently being done."
               style={styles.textarea}
             />
           </label>
@@ -509,8 +586,9 @@ export default async function PlatformIncidentsPage({
           </h2>
 
           <p style={styles.sectionText}>
-            Showing the latest 100 incidents for the selected status. Open
-            incidents stay above resolved incidents.
+            Showing the latest 100 incidents for the selected status. Public
+            visibility is controlled per incident and only published incidents
+            appear on /status.
           </p>
         </div>
 
@@ -708,6 +786,15 @@ function IncidentCard({
             </span>
 
             <span style={styles.areaPill}>{incident.affected_area}</span>
+
+            <span
+              style={{
+                ...styles.publicPill,
+                ...(incident.is_public ? styles.publicPillLive : {}),
+              }}
+            >
+              {incident.is_public ? "Public" : "Private"}
+            </span>
           </div>
 
           <h2 style={styles.incidentTitle}>{incident.title}</h2>
@@ -725,8 +812,7 @@ function IncidentCard({
           <strong style={styles.incidentIdValue}>{incident.id}</strong>
         </div>
       </div>
-
-      <div className="incident-status-panel" style={styles.statusPanel}>
+            <div className="incident-status-panel" style={styles.statusPanel}>
         <div style={styles.statusPanelCopy}>
           <p style={styles.statusPanelLabel}>Update status</p>
           <p style={styles.statusPanelText}>
@@ -773,8 +859,62 @@ function IncidentCard({
       </div>
 
       <div style={styles.summaryBox}>
-        <p style={styles.boxLabel}>Summary</p>
+        <p style={styles.boxLabel}>Internal summary</p>
         <p style={styles.boxText}>{incident.summary}</p>
+      </div>
+
+      <div className="incident-public-panel" style={styles.publicPanel}>
+        <div style={styles.publicHeader}>
+          <div>
+            <p style={styles.publicKicker}>Public status page</p>
+            <h3 style={styles.publicTitle}>
+              {incident.is_public ? "Published to /status" : "Private incident"}
+            </h3>
+            <p style={styles.publicText}>
+              Only published incidents appear on the public status page. Internal
+              notes are never shown publicly.
+            </p>
+          </div>
+        </div>
+
+        <form action={updateIncidentPublicStatus} style={styles.publicForm}>
+          <input type="hidden" name="incident_id" value={incident.id} />
+          <input type="hidden" name="return_status" value={activeStatus} />
+
+          <label style={styles.field}>
+            <span style={styles.label}>Public message</span>
+            <textarea
+              name="public_message"
+              defaultValue={incident.public_message || ""}
+              maxLength={1200}
+              rows={3}
+              placeholder="Optional public-facing update. If left blank, the internal summary is not exposed; the status page will use a safe generic message."
+              style={styles.textarea}
+            />
+          </label>
+
+          <div className="incident-public-actions" style={styles.publicActions}>
+            <button
+              type="submit"
+              name="public_action"
+              value={incident.is_public ? "save_public" : "publish"}
+              style={styles.publicButton}
+            >
+              {incident.is_public ? "Save public message" : "Publish to status page"} →
+            </button>
+
+            {incident.is_public ? (
+              <button
+                type="submit"
+                name="public_action"
+                value="unpublish"
+                style={styles.unpublishButton}
+              >
+                Unpublish
+              </button>
+            ) : null}
+          </div>
+        </form>
       </div>
 
       {incident.internal_notes ? (
@@ -804,6 +944,7 @@ const responsiveStyles = `
 .platform-incidents-page p,
 .platform-incidents-page h1,
 .platform-incidents-page h2,
+.platform-incidents-page h3,
 .platform-incidents-page strong,
 .platform-incidents-page span,
 .platform-incidents-page form,
@@ -869,11 +1010,13 @@ const responsiveStyles = `
   .platform-incidents-page .incident-summary-grid,
   .platform-incidents-page .incident-filter-grid,
   .platform-incidents-page .incident-detail-grid,
-  .platform-incidents-page .incident-status-actions {
+  .platform-incidents-page .incident-status-actions,
+  .platform-incidents-page .incident-public-actions {
     grid-template-columns: 1fr !important;
   }
 
-  .platform-incidents-page .incident-status-panel {
+  .platform-incidents-page .incident-status-panel,
+  .platform-incidents-page .incident-public-panel {
     padding: 12px !important;
     border-radius: 18px !important;
   }
@@ -991,6 +1134,30 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     lineHeight: 1.6,
     fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  heroActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 18,
+    minWidth: 0,
+  },
+
+  statusPageLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    maxWidth: "100%",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.22)",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
     overflowWrap: "anywhere",
   },
 
@@ -1406,6 +1573,27 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  publicPill: {
+    display: "inline-flex",
+    maxWidth: "100%",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  publicPillLive: {
+    background: "#ecfdf5",
+    color: "#047857",
+    border: "1px solid #a7f3d0",
+  },
+
   incidentTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1526,6 +1714,106 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     border: "1px solid #1683f8",
     cursor: "default",
+  },
+
+  publicPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, rgba(22,163,74,0.10), rgba(255,255,255,1) 72%)",
+    border: "1px solid #bbf7d0",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  publicHeader: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  publicKicker: {
+    margin: 0,
+    color: "#047857",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  publicTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  publicText: {
+    margin: 0,
+    color: "#166534",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  publicForm: {
+    display: "grid",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  publicActions: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, auto) minmax(0, auto)",
+    justifyContent: "start",
+    gap: 8,
+    minWidth: 0,
+  },
+
+  publicButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    maxWidth: "100%",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #16a34a 0%, #047857 100%)",
+    color: "#ffffff",
+    border: "1px solid #16a34a",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+  },
+
+  unpublishButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    maxWidth: "100%",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   detailGrid: {
