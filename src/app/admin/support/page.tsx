@@ -26,7 +26,6 @@ type SupportRequestInsertRow = {
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
-
   return clean || fallback;
 }
 
@@ -36,7 +35,6 @@ function limitText(value: unknown, maxLength: number) {
 
 function firstParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0] || "";
-
   return value || "";
 }
 
@@ -72,13 +70,11 @@ function isAllowedUrgency(value: string) {
 
 function normaliseCategory(value: unknown) {
   const clean = cleanText(value, "general").toLowerCase();
-
   return isAllowedCategory(clean) ? clean : "general";
 }
 
 function normaliseUrgency(value: unknown) {
   const clean = cleanText(value, "normal").toLowerCase();
-
   return isAllowedUrgency(clean) ? clean : "normal";
 }
 
@@ -155,6 +151,8 @@ async function createSupportRequest(formData: FormData) {
     redirect("/admin/support?support=validation_error");
   }
 
+  let requestId = "";
+
   try {
     const rows = await query<SupportRequestInsertRow>(
       `
@@ -205,45 +203,52 @@ async function createSupportRequest(formData: FormData) {
       ],
     );
 
-    const requestId = rows[0]?.id;
+    requestId = rows[0]?.id || "";
+  } catch (error) {
+    console.error("Support request insert failed", error);
+    redirect("/admin/support?support=error");
+  }
 
-    if (!requestId) {
-      redirect("/admin/support?support=error");
-    }
+  if (!requestId) {
+    redirect("/admin/support?support=error");
+  }
+
+  let emailFailed = false;
+
+  try {
+    await sendPlatformSupportRequestEmail({
+      requestId,
+      tenantSlug,
+      adminEmail,
+      adminName,
+      category,
+      urgency,
+      subject,
+      message,
+      pageUrl,
+      campaignType,
+      campaignId,
+      browserContext,
+    });
+
+    await query(
+      `
+        update support_requests
+        set
+          email_status = 'sent',
+          email_error = null,
+          updated_at = now()
+        where id = $1
+          and tenant_slug = $2
+      `,
+      [requestId, tenantSlug],
+    );
+  } catch (emailError) {
+    emailFailed = true;
+
+    console.error("Support request email failed", emailError);
 
     try {
-      await sendPlatformSupportRequestEmail({
-        requestId,
-        tenantSlug,
-        adminEmail,
-        adminName,
-        category,
-        urgency,
-        subject,
-        message,
-        pageUrl,
-        campaignType,
-        campaignId,
-        browserContext,
-      });
-
-      await query(
-        `
-          update support_requests
-          set
-            email_status = 'sent',
-            email_error = null,
-            updated_at = now()
-          where id = $1
-            and tenant_slug = $2
-        `,
-        [requestId, tenantSlug],
-      );
-
-      redirect(
-        `/admin/support?support=sent&ref=${encodeURIComponent(requestId)}`,
-      );
-    } catch (emailError) {
       await query(
         `
           update support_requests
@@ -262,17 +267,20 @@ async function createSupportRequest(formData: FormData) {
             : "Support email failed",
         ],
       );
-
-      redirect(
-        `/admin/support?support=saved_email_failed&ref=${encodeURIComponent(
-          requestId,
-        )}`,
-      );
+    } catch (updateError) {
+      console.error("Support request email failure update failed", updateError);
     }
-  } catch (error) {
-    console.error("Support request failed", error);
-    redirect("/admin/support?support=error");
   }
+
+  if (emailFailed) {
+    redirect(
+      `/admin/support?support=saved_email_failed&ref=${encodeURIComponent(
+        requestId,
+      )}`,
+    );
+  }
+
+  redirect(`/admin/support?support=sent&ref=${encodeURIComponent(requestId)}`);
 }
 
 export default async function AdminSupportPage({
