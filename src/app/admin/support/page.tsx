@@ -3,6 +3,7 @@
 // Admin Help & Support
 // Tenant-isolated support request form
 // Functional Platform Cards help hub
+// Collapsible platform guide sections
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -12,6 +13,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { sendPlatformSupportRequestEmail } from "@/lib/support-email";
+import SupportCollapsibleSection from "@/components/admin/SupportCollapsibleSection";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -137,7 +139,6 @@ async function createSupportRequest(formData: FormData) {
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
-
   const sessionTenantSlugs = getSessionTenantSlugs(session);
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
@@ -254,7 +255,6 @@ async function createSupportRequest(formData: FormData) {
     );
   } catch (emailError) {
     emailFailed = true;
-
     console.error("Support request email failed", emailError);
 
     try {
@@ -304,7 +304,6 @@ export default async function AdminSupportPage({
   }
 
   const tenantSlug = await getTenantSlugFromHeaders();
-
   const sessionTenantSlugs = getSessionTenantSlugs(session);
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
@@ -387,27 +386,16 @@ export default async function AdminSupportPage({
         <SupportOption
           label="Plan ideas"
           title="Explore platform uses"
-          text="Use the function cards below to choose the right tool for raffles, events, donations, auctions and future games."
+          text="Use the collapsible function cards below to choose the right tool for raffles, events, donations, auctions and future games."
         />
       </section>
-
-      <section className="function-section" style={styles.functionSection}>
-        <div style={styles.functionHeader}>
-          <div>
-            <p style={styles.functionKicker}>Platform function cards</p>
-
-            <h2 className="so-brand-card-title" style={styles.functionTitle}>
-              Live platform tools
-            </h2>
-
-            <p style={styles.functionText}>
-              These cards link directly to working admin areas and explain what
-              each tool is best used for. The “report issue” links jump to the
-              support form below.
-            </p>
-          </div>
-        </div>
-
+            <SupportCollapsibleSection
+        eyebrow="Platform function cards"
+        title="Live platform tools"
+        text="Open this section to see working admin areas, practical use cases and direct links."
+        defaultOpen={false}
+        tone="blue"
+      >
         <div className="function-card-grid" style={styles.functionGrid}>
           <FunctionCard
             status="Live"
@@ -589,26 +577,16 @@ export default async function AdminSupportPage({
             actionLabel="Open billing"
           />
         </div>
-      </section>
+      </SupportCollapsibleSection>
 
-      <section className="function-section" style={styles.ideaSection}>
-        <div style={styles.functionHeader}>
-          <div>
-            <p style={styles.ideaKicker}>Future formats and subtypes</p>
-
-            <h2 className="so-brand-card-title" style={styles.functionTitle}>
-              Campaign ideas to build next
-            </h2>
-
-            <p style={styles.functionText}>
-              These are planning cards only. They point tenants toward the best
-              existing tool today and keep the future roadmap clear without
-              adding new checkout or payment logic yet.
-            </p>
-          </div>
-        </div>
-
-        <div className="function-card-grid" style={styles.functionGrid}>
+      <SupportCollapsibleSection
+        eyebrow="Future formats and subtypes"
+        title="Campaign ideas to build next"
+        text="Open this section to see planned campaign formats. These are roadmap ideas only and do not add new checkout or payment logic yet."
+        defaultOpen={false}
+        tone="gold"
+      >
+        <div className="idea-card-grid" style={styles.ideaGrid}>
           <FunctionCard
             status="Future raffle subtype"
             label="50/50"
@@ -705,8 +683,9 @@ export default async function AdminSupportPage({
             future
           />
         </div>
-      </section>
-            <section
+      </SupportCollapsibleSection>
+
+      <section
         id="support-form"
         className="support-layout"
         style={styles.layoutGrid}
@@ -866,7 +845,6 @@ export default async function AdminSupportPage({
     </main>
   );
 }
-
 function StatCard({
   label,
   value,
@@ -1008,6 +986,18 @@ const responsiveStyles = `
   height: 100%;
 }
 
+.admin-support-page .support-collapsible-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-support-page .support-collapsible-section > summary::marker {
+  content: "";
+}
+
+.admin-support-page .support-collapsible-section[open] .support-collapsible-icon {
+  transform: rotate(180deg);
+}
+
 @media (max-width: 1180px) {
   .admin-support-page .function-card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -1022,6 +1012,10 @@ const responsiveStyles = `
 
   .admin-support-page .support-hero-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .admin-support-page .idea-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -1043,15 +1037,24 @@ const responsiveStyles = `
   .admin-support-page .support-options-grid,
   .admin-support-page .support-form-grid,
   .admin-support-page .support-hero-stats,
-  .admin-support-page .function-card-grid {
+  .admin-support-page .function-card-grid,
+  .admin-support-page .idea-card-grid {
     grid-template-columns: 1fr !important;
   }
 
   .admin-support-page .support-form-panel,
-  .admin-support-page .support-context-panel,
-  .admin-support-page .function-section {
+  .admin-support-page .support-context-panel {
     padding: 18px !important;
     border-radius: 24px !important;
+  }
+
+  .admin-support-page .support-collapsible-section > summary {
+    padding: 18px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .admin-support-page .support-collapsible-section > div {
+    padding: 0 18px 18px !important;
   }
 }
 `;
@@ -1299,73 +1302,16 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
   },
 
-  functionSection: {
-    display: "grid",
-    gap: 18,
-    padding: 22,
-    borderRadius: 28,
-    background:
-      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
-    border: "1px solid #bfdbfe",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
-    marginBottom: 18,
-  },
-
-  ideaSection: {
-    display: "grid",
-    gap: 18,
-    padding: 22,
-    borderRadius: 28,
-    background:
-      "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(255,255,255,1) 72%)",
-    border: "1px solid #fde68a",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
-    marginBottom: 18,
-  },
-
-  functionHeader: {
-    display: "grid",
-    gap: 6,
-  },
-
-  functionKicker: {
-    margin: 0,
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  ideaKicker: {
-    margin: 0,
-    color: "#b45309",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  functionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.05em",
-    overflowWrap: "anywhere",
-  },
-
-  functionText: {
-    margin: "8px 0 0",
-    color: "#475569",
-    lineHeight: 1.6,
-    maxWidth: 940,
-    fontWeight: 750,
-    overflowWrap: "anywhere",
-  },
-
   functionGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+    alignItems: "stretch",
+  },
+
+  ideaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
     alignItems: "stretch",
   },
