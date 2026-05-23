@@ -706,8 +706,7 @@ export default async function AdminSupportPage({
           />
         </div>
       </section>
-
-      <section
+            <section
         id="support-form"
         className="support-layout"
         style={styles.layoutGrid}
@@ -930,29 +929,33 @@ function FunctionCard({
         ...(future ? styles.futureFunctionCard : {}),
       }}
     >
-      <div style={styles.functionCardTop}>
-        <span
-          style={{
-            ...styles.statusBadge,
-            ...(future ? styles.futureStatusBadge : styles.liveStatusBadge),
-          }}
-        >
-          {status}
-        </span>
-
-        <span style={styles.functionBadge}>{label}</span>
-      </div>
-
-      <h3 style={styles.functionCardTitle}>{title}</h3>
-
-      <p style={styles.functionCardText}>{text}</p>
-
-      <div style={styles.useCaseWrap}>
-        {useCases.map((item) => (
-          <span key={item} style={styles.useCasePill}>
-            {item}
+      <div style={styles.functionCardContent}>
+        <div style={styles.functionCardTop}>
+          <span
+            style={{
+              ...styles.statusBadge,
+              ...(future ? styles.futureStatusBadge : styles.liveStatusBadge),
+            }}
+          >
+            {status}
           </span>
-        ))}
+
+          <span style={styles.functionBadge}>{label}</span>
+        </div>
+
+        <div style={styles.functionCopy}>
+          <h3 style={styles.functionCardTitle}>{title}</h3>
+
+          <p style={styles.functionCardText}>{text}</p>
+        </div>
+
+        <div style={styles.useCaseWrap}>
+          {useCases.map((item) => (
+            <span key={item} style={styles.useCasePill}>
+              {item}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div style={styles.functionActions}>
@@ -999,6 +1002,10 @@ const responsiveStyles = `
 .admin-support-page textarea,
 .admin-support-page button {
   min-width: 0;
+}
+
+.admin-support-page .function-card {
+  height: 100%;
 }
 
 @media (max-width: 1180px) {
@@ -1360,24 +1367,33 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
+    alignItems: "stretch",
   },
 
   functionCard: {
     display: "grid",
-    gap: 11,
+    gridTemplateRows: "1fr auto",
+    gap: 14,
     padding: 16,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
-    alignContent: "start",
+    height: "100%",
   },
 
   futureFunctionCard: {
     background:
       "linear-gradient(135deg, rgba(255,251,235,0.92), rgba(255,255,255,1) 68%)",
     border: "1px solid #fde68a",
+  },
+
+  functionCardContent: {
+    display: "grid",
+    gap: 11,
+    alignContent: "start",
+    minWidth: 0,
   },
 
   functionCardTop: {
@@ -1431,6 +1447,12 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
+  functionCopy: {
+    display: "grid",
+    gap: 8,
+    minWidth: 0,
+  },
+
   functionCardTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1474,7 +1496,8 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 8,
-    marginTop: "auto",
+    alignSelf: "end",
+    marginTop: 2,
   },
 
   cardAction: {
