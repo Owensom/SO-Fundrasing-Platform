@@ -6,6 +6,8 @@ import Link from "next/link";
 type BrandingFormState = {
   displayName: string;
   tagline: string;
+  contactName: string;
+  contactEmail: string;
   logoUrl: string;
   logoMarkUrl: string;
   primaryColour: string;
@@ -113,6 +115,8 @@ export default function BrandingSettingsForm({
 }: Props) {
   const [displayName, setDisplayName] = useState(formState.displayName);
   const [tagline, setTagline] = useState(formState.tagline);
+  const [contactName, setContactName] = useState(formState.contactName);
+  const [contactEmail, setContactEmail] = useState(formState.contactEmail);
   const [logoUrl, setLogoUrl] = useState(formState.logoUrl);
   const [logoMarkUrl, setLogoMarkUrl] = useState(formState.logoMarkUrl);
 
@@ -241,8 +245,9 @@ export default function BrandingSettingsForm({
           </h1>
 
           <p style={styles.subtitle}>
-            Set the public name and messaging for this tenant. Upload a logo
-            and choose brand colours when advanced branding is available.
+            Set the public name, contact details and messaging for this tenant.
+            Upload a logo and choose brand colours when advanced branding is
+            available.
           </p>
 
           <p style={styles.tenant}>
@@ -273,6 +278,12 @@ export default function BrandingSettingsForm({
             {tagline || "Your public tenant tagline will appear here."}
           </p>
 
+          <p style={styles.heroPanelContact}>
+            {contactEmail
+              ? `Public contact: ${contactName || displayName || tenantSlug}`
+              : "Public contact email is not set yet."}
+          </p>
+
           <div style={styles.colourPreviewRow}>
             <span
               style={{
@@ -293,7 +304,7 @@ export default function BrandingSettingsForm({
       {saved ? (
         <section style={styles.successCard}>
           <strong>Branding settings saved.</strong>
-          <span>The tenant branding details have been updated.</span>
+          <span>The tenant branding and public contact details have been updated.</span>
         </section>
       ) : null}
 
@@ -304,8 +315,9 @@ export default function BrandingSettingsForm({
           <h2 style={styles.sectionTitle}>Basic branding</h2>
 
           <p style={styles.sectionText}>
-            These details can be used across the public campaign hub and later
-            in campaign pages and emails.
+            These details are used across the public campaign hub and public
+            tenant pages. Public contact details will be used for supporter
+            contact forms.
           </p>
 
           <form action={updateAction} style={styles.form}>
@@ -338,6 +350,51 @@ export default function BrandingSettingsForm({
                 Included for all tenants. Keep this short and public-facing.
               </span>
             </label>
+
+            <section style={styles.contactPanel}>
+              <div>
+                <p style={styles.contactKicker}>Public contact</p>
+                <h2 style={styles.contactTitle}>Supporter contact details</h2>
+                <p style={styles.contactText}>
+                  These fields will be used by the public customer-to-tenant
+                  contact page. They do not affect platform-owner support
+                  emails.
+                </p>
+              </div>
+
+              <label style={styles.field}>
+                <span style={styles.label}>Public contact name</span>
+                <input
+                  name="public_contact_name"
+                  value={contactName}
+                  onChange={(event) => setContactName(event.target.value)}
+                  placeholder="Example: Events team, Fundraising team, Jane Smith"
+                  maxLength={120}
+                  style={styles.input}
+                />
+                <span style={styles.hint}>
+                  Optional. This can be a person, team or organisation contact
+                  label.
+                </span>
+              </label>
+
+              <label style={styles.field}>
+                <span style={styles.label}>Public contact email</span>
+                <input
+                  name="public_contact_email"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(event) => setContactEmail(event.target.value)}
+                  placeholder="Example: hello@example.org"
+                  maxLength={254}
+                  style={styles.input}
+                />
+                <span style={styles.hint}>
+                  Public supporter contact messages will go to this address.
+                  Leave blank until the tenant is ready to receive messages.
+                </span>
+              </label>
+            </section>
 
             <div style={styles.divider} />
 
@@ -620,9 +677,9 @@ export default function BrandingSettingsForm({
               <section style={styles.lockedNotice}>
                 <strong>Advanced branding is not active on this plan.</strong>
                 <span>
-                  Display name and tagline can be saved now. Logos, colours and
-                  footer wording will remain unchanged until advanced branding
-                  is available for this tenant.
+                  Display name, tagline and public contact details can be saved
+                  now. Logos, colours and footer wording will remain unchanged
+                  until advanced branding is available for this tenant.
                 </span>
               </section>
             ) : null}
@@ -639,6 +696,11 @@ export default function BrandingSettingsForm({
           <div style={styles.summaryList}>
             <SummaryItem label="Display name" value={displayName || "Not set"} />
             <SummaryItem label="Tagline" value={tagline || "Not set"} />
+            <SummaryItem label="Contact name" value={contactName || "Not set"} />
+            <SummaryItem
+              label="Contact email"
+              value={contactEmail || "Not set"}
+            />
             <SummaryItem label="Logo URL" value={logoUrl || "Not set"} />
             <SummaryItem
               label="Logo mark URL"
@@ -649,15 +711,25 @@ export default function BrandingSettingsForm({
             <SummaryItem label="Footer text" value={footerText || "Not set"} />
           </div>
 
-          <Link
-            href={`/c/${tenantSlug}?adminReturn=${encodeURIComponent(
-              "/admin/settings/branding",
-            )}`}
-            target="_blank"
-            style={styles.previewButton}
-          >
-            View public hub →
-          </Link>
+          <div style={styles.previewActions}>
+            <Link
+              href={`/c/${tenantSlug}?adminReturn=${encodeURIComponent(
+                "/admin/settings/branding",
+              )}`}
+              target="_blank"
+              style={styles.previewButton}
+            >
+              View public hub →
+            </Link>
+
+            <Link
+              href={`/c/${tenantSlug}/contact`}
+              target="_blank"
+              style={styles.secondaryPreviewButton}
+            >
+              Preview contact page →
+            </Link>
+          </div>
         </aside>
       </section>
     </main>
@@ -719,6 +791,19 @@ const responsiveStyles = `
 
   .branding-settings-page .colour-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .branding-settings-page a,
+  .branding-settings-page p,
+  .branding-settings-page h1,
+  .branding-settings-page h2,
+  .branding-settings-page h3,
+  .branding-settings-page strong,
+  .branding-settings-page span,
+  .branding-settings-page input,
+  .branding-settings-page select {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 }
 `;
@@ -889,6 +974,15 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  heroPanelContact: {
+    margin: 0,
+    color: "#fef3c7",
+    lineHeight: 1.45,
+    fontSize: 13,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
   colourPreviewRow: {
     display: "flex",
     gap: 8,
@@ -1010,6 +1104,44 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 700,
+  },
+
+  contactPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
+    border: "1px solid #bfdbfe",
+    minWidth: 0,
+  },
+
+  contactKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  contactTitle: {
+    margin: "5px 0 0",
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  contactText: {
+    margin: "7px 0 0",
+    color: "#1e40af",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   divider: {
@@ -1240,6 +1372,13 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  previewActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+  },
+
   previewButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1250,6 +1389,21 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+  },
+
+  secondaryPreviewButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 950,
   },
