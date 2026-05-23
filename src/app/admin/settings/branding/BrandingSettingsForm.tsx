@@ -20,9 +20,11 @@ type Props = {
   subscriptionLabel: string;
   saved: boolean;
   error: string;
+  contactTest: string;
   canUseAdvancedBranding: boolean;
   formState: BrandingFormState;
   updateAction: (formData: FormData) => void | Promise<void>;
+  sendContactEmailTestAction: (formData: FormData) => void | Promise<void>;
 };
 
 const COLOUR_PRESETS = [
@@ -117,14 +119,52 @@ function getErrorMessage(error: string) {
   return null;
 }
 
+function getContactTestMessage(contactTest: string) {
+  if (contactTest === "sent") {
+    return {
+      tone: "success" as const,
+      title: "Test email sent",
+      text: "A branded test email has been sent to the saved public contact email address.",
+    };
+  }
+
+  if (contactTest === "missing_contact_email") {
+    return {
+      tone: "warning" as const,
+      title: "No contact email saved",
+      text: "Save a valid public contact email address before sending a test email.",
+    };
+  }
+
+  if (contactTest === "missing_settings") {
+    return {
+      tone: "error" as const,
+      title: "Settings could not be loaded",
+      text: "The tenant branding settings could not be found. Please refresh and try again.",
+    };
+  }
+
+  if (contactTest === "email_failed") {
+    return {
+      tone: "error" as const,
+      title: "Test email could not be sent",
+      text: "The test email could not be sent. Check the contact address and email service settings, then try again.",
+    };
+  }
+
+  return null;
+}
+
 export default function BrandingSettingsForm({
   tenantSlug,
   subscriptionLabel,
   saved,
   error,
+  contactTest,
   canUseAdvancedBranding,
   formState,
   updateAction,
+  sendContactEmailTestAction,
 }: Props) {
   const [displayName, setDisplayName] = useState(formState.displayName);
   const [tagline, setTagline] = useState(formState.tagline);
@@ -134,6 +174,7 @@ export default function BrandingSettingsForm({
   const [logoMarkUrl, setLogoMarkUrl] = useState(formState.logoMarkUrl);
 
   const errorMessage = getErrorMessage(error);
+  const contactTestMessage = getContactTestMessage(contactTest);
 
   const [primaryColour, setPrimaryColour] = useState(
     cleanInitialColour(formState.primaryColour, "#1683F8"),
@@ -329,6 +370,22 @@ export default function BrandingSettingsForm({
         <section style={styles.errorCard}>
           <strong>{errorMessage.title}</strong>
           <span>{errorMessage.text}</span>
+        </section>
+      ) : null}
+
+      {contactTestMessage ? (
+        <section
+          style={{
+            ...styles.testStatusCard,
+            ...(contactTestMessage.tone === "success"
+              ? styles.testStatusSuccess
+              : contactTestMessage.tone === "warning"
+                ? styles.testStatusWarning
+                : styles.testStatusError),
+          }}
+        >
+          <strong>{contactTestMessage.title}</strong>
+          <span>{contactTestMessage.text}</span>
         </section>
       ) : null}
 
@@ -735,6 +792,33 @@ export default function BrandingSettingsForm({
             <SummaryItem label="Footer text" value={footerText || "Not set"} />
           </div>
 
+          <section style={styles.testEmailCard}>
+            <div>
+              <p style={styles.testEmailKicker}>Contact email test</p>
+              <h2 style={styles.testEmailTitle}>Send a branded test email</h2>
+              <p style={styles.testEmailText}>
+                This sends a test email to the saved public contact email
+                address. Save the contact email first if you have just changed
+                it.
+              </p>
+            </div>
+
+            <form action={sendContactEmailTestAction} style={styles.testEmailForm}>
+              <button
+                type="submit"
+                disabled={!formState.contactEmail}
+                style={{
+                  ...styles.testEmailButton,
+                  ...(!formState.contactEmail
+                    ? styles.testEmailButtonDisabled
+                    : {}),
+                }}
+              >
+                Send test email
+              </button>
+            </form>
+          </section>
+
           <div style={styles.previewActions}>
             <Link
               href={`/c/${tenantSlug}?adminReturn=${encodeURIComponent(
@@ -825,7 +909,8 @@ const responsiveStyles = `
   .branding-settings-page strong,
   .branding-settings-page span,
   .branding-settings-page input,
-  .branding-settings-page select {
+  .branding-settings-page select,
+  .branding-settings-page button {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
   }
@@ -1043,6 +1128,34 @@ const styles: Record<string, CSSProperties> = {
     color: "#991b1b",
     border: "1px solid #fecaca",
     fontWeight: 800,
+  },
+
+  testStatusCard: {
+    display: "grid",
+    gap: 4,
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 16,
+    border: "1px solid transparent",
+    fontWeight: 800,
+  },
+
+  testStatusSuccess: {
+    background: "#ecfdf5",
+    color: "#047857",
+    borderColor: "#a7f3d0",
+  },
+
+  testStatusWarning: {
+    background: "#fffbeb",
+    color: "#92400e",
+    borderColor: "#fde68a",
+  },
+
+  testStatusError: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
   },
 
   settingsGrid: {
@@ -1406,6 +1519,70 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     color: "#334155",
     overflowWrap: "anywhere",
+  },
+
+  testEmailCard: {
+    display: "grid",
+    gap: 12,
+    padding: 16,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, rgba(250,204,21,0.16), rgba(255,255,255,1) 74%)",
+    border: "1px solid #fde68a",
+  },
+
+  testEmailKicker: {
+    margin: 0,
+    color: "#b45309",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  testEmailTitle: {
+    margin: "5px 0 0",
+    color: "#0f172a",
+    fontSize: 20,
+    lineHeight: 1.12,
+    letterSpacing: "-0.04em",
+  },
+
+  testEmailText: {
+    margin: "7px 0 0",
+    color: "#78350f",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+  },
+
+  testEmailForm: {
+    display: "grid",
+    gap: 8,
+  },
+
+  testEmailButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    justifySelf: "start",
+    minHeight: 42,
+    maxWidth: "100%",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+  },
+
+  testEmailButtonDisabled: {
+    background: "#94a3b8",
+    border: "1px solid #94a3b8",
+    cursor: "not-allowed",
   },
 
   previewActions: {
