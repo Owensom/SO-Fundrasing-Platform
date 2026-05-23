@@ -308,6 +308,14 @@ export default async function AdminDashboardPage() {
           </Link>
 
           <Link
+            href="/admin/support"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Help & Support →
+          </Link>
+
+          <Link
             href="/admin/customers"
             className="secondaryButton"
             style={styles.secondaryButton}
@@ -520,6 +528,16 @@ export default async function AdminDashboardPage() {
         />
 
         <DashboardCard
+          href="/admin/support"
+          badgeText="HELP"
+          title="Help & Support"
+          description="Report a problem, ask for help and send tenant context to platform support."
+          stats="Support requests"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
           href="/admin/customers"
           badgeText="CRM"
           title="Customers"
@@ -608,6 +626,14 @@ export default async function AdminDashboardPage() {
               style={styles.financeButtonSecondary}
             >
               Donations & Gift Aid →
+            </Link>
+
+            <Link
+              href="/admin/support"
+              className="financeButtonSecondary"
+              style={styles.financeButtonSecondary}
+            >
+              Help & Support →
             </Link>
 
             <Link
