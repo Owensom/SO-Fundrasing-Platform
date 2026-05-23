@@ -1,7 +1,7 @@
 // src/app/admin/platform/support/page.tsx
 // ===============================
 // Platform Owner Support Dashboard
-// Phase 5B.3 — support request status updates + internal notes
+// Phase 5B.4 — status updates + internal notes + reply-to-tenant mailto action
 // Mobile-safe, desktop-safe, platform-owner-only
 // ===============================
 
@@ -170,6 +170,49 @@ function getFilterHref(filter: SupportFilter) {
   return `/admin/platform/support?filter=${encodeURIComponent(filter)}`;
 }
 
+function getSafeEmail(value: unknown) {
+  const clean = String(value || "")
+    .replace(/[\r\n]/g, "")
+    .trim();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+    return "";
+  }
+
+  return clean;
+}
+
+function buildReplyToTenantHref(request: SupportRequestRow) {
+  const email = getSafeEmail(request.admin_email);
+
+  if (!email) return "";
+
+  const greetingName = cleanText(request.admin_name, "").split(/\s+/)[0] || "";
+  const greeting = greetingName ? `Hi ${greetingName},` : "Hello,";
+
+  const subject = `SO Fundraising Platform support request ${request.id}`;
+
+  const body = [
+    greeting,
+    "",
+    "Thanks for contacting SO Fundraising Platform support.",
+    "",
+    `Support reference: ${request.id}`,
+    `Tenant: ${request.tenant_slug}`,
+    `Request subject: ${request.subject}`,
+    "",
+    "Reply:",
+    "",
+    "",
+    "Kind regards,",
+    "SO Fundraising Platform Support",
+  ].join("\n");
+
+  return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
+    subject,
+  )}&body=${encodeURIComponent(body)}`;
+}
+
 async function requirePlatformOwner() {
   const session = (await auth()) as PlatformSession;
 
@@ -334,8 +377,8 @@ export default async function PlatformSupportDashboardPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Review tenant support requests, update their status and keep private
-            platform-owner notes. Notes are not shown to tenant admins.
+            Review tenant support requests, update status, keep private notes
+            and reply to tenant admins from your email client.
           </p>
         </div>
 
@@ -443,8 +486,7 @@ export default async function PlatformSupportDashboardPage({
           </FilterLink>
         </div>
       </section>
-
-      <section style={styles.requestsPanel}>
+            <section style={styles.requestsPanel}>
         {requests.length > 0 ? (
           <div className="support-request-list" style={styles.requestList}>
             {requests.map((request) => (
@@ -467,6 +509,7 @@ export default async function PlatformSupportDashboardPage({
     </main>
   );
 }
+
 function StatCard({
   label,
   value,
@@ -568,6 +611,32 @@ function StatusButton({
   );
 }
 
+function ReplyToTenantPanel({ request }: { request: SupportRequestRow }) {
+  const href = buildReplyToTenantHref(request);
+  const email = getSafeEmail(request.admin_email);
+
+  return (
+    <div style={styles.replyPanel}>
+      <div style={styles.replyCopy}>
+        <p style={styles.replyKicker}>Reply to tenant</p>
+        <h3 style={styles.replyTitle}>Contact tenant admin</h3>
+        <p style={styles.replyText}>
+          This opens your email client with the support reference and request
+          context filled in. No email is sent automatically by the platform.
+        </p>
+      </div>
+
+      {href ? (
+        <a href={href} style={styles.replyButton}>
+          Reply to {email} →
+        </a>
+      ) : (
+        <div style={styles.noReplyBox}>No tenant email recorded</div>
+      )}
+    </div>
+  );
+}
+
 function SupportRequestCard({
   request,
   activeFilter,
@@ -642,6 +711,8 @@ function SupportRequestCard({
           <strong style={styles.requestIdValue}>{request.id}</strong>
         </div>
       </div>
+
+      <ReplyToTenantPanel request={request} />
 
       <div className="support-status-panel" style={styles.statusPanel}>
         <div style={styles.statusPanelCopy}>
@@ -760,8 +831,8 @@ function SupportRequestCard({
       ) : null}
 
       <div style={styles.readOnlyNotice}>
-        Status updates and internal notes are live. Reply to tenant will be added
-        later.
+        Status updates, internal notes and mailto replies are live. Controlled
+        platform email replies can be added later.
       </div>
     </article>
   );
@@ -823,7 +894,8 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .platform-support-page .support-status-panel {
+  .platform-support-page .support-status-panel,
+  .platform-support-page .support-reply-panel {
     grid-template-columns: 1fr !important;
   }
 }
@@ -853,7 +925,8 @@ const responsiveStyles = `
   }
 
   .platform-support-page .support-status-panel,
-  .platform-support-page .support-notes-panel {
+  .platform-support-page .support-notes-panel,
+  .platform-support-page .support-reply-panel {
     padding: 12px !important;
     border-radius: 18px !important;
   }
@@ -863,7 +936,8 @@ const responsiveStyles = `
   .platform-support-page .support-request-card span,
   .platform-support-page .support-request-card summary,
   .platform-support-page .support-request-card button,
-  .platform-support-page .support-request-card textarea {
+  .platform-support-page .support-request-card textarea,
+  .platform-support-page .support-request-card a {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
   }
@@ -1338,6 +1412,98 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
     wordBreak: "break-word",
+  },
+
+  replyPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, auto)",
+    gap: 12,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
+    border: "1px solid #bfdbfe",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  replyCopy: {
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  replyKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    overflowWrap: "anywhere",
+  },
+
+  replyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  replyText: {
+    margin: 0,
+    color: "#1e40af",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  replyButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    justifySelf: "end",
+    minHeight: 42,
+    maxWidth: "100%",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+  },
+
+  noReplyBox: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    justifySelf: "end",
+    minHeight: 42,
+    maxWidth: "100%",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#64748b",
+    border: "1px solid #cbd5e1",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   statusPanel: {
