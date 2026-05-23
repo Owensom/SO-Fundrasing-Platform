@@ -2,6 +2,7 @@
 // ===============================
 // Platform Owner Support Dashboard
 // Phase 5B.1 — read-only support request overview
+// Mobile-safe version
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -236,7 +237,10 @@ export default async function PlatformSupportDashboardPage({
             <span style={styles.softBadge}>Support dashboard</span>
           </div>
 
-          <h1 className="so-brand-heading platform-support-title" style={styles.title}>
+          <h1
+            className="so-brand-heading platform-support-title"
+            style={styles.title}
+          >
             Support requests
           </h1>
 
@@ -327,7 +331,7 @@ export default async function PlatformSupportDashboardPage({
             active={activeFilter === "resolved"}
             href="/admin/platform/support?filter=resolved"
           >
-            resolved
+            Resolved
           </FilterLink>
 
           <FilterLink
@@ -365,7 +369,6 @@ export default async function PlatformSupportDashboardPage({
     </main>
   );
 }
-
 function StatCard({
   label,
   value,
@@ -442,7 +445,7 @@ function SupportRequestCard({ request }: { request: SupportRequestRow }) {
 
   return (
     <article className="support-request-card" style={styles.requestCard}>
-      <div style={styles.requestTop}>
+      <div className="support-request-top" style={styles.requestTop}>
         <div style={styles.requestTitleBlock}>
           <div style={styles.requestPills}>
             <span style={styles.tenantPill}>{request.tenant_slug}</span>
@@ -518,7 +521,7 @@ function SupportRequestCard({ request }: { request: SupportRequestRow }) {
         <details style={styles.contextDetails}>
           <summary style={styles.contextSummary}>View request context</summary>
 
-          <div className="support-detail-grid" style={styles.detailGrid}>
+          <div className="support-detail-grid" style={styles.contextDetailGrid}>
             <DetailItem label="Page URL" value={cleanText(request.page_url)} />
             <DetailItem
               label="Campaign type"
@@ -562,8 +565,16 @@ const responsiveStyles = `
 .platform-support-page p,
 .platform-support-page h1,
 .platform-support-page h2,
-.platform-support-page strong {
+.platform-support-page strong,
+.platform-support-page span,
+.platform-support-page details,
+.platform-support-page summary {
   min-width: 0;
+  max-width: 100%;
+}
+
+.platform-support-page .support-request-card {
+  overflow: hidden;
 }
 
 @media (max-width: 1080px) {
@@ -574,6 +585,18 @@ const responsiveStyles = `
   .platform-support-page .platform-support-stats,
   .platform-support-page .support-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .platform-support-page .support-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .platform-support-page .support-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .platform-support-page .support-request-top {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -598,6 +621,14 @@ const responsiveStyles = `
   .platform-support-page .support-filter-grid,
   .platform-support-page .support-detail-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .platform-support-page .support-request-card p,
+  .platform-support-page .support-request-card strong,
+  .platform-support-page .support-request-card span,
+  .platform-support-page .support-request-card summary {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 }
 `;
@@ -651,6 +682,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   badgeRow: {
@@ -692,8 +724,7 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
-
-  subtitle: {
+    subtitle: {
     margin: "18px 0 0",
     maxWidth: 780,
     color: "#dbeafe",
@@ -772,6 +803,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   summaryLabel: {
@@ -781,6 +814,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
+    overflowWrap: "anywhere",
   },
 
   summaryValue: {
@@ -789,6 +823,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     letterSpacing: "-0.06em",
     lineHeight: 1,
+    overflowWrap: "anywhere",
   },
 
   summaryText: {
@@ -797,6 +832,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontSize: 13,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   filterPanel: {
@@ -808,6 +844,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   kicker: {
@@ -840,6 +878,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
     gap: 10,
+    minWidth: 0,
   },
 
   filterLink: {
@@ -856,6 +895,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
     textAlign: "center",
+    overflowWrap: "anywhere",
+    lineHeight: 1.2,
   },
 
   filterLinkActive: {
@@ -867,11 +908,13 @@ const styles: Record<string, CSSProperties> = {
 
   requestsPanel: {
     minWidth: 0,
+    overflow: "hidden",
   },
 
   requestList: {
     display: "grid",
     gap: 14,
+    minWidth: 0,
   },
 
   requestCard: {
@@ -882,17 +925,21 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   requestTop: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 260px)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 260px)",
     gap: 14,
     alignItems: "start",
+    minWidth: 0,
   },
 
   requestTitleBlock: {
     minWidth: 0,
+    overflow: "hidden",
   },
 
   requestPills: {
@@ -901,10 +948,12 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
     marginBottom: 10,
+    minWidth: 0,
   },
 
   tenantPill: {
     display: "inline-flex",
+    maxWidth: "100%",
     padding: "6px 9px",
     borderRadius: 999,
     background: "#eff6ff",
@@ -914,16 +963,19 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+    overflowWrap: "anywhere",
   },
 
   statusPill: {
     display: "inline-flex",
+    maxWidth: "100%",
     padding: "6px 9px",
     borderRadius: 999,
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+    overflowWrap: "anywhere",
   },
 
   statusNew: {
@@ -946,12 +998,14 @@ const styles: Record<string, CSSProperties> = {
 
   urgencyPill: {
     display: "inline-flex",
+    maxWidth: "100%",
     padding: "6px 9px",
     borderRadius: 999,
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+    overflowWrap: "anywhere",
   },
 
   urgencyUrgent: {
@@ -974,12 +1028,14 @@ const styles: Record<string, CSSProperties> = {
 
   emailPill: {
     display: "inline-flex",
+    maxWidth: "100%",
     padding: "6px 9px",
     borderRadius: 999,
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+    overflowWrap: "anywhere",
   },
 
   emailSent: {
@@ -1007,6 +1063,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.15,
     letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   requestMeta: {
@@ -1015,6 +1072,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   requestIdBox: {
@@ -1025,6 +1083,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
 
   requestIdLabel: {
@@ -1040,12 +1100,22 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.45,
     overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 10,
+    minWidth: 0,
+  },
+
+  contextDetailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
+    marginTop: 12,
   },
 
   detailItem: {
@@ -1055,6 +1125,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   detailLabel: {
@@ -1063,6 +1135,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
+    overflowWrap: "anywhere",
   },
 
   detailValue: {
@@ -1070,6 +1143,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.4,
     overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   messageBox: {
@@ -1079,6 +1153,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #cbd5e1",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   messageLabel: {
@@ -1098,6 +1174,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   contextDetails: {
@@ -1105,6 +1182,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#fffbeb",
     border: "1px solid #fde68a",
     padding: 14,
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   contextSummary: {
@@ -1112,6 +1191,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#92400e",
     fontSize: 13,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   browserBox: {
@@ -1122,6 +1202,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   readOnlyNotice: {
@@ -1133,6 +1215,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 850,
     lineHeight: 1.45,
+    overflowWrap: "anywhere",
   },
 
   emptyState: {
@@ -1151,6 +1234,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   emptyText: {
@@ -1158,5 +1242,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 };
