@@ -19,6 +19,7 @@ type Props = {
   tenantSlug: string;
   subscriptionLabel: string;
   saved: boolean;
+  error: string;
   canUseAdvancedBranding: boolean;
   formState: BrandingFormState;
   updateAction: (formData: FormData) => void | Promise<void>;
@@ -105,10 +106,22 @@ function getPresetValue(hex: string) {
   return match?.value || "custom";
 }
 
+function getErrorMessage(error: string) {
+  if (error === "invalid_contact_email") {
+    return {
+      title: "Contact email was not saved",
+      text: "Please enter a valid public contact email address, or leave the field blank.",
+    };
+  }
+
+  return null;
+}
+
 export default function BrandingSettingsForm({
   tenantSlug,
   subscriptionLabel,
   saved,
+  error,
   canUseAdvancedBranding,
   formState,
   updateAction,
@@ -119,6 +132,8 @@ export default function BrandingSettingsForm({
   const [contactEmail, setContactEmail] = useState(formState.contactEmail);
   const [logoUrl, setLogoUrl] = useState(formState.logoUrl);
   const [logoMarkUrl, setLogoMarkUrl] = useState(formState.logoMarkUrl);
+
+  const errorMessage = getErrorMessage(error);
 
   const [primaryColour, setPrimaryColour] = useState(
     cleanInitialColour(formState.primaryColour, "#1683F8"),
@@ -213,8 +228,8 @@ export default function BrandingSettingsForm({
       } else {
         setLogoMarkUrl(String(data.secure_url));
       }
-    } catch (error) {
-      console.error(error);
+    } catch (uploadError) {
+      console.error(uploadError);
       alert("Upload error.");
     } finally {
       if (target === "logo") {
@@ -304,7 +319,16 @@ export default function BrandingSettingsForm({
       {saved ? (
         <section style={styles.successCard}>
           <strong>Branding settings saved.</strong>
-          <span>The tenant branding and public contact details have been updated.</span>
+          <span>
+            The tenant branding and public contact details have been updated.
+          </span>
+        </section>
+      ) : null}
+
+      {errorMessage ? (
+        <section style={styles.errorCard}>
+          <strong>{errorMessage.title}</strong>
+          <span>{errorMessage.text}</span>
         </section>
       ) : null}
 
@@ -1006,6 +1030,18 @@ const styles: Record<string, CSSProperties> = {
     background: "#dcfce7",
     color: "#166534",
     border: "1px solid #86efac",
+    fontWeight: 800,
+  },
+
+  errorCard: {
+    display: "grid",
+    gap: 4,
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 16,
+    background: "#fef2f2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
     fontWeight: 800,
   },
 
