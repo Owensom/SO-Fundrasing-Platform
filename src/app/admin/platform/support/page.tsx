@@ -1,0 +1,1162 @@
+// src/app/admin/platform/support/page.tsx
+// ===============================
+// Platform Owner Support Dashboard
+// Phase 5B.1 — read-only support request overview
+// ===============================
+
+import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { query } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+type SupportFilter =
+  | "all"
+  | "new"
+  | "in_progress"
+  | "resolved"
+  | "urgent"
+  | "email_failed";
+
+type SupportSearchParams = {
+  filter?: string | string[];
+};
+
+type PlatformSession = {
+  user?: {
+    email?: unknown;
+    name?: unknown;
+    isPlatformOwner?: unknown;
+  } | null;
+} | null;
+
+type SupportRequestRow = {
+  id: string;
+  tenant_slug: string;
+  admin_email: string | null;
+  admin_name: string | null;
+  category: string;
+  urgency: string;
+  subject: string;
+  message: string;
+  page_url: string | null;
+  campaign_type: string | null;
+  campaign_id: string | null;
+  browser_context: string | null;
+  status: string;
+  email_status: string;
+  email_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type SupportSummaryRow = {
+  total_count: string | number;
+  new_count: string | number;
+  in_progress_count: string | number;
+  resolved_count: string | number;
+  urgent_count: string | number;
+  email_failed_count: string | number;
+};
+
+function firstParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] || "";
+  return value || "";
+}
+
+function normaliseFilter(value: unknown): SupportFilter {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (
+    clean === "new" ||
+    clean === "in_progress" ||
+    clean === "resolved" ||
+    clean === "urgent" ||
+    clean === "email_failed"
+  ) {
+    return clean;
+  }
+
+  return "all";
+}
+
+function toNumber(value: string | number | null | undefined) {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function cleanText(value: unknown, fallback = "—") {
+  const clean = String(value ?? "").trim();
+  return clean || fallback;
+}
+
+function formatLabel(value: unknown) {
+  return cleanText(value, "unknown")
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/London",
+  }).format(date);
+}
+
+function getFilterWhereClause(filter: SupportFilter) {
+  if (filter === "new") {
+    return "where status = 'new'";
+  }
+
+  if (filter === "in_progress") {
+    return "where status = 'in_progress'";
+  }
+
+  if (filter === "resolved") {
+    return "where status = 'resolved'";
+  }
+
+  if (filter === "urgent") {
+    return "where urgency = 'urgent'";
+  }
+
+  if (filter === "email_failed") {
+    return "where email_status = 'failed'";
+  }
+
+  return "";
+}
+
+async function getSupportSummary() {
+  const rows = await query<SupportSummaryRow>(
+    `
+      select
+        count(*)::int as total_count,
+        count(*) filter (where status = 'new')::int as new_count,
+        count(*) filter (where status = 'in_progress')::int as in_progress_count,
+        count(*) filter (where status = 'resolved')::int as resolved_count,
+        count(*) filter (where urgency = 'urgent')::int as urgent_count,
+        count(*) filter (where email_status = 'failed')::int as email_failed_count
+      from support_requests
+    `,
+  );
+
+  return (
+    rows[0] || {
+      total_count: 0,
+      new_count: 0,
+      in_progress_count: 0,
+      resolved_count: 0,
+      urgent_count: 0,
+      email_failed_count: 0,
+    }
+  );
+}
+
+async function getSupportRequests(filter: SupportFilter) {
+  const whereClause = getFilterWhereClause(filter);
+
+  return query<SupportRequestRow>(
+    `
+      select
+        id::text,
+        tenant_slug,
+        admin_email,
+        admin_name,
+        category,
+        urgency,
+        subject,
+        message,
+        page_url,
+        campaign_type,
+        campaign_id,
+        browser_context,
+        status,
+        email_status,
+        email_error,
+        created_at::text,
+        updated_at::text
+      from support_requests
+      ${whereClause}
+      order by created_at desc
+      limit 100
+    `,
+  );
+}
+
+export default async function PlatformSupportDashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SupportSearchParams>;
+}) {
+  const session = (await auth()) as PlatformSession;
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
+  if (!Boolean(session.user.isPlatformOwner)) {
+    redirect("/admin?error=platform_owner_required");
+  }
+
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const activeFilter = normaliseFilter(firstParam(resolvedSearchParams.filter));
+
+  const [summary, requests] = await Promise.all([
+    getSupportSummary(),
+    getSupportRequests(activeFilter),
+  ]);
+
+  return (
+    <main className="platform-support-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="platform-support-hero" style={styles.hero}>
+        <div style={styles.heroContent}>
+          <Link href="/admin" style={styles.backLink}>
+            ← Back to admin dashboard
+          </Link>
+
+          <div style={styles.badgeRow}>
+            <span style={styles.badge}>Platform owner</span>
+            <span style={styles.softBadge}>Support dashboard</span>
+          </div>
+
+          <h1 className="so-brand-heading platform-support-title" style={styles.title}>
+            Support requests
+          </h1>
+
+          <p style={styles.subtitle}>
+            Review tenant support requests across the platform. This first
+            version is read-only so the support trail can be checked safely
+            before adding status updates, notes or reply actions.
+          </p>
+        </div>
+
+        <div className="platform-support-stats" style={styles.heroStats}>
+          <StatCard label="Total requests" value={toNumber(summary.total_count)} dark />
+          <StatCard label="New" value={toNumber(summary.new_count)} dark />
+          <StatCard label="Urgent" value={toNumber(summary.urgent_count)} dark />
+          <StatCard
+            label="Email failed"
+            value={toNumber(summary.email_failed_count)}
+            dark
+          />
+        </div>
+      </section>
+
+      <section className="support-summary-grid" style={styles.summaryGrid}>
+        <SummaryCard
+          label="New"
+          value={toNumber(summary.new_count)}
+          text="Requests not yet processed"
+        />
+
+        <SummaryCard
+          label="In progress"
+          value={toNumber(summary.in_progress_count)}
+          text="Reserved for the next editable phase"
+        />
+
+        <SummaryCard
+          label="Resolved"
+          value={toNumber(summary.resolved_count)}
+          text="Resolved requests once status updates are added"
+        />
+
+        <SummaryCard
+          label="Urgent"
+          value={toNumber(summary.urgent_count)}
+          text="Live campaign or blocking issues"
+        />
+
+        <SummaryCard
+          label="Email failed"
+          value={toNumber(summary.email_failed_count)}
+          text="Request stored but email delivery failed"
+        />
+      </section>
+
+      <section style={styles.filterPanel}>
+        <div>
+          <p style={styles.kicker}>Filters</p>
+
+          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            Request queue
+          </h2>
+
+          <p style={styles.sectionText}>
+            Showing the latest 100 support requests for the selected filter.
+          </p>
+        </div>
+
+        <div className="support-filter-grid" style={styles.filterGrid}>
+          <FilterLink active={activeFilter === "all"} href="/admin/platform/support">
+            All
+          </FilterLink>
+
+          <FilterLink
+            active={activeFilter === "new"}
+            href="/admin/platform/support?filter=new"
+          >
+            New
+          </FilterLink>
+
+          <FilterLink
+            active={activeFilter === "in_progress"}
+            href="/admin/platform/support?filter=in_progress"
+          >
+            In progress
+          </FilterLink>
+
+          <FilterLink
+            active={activeFilter === "resolved"}
+            href="/admin/platform/support?filter=resolved"
+          >
+            resolved
+          </FilterLink>
+
+          <FilterLink
+            active={activeFilter === "urgent"}
+            href="/admin/platform/support?filter=urgent"
+          >
+            Urgent
+          </FilterLink>
+
+          <FilterLink
+            active={activeFilter === "email_failed"}
+            href="/admin/platform/support?filter=email_failed"
+          >
+            Email failed
+          </FilterLink>
+        </div>
+      </section>
+
+      <section style={styles.requestsPanel}>
+        {requests.length > 0 ? (
+          <div className="support-request-list" style={styles.requestList}>
+            {requests.map((request) => (
+              <SupportRequestCard key={request.id} request={request} />
+            ))}
+          </div>
+        ) : (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyTitle}>No support requests found</p>
+            <p style={styles.emptyText}>
+              There are no requests matching this filter yet.
+            </p>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  dark = false,
+}: {
+  label: string;
+  value: ReactNode;
+  dark?: boolean;
+}) {
+  return (
+    <div style={dark ? styles.darkStatCard : styles.statCard}>
+      <div style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</div>
+      <div style={dark ? styles.darkStatValue : styles.statValue}>{value}</div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  text,
+}: {
+  label: string;
+  value: ReactNode;
+  text: string;
+}) {
+  return (
+    <article style={styles.summaryCard}>
+      <p style={styles.summaryLabel}>{label}</p>
+      <div style={styles.summaryValue}>{value}</div>
+      <p style={styles.summaryText}>{text}</p>
+    </article>
+  );
+}
+
+function FilterLink({
+  active,
+  href,
+  children,
+}: {
+  active: boolean;
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        ...styles.filterLink,
+        ...(active ? styles.filterLinkActive : {}),
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.detailItem}>
+      <span style={styles.detailLabel}>{label}</span>
+      <strong style={styles.detailValue}>{value}</strong>
+    </div>
+  );
+}
+
+function SupportRequestCard({ request }: { request: SupportRequestRow }) {
+  const hasOptionalContext =
+    Boolean(request.page_url) ||
+    Boolean(request.campaign_type) ||
+    Boolean(request.campaign_id) ||
+    Boolean(request.browser_context) ||
+    Boolean(request.email_error);
+
+  return (
+    <article className="support-request-card" style={styles.requestCard}>
+      <div style={styles.requestTop}>
+        <div style={styles.requestTitleBlock}>
+          <div style={styles.requestPills}>
+            <span style={styles.tenantPill}>{request.tenant_slug}</span>
+
+            <span
+              style={{
+                ...styles.statusPill,
+                ...(request.status === "new"
+                  ? styles.statusNew
+                  : request.status === "resolved"
+                    ? styles.statusResolved
+                    : styles.statusDefault),
+              }}
+            >
+              {formatLabel(request.status)}
+            </span>
+
+            <span
+              style={{
+                ...styles.urgencyPill,
+                ...(request.urgency === "urgent"
+                  ? styles.urgencyUrgent
+                  : request.urgency === "high"
+                    ? styles.urgencyHigh
+                    : styles.urgencyDefault),
+              }}
+            >
+              {formatLabel(request.urgency)}
+            </span>
+
+            <span
+              style={{
+                ...styles.emailPill,
+                ...(request.email_status === "failed"
+                  ? styles.emailFailed
+                  : request.email_status === "sent"
+                    ? styles.emailSent
+                    : styles.emailPending),
+              }}
+            >
+              Email {formatLabel(request.email_status)}
+            </span>
+          </div>
+
+          <h2 style={styles.requestSubject}>{request.subject}</h2>
+
+          <p style={styles.requestMeta}>
+            {formatLabel(request.category)} · Created{" "}
+            {formatDateTime(request.created_at)}
+          </p>
+        </div>
+
+        <div style={styles.requestIdBox}>
+          <span style={styles.requestIdLabel}>Reference</span>
+          <strong style={styles.requestIdValue}>{request.id}</strong>
+        </div>
+      </div>
+
+      <div className="support-detail-grid" style={styles.detailGrid}>
+        <DetailItem label="Tenant" value={request.tenant_slug} />
+        <DetailItem label="Admin email" value={cleanText(request.admin_email)} />
+        <DetailItem label="Admin name" value={cleanText(request.admin_name)} />
+        <DetailItem label="Category" value={formatLabel(request.category)} />
+        <DetailItem label="Updated" value={formatDateTime(request.updated_at)} />
+      </div>
+
+      <div style={styles.messageBox}>
+        <p style={styles.messageLabel}>Message</p>
+        <p style={styles.messageText}>{request.message}</p>
+      </div>
+
+      {hasOptionalContext ? (
+        <details style={styles.contextDetails}>
+          <summary style={styles.contextSummary}>View request context</summary>
+
+          <div className="support-detail-grid" style={styles.detailGrid}>
+            <DetailItem label="Page URL" value={cleanText(request.page_url)} />
+            <DetailItem
+              label="Campaign type"
+              value={cleanText(request.campaign_type)}
+            />
+            <DetailItem label="Campaign ID" value={cleanText(request.campaign_id)} />
+            <DetailItem label="Email error" value={cleanText(request.email_error)} />
+          </div>
+
+          {request.browser_context ? (
+            <div style={styles.browserBox}>
+              <p style={styles.messageLabel}>Browser / extra context</p>
+              <p style={styles.messageText}>{request.browser_context}</p>
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+
+      <div style={styles.readOnlyNotice}>
+        Read-only phase. Status updates, internal notes and Reply to tenant will
+        be added later.
+      </div>
+    </article>
+  );
+}
+
+const responsiveStyles = `
+.platform-support-page,
+.platform-support-page * {
+  box-sizing: border-box;
+}
+
+.platform-support-page {
+  overflow-x: hidden;
+}
+
+.platform-support-page section,
+.platform-support-page article,
+.platform-support-page div,
+.platform-support-page a,
+.platform-support-page p,
+.platform-support-page h1,
+.platform-support-page h2,
+.platform-support-page strong {
+  min-width: 0;
+}
+
+@media (max-width: 1080px) {
+  .platform-support-page .platform-support-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .platform-support-page .platform-support-stats,
+  .platform-support-page .support-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .platform-support-page {
+    padding: 18px 12px 44px !important;
+  }
+
+  .platform-support-page .platform-support-title {
+    font-size: clamp(38px, 11vw, 58px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .platform-support-page .platform-support-hero,
+  .platform-support-page .support-request-card {
+    padding: 18px !important;
+    border-radius: 24px !important;
+  }
+
+  .platform-support-page .platform-support-stats,
+  .platform-support-page .support-summary-grid,
+  .platform-support-page .support-filter-grid,
+  .platform-support-page .support-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+`;
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    width: "100%",
+    maxWidth: 1320,
+    margin: "0 auto",
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(37,99,235,0.10), transparent 30%), radial-gradient(circle at top right, rgba(251,191,36,0.10), transparent 34%), #f8fafc",
+    color: "#0f172a",
+    boxSizing: "border-box",
+    overflowX: "hidden",
+  },
+
+  hero: {
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(320px, 0.82fr)",
+    gap: 22,
+    padding: 30,
+    borderRadius: 34,
+    background:
+      "radial-gradient(circle at bottom right, rgba(251,191,36,0.18), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroContent: {
+    minWidth: 0,
+  },
+
+  backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    marginBottom: 16,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  badgeRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+
+  badge: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(37,99,235,0.22)",
+    color: "#dbeafe",
+    border: "1px solid rgba(147,197,253,0.34)",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  softBadge: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.16)",
+    color: "#fef3c7",
+    border: "1px solid rgba(251,191,36,0.32)",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  title: {
+    margin: 0,
+    fontSize: "clamp(52px, 7vw, 82px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.08em",
+    color: "#ffffff",
+    overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
+  },
+
+  subtitle: {
+    margin: "18px 0 0",
+    maxWidth: 780,
+    color: "#dbeafe",
+    fontSize: 18,
+    lineHeight: 1.6,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+    alignContent: "start",
+  },
+
+  statCard: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  darkStatCard: {
+    display: "grid",
+    gap: 6,
+    padding: 18,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+  },
+
+  statLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  darkStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  statValue: {
+    color: "#0f172a",
+    fontSize: 28,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
+  darkStatValue: {
+    color: "#ffffff",
+    fontSize: 30,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 18,
+  },
+
+  summaryCard: {
+    display: "grid",
+    gap: 8,
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  summaryLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 30,
+    fontWeight: 950,
+    letterSpacing: "-0.06em",
+    lineHeight: 1,
+  },
+
+  summaryText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.45,
+    fontSize: 13,
+    fontWeight: 700,
+  },
+
+  filterPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    marginBottom: 18,
+  },
+
+  kicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  sectionTitle: {
+    margin: "6px 0 0",
+    color: "#0f172a",
+    fontSize: 30,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  sectionText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.6,
+    maxWidth: 760,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  filterGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  filterLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#0f172a",
+    border: "1px solid #e2e8f0",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  filterLinkActive: {
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    boxShadow: "0 14px 28px rgba(22,131,248,0.20)",
+  },
+
+  requestsPanel: {
+    minWidth: 0,
+  },
+
+  requestList: {
+    display: "grid",
+    gap: 14,
+  },
+
+  requestCard: {
+    display: "grid",
+    gap: 16,
+    padding: 20,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+  },
+
+  requestTop: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 260px)",
+    gap: 14,
+    alignItems: "start",
+  },
+
+  requestTitleBlock: {
+    minWidth: 0,
+  },
+
+  requestPills: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  tenantPill: {
+    display: "inline-flex",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+
+  statusPill: {
+    display: "inline-flex",
+    padding: "6px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+
+  statusNew: {
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+  },
+
+  statusResolved: {
+    background: "#f1f5f9",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+  },
+
+  statusDefault: {
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+  },
+
+  urgencyPill: {
+    display: "inline-flex",
+    padding: "6px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+
+  urgencyUrgent: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+  },
+
+  urgencyHigh: {
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+  },
+
+  urgencyDefault: {
+    background: "#f8fafc",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+  },
+
+  emailPill: {
+    display: "inline-flex",
+    padding: "6px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+
+  emailSent: {
+    background: "#ecfdf5",
+    color: "#047857",
+    border: "1px solid #a7f3d0",
+  },
+
+  emailPending: {
+    background: "#f8fafc",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+  },
+
+  emailFailed: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+  },
+
+  requestSubject: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 25,
+    lineHeight: 1.15,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  requestMeta: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  requestIdBox: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  requestIdLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  requestIdValue: {
+    color: "#0f172a",
+    fontSize: 12,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+  },
+
+  detailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  detailItem: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  detailLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  detailValue: {
+    color: "#0f172a",
+    fontSize: 13,
+    lineHeight: 1.4,
+    overflowWrap: "anywhere",
+  },
+
+  messageBox: {
+    display: "grid",
+    gap: 7,
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #cbd5e1",
+  },
+
+  messageLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  messageText: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.6,
+    fontWeight: 700,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+  },
+
+  contextDetails: {
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    padding: 14,
+  },
+
+  contextSummary: {
+    cursor: "pointer",
+    color: "#92400e",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  browserBox: {
+    display: "grid",
+    gap: 7,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+  },
+
+  readOnlyNotice: {
+    padding: 12,
+    borderRadius: 16,
+    background: "#eff6ff",
+    color: "#1e40af",
+    border: "1px solid #bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+    lineHeight: 1.45,
+  },
+
+  emptyState: {
+    display: "grid",
+    gap: 6,
+    padding: 24,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+  },
+
+  emptyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+
+  emptyText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 700,
+  },
+};
