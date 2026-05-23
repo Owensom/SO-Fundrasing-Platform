@@ -269,14 +269,7 @@ async function createIncident(formData: FormData) {
         now()
       )
     `,
-    [
-      title,
-      status,
-      severity,
-      affectedArea,
-      summary,
-      internalNotes || null,
-    ],
+    [title, status, severity, affectedArea, summary, internalNotes || null],
   );
 
   redirect(getStatusHref(status));
@@ -327,14 +320,26 @@ export default async function PlatformIncidentsPage({
         </div>
 
         <div className="platform-incidents-stats" style={styles.heroStats}>
-          <StatCard label="Total incidents" value={toNumber(summary.total_count)} dark />
+          <StatCard
+            label="Total incidents"
+            value={toNumber(summary.total_count)}
+            dark
+          />
           <StatCard
             label="Investigating"
             value={toNumber(summary.investigating_count)}
             dark
           />
-          <StatCard label="Monitoring" value={toNumber(summary.monitoring_count)} dark />
-          <StatCard label="Critical" value={toNumber(summary.critical_count)} dark />
+          <StatCard
+            label="Monitoring"
+            value={toNumber(summary.monitoring_count)}
+            dark
+          />
+          <StatCard
+            label="Critical"
+            value={toNumber(summary.critical_count)}
+            dark
+          />
         </div>
       </section>
             <section className="incident-summary-grid" style={styles.summaryGrid}>
@@ -764,7 +769,93 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     maxWidth: 1320,
     margin: "0 auto",
-      subtitle: {
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(37,99,235,0.10), transparent 30%), radial-gradient(circle at top right, rgba(251,191,36,0.10), transparent 34%), #f8fafc",
+    color: "#0f172a",
+    boxSizing: "border-box",
+    overflowX: "hidden",
+  },
+
+  hero: {
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(320px, 0.82fr)",
+    gap: 22,
+    padding: 30,
+    borderRadius: 34,
+    background:
+      "radial-gradient(circle at bottom right, rgba(251,191,36,0.18), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroContent: {
+    minWidth: 0,
+  },
+
+  backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    marginBottom: 16,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  badgeRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+
+  badge: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(37,99,235,0.22)",
+    color: "#dbeafe",
+    border: "1px solid rgba(147,197,253,0.34)",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  softBadge: {
+    display: "inline-flex",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.16)",
+    color: "#fef3c7",
+    border: "1px solid rgba(251,191,36,0.32)",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  title: {
+    margin: 0,
+    fontSize: "clamp(52px, 7vw, 82px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.08em",
+    color: "#ffffff",
+    overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
+  },
+    subtitle: {
     margin: "18px 0 0",
     maxWidth: 780,
     color: "#dbeafe",
