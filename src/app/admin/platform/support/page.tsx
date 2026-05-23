@@ -1,8 +1,8 @@
 // src/app/admin/platform/support/page.tsx
 // ===============================
 // Platform Owner Support Dashboard
-// Phase 5B.2 — support request status updates
-// Mobile-safe, platform-owner-only
+// Phase 5B.3 — support request status updates + internal notes
+// Mobile-safe, desktop-safe, platform-owner-only
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -52,6 +52,7 @@ type SupportRequestRow = {
   status: string;
   email_status: string;
   email_error: string | null;
+  internal_notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -110,6 +111,10 @@ function toNumber(value: string | number | null | undefined) {
 function cleanText(value: unknown, fallback = "—") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
+}
+
+function limitText(value: unknown, maxLength: number) {
+  return String(value ?? "").trim().slice(0, maxLength);
 }
 
 function formatLabel(value: unknown) {
@@ -226,6 +231,7 @@ async function getSupportRequests(filter: SupportFilter) {
         status,
         email_status,
         email_error,
+        internal_notes,
         created_at::text,
         updated_at::text
       from support_requests
@@ -258,6 +264,33 @@ async function updateSupportRequestStatus(formData: FormData) {
       where id = $1
     `,
     [requestId, nextStatus],
+  );
+
+  redirect(getFilterHref(returnFilter));
+}
+
+async function updateSupportRequestNotes(formData: FormData) {
+  "use server";
+
+  await requirePlatformOwner();
+
+  const requestId = String(formData.get("request_id") || "").trim();
+  const returnFilter = normaliseFilter(formData.get("return_filter"));
+  const internalNotes = limitText(formData.get("internal_notes"), 5000);
+
+  if (!isSafeUuid(requestId)) {
+    redirect(getFilterHref(returnFilter));
+  }
+
+  await query(
+    `
+      update support_requests
+      set
+        internal_notes = $2,
+        updated_at = now()
+      where id = $1
+    `,
+    [requestId, internalNotes || null],
   );
 
   redirect(getFilterHref(returnFilter));
@@ -301,9 +334,8 @@ export default async function PlatformSupportDashboardPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Review tenant support requests across the platform and update their
-            support status safely. Notes and reply actions can be layered on
-            after this status-only phase.
+            Review tenant support requests, update their status and keep private
+            platform-owner notes. Notes are not shown to tenant admins.
           </p>
         </div>
 
@@ -365,8 +397,8 @@ export default async function PlatformSupportDashboardPage({
 
           <p style={styles.sectionText}>
             Showing the latest 100 support requests for the selected filter.
-            Status changes update the request timestamp and keep the page in the
-            same filter view.
+            Status changes and notes update the request timestamp and keep the
+            page in the same filter view.
           </p>
         </div>
 
@@ -663,6 +695,47 @@ function SupportRequestCard({
         <p style={styles.messageText}>{request.message}</p>
       </div>
 
+      <div style={styles.notesPanel}>
+        <div style={styles.notesHeader}>
+          <div>
+            <p style={styles.notesKicker}>Internal notes</p>
+            <h3 style={styles.notesTitle}>Private platform notes</h3>
+            <p style={styles.notesText}>
+              These notes are only shown on this platform-owner support
+              dashboard. Tenant admins do not see them.
+            </p>
+          </div>
+        </div>
+
+        {request.internal_notes ? (
+          <div style={styles.savedNotesBox}>
+            <p style={styles.messageLabel}>Saved notes</p>
+            <p style={styles.messageText}>{request.internal_notes}</p>
+          </div>
+        ) : null}
+
+        <form action={updateSupportRequestNotes} style={styles.notesForm}>
+          <input type="hidden" name="request_id" value={request.id} />
+          <input type="hidden" name="return_filter" value={activeFilter} />
+
+          <label style={styles.notesField}>
+            <span style={styles.notesLabel}>Update internal notes</span>
+            <textarea
+              name="internal_notes"
+              defaultValue={request.internal_notes || ""}
+              maxLength={5000}
+              rows={4}
+              placeholder="Add private support notes, investigation updates, next actions, or contact history."
+              style={styles.notesTextarea}
+            />
+          </label>
+
+          <button type="submit" style={styles.notesButton}>
+            Save internal notes →
+          </button>
+        </form>
+      </div>
+
       {hasOptionalContext ? (
         <details style={styles.contextDetails}>
           <summary style={styles.contextSummary}>View request context</summary>
@@ -687,8 +760,8 @@ function SupportRequestCard({
       ) : null}
 
       <div style={styles.readOnlyNotice}>
-        Status updates are live. Internal notes and Reply to tenant will be
-        added later.
+        Status updates and internal notes are live. Reply to tenant will be added
+        later.
       </div>
     </article>
   );
@@ -711,11 +784,14 @@ const responsiveStyles = `
 .platform-support-page p,
 .platform-support-page h1,
 .platform-support-page h2,
+.platform-support-page h3,
 .platform-support-page strong,
 .platform-support-page span,
 .platform-support-page details,
 .platform-support-page summary,
 .platform-support-page form,
+.platform-support-page label,
+.platform-support-page textarea,
 .platform-support-page button {
   min-width: 0;
   max-width: 100%;
@@ -776,7 +852,8 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .platform-support-page .support-status-panel {
+  .platform-support-page .support-status-panel,
+  .platform-support-page .support-notes-panel {
     padding: 12px !important;
     border-radius: 18px !important;
   }
@@ -785,7 +862,8 @@ const responsiveStyles = `
   .platform-support-page .support-request-card strong,
   .platform-support-page .support-request-card span,
   .platform-support-page .support-request-card summary,
-  .platform-support-page .support-request-card button {
+  .platform-support-page .support-request-card button,
+  .platform-support-page .support-request-card textarea {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
   }
@@ -1409,6 +1487,121 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
     wordBreak: "break-word",
+  },
+
+  notesPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(255,255,255,1) 72%)",
+    border: "1px solid #fde68a",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  notesHeader: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  notesKicker: {
+    margin: 0,
+    color: "#b45309",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  notesTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  notesText: {
+    margin: 0,
+    color: "#78350f",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  savedNotesBox: {
+    display: "grid",
+    gap: 7,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  notesForm: {
+    display: "grid",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  notesField: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+  },
+
+  notesLabel: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    overflowWrap: "anywhere",
+  },
+
+  notesTextarea: {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
+    borderRadius: 16,
+    border: "1px solid #fcd34d",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "12px 14px",
+    fontSize: 14,
+    fontWeight: 700,
+    lineHeight: 1.5,
+    resize: "vertical",
+    outline: "none",
+    overflowWrap: "anywhere",
+  },
+
+  notesButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    justifySelf: "start",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   contextDetails: {
