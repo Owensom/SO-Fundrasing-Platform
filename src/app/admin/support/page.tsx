@@ -4,6 +4,7 @@
 // Tenant-isolated support request form
 // Functional Platform Cards help hub
 // Collapsible platform guide sections
+// Phase 5D.1 — added public platform status link
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -338,8 +339,8 @@ export default async function AdminSupportPage({
           </h1>
 
           <p style={styles.subtitle}>
-            Report a problem, ask for help, or find practical ideas for using
-            each fundraising tool in the platform.
+            Report a problem, ask for help, check platform status, or find
+            practical ideas for using each fundraising tool.
           </p>
 
           <p style={styles.tenant}>
@@ -351,6 +352,7 @@ export default async function AdminSupportPage({
           <StatCard label="Tenant context" value="Included" dark />
           <StatCard label="Support email" value="Automatic" dark />
           <StatCard label="Help guide" value="Built in" dark />
+          <StatCard label="Platform status" value="Public" dark />
         </div>
       </section>
 
@@ -369,8 +371,7 @@ export default async function AdminSupportPage({
           <p style={styles.statusText}>{statusMessage.text}</p>
         </section>
       ) : null}
-
-      <section className="support-options-grid" style={styles.optionsGrid}>
+            <section className="support-options-grid" style={styles.optionsGrid}>
         <SupportOption
           label="Report a problem"
           title="Something is not working"
@@ -384,12 +385,21 @@ export default async function AdminSupportPage({
         />
 
         <SupportOption
+          label="Platform status"
+          title="Check known platform issues"
+          text="View the public platform status page for published incidents, active monitoring updates and resolved notices."
+          href="/status"
+          actionLabel="View status page"
+        />
+
+        <SupportOption
           label="Plan ideas"
           title="Explore platform uses"
           text="Use the collapsible function cards below to choose the right tool for raffles, events, donations, auctions and future games."
         />
       </section>
-            <SupportCollapsibleSection
+
+      <SupportCollapsibleSection
         eyebrow="Platform function cards"
         title="Live platform tools"
         text="Open this section to see working admin areas, practical use cases and direct links."
@@ -684,8 +694,7 @@ export default async function AdminSupportPage({
           />
         </div>
       </SupportCollapsibleSection>
-
-      <section
+            <section
         id="support-form"
         className="support-layout"
         style={styles.layoutGrid}
@@ -833,18 +842,23 @@ export default async function AdminSupportPage({
           </div>
 
           <div style={styles.noticeBox}>
-            <p style={styles.noticeTitle}>Reply-to tenant preserved</p>
+            <p style={styles.noticeTitle}>Platform status is public</p>
             <p style={styles.noticeText}>
-              Support emails are sent from the platform sender, but replies are
-              directed to the admin email where available. A clearer support
-              dashboard and “Reply to tenant” action can be added later.
+              The status page only shows incidents deliberately published by
+              platform support. Internal notes and private support requests are
+              never shown there.
             </p>
+
+            <Link href="/status" style={styles.noticeLink}>
+              View platform status →
+            </Link>
           </div>
         </aside>
       </section>
     </main>
   );
 }
+
 function StatCard({
   label,
   value,
@@ -866,16 +880,28 @@ function SupportOption({
   label,
   title,
   text,
+  href,
+  actionLabel,
 }: {
   label: string;
   title: string;
   text: string;
+  href?: string;
+  actionLabel?: string;
 }) {
   return (
     <article style={styles.optionCard}>
-      <p style={styles.optionLabel}>{label}</p>
-      <h2 style={styles.optionTitle}>{title}</h2>
-      <p style={styles.optionText}>{text}</p>
+      <div style={styles.optionCardCopy}>
+        <p style={styles.optionLabel}>{label}</p>
+        <h2 style={styles.optionTitle}>{title}</h2>
+        <p style={styles.optionText}>{text}</p>
+      </div>
+
+      {href ? (
+        <Link href={href} style={styles.optionAction}>
+          {actionLabel || "Open"} →
+        </Link>
+      ) : null}
     </article>
   );
 }
@@ -957,7 +983,6 @@ function ContextItem({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .admin-support-page,
 .admin-support-page * {
@@ -1002,6 +1027,10 @@ const responsiveStyles = `
   .admin-support-page .function-card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
+
+  .admin-support-page .support-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 
 @media (max-width: 1040px) {
@@ -1011,7 +1040,7 @@ const responsiveStyles = `
   }
 
   .admin-support-page .support-hero-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .admin-support-page .idea-card-grid {
@@ -1055,6 +1084,18 @@ const responsiveStyles = `
 
   .admin-support-page .support-collapsible-section > div {
     padding: 0 18px 18px !important;
+  }
+
+  .admin-support-page a,
+  .admin-support-page p,
+  .admin-support-page h1,
+  .admin-support-page h2,
+  .admin-support-page h3,
+  .admin-support-page strong,
+  .admin-support-page span,
+  .admin-support-page button {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 }
 `;
@@ -1170,7 +1211,7 @@ const styles: Record<string, CSSProperties> = {
 
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "1fr",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
     alignContent: "start",
   },
@@ -1263,19 +1304,28 @@ const styles: Record<string, CSSProperties> = {
 
   optionsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
     marginBottom: 18,
   },
 
   optionCard: {
     display: "grid",
-    gap: 8,
+    gridTemplateRows: "1fr auto",
+    gap: 12,
     padding: 18,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    minWidth: 0,
+  },
+
+  optionCardCopy: {
+    display: "grid",
+    gap: 8,
+    alignContent: "start",
+    minWidth: 0,
   },
 
   optionLabel: {
@@ -1292,6 +1342,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 22,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   optionText: {
@@ -1300,6 +1351,24 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontSize: 14,
     fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  optionAction: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 12px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #16a34a 0%, #047857 100%)",
+    color: "#ffffff",
+    border: "1px solid #16a34a",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    overflowWrap: "anywhere",
   },
 
   functionGrid: {
@@ -1676,7 +1745,7 @@ const styles: Record<string, CSSProperties> = {
 
   noticeBox: {
     display: "grid",
-    gap: 7,
+    gap: 10,
     padding: 16,
     borderRadius: 20,
     background: "#eff6ff",
@@ -1696,5 +1765,23 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontSize: 14,
     fontWeight: 750,
+  },
+
+  noticeLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    justifySelf: "start",
+    minHeight: 40,
+    maxWidth: "100%",
+    padding: "9px 12px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
   },
 };
