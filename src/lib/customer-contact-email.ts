@@ -1,13 +1,16 @@
 // src/lib/customer-contact-email.ts
 // ===============================
 // Public customer/supporter → tenant contact email helper
-// Phase 5E.1B
+// Phase 5E.1C
 // Separate from platform-owner support emails
+// Includes branded contact-email test helper
 // ===============================
 
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const CONTACT_EMAIL_LOGO_PATH = "/brand/contact-emails-gold.png";
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -33,6 +36,36 @@ function getFromEmail() {
   );
 }
 
+function getBaseUrl() {
+  const explicit =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.APP_URL?.trim();
+
+  if (explicit) {
+    return explicit.replace(/\/+$/, "");
+  }
+
+  const vercelProductionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+
+  if (vercelProductionUrl) {
+    return `https://${vercelProductionUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
+  }
+
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+
+  if (vercelUrl) {
+    return `https://${vercelUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
+  }
+
+  return "https://sofundraising.it.com";
+}
+
+function getAssetUrl(path: string) {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${getBaseUrl()}${cleanPath}`;
+}
+
 function formatLabel(value: unknown) {
   const clean = cleanText(value, "general").toLowerCase();
 
@@ -41,6 +74,33 @@ function formatLabel(value: unknown) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function renderContactLogo() {
+  const logoUrl = getAssetUrl(CONTACT_EMAIL_LOGO_PATH);
+
+  return `
+    <div style="
+      text-align:center;
+      padding:22px 22px 12px;
+      background:linear-gradient(135deg,#020617 0%,#0f172a 58%,#172554 100%);
+    ">
+      <img
+        src="${escapeHtml(logoUrl)}"
+        alt="SO Fundraising Platform contact"
+        width="86"
+        style="
+          display:inline-block;
+          width:86px;
+          max-width:86px;
+          height:auto;
+          border:0;
+          outline:none;
+          text-decoration:none;
+        "
+      />
+    </div>
+  `;
 }
 
 function renderMetaCard(label: string, value: unknown) {
@@ -78,61 +138,28 @@ function renderMetaCard(label: string, value: unknown) {
   `;
 }
 
-export async function sendCustomerContactEmail({
-  tenantSlug,
-  tenantDisplayName,
-  tenantContactEmail,
-  tenantContactName,
-  supporterName,
-  supporterEmail,
-  subject,
-  message,
-  campaignType,
-  campaignId,
-  campaignTitle,
-  pageUrl,
+function renderEmailShell({
+  preheader,
+  eyebrow,
+  title,
+  intro,
+  summaryHtml,
+  metaHtml,
+  messageHtml,
+  noticeHtml,
+  footer,
 }: {
-  tenantSlug: string;
-  tenantDisplayName: string;
-  tenantContactEmail: string;
-  tenantContactName?: string | null;
-  supporterName?: string | null;
-  supporterEmail: string;
-  subject: string;
-  message: string;
-  campaignType?: string | null;
-  campaignId?: string | null;
-  campaignTitle?: string | null;
-  pageUrl?: string | null;
+  preheader: string;
+  eyebrow: string;
+  title: string;
+  intro: string;
+  summaryHtml: string;
+  metaHtml: string;
+  messageHtml: string;
+  noticeHtml: string;
+  footer: string;
 }) {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("Missing RESEND_API_KEY");
-  }
-
-  const to = cleanOptionalText(tenantContactEmail);
-  const fromEmail = getFromEmail();
-
-  if (!to) {
-    throw new Error("Tenant contact email is not configured");
-  }
-
-  const safeTenantSlug = cleanText(tenantSlug, "unknown");
-  const safeTenantDisplayName = cleanText(
-    tenantDisplayName,
-    "Tenant organiser",
-  );
-  const safeTenantContactName = cleanText(
-    tenantContactName,
-    safeTenantDisplayName,
-  );
-  const safeSupporterName = cleanText(supporterName, "Supporter");
-  const safeSupporterEmail = cleanText(supporterEmail, "Not supplied");
-  const safeSubject = cleanText(subject, "Supporter contact message");
-  const safeCampaignType = formatLabel(campaignType || "general");
-  const safeCampaignTitle = cleanText(campaignTitle, "Not campaign-specific");
-  const hasPageUrl = cleanOptionalText(pageUrl) !== "";
-
-  const html = `
+  return `
     <!doctype html>
     <html>
       <head>
@@ -199,7 +226,7 @@ export async function sendCustomerContactEmail({
 
       <body style="margin:0;padding:0;background:#f1f5f9;">
         <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
-          ${escapeHtml(safeSubject)}
+          ${escapeHtml(preheader)}
         </div>
 
         <div class="email-outer" style="
@@ -217,6 +244,8 @@ export async function sendCustomerContactEmail({
             overflow:hidden;
             box-shadow:0 12px 34px rgba(15,23,42,0.08);
           ">
+            ${renderContactLogo()}
+
             <div style="
               height:7px;
               background:linear-gradient(90deg,#1683f8,#facc15);
@@ -232,7 +261,7 @@ export async function sendCustomerContactEmail({
                 letter-spacing:0.08em;
                 text-transform:uppercase;
               ">
-                Public supporter contact
+                ${escapeHtml(eyebrow)}
               </p>
 
               <h1 class="email-title" style="
@@ -244,7 +273,7 @@ export async function sendCustomerContactEmail({
                 word-break:break-word;
                 overflow-wrap:anywhere;
               ">
-                ${escapeHtml(safeSubject)}
+                ${escapeHtml(title)}
               </h1>
 
               <p class="email-intro" style="
@@ -254,141 +283,13 @@ export async function sendCustomerContactEmail({
                 line-height:1.65;
                 font-weight:700;
               ">
-                ${escapeHtml(safeTenantContactName)}, a public supporter has sent a message to ${escapeHtml(safeTenantDisplayName)} through the SO Fundraising Platform contact page.
+                ${escapeHtml(intro)}
               </p>
 
-              <div class="summary-row" style="
-                display:flex;
-                gap:8px;
-                flex-wrap:wrap;
-                margin:0 0 20px;
-              ">
-                <span class="summary-pill" style="
-                  display:inline-block;
-                  padding:8px 11px;
-                  border-radius:999px;
-                  background:#eff6ff;
-                  border:1px solid #bfdbfe;
-                  color:#1d4ed8;
-                  font-size:12px;
-                  line-height:1.2;
-                  font-weight:900;
-                ">
-                  Tenant: ${escapeHtml(safeTenantSlug)}
-                </span>
-
-                <span class="summary-pill" style="
-                  display:inline-block;
-                  padding:8px 11px;
-                  border-radius:999px;
-                  background:#fffbeb;
-                  border:1px solid #fde68a;
-                  color:#92400e;
-                  font-size:12px;
-                  line-height:1.2;
-                  font-weight:900;
-                ">
-                  ${escapeHtml(safeCampaignType)}
-                </span>
-
-                <span class="summary-pill" style="
-                  display:inline-block;
-                  padding:8px 11px;
-                  border-radius:999px;
-                  background:#f8fafc;
-                  border:1px solid #e2e8f0;
-                  color:#334155;
-                  font-size:12px;
-                  line-height:1.2;
-                  font-weight:900;
-                ">
-                  Supporter message
-                </span>
-              </div>
-
-              <div class="meta-grid" style="
-                display:grid;
-                grid-template-columns:repeat(2,minmax(0,1fr));
-                gap:10px;
-                background:#f8fafc;
-                border:1px solid #e2e8f0;
-                border-radius:20px;
-                padding:12px;
-                margin:0 0 22px;
-              ">
-                ${renderMetaCard("Tenant", safeTenantSlug)}
-                ${renderMetaCard("Tenant contact", safeTenantContactName)}
-                ${renderMetaCard("Supporter name", safeSupporterName)}
-                ${renderMetaCard("Supporter email", safeSupporterEmail)}
-                ${renderMetaCard("Campaign type", safeCampaignType)}
-                ${renderMetaCard("Campaign title", safeCampaignTitle)}
-                ${renderMetaCard("Campaign ID", cleanText(campaignId))}
-                ${renderMetaCard("Page URL", cleanText(pageUrl))}
-              </div>
-
-              <div class="message-box" style="
-                border-radius:20px;
-                padding:18px;
-                background:#ffffff;
-                border:1px solid #cbd5e1;
-                margin:0 0 18px;
-              ">
-                <p style="
-                  margin:0 0 8px;
-                  color:#64748b;
-                  font-size:12px;
-                  line-height:1.35;
-                  font-weight:900;
-                  letter-spacing:0.08em;
-                  text-transform:uppercase;
-                ">
-                  Message
-                </p>
-
-                <div style="
-                  color:#0f172a;
-                  font-size:15px;
-                  line-height:1.65;
-                  font-weight:700;
-                  white-space:pre-wrap;
-                  word-break:break-word;
-                  overflow-wrap:anywhere;
-                ">${escapeHtml(message)}</div>
-              </div>
-
-              <div class="notice-box" style="
-                border-radius:20px;
-                padding:18px;
-                background:#fffbeb;
-                border:1px solid #fde68a;
-                margin:0;
-              ">
-                <p style="
-                  margin:0 0 8px;
-                  color:#92400e;
-                  font-size:12px;
-                  line-height:1.35;
-                  font-weight:900;
-                  letter-spacing:0.08em;
-                  text-transform:uppercase;
-                ">
-                  Reply guidance
-                </p>
-
-                <div style="
-                  color:#78350f;
-                  font-size:13px;
-                  line-height:1.6;
-                  font-weight:700;
-                ">
-                  Reply directly to this email to contact the supporter. Their supplied email address has been set as the reply-to address.
-                  ${
-                    hasPageUrl
-                      ? `The page they referenced was: ${escapeHtml(pageUrl)}.`
-                      : ""
-                  }
-                </div>
-              </div>
+              ${summaryHtml}
+              ${metaHtml}
+              ${messageHtml}
+              ${noticeHtml}
 
               <div class="footer-text" style="
                 margin-top:24px;
@@ -398,7 +299,7 @@ export async function sendCustomerContactEmail({
                 font-size:13px;
                 line-height:1.6;
               ">
-                Sent automatically by the SO Fundraising Platform public contact system. This message was sent to the tenant contact email, not platform owner support.
+                ${escapeHtml(footer)}
               </div>
             </div>
           </div>
@@ -406,6 +307,215 @@ export async function sendCustomerContactEmail({
       </body>
     </html>
   `;
+}
+
+export async function sendCustomerContactEmail({
+  tenantSlug,
+  tenantDisplayName,
+  tenantContactEmail,
+  tenantContactName,
+  supporterName,
+  supporterEmail,
+  subject,
+  message,
+  campaignType,
+  campaignId,
+  campaignTitle,
+  pageUrl,
+}: {
+  tenantSlug: string;
+  tenantDisplayName: string;
+  tenantContactEmail: string;
+  tenantContactName?: string | null;
+  supporterName?: string | null;
+  supporterEmail: string;
+  subject: string;
+  message: string;
+  campaignType?: string | null;
+  campaignId?: string | null;
+  campaignTitle?: string | null;
+  pageUrl?: string | null;
+}) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("Missing RESEND_API_KEY");
+  }
+
+  const to = cleanOptionalText(tenantContactEmail);
+  const fromEmail = getFromEmail();
+
+  if (!to) {
+    throw new Error("Tenant contact email is not configured");
+  }
+
+  const safeTenantSlug = cleanText(tenantSlug, "unknown");
+  const safeTenantDisplayName = cleanText(
+    tenantDisplayName,
+    "Tenant organiser",
+  );
+  const safeTenantContactName = cleanText(
+    tenantContactName,
+    safeTenantDisplayName,
+  );
+  const safeSupporterName = cleanText(supporterName, "Supporter");
+  const safeSupporterEmail = cleanText(supporterEmail, "Not supplied");
+  const safeSubject = cleanText(subject, "Supporter contact message");
+  const safeCampaignType = formatLabel(campaignType || "general");
+  const safeCampaignTitle = cleanText(campaignTitle, "Not campaign-specific");
+  const hasPageUrl = cleanOptionalText(pageUrl) !== "";
+
+  const summaryHtml = `
+    <div class="summary-row" style="
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin:0 0 20px;
+    ">
+      <span class="summary-pill" style="
+        display:inline-block;
+        padding:8px 11px;
+        border-radius:999px;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+        color:#1d4ed8;
+        font-size:12px;
+        line-height:1.2;
+        font-weight:900;
+      ">
+        Tenant: ${escapeHtml(safeTenantSlug)}
+      </span>
+
+      <span class="summary-pill" style="
+        display:inline-block;
+        padding:8px 11px;
+        border-radius:999px;
+        background:#fffbeb;
+        border:1px solid #fde68a;
+        color:#92400e;
+        font-size:12px;
+        line-height:1.2;
+        font-weight:900;
+      ">
+        ${escapeHtml(safeCampaignType)}
+      </span>
+
+      <span class="summary-pill" style="
+        display:inline-block;
+        padding:8px 11px;
+        border-radius:999px;
+        background:#f8fafc;
+        border:1px solid #e2e8f0;
+        color:#334155;
+        font-size:12px;
+        line-height:1.2;
+        font-weight:900;
+      ">
+        Supporter message
+      </span>
+    </div>
+  `;
+
+  const metaHtml = `
+    <div class="meta-grid" style="
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:20px;
+      padding:12px;
+      margin:0 0 22px;
+    ">
+      ${renderMetaCard("Tenant", safeTenantSlug)}
+      ${renderMetaCard("Tenant contact", safeTenantContactName)}
+      ${renderMetaCard("Supporter name", safeSupporterName)}
+      ${renderMetaCard("Supporter email", safeSupporterEmail)}
+      ${renderMetaCard("Campaign type", safeCampaignType)}
+      ${renderMetaCard("Campaign title", safeCampaignTitle)}
+      ${renderMetaCard("Campaign ID", cleanText(campaignId))}
+      ${renderMetaCard("Page URL", cleanText(pageUrl))}
+    </div>
+  `;
+
+  const messageHtml = `
+    <div class="message-box" style="
+      border-radius:20px;
+      padding:18px;
+      background:#ffffff;
+      border:1px solid #cbd5e1;
+      margin:0 0 18px;
+    ">
+      <p style="
+        margin:0 0 8px;
+        color:#64748b;
+        font-size:12px;
+        line-height:1.35;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+      ">
+        Message
+      </p>
+
+      <div style="
+        color:#0f172a;
+        font-size:15px;
+        line-height:1.65;
+        font-weight:700;
+        white-space:pre-wrap;
+        word-break:break-word;
+        overflow-wrap:anywhere;
+      ">${escapeHtml(message)}</div>
+    </div>
+  `;
+
+  const noticeHtml = `
+    <div class="notice-box" style="
+      border-radius:20px;
+      padding:18px;
+      background:#fffbeb;
+      border:1px solid #fde68a;
+      margin:0;
+    ">
+      <p style="
+        margin:0 0 8px;
+        color:#92400e;
+        font-size:12px;
+        line-height:1.35;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+      ">
+        Reply guidance
+      </p>
+
+      <div style="
+        color:#78350f;
+        font-size:13px;
+        line-height:1.6;
+        font-weight:700;
+      ">
+        Reply directly to this email to contact the supporter. Their supplied email address has been set as the reply-to address.
+        ${
+          hasPageUrl
+            ? `The page they referenced was: ${escapeHtml(pageUrl)}.`
+            : ""
+        }
+      </div>
+    </div>
+  `;
+
+  const html = renderEmailShell({
+    preheader: safeSubject,
+    eyebrow: "Public supporter contact",
+    title: safeSubject,
+    intro: `${safeTenantContactName}, a public supporter has sent a message to ${safeTenantDisplayName} through the SO Fundraising Platform contact page.`,
+    summaryHtml,
+    metaHtml,
+    messageHtml,
+    noticeHtml,
+    footer:
+      "Sent automatically by the SO Fundraising Platform public contact system. This message was sent to the tenant contact email, not platform owner support.",
+  });
 
   const result = await resend.emails.send({
     from: `${safeTenantDisplayName} via SO Fundraising <${fromEmail}>`,
@@ -420,6 +530,189 @@ export async function sendCustomerContactEmail({
       typeof result.error.message === "string"
         ? result.error.message
         : "Resend failed to send customer contact email",
+    );
+  }
+
+  return result.data?.id || null;
+}
+
+export async function sendTenantContactTestEmail({
+  tenantSlug,
+  tenantDisplayName,
+  tenantContactEmail,
+  tenantContactName,
+}: {
+  tenantSlug: string;
+  tenantDisplayName: string;
+  tenantContactEmail: string;
+  tenantContactName?: string | null;
+}) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("Missing RESEND_API_KEY");
+  }
+
+  const to = cleanOptionalText(tenantContactEmail);
+  const fromEmail = getFromEmail();
+
+  if (!to) {
+    throw new Error("Tenant contact email is not configured");
+  }
+
+  const safeTenantSlug = cleanText(tenantSlug, "unknown");
+  const safeTenantDisplayName = cleanText(
+    tenantDisplayName,
+    "Tenant organiser",
+  );
+  const safeTenantContactName = cleanText(
+    tenantContactName,
+    safeTenantDisplayName,
+  );
+
+  const summaryHtml = `
+    <div class="summary-row" style="
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin:0 0 20px;
+    ">
+      <span class="summary-pill" style="
+        display:inline-block;
+        padding:8px 11px;
+        border-radius:999px;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+        color:#1d4ed8;
+        font-size:12px;
+        line-height:1.2;
+        font-weight:900;
+      ">
+        Tenant: ${escapeHtml(safeTenantSlug)}
+      </span>
+
+      <span class="summary-pill" style="
+        display:inline-block;
+        padding:8px 11px;
+        border-radius:999px;
+        background:#fffbeb;
+        border:1px solid #fde68a;
+        color:#92400e;
+        font-size:12px;
+        line-height:1.2;
+        font-weight:900;
+      ">
+        Contact email test
+      </span>
+    </div>
+  `;
+
+  const metaHtml = `
+    <div class="meta-grid" style="
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:20px;
+      padding:12px;
+      margin:0 0 22px;
+    ">
+      ${renderMetaCard("Tenant", safeTenantSlug)}
+      ${renderMetaCard("Tenant name", safeTenantDisplayName)}
+      ${renderMetaCard("Contact name", safeTenantContactName)}
+      ${renderMetaCard("Contact email", to)}
+    </div>
+  `;
+
+  const messageHtml = `
+    <div class="message-box" style="
+      border-radius:20px;
+      padding:18px;
+      background:#ffffff;
+      border:1px solid #cbd5e1;
+      margin:0 0 18px;
+    ">
+      <p style="
+        margin:0 0 8px;
+        color:#64748b;
+        font-size:12px;
+        line-height:1.35;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+      ">
+        Test message
+      </p>
+
+      <div style="
+        color:#0f172a;
+        font-size:15px;
+        line-height:1.65;
+        font-weight:700;
+        white-space:pre-wrap;
+        word-break:break-word;
+        overflow-wrap:anywhere;
+      ">This is a test email for the public contact address linked to ${escapeHtml(
+        safeTenantDisplayName,
+      )}. If you received this, the tenant contact email can receive public supporter messages from SO Fundraising Platform.</div>
+    </div>
+  `;
+
+  const noticeHtml = `
+    <div class="notice-box" style="
+      border-radius:20px;
+      padding:18px;
+      background:#ecfdf5;
+      border:1px solid #a7f3d0;
+      margin:0;
+    ">
+      <p style="
+        margin:0 0 8px;
+        color:#047857;
+        font-size:12px;
+        line-height:1.35;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+      ">
+        What this confirms
+      </p>
+
+      <div style="
+        color:#065f46;
+        font-size:13px;
+        line-height:1.6;
+        font-weight:700;
+      ">
+        This confirms that the email address can receive messages from the platform. A later verification step can add confirmed status tracking.
+      </div>
+    </div>
+  `;
+
+  const html = renderEmailShell({
+    preheader: "SO Fundraising Platform contact email test",
+    eyebrow: "Contact email test",
+    title: "Your public contact email is receiving messages",
+    intro: `${safeTenantContactName}, this is a test email for the public contact address used by ${safeTenantDisplayName}.`,
+    summaryHtml,
+    metaHtml,
+    messageHtml,
+    noticeHtml,
+    footer:
+      "Sent automatically by the SO Fundraising Platform branding settings page.",
+  });
+
+  const result = await resend.emails.send({
+    from: `SO Fundraising Contact Test <${fromEmail}>`,
+    to,
+    subject: `[SO Fundraising] Contact email test for ${safeTenantDisplayName}`,
+    html,
+  });
+
+  if (result.error) {
+    throw new Error(
+      typeof result.error.message === "string"
+        ? result.error.message
+        : "Resend failed to send tenant contact test email",
     );
   }
 
