@@ -25,6 +25,8 @@ type BrandingSettings = {
   platform_owner_bypass: boolean | null;
   public_display_name: string | null;
   public_tagline: string | null;
+  public_contact_name: string | null;
+  public_contact_email: string | null;
   public_logo_url: string | null;
   public_logo_mark_url: string | null;
   public_primary_colour: string | null;
@@ -38,6 +40,18 @@ function cleanText(value: unknown) {
 
 function cleanLimitedText(value: unknown, maxLength: number) {
   return cleanText(value).slice(0, maxLength);
+}
+
+function cleanEmail(value: unknown) {
+  const clean = cleanLimitedText(value, 254).toLowerCase();
+
+  if (!clean) return "";
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+    return "";
+  }
+
+  return clean;
 }
 
 function cleanOptionalUrl(value: unknown) {
@@ -103,6 +117,8 @@ async function getBrandingSettings(tenantSlug: string) {
         platform_owner_bypass,
         public_display_name,
         public_tagline,
+        public_contact_name,
+        public_contact_email,
         public_logo_url,
         public_logo_mark_url,
         public_primary_colour,
@@ -149,6 +165,13 @@ async function updateTenantBranding(formData: FormData) {
 
   const nextTagline = cleanLimitedText(formData.get("public_tagline"), 180);
 
+  const nextContactName = cleanLimitedText(
+    formData.get("public_contact_name"),
+    120,
+  );
+
+  const nextContactEmail = cleanEmail(formData.get("public_contact_email"));
+
   const nextLogoUrl = canUseAdvancedBranding
     ? cleanOptionalUrl(formData.get("public_logo_url"))
     : existingSettings?.public_logo_url || "";
@@ -181,17 +204,21 @@ async function updateTenantBranding(formData: FormData) {
         tenant_slug,
         public_display_name,
         public_tagline,
+        public_contact_name,
+        public_contact_email,
         public_logo_url,
         public_logo_mark_url,
         public_primary_colour,
         public_accent_colour,
         public_footer_text
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       on conflict (tenant_slug)
       do update set
         public_display_name = excluded.public_display_name,
         public_tagline = excluded.public_tagline,
+        public_contact_name = excluded.public_contact_name,
+        public_contact_email = excluded.public_contact_email,
         public_logo_url = excluded.public_logo_url,
         public_logo_mark_url = excluded.public_logo_mark_url,
         public_primary_colour = excluded.public_primary_colour,
@@ -203,6 +230,8 @@ async function updateTenantBranding(formData: FormData) {
       tenantSlug,
       nextDisplayName || null,
       nextTagline || null,
+      nextContactName || null,
+      nextContactEmail || null,
       nextLogoUrl || null,
       nextLogoMarkUrl || null,
       nextPrimaryColour || null,
@@ -214,6 +243,8 @@ async function updateTenantBranding(formData: FormData) {
   revalidatePath("/admin/settings/branding");
   revalidatePath("/admin");
   revalidatePath(`/c/${tenantSlug}`);
+  revalidatePath(`/c/${tenantSlug}/support`);
+  revalidatePath(`/c/${tenantSlug}/contact`);
   redirect("/admin/settings/branding?saved=1");
 }
 
@@ -257,6 +288,8 @@ export default async function AdminBrandingSettingsPage({
       formState={{
         displayName: settings?.public_display_name || "",
         tagline: settings?.public_tagline || "",
+        contactName: settings?.public_contact_name || "",
+        contactEmail: settings?.public_contact_email || "",
         logoUrl: settings?.public_logo_url || "",
         logoMarkUrl: settings?.public_logo_mark_url || "",
         primaryColour: settings?.public_primary_colour || "#1683F8",
