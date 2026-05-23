@@ -486,7 +486,8 @@ export default async function PlatformSupportDashboardPage({
           </FilterLink>
         </div>
       </section>
-            <section style={styles.requestsPanel}>
+
+      <section style={styles.requestsPanel}>
         {requests.length > 0 ? (
           <div className="support-request-list" style={styles.requestList}>
             {requests.map((request) => (
@@ -509,7 +510,6 @@ export default async function PlatformSupportDashboardPage({
     </main>
   );
 }
-
 function StatCard({
   label,
   value,
@@ -616,7 +616,7 @@ function ReplyToTenantPanel({ request }: { request: SupportRequestRow }) {
   const email = getSafeEmail(request.admin_email);
 
   return (
-    <div style={styles.replyPanel}>
+    <div className="support-reply-panel" style={styles.replyPanel}>
       <div style={styles.replyCopy}>
         <p style={styles.replyKicker}>Reply to tenant</p>
         <h3 style={styles.replyTitle}>Contact tenant admin</h3>
@@ -872,6 +872,12 @@ const responsiveStyles = `
   overflow: hidden;
 }
 
+.platform-support-page .support-reply-panel {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 @media (max-width: 1080px) {
   .platform-support-page .platform-support-hero {
     grid-template-columns: 1fr !important;
@@ -890,13 +896,16 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .platform-support-page .support-request-top {
+  .platform-support-page .support-request-top,
+  .platform-support-page .support-reply-panel,
+  .platform-support-page .support-status-panel {
     grid-template-columns: 1fr !important;
   }
 
-  .platform-support-page .support-status-panel,
-  .platform-support-page .support-reply-panel {
-    grid-template-columns: 1fr !important;
+  .platform-support-page .support-reply-panel a,
+  .platform-support-page .support-reply-panel div:last-child {
+    justify-self: stretch !important;
+    width: 100% !important;
   }
 }
 
