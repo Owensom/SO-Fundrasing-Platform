@@ -369,8 +369,7 @@ export default async function TenantCampaignsPage({
     tenantSettings,
     "auctions",
   );
-
-  const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
+    const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
     if (campaign.status !== "published") {
       return false;
     }
@@ -438,7 +437,8 @@ export default async function TenantCampaignsPage({
     ...styles.hero,
     background: `radial-gradient(circle at bottom right, ${primaryColour}30, transparent 42%), radial-gradient(circle at top left, ${accentColour}14, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
   };
-    const brandedPrimaryActionStyle: CSSProperties = {
+
+  const brandedPrimaryActionStyle: CSSProperties = {
     ...styles.primaryAction,
     background: `linear-gradient(135deg, ${primaryColour} 0%, #2563eb 100%)`,
     border: `1px solid ${primaryColour}`,
@@ -727,8 +727,7 @@ export default async function TenantCampaignsPage({
           </div>
         </section>
       ) : null}
-
-      <section className="filtersCard" style={styles.filtersCard}>
+            <section className="filtersCard" style={styles.filtersCard}>
         <div style={styles.filtersHeader}>
           <div>
             <p style={{ ...styles.kicker, color: primaryColour }}>
@@ -802,7 +801,8 @@ export default async function TenantCampaignsPage({
           ) : null}
         </nav>
       </section>
-            <section className="campaignGrid" style={styles.campaignGrid}>
+
+      <section className="campaignGrid" style={styles.campaignGrid}>
         {visibleCampaigns.length === 0 ? (
           <div style={styles.emptyCard}>
             <h2 style={styles.emptyTitle}>No live campaigns found</h2>
@@ -1161,9 +1161,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.35,
     fontWeight: 750,
-  },
-
-  hero: {
+  },  hero: {
     position: "relative",
     display: "grid",
     gap: 16,
@@ -1215,7 +1213,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "stretch",
     minWidth: 0,
   },
-    heroCopy: {
+
+  heroCopy: {
     minWidth: 0,
   },
 
@@ -1471,9 +1470,11 @@ const styles: Record<string, CSSProperties> = {
 
   featuredContent: {
     display: "grid",
+    gridTemplateRows: "auto auto minmax(64px, 1fr) auto auto",
     gap: 11,
-    alignContent: "center",
+    alignContent: "stretch",
     minWidth: 0,
+    minHeight: "100%",
     padding: "2px 0",
   },
 
@@ -1558,6 +1559,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 9,
     alignItems: "stretch",
+    alignSelf: "end",
+    marginTop: "auto",
   },
 
   primaryAction: {
@@ -1683,18 +1686,20 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 14,
+    alignItems: "stretch",
     minWidth: 0,
   },
 
   card: {
     display: "grid",
-    gridTemplateRows: "200px 1fr",
+    gridTemplateRows: "200px minmax(0, 1fr)",
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
     boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
     minWidth: 0,
+    minHeight: "100%",
   },
 
   cardImageWrap: {
@@ -1707,10 +1712,12 @@ const styles: Record<string, CSSProperties> = {
 
   cardBody: {
     display: "grid",
+    gridTemplateRows: "auto auto minmax(72px, 1fr) auto",
     gap: 11,
-    alignContent: "start",
+    alignContent: "stretch",
     padding: 15,
     minWidth: 0,
+    minHeight: "100%",
   },
 
   cardTitle: {
@@ -1728,6 +1735,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 700,
     overflowWrap: "anywhere",
+    minHeight: 72,
   },
 
   emptyCard: {
