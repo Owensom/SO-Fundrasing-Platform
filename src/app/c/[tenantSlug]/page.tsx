@@ -91,13 +91,18 @@ function getDefaultImage(type: Campaign["type"]) {
   return "/brand/so-logo-full.png";
 }
 
+function getCampaignImageSrc(campaign: Campaign) {
+  return cleanText(campaign.imageUrl) || getDefaultImage(campaign.type);
+}
+
 function isDefaultBrandImage(imageUrl: string | null | undefined) {
-  return Boolean(imageUrl && imageUrl.includes("/brand/so-default-"));
+  const clean = cleanText(imageUrl);
+  return !clean || clean.includes("/brand/so-default-");
 }
 
 function getImageStyle(campaign: Campaign): CSSProperties {
-  const imageUrl = campaign.imageUrl || "";
-  const defaultImage = !imageUrl || isDefaultBrandImage(imageUrl);
+  const imageUrl = cleanText(campaign.imageUrl);
+  const defaultImage = isDefaultBrandImage(imageUrl);
 
   return {
     width: "100%",
@@ -324,7 +329,6 @@ function getHighlightedCampaign(params: {
 
   return params.campaigns[0] || null;
 }
-
 export default async function TenantCampaignsPage({
   params,
   searchParams,
@@ -649,9 +653,7 @@ export default async function TenantCampaignsPage({
         <section className="featuredCard" style={styles.featuredCard}>
           <div style={styles.featuredImageWrap}>
             <img
-              src={
-                featuredCampaign.imageUrl || getDefaultImage(featuredCampaign.type)
-              }
+              src={getCampaignImageSrc(featuredCampaign)}
               alt={featuredCampaign.title}
               style={getImageStyle(featuredCampaign)}
             />
@@ -696,23 +698,25 @@ export default async function TenantCampaignsPage({
               <MiniMeta label="Support" value="Campaign donations" />
             </div>
 
-            <div className="campaignActions" style={styles.campaignActions}>
-              <Link
-                href={getCampaignUrl(featuredCampaign)}
-                style={brandedPrimaryActionStyle}
-              >
-                See campaign →
-              </Link>
+            <div style={styles.actionStack}>
+              <div style={styles.primaryActionRow}>
+                <Link
+                  href={getCampaignUrl(featuredCampaign)}
+                  style={brandedPrimaryActionStyle}
+                >
+                  See campaign →
+                </Link>
 
-              <Link
-                href={getSupportUrl({
-                  tenantSlug,
-                  campaign: featuredCampaign,
-                })}
-                style={brandedGhostActionStyle}
-              >
-                Support campaign
-              </Link>
+                <Link
+                  href={getSupportUrl({
+                    tenantSlug,
+                    campaign: featuredCampaign,
+                  })}
+                  style={brandedGhostActionStyle}
+                >
+                  Support campaign
+                </Link>
+              </div>
 
               <Link
                 href={getContactUrl({
@@ -828,7 +832,7 @@ export default async function TenantCampaignsPage({
             <article key={`${campaign.type}-${campaign.id}`} style={styles.card}>
               <div style={styles.cardImageWrap}>
                 <img
-                  src={campaign.imageUrl || getDefaultImage(campaign.type)}
+                  src={getCampaignImageSrc(campaign)}
                   alt={campaign.title}
                   style={getImageStyle(campaign)}
                 />
@@ -854,20 +858,22 @@ export default async function TenantCampaignsPage({
                   {campaign.description?.trim() || getTypeMeta(campaign.type)}
                 </p>
 
-                <div className="campaignActions" style={styles.campaignActions}>
-                  <Link
-                    href={getCampaignUrl(campaign)}
-                    style={brandedPrimaryActionStyle}
-                  >
-                    See campaign
-                  </Link>
+                <div style={styles.actionStack}>
+                  <div style={styles.primaryActionRow}>
+                    <Link
+                      href={getCampaignUrl(campaign)}
+                      style={brandedPrimaryActionStyle}
+                    >
+                      See campaign
+                    </Link>
 
-                  <Link
-                    href={getSupportUrl({ tenantSlug, campaign })}
-                    style={brandedGhostActionStyle}
-                  >
-                    Support campaign
-                  </Link>
+                    <Link
+                      href={getSupportUrl({ tenantSlug, campaign })}
+                      style={brandedGhostActionStyle}
+                    >
+                      Support campaign
+                    </Link>
+                  </div>
 
                   <Link
                     href={getContactUrl({ tenantSlug, campaign })}
@@ -1013,8 +1019,11 @@ const responsiveStyles = `
     min-height: 210px !important;
   }
 
+  .tenant-campaigns-page .primaryActionRow {
+    grid-template-columns: 1fr !important;
+  }
+
   .tenant-campaigns-page .filterNav,
-  .tenant-campaigns-page .campaignActions,
   .tenant-campaigns-page .heroActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -1304,7 +1313,8 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.05,
     letterSpacing: "-0.04em",
   },
-    supportOptionList: {
+
+  supportOptionList: {
     display: "grid",
     gap: 9,
   },
@@ -1333,8 +1343,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#dbeafe",
     textDecoration: "none",
   },
-
-  supportIcon: {
+    supportIcon: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1550,51 +1559,75 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
   },
 
-  campaignActions: {
-    display: "flex",
+  actionStack: {
+    display: "grid",
     gap: 9,
-    flexWrap: "wrap",
-    alignItems: "center",
+    width: "100%",
+    minWidth: 0,
+    marginTop: 2,
+  },
+
+  primaryActionRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 9,
+    width: "100%",
+    minWidth: 0,
   },
 
   primaryAction: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 12px",
     borderRadius: 999,
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
+    textAlign: "center",
+    lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   secondaryAction: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 12px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #cbd5e1",
+    textAlign: "center",
+    lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   contactAction: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 12px",
     borderRadius: 999,
     background: "#f8fafc",
     color: "#0f172a",
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #cbd5e1",
+    textAlign: "center",
+    lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   filtersCard: {
