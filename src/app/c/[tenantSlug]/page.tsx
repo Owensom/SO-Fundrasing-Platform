@@ -141,6 +141,27 @@ function getSupportUrl({
   return `/c/${tenantSlug}/support?${params.toString()}`;
 }
 
+function getContactUrl({
+  tenantSlug,
+  campaign,
+}: {
+  tenantSlug: string;
+  campaign?: Campaign | null;
+}) {
+  const params = new URLSearchParams();
+
+  if (campaign) {
+    params.set("campaignType", campaign.type);
+    params.set("campaignId", campaign.id);
+  }
+
+  const query = params.toString();
+
+  return query
+    ? `/c/${tenantSlug}/contact?${query}`
+    : `/c/${tenantSlug}/contact`;
+}
+
 function getTypeLabel(type: Campaign["type"]) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
@@ -430,6 +451,13 @@ export default async function TenantCampaignsPage({
     borderColor: `${primaryColour}66`,
   };
 
+  const brandedContactButtonStyle: CSSProperties = {
+    ...styles.contactStripButton,
+    background: `linear-gradient(135deg, ${primaryColour} 0%, #2563eb 100%)`,
+    border: `1px solid ${primaryColour}`,
+    boxShadow: `0 12px 24px ${primaryColour}28`,
+  };
+
   const activeFilterStyle: CSSProperties = {
     ...styles.filterButtonActive,
     background: primaryColour,
@@ -563,6 +591,26 @@ export default async function TenantCampaignsPage({
                   <span>Make a simple donation without receiving an entry.</span>
                 </div>
               </div>
+
+              <Link
+                href={getContactUrl({ tenantSlug })}
+                style={styles.supportOptionLink}
+              >
+                <div
+                  style={{
+                    ...styles.supportIcon,
+                    background: "rgba(255,255,255,0.12)",
+                    borderColor: "rgba(191,219,254,0.42)",
+                  }}
+                >
+                  ✉
+                </div>
+
+                <div style={styles.supportOptionCopy}>
+                  <strong>Contact organiser</strong>
+                  <span>Ask the charity or organiser a public support question.</span>
+                </div>
+              </Link>
             </div>
           </div>
         </div>
@@ -574,6 +622,27 @@ export default async function TenantCampaignsPage({
             </Link>
           </div>
         ) : null}
+      </section>
+            <section style={styles.contactStrip}>
+        <div style={styles.contactStripCopy}>
+          <p style={{ ...styles.contactStripKicker, color: primaryColour }}>
+            Need help from the organiser?
+          </p>
+
+          <h2 style={styles.contactStripTitle}>Contact the organiser</h2>
+
+          <p style={styles.contactStripText}>
+            Questions about a campaign, booking, donation, raffle, event or
+            auction can be sent directly to the organiser.
+          </p>
+        </div>
+
+        <Link
+          href={getContactUrl({ tenantSlug })}
+          style={brandedContactButtonStyle}
+        >
+          Contact organiser →
+        </Link>
       </section>
 
       {featuredCampaign ? (
@@ -643,6 +712,16 @@ export default async function TenantCampaignsPage({
                 style={brandedGhostActionStyle}
               >
                 Support campaign
+              </Link>
+
+              <Link
+                href={getContactUrl({
+                  tenantSlug,
+                  campaign: featuredCampaign,
+                })}
+                style={styles.contactAction}
+              >
+                Contact organiser
               </Link>
             </div>
           </div>
@@ -732,6 +811,17 @@ export default async function TenantCampaignsPage({
             <p style={styles.emptyText}>
               There are no published campaigns in this category yet.
             </p>
+
+            <Link
+              href={getContactUrl({ tenantSlug })}
+              style={{
+                ...styles.contactAction,
+                justifySelf: "center",
+                marginTop: 12,
+              }}
+            >
+              Contact organiser
+            </Link>
           </div>
         ) : (
           visibleCampaigns.map((campaign) => (
@@ -778,6 +868,13 @@ export default async function TenantCampaignsPage({
                   >
                     Support campaign
                   </Link>
+
+                  <Link
+                    href={getContactUrl({ tenantSlug, campaign })}
+                    style={styles.contactAction}
+                  >
+                    Contact organiser
+                  </Link>
                 </div>
               </div>
             </article>
@@ -816,7 +913,6 @@ function MiniMeta({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .tenant-campaigns-page,
 .tenant-campaigns-page * {
@@ -837,7 +933,8 @@ const responsiveStyles = `
 @media (max-width: 980px) {
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .heroMainGrid,
-  .tenant-campaigns-page .featuredCard {
+  .tenant-campaigns-page .featuredCard,
+  .tenant-campaigns-page .contactStrip {
     grid-template-columns: 1fr !important;
   }
 
@@ -864,7 +961,8 @@ const responsiveStyles = `
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .campaigns-hero,
   .tenant-campaigns-page .featuredCard,
-  .tenant-campaigns-page .filtersCard {
+  .tenant-campaigns-page .filtersCard,
+  .tenant-campaigns-page .contactStrip {
     padding: 14px !important;
     border-radius: 22px !important;
   }
@@ -901,6 +999,11 @@ const responsiveStyles = `
     padding: 14px !important;
   }
 
+  .tenant-campaigns-page .supportOptionLink,
+  .tenant-campaigns-page .supportOption {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+  }
+
   .tenant-campaigns-page .featuredCard {
     margin: 10px 0 16px !important;
   }
@@ -920,6 +1023,8 @@ const responsiveStyles = `
 
   .tenant-campaigns-page .primaryAction,
   .tenant-campaigns-page .secondaryAction,
+  .tenant-campaigns-page .contactAction,
+  .tenant-campaigns-page .contactStripButton,
   .tenant-campaigns-page .adminReturnButton,
   .tenant-campaigns-page .filterButton {
     width: 100% !important;
@@ -1199,8 +1304,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.05,
     letterSpacing: "-0.04em",
   },
-
-  supportOptionList: {
+    supportOptionList: {
     display: "grid",
     gap: 9,
   },
@@ -1215,6 +1319,19 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.10)",
     border: "1px solid rgba(191,219,254,0.18)",
     color: "#dbeafe",
+  },
+
+  supportOptionLink: {
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0, 1fr)",
+    gap: 11,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.13)",
+    border: "1px solid rgba(191,219,254,0.24)",
+    color: "#dbeafe",
+    textDecoration: "none",
   },
 
   supportIcon: {
@@ -1261,6 +1378,67 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid rgba(255,255,255,0.28)",
+  },
+
+  contactStrip: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 14,
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 62%, rgba(239,246,255,0.98) 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.055)",
+    margin: "14px 0 16px",
+    minWidth: 0,
+  },
+
+  contactStripCopy: {
+    display: "grid",
+    gap: 4,
+    minWidth: 0,
+  },
+
+  contactStripKicker: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  contactStripTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 26,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  contactStripText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontSize: 14,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  contactStripButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 14,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   featuredCard: {
@@ -1405,6 +1583,20 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
   },
 
+  contactAction: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+  },
+
   filtersCard: {
     display: "grid",
     gap: 12,
@@ -1533,6 +1725,8 @@ const styles: Record<string, CSSProperties> = {
 
   emptyCard: {
     gridColumn: "1 / -1",
+    display: "grid",
+    justifyItems: "center",
     padding: 28,
     borderRadius: 24,
     background: "#ffffff",
