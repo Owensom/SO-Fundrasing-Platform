@@ -1,7 +1,7 @@
 // src/app/admin/platform/incidents/page.tsx
 // ===============================
 // Platform Owner Incident Log
-// Phase 5C.1 — internal incident/status log
+// Phase 5C.2 — internal incident/status log with status updates
 // Mobile-safe, desktop-safe, platform-owner-only
 // ===============================
 
@@ -98,6 +98,12 @@ function normaliseSeverity(value: unknown): IncidentSeverity {
   }
 
   return "medium";
+}
+
+function isSafeUuid(value: unknown) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim(),
+  );
 }
 
 function cleanText(value: unknown, fallback = "—") {
@@ -275,6 +281,37 @@ async function createIncident(formData: FormData) {
   redirect(getStatusHref(status));
 }
 
+async function updateIncidentStatus(formData: FormData) {
+  "use server";
+
+  await requirePlatformOwner();
+
+  const incidentId = String(formData.get("incident_id") || "").trim();
+  const nextStatus = normaliseIncidentStatus(formData.get("status"));
+  const returnStatus = normaliseStatus(formData.get("return_status"));
+
+  if (!isSafeUuid(incidentId)) {
+    redirect(getStatusHref(returnStatus));
+  }
+
+  await query(
+    `
+      update platform_incidents
+      set
+        status = $2,
+        resolved_at = case
+          when $2 = 'resolved' then coalesce(resolved_at, now())
+          else null
+        end,
+        updated_at = now()
+      where id = $1
+    `,
+    [incidentId, nextStatus],
+  );
+
+  redirect(getStatusHref(returnStatus));
+}
+
 export default async function PlatformIncidentsPage({
   searchParams,
 }: {
@@ -314,8 +351,8 @@ export default async function PlatformIncidentsPage({
 
           <p style={styles.subtitle}>
             Track platform issues, outages, degraded service and operational
-            incidents in one internal owner-only log. This first version is
-            manual and private.
+            incidents in one internal owner-only log. Status updates set or clear
+            the resolved timestamp safely.
           </p>
         </div>
 
@@ -509,7 +546,11 @@ export default async function PlatformIncidentsPage({
         {incidents.length > 0 ? (
           <div className="incident-list" style={styles.incidentList}>
             {incidents.map((incident) => (
-              <IncidentCard key={incident.id} incident={incident} />
+              <IncidentCard
+                key={incident.id}
+                incident={incident}
+                activeStatus={activeStatus}
+              />
             ))}
           </div>
         ) : (
@@ -591,7 +632,48 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function IncidentCard({ incident }: { incident: IncidentRow }) {
+function IncidentStatusButton({
+  incidentId,
+  status,
+  currentStatus,
+  activeStatus,
+  children,
+}: {
+  incidentId: string;
+  status: IncidentStatus;
+  currentStatus: string;
+  activeStatus: IncidentStatus | "all";
+  children: ReactNode;
+}) {
+  const active = currentStatus === status;
+
+  return (
+    <form action={updateIncidentStatus} style={styles.statusForm}>
+      <input type="hidden" name="incident_id" value={incidentId} />
+      <input type="hidden" name="status" value={status} />
+      <input type="hidden" name="return_status" value={activeStatus} />
+
+      <button
+        type="submit"
+        disabled={active}
+        style={{
+          ...styles.statusButton,
+          ...(active ? styles.statusButtonActive : {}),
+        }}
+      >
+        {children}
+      </button>
+    </form>
+  );
+}
+
+function IncidentCard({
+  incident,
+  activeStatus,
+}: {
+  incident: IncidentRow;
+  activeStatus: IncidentStatus | "all";
+}) {
   return (
     <article className="incident-card" style={styles.incidentCard}>
       <div className="incident-card-top" style={styles.incidentTop}>
@@ -641,6 +723,45 @@ function IncidentCard({ incident }: { incident: IncidentRow }) {
         <div style={styles.incidentIdBox}>
           <span style={styles.incidentIdLabel}>Reference</span>
           <strong style={styles.incidentIdValue}>{incident.id}</strong>
+        </div>
+      </div>
+
+      <div className="incident-status-panel" style={styles.statusPanel}>
+        <div style={styles.statusPanelCopy}>
+          <p style={styles.statusPanelLabel}>Update status</p>
+          <p style={styles.statusPanelText}>
+            Moving to resolved sets the resolved timestamp. Moving back to
+            investigating or monitoring clears it.
+          </p>
+        </div>
+
+        <div className="incident-status-actions" style={styles.statusActions}>
+          <IncidentStatusButton
+            incidentId={incident.id}
+            status="investigating"
+            currentStatus={incident.status}
+            activeStatus={activeStatus}
+          >
+            Investigating
+          </IncidentStatusButton>
+
+          <IncidentStatusButton
+            incidentId={incident.id}
+            status="monitoring"
+            currentStatus={incident.status}
+            activeStatus={activeStatus}
+          >
+            Monitoring
+          </IncidentStatusButton>
+
+          <IncidentStatusButton
+            incidentId={incident.id}
+            status="resolved"
+            currentStatus={incident.status}
+            activeStatus={activeStatus}
+          >
+            Resolved
+          </IncidentStatusButton>
         </div>
       </div>
 
@@ -709,7 +830,8 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .platform-incidents-page .incident-form-grid {
+  .platform-incidents-page .incident-form-grid,
+  .platform-incidents-page .incident-status-panel {
     grid-template-columns: 1fr !important;
   }
 
@@ -746,14 +868,21 @@ const responsiveStyles = `
   .platform-incidents-page .platform-incidents-stats,
   .platform-incidents-page .incident-summary-grid,
   .platform-incidents-page .incident-filter-grid,
-  .platform-incidents-page .incident-detail-grid {
+  .platform-incidents-page .incident-detail-grid,
+  .platform-incidents-page .incident-status-actions {
     grid-template-columns: 1fr !important;
+  }
+
+  .platform-incidents-page .incident-status-panel {
+    padding: 12px !important;
+    border-radius: 18px !important;
   }
 
   .platform-incidents-page .incident-card p,
   .platform-incidents-page .incident-card strong,
   .platform-incidents-page .incident-card span,
   .platform-incidents-page .incident-card a,
+  .platform-incidents-page .incident-card button,
   .platform-incidents-page input,
   .platform-incidents-page select,
   .platform-incidents-page textarea,
@@ -1322,6 +1451,81 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
     wordBreak: "break-word",
+  },
+
+  statusPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  statusPanelCopy: {
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  statusPanelLabel: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  statusPanelText: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  statusActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 8,
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+
+  statusForm: {
+    display: "block",
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+
+  statusButton: {
+    width: "100%",
+    minHeight: 40,
+    padding: "9px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    fontSize: 12,
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+  },
+
+  statusButtonActive: {
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    cursor: "default",
   },
 
   detailGrid: {
