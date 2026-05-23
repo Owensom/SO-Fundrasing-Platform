@@ -2,6 +2,7 @@
 // ===============================
 // Platform support email helper
 // Additive only: used by admin support requests
+// Mobile-friendly email template
 // ===============================
 
 import { Resend } from "resend";
@@ -47,32 +48,38 @@ function formatSupportLabel(value: unknown) {
     .join(" ");
 }
 
-function renderInfoRow(label: string, value: unknown) {
+function renderMetaCard(label: string, value: unknown) {
   return `
-    <tr>
-      <td style="
-        padding:10px 12px;
-        border-bottom:1px solid #e2e8f0;
+    <div class="meta-card" style="
+      border:1px solid #e2e8f0;
+      border-radius:16px;
+      background:#ffffff;
+      padding:13px 14px;
+      overflow:hidden;
+    ">
+      <div style="
         color:#64748b;
-        font-size:13px;
-        font-weight:800;
-        width:170px;
-        vertical-align:top;
+        font-size:11px;
+        line-height:1.25;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+        margin:0 0 6px;
       ">
         ${escapeHtml(label)}
-      </td>
-      <td style="
-        padding:10px 12px;
-        border-bottom:1px solid #e2e8f0;
+      </div>
+
+      <div style="
         color:#0f172a;
         font-size:14px;
-        font-weight:700;
-        vertical-align:top;
+        line-height:1.45;
+        font-weight:800;
         word-break:break-word;
+        overflow-wrap:anywhere;
       ">
         ${escapeHtml(value)}
-      </td>
-    </tr>
+      </div>
+    </div>
   `;
 }
 
@@ -114,19 +121,87 @@ export async function sendPlatformSupportRequestEmail({
   const safeCategory = formatSupportLabel(category);
   const safeUrgency = formatSupportLabel(urgency);
   const safeSubject = cleanText(subject, "Support request");
+  const hasBrowserContext = cleanText(browserContext, "") !== "";
 
   const html = `
     <!doctype html>
     <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <style>
+          @media only screen and (max-width: 640px) {
+            .email-outer {
+              padding: 14px 8px !important;
+            }
+
+            .email-card {
+              border-radius: 18px !important;
+            }
+
+            .email-content {
+              padding: 22px 16px !important;
+            }
+
+            .email-title {
+              font-size: 24px !important;
+              line-height: 1.18 !important;
+            }
+
+            .email-intro {
+              font-size: 14px !important;
+            }
+
+            .summary-row {
+              display: block !important;
+            }
+
+            .summary-pill {
+              display: block !important;
+              width: 100% !important;
+              margin: 0 0 8px !important;
+              box-sizing: border-box !important;
+              text-align: left !important;
+            }
+
+            .meta-grid {
+              display: block !important;
+            }
+
+            .meta-card {
+              display: block !important;
+              margin: 0 0 10px !important;
+              width: 100% !important;
+              box-sizing: border-box !important;
+            }
+
+            .message-box,
+            .browser-box {
+              padding: 15px !important;
+              border-radius: 16px !important;
+            }
+
+            .footer-text {
+              font-size: 12px !important;
+            }
+          }
+        </style>
+      </head>
+
       <body style="margin:0;padding:0;background:#f1f5f9;">
-        <div style="
+        <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+          ${escapeHtml(safeSubject)}
+        </div>
+
+        <div class="email-outer" style="
           font-family:Arial,Helvetica,sans-serif;
           max-width:720px;
           margin:0 auto;
           padding:28px 14px;
           color:#0f172a;
+          box-sizing:border-box;
         ">
-          <div style="
+          <div class="email-card" style="
             background:#ffffff;
             border:1px solid #e2e8f0;
             border-radius:24px;
@@ -138,11 +213,12 @@ export async function sendPlatformSupportRequestEmail({
               background:linear-gradient(90deg,#1683f8,#facc15);
             "></div>
 
-            <div style="padding:28px 26px;">
+            <div class="email-content" style="padding:28px 26px;">
               <p style="
                 margin:0 0 8px;
                 color:#2563eb;
-                font-size:13px;
+                font-size:12px;
+                line-height:1.35;
                 font-weight:900;
                 letter-spacing:0.08em;
                 text-transform:uppercase;
@@ -150,55 +226,110 @@ export async function sendPlatformSupportRequestEmail({
                 Admin support request
               </p>
 
-              <h1 style="
+              <h1 class="email-title" style="
                 margin:0 0 12px;
                 color:#0f172a;
-                font-size:28px;
-                line-height:1.2;
+                font-size:30px;
+                line-height:1.15;
+                letter-spacing:-0.04em;
+                word-break:break-word;
+                overflow-wrap:anywhere;
               ">
                 ${escapeHtml(safeSubject)}
               </h1>
 
-              <p style="
-                margin:0 0 22px;
+              <p class="email-intro" style="
+                margin:0 0 18px;
                 color:#475569;
                 font-size:15px;
-                line-height:1.6;
+                line-height:1.65;
                 font-weight:700;
               ">
                 A tenant admin has submitted a support request from the SO Fundraising Platform admin area.
               </p>
 
-              <div style="
-                border:1px solid #e2e8f0;
-                border-radius:18px;
-                overflow:hidden;
-                margin:0 0 22px;
+              <div class="summary-row" style="
+                display:flex;
+                gap:8px;
+                flex-wrap:wrap;
+                margin:0 0 20px;
               ">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                  ${renderInfoRow("Request ID", requestId)}
-                  ${renderInfoRow("Tenant", safeTenantSlug)}
-                  ${renderInfoRow("Admin name", cleanText(adminName))}
-                  ${renderInfoRow("Admin email", cleanText(adminEmail))}
-                  ${renderInfoRow("Category", safeCategory)}
-                  ${renderInfoRow("Urgency", safeUrgency)}
-                  ${renderInfoRow("Page URL", cleanText(pageUrl))}
-                  ${renderInfoRow("Campaign type", cleanText(campaignType))}
-                  ${renderInfoRow("Campaign ID", cleanText(campaignId))}
-                </table>
+                <span class="summary-pill" style="
+                  display:inline-block;
+                  padding:8px 11px;
+                  border-radius:999px;
+                  background:#eff6ff;
+                  border:1px solid #bfdbfe;
+                  color:#1d4ed8;
+                  font-size:12px;
+                  line-height:1.2;
+                  font-weight:900;
+                ">
+                  Tenant: ${escapeHtml(safeTenantSlug)}
+                </span>
+
+                <span class="summary-pill" style="
+                  display:inline-block;
+                  padding:8px 11px;
+                  border-radius:999px;
+                  background:#fffbeb;
+                  border:1px solid #fde68a;
+                  color:#92400e;
+                  font-size:12px;
+                  line-height:1.2;
+                  font-weight:900;
+                ">
+                  ${escapeHtml(safeUrgency)}
+                </span>
+
+                <span class="summary-pill" style="
+                  display:inline-block;
+                  padding:8px 11px;
+                  border-radius:999px;
+                  background:#f8fafc;
+                  border:1px solid #e2e8f0;
+                  color:#334155;
+                  font-size:12px;
+                  line-height:1.2;
+                  font-weight:900;
+                ">
+                  ${escapeHtml(safeCategory)}
+                </span>
               </div>
 
-              <div style="
-                border-radius:18px;
-                padding:18px;
+              <div class="meta-grid" style="
+                display:grid;
+                grid-template-columns:repeat(2,minmax(0,1fr));
+                gap:10px;
                 background:#f8fafc;
                 border:1px solid #e2e8f0;
-                margin-bottom:18px;
+                border-radius:20px;
+                padding:12px;
+                margin:0 0 22px;
+              ">
+                ${renderMetaCard("Request ID", requestId)}
+                ${renderMetaCard("Tenant", safeTenantSlug)}
+                ${renderMetaCard("Admin name", cleanText(adminName))}
+                ${renderMetaCard("Admin email", cleanText(adminEmail))}
+                ${renderMetaCard("Category", safeCategory)}
+                ${renderMetaCard("Urgency", safeUrgency)}
+                ${renderMetaCard("Page URL", cleanText(pageUrl))}
+                ${renderMetaCard("Campaign type", cleanText(campaignType))}
+                ${renderMetaCard("Campaign ID", cleanText(campaignId))}
+              </div>
+
+              <div class="message-box" style="
+                border-radius:20px;
+                padding:18px;
+                background:#ffffff;
+                border:1px solid #cbd5e1;
+                margin:0 0 18px;
               ">
                 <p style="
                   margin:0 0 8px;
                   color:#64748b;
                   font-size:12px;
+                  line-height:1.35;
                   font-weight:900;
                   letter-spacing:0.08em;
                   text-transform:uppercase;
@@ -213,15 +344,16 @@ export async function sendPlatformSupportRequestEmail({
                   font-weight:700;
                   white-space:pre-wrap;
                   word-break:break-word;
+                  overflow-wrap:anywhere;
                 ">${escapeHtml(message)}</div>
               </div>
 
               ${
-                cleanText(browserContext, "") !== ""
+                hasBrowserContext
                   ? `
-                    <div style="
-                      border-radius:18px;
-                      padding:16px;
+                    <div class="browser-box" style="
+                      border-radius:20px;
+                      padding:18px;
                       background:#fffbeb;
                       border:1px solid #fde68a;
                     ">
@@ -229,6 +361,7 @@ export async function sendPlatformSupportRequestEmail({
                         margin:0 0 8px;
                         color:#92400e;
                         font-size:12px;
+                        line-height:1.35;
                         font-weight:900;
                         letter-spacing:0.08em;
                         text-transform:uppercase;
@@ -239,17 +372,18 @@ export async function sendPlatformSupportRequestEmail({
                       <div style="
                         color:#78350f;
                         font-size:13px;
-                        line-height:1.55;
+                        line-height:1.6;
                         font-weight:700;
                         white-space:pre-wrap;
                         word-break:break-word;
+                        overflow-wrap:anywhere;
                       ">${escapeHtml(browserContext)}</div>
                     </div>
                   `
                   : ""
               }
 
-              <div style="
+              <div class="footer-text" style="
                 margin-top:24px;
                 padding-top:16px;
                 border-top:1px solid #e2e8f0;
