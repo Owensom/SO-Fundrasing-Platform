@@ -55,6 +55,73 @@ function parsePositiveInteger(
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
+function isRealDate(year: number, month: number, day: number) {
+  if (
+    year < 1900 ||
+    year > 2100 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return false;
+  }
+
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    testDate.getUTCFullYear() === year &&
+    testDate.getUTCMonth() === month - 1 &&
+    testDate.getUTCDate() === day
+  );
+}
+
+function isValidDateTimeLocal(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+
+  if (!isRealDate(year, month, day)) return false;
+
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+}
+
+function normaliseOptionalDateTimeLocal(value: FormDataEntryValue | null) {
+  const clean = String(value ?? "").trim();
+
+  if (!clean) {
+    return {
+      ok: true as const,
+      value: null,
+    };
+  }
+
+  if (!isValidDateTimeLocal(clean)) {
+    return {
+      ok: false as const,
+      value: null,
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: clean,
+  };
+}
+
+function redirectToEditWithError(req: NextRequest, raffleId: string, error: string) {
+  return NextResponse.redirect(
+    new URL(`/admin/raffles/${raffleId}?error=${error}`, req.url),
+    { status: 303 },
+  );
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
@@ -103,8 +170,21 @@ export async function POST(
     const image_focus_x = normaliseFocus(formData.get("image_focus_x"), 50);
     const image_focus_y = normaliseFocus(formData.get("image_focus_y"), 50);
 
-    const rawDrawAt = String(formData.get("draw_at") || "").trim();
-    const draw_at = rawDrawAt ? rawDrawAt : null;
+    const drawAtResult = normaliseOptionalDateTimeLocal(formData.get("draw_at"));
+
+    if (!drawAtResult.ok) {
+      return redirectToEditWithError(req, params.id, "invalid_draw_datetime");
+    }
+
+    const postalClosingResult = normaliseOptionalDateTimeLocal(
+      formData.get("free_entry_closes_at"),
+    );
+
+    if (!postalClosingResult.ok) {
+      return redirectToEditWithError(req, params.id, "invalid_postal_datetime");
+    }
+
+    const draw_at = drawAtResult.value;
 
     const ticket_price = Number(formData.get("ticket_price") || 0);
     const ticket_price_cents = Math.round(ticket_price * 100);
@@ -167,10 +247,7 @@ export async function POST(
       });
 
       if (!allowedToPublish) {
-        return NextResponse.redirect(
-          new URL(`/admin/raffles/${params.id}?error=campaign_limit`, req.url),
-          { status: 303 },
-        );
+        return redirectToEditWithError(req, params.id, "campaign_limit");
       }
     }
 
@@ -181,7 +258,7 @@ export async function POST(
       instructions: String(
         formData.get("free_entry_instructions") || "",
       ).trim(),
-      closes_at: String(formData.get("free_entry_closes_at") || "").trim(),
+      closes_at: postalClosingResult.value ?? "",
     };
 
     const preset = formData.getAll("colour_preset").map(String);
@@ -291,9 +368,6 @@ export async function POST(
   } catch (err: any) {
     console.error("POST raffle error:", err);
 
-    return NextResponse.json(
-      { ok: false, error: err.message },
-      { status: 500 },
-    );
+    return redirectToEditWithError(req, params.id, "save_failed");
   }
 }
