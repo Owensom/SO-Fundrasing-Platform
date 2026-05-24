@@ -424,6 +424,17 @@ export default async function AdminBrandingSettingsPage({
         tagline: settings?.public_tagline || "",
         contactName: settings?.public_contact_name || "",
         contactEmail: settings?.public_contact_email || "",
+        contactEmailVerificationStatus:
+          settings?.public_contact_email_verification_status || "",
+        contactEmailVerificationSentAt:
+          settings?.public_contact_email_verification_sent_at
+            ? String(settings.public_contact_email_verification_sent_at)
+            : "",
+        contactEmailVerifiedAt: settings?.public_contact_email_verified_at
+          ? String(settings.public_contact_email_verified_at)
+          : "",
+        contactEmailVerificationError:
+          settings?.public_contact_email_verification_error || "",
         logoUrl: settings?.public_logo_url || "",
         logoMarkUrl: settings?.public_logo_mark_url || "",
         primaryColour: settings?.public_primary_colour || "#1683F8",
