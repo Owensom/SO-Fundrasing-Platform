@@ -142,7 +142,8 @@ export default function NewRaffleForm({
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [description, setDescription] = useState("");
-  const [drawAt, setDrawAt] = useState("");
+  const [drawDate, setDrawDate] = useState("");
+  const [drawTime, setDrawTime] = useState("");
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageFocusX, setImageFocusX] = useState(50);
@@ -180,6 +181,11 @@ export default function NewRaffleForm({
       setSlug(slugify(title));
     }
   }, [title, slugEdited]);
+
+  const drawAtValue = useMemo(() => {
+    if (!drawDate) return "";
+    return `${drawDate}T${drawTime || "00:00"}`;
+  }, [drawDate, drawTime]);
 
   const numbersPerColour = useMemo(() => {
     const start = toInt(startNumber, 1);
@@ -351,6 +357,7 @@ export default function NewRaffleForm({
 
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
       <input type="hidden" name="raffle_subtype" value={raffleSubtype} />
+      <input type="hidden" name="draw_at" value={drawAtValue} />
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
       <input type="hidden" name="prizes" value={prizesValue} />
@@ -649,10 +656,20 @@ export default function NewRaffleForm({
               <div style={styles.ticketSetupGrid}>
                 <Field label="Draw date">
                   <input
-                    name="draw_at"
-                    type="datetime-local"
-                    value={drawAt}
-                    onChange={(event) => setDrawAt(event.target.value)}
+                    name="draw_date_preview"
+                    type="date"
+                    value={drawDate}
+                    onChange={(event) => setDrawDate(event.target.value)}
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Draw time">
+                  <input
+                    name="draw_time_preview"
+                    type="time"
+                    value={drawTime}
+                    onChange={(event) => setDrawTime(event.target.value)}
                     style={styles.input}
                   />
                 </Field>
@@ -1320,15 +1337,6 @@ const responsiveStyles = `
     max-width: 100%;
   }
 
-  .new-raffle-form input[type="datetime-local"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    display: block !important;
-    box-sizing: border-box !important;
-    overflow: hidden !important;
-  }
-
   @media (max-width: 1120px) {
     .new-raffle-builder-grid {
       grid-template-columns: 1fr !important;
@@ -1756,7 +1764,7 @@ const styles: Record<string, CSSProperties> = {
   },
   ticketSetupGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
     alignItems: "end",
     minWidth: 0,
