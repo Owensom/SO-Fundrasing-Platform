@@ -94,19 +94,53 @@ function toInt(value: string, fallback: number) {
 }
 
 function normaliseDateInput(value: string) {
-  return value.replace(/[^\d-]/g, "").slice(0, 10);
+  return value.replace(/[^\d/]/g, "").slice(0, 10);
 }
 
 function normaliseTimeInput(value: string) {
   return value.replace(/[^\d:]/g, "").slice(0, 5);
 }
 
-function isValidDateInput(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+function parseBritishDateToIso(value: string) {
+  const clean = value.trim();
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(clean);
+
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+    return null;
+  }
+
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    testDate.getUTCFullYear() !== year ||
+    testDate.getUTCMonth() !== month - 1 ||
+    testDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function isValidTimeInput(value: string) {
-  return /^\d{2}:\d{2}$/.test(value);
+  const match = /^(\d{2}):(\d{2})$/.exec(value.trim());
+
+  if (!match) return false;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
 function colourToCss(colour: string) {
@@ -199,12 +233,14 @@ export default function NewRaffleForm({
   }, [title, slugEdited]);
 
   const drawAtValue = useMemo(() => {
-    const cleanDate = drawDate.trim();
+    const isoDate = parseBritishDateToIso(drawDate);
     const cleanTime = drawTime.trim();
 
-    if (!isValidDateInput(cleanDate)) return "";
+    if (!isoDate) return "";
 
-    return `${cleanDate}T${isValidTimeInput(cleanTime) ? cleanTime : "00:00"}`;
+    if (cleanTime && !isValidTimeInput(cleanTime)) return "";
+
+    return `${isoDate}T${cleanTime || "00:00"}`;
   }, [drawDate, drawTime]);
 
   const numbersPerColour = useMemo(() => {
@@ -686,7 +722,7 @@ export default function NewRaffleForm({
                     <div style={styles.innerEyebrow}>Ticket setup</div>
                     <h3 style={styles.subTitle}>Draw, pricing and status</h3>
                     <p style={styles.sectionDescription}>
-                      Use YYYY-MM-DD and 24-hour HH:MM format.
+                      Use UK date format DD/MM/YYYY and 24-hour HH:MM time.
                     </p>
                   </div>
                 </div>
@@ -698,7 +734,7 @@ export default function NewRaffleForm({
                       type="text"
                       inputMode="numeric"
                       autoComplete="off"
-                      placeholder="YYYY-MM-DD"
+                      placeholder="DD/MM/YYYY"
                       value={drawDate}
                       onChange={(event) =>
                         setDrawDate(normaliseDateInput(event.target.value))
@@ -763,8 +799,7 @@ export default function NewRaffleForm({
                   <div style={styles.setupHintCard}>
                     <strong>Draw date optional</strong>
                     <span>
-                      Leave blank while drafting. Add a date before publishing
-                      if the campaign needs a visible draw time.
+                      Leave blank while drafting. Example: 31/10/2026 at 19:00.
                     </span>
                   </div>
                 </div>
