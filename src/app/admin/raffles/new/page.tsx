@@ -109,6 +109,9 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
   const campaignLimitRedirect =
     resolvedSearchParams?.error === "campaign_limit";
 
+  const drawDateError =
+    resolvedSearchParams?.error === "invalid_draw_datetime";
+
   const showCampaignLimitBanner =
     campaignLimitRedirect || !canPublishCampaign;
 
@@ -175,6 +178,24 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
         </div>
       </section>
 
+      {drawDateError ? (
+        <section
+          className="new-raffle-validation-banner"
+          style={styles.validationBanner}
+        >
+          <div style={styles.validationEyebrow}>Date format issue</div>
+
+          <h1 style={styles.validationTitle}>Please check the draw date.</h1>
+
+          <p style={styles.validationText}>
+            Draw date must use UK format, for example{" "}
+            <strong>31/10/2026</strong>. Draw time must use 24-hour format, for
+            example <strong>19:00</strong>. You can also leave both fields blank
+            while saving a draft.
+          </p>
+        </section>
+      ) : null}
+
       {showCampaignLimitBanner ? (
         <section className="new-raffle-upgrade-banner" style={styles.upgradeBanner}>
           <div style={styles.upgradeEyebrow}>Plan limit notice</div>
@@ -226,7 +247,8 @@ const responsiveStyles = `
   }
 
   .new-raffle-limit-panel,
-  .new-raffle-upgrade-banner {
+  .new-raffle-upgrade-banner,
+  .new-raffle-validation-banner {
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
@@ -237,7 +259,9 @@ const responsiveStyles = `
   .new-raffle-limit-panel span,
   .new-raffle-limit-panel strong,
   .new-raffle-upgrade-banner h1,
-  .new-raffle-upgrade-banner p {
+  .new-raffle-upgrade-banner p,
+  .new-raffle-validation-banner h1,
+  .new-raffle-validation-banner p {
     overflow-wrap: anywhere;
   }
 
@@ -281,7 +305,8 @@ const responsiveStyles = `
       width: 100% !important;
     }
 
-    .new-raffle-upgrade-banner {
+    .new-raffle-upgrade-banner,
+    .new-raffle-validation-banner {
       padding: 18px 14px !important;
       border-radius: 22px !important;
     }
@@ -305,7 +330,8 @@ const responsiveStyles = `
     }
 
     .new-raffle-limit-panel h1,
-    .new-raffle-upgrade-banner h1 {
+    .new-raffle-upgrade-banner h1,
+    .new-raffle-validation-banner h1 {
       font-size: 28px !important;
       line-height: 1.05 !important;
     }
@@ -414,6 +440,45 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+  },
+  validationBanner: {
+    marginBottom: 18,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+  validationEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  validationTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(26px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  validationText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 780,
   },
   upgradeBanner: {
     marginBottom: 18,
