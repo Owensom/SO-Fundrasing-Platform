@@ -385,7 +385,7 @@ export default function BrandingSettingsForm({
       <style>{responsiveStyles}</style>
 
       <section className="branding-hero" style={styles.hero}>
-        <div>
+        <div style={styles.heroCopy}>
           <Link href="/admin" style={styles.backLink}>
             ← Back to dashboard
           </Link>
@@ -537,7 +537,7 @@ export default function BrandingSettingsForm({
             </label>
 
             <section style={styles.contactPanel}>
-              <div>
+              <div style={styles.panelIntro}>
                 <p style={styles.contactKicker}>Public contact</p>
                 <h2 style={styles.contactTitle}>Supporter contact details</h2>
                 <p style={styles.contactText}>
@@ -581,6 +581,7 @@ export default function BrandingSettingsForm({
               </label>
 
               <section
+                className="verification-card"
                 style={{
                   ...styles.verificationCard,
                   ...(verificationStatusMessage.tone === "success"
@@ -592,7 +593,7 @@ export default function BrandingSettingsForm({
                         : styles.verificationNeutral),
                 }}
               >
-                <div>
+                <div style={styles.panelIntro}>
                   <p style={styles.verificationKicker}>
                     Contact email test status
                   </p>
@@ -604,7 +605,7 @@ export default function BrandingSettingsForm({
                   </p>
                 </div>
 
-                <div style={styles.verificationGrid}>
+                <div className="verification-grid" style={styles.verificationGrid}>
                   <SummaryItem
                     label="Saved status"
                     value={formatStatusLabel(
@@ -631,9 +632,7 @@ export default function BrandingSettingsForm({
                   />
                   <SummaryItem
                     label="Last error"
-                    value={
-                      formState.contactEmailVerificationError || "No error"
-                    }
+                    value={formState.contactEmailVerificationError || "No error"}
                   />
                 </div>
               </section>
@@ -642,7 +641,7 @@ export default function BrandingSettingsForm({
             <div style={styles.divider} />
 
             <div style={styles.advancedHeader}>
-              <div>
+              <div style={styles.panelIntro}>
                 <p style={styles.kicker}>Advanced branding</p>
                 <h2 style={styles.sectionTitle}>Logo, colours and footer</h2>
               </div>
@@ -668,7 +667,7 @@ export default function BrandingSettingsForm({
             >
               <section style={styles.uploadPanel}>
                 <div style={styles.uploadHeader}>
-                  <div>
+                  <div style={styles.panelIntro}>
                     <h3 style={styles.uploadTitle}>Main logo</h3>
                     <p style={styles.uploadText}>
                       Upload a transparent PNG where possible, or paste an image
@@ -718,7 +717,7 @@ export default function BrandingSettingsForm({
 
               <section style={styles.uploadPanel}>
                 <div style={styles.uploadHeader}>
-                  <div>
+                  <div style={styles.panelIntro}>
                     <h3 style={styles.uploadTitle}>Logo mark</h3>
                     <p style={styles.uploadText}>
                       Optional square/icon version for compact spaces.
@@ -969,7 +968,7 @@ export default function BrandingSettingsForm({
           </div>
 
           <section style={styles.testEmailCard}>
-            <div>
+            <div style={styles.panelIntro}>
               <p style={styles.testEmailKicker}>Contact email test</p>
               <h2 style={styles.testEmailTitle}>Send a branded test email</h2>
               <p style={styles.testEmailText}>
@@ -1038,9 +1037,9 @@ export default function BrandingSettingsForm({
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
-    <div style={styles.summaryItem}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className="branding-summary-item" style={styles.summaryItem}>
+      <span style={styles.summaryLabel}>{label}</span>
+      <strong style={styles.summaryValue}>{value}</strong>
     </div>
   );
 }
@@ -1061,8 +1060,24 @@ const responsiveStyles = `
 .branding-settings-page label,
 .branding-settings-page fieldset,
 .branding-settings-page aside,
-.branding-settings-page a {
+.branding-settings-page a,
+.branding-settings-page input,
+.branding-settings-page select,
+.branding-settings-page button,
+.branding-settings-page span,
+.branding-settings-page strong,
+.branding-settings-page p,
+.branding-settings-page h1,
+.branding-settings-page h2,
+.branding-settings-page h3 {
   min-width: 0;
+  max-width: 100%;
+}
+
+.branding-settings-page input,
+.branding-settings-page select,
+.branding-settings-page button {
+  font: inherit;
 }
 
 @media (max-width: 960px) {
@@ -1070,28 +1085,53 @@ const responsiveStyles = `
   .branding-settings-page .settings-grid {
     grid-template-columns: 1fr !important;
   }
+
+  .branding-settings-page .preview-card {
+    order: 2;
+  }
 }
 
 @media (max-width: 680px) {
   .branding-settings-page {
-    padding: 18px 12px 44px !important;
+    padding: 14px 10px 42px !important;
   }
 
   .branding-settings-page .branding-hero,
   .branding-settings-page .form-card,
   .branding-settings-page .preview-card {
-    padding: 18px !important;
-    border-radius: 24px !important;
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .branding-settings-page .branding-hero {
+    gap: 16px !important;
   }
 
   .branding-settings-page .branding-title {
-    font-size: clamp(38px, 11vw, 58px) !important;
+    font-size: clamp(36px, 11vw, 54px) !important;
     line-height: 0.98 !important;
+    letter-spacing: -0.07em !important;
   }
 
   .branding-settings-page .colour-grid,
   .branding-settings-page .verification-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .branding-settings-page .preview-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .branding-settings-page .preview-actions a {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .branding-settings-page .branding-summary-item {
+    padding: 11px !important;
   }
 
   .branding-settings-page a,
@@ -1106,6 +1146,31 @@ const responsiveStyles = `
   .branding-settings-page button {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
+  }
+}
+
+@media (max-width: 460px) {
+  .branding-settings-page {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .branding-settings-page .branding-hero,
+  .branding-settings-page .form-card,
+  .branding-settings-page .preview-card {
+    padding: 14px !important;
+  }
+
+  .branding-settings-page .primary-button,
+  .branding-settings-page .upload-button,
+  .branding-settings-page .test-email-button {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .branding-settings-page .colour-control {
+    grid-template-columns: 52px minmax(0, 1fr) !important;
   }
 }
 `;
@@ -1126,7 +1191,7 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 0.85fr)",
     gap: 22,
     padding: 30,
     borderRadius: 34,
@@ -1137,6 +1202,11 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroCopy: {
+    minWidth: 0,
+    maxWidth: "100%",
   },
 
   backLink: {
@@ -1152,6 +1222,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
+    lineHeight: 1.2,
   },
 
   badgeRow: {
@@ -1160,6 +1231,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
     marginBottom: 14,
+    minWidth: 0,
   },
 
   badge: {
@@ -1171,6 +1243,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(251,191,36,0.32)",
     fontSize: 13,
     fontWeight: 950,
+    lineHeight: 1.2,
   },
 
   softBadge: {
@@ -1182,6 +1255,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(191,219,254,0.26)",
     fontSize: 13,
     fontWeight: 950,
+    lineHeight: 1.2,
   },
 
   title: {
@@ -1222,6 +1296,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(148,163,184,0.26)",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
     backdropFilter: "blur(12px)",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
 
   heroPanelEyebrow: {
@@ -1239,6 +1316,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     width: 84,
     height: 84,
+    maxWidth: "100%",
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid rgba(255,255,255,0.28)",
@@ -1309,6 +1387,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#166534",
     border: "1px solid #86efac",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   errorCard: {
@@ -1321,6 +1400,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#991b1b",
     border: "1px solid #fecaca",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   testStatusCard: {
@@ -1331,6 +1411,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     border: "1px solid transparent",
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   testStatusSuccess: {
@@ -1353,8 +1434,9 @@ const styles: Record<string, CSSProperties> = {
 
   settingsGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.1fr) minmax(300px, 0.9fr)",
+    gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)",
     gap: 16,
+    minWidth: 0,
   },
 
   formCard: {
@@ -1365,6 +1447,9 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
 
   kicker: {
@@ -1396,11 +1481,14 @@ const styles: Record<string, CSSProperties> = {
   form: {
     display: "grid",
     gap: 14,
+    minWidth: 0,
   },
 
   field: {
     display: "grid",
     gap: 8,
+    minWidth: 0,
+    maxWidth: "100%",
   },
 
   label: {
@@ -1415,10 +1503,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
     fontWeight: 900,
+    minWidth: 0,
   },
 
   input: {
     width: "100%",
+    maxWidth: "100%",
     minHeight: 50,
     borderRadius: 16,
     border: "1px solid #cbd5e1",
@@ -1427,10 +1517,13 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 13px",
     fontSize: 16,
     fontWeight: 750,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
 
   select: {
     width: "100%",
+    maxWidth: "100%",
     minHeight: 50,
     borderRadius: 16,
     border: "1px solid #cbd5e1",
@@ -1446,6 +1539,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   contactPanel: {
@@ -1457,6 +1551,14 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
     border: "1px solid #bfdbfe",
     minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  panelIntro: {
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
 
   contactKicker: {
@@ -1493,6 +1595,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 20,
     border: "1px solid transparent",
     minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
 
   verificationSuccess: {
@@ -1546,6 +1650,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
+    minWidth: 0,
   },
 
   compactVerificationCard: {
@@ -1557,6 +1662,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 750,
+    minWidth: 0,
+    overflow: "hidden",
+    overflowWrap: "anywhere",
   },
 
   compactVerificationSuccess: {
@@ -1595,6 +1703,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
+    minWidth: 0,
   },
 
   planPill: {
@@ -1607,7 +1716,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    textAlign: "center",
+    lineHeight: 1.2,
   },
 
   planPillIncluded: {
@@ -1628,6 +1739,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 0,
     margin: 0,
     border: "none",
+    minWidth: 0,
   },
 
   disabledFieldset: {
@@ -1641,6 +1753,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   uploadHeader: {
@@ -1649,6 +1763,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     gap: 12,
     flexWrap: "wrap",
+    minWidth: 0,
   },
 
   uploadTitle: {
@@ -1656,6 +1771,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 18,
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
 
   uploadText: {
@@ -1664,6 +1780,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontSize: 13,
     fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
   uploadPreviewWrap: {
@@ -1688,6 +1805,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
+    maxWidth: "100%",
     minHeight: 42,
     padding: "10px 14px",
     borderRadius: 999,
@@ -1696,6 +1814,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 950,
     cursor: "pointer",
+    textAlign: "center",
   },
 
   hiddenFileInput: {
@@ -1706,6 +1825,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 14,
+    minWidth: 0,
   },
 
   colourField: {
@@ -1715,11 +1835,14 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   colourStack: {
     display: "grid",
     gap: 10,
+    minWidth: 0,
   },
 
   colourControl: {
@@ -1727,10 +1850,12 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "58px minmax(0, 1fr)",
     gap: 10,
     alignItems: "center",
+    minWidth: 0,
   },
 
   colourPicker: {
     width: 58,
+    maxWidth: "100%",
     height: 50,
     padding: 4,
     borderRadius: 16,
@@ -1751,6 +1876,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 16,
     fontWeight: 850,
     letterSpacing: "0.03em",
+    overflowWrap: "anywhere",
   },
 
   lockedNotice: {
@@ -1764,6 +1890,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontSize: 14,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   primaryButton: {
@@ -1771,6 +1898,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
+    maxWidth: "100%",
     minHeight: 48,
     padding: "12px 18px",
     borderRadius: 999,
@@ -1781,6 +1909,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 12px 24px rgba(22,131,248,0.22)",
+    textAlign: "center",
   },
 
   previewCard: {
@@ -1793,11 +1922,15 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
     border: "1px solid #dbeafe",
     boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
 
   summaryList: {
     display: "grid",
     gap: 10,
+    minWidth: 0,
   },
 
   summaryItem: {
@@ -1808,7 +1941,26 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     color: "#334155",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+    lineHeight: 1.35,
     overflowWrap: "anywhere",
+  },
+
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 900,
+    lineHeight: 1.4,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   testEmailCard: {
@@ -1819,6 +1971,8 @@ const styles: Record<string, CSSProperties> = {
     background:
       "linear-gradient(135deg, rgba(250,204,21,0.16), rgba(255,255,255,1) 74%)",
     border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   testEmailKicker: {
@@ -1836,6 +1990,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 20,
     lineHeight: 1.12,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   testEmailText: {
@@ -1844,11 +1999,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.5,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   testEmailForm: {
     display: "grid",
     gap: 8,
+    minWidth: 0,
   },
 
   testEmailButton: {
@@ -1880,6 +2037,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     gap: 8,
     alignItems: "center",
+    minWidth: 0,
   },
 
   previewButton: {
@@ -1887,6 +2045,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
+    maxWidth: "100%",
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
@@ -1894,6 +2053,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
+    textAlign: "center",
   },
 
   secondaryPreviewButton: {
@@ -1901,6 +2061,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
+    maxWidth: "100%",
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
@@ -1909,5 +2070,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 950,
+    textAlign: "center",
   },
 };
