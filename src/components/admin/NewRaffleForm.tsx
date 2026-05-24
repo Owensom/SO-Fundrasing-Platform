@@ -1319,7 +1319,16 @@ const responsiveStyles = `
   .new-raffle-form button {
     max-width: 100%;
   }
-
+  
+  .new-raffle-form input[type="datetime-local"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+  
   @media (max-width: 760px) {
     .new-raffle-form {
       width: 100% !important;
@@ -1819,6 +1828,7 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     width: "100%",
+    maxWidth: "100%",
     minHeight: 46,
     padding: "11px 12px",
     borderRadius: 13,
@@ -1828,7 +1838,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 16,
     boxSizing: "border-box",
     minWidth: 0,
-  },
+    display: "block",
+    overflow: "hidden",
+   },
   textarea: {
     width: "100%",
     padding: "11px 12px",
