@@ -442,14 +442,19 @@ export default function NewRaffleForm({
 
             <div style={styles.previewBottom}>
               <span>{formatPreviewMoney(ticketPrice, currency)} per ticket</span>
-              <span>{isFiftyFifty ? "50/50 prize pot" : `${totalTickets} tickets`}</span>
+              <span>
+                {isFiftyFifty ? "50/50 prize pot" : `${totalTickets} tickets`}
+              </span>
             </div>
           </div>
         </div>
       </section>
 
       <section style={styles.summaryGrid}>
-        <SummaryCard label="Raffle type" value={isFiftyFifty ? "50/50" : "Standard"} />
+        <SummaryCard
+          label="Raffle type"
+          value={isFiftyFifty ? "50/50" : "Standard"}
+        />
         <SummaryCard label="Total tickets" value={totalTickets} />
         <SummaryCard label="Numbers / colour" value={numbersPerColour} />
         <SummaryCard label="Colours" value={selectedColours.length} />
@@ -1336,6 +1341,23 @@ const responsiveStyles = `
     .new-raffle-form label {
       min-width: 0 !important;
       max-width: 100% !important;
+    }
+
+    .new-raffle-form input[type="datetime-local"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      display: block !important;
+      box-sizing: border-box !important;
+      appearance: none !important;
+      -webkit-appearance: none !important;
+    }
+
+    .new-raffle-form input[name="draw_at"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
     }
 
     .new-raffle-form h1 {
