@@ -464,7 +464,7 @@ export default function NewRaffleForm({
         />
       </section>
 
-      <section style={styles.builderGrid}>
+      <section className="new-raffle-builder-grid" style={styles.builderGrid}>
         <div style={styles.mainColumn}>
           <section style={styles.section}>
             <SectionHeader
@@ -1142,7 +1142,7 @@ export default function NewRaffleForm({
           </section>
         </div>
 
-        <aside style={styles.sideColumn}>
+        <aside className="new-raffle-side-column" style={styles.sideColumn}>
           <div style={styles.sideCard}>
             <div style={styles.sideEyebrow}>Campaign readiness</div>
 
@@ -1329,6 +1329,17 @@ const responsiveStyles = `
     overflow: hidden !important;
   }
 
+  @media (max-width: 1120px) {
+    .new-raffle-builder-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .new-raffle-side-column {
+      position: static !important;
+      top: auto !important;
+    }
+  }
+
   @media (max-width: 760px) {
     .new-raffle-form {
       width: 100% !important;
@@ -1337,11 +1348,6 @@ const responsiveStyles = `
 
     .new-raffle-form [style*="grid-template-columns"] {
       grid-template-columns: 1fr !important;
-    }
-
-    .new-raffle-form [style*="position: sticky"] {
-      position: static !important;
-      top: auto !important;
     }
 
     .new-raffle-form section,
@@ -1749,12 +1755,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   ticketSetupGrid: {
-   display: "grid",
-   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-   gap: 12,
-   alignItems: "end",
-   minWidth: 0,
-   maxWidth: "100%",
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+    alignItems: "end",
+    minWidth: 0,
+    maxWidth: "100%",
   },
   subtypeGrid: {
     display: "grid",
