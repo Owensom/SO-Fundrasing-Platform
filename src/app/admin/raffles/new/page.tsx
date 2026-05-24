@@ -140,8 +140,8 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
         </Link>
       </section>
 
-      <section style={styles.limitPanel}>
-        <div>
+      <section className="new-raffle-limit-panel" style={styles.limitPanel}>
+        <div style={styles.limitCopy}>
           <div style={styles.limitEyebrow}>Subscription enforcement</div>
 
           <h1 style={styles.limitTitle}>
@@ -157,7 +157,7 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
           </p>
         </div>
 
-        <div style={styles.limitStats}>
+        <div className="new-raffle-limit-stats" style={styles.limitStats}>
           <div style={styles.limitStat}>
             <span>Plan</span>
             <strong>{formatTierName(subscriptionTier)}</strong>
@@ -176,14 +176,14 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
       </section>
 
       {showCampaignLimitBanner ? (
-        <section style={styles.upgradeBanner}>
+        <section className="new-raffle-upgrade-banner" style={styles.upgradeBanner}>
           <div style={styles.upgradeEyebrow}>Plan limit notice</div>
 
           <h1 style={styles.upgradeTitle}>{limitTitle}</h1>
 
           <p style={styles.upgradeText}>{limitText}</p>
 
-          <div style={styles.upgradeActions}>
+          <div className="new-raffle-upgrade-actions" style={styles.upgradeActions}>
             <Link
               href="/admin/settings/billing"
               style={styles.primaryUpgradeButton}
@@ -206,6 +206,7 @@ export default async function NewRafflePage({ searchParams }: PageProps) {
     </main>
   );
 }
+
 const responsiveStyles = `
   .new-raffle-page,
   .new-raffle-page * {
@@ -214,6 +215,30 @@ const responsiveStyles = `
 
   .new-raffle-page {
     overflow-x: hidden;
+  }
+
+  .new-raffle-page a,
+  .new-raffle-page button,
+  .new-raffle-page input,
+  .new-raffle-page textarea,
+  .new-raffle-page select {
+    max-width: 100%;
+  }
+
+  .new-raffle-limit-panel,
+  .new-raffle-upgrade-banner {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .new-raffle-limit-panel h1,
+  .new-raffle-limit-panel p,
+  .new-raffle-limit-panel span,
+  .new-raffle-limit-panel strong,
+  .new-raffle-upgrade-banner h1,
+  .new-raffle-upgrade-banner p {
+    overflow-wrap: anywhere;
   }
 
   @media (max-width: 760px) {
@@ -240,10 +265,49 @@ const responsiveStyles = `
 
     .new-raffle-limit-panel {
       grid-template-columns: 1fr !important;
+      gap: 14px !important;
+      padding: 18px 14px !important;
+      border-radius: 22px !important;
+      margin-bottom: 16px !important;
     }
 
     .new-raffle-limit-stats {
       grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      width: 100% !important;
+    }
+
+    .new-raffle-limit-stats > div {
+      width: 100% !important;
+    }
+
+    .new-raffle-upgrade-banner {
+      padding: 18px 14px !important;
+      border-radius: 22px !important;
+    }
+
+    .new-raffle-upgrade-actions {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .new-raffle-upgrade-actions a {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .new-raffle-limit-panel {
+      padding: 16px 12px !important;
+    }
+
+    .new-raffle-limit-panel h1,
+    .new-raffle-upgrade-banner h1 {
+      font-size: 28px !important;
+      line-height: 1.05 !important;
     }
   }
 `;
@@ -302,6 +366,12 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(135deg, #ffffff 0%, #eff6ff 52%, #f8fafc 100%)",
     border: "1px solid #dbeafe",
     boxShadow: "0 16px 38px rgba(15,23,42,0.06)",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+  limitCopy: {
+    minWidth: 0,
   },
   limitEyebrow: {
     display: "inline-flex",
@@ -334,6 +404,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
+    minWidth: 0,
   },
   limitStat: {
     display: "grid",
@@ -352,6 +423,9 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
     border: "1px solid #fed7aa",
     boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
   },
   upgradeEyebrow: {
     display: "inline-flex",
