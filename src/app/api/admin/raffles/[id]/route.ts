@@ -39,6 +39,14 @@ function normaliseFocus(value: FormDataEntryValue | null, fallback = 50) {
   return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
+function normaliseRaffleSubtype(value: FormDataEntryValue | string | null) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") return "fifty_fifty";
+
+  return "standard";
+}
+
 function parsePositiveInteger(
   value: FormDataEntryValue | null,
   fallback: number,
@@ -116,6 +124,9 @@ export async function POST(
     );
 
     const status = String(formData.get("status") || "draft").trim();
+    const raffle_subtype = normaliseRaffleSubtype(
+      formData.get("raffle_subtype"),
+    );
 
     if (status === "published" && raffle.status !== "published") {
       const activeCampaignCounts = await queryOne<{
@@ -190,21 +201,23 @@ export async function POST(
     const offerCount = Number(formData.get("offer_count") || 0);
     const offers: any[] = [];
 
-    for (let i = 0; i < offerCount; i += 1) {
-      const quantity = Number(formData.get(`offer_quantity_${i}`));
-      const price = Number(formData.get(`offer_price_${i}`));
-      const active = formData.get(`offer_active_${i}`) === "true";
+    if (raffle_subtype !== "fifty_fifty") {
+      for (let i = 0; i < offerCount; i += 1) {
+        const quantity = Number(formData.get(`offer_quantity_${i}`));
+        const price = Number(formData.get(`offer_price_${i}`));
+        const active = formData.get(`offer_active_${i}`) === "true";
 
-      if (quantity > 0 && price > 0) {
-        offers.push({
-          id: `offer-${i + 1}`,
-          label: `${quantity} for ${price}`,
-          price,
-          quantity,
-          tickets: quantity,
-          isActive: active,
-          sortOrder: i,
-        });
+        if (quantity > 0 && price > 0) {
+          offers.push({
+            id: `offer-${i + 1}`,
+            label: `${quantity} for ${price}`,
+            price,
+            quantity,
+            tickets: quantity,
+            isActive: active,
+            sortOrder: i,
+          });
+        }
       }
     }
 
@@ -217,6 +230,7 @@ export async function POST(
       ticket_price_cents,
       total_tickets,
       status: status as any,
+      raffle_subtype,
       currency: currency as any,
     });
 
