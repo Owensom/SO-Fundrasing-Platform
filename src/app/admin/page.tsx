@@ -38,6 +38,11 @@ type TenantBillingLike = {
   platform_fee_percent?: number | null;
 };
 
+type SessionUserWithOwner = {
+  tenantSlugs?: string[];
+  isPlatformOwner?: boolean | null;
+};
+
 async function getAdminRaffles(): Promise<RaffleItem[]> {
   try {
     const headerStore = await headers();
@@ -96,15 +101,19 @@ export default async function AdminDashboardPage() {
     redirect("/admin/login");
   }
 
+  const sessionUser = session.user as SessionUserWithOwner;
+
   const tenantSlug = await getTenantSlugFromHeaders();
 
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
+  const sessionTenantSlugs = Array.isArray(sessionUser.tenantSlugs)
+    ? sessionUser.tenantSlugs.map((value) => String(value))
     : [];
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     redirect("/admin/login?error=tenant_access_denied");
   }
+
+  const isPlatformOwner = Boolean(sessionUser.isPlatformOwner);
 
   const publicCampaignsHref = `/c/${tenantSlug}?adminReturn=${encodeURIComponent(
     "/admin",
@@ -315,6 +324,16 @@ export default async function AdminDashboardPage() {
             Help & Support →
           </Link>
 
+          {isPlatformOwner ? (
+            <Link
+              href="/admin/platform"
+              className="secondaryButton"
+              style={styles.ownerToolsButton}
+            >
+              Owner tools →
+            </Link>
+          ) : null}
+
           <Link
             href="/admin/customers"
             className="secondaryButton"
@@ -396,8 +415,7 @@ export default async function AdminDashboardPage() {
           />
         </div>
       </section>
-
-      <section className="admin-focus-grid" style={styles.focusGrid}>
+            <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -537,6 +555,18 @@ export default async function AdminDashboardPage() {
           compact
         />
 
+        {isPlatformOwner ? (
+          <DashboardCard
+            href="/admin/platform"
+            badgeText="OWNER"
+            title="Owner tools"
+            description="Open platform-owner support, incidents, billing and tenant verification tools."
+            stats="Platform owner only"
+            tone="gold"
+            compact
+          />
+        ) : null}
+
         <DashboardCard
           href="/admin/customers"
           badgeText="CRM"
@@ -635,6 +665,16 @@ export default async function AdminDashboardPage() {
             >
               Help & Support →
             </Link>
+
+            {isPlatformOwner ? (
+              <Link
+                href="/admin/platform"
+                className="financeButtonSecondary"
+                style={styles.ownerToolsFinanceButton}
+              >
+                Owner tools →
+              </Link>
+            ) : null}
 
             <Link
               href="/admin/customers"
@@ -782,7 +822,6 @@ function FocusCard({
     </article>
   );
 }
-
 function DataBlock({
   label,
   total,
@@ -964,7 +1003,8 @@ const responsiveStyles = `
   }
 
   .admin-dashboard-page .primaryButton,
-  .admin-dashboard-page .secondaryButton {
+  .admin-dashboard-page .secondaryButton,
+  .admin-dashboard-page .ownerToolsButton {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
@@ -1101,8 +1141,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
     overflowWrap: "anywhere",
   },
-
-  commandActions: {
+    commandActions: {
     position: "relative",
     zIndex: 1,
     gridArea: "actions",
@@ -1147,6 +1186,26 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     textAlign: "center",
     lineHeight: 1.2,
+  },
+
+  ownerToolsButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background:
+      "linear-gradient(135deg, rgba(250,204,21,0.20), rgba(255,255,255,0.07))",
+    color: "#fef3c7",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid rgba(250,204,21,0.82)",
+    backdropFilter: "blur(10px)",
+    whiteSpace: "nowrap",
+    textAlign: "center",
+    lineHeight: 1.2,
+    boxShadow: "0 14px 28px rgba(250,204,21,0.10)",
   },
 
   commandStats: {
@@ -1632,6 +1691,24 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+    whiteSpace: "normal",
+    width: "100%",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+
+  ownerToolsFinanceButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 54,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, rgba(251,191,36,0.18), rgba(255,255,255,1) 74%)",
+    color: "#92400e",
+    border: "1px solid #fde68a",
     textDecoration: "none",
     fontWeight: 950,
     whiteSpace: "normal",
