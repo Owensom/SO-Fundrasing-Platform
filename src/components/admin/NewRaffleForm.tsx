@@ -646,17 +646,17 @@ export default function NewRaffleForm({
                 </div>
               ) : null}
 
-              <Field label="Draw date">
-                <input
-                  name="draw_at"
-                  type="datetime-local"
-                  value={drawAt}
-                  onChange={(event) => setDrawAt(event.target.value)}
-                  style={styles.input}
-                />
-              </Field>
+              <div style={styles.ticketSetupGrid}>
+                <Field label="Draw date">
+                  <input
+                    name="draw_at"
+                    type="datetime-local"
+                    value={drawAt}
+                    onChange={(event) => setDrawAt(event.target.value)}
+                    style={styles.input}
+                  />
+                </Field>
 
-              <div style={styles.threeColumn}>
                 <Field label="Ticket price">
                   <input
                     name="ticket_price"
@@ -1319,7 +1319,7 @@ const responsiveStyles = `
   .new-raffle-form button {
     max-width: 100%;
   }
-  
+
   .new-raffle-form input[type="datetime-local"] {
     width: 100% !important;
     max-width: 100% !important;
@@ -1328,7 +1328,7 @@ const responsiveStyles = `
     box-sizing: border-box !important;
     overflow: hidden !important;
   }
-  
+
   @media (max-width: 760px) {
     .new-raffle-form {
       width: 100% !important;
@@ -1350,23 +1350,6 @@ const responsiveStyles = `
     .new-raffle-form label {
       min-width: 0 !important;
       max-width: 100% !important;
-    }
-
-    .new-raffle-form input[type="datetime-local"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-      display: block !important;
-      box-sizing: border-box !important;
-      appearance: none !important;
-      -webkit-appearance: none !important;
-    }
-
-    .new-raffle-form input[name="draw_at"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-      overflow: hidden !important;
     }
 
     .new-raffle-form h1 {
@@ -1765,6 +1748,13 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
+  ticketSetupGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(min(100%, 250px), 1.25fr) repeat(3, minmax(min(100%, 150px), 1fr))",
+    gap: 12,
+    alignItems: "end",
+  },
   subtypeGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
@@ -1840,7 +1830,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     display: "block",
     overflow: "hidden",
-   },
+  },
   textarea: {
     width: "100%",
     padding: "11px 12px",
