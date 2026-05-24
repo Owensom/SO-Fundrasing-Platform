@@ -6,6 +6,7 @@ import { query, queryOne } from "@/lib/db";
 
 export type RaffleCurrency = "GBP" | "EUR" | "USD";
 export type RaffleStatus = "draft" | "published" | "closed" | "drawn";
+export type RaffleSubtype = "standard" | "fifty_fifty";
 
 export type RaffleColour = {
   id?: string;
@@ -61,6 +62,7 @@ export type Raffle = {
   total_tickets: number;
   sold_tickets: number;
   status: RaffleStatus;
+  raffle_subtype: RaffleSubtype;
   currency: RaffleCurrency;
   config_json: RaffleConfig;
   offers: RaffleOffer[];
@@ -88,6 +90,14 @@ function normaliseImagePosition(value: unknown): string {
   return "center";
 }
 
+function normaliseRaffleSubtype(value: unknown): RaffleSubtype {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") return "fifty_fifty";
+
+  return "standard";
+}
+
 function normaliseRaffle(row: any): Raffle {
   const rawConfig =
     row?.config_json && typeof row.config_json === "object"
@@ -109,6 +119,7 @@ function normaliseRaffle(row: any): Raffle {
     draw_at: row.draw_at ?? null,
     currency: (row.currency || "GBP") as RaffleCurrency,
     status: (row.status || "draft") as RaffleStatus,
+    raffle_subtype: normaliseRaffleSubtype(row.raffle_subtype),
     config_json: config,
     colours: config.colours,
     offers: config.offers,
@@ -206,6 +217,7 @@ export async function updateRaffle(
     total_tickets: number;
     sold_tickets: number;
     status: RaffleStatus;
+    raffle_subtype: RaffleSubtype;
     currency: RaffleCurrency;
     config_json: RaffleConfig;
   }>,
@@ -217,6 +229,12 @@ export async function updateRaffle(
   }
 
   const safeFields = { ...fields };
+
+  if (safeFields.raffle_subtype) {
+    safeFields.raffle_subtype = normaliseRaffleSubtype(
+      safeFields.raffle_subtype,
+    );
+  }
 
   if (safeFields.config_json) {
     safeFields.config_json = {
@@ -248,6 +266,7 @@ export async function updateRaffle(
     "total_tickets",
     "sold_tickets",
     "status",
+    "raffle_subtype",
     "currency",
     "config_json",
   ] as const;
