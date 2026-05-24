@@ -278,7 +278,8 @@ export default function NewRaffleForm({
   const publicPrizesCount = useMemo(() => {
     if (isFiftyFifty) return 0;
 
-    return prizes.filter((prize) => prize.title.trim() && prize.is_public).length;
+    return prizes.filter((prize) => prize.title.trim() && prize.is_public)
+      .length;
   }, [prizes, isFiftyFifty]);
 
   const featuredOffer = useMemo(() => {
@@ -400,7 +401,10 @@ export default function NewRaffleForm({
               value={formatPreviewMoney(ticketPrice, currency)}
             />
             <HeroMetric label="Total tickets" value={totalTickets} />
-            <HeroMetric label="Type" value={isFiftyFifty ? "50/50" : "Standard"} />
+            <HeroMetric
+              label="Type"
+              value={isFiftyFifty ? "50/50" : "Standard"}
+            />
             <HeroMetric
               label={isFiftyFifty ? "Winner share" : "Offers"}
               value={isFiftyFifty ? "50%" : validOffersCount}
@@ -587,7 +591,10 @@ export default function NewRaffleForm({
             />
 
             <div style={styles.formInner}>
-              <div className="new-raffle-subtype-grid" style={styles.subtypeGrid}>
+              <div
+                className="new-raffle-subtype-grid"
+                style={styles.subtypeGrid}
+              >
                 <button
                   type="button"
                   onClick={() => setRaffleSubtype("standard")}
@@ -665,8 +672,8 @@ export default function NewRaffleForm({
                   </div>
                 </div>
 
-                <div style={styles.stackedFields}>
-                  <Field label="Draw date">
+                <div style={styles.horizontalFieldList}>
+                  <HorizontalField label="Draw date">
                     <input
                       name="draw_date_preview"
                       type="date"
@@ -674,9 +681,9 @@ export default function NewRaffleForm({
                       onChange={(event) => setDrawDate(event.target.value)}
                       style={styles.input}
                     />
-                  </Field>
+                  </HorizontalField>
 
-                  <Field label="Draw time">
+                  <HorizontalField label="Draw time">
                     <input
                       name="draw_time_preview"
                       type="time"
@@ -684,9 +691,9 @@ export default function NewRaffleForm({
                       onChange={(event) => setDrawTime(event.target.value)}
                       style={styles.input}
                     />
-                  </Field>
+                  </HorizontalField>
 
-                  <Field label="Ticket price">
+                  <HorizontalField label="Ticket price">
                     <input
                       name="ticket_price"
                       type="number"
@@ -696,9 +703,9 @@ export default function NewRaffleForm({
                       onChange={(event) => setTicketPrice(event.target.value)}
                       style={styles.input}
                     />
-                  </Field>
+                  </HorizontalField>
 
-                  <Field label="Currency">
+                  <HorizontalField label="Currency">
                     <select
                       name="currency"
                       value={currency}
@@ -709,9 +716,9 @@ export default function NewRaffleForm({
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
-                  </Field>
+                  </HorizontalField>
 
-                  <Field label="Status">
+                  <HorizontalField label="Status">
                     <select
                       name="status"
                       value={status}
@@ -722,7 +729,7 @@ export default function NewRaffleForm({
                       <option value="published">Published</option>
                       <option value="closed">Closed</option>
                     </select>
-                  </Field>
+                  </HorizontalField>
                 </div>
               </section>
 
@@ -1036,7 +1043,11 @@ export default function NewRaffleForm({
                     </p>
                   </div>
 
-                  <button type="button" onClick={addPrize} style={styles.goldButton}>
+                  <button
+                    type="button"
+                    onClick={addPrize}
+                    style={styles.goldButton}
+                  >
                     + Add prize
                   </button>
                 </div>
@@ -1108,7 +1119,8 @@ export default function NewRaffleForm({
                         disabled={prizes.length <= 1}
                         style={{
                           ...styles.dangerButton,
-                          cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                          cursor:
+                            prizes.length <= 1 ? "not-allowed" : "pointer",
                           opacity: prizes.length <= 1 ? 0.55 : 1,
                         }}
                       >
@@ -1320,6 +1332,21 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function HorizontalField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="new-raffle-horizontal-field" style={styles.horizontalField}>
+      <span style={styles.horizontalLabel}>{label}</span>
+      <span style={styles.horizontalControl}>{children}</span>
+    </label>
+  );
+}
+
 function CheckItem({
   done,
   children,
@@ -1389,6 +1416,12 @@ const responsiveStyles = `
     .new-raffle-form label {
       min-width: 0 !important;
       max-width: 100% !important;
+    }
+
+    .new-raffle-horizontal-field {
+      grid-template-columns: 1fr !important;
+      gap: 7px !important;
+      align-items: stretch !important;
     }
 
     .new-raffle-form h1 {
@@ -1782,9 +1815,27 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
-  stackedFields: {
+  horizontalFieldList: {
     display: "grid",
     gap: 12,
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+  horizontalField: {
+    display: "grid",
+    gridTemplateColumns: "150px minmax(0, 1fr)",
+    gap: 14,
+    alignItems: "center",
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+  horizontalLabel: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  horizontalControl: {
+    display: "block",
     minWidth: 0,
     maxWidth: "100%",
   },
