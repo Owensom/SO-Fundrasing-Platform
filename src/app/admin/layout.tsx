@@ -5,6 +5,11 @@ import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
+type AdminLayoutUser = {
+  tenantSlugs?: string[];
+  isPlatformOwner?: boolean | null;
+};
+
 export default async function AdminLayout({
   children,
 }: {
@@ -13,11 +18,14 @@ export default async function AdminLayout({
   const session = await auth();
   const tenantSlug = await getTenantSlugFromHeaders();
 
-  const tenantSlugs = Array.isArray(session?.user?.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value)).filter(Boolean)
+  const sessionUser = session?.user as AdminLayoutUser | undefined;
+
+  const tenantSlugs = Array.isArray(sessionUser?.tenantSlugs)
+    ? sessionUser.tenantSlugs.map((value) => String(value)).filter(Boolean)
     : [];
 
   const showAdminBar = Boolean(session?.user);
+  const isPlatformOwner = Boolean(sessionUser?.isPlatformOwner);
 
   return (
     <>
@@ -43,6 +51,12 @@ export default async function AdminLayout({
               {tenantSlugs.length > 1 ? (
                 <Link href="/admin/select-tenant" style={styles.adminLink}>
                   Switch site
+                </Link>
+              ) : null}
+
+              {isPlatformOwner ? (
+                <Link href="/admin/platform" style={styles.ownerToolsLink}>
+                  Owner tools
                 </Link>
               ) : null}
 
@@ -152,6 +166,23 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 900,
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  },
+
+  ownerToolsLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background:
+      "linear-gradient(135deg, rgba(250,204,21,0.18), rgba(255,255,255,1))",
+    color: "#92400e",
+    border: "1px solid #facc15",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
     boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
   },
 
