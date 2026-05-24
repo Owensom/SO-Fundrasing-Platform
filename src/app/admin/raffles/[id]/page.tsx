@@ -122,6 +122,14 @@ function normaliseFocus(value: unknown, fallback = 50) {
   return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
+function normaliseRaffleSubtype(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") return "fifty_fifty";
+
+  return "standard";
+}
+
 function formatDateTimeLocal(value: string | null | undefined) {
   if (!value) return "";
 
@@ -267,6 +275,8 @@ export default async function AdminRafflePage({
   }
 
   const config = (raffle.config_json as any) ?? {};
+  const raffleSubtype = normaliseRaffleSubtype((raffle as any).raffle_subtype);
+  const isFiftyFifty = raffleSubtype === "fifty_fifty";
 
   const imagePosition = normaliseImagePosition(config.image_position);
   const imageFocusX = normaliseFocus(config.image_focus_x, 50);
@@ -403,12 +413,21 @@ export default async function AdminRafflePage({
 
       <section className="raffle-hero" style={styles.hero}>
         <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Raffle editor</div>
-                    <div style={styles.heroTitleRow}>
+          <div style={styles.eyebrow}>
+            {isFiftyFifty ? "50/50 raffle editor" : "Raffle editor"}
+          </div>
+
+          <div style={styles.heroTitleRow}>
             <h1 style={styles.heroTitle}>{raffle.title}</h1>
 
-            <div style={{ ...styles.statusPill, ...statusStyle }}>
-              {raffle.status}
+            <div style={styles.heroPillRow}>
+              {isFiftyFifty ? (
+                <div style={styles.fiftyFiftyHeroPill}>50/50</div>
+              ) : null}
+
+              <div style={{ ...styles.statusPill, ...statusStyle }}>
+                {raffle.status}
+              </div>
             </div>
           </div>
 
@@ -423,6 +442,11 @@ export default async function AdminRafflePage({
           )}
 
           <div className="raffle-hero-meta" style={styles.heroMetaGrid}>
+            <HeroMeta
+              label="Type"
+              value={isFiftyFifty ? "50/50 raffle" : "Standard raffle"}
+            />
+
             <HeroMeta label="Draw" value={formatDrawDate(raffle.draw_at)} />
 
             <HeroMeta
@@ -458,6 +482,11 @@ export default async function AdminRafflePage({
 
       <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
+          label="Raffle type"
+          value={isFiftyFifty ? "50/50" : "Standard"}
+        />
+
+        <SummaryCard
           label="Ticket price"
           value={formatMoney(raffle.ticket_price_cents, raffle.currency)}
         />
@@ -473,6 +502,41 @@ export default async function AdminRafflePage({
 
         <SummaryCard label="Remaining" value={remainingTickets} />
       </section>
+
+      {isFiftyFifty ? (
+        <section style={styles.fiftyFiftyNotice}>
+          <div style={styles.fiftyFiftyNoticeEyebrow}>50/50 raffle mode</div>
+
+          <h2 style={styles.fiftyFiftyNoticeTitle}>
+            This raffle uses the existing legal and checkout structure.
+          </h2>
+
+          <p style={styles.fiftyFiftyNoticeText}>
+            The entry question, free postal entry route, terms acceptance,
+            ticket reservation and Stripe checkout flow remain in place. Bundle
+            offers and fixed prize setup are disabled for 50/50 raffles in this
+            first release. The winner prize will be calculated from paid ticket
+            sales in a later draw-snapshot phase.
+          </p>
+
+          <div className="raffle-fifty-stats" style={styles.fiftyFiftyStats}>
+            <div style={styles.fiftyFiftyStat}>
+              <span>Winner share</span>
+              <strong>50%</strong>
+            </div>
+
+            <div style={styles.fiftyFiftyStat}>
+              <span>Cause share</span>
+              <strong>50%</strong>
+            </div>
+
+            <div style={styles.fiftyFiftyStat}>
+              <span>Payout</span>
+              <strong>Manual tracker later</strong>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section style={styles.progressCard}>
         <div style={styles.progressHeader}>
@@ -534,6 +598,10 @@ export default async function AdminRafflePage({
               <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
 
               <StatusMiniPill label="Postal" active={postalEntryEnabled} />
+
+              {isFiftyFifty ? (
+                <span style={styles.fiftyFiftyMiniPill}>50/50</span>
+              ) : null}
 
               <span style={styles.adminSummaryToggle}>Open / close</span>
             </div>
@@ -636,6 +704,66 @@ export default async function AdminRafflePage({
                   </div>
                 </div>
 
+                <div
+                  className="raffle-subtype-grid"
+                  style={styles.subtypeGrid}
+                >
+                  <label
+                    style={{
+                      ...styles.subtypeCard,
+                      borderColor: !isFiftyFifty ? "#1683f8" : "#e2e8f0",
+                      background: !isFiftyFifty ? "#eff6ff" : "#ffffff",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="raffle_subtype"
+                      value="standard"
+                      defaultChecked={!isFiftyFifty}
+                    />
+
+                    <span style={styles.subtypeTitle}>Standard raffle</span>
+
+                    <span style={styles.subtypeText}>
+                      Fixed prize setup, optional bundle offers and the existing
+                      raffle draw flow.
+                    </span>
+                  </label>
+
+                  <label
+                    style={{
+                      ...styles.subtypeCard,
+                      borderColor: isFiftyFifty ? "#d97706" : "#e2e8f0",
+                      background: isFiftyFifty ? "#fffbeb" : "#ffffff",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="raffle_subtype"
+                      value="fifty_fifty"
+                      defaultChecked={isFiftyFifty}
+                    />
+
+                    <span style={styles.subtypeTitle}>50/50 raffle</span>
+
+                    <span style={styles.subtypeText}>
+                      Half the paid ticket pot goes to the winner and half
+                      supports the cause.
+                    </span>
+                  </label>
+                </div>
+
+                {isFiftyFifty ? (
+                  <div style={styles.fiftyFiftyInlineNotice}>
+                    <strong>50/50 mode is active.</strong>
+                    <span>
+                      Bundle offers and fixed prize setup are disabled for this
+                      raffle type. The legal question, postal entry details and
+                      checkout flow remain active.
+                    </span>
+                  </div>
+                ) : null}
+
                 <div className="raffle-three-column" style={styles.threeColumn}>
                   <Field label="Draw date">
                     <input
@@ -681,8 +809,9 @@ export default async function AdminRafflePage({
                     <h3 style={styles.subTitle}>Pricing & bundles</h3>
 
                     <p style={styles.sectionDescription}>
-                      Configure pricing, number range, colours and bundle
-                      offers.
+                      {isFiftyFifty
+                        ? "Configure the ticket price, number range and colours. Bundle offers are disabled for 50/50 raffles."
+                        : "Configure pricing, number range, colours and bundle offers."}
                     </p>
                   </div>
                 </div>
@@ -717,7 +846,8 @@ export default async function AdminRafflePage({
                     />
                   </Field>
                 </div>
-                                <div className="raffle-colour-grid" style={styles.colourGrid}>
+
+                <div className="raffle-colour-grid" style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
                     const selected = colours.includes(colour);
                     const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
@@ -769,63 +899,82 @@ export default async function AdminRafflePage({
                   />
                 </Field>
 
-                <input
-                  type="hidden"
-                  name="offer_count"
-                  value={offerRows.length}
-                />
+                {isFiftyFifty ? (
+                  <div style={styles.disabledPanel}>
+                    <div style={styles.disabledEyebrow}>Disabled for 50/50</div>
 
-                <div style={styles.offerList}>
-                  {offerRows.map((offer, index) => (
-                    <div key={`${offer.id}-${index}`} style={styles.offerCard}>
-                      <div style={styles.offerBadge}>
-                        {offerSavingText(
-                          offer.quantity as number | "",
-                          offer.price as number | "",
-                          raffle.ticket_price_cents,
-                        )}
-                      </div>
+                    <h3 style={styles.subTitle}>Bundle offers</h3>
 
-                      <div
-                        className="raffle-offer-inputs"
-                        style={styles.offerInputs}
-                      >
-                        <Field label="Number of tickets">
-                          <input
-                            name={`offer_quantity_${index}`}
-                            type="number"
-                            min={1}
-                            defaultValue={offer.quantity}
-                            placeholder="3"
-                            style={styles.input}
-                          />
-                        </Field>
+                    <p style={styles.sectionDescription}>
+                      Bundle offers are disabled for 50/50 raffles in this first
+                      release so the prize pot remains simple and transparent.
+                      Saving this raffle in 50/50 mode clears active offer rows.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="hidden"
+                      name="offer_count"
+                      value={offerRows.length}
+                    />
 
-                        <Field label="Total offer price">
-                          <input
-                            name={`offer_price_${index}`}
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            defaultValue={offer.price}
-                            placeholder="12.00"
-                            style={styles.input}
-                          />
-                        </Field>
+                    <div style={styles.offerList}>
+                      {offerRows.map((offer, index) => (
+                        <div
+                          key={`${offer.id}-${index}`}
+                          style={styles.offerCard}
+                        >
+                          <div style={styles.offerBadge}>
+                            {offerSavingText(
+                              offer.quantity as number | "",
+                              offer.price as number | "",
+                              raffle.ticket_price_cents,
+                            )}
+                          </div>
 
-                        <label style={styles.checkboxLabel}>
-                          <input
-                            name={`offer_active_${index}`}
-                            type="checkbox"
-                            value="true"
-                            defaultChecked={offer.is_active}
-                          />
-                          Use
-                        </label>
-                      </div>
+                          <div
+                            className="raffle-offer-inputs"
+                            style={styles.offerInputs}
+                          >
+                            <Field label="Number of tickets">
+                              <input
+                                name={`offer_quantity_${index}`}
+                                type="number"
+                                min={1}
+                                defaultValue={offer.quantity}
+                                placeholder="3"
+                                style={styles.input}
+                              />
+                            </Field>
+
+                            <Field label="Total offer price">
+                              <input
+                                name={`offer_price_${index}`}
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                defaultValue={offer.price}
+                                placeholder="12.00"
+                                style={styles.input}
+                              />
+                            </Field>
+
+                            <label style={styles.checkboxLabel}>
+                              <input
+                                name={`offer_active_${index}`}
+                                type="checkbox"
+                                value="true"
+                                defaultChecked={offer.is_active}
+                              />
+                              Use
+                            </label>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </section>
 
               <section style={styles.innerPanel}>
@@ -838,6 +987,9 @@ export default async function AdminRafflePage({
                     <p style={styles.sectionDescription}>
                       Add a skill-based entry question and the free postal entry
                       route shown on the public raffle page.
+                      {isFiftyFifty
+                        ? " 50/50 raffles use the same legal framework."
+                        : ""}
                     </p>
                   </div>
                 </div>
@@ -955,15 +1107,19 @@ export default async function AdminRafflePage({
       </section>
 
       <section style={styles.section}>
-        <details open={!prizesConfigured} style={styles.adminDetails}>
+        <details open={!prizesConfigured && !isFiftyFifty} style={styles.adminDetails}>
           <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 2</div>
 
-              <h2 style={styles.sectionTitle}>Prize management</h2>
+              <h2 style={styles.sectionTitle}>
+                {isFiftyFifty ? "50/50 prize pot" : "Prize management"}
+              </h2>
 
               <p style={styles.sectionDescription}>
-                Manage prize names, descriptions and public visibility.
+                {isFiftyFifty
+                  ? "The winner prize is calculated automatically from paid ticket sales."
+                  : "Manage prize names, descriptions and public visibility."}
               </p>
             </div>
 
@@ -971,10 +1127,30 @@ export default async function AdminRafflePage({
           </summary>
 
           <div style={styles.adminDetailsBody}>
-            <PrizeSettings
-              raffleId={raffle.id}
-              initialPrizes={config.prizes ?? []}
-            />
+            {isFiftyFifty ? (
+              <div style={styles.fiftyFiftyPrizePanel}>
+                <div style={styles.fiftyFiftyPrizeStat}>
+                  <span>Winner share</span>
+                  <strong>50%</strong>
+                </div>
+
+                <div style={styles.fiftyFiftyPrizeStat}>
+                  <span>Cause share</span>
+                  <strong>50%</strong>
+                </div>
+
+                <p style={styles.helpText}>
+                  Manual prize rows are not used for 50/50 raffles. The final
+                  winner prize and cause share will be snapshotted at draw time
+                  in a later phase.
+                </p>
+              </div>
+            ) : (
+              <PrizeSettings
+                raffleId={raffle.id}
+                initialPrizes={config.prizes ?? []}
+              />
+            )}
           </div>
         </details>
       </section>
@@ -1054,7 +1230,8 @@ export default async function AdminRafflePage({
             ) : (
               <div style={styles.emptyBox}>No winners yet.</div>
             )}
-                        <details open style={styles.drawDetails}>
+
+            <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
@@ -1258,7 +1435,9 @@ const responsiveStyles = `
     .raffle-three-column,
     .raffle-two-column,
     .raffle-media-box,
-    .raffle-draw-grid {
+    .raffle-draw-grid,
+    .raffle-subtype-grid,
+    .raffle-fifty-stats {
       grid-template-columns: 1fr !important;
     }
 
@@ -1344,6 +1523,7 @@ const responsiveStyles = `
     }
   }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1505,6 +1685,24 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     minWidth: 0,
   },
+  heroPillRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  fiftyFiftyHeroPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #facc15",
+    fontSize: 13,
+    textTransform: "uppercase",
+    fontWeight: 950,
+    flexShrink: 0,
+    background: "#fef3c7",
+    color: "#92400e",
+  },
   statusPill: {
     padding: "8px 12px",
     borderRadius: 999,
@@ -1596,6 +1794,59 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     marginTop: 5,
     overflowWrap: "anywhere",
+  },
+  fiftyFiftyNotice: {
+    display: "grid",
+    gap: 12,
+    padding: "clamp(18px, 4vw, 22px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
+    marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  fiftyFiftyNoticeEyebrow: {
+    justifySelf: "start",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  fiftyFiftyNoticeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(22px, 4vw, 28px)",
+    letterSpacing: "-0.035em",
+  },
+  fiftyFiftyNoticeText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.6,
+    maxWidth: 900,
+  },
+  fiftyFiftyStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  fiftyFiftyStat: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    minWidth: 0,
   },
   progressCard: {
     padding: 16,
@@ -1722,6 +1973,17 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+  fiftyFiftyMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #facc15",
+    fontSize: 12,
+    fontWeight: 950,
+  },
   neutralPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1748,6 +2010,43 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
     alignItems: "start",
+  },
+  subtypeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 12,
+  },
+  subtypeCard: {
+    display: "grid",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+  subtypeTitle: {
+    color: "#0f172a",
+    fontSize: 17,
+    fontWeight: 950,
+  },
+  subtypeText: {
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+  fiftyFiftyInlineNotice: {
+    display: "grid",
+    gap: 6,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 800,
   },
   field: {
     display: "grid",
@@ -1864,6 +2163,21 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     minWidth: 0,
   },
+  disabledPanel: {
+    display: "grid",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+  },
+  disabledEyebrow: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
   offerList: {
     display: "grid",
     gap: 10,
@@ -1934,6 +2248,27 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     marginTop: 3,
+  },
+  fiftyFiftyPrizePanel: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gap: 12,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
+    border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  fiftyFiftyPrizeStat: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+    color: "#92400e",
   },
   winnerList: {
     display: "grid",
