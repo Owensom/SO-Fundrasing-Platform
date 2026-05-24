@@ -93,6 +93,22 @@ function toInt(value: string, fallback: number) {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
+function normaliseDateInput(value: string) {
+  return value.replace(/[^\d-]/g, "").slice(0, 10);
+}
+
+function normaliseTimeInput(value: string) {
+  return value.replace(/[^\d:]/g, "").slice(0, 5);
+}
+
+function isValidDateInput(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isValidTimeInput(value: string) {
+  return /^\d{2}:\d{2}$/.test(value);
+}
+
 function colourToCss(colour: string) {
   const clean = colour.trim();
 
@@ -183,8 +199,12 @@ export default function NewRaffleForm({
   }, [title, slugEdited]);
 
   const drawAtValue = useMemo(() => {
-    if (!drawDate) return "";
-    return `${drawDate}T${drawTime || "00:00"}`;
+    const cleanDate = drawDate.trim();
+    const cleanTime = drawTime.trim();
+
+    if (!isValidDateInput(cleanDate)) return "";
+
+    return `${cleanDate}T${isValidTimeInput(cleanTime) ? cleanTime : "00:00"}`;
   }, [drawDate, drawTime]);
 
   const numbersPerColour = useMemo(() => {
@@ -666,34 +686,43 @@ export default function NewRaffleForm({
                     <div style={styles.innerEyebrow}>Ticket setup</div>
                     <h3 style={styles.subTitle}>Draw, pricing and status</h3>
                     <p style={styles.sectionDescription}>
-                      Set the draw date and time, single ticket price and
-                      publishing status.
+                      Use YYYY-MM-DD and 24-hour HH:MM format.
                     </p>
                   </div>
                 </div>
 
-                <div style={styles.horizontalFieldList}>
-                  <HorizontalField label="Draw date">
+                <div style={styles.compactSetupGrid}>
+                  <Field label="Draw date">
                     <input
                       name="draw_date_preview"
-                      type="date"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="YYYY-MM-DD"
                       value={drawDate}
-                      onChange={(event) => setDrawDate(event.target.value)}
+                      onChange={(event) =>
+                        setDrawDate(normaliseDateInput(event.target.value))
+                      }
                       style={styles.input}
                     />
-                  </HorizontalField>
+                  </Field>
 
-                  <HorizontalField label="Draw time">
+                  <Field label="Draw time">
                     <input
                       name="draw_time_preview"
-                      type="time"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="HH:MM"
                       value={drawTime}
-                      onChange={(event) => setDrawTime(event.target.value)}
+                      onChange={(event) =>
+                        setDrawTime(normaliseTimeInput(event.target.value))
+                      }
                       style={styles.input}
                     />
-                  </HorizontalField>
+                  </Field>
 
-                  <HorizontalField label="Ticket price">
+                  <Field label="Ticket price">
                     <input
                       name="ticket_price"
                       type="number"
@@ -703,9 +732,9 @@ export default function NewRaffleForm({
                       onChange={(event) => setTicketPrice(event.target.value)}
                       style={styles.input}
                     />
-                  </HorizontalField>
+                  </Field>
 
-                  <HorizontalField label="Currency">
+                  <Field label="Currency">
                     <select
                       name="currency"
                       value={currency}
@@ -716,9 +745,9 @@ export default function NewRaffleForm({
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
-                  </HorizontalField>
+                  </Field>
 
-                  <HorizontalField label="Status">
+                  <Field label="Status">
                     <select
                       name="status"
                       value={status}
@@ -729,7 +758,15 @@ export default function NewRaffleForm({
                       <option value="published">Published</option>
                       <option value="closed">Closed</option>
                     </select>
-                  </HorizontalField>
+                  </Field>
+
+                  <div style={styles.setupHintCard}>
+                    <strong>Draw date optional</strong>
+                    <span>
+                      Leave blank while drafting. Add a date before publishing
+                      if the campaign needs a visible draw time.
+                    </span>
+                  </div>
                 </div>
               </section>
 
@@ -744,7 +781,7 @@ export default function NewRaffleForm({
                   </div>
                 </div>
 
-                <div style={styles.twoColumn}>
+                <div style={styles.compactTwoGrid}>
                   <Field label="Start number">
                     <input
                       name="startNumber"
@@ -1332,21 +1369,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function HorizontalField({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="new-raffle-horizontal-field" style={styles.horizontalField}>
-      <span style={styles.horizontalLabel}>{label}</span>
-      <span style={styles.horizontalControl}>{children}</span>
-    </label>
-  );
-}
-
 function CheckItem({
   done,
   children,
@@ -1416,12 +1438,6 @@ const responsiveStyles = `
     .new-raffle-form label {
       min-width: 0 !important;
       max-width: 100% !important;
-    }
-
-    .new-raffle-horizontal-field {
-      grid-template-columns: 1fr !important;
-      gap: 7px !important;
-      align-items: stretch !important;
     }
 
     .new-raffle-form h1 {
@@ -1815,29 +1831,34 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
-  horizontalFieldList: {
+  compactTwoGrid: {
     display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
     minWidth: 0,
     maxWidth: "100%",
   },
-  horizontalField: {
+  compactSetupGrid: {
     display: "grid",
-    gridTemplateColumns: "150px minmax(0, 1fr)",
-    gap: 14,
-    alignItems: "center",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
     minWidth: 0,
     maxWidth: "100%",
   },
-  horizontalLabel: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-  horizontalControl: {
-    display: "block",
+  setupHintCard: {
+    display: "grid",
+    gap: 5,
+    alignContent: "center",
+    minHeight: 46,
+    padding: "11px 12px",
+    borderRadius: 13,
+    border: "1px solid #bfdbfe",
+    background: "#eff6ff",
+    color: "#1e3a8a",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 800,
     minWidth: 0,
-    maxWidth: "100%",
   },
   ticketSetupPanel: {
     display: "grid",
