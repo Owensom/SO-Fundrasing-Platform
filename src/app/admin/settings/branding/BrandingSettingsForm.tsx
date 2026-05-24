@@ -8,6 +8,10 @@ type BrandingFormState = {
   tagline: string;
   contactName: string;
   contactEmail: string;
+  contactEmailVerificationStatus: string;
+  contactEmailVerificationSentAt: string;
+  contactEmailVerifiedAt: string;
+  contactEmailVerificationError: string;
   logoUrl: string;
   logoMarkUrl: string;
   primaryColour: string;
@@ -108,6 +112,36 @@ function getPresetValue(hex: string) {
   return match?.value || "custom";
 }
 
+function formatDateTime(value: string) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return "Not recorded";
+
+  const date = new Date(clean.replace(" ", "T"));
+
+  if (Number.isNaN(date.getTime())) {
+    return clean;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatStatusLabel(value: string) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return "Not tested yet";
+
+  return clean
+    .replaceAll("_", " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function getErrorMessage(error: string) {
   if (error === "invalid_contact_email") {
     return {
@@ -155,6 +189,64 @@ function getContactTestMessage(contactTest: string) {
   return null;
 }
 
+function getVerificationStatusMessage({
+  contactEmail,
+  status,
+  sentAt,
+  verifiedAt,
+  error,
+}: {
+  contactEmail: string;
+  status: string;
+  sentAt: string;
+  verifiedAt: string;
+  error: string;
+}) {
+  if (!contactEmail) {
+    return {
+      tone: "neutral" as const,
+      title: "No public contact email saved",
+      text: "Save a public contact email before sending a branded test email.",
+    };
+  }
+
+  if (status === "verified") {
+    return {
+      tone: "success" as const,
+      title: "Contact email verified",
+      text: verifiedAt
+        ? `Verified on ${formatDateTime(verifiedAt)}.`
+        : "This public contact email has been marked as verified.",
+    };
+  }
+
+  if (status === "sent") {
+    return {
+      tone: "success" as const,
+      title: "Test email sent",
+      text: sentAt
+        ? `Last test email sent on ${formatDateTime(sentAt)}.`
+        : "A branded test email has been sent to this address.",
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      tone: "error" as const,
+      title: "Last test email failed",
+      text:
+        error ||
+        "The last test email could not be sent. Check the contact address and email service settings.",
+    };
+  }
+
+  return {
+    tone: "warning" as const,
+    title: "Contact email not tested yet",
+    text: "Send a branded test email to confirm this address can receive public supporter messages.",
+  };
+}
+
 export default function BrandingSettingsForm({
   tenantSlug,
   subscriptionLabel,
@@ -175,6 +267,13 @@ export default function BrandingSettingsForm({
 
   const errorMessage = getErrorMessage(error);
   const contactTestMessage = getContactTestMessage(contactTest);
+  const verificationStatusMessage = getVerificationStatusMessage({
+    contactEmail: formState.contactEmail,
+    status: formState.contactEmailVerificationStatus,
+    sentAt: formState.contactEmailVerificationSentAt,
+    verifiedAt: formState.contactEmailVerifiedAt,
+    error: formState.contactEmailVerificationError,
+  });
 
   const [primaryColour, setPrimaryColour] = useState(
     cleanInitialColour(formState.primaryColour, "#1683F8"),
@@ -340,6 +439,11 @@ export default function BrandingSettingsForm({
               : "Public contact email is not set yet."}
           </p>
 
+          <p style={styles.heroPanelContact}>
+            Contact test:{" "}
+            {formatStatusLabel(formState.contactEmailVerificationStatus)}
+          </p>
+
           <div style={styles.colourPreviewRow}>
             <span
               style={{
@@ -475,6 +579,64 @@ export default function BrandingSettingsForm({
                   Leave blank until the tenant is ready to receive messages.
                 </span>
               </label>
+
+              <section
+                style={{
+                  ...styles.verificationCard,
+                  ...(verificationStatusMessage.tone === "success"
+                    ? styles.verificationSuccess
+                    : verificationStatusMessage.tone === "error"
+                      ? styles.verificationError
+                      : verificationStatusMessage.tone === "warning"
+                        ? styles.verificationWarning
+                        : styles.verificationNeutral),
+                }}
+              >
+                <div>
+                  <p style={styles.verificationKicker}>
+                    Contact email test status
+                  </p>
+                  <h3 style={styles.verificationTitle}>
+                    {verificationStatusMessage.title}
+                  </h3>
+                  <p style={styles.verificationText}>
+                    {verificationStatusMessage.text}
+                  </p>
+                </div>
+
+                <div style={styles.verificationGrid}>
+                  <SummaryItem
+                    label="Saved status"
+                    value={formatStatusLabel(
+                      formState.contactEmailVerificationStatus,
+                    )}
+                  />
+                  <SummaryItem
+                    label="Last test sent"
+                    value={
+                      formState.contactEmailVerificationSentAt
+                        ? formatDateTime(
+                            formState.contactEmailVerificationSentAt,
+                          )
+                        : "Not sent"
+                    }
+                  />
+                  <SummaryItem
+                    label="Verified at"
+                    value={
+                      formState.contactEmailVerifiedAt
+                        ? formatDateTime(formState.contactEmailVerifiedAt)
+                        : "Not manually verified"
+                    }
+                  />
+                  <SummaryItem
+                    label="Last error"
+                    value={
+                      formState.contactEmailVerificationError || "No error"
+                    }
+                  />
+                </div>
+              </section>
             </section>
 
             <div style={styles.divider} />
@@ -782,6 +944,20 @@ export default function BrandingSettingsForm({
               label="Contact email"
               value={contactEmail || "Not set"}
             />
+            <SummaryItem
+              label="Contact email status"
+              value={formatStatusLabel(
+                formState.contactEmailVerificationStatus,
+              )}
+            />
+            <SummaryItem
+              label="Last contact test"
+              value={
+                formState.contactEmailVerificationSentAt
+                  ? formatDateTime(formState.contactEmailVerificationSentAt)
+                  : "Not sent"
+              }
+            />
             <SummaryItem label="Logo URL" value={logoUrl || "Not set"} />
             <SummaryItem
               label="Logo mark URL"
@@ -802,6 +978,22 @@ export default function BrandingSettingsForm({
                 it.
               </p>
             </div>
+
+            <section
+              style={{
+                ...styles.compactVerificationCard,
+                ...(verificationStatusMessage.tone === "success"
+                  ? styles.compactVerificationSuccess
+                  : verificationStatusMessage.tone === "error"
+                    ? styles.compactVerificationError
+                    : verificationStatusMessage.tone === "warning"
+                      ? styles.compactVerificationWarning
+                      : styles.compactVerificationNeutral),
+              }}
+            >
+              <strong>{verificationStatusMessage.title}</strong>
+              <span>{verificationStatusMessage.text}</span>
+            </section>
 
             <form action={sendContactEmailTestAction} style={styles.testEmailForm}>
               <button
@@ -897,7 +1089,8 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .branding-settings-page .colour-grid {
+  .branding-settings-page .colour-grid,
+  .branding-settings-page .verification-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -1291,6 +1484,103 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 750,
     overflowWrap: "anywhere",
+  },
+
+  verificationCard: {
+    display: "grid",
+    gap: 14,
+    padding: 14,
+    borderRadius: 20,
+    border: "1px solid transparent",
+    minWidth: 0,
+  },
+
+  verificationSuccess: {
+    background: "#ecfdf5",
+    borderColor: "#a7f3d0",
+  },
+
+  verificationWarning: {
+    background: "#fffbeb",
+    borderColor: "#fde68a",
+  },
+
+  verificationError: {
+    background: "#fef2f2",
+    borderColor: "#fecaca",
+  },
+
+  verificationNeutral: {
+    background: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+
+  verificationKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  verificationTitle: {
+    margin: "5px 0 0",
+    color: "#0f172a",
+    fontSize: 19,
+    lineHeight: 1.15,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  verificationText: {
+    margin: "7px 0 0",
+    color: "#334155",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  verificationGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  compactVerificationCard: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 16,
+    border: "1px solid transparent",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  compactVerificationSuccess: {
+    background: "#ecfdf5",
+    color: "#047857",
+    borderColor: "#a7f3d0",
+  },
+
+  compactVerificationWarning: {
+    background: "#fffbeb",
+    color: "#92400e",
+    borderColor: "#fde68a",
+  },
+
+  compactVerificationError: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
+  },
+
+  compactVerificationNeutral: {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
   },
 
   divider: {
