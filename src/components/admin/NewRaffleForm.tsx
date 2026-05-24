@@ -10,6 +10,8 @@ type Props = {
   customImagesAllowed?: boolean;
 };
 
+type RaffleSubtype = "standard" | "fifty_fifty";
+
 type OfferRow = {
   id: string;
   label: string;
@@ -133,6 +135,9 @@ export default function NewRaffleForm({
   subscriptionTier,
   customImagesAllowed,
 }: Props) {
+  const [raffleSubtype, setRaffleSubtype] =
+    useState<RaffleSubtype>("standard");
+
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -168,6 +173,8 @@ export default function NewRaffleForm({
     makePrize("prize-1", "1", "", ""),
   ]);
 
+  const isFiftyFifty = raffleSubtype === "fifty_fifty";
+
   useEffect(() => {
     if (!slugEdited) {
       setSlug(slugify(title));
@@ -189,7 +196,10 @@ export default function NewRaffleForm({
     () => selectedColours.join(","),
     [selectedColours],
   );
-    const offersValue = useMemo(() => {
+
+  const offersValue = useMemo(() => {
+    if (isFiftyFifty) return "[]";
+
     const clean = offers
       .map((offer, index) => ({
         id: offer.id,
@@ -210,9 +220,11 @@ export default function NewRaffleForm({
       );
 
     return JSON.stringify(clean);
-  }, [offers]);
+  }, [offers, isFiftyFifty]);
 
   const prizesValue = useMemo(() => {
+    if (isFiftyFifty) return "[]";
+
     const clean = prizes
       .map((prize, index) => {
         const position = Number(prize.position);
@@ -236,7 +248,7 @@ export default function NewRaffleForm({
       .filter((prize) => prize.title);
 
     return JSON.stringify(clean);
-  }, [prizes]);
+  }, [prizes, isFiftyFifty]);
 
   const questionValue = useMemo(() => {
     const text = questionText.trim();
@@ -248,18 +260,24 @@ export default function NewRaffleForm({
   }, [questionText, questionAnswer]);
 
   const validOffersCount = useMemo(() => {
+    if (isFiftyFifty) return 0;
+
     try {
       return JSON.parse(offersValue).length;
     } catch {
       return 0;
     }
-  }, [offersValue]);
+  }, [offersValue, isFiftyFifty]);
 
   const publicPrizesCount = useMemo(() => {
+    if (isFiftyFifty) return 0;
+
     return prizes.filter((prize) => prize.title.trim() && prize.is_public).length;
-  }, [prizes]);
+  }, [prizes, isFiftyFifty]);
 
   const featuredOffer = useMemo(() => {
+    if (isFiftyFifty) return null;
+
     return offers.find(
       (offer) =>
         offer.is_active &&
@@ -267,7 +285,7 @@ export default function NewRaffleForm({
         Number(offer.price) > 0 &&
         Number(offer.quantity) > 0,
     );
-  }, [offers]);
+  }, [offers, isFiftyFifty]);
 
   function toggleColour(colour: string) {
     setSelectedColours((current) =>
@@ -332,6 +350,7 @@ export default function NewRaffleForm({
       <style>{responsiveStyles}</style>
 
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
+      <input type="hidden" name="raffle_subtype" value={raffleSubtype} />
       <input type="hidden" name="colours" value={coloursValue} />
       <input type="hidden" name="offers" value={offersValue} />
       <input type="hidden" name="prizes" value={prizesValue} />
@@ -340,14 +359,22 @@ export default function NewRaffleForm({
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Raffle builder</div>
+          <div style={styles.eyebrow}>
+            {isFiftyFifty ? "50/50 raffle builder" : "Raffle builder"}
+          </div>
 
           <div style={styles.heroTitleRow}>
             <h1 style={styles.heroTitle}>
-              {title.trim() ? title : "Build a premium raffle campaign"}
+              {title.trim()
+                ? title
+                : isFiftyFifty
+                  ? "Build a 50/50 raffle campaign"
+                  : "Build a premium raffle campaign"}
             </h1>
 
-            <div style={styles.statusPill}>{status || "draft"}</div>
+            <div style={styles.statusPill}>
+              {isFiftyFifty ? "50/50" : status || "draft"}
+            </div>
           </div>
 
           <p style={styles.heroSlug}>
@@ -355,8 +382,9 @@ export default function NewRaffleForm({
           </p>
 
           <p style={styles.heroDescription}>
-            Create the public campaign, configure ticket sales, add offers,
-            showcase prizes and keep legal entry requirements in one place.
+            {isFiftyFifty
+              ? "Create a 50/50 raffle using the existing raffle legal framework. Half the paid ticket pot goes to the winner and half supports the cause."
+              : "Create the public campaign, configure ticket sales, add offers, showcase prizes and keep legal entry requirements in one place."}
           </p>
 
           <div style={styles.heroMetricGrid}>
@@ -365,8 +393,11 @@ export default function NewRaffleForm({
               value={formatPreviewMoney(ticketPrice, currency)}
             />
             <HeroMetric label="Total tickets" value={totalTickets} />
-            <HeroMetric label="Colours" value={selectedColours.length} />
-            <HeroMetric label="Offers" value={validOffersCount} />
+            <HeroMetric label="Type" value={isFiftyFifty ? "50/50" : "Standard"} />
+            <HeroMetric
+              label={isFiftyFifty ? "Winner share" : "Offers"}
+              value={isFiftyFifty ? "50%" : validOffersCount}
+            />
           </div>
         </div>
 
@@ -403,26 +434,32 @@ export default function NewRaffleForm({
             <div style={styles.previewText}>
               {description.trim()
                 ? description.trim().slice(0, 92)
-                : "A short public summary of your raffle will appear here."}
+                : isFiftyFifty
+                  ? "Half the paid ticket pot goes to the winner. Half supports the cause."
+                  : "A short public summary of your raffle will appear here."}
               {description.trim().length > 92 ? "…" : ""}
             </div>
 
             <div style={styles.previewBottom}>
               <span>{formatPreviewMoney(ticketPrice, currency)} per ticket</span>
-              <span>{totalTickets} tickets</span>
+              <span>{isFiftyFifty ? "50/50 prize pot" : `${totalTickets} tickets`}</span>
             </div>
           </div>
         </div>
       </section>
 
       <section style={styles.summaryGrid}>
+        <SummaryCard label="Raffle type" value={isFiftyFifty ? "50/50" : "Standard"} />
         <SummaryCard label="Total tickets" value={totalTickets} />
         <SummaryCard label="Numbers / colour" value={numbersPerColour} />
         <SummaryCard label="Colours" value={selectedColours.length} />
-        <SummaryCard label="Offers" value={validOffersCount} />
-        <SummaryCard label="Public prizes" value={publicPrizesCount} />
+        <SummaryCard
+          label={isFiftyFifty ? "Winner share" : "Public prizes"}
+          value={isFiftyFifty ? "50%" : publicPrizesCount}
+        />
       </section>
-            <section style={styles.builderGrid}>
+
+      <section style={styles.builderGrid}>
         <div style={styles.mainColumn}>
           <section style={styles.section}>
             <SectionHeader
@@ -440,7 +477,11 @@ export default function NewRaffleForm({
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
                     style={styles.input}
-                    placeholder="Spring Cash Raffle"
+                    placeholder={
+                      isFiftyFifty
+                        ? "Autumn 50/50 Raffle"
+                        : "Spring Cash Raffle"
+                    }
                   />
                 </Field>
 
@@ -454,7 +495,11 @@ export default function NewRaffleForm({
                       setSlug(slugify(event.target.value));
                     }}
                     style={styles.input}
-                    placeholder="spring-cash-raffle"
+                    placeholder={
+                      isFiftyFifty
+                        ? "autumn-50-50-raffle"
+                        : "spring-cash-raffle"
+                    }
                   />
                 </Field>
               </div>
@@ -466,7 +511,11 @@ export default function NewRaffleForm({
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   style={styles.textarea}
-                  placeholder="Describe the raffle..."
+                  placeholder={
+                    isFiftyFifty
+                      ? "Half the paid ticket pot goes to the winner. Half supports the cause."
+                      : "Describe the raffle..."
+                  }
                 />
               </Field>
 
@@ -521,11 +570,77 @@ export default function NewRaffleForm({
           <section style={styles.section}>
             <SectionHeader
               eyebrow="Section 2"
-              title="Ticket setup"
-              description="Configure ticket price, draw date, currency, status and number range."
+              title="Raffle type & ticket setup"
+              description="Choose the raffle type, then configure ticket price, draw date, currency, status and number range."
             />
 
             <div style={styles.formInner}>
+              <div className="new-raffle-subtype-grid" style={styles.subtypeGrid}>
+                <button
+                  type="button"
+                  onClick={() => setRaffleSubtype("standard")}
+                  style={{
+                    ...styles.subtypeCard,
+                    borderColor:
+                      raffleSubtype === "standard" ? "#1683f8" : "#e2e8f0",
+                    background:
+                      raffleSubtype === "standard" ? "#eff6ff" : "#ffffff",
+                  }}
+                >
+                  <span style={styles.subtypeTitle}>Standard raffle</span>
+                  <span style={styles.subtypeText}>
+                    Fixed prizes, optional bundle offers and the existing raffle
+                    draw flow.
+                  </span>
+                  <span style={styles.subtypeBadge}>
+                    {raffleSubtype === "standard" ? "Selected" : "Choose"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRaffleSubtype("fifty_fifty")}
+                  style={{
+                    ...styles.subtypeCard,
+                    borderColor:
+                      raffleSubtype === "fifty_fifty" ? "#d97706" : "#e2e8f0",
+                    background:
+                      raffleSubtype === "fifty_fifty" ? "#fffbeb" : "#ffffff",
+                  }}
+                >
+                  <span style={styles.subtypeTitle}>50/50 raffle</span>
+                  <span style={styles.subtypeText}>
+                    Half the paid ticket pot goes to the winner and half supports
+                    the cause.
+                  </span>
+                  <span
+                    style={{
+                      ...styles.subtypeBadge,
+                      background:
+                        raffleSubtype === "fifty_fifty" ? "#fef3c7" : "#f8fafc",
+                      color:
+                        raffleSubtype === "fifty_fifty" ? "#92400e" : "#334155",
+                      borderColor:
+                        raffleSubtype === "fifty_fifty" ? "#facc15" : "#e2e8f0",
+                    }}
+                  >
+                    {raffleSubtype === "fifty_fifty" ? "Selected" : "Choose"}
+                  </span>
+                </button>
+              </div>
+
+              {isFiftyFifty ? (
+                <div style={styles.fiftyFiftyInfo}>
+                  <strong>50/50 setup</strong>
+                  <span>
+                    This raffle keeps the existing legal entry question, free
+                    entry structure, terms acceptance and raffle checkout flow.
+                    Bundle offers and fixed prize setup are disabled for this
+                    first 50/50 release.
+                  </span>
+                </div>
+              ) : null}
+
               <Field label="Draw date">
                 <input
                   name="draw_at"
@@ -607,8 +722,12 @@ export default function NewRaffleForm({
           <section style={styles.section}>
             <SectionHeader
               eyebrow="Section 3"
-              title="Sales incentives"
-              description="Set ticket colours and bundle offers that encourage buyers to purchase more."
+              title="Sales setup"
+              description={
+                isFiftyFifty
+                  ? "Set ticket colours. Bundle offers are disabled for 50/50 raffles in this release."
+                  : "Set ticket colours and bundle offers that encourage buyers to purchase more."
+              }
             />
 
             <div style={styles.formInner}>
@@ -699,224 +818,260 @@ export default function NewRaffleForm({
                 </p>
               </section>
 
-              <section style={styles.innerPanel}>
+              {isFiftyFifty ? (
+                <section style={styles.disabledPanel}>
+                  <div style={styles.disabledEyebrow}>Disabled for 50/50</div>
+                  <h3 style={styles.subTitle}>Bundle offers</h3>
+                  <p style={styles.sectionDescription}>
+                    Bundle offers are disabled for 50/50 raffles in this first
+                    release so the cash prize pot remains simple and transparent.
+                  </p>
+                </section>
+              ) : (
+                <section style={styles.innerPanel}>
+                  <div style={styles.innerHeader}>
+                    <div>
+                      <h3 style={styles.subTitle}>Offers</h3>
+
+                      <p style={styles.sectionDescription}>
+                        Optional bundle pricing. Example: 3 tickets for 12.00.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addOffer}
+                      style={styles.lightButton}
+                    >
+                      + Add offer
+                    </button>
+                  </div>
+
+                  <div style={styles.offerList}>
+                    {offers.map((offer, index) => (
+                      <div key={offer.id} style={styles.offerCard}>
+                        <div style={styles.offerCardTop}>
+                          <div>
+                            <div style={styles.offerBadge}>
+                              {index === 0
+                                ? "Featured offer"
+                                : `Offer ${index + 1}`}
+                            </div>
+
+                            <div style={styles.offerTitle}>
+                              {offer.label.trim() || "Bundle offer"}
+                            </div>
+                          </div>
+
+                          <label style={styles.checkboxLabel}>
+                            <input
+                              type="checkbox"
+                              checked={offer.is_active}
+                              onChange={(event) =>
+                                updateOffer(offer.id, {
+                                  is_active: event.target.checked,
+                                })
+                              }
+                            />
+                            Use
+                          </label>
+                        </div>
+
+                        <div style={styles.offerGrid}>
+                          <Field label="Label">
+                            <input
+                              value={offer.label}
+                              onChange={(event) =>
+                                updateOffer(offer.id, {
+                                  label: event.target.value,
+                                })
+                              }
+                              placeholder="3 for 12"
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Number of tickets">
+                            <input
+                              value={offer.quantity}
+                              onChange={(event) =>
+                                updateOffer(offer.id, {
+                                  quantity: event.target.value,
+                                })
+                              }
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="3"
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Total offer price">
+                            <input
+                              value={offer.price}
+                              onChange={(event) =>
+                                updateOffer(offer.id, {
+                                  price: event.target.value,
+                                })
+                              }
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="12.00"
+                              style={styles.input}
+                            />
+                          </Field>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeOffer(offer.id)}
+                          disabled={offers.length <= 1}
+                          style={{
+                            ...styles.dangerButton,
+                            cursor:
+                              offers.length <= 1 ? "not-allowed" : "pointer",
+                            opacity: offers.length <= 1 ? 0.55 : 1,
+                          }}
+                        >
+                          Remove offer
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p style={styles.helpText}>
+                    Leave unused rows blank. Save the raffle to apply changes.
+                  </p>
+                </section>
+              )}
+            </div>
+          </section>
+
+          <section style={styles.section}>
+            <SectionHeader
+              eyebrow="Section 4"
+              title={isFiftyFifty ? "50/50 prize setup" : "Prize setup"}
+              description={
+                isFiftyFifty
+                  ? "The winner prize is calculated automatically from paid ticket sales."
+                  : "Add prizes and choose which ones appear publicly on the campaign page."
+              }
+            />
+
+            {isFiftyFifty ? (
+              <div style={styles.fiftyFiftyPrizePanel}>
+                <div style={styles.fiftyFiftyPrizeStat}>
+                  <span>Winner share</span>
+                  <strong>50%</strong>
+                </div>
+
+                <div style={styles.fiftyFiftyPrizeStat}>
+                  <span>Cause share</span>
+                  <strong>50%</strong>
+                </div>
+
+                <p style={styles.helpText}>
+                  The final prize amount will be calculated from paid ticket
+                  sales and snapshotted at draw time. Manual prize rows are not
+                  used for 50/50 raffles.
+                </p>
+              </div>
+            ) : (
+              <div style={styles.prizePanel}>
                 <div style={styles.innerHeader}>
                   <div>
-                    <h3 style={styles.subTitle}>Offers</h3>
+                    <h3 style={styles.subTitle}>Public prize list</h3>
 
                     <p style={styles.sectionDescription}>
-                      Optional bundle pricing. Example: 3 tickets for 12.00.
+                      These prizes can also be used later during winner draws.
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={addOffer}
-                    style={styles.lightButton}
-                  >
-                    + Add offer
+                  <button type="button" onClick={addPrize} style={styles.goldButton}>
+                    + Add prize
                   </button>
                 </div>
 
-                <div style={styles.offerList}>
-                  {offers.map((offer, index) => (
-                    <div key={offer.id} style={styles.offerCard}>
-                      <div style={styles.offerCardTop}>
-                        <div>
-                          <div style={styles.offerBadge}>
-                            {index === 0
-                              ? "Featured offer"
-                              : `Offer ${index + 1}`}
-                          </div>
-
-                          <div style={styles.offerTitle}>
-                            {offer.label.trim() || "Bundle offer"}
-                          </div>
-                        </div>
+                <div style={styles.prizeList}>
+                  {prizes.map((prize, index) => (
+                    <div key={prize.id} style={styles.prizeRow}>
+                      <div style={styles.rowHeader}>
+                        <strong>Prize {index + 1}</strong>
 
                         <label style={styles.checkboxLabel}>
                           <input
                             type="checkbox"
-                            checked={offer.is_active}
+                            checked={prize.is_public}
                             onChange={(event) =>
-                              updateOffer(offer.id, {
-                                is_active: event.target.checked,
+                              updatePrize(prize.id, {
+                                is_public: event.target.checked,
                               })
                             }
                           />
-                          Use
+                          Show publicly
                         </label>
                       </div>
 
-                      <div style={styles.offerGrid}>
-                        <Field label="Label">
+                      <div style={styles.prizeGrid}>
+                        <Field label="Position">
                           <input
-                            value={offer.label}
+                            value={prize.position}
                             onChange={(event) =>
-                              updateOffer(offer.id, {
-                                label: event.target.value,
-                              })
-                            }
-                            placeholder="3 for 12"
-                            style={styles.input}
-                          />
-                        </Field>
-
-                        <Field label="Number of tickets">
-                          <input
-                            value={offer.quantity}
-                            onChange={(event) =>
-                              updateOffer(offer.id, {
-                                quantity: event.target.value,
+                              updatePrize(prize.id, {
+                                position: event.target.value,
                               })
                             }
                             type="number"
                             min="1"
                             step="1"
-                            placeholder="3"
                             style={styles.input}
                           />
                         </Field>
 
-                        <Field label="Total offer price">
+                        <Field label="Prize title">
                           <input
-                            value={offer.price}
+                            value={prize.title}
                             onChange={(event) =>
-                              updateOffer(offer.id, {
-                                price: event.target.value,
-                              })
+                              updatePrize(prize.id, { title: event.target.value })
                             }
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="12.00"
+                            placeholder="Prize title"
                             style={styles.input}
                           />
                         </Field>
                       </div>
 
+                      <Field label="Description optional">
+                        <textarea
+                          value={prize.description}
+                          onChange={(event) =>
+                            updatePrize(prize.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          rows={2}
+                          style={styles.textarea}
+                        />
+                      </Field>
+
                       <button
                         type="button"
-                        onClick={() => removeOffer(offer.id)}
-                        disabled={offers.length <= 1}
+                        onClick={() => removePrize(prize.id)}
+                        disabled={prizes.length <= 1}
                         style={{
                           ...styles.dangerButton,
-                          cursor:
-                            offers.length <= 1 ? "not-allowed" : "pointer",
-                          opacity: offers.length <= 1 ? 0.55 : 1,
+                          cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
+                          opacity: prizes.length <= 1 ? 0.55 : 1,
                         }}
                       >
-                        Remove offer
+                        Remove prize
                       </button>
                     </div>
                   ))}
                 </div>
-
-                <p style={styles.helpText}>
-                  Leave unused rows blank. Save the raffle to apply changes.
-                </p>
-              </section>
-            </div>
-          </section>
-                    <section style={styles.section}>
-            <SectionHeader
-              eyebrow="Section 4"
-              title="Prize setup"
-              description="Add prizes and choose which ones appear publicly on the campaign page."
-            />
-
-            <div style={styles.prizePanel}>
-              <div style={styles.innerHeader}>
-                <div>
-                  <h3 style={styles.subTitle}>Public prize list</h3>
-
-                  <p style={styles.sectionDescription}>
-                    These prizes can also be used later during winner draws.
-                  </p>
-                </div>
-
-                <button type="button" onClick={addPrize} style={styles.goldButton}>
-                  + Add prize
-                </button>
               </div>
-
-              <div style={styles.prizeList}>
-                {prizes.map((prize, index) => (
-                  <div key={prize.id} style={styles.prizeRow}>
-                    <div style={styles.rowHeader}>
-                      <strong>Prize {index + 1}</strong>
-
-                      <label style={styles.checkboxLabel}>
-                        <input
-                          type="checkbox"
-                          checked={prize.is_public}
-                          onChange={(event) =>
-                            updatePrize(prize.id, {
-                              is_public: event.target.checked,
-                            })
-                          }
-                        />
-                        Show publicly
-                      </label>
-                    </div>
-
-                    <div style={styles.prizeGrid}>
-                      <Field label="Position">
-                        <input
-                          value={prize.position}
-                          onChange={(event) =>
-                            updatePrize(prize.id, {
-                              position: event.target.value,
-                            })
-                          }
-                          type="number"
-                          min="1"
-                          step="1"
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Prize title">
-                        <input
-                          value={prize.title}
-                          onChange={(event) =>
-                            updatePrize(prize.id, { title: event.target.value })
-                          }
-                          placeholder="Prize title"
-                          style={styles.input}
-                        />
-                      </Field>
-                    </div>
-
-                    <Field label="Description optional">
-                      <textarea
-                        value={prize.description}
-                        onChange={(event) =>
-                          updatePrize(prize.id, {
-                            description: event.target.value,
-                          })
-                        }
-                        rows={2}
-                        style={styles.textarea}
-                      />
-                    </Field>
-
-                    <button
-                      type="button"
-                      onClick={() => removePrize(prize.id)}
-                      disabled={prizes.length <= 1}
-                      style={{
-                        ...styles.dangerButton,
-                        cursor: prizes.length <= 1 ? "not-allowed" : "pointer",
-                        opacity: prizes.length <= 1 ? 0.55 : 1,
-                      }}
-                    >
-                      Remove prize
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </section>
 
           <details style={styles.legalDetails}>
@@ -928,6 +1083,9 @@ export default function NewRaffleForm({
 
                 <p style={styles.legalText}>
                   Optional skill-based question for the public checkout flow.
+                  {isFiftyFifty
+                    ? " 50/50 raffles use this same raffle legal structure."
+                    : ""}
                 </p>
               </div>
 
@@ -938,6 +1096,7 @@ export default function NewRaffleForm({
               <div style={styles.twoColumn}>
                 <Field label="Question">
                   <input
+                    name="question_text_preview"
                     value={questionText}
                     onChange={(event) => setQuestionText(event.target.value)}
                     placeholder="e.g. What colour is a London taxi?"
@@ -947,6 +1106,7 @@ export default function NewRaffleForm({
 
                 <Field label="Correct answer">
                   <input
+                    name="question_answer_preview"
                     value={questionAnswer}
                     onChange={(event) => setQuestionAnswer(event.target.value)}
                     placeholder="e.g. black"
@@ -1004,26 +1164,32 @@ export default function NewRaffleForm({
                 Choose ticket colours
               </CheckItem>
 
-              <CheckItem done={publicPrizesCount > 0}>
-                Add public prize
+              <CheckItem done={isFiftyFifty || publicPrizesCount > 0}>
+                {isFiftyFifty ? "50/50 prize pot enabled" : "Add public prize"}
               </CheckItem>
             </div>
           </div>
 
           <div style={styles.sideCard}>
-            <div style={styles.sideEyebrow}>Public offer preview</div>
+            <div style={styles.sideEyebrow}>
+              {isFiftyFifty ? "50/50 preview" : "Public offer preview"}
+            </div>
 
             <h3 style={styles.sideTitle}>
-              {featuredOffer?.label?.trim() || "No active offer yet"}
+              {isFiftyFifty
+                ? "50% to winner"
+                : featuredOffer?.label?.trim() || "No active offer yet"}
             </h3>
 
             <p style={styles.sideText}>
-              {featuredOffer
-                ? `${featuredOffer.quantity || "0"} tickets for ${formatPreviewMoney(
-                    featuredOffer.price,
-                    currency,
-                  )}`
-                : "Add an offer to show a highlighted bundle for buyers."}
+              {isFiftyFifty
+                ? "The public page will show the estimated winner prize once paid ticket sales are available."
+                : featuredOffer
+                  ? `${featuredOffer.quantity || "0"} tickets for ${formatPreviewMoney(
+                      featuredOffer.price,
+                      currency,
+                    )}`
+                  : "Add an offer to show a highlighted bundle for buyers."}
             </p>
           </div>
 
@@ -1209,6 +1375,10 @@ const responsiveStyles = `
     .new-raffle-form button,
     .new-raffle-form a {
       min-height: 46px !important;
+    }
+
+    .new-raffle-subtype-grid {
+      grid-template-columns: 1fr !important;
     }
   }
 
@@ -1564,6 +1734,57 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
   },
+  subtypeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 12,
+  },
+  subtypeCard: {
+    display: "grid",
+    gap: 8,
+    textAlign: "left",
+    padding: 16,
+    borderRadius: 20,
+    border: "1px solid",
+    cursor: "pointer",
+    color: "#0f172a",
+  },
+  subtypeTitle: {
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  subtypeText: {
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 750,
+  },
+  subtypeBadge: {
+    justifySelf: "start",
+    marginTop: 4,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  fiftyFiftyInfo: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 20,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 800,
+  },
   field: {
     display: "grid",
     gap: 6,
@@ -1643,6 +1864,23 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
   },
+  disabledPanel: {
+    display: "grid",
+    gap: 8,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  disabledEyebrow: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
   prizePanel: {
     display: "grid",
     gap: 14,
@@ -1653,6 +1891,27 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
     minWidth: 0,
     overflow: "hidden",
+  },
+  fiftyFiftyPrizePanel: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gap: 12,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
+    border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  fiftyFiftyPrizeStat: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+    color: "#92400e",
   },
   innerHeader: {
     display: "flex",
