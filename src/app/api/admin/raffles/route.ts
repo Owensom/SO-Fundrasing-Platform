@@ -98,9 +98,64 @@ function normaliseImagePosition(value: string) {
   return "center";
 }
 
-function normaliseDrawAt(value: FormDataEntryValue | null) {
-  const clean = String(value ?? "").trim();
-  return clean ? clean : null;
+function isRealDate(year: number, month: number, day: number) {
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    testDate.getUTCFullYear() === year &&
+    testDate.getUTCMonth() === month - 1 &&
+    testDate.getUTCDate() === day
+  );
+}
+
+function isValidIsoDrawAt(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+
+  if (!isRealDate(year, month, day)) return false;
+
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+}
+
+function normaliseDrawAt(formData: FormData) {
+  const submittedDrawAt = String(formData.get("draw_at") ?? "").trim();
+  const visibleDrawDate = String(formData.get("draw_date_preview") ?? "").trim();
+  const visibleDrawTime = String(formData.get("draw_time_preview") ?? "").trim();
+
+  if (!submittedDrawAt && !visibleDrawDate && !visibleDrawTime) {
+    return {
+      ok: true as const,
+      value: null,
+    };
+  }
+
+  if (!submittedDrawAt) {
+    return {
+      ok: false as const,
+    };
+  }
+
+  if (!isValidIsoDrawAt(submittedDrawAt)) {
+    return {
+      ok: false as const,
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: submittedDrawAt,
+  };
 }
 
 async function requireTenantAccess(request: NextRequest) {
@@ -225,7 +280,17 @@ export async function POST(request: NextRequest) {
     const slug = slugify(rawSlug || title);
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
-    const draw_at = normaliseDrawAt(formData.get("draw_at"));
+
+    const drawAtResult = normaliseDrawAt(formData);
+
+    if (!drawAtResult.ok) {
+      return NextResponse.redirect(
+        new URL("/admin/raffles/new?error=invalid_draw_datetime", request.url),
+        { status: 303 },
+      );
+    }
+
+    const draw_at = drawAtResult.value;
 
     const image_position = normaliseImagePosition(
       String(formData.get("image_position") ?? "center"),
