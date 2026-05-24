@@ -28,6 +28,10 @@ type BrandingSettings = {
   public_tagline: string | null;
   public_contact_name: string | null;
   public_contact_email: string | null;
+  public_contact_email_verified_at: string | Date | null;
+  public_contact_email_verification_sent_at: string | Date | null;
+  public_contact_email_verification_status: string | null;
+  public_contact_email_verification_error: string | null;
   public_logo_url: string | null;
   public_logo_mark_url: string | null;
   public_primary_colour: string | null;
@@ -120,6 +124,10 @@ async function getBrandingSettings(tenantSlug: string) {
         public_tagline,
         public_contact_name,
         public_contact_email,
+        public_contact_email_verified_at,
+        public_contact_email_verification_sent_at,
+        public_contact_email_verification_status,
+        public_contact_email_verification_error,
         public_logo_url,
         public_logo_mark_url,
         public_primary_colour,
@@ -216,19 +224,65 @@ async function updateTenantBranding(formData: FormData) {
         public_tagline,
         public_contact_name,
         public_contact_email,
+        public_contact_email_verification_status,
+        public_contact_email_verification_sent_at,
+        public_contact_email_verified_at,
+        public_contact_email_verification_error,
         public_logo_url,
         public_logo_mark_url,
         public_primary_colour,
         public_accent_colour,
         public_footer_text
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      values (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        case when $5::text is null then null else 'not_sent' end,
+        null,
+        null,
+        null,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10
+      )
       on conflict (tenant_slug)
       do update set
         public_display_name = excluded.public_display_name,
         public_tagline = excluded.public_tagline,
         public_contact_name = excluded.public_contact_name,
         public_contact_email = excluded.public_contact_email,
+        public_contact_email_verification_status =
+          case
+            when tenant_settings.public_contact_email is distinct from excluded.public_contact_email
+              then case
+                when excluded.public_contact_email is null then null
+                else 'not_sent'
+              end
+            else tenant_settings.public_contact_email_verification_status
+          end,
+        public_contact_email_verification_sent_at =
+          case
+            when tenant_settings.public_contact_email is distinct from excluded.public_contact_email
+              then null
+            else tenant_settings.public_contact_email_verification_sent_at
+          end,
+        public_contact_email_verified_at =
+          case
+            when tenant_settings.public_contact_email is distinct from excluded.public_contact_email
+              then null
+            else tenant_settings.public_contact_email_verified_at
+          end,
+        public_contact_email_verification_error =
+          case
+            when tenant_settings.public_contact_email is distinct from excluded.public_contact_email
+              then null
+            else tenant_settings.public_contact_email_verification_error
+          end,
         public_logo_url = excluded.public_logo_url,
         public_logo_mark_url = excluded.public_logo_mark_url,
         public_primary_colour = excluded.public_primary_colour,
@@ -278,16 +332,49 @@ async function sendContactEmailTest(formData: FormData) {
   try {
     await sendTenantContactTestEmail({
       tenantSlug,
-      tenantDisplayName:
-        cleanText(settings.public_display_name) || tenantSlug,
+      tenantDisplayName: cleanText(settings.public_display_name) || tenantSlug,
       tenantContactEmail: contactEmail,
       tenantContactName: settings.public_contact_name,
     });
+
+    await query(
+      `
+        update tenant_settings
+        set
+          public_contact_email_verification_status = 'sent',
+          public_contact_email_verification_sent_at = now(),
+          public_contact_email_verified_at = null,
+          public_contact_email_verification_error = null,
+          updated_at = now()
+        where tenant_slug = $1
+          and public_contact_email = $2
+      `,
+      [tenantSlug, contactEmail],
+    );
   } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message.slice(0, 1000)
+        : "Contact email test failed";
+
     console.error("Tenant contact test email failed", error);
+
+    await query(
+      `
+        update tenant_settings
+        set
+          public_contact_email_verification_status = 'failed',
+          public_contact_email_verification_error = $2,
+          updated_at = now()
+        where tenant_slug = $1
+      `,
+      [tenantSlug, errorMessage],
+    );
+
     redirect("/admin/settings/branding?contactTest=email_failed");
   }
 
+  revalidatePath("/admin/settings/branding");
   redirect("/admin/settings/branding?contactTest=sent");
 }
 
