@@ -1749,11 +1749,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   ticketSetupGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(min(100%, 250px), 1.25fr) repeat(3, minmax(min(100%, 150px), 1fr))",
-    gap: 12,
-    alignItems: "end",
+   display: "grid",
+   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+   gap: 12,
+   alignItems: "end",
+   minWidth: 0,
+   maxWidth: "100%",
   },
   subtypeGrid: {
     display: "grid",
