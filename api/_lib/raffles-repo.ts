@@ -5,6 +5,8 @@ type CurrencyCode = "GBP" | "USD" | "EUR";
 
 type ImagePosition = "center" | "top" | "bottom" | "left" | "right";
 
+export type RaffleSubtype = "standard" | "fifty_fifty";
+
 type RaffleQuestion = {
   text: string;
   answer: string;
@@ -57,6 +59,7 @@ export type RaffleRow = {
   total_tickets: number;
   sold_tickets: number;
   status: RaffleStatus;
+  raffle_subtype: RaffleSubtype | null;
   config_json: RaffleConfig | null;
   winner_ticket_number: number | null;
   winner_colour: string | null;
@@ -81,6 +84,7 @@ export type RaffleSummary = {
   sold_tickets: number;
   remaining_tickets: number;
   status: RaffleStatus;
+  raffle_subtype: RaffleSubtype;
   config_json: RaffleConfig;
   winner_ticket_number: number | null;
   winner_colour: string | null;
@@ -115,6 +119,7 @@ export type CreateRaffleInput = {
   total_tickets?: number | null;
   sold_tickets?: number | null;
   status?: RaffleStatus;
+  raffle_subtype?: RaffleSubtype | string | null;
   startNumber?: number | null;
   endNumber?: number | null;
   numbersPerColour?: number | null;
@@ -148,6 +153,14 @@ export type SoldTicketForDraw = {
 function normalizeCurrency(value: unknown): CurrencyCode {
   if (value === "USD" || value === "EUR") return value;
   return "GBP";
+}
+
+function normalizeRaffleSubtype(value: unknown): RaffleSubtype {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") return "fifty_fifty";
+
+  return "standard";
 }
 
 function normalizeImagePosition(value: unknown): ImagePosition {
@@ -329,6 +342,7 @@ function toRaffleSummary(row: RaffleRow): RaffleSummary {
       0,
     ),
     status: row.status,
+    raffle_subtype: normalizeRaffleSubtype(row.raffle_subtype),
     config_json:
       row.config_json && typeof row.config_json === "object"
         ? row.config_json
@@ -374,6 +388,7 @@ const RAFFLE_SELECT = `
   total_tickets,
   sold_tickets,
   status,
+  raffle_subtype,
   config_json,
   winner_ticket_number,
   winner_colour,
@@ -460,9 +475,10 @@ export async function createRaffle(
       total_tickets,
       sold_tickets,
       status,
+      raffle_subtype,
       config_json
     )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
     returning ${RAFFLE_SELECT}
     `,
     [
@@ -478,6 +494,7 @@ export async function createRaffle(
       input.total_tickets ?? 0,
       input.sold_tickets ?? 0,
       input.status ?? "published",
+      normalizeRaffleSubtype(input.raffle_subtype),
       JSON.stringify(config),
     ],
   );
@@ -510,7 +527,8 @@ export async function updateRaffle(
       total_tickets = $10,
       sold_tickets = $11,
       status = $12,
-      config_json = $13::jsonb,
+      raffle_subtype = $13,
+      config_json = $14::jsonb,
       updated_at = now()
     where id = $1
        or (tenant_slug = $2 and slug = $3)
@@ -529,6 +547,7 @@ export async function updateRaffle(
       input.total_tickets ?? 0,
       input.sold_tickets ?? 0,
       input.status ?? "published",
+      normalizeRaffleSubtype(input.raffle_subtype),
       JSON.stringify(config),
     ],
   );
