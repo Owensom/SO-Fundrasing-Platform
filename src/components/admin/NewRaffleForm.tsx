@@ -583,7 +583,7 @@ export default function NewRaffleForm({
             <SectionHeader
               eyebrow="Section 2"
               title="Raffle type & ticket setup"
-              description="Choose the raffle type, then configure ticket price, draw date, currency, status and number range."
+              description="Choose the raffle type, then configure draw timing, pricing, status and ticket range."
             />
 
             <div style={styles.formInner}>
@@ -653,91 +653,116 @@ export default function NewRaffleForm({
                 </div>
               ) : null}
 
-              <div style={styles.ticketSetupGrid}>
-                <Field label="Draw date">
-                  <input
-                    name="draw_date_preview"
-                    type="date"
-                    value={drawDate}
-                    onChange={(event) => setDrawDate(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
+              <section style={styles.ticketSetupPanel}>
+                <div style={styles.panelHeader}>
+                  <div>
+                    <div style={styles.innerEyebrow}>Ticket setup</div>
+                    <h3 style={styles.subTitle}>Draw, pricing and status</h3>
+                    <p style={styles.sectionDescription}>
+                      Set the draw date and time, single ticket price and
+                      publishing status.
+                    </p>
+                  </div>
+                </div>
 
-                <Field label="Draw time">
-                  <input
-                    name="draw_time_preview"
-                    type="time"
-                    value={drawTime}
-                    onChange={(event) => setDrawTime(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
+                <div style={styles.stackedFields}>
+                  <Field label="Draw date">
+                    <input
+                      name="draw_date_preview"
+                      type="date"
+                      value={drawDate}
+                      onChange={(event) => setDrawDate(event.target.value)}
+                      style={styles.input}
+                    />
+                  </Field>
 
-                <Field label="Ticket price">
-                  <input
-                    name="ticket_price"
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={ticketPrice}
-                    onChange={(event) => setTicketPrice(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
+                  <Field label="Draw time">
+                    <input
+                      name="draw_time_preview"
+                      type="time"
+                      value={drawTime}
+                      onChange={(event) => setDrawTime(event.target.value)}
+                      style={styles.input}
+                    />
+                  </Field>
 
-                <Field label="Currency">
-                  <select
-                    name="currency"
-                    value={currency}
-                    onChange={(event) => setCurrency(event.target.value)}
-                    style={styles.input}
-                  >
-                    <option value="GBP">GBP</option>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                  </select>
-                </Field>
+                  <Field label="Ticket price">
+                    <input
+                      name="ticket_price"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={ticketPrice}
+                      onChange={(event) => setTicketPrice(event.target.value)}
+                      style={styles.input}
+                    />
+                  </Field>
 
-                <Field label="Status">
-                  <select
-                    name="status"
-                    value={status}
-                    onChange={(event) => setStatus(event.target.value)}
-                    style={styles.input}
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </Field>
-              </div>
+                  <Field label="Currency">
+                    <select
+                      name="currency"
+                      value={currency}
+                      onChange={(event) => setCurrency(event.target.value)}
+                      style={styles.input}
+                    >
+                      <option value="GBP">GBP</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </Field>
 
-              <div style={styles.twoColumn}>
-                <Field label="Start number">
-                  <input
-                    name="startNumber"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={startNumber}
-                    onChange={(event) => setStartNumber(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
+                  <Field label="Status">
+                    <select
+                      name="status"
+                      value={status}
+                      onChange={(event) => setStatus(event.target.value)}
+                      style={styles.input}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </Field>
+                </div>
+              </section>
 
-                <Field label="End number">
-                  <input
-                    name="endNumber"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={endNumber}
-                    onChange={(event) => setEndNumber(event.target.value)}
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
+              <section style={styles.ticketSetupPanel}>
+                <div style={styles.panelHeader}>
+                  <div>
+                    <div style={styles.innerEyebrow}>Ticket range</div>
+                    <h3 style={styles.subTitle}>Numbers per colour</h3>
+                    <p style={styles.sectionDescription}>
+                      Each selected colour will use this same number range.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.twoColumn}>
+                  <Field label="Start number">
+                    <input
+                      name="startNumber"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={startNumber}
+                      onChange={(event) => setStartNumber(event.target.value)}
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="End number">
+                    <input
+                      name="endNumber"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={endNumber}
+                      onChange={(event) => setEndNumber(event.target.value)}
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+              </section>
             </div>
           </section>
 
@@ -1757,18 +1782,30 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
     gap: 12,
   },
-  threeColumn: {
+  stackedFields: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 12,
-  },
-  ticketSetupGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
-    gap: 12,
-    alignItems: "end",
     minWidth: 0,
     maxWidth: "100%",
+  },
+  ticketSetupPanel: {
+    display: "grid",
+    gap: 14,
+    padding: "clamp(14px, 3vw, 16px)",
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+  panelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
   subtypeGrid: {
     display: "grid",
@@ -1876,6 +1913,14 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 18,
     letterSpacing: "-0.01em",
+  },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
   },
   previewBox: {
     height: 220,
