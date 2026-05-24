@@ -130,16 +130,38 @@ function normaliseRaffleSubtype(value: unknown) {
   return "standard";
 }
 
-function formatDateTimeLocal(value: string | null | undefined) {
-  if (!value) return "";
+function getDateParts(value: string | null | undefined) {
+  if (!value) return null;
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "";
+    return null;
   }
 
-  return date.toISOString().slice(0, 16);
+  return {
+    day: String(date.getUTCDate()).padStart(2, "0"),
+    month: String(date.getUTCMonth() + 1).padStart(2, "0"),
+    year: String(date.getUTCFullYear()).padStart(4, "0"),
+    hour: String(date.getUTCHours()).padStart(2, "0"),
+    minute: String(date.getUTCMinutes()).padStart(2, "0"),
+  };
+}
+
+function formatBritishDateInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
+
+  if (!parts) return "";
+
+  return `${parts.day}/${parts.month}/${parts.year}`;
+}
+
+function formatTimeInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
+
+  if (!parts) return "";
+
+  return `${parts.hour}:${parts.minute}`;
 }
 
 function formatDrawDate(value: string | null | undefined) {
@@ -240,6 +262,14 @@ export default async function AdminRafflePage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const campaignLimitReached =
     resolvedSearchParams.error === "campaign_limit";
+
+  const invalidDrawDateTime =
+    resolvedSearchParams.error === "invalid_draw_datetime";
+
+  const invalidPostalDateTime =
+    resolvedSearchParams.error === "invalid_postal_datetime";
+
+  const saveFailed = resolvedSearchParams.error === "save_failed";
 
   const session = await auth();
 
@@ -408,6 +438,30 @@ export default async function AdminRafflePage({
               View billing
             </Link>
           </div>
+        </section>
+      ) : null}
+
+      {invalidDrawDateTime || invalidPostalDateTime || saveFailed ? (
+        <section style={styles.validationBanner}>
+          <div style={styles.validationEyebrow}>
+            {saveFailed ? "Save issue" : "Date format issue"}
+          </div>
+
+          <h2 style={styles.validationTitle}>
+            {invalidDrawDateTime
+              ? "Please check the draw date."
+              : invalidPostalDateTime
+                ? "Please check the postal closing date."
+                : "The raffle could not be saved."}
+          </h2>
+
+          <p style={styles.validationText}>
+            {invalidDrawDateTime
+              ? "Draw date must use DD/MM/YYYY format, for example 31/10/2026. Draw time must use 24-hour HH:MM format, for example 19:00. You can also leave both fields blank while drafting."
+              : invalidPostalDateTime
+                ? "Postal closing date must use DD/MM/YYYY format, for example 31/10/2026. Postal closing time must use 24-hour HH:MM format, for example 18:00. You can also leave both fields blank."
+                : "Please check the form values and try again. The raffle has not been changed."}
+          </p>
         </section>
       ) : null}
 
@@ -767,9 +821,22 @@ export default async function AdminRafflePage({
                 <div className="raffle-three-column" style={styles.threeColumn}>
                   <Field label="Draw date">
                     <input
-                      name="draw_at"
-                      type="datetime-local"
-                      defaultValue={formatDateTimeLocal(raffle.draw_at)}
+                      name="draw_date"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatBritishDateInput(raffle.draw_at)}
+                      placeholder="DD/MM/YYYY"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Draw time">
+                    <input
+                      name="draw_time"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatTimeInput(raffle.draw_at)}
+                      placeholder="HH:MM"
                       style={styles.input}
                     />
                   </Field>
@@ -1034,16 +1101,33 @@ export default async function AdminRafflePage({
                   />
                 </Field>
 
-                <Field label="Postal entry closing date">
-                  <input
-                    name="free_entry_closes_at"
-                    type="datetime-local"
-                    defaultValue={formatDateTimeLocal(
-                      config.free_entry?.closes_at,
-                    )}
-                    style={styles.input}
-                  />
-                </Field>
+                <div className="raffle-two-column" style={styles.twoColumn}>
+                  <Field label="Postal entry closing date">
+                    <input
+                      name="free_entry_closes_date"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatBritishDateInput(
+                        config.free_entry?.closes_at,
+                      )}
+                      placeholder="DD/MM/YYYY"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Postal entry closing time">
+                    <input
+                      name="free_entry_closes_time"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatTimeInput(
+                        config.free_entry?.closes_at,
+                      )}
+                      placeholder="HH:MM"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
 
                 <p style={styles.helpText}>
                   Postal entries must include an email address so the entrant can
@@ -1107,7 +1191,10 @@ export default async function AdminRafflePage({
       </section>
 
       <section style={styles.section}>
-        <details open={!prizesConfigured && !isFiftyFifty} style={styles.adminDetails}>
+        <details
+          open={!prizesConfigured && !isFiftyFifty}
+          style={styles.adminDetails}
+        >
           <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 2</div>
@@ -1490,25 +1577,7 @@ const responsiveStyles = `
     .raffle-preview-box {
       height: 190px !important;
     }
-  
-    .raffle-admin-page input[type="datetime-local"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-      display: block !important;
-      box-sizing: border-box !important;
-      appearance: none !important;
-      -webkit-appearance: none !important;
-    }
 
-    .raffle-admin-page input[name="draw_at"],
-    .raffle-admin-page input[name="free_entry_closes_at"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-      overflow: hidden !important;
-    }
-    
     .raffle-colour-grid {
       grid-template-columns: 1fr !important;
     }
@@ -1638,6 +1707,42 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #cbd5e1",
+  },
+  validationBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  validationEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  validationTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  validationText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
   },
   hero: {
     display: "grid",
