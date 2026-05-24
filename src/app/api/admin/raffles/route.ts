@@ -28,6 +28,14 @@ function normaliseFocus(
   return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
+function normaliseRaffleSubtype(value: FormDataEntryValue | string | null) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") return "fifty_fifty";
+
+  return "standard";
+}
+
 function parseColours(value: string): string[] {
   return value
     .split(",")
@@ -226,8 +234,11 @@ export async function POST(request: NextRequest) {
     const image_focus_x = normaliseFocus(formData.get("image_focus_x"), 50);
     const image_focus_y = normaliseFocus(formData.get("image_focus_y"), 50);
 
-    const currency = String(formData.get("currency") ?? "EUR").trim();
+    const currency = String(formData.get("currency") ?? "GBP").trim();
     const status = String(formData.get("status") ?? "draft").trim();
+    const raffle_subtype = normaliseRaffleSubtype(
+      formData.get("raffle_subtype"),
+    );
 
     if (status === "published") {
       const allowedToPublish = await canTenantPublishCampaign(tenantSlug);
@@ -245,9 +256,11 @@ export async function POST(request: NextRequest) {
     const endNumber = parseNumber(formData.get("endNumber"), 1);
 
     const colours = parseColours(String(formData.get("colours") ?? ""));
-    const offers = parseJsonArray(String(formData.get("offers") ?? "[]"));
+    const rawOffers = parseJsonArray(String(formData.get("offers") ?? "[]"));
     const prizes = parseJsonArray(String(formData.get("prizes") ?? "[]"));
     const question = parseLegalQuestion(String(formData.get("question") ?? ""));
+
+    const offers = raffle_subtype === "fifty_fifty" ? [] : rawOffers;
 
     if (!title) {
       return NextResponse.json(
@@ -285,6 +298,7 @@ export async function POST(request: NextRequest) {
       total_tickets,
       sold_tickets: 0,
       status: status as "draft" | "published" | "closed" | "drawn",
+      raffle_subtype,
       startNumber,
       endNumber,
       numbersPerColour,
