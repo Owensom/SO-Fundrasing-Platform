@@ -92,17 +92,93 @@ function isValidDateTimeLocal(value: string) {
   return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
-function normaliseOptionalDateTimeLocal(value: FormDataEntryValue | null) {
-  const clean = String(value ?? "").trim();
+function parseBritishDate(value: string) {
+  const clean = value.trim();
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(clean);
 
-  if (!clean) {
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (!isRealDate(year, month, day)) return null;
+
+  return {
+    year,
+    month,
+    day,
+    isoDate: `${String(year).padStart(4, "0")}-${String(month).padStart(
+      2,
+      "0",
+    )}-${String(day).padStart(2, "0")}`,
+  };
+}
+
+function parseTime(value: string) {
+  const clean = value.trim();
+
+  if (!clean) return "00:00";
+
+  const match = /^(\d{2}):(\d{2})$/.exec(clean);
+
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function normaliseDateTimeFields({
+  legacyValue,
+  dateValue,
+  timeValue,
+}: {
+  legacyValue: FormDataEntryValue | null;
+  dateValue: FormDataEntryValue | null;
+  timeValue: FormDataEntryValue | null;
+}) {
+  const legacy = String(legacyValue ?? "").trim();
+  const date = String(dateValue ?? "").trim();
+  const time = String(timeValue ?? "").trim();
+
+  if (!legacy && !date && !time) {
     return {
       ok: true as const,
       value: null,
     };
   }
 
-  if (!isValidDateTimeLocal(clean)) {
+  if (date || time) {
+    if (!date) {
+      return {
+        ok: false as const,
+        value: null,
+      };
+    }
+
+    const parsedDate = parseBritishDate(date);
+    const parsedTime = parseTime(time);
+
+    if (!parsedDate || !parsedTime) {
+      return {
+        ok: false as const,
+        value: null,
+      };
+    }
+
+    return {
+      ok: true as const,
+      value: `${parsedDate.isoDate}T${parsedTime}`,
+    };
+  }
+
+  if (!isValidDateTimeLocal(legacy)) {
     return {
       ok: false as const,
       value: null,
@@ -111,11 +187,15 @@ function normaliseOptionalDateTimeLocal(value: FormDataEntryValue | null) {
 
   return {
     ok: true as const,
-    value: clean,
+    value: legacy,
   };
 }
 
-function redirectToEditWithError(req: NextRequest, raffleId: string, error: string) {
+function redirectToEditWithError(
+  req: NextRequest,
+  raffleId: string,
+  error: string,
+) {
   return NextResponse.redirect(
     new URL(`/admin/raffles/${raffleId}?error=${error}`, req.url),
     { status: 303 },
@@ -170,15 +250,21 @@ export async function POST(
     const image_focus_x = normaliseFocus(formData.get("image_focus_x"), 50);
     const image_focus_y = normaliseFocus(formData.get("image_focus_y"), 50);
 
-    const drawAtResult = normaliseOptionalDateTimeLocal(formData.get("draw_at"));
+    const drawAtResult = normaliseDateTimeFields({
+      legacyValue: formData.get("draw_at"),
+      dateValue: formData.get("draw_date"),
+      timeValue: formData.get("draw_time"),
+    });
 
     if (!drawAtResult.ok) {
       return redirectToEditWithError(req, params.id, "invalid_draw_datetime");
     }
 
-    const postalClosingResult = normaliseOptionalDateTimeLocal(
-      formData.get("free_entry_closes_at"),
-    );
+    const postalClosingResult = normaliseDateTimeFields({
+      legacyValue: formData.get("free_entry_closes_at"),
+      dateValue: formData.get("free_entry_closes_date"),
+      timeValue: formData.get("free_entry_closes_time"),
+    });
 
     if (!postalClosingResult.ok) {
       return redirectToEditWithError(req, params.id, "invalid_postal_datetime");
