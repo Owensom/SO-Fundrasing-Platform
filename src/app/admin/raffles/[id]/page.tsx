@@ -238,8 +238,17 @@ export default async function AdminRafflePage({
 }: PageProps) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
+
   const campaignLimitReached =
     resolvedSearchParams.error === "campaign_limit";
+
+  const invalidDrawDateTime =
+    resolvedSearchParams.error === "invalid_draw_datetime";
+
+  const invalidPostalDateTime =
+    resolvedSearchParams.error === "invalid_postal_datetime";
+
+  const saveFailed = resolvedSearchParams.error === "save_failed";
 
   const session = await auth();
 
@@ -411,6 +420,30 @@ export default async function AdminRafflePage({
         </section>
       ) : null}
 
+      {invalidDrawDateTime || invalidPostalDateTime || saveFailed ? (
+        <section className="raffle-validation-banner" style={styles.validationBanner}>
+          <div style={styles.validationEyebrow}>
+            {saveFailed ? "Save issue" : "Date format issue"}
+          </div>
+
+          <h2 style={styles.validationTitle}>
+            {invalidDrawDateTime
+              ? "Please check the draw date."
+              : invalidPostalDateTime
+                ? "Please check the postal closing date."
+                : "The raffle could not be saved."}
+          </h2>
+
+          <p style={styles.validationText}>
+            {invalidDrawDateTime
+              ? "The draw date must use the browser date and time picker value. Clear the field if no draw date is needed yet."
+              : invalidPostalDateTime
+                ? "The postal entry closing date must use the browser date and time picker value. Clear the field if no postal closing date is needed yet."
+                : "Please check the form values and try again. The raffle has not been changed."}
+          </p>
+        </section>
+      ) : null}
+
       <section className="raffle-hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>
@@ -576,10 +609,7 @@ export default async function AdminRafflePage({
 
       <section style={styles.section}>
         <details open style={styles.adminDetails}>
-          <summary
-            className="raffle-admin-summary"
-            style={styles.adminSummary}
-          >
+          <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 1</div>
 
@@ -591,10 +621,7 @@ export default async function AdminRafflePage({
               </p>
             </div>
 
-            <div
-              className="raffle-summary-pills"
-              style={styles.summaryPillRow}
-            >
+            <div className="raffle-summary-pills" style={styles.summaryPillRow}>
               <StatusMiniPill label="Legal" active={legalQuestionEnabled} />
 
               <StatusMiniPill label="Postal" active={postalEntryEnabled} />
@@ -704,10 +731,7 @@ export default async function AdminRafflePage({
                   </div>
                 </div>
 
-                <div
-                  className="raffle-subtype-grid"
-                  style={styles.subtypeGrid}
-                >
+                <div className="raffle-subtype-grid" style={styles.subtypeGrid}>
                   <label
                     style={{
                       ...styles.subtypeCard,
@@ -1107,7 +1131,10 @@ export default async function AdminRafflePage({
       </section>
 
       <section style={styles.section}>
-        <details open={!prizesConfigured && !isFiftyFifty} style={styles.adminDetails}>
+        <details
+          open={!prizesConfigured && !isFiftyFifty}
+          style={styles.adminDetails}
+        >
           <summary className="raffle-admin-summary" style={styles.adminSummary}>
             <div>
               <div style={styles.sectionEyebrow}>Section 2</div>
@@ -1412,47 +1439,42 @@ const responsiveStyles = `
     overflow-x: hidden;
   }
 
-  .raffle-admin-page img,
   .raffle-admin-page input,
   .raffle-admin-page textarea,
   .raffle-admin-page select,
-  .raffle-admin-page button {
+  .raffle-admin-page button,
+  .raffle-admin-page img {
     max-width: 100%;
   }
 
-  @media (max-width: 900px) {
+  .raffle-admin-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @media (max-width: 980px) {
     .raffle-hero {
       grid-template-columns: 1fr !important;
-      min-height: auto !important;
     }
 
     .raffle-hero-image {
-      max-width: 240px !important;
-      height: 240px !important;
+      min-height: 260px !important;
     }
 
     .raffle-summary-grid,
     .raffle-three-column,
     .raffle-two-column,
     .raffle-media-box,
-    .raffle-draw-grid,
     .raffle-subtype-grid,
-    .raffle-fifty-stats {
+    .raffle-draw-grid {
       grid-template-columns: 1fr !important;
-    }
-
-    .raffle-admin-summary {
-      align-items: flex-start !important;
-    }
-
-    .raffle-summary-pills {
-      width: 100% !important;
-      justify-content: flex-start !important;
     }
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 760px) {
     .raffle-admin-page {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 auto !important;
       padding: 18px 12px 44px !important;
     }
 
@@ -1460,61 +1482,66 @@ const responsiveStyles = `
       display: grid !important;
       grid-template-columns: 1fr !important;
       gap: 10px !important;
+      margin-bottom: 16px !important;
     }
 
     .raffle-topbar a {
       width: 100% !important;
-      justify-content: center !important;
+      min-height: 50px !important;
       text-align: center !important;
+      justify-content: center !important;
+      padding: 13px 16px !important;
     }
 
-    .raffle-hero {
-      padding: 20px !important;
-      border-radius: 24px !important;
+    .raffle-admin-page section,
+    .raffle-admin-page details,
+    .raffle-admin-page div,
+    .raffle-admin-page label {
+      min-width: 0 !important;
+      max-width: 100% !important;
     }
 
-    .raffle-hero-image {
-      max-width: 220px !important;
-      height: 220px !important;
-    }
-
-    .raffle-hero h1 {
-      font-size: clamp(32px, 11vw, 42px) !important;
+    .raffle-admin-page h1 {
+      font-size: clamp(34px, 12vw, 46px) !important;
       line-height: 1.02 !important;
+      letter-spacing: -0.055em !important;
+      overflow-wrap: anywhere !important;
     }
 
-    .raffle-hero-meta {
+    .raffle-admin-page h2 {
+      font-size: clamp(26px, 9vw, 34px) !important;
+      line-height: 1.05 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .raffle-admin-page h3,
+    .raffle-admin-page p,
+    .raffle-admin-page span,
+    .raffle-admin-page strong {
+      overflow-wrap: anywhere !important;
+    }
+
+    .raffle-admin-summary {
+      display: grid !important;
       grid-template-columns: 1fr !important;
     }
 
-    .raffle-preview-box {
-      height: 190px !important;
-    }
-  
-    .raffle-admin-page input[type="datetime-local"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-      display: block !important;
-      box-sizing: border-box !important;
-      appearance: none !important;
-      -webkit-appearance: none !important;
+    .raffle-summary-pills {
+      justify-content: flex-start !important;
     }
 
-    .raffle-admin-page input[name="draw_at"],
-    .raffle-admin-page input[name="free_entry_closes_at"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-      overflow: hidden !important;
-    }
-    
-    .raffle-colour-grid {
+    .raffle-fifty-stats {
       grid-template-columns: 1fr !important;
     }
 
     .raffle-offer-inputs {
       grid-template-columns: 1fr !important;
+    }
+
+    .raffle-admin-page input,
+    .raffle-admin-page textarea,
+    .raffle-admin-page select {
+      font-size: 16px !important;
     }
 
     .raffle-admin-page button,
@@ -1527,57 +1554,55 @@ const responsiveStyles = `
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
+    maxWidth: 1120,
+    margin: "40px auto",
+    padding: "0 16px 56px",
     overflowX: "hidden",
-    boxSizing: "border-box",
   },
   topBar: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
     alignItems: "center",
-    marginBottom: 16,
+    gap: 12,
     flexWrap: "wrap",
+    marginBottom: 18,
   },
   backLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 900,
-  },
-  publicLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
+    padding: "12px 18px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
+    fontWeight: 950,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+  },
+  publicLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
   },
   campaignLimitBanner: {
-    marginBottom: 16,
+    marginBottom: 18,
     padding: "clamp(18px, 4vw, 24px)",
-    borderRadius: 24,
+    borderRadius: 26,
     background:
       "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
     border: "1px solid #fed7aa",
     boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    minWidth: 0,
+    overflow: "hidden",
   },
   campaignLimitEyebrow: {
     display: "inline-flex",
@@ -1604,7 +1629,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     fontSize: 15,
     lineHeight: 1.6,
-    maxWidth: 820,
+    maxWidth: 840,
   },
   campaignLimitActions: {
     display: "flex",
@@ -1624,7 +1649,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #1683f8",
-    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
   },
   campaignLimitSecondary: {
     display: "inline-flex",
@@ -1639,21 +1663,57 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #cbd5e1",
   },
+  validationBanner: {
+    marginBottom: 18,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  validationEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  validationTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  validationText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 840,
+  },
   hero: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gridTemplateColumns: "minmax(0, 1.12fr) minmax(320px, 0.88fr)",
     gap: 20,
-    alignItems: "center",
-    padding: "clamp(20px, 5vw, 28px)",
-    borderRadius: 28,
+    alignItems: "stretch",
+    padding: "clamp(20px, 4vw, 28px)",
+    borderRadius: 30,
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.26), transparent 32%), linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%)",
+      "radial-gradient(circle at top left, rgba(59,130,246,0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
-    marginBottom: 16,
-    minHeight: 330,
-    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
     overflow: "hidden",
-    minWidth: 0,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
+    marginBottom: 16,
   },
   heroContent: {
     minWidth: 0,
@@ -1663,11 +1723,12 @@ const styles: Record<string, CSSProperties> = {
     padding: "6px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.12)",
+    color: "#bfdbfe",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
+    letterSpacing: "0.1em",
+    marginBottom: 12,
   },
   heroTitleRow: {
     display: "flex",
@@ -1675,33 +1736,21 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     flexWrap: "wrap",
-    minWidth: 0,
   },
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(34px, 8vw, 48px)",
-    lineHeight: 1.03,
-    letterSpacing: "-0.055em",
+    fontSize: "clamp(36px, 5vw, 54px)",
+    lineHeight: 1,
+    letterSpacing: "-0.06em",
+    wordBreak: "break-word",
     overflowWrap: "anywhere",
-    minWidth: 0,
+    maxWidth: 720,
   },
   heroPillRow: {
     display: "flex",
-    flexWrap: "wrap",
     gap: 8,
+    flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  fiftyFiftyHeroPill: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid #facc15",
-    fontSize: 13,
-    textTransform: "uppercase",
-    fontWeight: 950,
-    flexShrink: 0,
-    background: "#fef3c7",
-    color: "#92400e",
   },
   statusPill: {
     padding: "8px 12px",
@@ -1709,65 +1758,69 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
     fontSize: 13,
     textTransform: "capitalize",
+    fontWeight: 900,
+  },
+  fiftyFiftyHeroPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #facc15",
+    fontSize: 13,
     fontWeight: 950,
-    flexShrink: 0,
+    background: "#fef3c7",
+    color: "#92400e",
   },
   heroSlug: {
-    margin: "9px 0 0",
-    color: "#cbd5e1",
+    margin: "10px 0 0",
+    color: "#bfdbfe",
     fontSize: 14,
     fontWeight: 800,
-    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
   heroDescription: {
     margin: "14px 0 0",
-    color: "#e2e8f0",
-    lineHeight: 1.55,
+    color: "#dbeafe",
+    lineHeight: 1.65,
     maxWidth: 760,
-    overflowWrap: "anywhere",
+    fontSize: 16,
   },
   heroDescriptionMuted: {
     margin: "14px 0 0",
-    color: "#94a3b8",
-    lineHeight: 1.55,
+    color: "#bfdbfe",
+    lineHeight: 1.65,
+    maxWidth: 760,
+    fontSize: 16,
   },
   heroMetaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))",
     gap: 10,
     marginTop: 22,
-    maxWidth: 700,
   },
   heroMetaCard: {
-    padding: "12px 14px",
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    padding: "13px 14px",
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.16)",
     minWidth: 0,
   },
   heroMetaLabel: {
-    color: "#94a3b8",
+    color: "#bfdbfe",
     fontSize: 12,
     fontWeight: 900,
   },
   heroMetaValue: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: 950,
     marginTop: 4,
-    overflowWrap: "anywhere",
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
   },
   heroImageWrap: {
-    width: "100%",
-    maxWidth: 280,
-    height: 280,
-    borderRadius: 22,
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.14)",
+    minHeight: 320,
+    borderRadius: 24,
     overflow: "hidden",
-    alignSelf: "center",
-    justifySelf: "center",
-    boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "#ffffff",
   },
   summaryGrid: {
     display: "grid",
@@ -1776,8 +1829,8 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
   summaryCard: {
-    padding: 16,
-    borderRadius: 20,
+    padding: 15,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
@@ -1786,57 +1839,50 @@ const styles: Record<string, CSSProperties> = {
   summaryLabel: {
     color: "#64748b",
     fontSize: 12,
-    fontWeight: 950,
+    fontWeight: 900,
   },
   summaryValue: {
     color: "#0f172a",
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 950,
     marginTop: 5,
-    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
   fiftyFiftyNotice: {
-    display: "grid",
-    gap: 12,
-    padding: "clamp(18px, 4vw, 22px)",
-    borderRadius: 24,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
     background:
       "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
     border: "1px solid #fde68a",
-    boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
     marginBottom: 16,
-    minWidth: 0,
-    overflow: "hidden",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
   },
   fiftyFiftyNoticeEyebrow: {
-    justifySelf: "start",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fef3c7",
     color: "#92400e",
-    border: "1px solid #facc15",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    marginBottom: 8,
   },
   fiftyFiftyNoticeTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(22px, 4vw, 28px)",
-    letterSpacing: "-0.035em",
+    fontSize: "clamp(24px, 4vw, 32px)",
+    lineHeight: 1.08,
+    letterSpacing: "-0.04em",
   },
   fiftyFiftyNoticeText: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 14,
+    margin: "10px 0 0",
+    color: "#475569",
     lineHeight: 1.6,
-    maxWidth: 900,
+    fontSize: 15,
   },
   fiftyFiftyStats: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
+    marginTop: 16,
   },
   fiftyFiftyStat: {
     display: "grid",
@@ -1846,61 +1892,61 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #fde68a",
     color: "#92400e",
-    minWidth: 0,
   },
   progressCard: {
     padding: 16,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   progressHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "center",
-    marginBottom: 10,
-    flexWrap: "wrap",
+    marginBottom: 12,
   },
   progressPercent: {
-    color: "#166534",
+    color: "#0f172a",
+    fontSize: 28,
     fontWeight: 950,
-    fontSize: 18,
+    letterSpacing: "-0.04em",
   },
   progressTrack: {
-    height: 11,
-    background: "#e2e8f0",
+    height: 12,
     borderRadius: 999,
+    background: "#e2e8f0",
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    background: "linear-gradient(90deg, #16a34a, #22c55e)",
     borderRadius: 999,
+    background: "linear-gradient(135deg, #1683f8, #1d4ed8)",
   },
   actionsCard: {
-    display: "grid",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     gap: 14,
+    flexWrap: "wrap",
     padding: 18,
-    borderRadius: 24,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     marginBottom: 16,
-    minWidth: 0,
-    overflow: "hidden",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   section: {
-    padding: "clamp(16px, 4vw, 18px)",
+    padding: "clamp(16px, 4vw, 20px)",
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 16,
     minWidth: 0,
     overflow: "hidden",
+    marginBottom: 16,
   },
   sectionEyebrow: {
     color: "#2563eb",
@@ -1913,35 +1959,69 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(22px, 5vw, 26px)",
-    letterSpacing: "-0.035em",
-    overflowWrap: "anywhere",
+    fontSize: 24,
+    letterSpacing: "-0.03em",
   },
   sectionDescription: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
-    overflowWrap: "anywhere",
   },
   adminDetails: {
-    display: "grid",
-    gap: 0,
+    borderRadius: 20,
     minWidth: 0,
   },
   adminSummary: {
     display: "flex",
     justifyContent: "space-between",
+    alignItems: "flex-start",
     gap: 14,
-    alignItems: "center",
     cursor: "pointer",
     listStyle: "none",
+  },
+  summaryPillRow: {
+    display: "flex",
+    gap: 8,
     flexWrap: "wrap",
-    minWidth: 0,
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  statusMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  fiftyFiftyMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 10px",
+    borderRadius: 999,
+    border: "1px solid #facc15",
+    background: "#fef3c7",
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  neutralPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 10px",
+    borderRadius: 999,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: 900,
   },
   adminSummaryToggle: {
-    flexShrink: 0,
-    padding: "8px 12px",
+    display: "inline-flex",
+    padding: "8px 10px",
     borderRadius: 999,
     background: "#eff6ff",
     color: "#1d4ed8",
@@ -1953,100 +2033,56 @@ const styles: Record<string, CSSProperties> = {
   },
   adminDetailsBody: {
     display: "grid",
-    gap: 14,
+    gap: 16,
     marginTop: 16,
-    minWidth: 0,
-  },
-  summaryPillRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
-  statusMiniPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "8px 11px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  fiftyFiftyMiniPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "8px 11px",
-    borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
-    border: "1px solid #facc15",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-  neutralPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "8px 11px",
-    borderRadius: 999,
-    background: "#f8fafc",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 950,
   },
   form: {
     display: "grid",
-    gap: 14,
+    gap: 16,
     minWidth: 0,
+  },
+  innerPanel: {
+    display: "grid",
+    gap: 14,
+    padding: "clamp(14px, 4vw, 16px)",
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  innerHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+  subTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    letterSpacing: "-0.01em",
   },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
+    minWidth: 0,
   },
   threeColumn: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
-    alignItems: "start",
-  },
-  subtypeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
-    gap: 12,
-  },
-  subtypeCard: {
-    display: "grid",
-    gap: 8,
-    padding: 14,
-    borderRadius: 18,
-    border: "1px solid",
-    cursor: "pointer",
     minWidth: 0,
-  },
-  subtypeTitle: {
-    color: "#0f172a",
-    fontSize: 17,
-    fontWeight: 950,
-  },
-  subtypeText: {
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-  fiftyFiftyInlineNotice: {
-    display: "grid",
-    gap: 6,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontSize: 14,
-    lineHeight: 1.5,
-    fontWeight: 800,
   },
   field: {
     display: "grid",
@@ -2056,10 +2092,11 @@ const styles: Record<string, CSSProperties> = {
   label: {
     color: "#334155",
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 900,
   },
   input: {
     width: "100%",
+    maxWidth: "100%",
     minHeight: 46,
     padding: "11px 12px",
     borderRadius: 13,
@@ -2084,7 +2121,7 @@ const styles: Record<string, CSSProperties> = {
   },
   mediaBox: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 16,
     padding: 14,
     borderRadius: 20,
@@ -2095,48 +2132,54 @@ const styles: Record<string, CSSProperties> = {
   mediaControls: {
     minWidth: 0,
   },
-  subTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    letterSpacing: "-0.01em",
-  },
   previewBox: {
-    height: 220,
+    minHeight: 240,
     borderRadius: 18,
     border: "1px solid #e2e8f0",
     background: "#ffffff",
     overflow: "hidden",
   },
-  innerPanel: {
+  subtypeGrid: {
     display: "grid",
-    gap: 14,
-    padding: "clamp(14px, 4vw, 16px)",
-    borderRadius: 20,
-    background:
-      "linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eff6ff 100%)",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  innerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
+    minWidth: 0,
   },
-  innerEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
+  subtypeCard: {
+    display: "grid",
+    gap: 8,
+    padding: 16,
+    borderRadius: 20,
+    border: "1px solid",
+    cursor: "pointer",
+    color: "#0f172a",
+  },
+  subtypeTitle: {
+    fontSize: 18,
     fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
+    letterSpacing: "-0.02em",
+  },
+  subtypeText: {
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 750,
+  },
+  fiftyFiftyInlineNotice: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 800,
   },
   colourGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 135px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
     gap: 10,
   },
   colourCard: {
@@ -2146,13 +2189,11 @@ const styles: Record<string, CSSProperties> = {
     padding: 12,
     borderRadius: 16,
     border: "1px solid",
-    cursor: "pointer",
-    fontWeight: 900,
     minWidth: 0,
   },
   swatch: {
-    width: 24,
-    height: 24,
+    width: 18,
+    height: 18,
     borderRadius: 999,
     border: "1px solid",
     flexShrink: 0,
@@ -2161,12 +2202,13 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 2,
     color: "#0f172a",
+    fontSize: 13,
     minWidth: 0,
   },
   disabledPanel: {
     display: "grid",
     gap: 8,
-    padding: 14,
+    padding: 16,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px dashed #cbd5e1",
@@ -2180,30 +2222,29 @@ const styles: Record<string, CSSProperties> = {
   },
   offerList: {
     display: "grid",
-    gap: 10,
+    gap: 12,
   },
   offerCard: {
     display: "grid",
     gap: 10,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 18,
     background: "#ffffff",
-    minWidth: 0,
+    border: "1px solid #e2e8f0",
   },
   offerBadge: {
     justifySelf: "start",
     padding: "6px 10px",
     borderRadius: 999,
-    background: "#ecfdf5",
-    color: "#166534",
-    border: "1px solid #bbf7d0",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
     fontSize: 12,
     fontWeight: 950,
   },
   offerInputs: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gridTemplateColumns: "1fr 1fr auto",
     gap: 10,
     alignItems: "end",
   },
@@ -2211,8 +2252,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
-    minHeight: 44,
-    fontWeight: 950,
+    minHeight: 46,
+    fontWeight: 900,
     color: "#334155",
     cursor: "pointer",
   },
@@ -2220,7 +2261,12 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     margin: 0,
-    overflowWrap: "anywhere",
+    lineHeight: 1.45,
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
   },
   submitBar: {
     display: "flex",
@@ -2230,7 +2276,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     padding: 16,
     borderRadius: 20,
-    background: "#f8fafc",
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
   },
   submitButton: {
@@ -2242,24 +2288,16 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
-    minHeight: 44,
-  },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
   },
   fiftyFiftyPrizePanel: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
-    padding: "clamp(14px, 4vw, 16px)",
+    padding: 16,
     borderRadius: 22,
     background:
       "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #f8fafc 100%)",
     border: "1px solid #fde68a",
-    minWidth: 0,
-    overflow: "hidden",
   },
   fiftyFiftyPrizeStat: {
     display: "grid",
@@ -2273,80 +2311,72 @@ const styles: Record<string, CSSProperties> = {
   winnerList: {
     display: "grid",
     gap: 10,
-    marginBottom: 14,
   },
   winnerCard: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+    gridTemplateColumns: "56px repeat(4, minmax(0, 1fr))",
     gap: 12,
+    alignItems: "center",
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    alignItems: "center",
-    minWidth: 0,
   },
   winnerPrizeIcon: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    background: "#0f172a",
+    color: "#ffffff",
     fontWeight: 950,
   },
   winnerLabel: {
     color: "#64748b",
     fontSize: 12,
-    fontWeight: 950,
-    marginBottom: 4,
+    fontWeight: 900,
   },
   winnerValue: {
     color: "#0f172a",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 950,
-    overflowWrap: "anywhere",
+    marginTop: 3,
+    wordBreak: "break-word",
   },
   winnerEmail: {
     color: "#64748b",
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 3,
-    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
   emptyBox: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 18,
+    borderRadius: 18,
     background: "#f8fafc",
     border: "1px dashed #cbd5e1",
     color: "#64748b",
-    fontWeight: 900,
-    marginBottom: 14,
+    fontWeight: 850,
   },
   drawDetails: {
-    padding: 0,
-    borderRadius: 20,
-    background: "#f8fafc",
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
-    overflow: "hidden",
     marginTop: 14,
   },
   drawSummary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "center",
+    alignItems: "flex-start",
     cursor: "pointer",
     listStyle: "none",
-    padding: 16,
-    background: "#ffffff",
-    borderBottom: "1px solid #e2e8f0",
-    flexWrap: "wrap",
   },
   drawToggle: {
-    flexShrink: 0,
-    padding: "8px 12px",
+    display: "inline-flex",
+    padding: "8px 10px",
     borderRadius: 999,
     background: "#eff6ff",
     color: "#1d4ed8",
@@ -2355,30 +2385,31 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
+    flexShrink: 0,
+  },
+  drawPanel: {
+    display: "grid",
+    gap: 12,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
   },
   drawGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gridTemplateColumns: "minmax(0, 0.85fr) minmax(0, 1.15fr)",
     gap: 14,
-    padding: 16,
-  },
-  drawPanel: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 12,
-    minWidth: 0,
+    marginTop: 14,
   },
   drawButton: {
-    padding: "13px 20px",
+    justifySelf: "start",
+    padding: "12px 16px",
     border: "none",
     borderRadius: 999,
-    background: "#16a34a",
+    background: "#0f172a",
     color: "#ffffff",
     fontWeight: 950,
     cursor: "pointer",
-    minHeight: 44,
   },
 };
