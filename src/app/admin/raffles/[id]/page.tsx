@@ -195,7 +195,7 @@ function getStatusStyle(status: string): CSSProperties {
 
   if (clean === "published") {
     return {
-      background: "#ecfdf5",
+      background: "#dcfce7",
       borderColor: "#bbf7d0",
       color: "#166534",
     };
@@ -211,14 +211,14 @@ function getStatusStyle(status: string): CSSProperties {
 
   if (clean === "drawn") {
     return {
-      background: "#eff6ff",
+      background: "#dbeafe",
       borderColor: "#bfdbfe",
       color: "#1d4ed8",
     };
   }
 
   return {
-    background: "#f8fafc",
+    background: "#f1f5f9",
     borderColor: "#e2e8f0",
     color: "#475569",
   };
@@ -472,17 +472,13 @@ export default async function AdminRafflePage({
           </div>
 
           <div style={styles.heroTitleRow}>
-            <h1 style={styles.heroTitle}>{raffle.title}</h1>
+            <h1 className="so-brand-heading" style={styles.heroTitle}>
+              {raffle.title}
+            </h1>
 
-            <div style={styles.heroPillRow}>
-              {isFiftyFifty ? (
-                <div style={styles.fiftyFiftyHeroPill}>50/50</div>
-              ) : null}
-
-              <div style={{ ...styles.statusPill, ...statusStyle }}>
-                {raffle.status}
-              </div>
-            </div>
+            <span style={{ ...styles.statusPill, ...statusStyle }}>
+              {raffle.status}
+            </span>
           </div>
 
           <p style={styles.heroSlug}>/r/{raffle.slug}</p>
@@ -496,15 +492,10 @@ export default async function AdminRafflePage({
           )}
 
           <div className="raffle-hero-meta" style={styles.heroMetaGrid}>
-            <HeroMeta
-              label="Type"
-              value={isFiftyFifty ? "50/50 raffle" : "Standard raffle"}
-            />
-
             <HeroMeta label="Draw" value={formatDrawDate(raffle.draw_at)} />
 
             <HeroMeta
-              label="Ticket sales"
+              label="Tickets sold"
               value={`${soldTicketsCount}/${totalTickets}`}
             />
 
@@ -517,24 +508,21 @@ export default async function AdminRafflePage({
             src={raffle.image_url || DEFAULT_RAFFLE_IMAGE}
             alt={raffle.title || "SO Raffles"}
             style={{
-              width: "100%",
-              height: "100%",
+              ...styles.heroImage,
               objectFit: raffle.image_url ? "cover" : "contain",
               objectPosition: raffle.image_url
                 ? imageObjectPosition
                 : "center",
-              display: "block",
-              padding: raffle.image_url ? 0 : 22,
-              boxSizing: "border-box",
+              padding: raffle.image_url ? 0 : 28,
               background: raffle.image_url
                 ? "#1e293b"
-                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)",
+                : "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+              boxSizing: "border-box",
             }}
           />
         </div>
       </section>
-
-      <section className="raffle-summary-grid" style={styles.summaryGrid}>
+            <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Raffle type"
           value={isFiftyFifty ? "50/50" : "Standard"}
@@ -913,8 +901,7 @@ export default async function AdminRafflePage({
                     />
                   </Field>
                 </div>
-
-                <div className="raffle-colour-grid" style={styles.colourGrid}>
+                                <div className="raffle-colour-grid" style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
                     const selected = colours.includes(colour);
                     const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
@@ -1488,7 +1475,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
-
 const responsiveStyles = `
   .raffle-admin-page,
   .raffle-admin-page * {
@@ -1790,24 +1776,6 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     minWidth: 0,
   },
-  heroPillRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  fiftyFiftyHeroPill: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid #facc15",
-    fontSize: 13,
-    textTransform: "uppercase",
-    fontWeight: 950,
-    flexShrink: 0,
-    background: "#fef3c7",
-    color: "#92400e",
-  },
   statusPill: {
     padding: "8px 12px",
     borderRadius: 999,
@@ -1873,6 +1841,12 @@ const styles: Record<string, CSSProperties> = {
     alignSelf: "center",
     justifySelf: "center",
     boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    maxHeight: 280,
+    display: "block",
   },
   summaryGrid: {
     display: "grid",
