@@ -80,6 +80,7 @@ type RaffleDetails = {
   id: string;
   tenant_slug: string;
   title: string;
+  raffle_subtype: string | null;
 };
 
 type EventDetails = {
@@ -582,7 +583,8 @@ async function getRaffleDetails(input: {
       select
         id,
         tenant_slug,
-        title
+        title,
+        raffle_subtype
       from raffles
       where id = $1
         and tenant_slug = $2
@@ -593,7 +595,6 @@ async function getRaffleDetails(input: {
 
   return rows[0] || null;
 }
-
 async function getVerifiedSquaresReservation(input: {
   gameId: string;
   reservationToken: string;
@@ -1038,8 +1039,7 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-
-    if (type === "auction_winning_bid") {
+        if (type === "auction_winning_bid") {
       const auctionBidId = String(
         metadata.auction_bid_id ||
           metadata.auctionBidId ||
@@ -1575,6 +1575,7 @@ export async function POST(request: NextRequest) {
             currency: session.currency || "GBP",
             reservationToken,
             branding: emailBranding,
+            raffleSubtype: raffleDetails.raffle_subtype,
           });
         } catch (emailError) {
           console.error("Raffle receipt email failed:", emailError);
