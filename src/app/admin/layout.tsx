@@ -27,6 +27,10 @@ export default async function AdminLayout({
   const showAdminBar = Boolean(session?.user);
   const isPlatformOwner = Boolean(sessionUser?.isPlatformOwner);
 
+  const publicSiteHref = tenantSlug
+    ? `/c/${tenantSlug}?adminReturn=${encodeURIComponent("/admin")}`
+    : "/admin";
+
   return (
     <>
       {showAdminBar ? (
@@ -46,6 +50,22 @@ export default async function AdminLayout({
             <nav style={styles.adminActions} aria-label="Admin actions">
               <Link href="/admin" style={styles.adminLink}>
                 Dashboard
+              </Link>
+
+              <Link href="/admin/orders" style={styles.adminLink}>
+                Orders
+              </Link>
+
+              <Link href="/admin/events" style={styles.adminLink}>
+                Events
+              </Link>
+
+              <Link href={publicSiteHref} target="_blank" style={styles.adminLink}>
+                Public site
+              </Link>
+
+              <Link href="/admin/support" style={styles.adminLink}>
+                Support
               </Link>
 
               {tenantSlugs.length > 1 ? (
@@ -167,6 +187,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 900,
     boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+    whiteSpace: "nowrap",
   },
 
   ownerToolsLink: {
@@ -184,6 +205,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
     boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+    whiteSpace: "nowrap",
   },
 
   signOutLink: {
@@ -200,5 +222,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
     boxShadow: "0 8px 18px rgba(15,23,42,0.16)",
+    whiteSpace: "nowrap",
   },
 };
