@@ -353,8 +353,7 @@ export default function NewEventForm({
   const [tableInitialTicketTypeId, setTableInitialTicketTypeId] = useState("");
   const [tableShape, setTableShape] = useState<TableShape>("round");
   const [tableNames, setTableNames] = useState<Record<string, string>>({});
-
-  const tableNumbers = useMemo(() => {
+    const tableNumbers = useMemo(() => {
     const count = Number(tableCount);
     if (!Number.isFinite(count) || count <= 0) return [];
 
@@ -391,7 +390,8 @@ export default function NewEventForm({
       0,
     );
   }, [ticketTypes]);
-    const reservedSeatsPreview = useMemo(() => {
+
+  const reservedSeatsPreview = useMemo(() => {
     const rowsText = rowRows.trim();
     const seats = toPositiveNumber(rowSeatsPerRow);
 
@@ -435,21 +435,6 @@ export default function NewEventForm({
       : eventType === "tables"
         ? tableSeatsPreview
         : toPositiveNumber(capacity);
-
-  const readinessScore = useMemo(() => {
-    const checks = [
-      Boolean(title.trim()),
-      Boolean(slug.trim()),
-      Boolean(description.trim()),
-      Boolean(location.trim()),
-      Boolean(startsDate.trim()),
-      activeTicketCount > 0,
-    ];
-
-    return checks.filter(Boolean).length;
-  }, [activeTicketCount, description, location, slug, startsDate, title]);
-
-  const readinessPercent = Math.round((readinessScore / 6) * 100);
 
   const prizesValue = useMemo(() => {
     const clean = prizes
@@ -823,43 +808,12 @@ export default function NewEventForm({
         />
       </section>
 
-      <section style={styles.readinessPanel}>
-        <div style={styles.readinessHeader}>
-          <div>
-            <div style={styles.readinessPanelEyebrow}>
-              Campaign readiness
-            </div>
+      <section style={styles.readinessCard}>
+        <div style={styles.readinessEyebrow}>Campaign readiness</div>
 
-            <h2 style={styles.readinessPanelTitle}>
-              {isQuizNight
-                ? "Quiz night setup checklist"
-                : "Event setup checklist"}
-            </h2>
+        <h2 style={styles.readinessTitle}>Before publishing</h2>
 
-            <p style={styles.readinessPanelText}>
-              Complete the essentials before publishing. Draft events can be
-              safely prepared here before they appear publicly.
-            </p>
-          </div>
-
-          <div style={styles.readinessScoreCard}>
-            <span style={styles.readinessScoreLabel}>Ready</span>
-            <strong style={styles.readinessScoreValue}>
-              {readinessScore}/6
-            </strong>
-          </div>
-        </div>
-
-        <div style={styles.readinessProgressTrack}>
-          <div
-            style={{
-              ...styles.readinessProgressFill,
-              width: `${readinessPercent}%`,
-            }}
-          />
-        </div>
-
-        <div style={styles.readinessChecklistGrid}>
+        <div style={styles.readinessBody}>
           <CheckItem done={Boolean(title.trim())}>
             {isQuizNight ? "Add quiz night title" : "Add event title"}
           </CheckItem>
@@ -867,7 +821,7 @@ export default function NewEventForm({
           <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
 
           <CheckItem done={Boolean(description.trim())}>
-            Add public description
+            Add description
           </CheckItem>
 
           <CheckItem done={Boolean(location.trim())}>
@@ -879,40 +833,8 @@ export default function NewEventForm({
           </CheckItem>
 
           <CheckItem done={activeTicketCount > 0}>
-            {isQuizNight
-              ? "Add team or player booking"
-              : "Add active ticket type"}
+            {isQuizNight ? "Add team or player booking" : "Add active ticket type"}
           </CheckItem>
-        </div>
-
-        <div style={styles.readinessMiniGrid}>
-          <ReadinessMiniCard
-            label={isQuizNight ? "Bookings" : "Tickets"}
-            value={`${activeTicketCount} active`}
-            helper={
-              lowestTicketPrice === null
-                ? "Price not set"
-                : `${formatPreviewMoney(lowestTicketPrice, currency)} from`
-            }
-          />
-
-          <ReadinessMiniCard
-            label={isQuizNight ? "Places / teams" : "Capacity"}
-            value={seatingPreview > 0 ? seatingPreview : "Not set"}
-            helper={formatEventType(eventType)}
-          />
-
-          <ReadinessMiniCard
-            label="Starts"
-            value={formatDatePreview(startsDate, startsTime)}
-            helper={location.trim() || "Location not set"}
-          />
-
-          <ReadinessMiniCard
-            label="Prizes"
-            value={prizeText(publicPrizesCount)}
-            helper={publicPrizesCount > 0 ? "Visible publicly" : "Optional"}
-          />
         </div>
       </section>
 
@@ -1780,9 +1702,7 @@ function SectionCard({
       <div style={styles.sectionTop}>
         <div>
           <div style={styles.sectionEyebrow}>Section {number}</div>
-
           <h2 style={styles.sectionTitle}>{title}</h2>
-
           <p style={styles.sectionDescription}>{description}</p>
         </div>
 
@@ -1808,24 +1728,6 @@ function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
     <div style={styles.heroMetricCard}>
       <div style={styles.heroMetricLabel}>{label}</div>
       <div style={styles.heroMetricValue}>{value}</div>
-    </div>
-  );
-}
-
-function ReadinessMiniCard({
-  label,
-  value,
-  helper,
-}: {
-  label: string;
-  value: ReactNode;
-  helper: ReactNode;
-}) {
-  return (
-    <div style={styles.readinessMiniCard}>
-      <span style={styles.readinessMiniLabel}>{label}</span>
-      <strong style={styles.readinessMiniValue}>{value}</strong>
-      <span style={styles.readinessMiniHelper}>{helper}</span>
     </div>
   );
 }
@@ -1900,7 +1802,6 @@ const responsiveStyles = `
     }
 
     .new-event-form section,
-    .new-event-form details,
     .new-event-form div,
     .new-event-form label {
       min-width: 0 !important;
@@ -1915,7 +1816,7 @@ const responsiveStyles = `
     }
 
     .new-event-form h2 {
-      font-size: clamp(28px, 9vw, 36px) !important;
+      font-size: clamp(24px, 8vw, 34px) !important;
       line-height: 1.05 !important;
       overflow-wrap: anywhere !important;
     }
@@ -2185,114 +2086,32 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     wordBreak: "break-word",
   },
-  readinessPanel: {
-    display: "grid",
-    gap: 14,
-    padding: "clamp(18px, 4vw, 22px)",
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 48%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 12px 30px rgba(15,23,42,0.05)",
-    overflow: "hidden",
-  },
-  readinessHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  readinessPanelEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 6,
-  },
-  readinessPanelTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(22px, 5vw, 28px)",
-    lineHeight: 1.05,
-    letterSpacing: "-0.04em",
-  },
-  readinessPanelText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.55,
-    maxWidth: 760,
-  },
-  readinessScoreCard: {
-    display: "grid",
-    gap: 3,
-    minWidth: 96,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #bfdbfe",
-    textAlign: "center",
-  },
-  readinessScoreLabel: {
-    color: "#2563eb",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  readinessScoreValue: {
-    color: "#0f172a",
-    fontSize: 24,
-    fontWeight: 950,
-  },
-  readinessProgressTrack: {
-    height: 10,
-    borderRadius: 999,
-    background: "#dbeafe",
-    overflow: "hidden",
-  },
-  readinessProgressFill: {
-    height: "100%",
-    borderRadius: 999,
-    background: "linear-gradient(90deg, #1683f8, #16a34a)",
-  },
-  readinessChecklistGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-    gap: 10,
-  },
-  readinessMiniGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 10,
-  },
-  readinessMiniCard: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
+  readinessCard: {
+    padding: 18,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minWidth: 0,
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
-  readinessMiniLabel: {
-    color: "#64748b",
+  readinessEyebrow: {
+    margin: 0,
+    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
-  readinessMiniValue: {
+  readinessTitle: {
+    margin: "8px 0 0",
     color: "#0f172a",
-    fontSize: 19,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
+    fontSize: 22,
+    lineHeight: 1.1,
+    letterSpacing: "-0.03em",
   },
-  readinessMiniHelper: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 800,
-    overflowWrap: "anywhere",
+  readinessBody: {
+    display: "grid",
+    gap: 10,
+    marginTop: 14,
   },
   sectionCard: {
     padding: "clamp(18px, 4vw, 22px)",
