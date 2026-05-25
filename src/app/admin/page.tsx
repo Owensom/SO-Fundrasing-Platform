@@ -272,23 +272,7 @@ export default async function AdminDashboardPage() {
             className="primaryButton"
             style={styles.primaryButton}
           >
-            View public →
-          </Link>
-
-          <Link
-            href="/admin/settings/public-hub"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Public Hub →
-          </Link>
-
-          <Link
-            href="/admin/settings/branding"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Branding →
+            View public site →
           </Link>
 
           <Link
@@ -304,15 +288,7 @@ export default async function AdminDashboardPage() {
             className="secondaryButton"
             style={styles.secondaryButton}
           >
-            Donations →
-          </Link>
-
-          <Link
-            href="/admin/support"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Help & Support →
+            Donations & Gift Aid →
           </Link>
 
           <Link
@@ -332,6 +308,30 @@ export default async function AdminDashboardPage() {
           </Link>
 
           <Link
+            href="/admin/support"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Help & Support →
+          </Link>
+
+          <Link
+            href="/admin/settings/public-hub"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Public Hub →
+          </Link>
+
+          <Link
+            href="/admin/settings/branding"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Branding →
+          </Link>
+
+          <Link
             href="/admin/settings/billing"
             className="secondaryButton"
             style={styles.secondaryButton}
@@ -340,8 +340,7 @@ export default async function AdminDashboardPage() {
           </Link>
         </div>
       </section>
-
-      <section className="admin-plan-panel" style={styles.planPanel}>
+            <section className="admin-plan-panel" style={styles.planPanel}>
         <div>
           <p style={styles.planKicker}>Subscription status</p>
 
@@ -353,8 +352,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.planText}>
-            This dashboard now understands the tenant plan and can show
-            upgrade-only features without blocking routes yet.
+            Your dashboard reflects the current tenant plan and highlights which
+            campaign and branding features are available.
           </p>
         </div>
 
@@ -396,7 +395,8 @@ export default async function AdminDashboardPage() {
           />
         </div>
       </section>
-            <section className="admin-focus-grid" style={styles.focusGrid}>
+
+      <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
           value={totalRaffleTicketsSold}
@@ -430,28 +430,28 @@ export default async function AdminDashboardPage() {
 
       <section style={styles.sectionHeader}>
         <div>
-          <p style={styles.kicker}>Main workspaces</p>
+          <p style={styles.kicker}>Campaign workspaces</p>
 
           <h2
             className="so-brand-card-title admin-section-title"
             style={styles.sectionTitle}
           >
-            Open a fundraising area
+            Manage fundraising campaigns
           </h2>
 
           <p style={styles.sectionText}>
-            Choose the campaign type or operational dashboard you want to
-            manage. Locked labels are visual only at this stage.
+            Open the main campaign areas. Orders, finance, donations and support
+            are grouped separately below for a cleaner admin layout.
           </p>
         </div>
       </section>
 
-      <section className="admin-cards-grid" style={styles.cardsGrid}>
+      <section className="admin-campaign-grid" style={styles.campaignGrid}>
         <DashboardCard
           href="/admin/raffles"
           image="/brand/so-default-raffles.png"
           title="Raffles"
-          description="Create, manage and draw fundraising raffles."
+          description="Create, manage and draw standard raffles and 50/50 raffles."
           stats={`${raffles.length} total · ${publishedRaffles.length} published`}
         />
 
@@ -467,7 +467,7 @@ export default async function AdminDashboardPage() {
           href="/admin/events"
           image="/brand/so-default-events.png"
           title="Events"
-          description="Manage seating plans, ticketing and guest experiences."
+          description="Manage events, quiz nights, seating plans, tickets and guests."
           stats={`${events.length} total · ${publishedEvents.length} published`}
         />
 
@@ -480,7 +480,106 @@ export default async function AdminDashboardPage() {
           locked={!auctionCapability.allowed}
           lockText="Professional required"
         />
+      </section>
 
+      <section style={styles.sectionHeader}>
+        <div>
+          <p style={styles.kicker}>Operations</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Orders, supporters and finance
+          </h2>
+
+          <p style={styles.sectionText}>
+            Review supporter activity, event guests, donations, platform fees
+            and support requests from dedicated operational dashboards.
+          </p>
+        </div>
+      </section>
+
+      <section className="admin-operations-card-grid" style={styles.operationsCardGrid}>
+        <DashboardCard
+          href="/admin/orders"
+          badgeText="ORDERS"
+          title="Orders"
+          description="Review raffle sales, squares sales, event orders and auction bids."
+          stats="Unified activity dashboard"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/donations"
+          badgeText="GIFT"
+          title="Donations & Gift Aid"
+          description="Review pure donations, donor details, payment status and Gift Aid declarations."
+          stats="Donation reporting"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/customers"
+          badgeText="CRM"
+          title="Customers"
+          description="View supporter profiles grouped from orders and campaign activity."
+          stats="Supporter intelligence"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/metadata"
+          badgeText="FEES"
+          title="Finance"
+          description="Review payment metadata, platform fees, Stripe fees and organiser net estimates."
+          stats="Money breakdown"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/support"
+          badgeText="HELP"
+          title="Help & Support"
+          description="Report a problem, ask for help and send tenant context to platform support."
+          stats="Support requests"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/settings/billing"
+          badgeText="PLAN"
+          title="Billing"
+          description="View subscription tier, platform commission, enabled capabilities and billing readiness."
+          stats="Subscription settings"
+          tone="blue"
+          compact
+        />
+      </section>
+            <section style={styles.sectionHeader}>
+        <div>
+          <p style={styles.kicker}>Public setup</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Public hub and branding
+          </h2>
+
+          <p style={styles.sectionText}>
+            Control how supporters experience the tenant’s public campaign hub,
+            highlighted campaign and visual identity.
+          </p>
+        </div>
+      </section>
+
+      <section className="admin-settings-card-grid" style={styles.settingsCardGrid}>
         <DashboardCard
           href="/admin/settings/public-hub"
           badgeText="HUB"
@@ -503,66 +602,6 @@ export default async function AdminDashboardPage() {
               : "Basic branding settings"
           }
           tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/orders"
-          badgeText="ORDERS"
-          title="Orders"
-          description="Review raffle sales, squares sales, event orders and auction bids."
-          stats="Unified activity dashboard"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/donations"
-          badgeText="GIFT"
-          title="Donations & Gift Aid"
-          description="Review pure donations, donor details, payment status and Gift Aid declarations."
-          stats="Donation reporting"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/support"
-          badgeText="HELP"
-          title="Help & Support"
-          description="Report a problem, ask for help and send tenant context to platform support."
-          stats="Support requests"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/customers"
-          badgeText="CRM"
-          title="Customers"
-          description="View supporter profiles grouped from orders and campaign activity."
-          stats="Supporter intelligence"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/metadata"
-          badgeText="FEES"
-          title="Finance"
-          description="Review payment metadata, platform fees, Stripe fees, commission and organiser net estimates."
-          stats="Money breakdown"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/settings/billing"
-          badgeText="PLAN"
-          title="Billing"
-          description="View subscription tier, platform commission, enabled capabilities and Stripe billing readiness."
-          stats="Subscription settings"
-          tone="blue"
           compact
         />
       </section>
@@ -596,22 +635,6 @@ export default async function AdminDashboardPage() {
             </Link>
 
             <Link
-              href="/admin/settings/public-hub"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Public Hub →
-            </Link>
-
-            <Link
-              href="/admin/settings/branding"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Branding →
-            </Link>
-
-            <Link
               href="/admin/orders"
               className="financeButtonSecondary"
               style={styles.financeButtonSecondary}
@@ -625,14 +648,6 @@ export default async function AdminDashboardPage() {
               style={styles.financeButtonSecondary}
             >
               Donations & Gift Aid →
-            </Link>
-
-            <Link
-              href="/admin/support"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Help & Support →
             </Link>
 
             <Link
@@ -726,6 +741,7 @@ function StatCard({
     </div>
   );
 }
+
 function PlanFeature({
   label,
   included,
@@ -905,7 +921,6 @@ function DashboardCard({
     </Link>
   );
 }
-
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -982,7 +997,9 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-cards-grid,
+  .admin-dashboard-page .admin-campaign-grid,
+  .admin-dashboard-page .admin-operations-card-grid,
+  .admin-dashboard-page .admin-settings-card-grid,
   .admin-dashboard-page .admin-panel-actions,
   .admin-dashboard-page .admin-plan-grid {
     grid-template-columns: 1fr !important;
@@ -1099,7 +1116,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
     overflowWrap: "anywhere",
   },
-    commandActions: {
+
+  commandActions: {
     position: "relative",
     zIndex: 1,
     gridArea: "actions",
@@ -1202,8 +1220,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
-
-  planPanel: {
+    planPanel: {
     display: "grid",
     gap: 18,
     padding: 22,
@@ -1357,7 +1374,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   sectionHeader: {
-    marginBottom: 16,
+    margin: "26px 0 16px",
   },
 
   kicker: {
@@ -1386,7 +1403,23 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  cardsGrid: {
+  campaignGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 16,
+    marginBottom: 20,
+    alignItems: "stretch",
+  },
+
+  operationsCardGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 16,
+    marginBottom: 20,
+    alignItems: "stretch",
+  },
+
+  settingsCardGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 16,
