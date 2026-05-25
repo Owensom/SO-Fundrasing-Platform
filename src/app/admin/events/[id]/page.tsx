@@ -2300,23 +2300,31 @@ export default async function AdminEventManagePage({
         </div>
       </section>
             <section className="topActions" style={styles.topActions}>
-        <a
-          href="/admin/events"
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          ← Back to events
-        </a>
+  <a
+    href="/admin/events"
+    className="secondaryButton"
+    style={styles.secondaryButton}
+  >
+    ← Back to events
+  </a>
 
-                <a
-          href={publicEventHref}
-          target={event.status === "published" ? "_blank" : undefined}
-          className="primaryLink"
-          style={styles.primaryLink}
-        >
-          View public page
-        </a>
-            </section>
+  <a
+    href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
+    className="secondaryButton"
+    style={styles.secondaryButton}
+  >
+    Orders
+  </a>
+
+  <a
+    href={publicEventHref}
+    target={event.status === "published" ? "_blank" : undefined}
+    className="primaryLink"
+    style={styles.primaryLink}
+  >
+    View public page
+  </a>
+</section>
 
       {publicPreviewUnavailable ? (
         <section style={styles.publicPreviewBanner}>
