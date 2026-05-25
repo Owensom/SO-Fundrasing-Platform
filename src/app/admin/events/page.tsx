@@ -441,12 +441,16 @@ export default async function AdminEventsPage() {
                       </Link>
 
                       <Link
-                        href={`/e/${event.slug}?adminReturn=/admin/events/${event.id}`}
-                        target="_blank"
-                        style={styles.secondaryLink}
+                        href={
+                        event.status === "published"
+                      ? `/e/${event.slug}?adminReturn=/admin/events/${event.id}`
+                    : `/admin/events/${event.id}?error=public-preview-unavailable`
+                        }
+                    target={event.status === "published" ? "_blank" : undefined}
+                    style={styles.secondaryLink}
                       >
-                        View campaign
-                      </Link>
+                    View campaign
+                  </Link>
                     </div>
                   </div>
                 </div>
