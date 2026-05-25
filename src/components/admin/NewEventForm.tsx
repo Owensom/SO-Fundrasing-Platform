@@ -12,6 +12,7 @@ type Props = {
 };
 
 type EventType = "general_admission" | "reserved_seating" | "tables";
+type EventSubtype = "standard" | "quiz_night";
 type TableShape = "round" | "square" | "rectangle";
 type SectionTone = "default" | "tickets" | "seating" | "media" | "prize";
 
@@ -50,6 +51,27 @@ const DEFAULT_TICKETS: TicketTypeRow[] = [
     id: "ticket-concession",
     name: "Concession",
     description: "",
+    price: "",
+    capacity: "",
+    sort_order: "1",
+    is_active: true,
+  },
+];
+
+const QUIZ_TICKETS: TicketTypeRow[] = [
+  {
+    id: "ticket-team",
+    name: "Team entry",
+    description: "One quiz team booking",
+    price: "",
+    capacity: "",
+    sort_order: "0",
+    is_active: true,
+  },
+  {
+    id: "ticket-individual",
+    name: "Individual player",
+    description: "Single player ticket",
     price: "",
     capacity: "",
     sort_order: "1",
@@ -119,6 +141,11 @@ function formatEventType(value: EventType) {
   if (value === "reserved_seating") return "Reserved seating";
   if (value === "tables") return "Tables";
   return "General admission";
+}
+
+function formatEventSubtype(value: EventSubtype) {
+  if (value === "quiz_night") return "Quiz night";
+  return "Standard event";
 }
 
 function formatTableShape(value: TableShape) {
@@ -218,6 +245,10 @@ export default function NewEventForm({
   const [currency, setCurrency] = useState("GBP");
   const [status, setStatus] = useState("draft");
   const [eventType, setEventType] = useState<EventType>("general_admission");
+  const [eventSubtype, setEventSubtype] =
+    useState<EventSubtype>("standard");
+
+  const isQuizNight = eventSubtype === "quiz_night";
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageFocusX, setImageFocusX] = useState(50);
@@ -366,8 +397,7 @@ export default function NewEventForm({
 
     return JSON.stringify(clean);
   }, [ticketTypes]);
-
-  const rowSeatingValue = useMemo(() => {
+    const rowSeatingValue = useMemo(() => {
     return JSON.stringify({
       section: rowSection.trim(),
       rows: rowRows.trim(),
@@ -412,6 +442,46 @@ export default function NewEventForm({
 
     if (!slugEdited) {
       setSlug(slugify(value));
+    }
+  }
+
+  function updateEventSubtype(value: EventSubtype) {
+    setEventSubtype(value);
+
+    if (value === "quiz_night") {
+      setTicketTypes((current) => {
+        const hasEditedTickets = current.some(
+          (ticketType) =>
+            ticketType.name.trim() ||
+            ticketType.description.trim() ||
+            ticketType.price.trim() ||
+            ticketType.capacity.trim(),
+        );
+
+        const isDefaultTicketSet =
+          current.length === DEFAULT_TICKETS.length &&
+          current.every((ticketType, index) => {
+            const defaultTicket = DEFAULT_TICKETS[index];
+
+            return (
+              defaultTicket &&
+              ticketType.name === defaultTicket.name &&
+              ticketType.description === defaultTicket.description &&
+              ticketType.price === defaultTicket.price &&
+              ticketType.capacity === defaultTicket.capacity
+            );
+          });
+
+        if (!hasEditedTickets || isDefaultTicketSet) {
+          return QUIZ_TICKETS;
+        }
+
+        return current;
+      });
+
+      setEventType((current) =>
+        current === "reserved_seating" ? "tables" : current,
+      );
     }
   }
 
@@ -495,6 +565,7 @@ export default function NewEventForm({
       </div>
 
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
+      <input type="hidden" name="event_subtype" value={eventSubtype} />
       <input type="hidden" name="prizes" value={prizesValue} />
       <input type="hidden" name="ticket_types" value={ticketTypesValue} />
       <input type="hidden" name="row_seating" value={rowSeatingValue} />
@@ -503,11 +574,17 @@ export default function NewEventForm({
 
       <section style={styles.hero}>
         <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Events builder</div>
+          <div style={styles.eyebrow}>
+            {isQuizNight ? "Quiz night builder" : "Events builder"}
+          </div>
 
           <div style={styles.heroTitleRow}>
             <h1 style={styles.heroTitle}>
-              {title.trim() ? title : "Build a premium event"}
+              {title.trim()
+                ? title
+                : isQuizNight
+                  ? "Build a premium quiz night"
+                  : "Build a premium event"}
             </h1>
 
             <div style={styles.statusPill}>{status}</div>
@@ -516,21 +593,24 @@ export default function NewEventForm({
           <p style={styles.heroSlug}>/e/{slug.trim() ? slug : "event-slug"}</p>
 
           <p style={styles.heroDescription}>
-            Create the public event page, add ticket types, set event timing,
-            upload a polished campaign image and prepare seating or tables in one
-            guided setup flow.
+            {isQuizNight
+              ? "Create a quiz night booking page, add team or player tickets, prepare tables if needed, upload a polished campaign image and keep the existing secure event checkout flow."
+              : "Create the public event page, add ticket types, set event timing, upload a polished campaign image and prepare seating or tables in one guided setup flow."}
           </p>
 
           <p style={styles.heroUseCase}>
-            Ideal for galas, dinners, ceilidhs, concerts, race nights, charity
-            evenings and seated fundraising events.
+            {isQuizNight
+              ? "Ideal for pub quizzes, charity quiz nights, team fundraisers, table challenges and community social nights."
+              : "Ideal for galas, dinners, ceilidhs, concerts, race nights, charity evenings and seated fundraising events."}
           </p>
 
           <div style={styles.heroMetricGrid}>
+            <HeroMetric label="Subtype" value={formatEventSubtype(eventSubtype)} />
+
             <HeroMetric label="Event type" value={formatEventType(eventType)} />
 
             <HeroMetric
-              label="Tickets"
+              label={isQuizNight ? "Booking types" : "Tickets"}
               value={`${activeTicketCount} active`}
             />
 
@@ -544,7 +624,7 @@ export default function NewEventForm({
             />
 
             <HeroMetric
-              label="Capacity"
+              label={isQuizNight ? "Places / teams" : "Capacity"}
               value={seatingPreview > 0 ? seatingPreview : "Not set"}
             />
           </div>
@@ -571,17 +651,27 @@ export default function NewEventForm({
 
           <div style={styles.previewCardBody}>
             <div style={styles.previewTitle}>
-              {title.trim() ? title : "Your event"}
+              {title.trim()
+                ? title
+                : isQuizNight
+                  ? "Your quiz night"
+                  : "Your event"}
             </div>
 
             <div style={styles.previewText}>
               {description.trim()
                 ? description.trim().slice(0, 96)
-                : "A short public summary of your event will appear here."}
+                : isQuizNight
+                  ? "A short public summary of your quiz night will appear here."
+                  : "A short public summary of your event will appear here."}
               {description.trim().length > 96 ? "…" : ""}
             </div>
 
             <div style={styles.previewMetaGrid}>
+              <span style={styles.previewMetaItem}>
+                {formatEventSubtype(eventSubtype)}
+              </span>
+
               <span style={styles.previewMetaItem}>
                 {formatEventType(eventType)}
               </span>
@@ -607,9 +697,14 @@ export default function NewEventForm({
       </section>
 
       <section style={styles.summaryGrid}>
+        <SummaryCard label="Subtype" value={formatEventSubtype(eventSubtype)} />
+
         <SummaryCard label="Event type" value={formatEventType(eventType)} />
 
-        <SummaryCard label="Ticket types" value={`${activeTicketCount} active`} />
+        <SummaryCard
+          label={isQuizNight ? "Booking types" : "Ticket types"}
+          value={`${activeTicketCount} active`}
+        />
 
         <SummaryCard
           label="Starting price"
@@ -633,15 +728,22 @@ export default function NewEventForm({
 
       <section style={styles.readinessGrid}>
         <ReadinessCard eyebrow="Campaign readiness" title="Before publishing">
-          <CheckItem done={Boolean(title.trim())}>Add event title</CheckItem>
+          <CheckItem done={Boolean(title.trim())}>
+            {isQuizNight ? "Add quiz night title" : "Add event title"}
+          </CheckItem>
           <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
           <CheckItem done={Boolean(description.trim())}>Add description</CheckItem>
           <CheckItem done={Boolean(location.trim())}>Add location</CheckItem>
           <CheckItem done={Boolean(startsAt)}>Schedule start time</CheckItem>
-          <CheckItem done={activeTicketCount > 0}>Add active ticket type</CheckItem>
+          <CheckItem done={activeTicketCount > 0}>
+            {isQuizNight ? "Add team or player ticket" : "Add active ticket type"}
+          </CheckItem>
         </ReadinessCard>
 
-        <ReadinessCard eyebrow="Ticket preview" title="Tickets">
+        <ReadinessCard
+          eyebrow={isQuizNight ? "Quiz booking preview" : "Ticket preview"}
+          title={isQuizNight ? "Bookings" : "Tickets"}
+        >
           <PreviewLine label="Active types" value={activeTicketCount} />
 
           <PreviewLine
@@ -654,21 +756,23 @@ export default function NewEventForm({
           />
 
           <PreviewLine
-            label="Ticket limit"
+            label={isQuizNight ? "Booking limit" : "Ticket limit"}
             value={
               totalTicketCapacity > 0
                 ? `${totalTicketCapacity} from ticket types`
-                : "No ticket limit set"
+                : isQuizNight
+                  ? "No booking limit set"
+                  : "No ticket limit set"
             }
           />
         </ReadinessCard>
 
         <ReadinessCard
-          eyebrow="Event setup preview"
+          eyebrow={isQuizNight ? "Quiz setup preview" : "Event setup preview"}
           title={formatEventType(eventType)}
         >
           <PreviewLine
-            label="Capacity"
+            label={isQuizNight ? "Places / teams" : "Capacity"}
             value={seatingPreview > 0 ? seatingPreview : "Not set"}
           />
 
@@ -684,11 +788,74 @@ export default function NewEventForm({
 
       <SectionCard
         number="01"
-        title="Event details"
-        description="Set the public title, URL, description, image, location and timing."
+        title={isQuizNight ? "Quiz night details" : "Event details"}
+        description={
+          isQuizNight
+            ? "Set the public title, URL, description, image, venue and quiz timing."
+            : "Set the public title, URL, description, image, location and timing."
+        }
         badge={startsAt ? "Event scheduled" : undefined}
         tone="default"
       >
+        <div style={styles.subtypeGrid}>
+          <label
+            style={{
+              ...styles.subtypeCard,
+              borderColor: eventSubtype === "standard" ? "#1683f8" : "#e2e8f0",
+              background: eventSubtype === "standard" ? "#eff6ff" : "#ffffff",
+            }}
+          >
+            <input
+              type="radio"
+              name="event_subtype_selector"
+              value="standard"
+              checked={eventSubtype === "standard"}
+              onChange={() => updateEventSubtype("standard")}
+            />
+
+            <span style={styles.subtypeTitle}>Standard event</span>
+
+            <span style={styles.subtypeText}>
+              Use the normal event setup for galas, concerts, dinners, ceilidhs
+              and seated fundraisers.
+            </span>
+          </label>
+
+          <label
+            style={{
+              ...styles.subtypeCard,
+              borderColor: isQuizNight ? "#d97706" : "#e2e8f0",
+              background: isQuizNight ? "#fffbeb" : "#ffffff",
+            }}
+          >
+            <input
+              type="radio"
+              name="event_subtype_selector"
+              value="quiz_night"
+              checked={isQuizNight}
+              onChange={() => updateEventSubtype("quiz_night")}
+            />
+
+            <span style={styles.subtypeTitle}>Quiz night</span>
+
+            <span style={styles.subtypeText}>
+              Use event checkout with quiz-focused wording, team tickets and
+              optional table bookings.
+            </span>
+          </label>
+        </div>
+
+        {isQuizNight ? (
+          <div style={styles.quizInlineNotice}>
+            <strong>Quiz night mode is active.</strong>
+            <span>
+              This keeps the existing Events checkout and booking flow. Use
+              general admission for team/player tickets, or tables for team
+              table bookings.
+            </span>
+          </div>
+        ) : null}
+
         <div style={styles.twoCol}>
           <Field label="Title">
             <input
@@ -697,7 +864,7 @@ export default function NewEventForm({
               value={title}
               onChange={(event) => updateTitle(event.target.value)}
               style={styles.input}
-              placeholder="Summer Gala Night"
+              placeholder={isQuizNight ? "Charity Quiz Night" : "Summer Gala Night"}
             />
           </Field>
 
@@ -711,7 +878,7 @@ export default function NewEventForm({
                 setSlug(slugify(event.target.value));
               }}
               style={styles.input}
-              placeholder="summer-gala-night"
+              placeholder={isQuizNight ? "charity-quiz-night" : "summer-gala-night"}
             />
           </Field>
         </div>
@@ -723,13 +890,18 @@ export default function NewEventForm({
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             style={styles.textarea}
-            placeholder="Describe the event..."
+            placeholder={
+              isQuizNight
+                ? "Describe the quiz format, team size, rounds, prizes and fundraising cause..."
+                : "Describe the event..."
+            }
           />
         </Field>
-
-        <div style={styles.mediaBox}>
+                <div style={styles.mediaBox}>
           <div style={styles.mediaControls}>
-            <h3 style={styles.panelTitle}>Event image</h3>
+            <h3 style={styles.panelTitle}>
+              {isQuizNight ? "Quiz night image" : "Event image"}
+            </h3>
 
             <p style={styles.sectionText}>
               Upload or replace the public event image, then choose the focal
@@ -740,7 +912,7 @@ export default function NewEventForm({
               currentImageUrl={imageUrl}
               currentFocusX={imageFocusX}
               currentFocusY={imageFocusY}
-              label="Event image upload"
+              label={isQuizNight ? "Quiz night image upload" : "Event image upload"}
               previewAlt={title.trim() || "Event image preview"}
               subscriptionTier={subscriptionTier}
               customImagesAllowed={customImagesAllowed}
@@ -768,31 +940,41 @@ export default function NewEventForm({
         </div>
 
         <div style={styles.twoCol}>
-          <Field label="Location">
+          <Field label={isQuizNight ? "Venue" : "Location"}>
             <input
               name="location"
               value={location}
               onChange={(event) => setLocation(event.target.value)}
-              placeholder="Venue, city or online"
+              placeholder={isQuizNight ? "Pub, hall, school or venue" : "Venue, city or online"}
               style={styles.input}
             />
           </Field>
 
-          <Field label="General admission capacity">
+          <Field
+            label={
+              isQuizNight
+                ? "General admission capacity"
+                : "General admission capacity"
+            }
+          >
             <input
               name="capacity"
               type="number"
               min="0"
               value={capacity}
               onChange={(event) => setCapacity(event.target.value)}
-              placeholder="Leave blank for unlimited"
+              placeholder={
+                isQuizNight
+                  ? "Leave blank if using team/table ticket limits"
+                  : "Leave blank for unlimited"
+              }
               style={styles.input}
             />
           </Field>
         </div>
 
         <div style={styles.twoCol}>
-          <Field label="Starts at">
+          <Field label={isQuizNight ? "Quiz starts at" : "Starts at"}>
             <input
               name="starts_at"
               type="datetime-local"
@@ -802,7 +984,7 @@ export default function NewEventForm({
             />
           </Field>
 
-          <Field label="Ends at">
+          <Field label={isQuizNight ? "Quiz ends at" : "Ends at"}>
             <input
               name="ends_at"
               type="datetime-local"
@@ -814,7 +996,9 @@ export default function NewEventForm({
         </div>
 
         <div style={styles.previewInfoCard}>
-          <div style={styles.previewInfoLabel}>Event preview</div>
+          <div style={styles.previewInfoLabel}>
+            {isQuizNight ? "Quiz night preview" : "Event preview"}
+          </div>
 
           <div style={styles.previewInfoValue}>
             {formatDatePreview(startsAt)}
@@ -836,16 +1020,20 @@ export default function NewEventForm({
             </select>
           </Field>
 
-          <Field label="Type">
+          <Field label={isQuizNight ? "Booking layout" : "Type"}>
             <select
               name="event_type"
               value={eventType}
               onChange={(event) => setEventType(event.target.value as EventType)}
               style={styles.input}
             >
-              <option value="general_admission">General admission</option>
+              <option value="general_admission">
+                {isQuizNight ? "General admission / team tickets" : "General admission"}
+              </option>
               <option value="reserved_seating">Reserved seating</option>
-              <option value="tables">Tables</option>
+              <option value="tables">
+                {isQuizNight ? "Tables / team tables" : "Tables"}
+              </option>
             </select>
           </Field>
 
@@ -866,22 +1054,30 @@ export default function NewEventForm({
 
       <SectionCard
         number="02"
-        title="Tickets & prices"
-        description="Add public ticket choices now. You can edit them after creation."
+        title={isQuizNight ? "Team tickets & prices" : "Tickets & prices"}
+        description={
+          isQuizNight
+            ? "Add team or player booking choices. You can edit them after creation."
+            : "Add public ticket choices now. You can edit them after creation."
+        }
         badge={`${activeTicketCount} active`}
         tone="tickets"
       >
         <div style={styles.sectionHeaderInner}>
           <div>
-            <h3 style={styles.panelTitle}>Ticket types</h3>
+            <h3 style={styles.panelTitle}>
+              {isQuizNight ? "Booking types" : "Ticket types"}
+            </h3>
 
             <p style={styles.sectionText}>
-              Create ticket names, prices, limits and public descriptions.
+              {isQuizNight
+                ? "Create booking names, prices, limits and public descriptions. Team entry works well for full-team bookings; individual player tickets work well for open sign-ups."
+                : "Create ticket names, prices, limits and public descriptions."}
             </p>
           </div>
 
           <button type="button" onClick={addTicketType} style={styles.lightButton}>
-            + Add ticket type
+            {isQuizNight ? "+ Add booking type" : "+ Add ticket type"}
           </button>
         </div>
 
@@ -889,7 +1085,9 @@ export default function NewEventForm({
           {ticketTypes.map((ticketType, index) => (
             <div key={ticketType.id} style={styles.editTicketCard}>
               <div style={styles.rowHeader}>
-                <strong>Ticket type {index + 1}</strong>
+                <strong>
+                  {isQuizNight ? "Booking type" : "Ticket type"} {index + 1}
+                </strong>
 
                 <label style={styles.checkboxLabel}>
                   <input
@@ -906,7 +1104,7 @@ export default function NewEventForm({
               </div>
 
               <div style={styles.twoCol}>
-                <Field label="Ticket name">
+                <Field label={isQuizNight ? "Booking name" : "Ticket name"}>
                   <input
                     value={ticketType.name}
                     onChange={(event) =>
@@ -914,7 +1112,7 @@ export default function NewEventForm({
                         name: event.target.value,
                       })
                     }
-                    placeholder="Standard"
+                    placeholder={isQuizNight ? "Team entry" : "Standard"}
                     style={styles.input}
                   />
                 </Field>
@@ -927,7 +1125,11 @@ export default function NewEventForm({
                         description: event.target.value,
                       })
                     }
-                    placeholder="Optional description"
+                    placeholder={
+                      isQuizNight
+                        ? "e.g. Up to 6 players per team"
+                        : "Optional description"
+                    }
                     style={styles.input}
                   />
                 </Field>
@@ -950,7 +1152,7 @@ export default function NewEventForm({
                   />
                 </Field>
 
-                <Field label="Ticket limit">
+                <Field label={isQuizNight ? "Booking limit" : "Ticket limit"}>
                   <input
                     value={ticketType.capacity}
                     onChange={(event) =>
@@ -960,7 +1162,11 @@ export default function NewEventForm({
                     }
                     type="number"
                     min="0"
-                    placeholder="Leave blank for unlimited"
+                    placeholder={
+                      isQuizNight
+                        ? "Leave blank for unlimited"
+                        : "Leave blank for unlimited"
+                    }
                     style={styles.input}
                   />
                 </Field>
@@ -990,7 +1196,9 @@ export default function NewEventForm({
                   cursor: ticketTypes.length <= 1 ? "not-allowed" : "pointer",
                 }}
               >
-                Delete this ticket type
+                {isQuizNight
+                  ? "Delete this booking type"
+                  : "Delete this ticket type"}
               </button>
             </div>
           ))}
@@ -1098,8 +1306,12 @@ export default function NewEventForm({
       {eventType === "tables" ? (
         <SectionCard
           number="03"
-          title="Table seating"
-          description="Generate table seats during creation, choose the table shape and optionally name tables."
+          title={isQuizNight ? "Team table seating" : "Table seating"}
+          description={
+            isQuizNight
+              ? "Generate quiz team tables during creation, choose the table shape and optionally name tables."
+              : "Generate table seats during creation, choose the table shape and optionally name tables."
+          }
           badge={
             tableSeatsPreview ? `${tableSeatsPreview} places` : "Optional"
           }
@@ -1107,7 +1319,9 @@ export default function NewEventForm({
         >
           <div style={styles.twoPanel}>
             <div style={styles.panel}>
-              <h3 style={styles.panelTitle}>Generate table seating</h3>
+              <h3 style={styles.panelTitle}>
+                {isQuizNight ? "Generate team tables" : "Generate table seating"}
+              </h3>
 
               <div style={styles.formInner}>
                 <Field label="Initial marking">
@@ -1144,7 +1358,7 @@ export default function NewEventForm({
                 </Field>
 
                 <div style={styles.twoCol}>
-                  <Field label="Number of tables">
+                  <Field label={isQuizNight ? "Number of teams/tables" : "Number of tables"}>
                     <input
                       value={tableCount}
                       onChange={(event) => setTableCount(event.target.value)}
@@ -1155,7 +1369,7 @@ export default function NewEventForm({
                     />
                   </Field>
 
-                  <Field label="Seats per table">
+                  <Field label={isQuizNight ? "Players per table" : "Seats per table"}>
                     <input
                       value={tableSeatsPerTable}
                       onChange={(event) =>
@@ -1163,7 +1377,7 @@ export default function NewEventForm({
                       }
                       type="number"
                       min="1"
-                      placeholder="8"
+                      placeholder={isQuizNight ? "6" : "8"}
                       style={styles.input}
                     />
                   </Field>
@@ -1172,7 +1386,9 @@ export default function NewEventForm({
             </div>
 
             <div style={styles.panel}>
-              <h3 style={styles.panelTitle}>Table seating summary</h3>
+              <h3 style={styles.panelTitle}>
+                {isQuizNight ? "Quiz table summary" : "Table seating summary"}
+              </h3>
 
               <p style={styles.sectionText}>
                 Leave these blank if you want to create the event first and
@@ -1198,13 +1414,15 @@ export default function NewEventForm({
               </div>
             </div>
           </div>
-
-          <div style={{ ...styles.panel, marginTop: 16 }}>
-            <h3 style={styles.panelTitle}>Table names optional</h3>
+                    <div style={{ ...styles.panel, marginTop: 16 }}>
+            <h3 style={styles.panelTitle}>
+              {isQuizNight ? "Team/table names optional" : "Table names optional"}
+            </h3>
 
             <p style={styles.sectionText}>
-              Add friendly names for tables before they go public. These save as
-              table names automatically.
+              {isQuizNight
+                ? "Add friendly team or table names before they go public. These save as table names automatically."
+                : "Add friendly names for tables before they go public. These save as table names automatically."}
             </p>
 
             {tableNumbers.length === 0 ? (
@@ -1222,7 +1440,11 @@ export default function NewEventForm({
                       onChange={(event) =>
                         updateTableName(tableNumber, event.target.value)
                       }
-                      placeholder="e.g. VIP, Sponsors, Smith Family"
+                      placeholder={
+                        isQuizNight
+                          ? "e.g. Team 1, Sponsors, Staff Team"
+                          : "e.g. VIP, Sponsors, Smith Family"
+                      }
                       style={styles.input}
                     />
                   </label>
@@ -1235,17 +1457,25 @@ export default function NewEventForm({
 
       <SectionCard
         number={eventType === "general_admission" ? "03" : "04"}
-        title="Prize settings"
-        description="Choose which prizes are visible on the public event page."
+        title={isQuizNight ? "Quiz prizes" : "Prize settings"}
+        description={
+          isQuizNight
+            ? "Choose which quiz prizes are visible on the public event page."
+            : "Choose which prizes are visible on the public event page."
+        }
         badge={prizeText(publicPrizesCount)}
         tone="prize"
       >
         <div style={styles.prizeSectionShell}>
           <div style={styles.prizeSectionTop}>
             <div>
-              <div style={styles.prizeSectionTitle}>Public prize list</div>
+              <div style={styles.prizeSectionTitle}>
+                {isQuizNight ? "Quiz prize list" : "Public prize list"}
+              </div>
               <div style={styles.prizeSectionText}>
-                These prizes can also be used later during winner draws.
+                {isQuizNight
+                  ? "These prizes can be used for quiz winners or later event draws."
+                  : "These prizes can also be used later during winner draws."}
               </div>
             </div>
 
@@ -1297,7 +1527,7 @@ export default function NewEventForm({
                           title: event.target.value,
                         })
                       }
-                      placeholder="Luxury hamper"
+                      placeholder={isQuizNight ? "Winning team prize" : "Luxury hamper"}
                       style={styles.input}
                     />
                   </Field>
@@ -1336,16 +1566,19 @@ export default function NewEventForm({
 
       <section style={styles.submitBar}>
         <div>
-          <div style={styles.submitTitle}>Create event</div>
+          <div style={styles.submitTitle}>
+            {isQuizNight ? "Create quiz night" : "Create event"}
+          </div>
 
           <div style={styles.submitText}>
-            Your event will be created in draft mode and can be edited further
-            afterwards.
+            {isQuizNight
+              ? "Your quiz night will be created and can be edited further afterwards."
+              : "Your event will be created in draft mode and can be edited further afterwards."}
           </div>
         </div>
 
         <button type="submit" style={styles.submitButton}>
-          Create event
+          {isQuizNight ? "Create quiz night" : "Create event"}
         </button>
       </section>
     </form>
@@ -1901,6 +2134,45 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
+  },
+  subtypeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  subtypeCard: {
+    display: "grid",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+  subtypeTitle: {
+    color: "#0f172a",
+    fontSize: 17,
+    fontWeight: 950,
+  },
+  subtypeText: {
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+  quizInlineNotice: {
+    display: "grid",
+    gap: 6,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 800,
+    marginBottom: 16,
   },
   sectionHeaderInner: {
     display: "flex",
