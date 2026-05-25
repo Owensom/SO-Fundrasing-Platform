@@ -33,6 +33,20 @@ type WinnerRow = {
   colour: string | null;
   buyer_name: string | null;
   buyer_email: string | null;
+  raffle_subtype_snapshot: string | null;
+  gross_paid_sales_cents: number | string | null;
+  winner_prize_cents: number | string | null;
+  cause_share_cents: number | string | null;
+  paid_entry_count: number | string | null;
+  postal_entry_count: number | string | null;
+  total_entry_count: number | string | null;
+  payout_status: string | null;
+  payout_method: string | null;
+  payout_date: string | null;
+  payout_reference: string | null;
+  payout_note: string | null;
+  payout_recorded_by: string | null;
+  payout_recorded_at: string | null;
 };
 
 type SoldTicketRow = {
@@ -179,15 +193,65 @@ function formatDrawDate(value: string | null | undefined) {
   }).format(date);
 }
 
-function formatMoney(cents: number, currency: string) {
+function formatMoney(cents: number | string | null | undefined, currency: string) {
+  const numericCents = Number(cents || 0);
+
   try {
     return new Intl.NumberFormat("en-GB", {
       style: "currency",
       currency: currency || "GBP",
-    }).format(Number(cents || 0) / 100);
+    }).format(Number(numericCents || 0) / 100);
   } catch {
-    return `${(Number(cents || 0) / 100).toFixed(2)} ${currency || "GBP"}`;
+    return `${(Number(numericCents || 0) / 100).toFixed(2)} ${
+      currency || "GBP"
+    }`;
   }
+}
+
+function formatWholeNumber(value: number | string | null | undefined) {
+  const parsed = Number(value || 0);
+
+  if (!Number.isFinite(parsed)) {
+    return "0";
+  }
+
+  return String(Math.max(0, Math.round(parsed)));
+}
+
+function formatPayoutStatus(value: string | null | undefined) {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (clean === "paid") return "Paid";
+  if (clean === "pending") return "Pending";
+  if (clean === "not_required") return "Not required";
+
+  return "Not recorded";
+}
+
+function getPayoutStatusStyle(value: string | null | undefined): CSSProperties {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (clean === "paid") {
+    return {
+      background: "#dcfce7",
+      borderColor: "#bbf7d0",
+      color: "#166534",
+    };
+  }
+
+  if (clean === "pending") {
+    return {
+      background: "#fff7ed",
+      borderColor: "#fed7aa",
+      color: "#9a3412",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    borderColor: "#e2e8f0",
+    color: "#475569",
+  };
 }
 
 function getStatusStyle(status: string): CSSProperties {
@@ -345,13 +409,44 @@ export default async function AdminRafflePage({
 
   const winners = await query<WinnerRow>(
     `
-      select *
+      select
+        id,
+        raffle_id,
+        prize_position,
+        prize_title,
+        ticket_number,
+        colour,
+        buyer_name,
+        buyer_email,
+        raffle_subtype_snapshot,
+        gross_paid_sales_cents,
+        winner_prize_cents,
+        cause_share_cents,
+        paid_entry_count,
+        postal_entry_count,
+        total_entry_count,
+        payout_status,
+        payout_method,
+        payout_date,
+        payout_reference,
+        payout_note,
+        payout_recorded_by,
+        payout_recorded_at
       from raffle_winners
       where raffle_id = $1
       order by prize_position asc
     `,
     [raffle.id],
   );
+
+  const fiftyFiftySnapshotWinner =
+    isFiftyFifty && winners.length > 0
+      ? winners.find(
+          (winner) =>
+            normaliseRaffleSubtype(winner.raffle_subtype_snapshot) ===
+            "fifty_fifty",
+        ) || winners[0]
+      : null;
 
   const soldTicketRows = await query<SoldTicketRow>(
     `
@@ -410,8 +505,7 @@ export default async function AdminRafflePage({
           View campaign page
         </Link>
       </section>
-
-      {campaignLimitReached ? (
+            {campaignLimitReached ? (
         <section style={styles.campaignLimitBanner}>
           <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
 
@@ -522,7 +616,8 @@ export default async function AdminRafflePage({
           />
         </div>
       </section>
-            <section className="raffle-summary-grid" style={styles.summaryGrid}>
+
+      <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Raffle type"
           value={isFiftyFifty ? "50/50" : "Standard"}
@@ -557,8 +652,7 @@ export default async function AdminRafflePage({
             The entry question, free postal entry route, terms acceptance,
             ticket reservation and Stripe checkout flow remain in place. Bundle
             offers and fixed prize setup are disabled for 50/50 raffles in this
-            first release. The winner prize will be calculated from paid ticket
-            sales in a later draw-snapshot phase.
+            first release.
           </p>
 
           <div className="raffle-fifty-stats" style={styles.fiftyFiftyStats}>
@@ -574,9 +668,129 @@ export default async function AdminRafflePage({
 
             <div style={styles.fiftyFiftyStat}>
               <span>Payout</span>
-              <strong>Manual tracker later</strong>
+              <strong>
+                {fiftyFiftySnapshotWinner
+                  ? formatPayoutStatus(fiftyFiftySnapshotWinner.payout_status)
+                  : "After draw"}
+              </strong>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {isFiftyFifty && fiftyFiftySnapshotWinner ? (
+        <section style={styles.fiftyFiftySnapshotCard}>
+          <div style={styles.fiftyFiftySnapshotHeader}>
+            <div>
+              <div style={styles.fiftyFiftySnapshotEyebrow}>
+                50/50 payout snapshot
+              </div>
+
+              <h2 style={styles.fiftyFiftySnapshotTitle}>
+                Winner prize and cause share
+              </h2>
+
+              <p style={styles.fiftyFiftySnapshotText}>
+                This read-only snapshot was recorded when the winner was drawn.
+                It is for admin tracking only; Stripe payout automation is not
+                active yet.
+              </p>
+            </div>
+
+            <span
+              style={{
+                ...styles.payoutStatusPill,
+                ...getPayoutStatusStyle(fiftyFiftySnapshotWinner.payout_status),
+              }}
+            >
+              {formatPayoutStatus(fiftyFiftySnapshotWinner.payout_status)}
+            </span>
+          </div>
+
+          <div
+            className="raffle-fifty-snapshot-grid"
+            style={styles.fiftyFiftySnapshotGrid}
+          >
+            <SnapshotStat
+              label="Gross paid ticket sales"
+              value={formatMoney(
+                fiftyFiftySnapshotWinner.gross_paid_sales_cents,
+                raffle.currency,
+              )}
+              emphasis
+            />
+
+            <SnapshotStat
+              label="Winner prize"
+              value={formatMoney(
+                fiftyFiftySnapshotWinner.winner_prize_cents,
+                raffle.currency,
+              )}
+              emphasis
+            />
+
+            <SnapshotStat
+              label="Cause share"
+              value={formatMoney(
+                fiftyFiftySnapshotWinner.cause_share_cents,
+                raffle.currency,
+              )}
+              emphasis
+            />
+
+            <SnapshotStat
+              label="Paid entries"
+              value={formatWholeNumber(
+                fiftyFiftySnapshotWinner.paid_entry_count,
+              )}
+            />
+
+            <SnapshotStat
+              label="Postal/manual entries"
+              value={formatWholeNumber(
+                fiftyFiftySnapshotWinner.postal_entry_count,
+              )}
+            />
+
+            <SnapshotStat
+              label="Total entries"
+              value={formatWholeNumber(
+                fiftyFiftySnapshotWinner.total_entry_count,
+              )}
+            />
+          </div>
+
+          <div style={styles.fiftyFiftyPayoutDetails}>
+            <div>
+              <span style={styles.snapshotDetailLabel}>Payout method</span>
+              <strong style={styles.snapshotDetailValue}>
+                {fiftyFiftySnapshotWinner.payout_method || "Not recorded"}
+              </strong>
+            </div>
+
+            <div>
+              <span style={styles.snapshotDetailLabel}>Payout date</span>
+              <strong style={styles.snapshotDetailValue}>
+                {fiftyFiftySnapshotWinner.payout_date
+                  ? formatDrawDate(fiftyFiftySnapshotWinner.payout_date)
+                  : "Not recorded"}
+              </strong>
+            </div>
+
+            <div>
+              <span style={styles.snapshotDetailLabel}>Reference</span>
+              <strong style={styles.snapshotDetailValue}>
+                {fiftyFiftySnapshotWinner.payout_reference || "Not recorded"}
+              </strong>
+            </div>
+          </div>
+
+          {fiftyFiftySnapshotWinner.payout_note ? (
+            <div style={styles.fiftyFiftyPayoutNote}>
+              <strong>Internal note</strong>
+              <span>{fiftyFiftySnapshotWinner.payout_note}</span>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -745,8 +959,7 @@ export default async function AdminRafflePage({
                     />
                   </div>
                 </div>
-
-                <div
+                                <div
                   className="raffle-subtype-grid"
                   style={styles.subtypeGrid}
                 >
@@ -901,7 +1114,8 @@ export default async function AdminRafflePage({
                     />
                   </Field>
                 </div>
-                                <div className="raffle-colour-grid" style={styles.colourGrid}>
+
+                <div className="raffle-colour-grid" style={styles.colourGrid}>
                   {PRESET_COLOURS.map((colour) => {
                     const selected = colours.includes(colour);
                     const swatch = COLOUR_SWATCHES[colour] || "#e2e8f0";
@@ -1192,7 +1406,7 @@ export default async function AdminRafflePage({
 
               <p style={styles.sectionDescription}>
                 {isFiftyFifty
-                  ? "The winner prize is calculated automatically from paid ticket sales."
+                  ? "The winner prize is calculated from paid ticket sales."
                   : "Manage prize names, descriptions and public visibility."}
               </p>
             </div>
@@ -1214,9 +1428,9 @@ export default async function AdminRafflePage({
                 </div>
 
                 <p style={styles.helpText}>
-                  Manual prize rows are not used for 50/50 raffles. The final
-                  winner prize and cause share will be snapshotted at draw time
-                  in a later phase.
+                  Manual prize rows are not used for 50/50 raffles. Once drawn,
+                  the admin payout snapshot records the paid ticket pot, winner
+                  share, cause share and entry counts.
                 </p>
               </div>
             ) : (
@@ -1304,8 +1518,7 @@ export default async function AdminRafflePage({
             ) : (
               <div style={styles.emptyBox}>No winners yet.</div>
             )}
-
-            <details open style={styles.drawDetails}>
+                        <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
@@ -1452,6 +1665,28 @@ function HeroMeta({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function SnapshotStat({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: ReactNode;
+  emphasis?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        ...styles.snapshotStat,
+        background: emphasis ? "#ffffff" : "#fffbeb",
+      }}
+    >
+      <span style={styles.snapshotStatLabel}>{label}</span>
+      <strong style={styles.snapshotStatValue}>{value}</strong>
+    </div>
+  );
+}
+
 function StatusMiniPill({ label, active }: { label: string; active: boolean }) {
   return (
     <span
@@ -1475,6 +1710,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
+
 const responsiveStyles = `
   .raffle-admin-page,
   .raffle-admin-page * {
@@ -1510,7 +1746,8 @@ const responsiveStyles = `
     .raffle-media-box,
     .raffle-draw-grid,
     .raffle-subtype-grid,
-    .raffle-fifty-stats {
+    .raffle-fifty-stats,
+    .raffle-fifty-snapshot-grid {
       grid-template-columns: 1fr !important;
     }
 
@@ -1926,6 +2163,123 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
     color: "#92400e",
     minWidth: 0,
+  },
+  fiftyFiftySnapshotCard: {
+    display: "grid",
+    gap: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #111827 54%, #1e293b 100%)",
+    border: "1px solid #334155",
+    boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
+    color: "#ffffff",
+    marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  fiftyFiftySnapshotHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+  fiftyFiftySnapshotEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.12)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.38)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  fiftyFiftySnapshotTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: "clamp(24px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  fiftyFiftySnapshotText: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    lineHeight: 1.6,
+    maxWidth: 760,
+  },
+  payoutStatusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "9px 13px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  fiftyFiftySnapshotGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  snapshotStat: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 18,
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    minWidth: 0,
+  },
+  snapshotStatLabel: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  snapshotStatValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  fiftyFiftyPayoutDetails: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+  },
+  snapshotDetailLabel: {
+    display: "block",
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 950,
+    marginBottom: 4,
+  },
+  snapshotDetailValue: {
+    display: "block",
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
+  },
+  fiftyFiftyPayoutNote: {
+    display: "grid",
+    gap: 5,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.10)",
+    border: "1px solid rgba(250,204,21,0.26)",
+    color: "#fde68a",
+    fontSize: 14,
+    lineHeight: 1.5,
   },
   progressCard: {
     padding: 16,
