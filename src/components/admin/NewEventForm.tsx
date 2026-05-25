@@ -353,7 +353,8 @@ export default function NewEventForm({
   const [tableInitialTicketTypeId, setTableInitialTicketTypeId] = useState("");
   const [tableShape, setTableShape] = useState<TableShape>("round");
   const [tableNames, setTableNames] = useState<Record<string, string>>({});
-    const tableNumbers = useMemo(() => {
+
+  const tableNumbers = useMemo(() => {
     const count = Number(tableCount);
     if (!Number.isFinite(count) || count <= 0) return [];
 
@@ -390,8 +391,7 @@ export default function NewEventForm({
       0,
     );
   }, [ticketTypes]);
-
-  const reservedSeatsPreview = useMemo(() => {
+    const reservedSeatsPreview = useMemo(() => {
     const rowsText = rowRows.trim();
     const seats = toPositiveNumber(rowSeatsPerRow);
 
@@ -808,12 +808,8 @@ export default function NewEventForm({
         />
       </section>
 
-      <section style={styles.readinessCard}>
-        <div style={styles.readinessEyebrow}>Campaign readiness</div>
-
-        <h2 style={styles.readinessTitle}>Before publishing</h2>
-
-        <div style={styles.readinessBody}>
+      <section style={styles.readinessGrid}>
+        <ReadinessCard eyebrow="Campaign readiness" title="Before publishing">
           <CheckItem done={Boolean(title.trim())}>
             {isQuizNight ? "Add quiz night title" : "Add event title"}
           </CheckItem>
@@ -824,18 +820,64 @@ export default function NewEventForm({
             Add description
           </CheckItem>
 
-          <CheckItem done={Boolean(location.trim())}>
-            {isQuizNight ? "Add quiz venue" : "Add location"}
-          </CheckItem>
+          <CheckItem done={Boolean(location.trim())}>Add location</CheckItem>
 
           <CheckItem done={Boolean(startsDate.trim())}>
             Schedule start date
           </CheckItem>
 
           <CheckItem done={activeTicketCount > 0}>
-            {isQuizNight ? "Add team or player booking" : "Add active ticket type"}
+            {isQuizNight ? "Add team or player ticket" : "Add active ticket type"}
           </CheckItem>
-        </div>
+        </ReadinessCard>
+
+        <ReadinessCard
+          eyebrow={isQuizNight ? "Quiz booking preview" : "Ticket preview"}
+          title={isQuizNight ? "Bookings" : "Tickets"}
+        >
+          <PreviewLine label="Active types" value={activeTicketCount} />
+
+          <PreviewLine
+            label="Starting price"
+            value={
+              lowestTicketPrice === null
+                ? "Not priced"
+                : formatPreviewMoney(lowestTicketPrice, currency)
+            }
+          />
+
+          <PreviewLine
+            label={isQuizNight ? "Booking limit" : "Ticket limit"}
+            value={
+              totalTicketCapacity > 0
+                ? `${totalTicketCapacity} from ticket types`
+                : isQuizNight
+                  ? "No booking limit set"
+                  : "No ticket limit set"
+            }
+          />
+        </ReadinessCard>
+
+        <ReadinessCard
+          eyebrow={isQuizNight ? "Quiz setup preview" : "Event setup preview"}
+          title={formatEventType(eventType)}
+        >
+          <PreviewLine
+            label={isQuizNight ? "Places / teams" : "Capacity"}
+            value={seatingPreview > 0 ? seatingPreview : "Not set"}
+          />
+
+          {eventType === "tables" ? (
+            <PreviewLine label="Table shape" value={formatTableShape(tableShape)} />
+          ) : null}
+
+          <PreviewLine
+            label="Starts"
+            value={formatDatePreview(startsDate, startsTime)}
+          />
+
+          <PreviewLine label="Prizes" value={prizeText(publicPrizesCount)} />
+        </ReadinessCard>
       </section>
 
       <SectionCard
@@ -1005,9 +1047,7 @@ export default function NewEventForm({
               value={location}
               onChange={(event) => setLocation(event.target.value)}
               placeholder={
-                isQuizNight
-                  ? "Pub, hall, school or venue"
-                  : "Venue, city or online"
+                isQuizNight ? "Pub, hall, school or venue" : "Venue, city or online"
               }
               style={styles.input}
             />
@@ -1702,7 +1742,9 @@ function SectionCard({
       <div style={styles.sectionTop}>
         <div>
           <div style={styles.sectionEyebrow}>Section {number}</div>
+
           <h2 style={styles.sectionTitle}>{title}</h2>
+
           <p style={styles.sectionDescription}>{description}</p>
         </div>
 
@@ -1732,6 +1774,24 @@ function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function ReadinessCard({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div style={styles.readinessCard}>
+      <div style={styles.readinessEyebrow}>{eyebrow}</div>
+      <h3 style={styles.readinessTitle}>{title}</h3>
+      <div style={styles.readinessBody}>{children}</div>
+    </div>
+  );
+}
+
 function CheckItem({
   done,
   children,
@@ -1757,6 +1817,15 @@ function CheckItem({
       </span>
 
       <span>{children}</span>
+    </div>
+  );
+}
+
+function PreviewLine({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.previewLine}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -1802,6 +1871,7 @@ const responsiveStyles = `
     }
 
     .new-event-form section,
+    .new-event-form details,
     .new-event-form div,
     .new-event-form label {
       min-width: 0 !important;
@@ -1816,7 +1886,7 @@ const responsiveStyles = `
     }
 
     .new-event-form h2 {
-      font-size: clamp(24px, 8vw, 34px) !important;
+      font-size: clamp(28px, 9vw, 36px) !important;
       line-height: 1.05 !important;
       overflow-wrap: anywhere !important;
     }
@@ -2086,12 +2156,16 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     wordBreak: "break-word",
   },
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 14,
+  },
   readinessCard: {
     padding: 18,
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   readinessEyebrow: {
     margin: 0,
@@ -2108,10 +2182,14 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.1,
     letterSpacing: "-0.03em",
   },
-  readinessBody: {
-    display: "grid",
-    gap: 10,
-    marginTop: 14,
+  readinessBody: { display: "grid", gap: 10, marginTop: 14 },
+  previewLine: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    color: "#334155",
+    fontSize: 14,
   },
   sectionCard: {
     padding: "clamp(18px, 4vw, 22px)",
