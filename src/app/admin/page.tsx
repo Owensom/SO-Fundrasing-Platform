@@ -222,23 +222,25 @@ export default async function AdminDashboardPage() {
         <div style={styles.heroGlow} />
 
         <div style={styles.commandContent}>
-          <div style={styles.badge}>SO Foundation Platform</div>
+          <div>
+            <div style={styles.badge}>SO Foundation Platform</div>
 
-          <h1
-            className="so-brand-heading admin-dashboard-title"
-            style={styles.title}
-          >
-            Admin command centre
-          </h1>
+            <h1
+              className="so-brand-heading admin-dashboard-title"
+              style={styles.title}
+            >
+              Admin command centre
+            </h1>
 
-          <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-            Manage campaigns, payments, supporters and operations across one
-            premium fundraising workspace.
-          </p>
+            <p className="admin-dashboard-subtitle" style={styles.subtitle}>
+              Manage campaigns, payments, supporters and operations across one
+              premium fundraising workspace.
+            </p>
 
-          <p className="admin-dashboard-tenant" style={styles.tenant}>
-            Tenant: <strong>{tenantSlug}</strong>
-          </p>
+            <p className="admin-dashboard-tenant" style={styles.tenant}>
+              Tenant: <strong>{tenantSlug}</strong>
+            </p>
+          </div>
 
           <div className="admin-command-actions" style={styles.commandActions}>
             <Link
@@ -967,6 +969,7 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-centre {
     padding: 22px !important;
     border-radius: 28px !important;
+    min-height: auto !important;
   }
 
   .admin-dashboard-page .admin-dashboard-title {
@@ -1053,6 +1056,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+    minHeight: 620,
   },
 
   heroGlow: {
@@ -1067,6 +1071,9 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     zIndex: 1,
     minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0,
   },
 
   badge: {
@@ -1120,7 +1127,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "stretch",
     width: "100%",
-    marginTop: 24,
+    marginTop: "auto",
+    paddingTop: 30,
   },
 
   primaryButton: {
