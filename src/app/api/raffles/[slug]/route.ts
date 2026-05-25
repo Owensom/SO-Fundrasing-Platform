@@ -18,6 +18,7 @@ type DbRaffleRow = {
   total_tickets: number | null;
   sold_tickets: number | null;
   status: string | null;
+  raffle_subtype: string | null;
   config_json: {
     startNumber?: number;
     endNumber?: number;
@@ -25,6 +26,7 @@ type DbRaffleRow = {
     colours?: unknown[];
     offers?: unknown[];
     prizes?: unknown[];
+    raffle_subtype?: string;
   } | null;
   winner_ticket_number?: number | null;
   winner_colour?: string | null;
@@ -68,6 +70,16 @@ function normalizeImagePosition(value: unknown) {
   }
 
   return "center";
+}
+
+function normalizeRaffleSubtype(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") {
+    return "fifty_fifty";
+  }
+
+  return "standard";
 }
 
 function normalizeColourItem(value: unknown, index: number) {
@@ -263,6 +275,9 @@ export async function GET(
     const raffle = raffleRows[0];
     const config = raffle.config_json ?? {};
     const imagePosition = normalizeImagePosition(config.image_position);
+    const raffleSubtype = normalizeRaffleSubtype(
+      raffle.raffle_subtype ?? config.raffle_subtype,
+    );
 
     const coloursRaw = Array.isArray(config.colours) ? config.colours : [];
     const offersRaw = Array.isArray(config.offers) ? config.offers : [];
@@ -304,6 +319,8 @@ export async function GET(
         draw_at: raffle.draw_at ?? null,
         imagePosition,
         image_position: imagePosition,
+        raffleSubtype,
+        raffle_subtype: raffleSubtype,
         config_json: config,
         currency: raffle.currency ?? "GBP",
         ticketPrice: Number(raffle.ticket_price_cents ?? 0) / 100,
@@ -313,8 +330,11 @@ export async function GET(
         startNumber: Number(config.startNumber ?? 1),
         endNumber: Number(config.endNumber ?? 1),
         colours: coloursRaw.map(normalizeColourItem),
-        offers: offersRaw.map(normalizeOfferItem),
-        prizes,
+        offers:
+          raffleSubtype === "fifty_fifty"
+            ? []
+            : offersRaw.map(normalizeOfferItem),
+        prizes: raffleSubtype === "fifty_fifty" ? [] : prizes,
         soldTickets: sold.map((ticket) => ({
           number: Number(ticket.ticket_number),
           colour: ticket.colour || "default",
