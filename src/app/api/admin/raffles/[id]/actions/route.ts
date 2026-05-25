@@ -56,7 +56,7 @@ function getPrizeTitle(prizes: PrizeRow[], index: number) {
   return `Prize ${index + 1}`;
 }
 
-async function requireTenantAccess(req: NextRequest) {
+async function requireTenantAccess() {
   const session = await auth();
 
   if (!session?.user) {
@@ -99,7 +99,7 @@ export async function POST(
   try {
     const { id } = await params;
 
-    const access = await requireTenantAccess(req);
+    const access = await requireTenantAccess();
 
     if (!access.ok) {
       return access.response;
@@ -161,12 +161,11 @@ export async function POST(
             buyer_name,
             buyer_email
           from raffle_ticket_sales
-          where tenant_slug = $1
-            and raffle_id = $2
+          where raffle_id = $1
             and ticket_number is not null
           order by created_at asc
         `,
-        [tenantSlug, raffle.id],
+        [raffle.id],
       );
 
       if (!soldTickets.length) {
@@ -317,6 +316,7 @@ export async function POST(
             prizeTitle,
             ticketNumber: Number(winner.ticket_number),
             colour: winner.colour || null,
+            raffleSubtype: raffle.raffle_subtype,
           });
 
           sentWinnerEmails += 1;
