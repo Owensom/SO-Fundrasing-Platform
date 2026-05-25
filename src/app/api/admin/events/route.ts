@@ -111,6 +111,107 @@ function optionalDate(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+function parseBritishDate(value: FormDataEntryValue | null) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return null;
+
+  const match = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year) ||
+    day < 1 ||
+    day > 31 ||
+    month < 1 ||
+    month > 12 ||
+    year < 2000 ||
+    year > 2100
+  ) {
+    return null;
+  }
+
+  return {
+    day,
+    month,
+    year,
+  };
+}
+
+function parseTime(value: FormDataEntryValue | null) {
+  const clean = String(value || "").trim();
+
+  if (!clean) return null;
+
+  const match = clean.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  return {
+    hour,
+    minute,
+  };
+}
+
+function optionalSplitDateTime(
+  dateValue: FormDataEntryValue | null,
+  timeValue: FormDataEntryValue | null,
+  fallbackValue: FormDataEntryValue | null,
+) {
+  const dateParts = parseBritishDate(dateValue);
+  const timeParts = parseTime(timeValue);
+
+  const hasDate = String(dateValue || "").trim().length > 0;
+  const hasTime = String(timeValue || "").trim().length > 0;
+
+  if (!hasDate && !hasTime) {
+    return optionalDate(fallbackValue);
+  }
+
+  if (!dateParts) {
+    return null;
+  }
+
+  const hour = timeParts?.hour ?? 0;
+  const minute = timeParts?.minute ?? 0;
+
+  const date = new Date(
+    Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, hour, minute),
+  );
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== dateParts.year ||
+    date.getUTCMonth() !== dateParts.month - 1 ||
+    date.getUTCDate() !== dateParts.day
+  ) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
 function parseJsonArray<T>(value: FormDataEntryValue | null): T[] {
   try {
     const parsed = JSON.parse(String(value || "[]"));
@@ -311,6 +412,31 @@ export async function POST(request: Request) {
     );
   }
 
+  const startsAt = optionalSplitDateTime(
+    formData.get("starts_date"),
+    formData.get("starts_time"),
+    formData.get("starts_at"),
+  );
+
+  const endsAt = optionalSplitDateTime(
+    formData.get("ends_date"),
+    formData.get("ends_time"),
+    formData.get("ends_at"),
+  );
+
+  const hasInvalidStartDate =
+    String(formData.get("starts_date") || "").trim() && !startsAt;
+
+  const hasInvalidEndDate =
+    String(formData.get("ends_date") || "").trim() && !endsAt;
+
+  if (hasInvalidStartDate || hasInvalidEndDate) {
+    return NextResponse.redirect(
+      new URL("/admin/events/new?error=invalid-event-datetime", request.url),
+      { status: 303 },
+    );
+  }
+
   try {
     if (status === "published" && !(await canPublishEventForTenant(tenantSlug))) {
       return NextResponse.redirect(
@@ -340,8 +466,8 @@ export async function POST(request: Request) {
       imageFocusX: cleanImageFocus(formData.get("image_focus_x")),
       imageFocusY: cleanImageFocus(formData.get("image_focus_y")),
       location: String(formData.get("location") || "").trim() || null,
-      startsAt: optionalDate(formData.get("starts_at")),
-      endsAt: optionalDate(formData.get("ends_at")),
+      startsAt,
+      endsAt,
       capacity: positiveInteger(formData.get("capacity"), 0) || null,
       currency: String(formData.get("currency") || "GBP").trim() || "GBP",
       eventType,
