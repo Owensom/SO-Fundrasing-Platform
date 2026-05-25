@@ -62,6 +62,7 @@ type FreeEntry = {
 };
 
 type SafeRaffleStatus = "draft" | "published" | "closed" | "drawn";
+type SafeRaffleSubtype = "standard" | "fifty_fifty";
 
 type SafeRaffle = {
   id: string;
@@ -80,6 +81,7 @@ type SafeRaffle = {
   currency: string;
   ticketPrice: number;
   status: SafeRaffleStatus;
+  raffleSubtype: SafeRaffleSubtype;
   colours: RaffleColour[];
   offers: RaffleOffer[];
   prizes: RafflePrize[];
@@ -122,6 +124,14 @@ function normaliseHexColour(value: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function normaliseRaffleSubtype(value: unknown): SafeRaffleSubtype {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") return "fifty_fifty";
+
+  return "standard";
 }
 
 function normaliseBranding(input: any): TenantBranding {
@@ -324,6 +334,9 @@ function toSafeRaffle(input: any): SafeRaffle {
       ? Number(raw.ticketPrice)
       : 0,
     status: normaliseFrontendStatus(raw.status),
+    raffleSubtype: normaliseRaffleSubtype(
+      raw.raffleSubtype ?? raw.raffle_subtype ?? config.raffle_subtype,
+    ),
 
     colours: colours.map((c: any, index: number) => ({
       id: String(c?.id ?? "colour-" + index),
@@ -481,8 +494,7 @@ function calculateBestPrice(
       }
     }
   }
-
-  const total = Number.isFinite(dp[safeQuantity]?.total)
+    const total = Number.isFinite(dp[safeQuantity]?.total)
     ? dp[safeQuantity].total
     : 0;
 
@@ -596,6 +608,7 @@ function statusPillStyle(status: SafeRaffleStatus): React.CSSProperties {
     border: "1px solid #e2e8f0",
   };
 }
+
 const responsiveStyles = `
   @media (max-width: 760px) {
     .public-raffle-page {
@@ -720,9 +733,15 @@ const responsiveStyles = `
     .public-raffle-prizes,
     .public-raffle-winners,
     .public-raffle-quick-select,
+    .public-raffle-fifty-fifty-panel,
     .public-raffle-total-box {
       border-radius: 22px !important;
       padding: 16px !important;
+    }
+
+    .public-raffle-fifty-fifty-stats {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
     }
 
     .public-raffle-prize-card {
@@ -955,6 +974,7 @@ export default function PublicRafflePage({ slug }: Props) {
   const isClosed = raffle?.status === "closed";
   const isDrawn = raffle?.status === "drawn";
   const isDraft = raffle?.status === "draft";
+  const isFiftyFifty = raffle?.raffleSubtype === "fifty_fifty";
   const canReserve = Boolean(raffle && isPublished);
 
   const pricing = useMemo(() => {
@@ -1016,8 +1036,7 @@ export default function PublicRafflePage({ slug }: Props) {
   const brandLogoSrc = branding.logoMarkUrl || branding.logoUrl;
   const primaryColour = branding.primaryColour || "#2563EB";
   const accentColour = branding.accentColour || "#F59E0B";
-
-  const brandedPrimaryButtonStyle: React.CSSProperties = {
+    const brandedPrimaryButtonStyle: React.CSSProperties = {
     ...styles.primaryButton,
     background: `linear-gradient(135deg, ${primaryColour} 0%, #1d4ed8 58%, #1e40af 100%)`,
     boxShadow: `0 14px 30px ${primaryColour}36`,
@@ -1317,7 +1336,8 @@ export default function PublicRafflePage({ slug }: Props) {
       setSaving(false);
     }
   }
-    if (!slug) return <div style={styles.wrap}>Loading…</div>;
+
+  if (!slug) return <div style={styles.wrap}>Loading…</div>;
   if (loading) return <div style={styles.wrap}>Loading raffle…</div>;
   if (error && !raffle) return <div style={styles.wrap}>{error}</div>;
   if (!raffle) return <div style={styles.wrap}>Raffle not found.</div>;
@@ -1422,7 +1442,7 @@ export default function PublicRafflePage({ slug }: Props) {
                 borderColor: `${accentColour}88`,
               }}
             >
-              Prize draw
+              {isFiftyFifty ? "50/50 raffle" : "Prize draw"}
             </span>
 
             <span
@@ -1463,9 +1483,13 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
 
             <div className="public-raffle-meta-card" style={styles.metaCard}>
-              <span style={styles.metaLabel}>Ticket range</span>
+              <span style={styles.metaLabel}>
+                {isFiftyFifty ? "Prize split" : "Ticket range"}
+              </span>
               <strong>
-                {raffle.startNumber}–{raffle.endNumber}
+                {isFiftyFifty
+                  ? "50% / 50%"
+                  : `${raffle.startNumber}–${raffle.endNumber}`}
               </strong>
             </div>
 
@@ -1476,7 +1500,11 @@ export default function PublicRafflePage({ slug }: Props) {
           </div>
 
           <div className="public-raffle-hero-footer" style={styles.heroFooter}>
-            <span>Supporting the organiser</span>
+            <span>
+              {isFiftyFifty
+                ? "50% to the winner · 50% to the cause"
+                : "Supporting the organiser"}
+            </span>
             <strong>
               {basket.length > 0
                 ? `${basket.length} selected`
@@ -1498,7 +1526,48 @@ export default function PublicRafflePage({ slug }: Props) {
             laws.
           </div>
 
-          {raffle.prizes.length > 0 ? (
+          {isFiftyFifty ? (
+            <section
+              className="public-raffle-fifty-fifty-panel"
+              style={{
+                ...styles.fiftyFiftyPanel,
+                borderColor: `${accentColour}88`,
+              }}
+            >
+              <div style={styles.fiftyFiftyKicker}>50/50 raffle</div>
+
+              <h2 style={styles.fiftyFiftyTitle}>
+                Half the paid ticket pot goes to the winner.
+              </h2>
+
+              <p style={styles.fiftyFiftyText}>
+                50% of all paid ticket sales goes to the winning ticket holder.
+                The remaining 50% supports the cause.
+              </p>
+
+              <div
+                className="public-raffle-fifty-fifty-stats"
+                style={styles.fiftyFiftyPanelStats}
+              >
+                <div style={styles.fiftyFiftyPanelStat}>
+                  <span>Winner share</span>
+                  <strong>50%</strong>
+                </div>
+
+                <div style={styles.fiftyFiftyPanelStat}>
+                  <span>Cause share</span>
+                  <strong>50%</strong>
+                </div>
+
+                <div style={styles.fiftyFiftyPanelStat}>
+                  <span>Prize type</span>
+                  <strong>Cash pot</strong>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {raffle.prizes.length > 0 && !isFiftyFifty ? (
             <section className="public-raffle-prizes" style={styles.prizesBox}>
               <div style={styles.prizesTitle}>Prizes</div>
 
@@ -1547,8 +1616,7 @@ export default function PublicRafflePage({ slug }: Props) {
               ) : null}
             </section>
           ) : null}
-
-          {isDrawn ? (
+                    {isDrawn ? (
             <section
               className="public-raffle-winners"
               style={styles.winnersBox}
@@ -1572,7 +1640,9 @@ export default function PublicRafflePage({ slug }: Props) {
                       <div style={styles.winnerBlock}>
                         <div style={styles.winnerLabel}>Prize</div>
                         <div style={styles.winnerPrize}>
-                          {ordinal(winner.prizePosition)}
+                          {isFiftyFifty
+                            ? "50/50 pot"
+                            : ordinal(winner.prizePosition)}
                         </div>
                       </div>
 
@@ -1600,7 +1670,9 @@ export default function PublicRafflePage({ slug }: Props) {
                 >
                   <div style={styles.winnerBlock}>
                     <div style={styles.winnerLabel}>Prize</div>
-                    <div style={styles.winnerPrize}>1st</div>
+                    <div style={styles.winnerPrize}>
+                      {isFiftyFifty ? "50/50 pot" : "1st"}
+                    </div>
                   </div>
 
                   <div style={styles.winnerBlock}>
@@ -1709,7 +1781,7 @@ export default function PublicRafflePage({ slug }: Props) {
             </section>
           ) : null}
 
-          {raffle.offers.length > 0 && canReserve ? (
+          {raffle.offers.length > 0 && canReserve && !isFiftyFifty ? (
             <section style={styles.offerBox}>
               <div style={{ fontWeight: 800, marginBottom: 8 }}>
                 Available offers
@@ -1860,7 +1932,7 @@ export default function PublicRafflePage({ slug }: Props) {
               Ticket total: {formatCurrency(pricing.total, raffle.currency)}
             </div>
 
-            {pricing.appliedOffers.length > 0 ? (
+            {pricing.appliedOffers.length > 0 && !isFiftyFifty ? (
               <div style={{ color: "#166534" }}>
                 Best value applied:{" "}
                 {pricing.appliedOffers
@@ -1874,9 +1946,23 @@ export default function PublicRafflePage({ slug }: Props) {
               </div>
             ) : null}
 
-            {pricing.savings > 0 ? (
+            {pricing.savings > 0 && !isFiftyFifty ? (
               <div style={{ color: "#166534" }}>
                 You save {formatCurrency(pricing.savings, raffle.currency)}
+              </div>
+            ) : null}
+
+            {isFiftyFifty && pricing.total > 0 ? (
+              <div style={styles.fiftyFiftyTotalNote}>
+                Estimated split:{" "}
+                <strong>
+                  {formatCurrency(pricing.total / 2, raffle.currency)}
+                </strong>{" "}
+                to the winner and{" "}
+                <strong>
+                  {formatCurrency(pricing.total / 2, raffle.currency)}
+                </strong>{" "}
+                to the cause from your selected tickets.
               </div>
             ) : null}
 
@@ -2170,7 +2256,8 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 32,
     padding: 14,
     borderRadius: 24,
-    background: "linear-gradient(135deg, rgba(15,23,42,0.58), rgba(15,23,42,0.30))",
+    background:
+      "linear-gradient(135deg, rgba(15,23,42,0.58), rgba(15,23,42,0.30))",
     border: "1px solid rgba(255,255,255,0.20)",
     backdropFilter: "blur(16px)",
     boxShadow: "0 16px 38px rgba(0,0,0,0.20)",
@@ -2370,6 +2457,74 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     lineHeight: 1.65,
     boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
+  },
+
+  fiftyFiftyPanel: {
+    padding: 24,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    display: "grid",
+    gap: 12,
+  },
+
+  fiftyFiftyKicker: {
+    justifySelf: "start",
+    padding: "7px 11px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  fiftyFiftyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+    fontWeight: 950,
+  },
+
+  fiftyFiftyText: {
+    margin: 0,
+    maxWidth: 760,
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.7,
+    fontWeight: 700,
+  },
+
+  fiftyFiftyPanelStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 4,
+  },
+
+  fiftyFiftyPanelStat: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+  },
+
+  fiftyFiftyTotalNote: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    lineHeight: 1.55,
   },
 
   prizesBox: {
