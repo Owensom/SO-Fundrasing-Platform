@@ -12,6 +12,7 @@ type RaffleRow = {
   id: string;
   tenant_slug: string;
   title: string;
+  raffle_subtype: string | null;
   config_json: any;
 };
 
@@ -124,7 +125,7 @@ export async function POST(
 
     const raffle = await queryOne<RaffleRow>(
       `
-        select id, tenant_slug, title, config_json
+        select id, tenant_slug, title, raffle_subtype, config_json
         from raffles
         where id = $1
           and tenant_slug = $2
@@ -278,6 +279,7 @@ export async function POST(
           prizeTitle,
           ticketNumber: Number(ticket.ticket_number),
           colour: ticket.colour,
+          raffleSubtype: raffle.raffle_subtype,
         });
 
         console.log("Auto draw winner email sent", {
