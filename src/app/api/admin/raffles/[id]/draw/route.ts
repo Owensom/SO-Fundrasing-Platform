@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { query, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { sendWinnerEmail } from "@/lib/email";
 
@@ -16,17 +16,12 @@ type RaffleRow = {
   config_json: any;
 };
 
-type SoldTicketRow = {
+type TicketRow = {
   sale_id: string;
   ticket_number: number;
   colour: string | null;
   buyer_name: string | null;
   buyer_email: string | null;
-};
-
-type WinnerRow = {
-  prize_position: number;
-  ticket_number: number;
 };
 
 function parsePositiveInteger(value: FormDataEntryValue | null) {
@@ -67,20 +62,6 @@ function getPrizeTitle(config: any, prizePosition: number) {
   );
 }
 
-function shuffle<T>(items: T[]) {
-  const copy = [...items];
-
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    const current = copy[index];
-
-    copy[index] = copy[randomIndex];
-    copy[randomIndex] = current;
-  }
-
-  return copy;
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } },
@@ -110,18 +91,15 @@ export async function POST(
 
     const formData = await request.formData();
 
-    const fromPrize =
-      parsePositiveInteger(formData.get("from_prize")) ||
-      parsePositiveInteger(formData.get("auto_draw_from_prize")) ||
-      1;
+    const prizePosition = parsePositiveInteger(formData.get("prize_position"));
+    const ticketNumber = parsePositiveInteger(formData.get("ticket_number"));
 
-    const toPrize =
-      parsePositiveInteger(formData.get("to_prize")) ||
-      parsePositiveInteger(formData.get("auto_draw_to_prize")) ||
-      fromPrize;
-
-    const startPrize = Math.min(fromPrize, toPrize);
-    const endPrize = Math.max(fromPrize, toPrize);
+    if (!prizePosition || !ticketNumber) {
+      return NextResponse.json(
+        { ok: false, error: "Prize number and ticket number are required" },
+        { status: 400 },
+      );
+    }
 
     const raffle = await queryOne<RaffleRow>(
       `
@@ -141,43 +119,45 @@ export async function POST(
       );
     }
 
-    const existingWinners = await query<WinnerRow>(
+    const existingPrizeWinner = await queryOne(
       `
-        select prize_position, ticket_number
+        select *
         from raffle_winners
         where tenant_slug = $1
           and raffle_id = $2
+          and prize_position = $3
+        limit 1
       `,
-      [tenantSlug, raffle.id],
+      [tenantSlug, raffle.id, prizePosition],
     );
 
-    const usedPrizePositions = new Set(
-      existingWinners.map((winner) => Number(winner.prize_position)),
-    );
-
-    const usedTicketNumbers = new Set(
-      existingWinners.map((winner) => Number(winner.ticket_number)),
-    );
-
-    const availablePrizePositions: number[] = [];
-
-    for (let prize = startPrize; prize <= endPrize; prize += 1) {
-      if (!usedPrizePositions.has(prize)) {
-        availablePrizePositions.push(prize);
-      }
-    }
-
-    if (!availablePrizePositions.length) {
+    if (existingPrizeWinner) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "No undrawn prizes found in that range",
-        },
+        { ok: false, error: `Prize ${prizePosition} has already been drawn` },
         { status: 400 },
       );
     }
 
-    const soldTickets = await query<SoldTicketRow>(
+    const existingTicketWinner = await queryOne(
+      `
+        select *
+        from raffle_winners
+        where tenant_slug = $1
+          and raffle_id = $2
+          and ticket_number = $3
+        limit 1
+      `,
+      [tenantSlug, raffle.id, ticketNumber],
+    );
+
+    if (existingTicketWinner) {
+      return NextResponse.json(
+        { ok: false, error: `Ticket #${ticketNumber} has already won a prize` },
+        { status: 400 },
+      );
+    }
+
+    const soldTicket = await queryOne<TicketRow>(
       `
         select
           id as sale_id,
@@ -187,127 +167,108 @@ export async function POST(
           buyer_email
         from raffle_ticket_sales
         where raffle_id = $1
-          and ticket_number is not null
-        order by created_at asc
+          and ticket_number = $2
+        limit 1
       `,
-      [raffle.id],
+      [raffle.id, ticketNumber],
     );
 
-    const availableTickets = shuffle(
-      soldTickets.filter(
-        (ticket) =>
-          Number.isFinite(Number(ticket.ticket_number)) &&
-          !usedTicketNumbers.has(Number(ticket.ticket_number)),
-      ),
-    );
-
-    if (!availableTickets.length) {
+    if (!soldTicket) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "No sold tickets are available to draw",
-        },
+        { ok: false, error: "That ticket has not been sold" },
         { status: 400 },
       );
     }
 
-    const drawCount = Math.min(
-      availablePrizePositions.length,
-      availableTickets.length,
+    const prizeTitle = getPrizeTitle(raffle.config_json, prizePosition);
+    const winnerEmail = cleanEmail(soldTicket.buyer_email);
+    const winnerName = cleanName(soldTicket.buyer_name);
+
+    const winner = await queryOne(
+      `
+        insert into raffle_winners (
+          id,
+          tenant_slug,
+          raffle_id,
+          prize_position,
+          prize_title,
+          ticket_number,
+          colour,
+          sale_id,
+          buyer_name,
+          buyer_email
+        )
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        returning *
+      `,
+      [
+        crypto.randomUUID(),
+        tenantSlug,
+        raffle.id,
+        prizePosition,
+        prizeTitle,
+        soldTicket.ticket_number,
+        soldTicket.colour,
+        soldTicket.sale_id,
+        winnerName,
+        winnerEmail || null,
+      ],
     );
 
-    const createdWinners = [];
+    let winnerEmailStatus:
+      | "sent"
+      | "skipped_missing_email"
+      | "failed" = "skipped_missing_email";
 
-    for (let index = 0; index < drawCount; index += 1) {
-      const prizePosition = availablePrizePositions[index];
-      const ticket = availableTickets[index];
-      const winnerEmail = cleanEmail(ticket.buyer_email);
-      const winnerName = cleanName(ticket.buyer_name);
-      const prizeTitle = getPrizeTitle(raffle.config_json, prizePosition);
-
-      const winner = await queryOne(
-        `
-          insert into raffle_winners (
-            id,
-            tenant_slug,
-            raffle_id,
-            prize_position,
-            prize_title,
-            ticket_number,
-            colour,
-            sale_id,
-            buyer_name,
-            buyer_email
-          )
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-          returning *
-        `,
-        [
-          crypto.randomUUID(),
-          tenantSlug,
-          raffle.id,
-          prizePosition,
-          prizeTitle,
-          Number(ticket.ticket_number),
-          ticket.colour,
-          ticket.sale_id,
-          winnerName,
-          winnerEmail || null,
-        ],
-      );
-
-      if (winner) {
-        createdWinners.push(winner);
-      }
-
-      if (!winnerEmail) {
-        console.warn("Auto draw winner email skipped - missing email", {
-          raffleId: raffle.id,
-          prizePosition,
-          ticketNumber: ticket.ticket_number,
-          saleId: ticket.sale_id,
-        });
-        continue;
-      }
-
+    if (winnerEmail) {
       try {
         await sendWinnerEmail({
           to: winnerEmail,
           name: winnerName,
           raffleTitle: raffle.title,
           prizeTitle,
-          ticketNumber: Number(ticket.ticket_number),
-          colour: ticket.colour,
+          ticketNumber: soldTicket.ticket_number,
+          colour: soldTicket.colour,
           raffleSubtype: raffle.raffle_subtype,
         });
 
-        console.log("Auto draw winner email sent", {
+        winnerEmailStatus = "sent";
+
+        console.log("Raffle draw winner email sent", {
           to: winnerEmail,
           raffleId: raffle.id,
           prizePosition,
-          ticketNumber: ticket.ticket_number,
+          ticketNumber: soldTicket.ticket_number,
         });
       } catch (emailError: any) {
-        console.error("Auto draw winner email failed", {
+        winnerEmailStatus = "failed";
+
+        console.error("Raffle draw winner email failed", {
           to: winnerEmail,
           raffleId: raffle.id,
           prizePosition,
-          ticketNumber: ticket.ticket_number,
-          saleId: ticket.sale_id,
+          ticketNumber: soldTicket.ticket_number,
           error: emailError?.message || emailError,
         });
       }
+    } else {
+      console.warn("Raffle draw winner email skipped - missing email", {
+        raffleId: raffle.id,
+        prizePosition,
+        ticketNumber: soldTicket.ticket_number,
+      });
     }
 
-    return NextResponse.redirect(
-      new URL(`/admin/raffles/${raffle.id}`, request.url),
-      { status: 303 },
-    );
+    return NextResponse.json({
+      ok: true,
+      winner,
+      winnerEmailStatus,
+    });
   } catch (error) {
-    console.error("Raffle auto draw failed", error);
+    console.error("Raffle draw failed", error);
 
     return NextResponse.json(
-      { ok: false, error: "Auto draw failed" },
+      { ok: false, error: "Draw failed" },
       { status: 500 },
     );
   }
