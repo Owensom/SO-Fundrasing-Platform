@@ -21,6 +21,7 @@ type PageProps = {
   }>;
   searchParams?: Promise<{
     error?: string;
+    payout?: string;
   }>;
 };
 
@@ -193,6 +194,24 @@ function formatDrawDate(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatDateOnlyInput(value: string | null | undefined) {
+  if (!value) return "";
+
+  const clean = String(value).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+
+  const date = new Date(clean);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
 function formatMoney(cents: number | string | null | undefined, currency: string) {
   const numericCents = Number(cents || 0);
 
@@ -334,6 +353,8 @@ export default async function AdminRafflePage({
     resolvedSearchParams.error === "invalid_postal_datetime";
 
   const saveFailed = resolvedSearchParams.error === "save_failed";
+  const payoutSaved = resolvedSearchParams.payout === "saved";
+  const payoutSaveFailed = resolvedSearchParams.error === "payout_failed";
 
   const session = await auth();
 
@@ -535,10 +556,13 @@ export default async function AdminRafflePage({
         </section>
       ) : null}
 
-      {invalidDrawDateTime || invalidPostalDateTime || saveFailed ? (
+      {invalidDrawDateTime ||
+      invalidPostalDateTime ||
+      saveFailed ||
+      payoutSaveFailed ? (
         <section style={styles.validationBanner}>
           <div style={styles.validationEyebrow}>
-            {saveFailed ? "Save issue" : "Date format issue"}
+            {saveFailed || payoutSaveFailed ? "Save issue" : "Date format issue"}
           </div>
 
           <h2 style={styles.validationTitle}>
@@ -546,7 +570,9 @@ export default async function AdminRafflePage({
               ? "Please check the draw date."
               : invalidPostalDateTime
                 ? "Please check the postal closing date."
-                : "The raffle could not be saved."}
+                : payoutSaveFailed
+                  ? "The payout tracker could not be saved."
+                  : "The raffle could not be saved."}
           </h2>
 
           <p style={styles.validationText}>
@@ -554,7 +580,19 @@ export default async function AdminRafflePage({
               ? "Draw date must use DD/MM/YYYY format, for example 31/10/2026. Draw time must use 24-hour HH:MM format, for example 19:00. You can also leave both fields blank while drafting."
               : invalidPostalDateTime
                 ? "Postal closing date must use DD/MM/YYYY format, for example 31/10/2026. Postal closing time must use 24-hour HH:MM format, for example 18:00. You can also leave both fields blank."
-                : "Please check the form values and try again. The raffle has not been changed."}
+                : payoutSaveFailed
+                  ? "Please check the payout status, method, date, reference and note, then try again. No Stripe payout has been triggered."
+                  : "Please check the form values and try again. The raffle has not been changed."}
+          </p>
+        </section>
+      ) : null}
+
+      {payoutSaved ? (
+        <section style={styles.successBanner}>
+          <div style={styles.successEyebrow}>Payout tracker saved</div>
+
+          <p style={styles.successText}>
+            The 50/50 payout tracking details have been updated for this winner.
           </p>
         </section>
       ) : null}
@@ -691,9 +729,9 @@ export default async function AdminRafflePage({
               </h2>
 
               <p style={styles.fiftyFiftySnapshotText}>
-                This read-only snapshot was recorded when the winner was drawn.
-                It is for admin tracking only; Stripe payout automation is not
-                active yet.
+                This snapshot was recorded when the winner was drawn. The payout
+                tracker below is manual admin tracking only and does not trigger
+                any Stripe payout.
               </p>
             </div>
 
@@ -760,37 +798,96 @@ export default async function AdminRafflePage({
             />
           </div>
 
-          <div style={styles.fiftyFiftyPayoutDetails}>
-            <div>
-              <span style={styles.snapshotDetailLabel}>Payout method</span>
-              <strong style={styles.snapshotDetailValue}>
-                {fiftyFiftySnapshotWinner.payout_method || "Not recorded"}
-              </strong>
+          <form
+            action={`/api/admin/raffles/${raffle.id}/payout`}
+            method="post"
+            style={styles.payoutForm}
+          >
+            <div style={styles.payoutFormHeader}>
+              <div>
+                <h3 style={styles.payoutFormTitle}>Manual payout tracker</h3>
+
+                <p style={styles.payoutFormText}>
+                  Record how the 50/50 winner was paid. This is admin tracking
+                  only.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <span style={styles.snapshotDetailLabel}>Payout date</span>
-              <strong style={styles.snapshotDetailValue}>
-                {fiftyFiftySnapshotWinner.payout_date
-                  ? formatDrawDate(fiftyFiftySnapshotWinner.payout_date)
-                  : "Not recorded"}
-              </strong>
+            <div className="raffle-payout-grid" style={styles.payoutGrid}>
+              <Field label="Payout status">
+                <select
+                  name="payout_status"
+                  defaultValue={
+                    fiftyFiftySnapshotWinner.payout_status || "pending"
+                  }
+                  style={styles.input}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="not_required">Not required</option>
+                </select>
+              </Field>
+
+              <Field label="Payout method">
+                <input
+                  name="payout_method"
+                  defaultValue={fiftyFiftySnapshotWinner.payout_method || ""}
+                  placeholder="Bank transfer, cash, cheque..."
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Payout date">
+                <input
+                  name="payout_date"
+                  type="date"
+                  defaultValue={formatDateOnlyInput(
+                    fiftyFiftySnapshotWinner.payout_date,
+                  )}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Reference">
+                <input
+                  name="payout_reference"
+                  defaultValue={fiftyFiftySnapshotWinner.payout_reference || ""}
+                  placeholder="Transfer reference or internal ref"
+                  style={styles.input}
+                />
+              </Field>
             </div>
 
-            <div>
-              <span style={styles.snapshotDetailLabel}>Reference</span>
-              <strong style={styles.snapshotDetailValue}>
-                {fiftyFiftySnapshotWinner.payout_reference || "Not recorded"}
-              </strong>
-            </div>
-          </div>
+            <Field label="Internal note">
+              <textarea
+                name="payout_note"
+                rows={3}
+                defaultValue={fiftyFiftySnapshotWinner.payout_note || ""}
+                placeholder="Optional internal payout note"
+                style={styles.textarea}
+              />
+            </Field>
 
-          {fiftyFiftySnapshotWinner.payout_note ? (
-            <div style={styles.fiftyFiftyPayoutNote}>
-              <strong>Internal note</strong>
-              <span>{fiftyFiftySnapshotWinner.payout_note}</span>
+            <div style={styles.payoutMetaRow}>
+              <div style={styles.payoutMetaText}>
+                Last recorded by{" "}
+                <strong>
+                  {fiftyFiftySnapshotWinner.payout_recorded_by ||
+                    "not recorded"}
+                </strong>
+                {fiftyFiftySnapshotWinner.payout_recorded_at
+                  ? ` · ${formatDrawDate(
+                      fiftyFiftySnapshotWinner.payout_recorded_at,
+                    )}`
+                  : ""}
+              </div>
+
+              <button type="submit" style={styles.payoutSubmitButton}>
+                Save payout tracker
+              </button>
             </div>
-          ) : null}
+          </form>
         </section>
       ) : null}
 
@@ -1747,7 +1844,8 @@ const responsiveStyles = `
     .raffle-draw-grid,
     .raffle-subtype-grid,
     .raffle-fifty-stats,
-    .raffle-fifty-snapshot-grid {
+    .raffle-fifty-snapshot-grid,
+    .raffle-payout-grid {
       grid-template-columns: 1fr !important;
     }
 
@@ -1812,6 +1910,12 @@ const responsiveStyles = `
     .raffle-admin-page button,
     .raffle-admin-page a {
       min-height: 46px !important;
+    }
+
+    .raffle-admin-page input[type="date"] {
+      min-height: 46px !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
     }
   }
 `;
@@ -1966,6 +2070,34 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     lineHeight: 1.6,
     maxWidth: 820,
+  },
+  successBanner: {
+    marginBottom: 16,
+    padding: "clamp(16px, 4vw, 20px)",
+    borderRadius: 22,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
+  },
+  successEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 8,
+  },
+  successText: {
+    margin: 0,
+    color: "#166534",
+    fontSize: 15,
+    lineHeight: 1.6,
+    fontWeight: 800,
   },
   hero: {
     display: "grid",
@@ -2247,39 +2379,60 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
-  fiftyFiftyPayoutDetails: {
+  payoutForm: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
-    padding: 14,
-    borderRadius: 18,
+    gap: 14,
+    padding: 16,
+    borderRadius: 20,
     background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.14)",
   },
-  snapshotDetailLabel: {
-    display: "block",
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: 950,
-    marginBottom: 4,
+  payoutFormHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
   },
-  snapshotDetailValue: {
-    display: "block",
+  payoutFormTitle: {
+    margin: 0,
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: 900,
-    overflowWrap: "anywhere",
+    fontSize: 20,
+    letterSpacing: "-0.02em",
   },
-  fiftyFiftyPayoutNote: {
-    display: "grid",
-    gap: 5,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(250,204,21,0.10)",
-    border: "1px solid rgba(250,204,21,0.26)",
-    color: "#fde68a",
+  payoutFormText: {
+    margin: "5px 0 0",
+    color: "#cbd5e1",
     fontSize: 14,
     lineHeight: 1.5,
+  },
+  payoutGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+  },
+  payoutMetaRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    paddingTop: 4,
+  },
+  payoutMetaText: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  payoutSubmitButton: {
+    padding: "12px 18px",
+    borderRadius: 999,
+    border: "1px solid #facc15",
+    background: "#facc15",
+    color: "#78350f",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(250,204,21,0.18)",
+    minHeight: 44,
   },
   progressCard: {
     padding: 16,
