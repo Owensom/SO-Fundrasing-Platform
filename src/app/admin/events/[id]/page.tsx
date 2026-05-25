@@ -464,6 +464,7 @@ function statusStyle(status: string): CSSProperties {
     borderColor: "#e2e8f0",
   };
 }
+
 function accessTypeLabel(value: string) {
   if (value === "vip") return "VIP";
   if (value === "sponsor") return "Sponsor";
@@ -940,7 +941,6 @@ async function deleteEventAccessCodeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=access-code-deleted#access-codes`);
 }
-
 async function updateGuestCateringItemAction(formData: FormData) {
   "use server";
 
@@ -1063,6 +1063,7 @@ async function updateEventAction(formData: FormData) {
 
   redirect(`/admin/events/${id}?saved=event#overview`);
 }
+
 async function updatePrizesAction(formData: FormData) {
   "use server";
 
@@ -1441,6 +1442,7 @@ async function generateSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seats#row-seating`);
 }
+
 async function generateTablesAction(formData: FormData) {
   "use server";
 
@@ -1504,7 +1506,6 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
-
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -1965,7 +1966,6 @@ const responsiveStyles = `
     min-width: 0 !important;
     overflow: hidden !important;
   }
-
   .event-edit-page .guestHeaderActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -2049,614 +2049,529 @@ const responsiveStyles = `
   }
 }
 `;
-async function generateTablesAction(formData: FormData) {
-  "use server";
 
-  const eventId = String(formData.get("event_id") || "").trim();
-  const tableCount = positiveInteger(formData.get("table_count"), 0);
-  const seatsPerTable = positiveInteger(formData.get("seats_per_table"), 0);
-  const ticketTypeId =
-    String(formData.get("ticket_type_id") || "").trim() || null;
-  const clearExisting = String(formData.get("clear_existing") || "") === "yes";
+export default async function AdminEventManagePage({
+  params,
+  searchParams,
+}: PageProps) {
+  const session = await auth();
 
-  if (!eventId || tableCount <= 0 || seatsPerTable <= 0) {
-    redirect(`/admin/events/${eventId}?error=missing-tables#table-seating`);
+  if (!session?.user) {
+    redirect("/admin/login");
   }
 
-  await requireEventAccess(eventId);
+  const event = await getEventById(params.id);
 
-  if (clearExisting) await deleteEventTableSeats(eventId);
-
-  for (let table = 1; table <= tableCount; table += 1) {
-    for (let seat = 1; seat <= seatsPerTable; seat += 1) {
-      try {
-        await createEventSeat({
-          eventId,
-          ticketTypeId,
-          section: null,
-          rowLabel: null,
-          seatNumber: String(seat),
-          tableNumber: String(table),
-          aisleAfter: null,
-          status: "available",
-        });
-      } catch {}
-    }
+  if (!event) {
+    notFound();
   }
 
-  redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
-}
+  const tenantSlug = await getTenantSlugFromHeaders();
 
-async function clearRowSeatsAction(formData: FormData) {
-  "use server";
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
 
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (eventId) {
-    await requireEventAccess(eventId);
-    await deleteEventRowSeats(eventId);
+  if (
+    !tenantSlug ||
+    event.tenant_slug !== tenantSlug ||
+    !sessionTenantSlugs.includes(tenantSlug)
+  ) {
+    redirect("/admin/login?error=tenant_access_denied");
   }
 
-  redirect(`/admin/events/${eventId}?saved=row-seats-cleared#row-seating`);
-}
+  const tenantSettings = await getTenantSettings(tenantSlug);
 
-async function clearTableSeatsAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (eventId) {
-    await requireEventAccess(eventId);
-    await deleteEventTableSeats(eventId);
-  }
-
-  redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
-}
-
-async function runWinnerDrawAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const drawMode = String(formData.get("draw_mode") || "single").trim();
-  const selectedPrize = parsePrizeSelection(formData.get("prize_key"));
-  const drawScope = String(formData.get("draw_scope") || "all").trim();
-
-  const maxWinnersPerTableRaw = positiveInteger(
-    formData.get("max_winners_per_table"),
-    0,
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
   );
 
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
-  }
-
-  const event = await requireEventAccess(eventId);
-  const existingWinners = await listEventWinners(eventId);
-
-  const drawnPrizeIds = new Set(
-    existingWinners
-      .filter((winner) => winner.status === "drawn")
-      .map((winner) => String(winner.prize_id || "").trim())
-      .filter(Boolean),
+  const guestCateringEditCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_guest_catering_edit",
   );
 
-  const eventPrizes: ParsedPrizeSelection[] = (event.prizes_json || [])
-    .map((prize, index) => {
-      const title = String(prize.title || prize.name || "").trim();
-      if (!title) return null;
+  const guestMenuRequestCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_guest_menu_request_emails",
+  );
 
-      const rawPosition = Number(prize.position);
+  const accessCodeCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_vip_access_codes",
+  );
 
-      return {
-        id: String(prize.id || `prize-${index + 1}`),
-        title,
-        position:
-          Number.isFinite(rawPosition) && rawPosition > 0
-            ? Math.floor(rawPosition)
-            : index + 1,
-      };
-    })
-    .filter(Boolean) as ParsedPrizeSelection[];
+  const canEditGuestCatering = guestCateringEditCapability.allowed;
+  const canSendMenuRequests = guestMenuRequestCapability.allowed;
+  const canManageAccessCodes = accessCodeCapability.allowed;
 
-  const prizesToDraw =
-    drawMode === "all_remaining"
-      ? eventPrizes.filter((prize) => !drawnPrizeIds.has(prize.id))
-      : selectedPrize
-        ? [selectedPrize]
-        : [];
+  const ticketTypes = event.ticket_types || [];
+  const seats = event.seats || [];
 
-  if (prizesToDraw.length === 0) {
-    redirect(`/admin/events/${eventId}?error=missing-draw-data#winner-draw`);
-  }
+  const [winners, guestCateringRows, accessCodes] = await Promise.all([
+    listEventWinners(event.id),
+    listEventGuestCateringRows(event.id),
+    listEventAccessCodes(event.id),
+  ]);
 
-  if (drawMode !== "all_remaining" && selectedPrize) {
-    if (drawnPrizeIds.has(selectedPrize.id)) {
-      redirect(`/admin/events/${eventId}?error=prize-already-drawn#winner-draw`);
-    }
-  }
+  const hasCustomImage = Boolean(event.image_url);
+  const campaignLimitReached = searchParams?.error === "campaign-limit";
+  const upgradeRequired = searchParams?.error === "upgrade-required";
+  const vipUpgradeRequired = searchParams?.error === "vip-upgrade-required";
+  const menuRequestFailed = searchParams?.error === "menu-request-failed";
 
-  const drawSettings = {
-    eventType: event.event_type,
-    includeVip: String(formData.get("include_vip") || "") === "yes",
-    includeComplimentary:
-      String(formData.get("include_complimentary") || "") === "yes",
-    includeStaff: String(formData.get("include_staff") || "") === "yes",
-    includeSponsors: String(formData.get("include_sponsors") || "") === "yes",
-    includeGuests: String(formData.get("include_guests") || "") === "yes",
-    excludeWinnerEmails: drawScope === "not_previous_winners",
-    maxWinnersPerTable:
-      event.event_type === "tables" && maxWinnersPerTableRaw > 0
-        ? maxWinnersPerTableRaw
-        : null,
+  const imageFocusStyle: CSSProperties = {
+    objectFit: "cover",
+    objectPosition: `${event.image_focus_x ?? 50}% ${
+      event.image_focus_y ?? 50
+    }%`,
   };
 
-  let drawnCount = 0;
+  const defaultImageStyle: CSSProperties = {
+    objectFit: "contain",
+    objectPosition: "center",
+    padding: 18,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
+    boxSizing: "border-box",
+  };
 
-  for (const prize of prizesToDraw) {
-    const candidates = await getEligibleEventDrawCandidates({
-      eventId,
-      includeVip: drawSettings.includeVip,
-      includeComplimentary: drawSettings.includeComplimentary,
-      includeStaff: drawSettings.includeStaff,
-      includeSponsors: drawSettings.includeSponsors,
-      includeGuests: drawSettings.includeGuests,
-      excludeWinnerEmails: drawSettings.excludeWinnerEmails,
-      maxWinnersPerTable: drawSettings.maxWinnersPerTable,
-    });
+  const isGeneralAdmission = event.event_type === "general_admission";
+  const isReservedSeating = event.event_type === "reserved_seating";
+  const isTables = event.event_type === "tables";
 
-    const winner = chooseRandomCandidate(candidates);
+  const rowSeats = seats.filter((seat) => seat.row_label && !seat.table_number);
+  const tableSeats = seats.filter((seat) => seat.table_number);
 
-    if (!winner) {
-      if (drawMode === "all_remaining" && drawnCount > 0) break;
+  const visibleSeats = isReservedSeating
+    ? rowSeats
+    : isTables
+      ? tableSeats
+      : seats;
 
-      redirect(`/admin/events/${eventId}?error=no-eligible-winner#winner-draw`);
+  const soldSeats = visibleSeats.filter((seat) => seat.status === "sold").length;
+  const reservedSeats = visibleSeats.filter(
+    (seat) => seat.status === "reserved",
+  ).length;
+  const blockedSeats = visibleSeats.filter(
+    (seat) => seat.status === "blocked",
+  ).length;
+  const availableSeats = visibleSeats.filter(
+    (seat) => seat.status === "available",
+  ).length;
+  const vipSeats = visibleSeats.filter(
+    (seat) => seat.seat_purpose === "vip",
+  ).length;
+  const complimentarySeats = visibleSeats.filter(
+    (seat) => seat.seat_purpose === "complimentary",
+  ).length;
+
+  const activeTicketTypes = ticketTypes.filter(
+    (ticketType) => ticketType.is_active,
+  );
+
+  const lowestTicketPrice =
+    activeTicketTypes.length > 0
+      ? Math.min(...activeTicketTypes.map((ticketType) => ticketType.price || 0))
+      : null;
+
+  const uniqueTableNumbers = Array.from(
+    new Set(
+      tableSeats
+        .map((seat) => String(seat.table_number || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => {
+    const aNumber = Number(a);
+    const bNumber = Number(b);
+
+    if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+      return aNumber - bNumber;
     }
 
-    await createEventWinner({
-      tenantSlug: event.tenant_slug,
-      eventId,
-      prizeId: prize.id,
-      prizeTitle: prize.title,
-      prizePosition: prize.position,
-      drawScope,
-      drawSettings,
-      eventOrderId: winner.event_order_id,
-      eventOrderItemId: winner.event_order_item_id,
-      eventSeatId: winner.event_seat_id,
-      ticketTypeId: winner.ticket_type_id,
-      tableNumber: winner.table_number,
-      rowLabel: winner.row_label,
-      seatNumber: winner.seat_number,
-      winnerName: winner.winner_name,
-      winnerEmail: winner.winner_email,
-    });
+    return a.localeCompare(b);
+  });
 
-    drawnCount += 1;
-  }
+  const tableShape = getTableShape(event.table_names_json);
 
-  if (drawnCount === 0) {
-    redirect(`/admin/events/${eventId}?error=no-eligible-winner#winner-draw`);
-  }
-
-  redirect(
-    `/admin/events/${eventId}?saved=${
-      drawMode === "all_remaining" ? "all-winners-drawn" : "winner-drawn"
-    }#winner-draw`,
+  const tableNamesFromExistingTables = Object.fromEntries(
+    uniqueTableNumbers.map((tableNumber) => [
+      tableNumber,
+      event.table_names_json?.[tableNumber] || "",
+    ]),
   );
-}
-
-async function deleteWinnerAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-  const winnerId = String(formData.get("winner_id") || "").trim();
-
-  if (!eventId || !winnerId) {
-    redirect(`/admin/events/${eventId}?error=missing-winner#winner-draw`);
-  }
-
-  await requireEventAccess(eventId);
-  await deleteEventWinner(eventId, winnerId);
-
-  redirect(`/admin/events/${eventId}?saved=winner-deleted#winner-draw`);
-}
-
-async function clearWinnersAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
-  }
-
-  await requireEventAccess(eventId);
-  await clearEventWinners(eventId);
-
-  redirect(`/admin/events/${eventId}?saved=winners-cleared#winner-draw`);
-}
-
-async function deleteEventAction(formData: FormData) {
-  "use server";
-
-  const eventId = String(formData.get("event_id") || "").trim();
-
-  if (eventId) {
-    await requireEventAccess(eventId);
-    await deleteEvent(eventId);
-  }
-
-  redirect("/admin/events");
-}
-
-const responsiveStyles = `
-@media (max-width: 1180px) {
-  .event-edit-page {
-    width: 100% !important;
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
-  }
-
-  .event-edit-page * {
-    box-sizing: border-box !important;
-  }
-
-  .event-edit-page img,
-  .event-edit-page video,
-  .event-edit-page canvas,
-  .event-edit-page svg {
-    max-width: 100% !important;
-  }
-}
-
-@media (max-width: 980px) {
-  .event-edit-page {
-    overflow-x: hidden !important;
-  }
-
-  .event-edit-page * {
-    max-width: 100%;
-  }
-
-  .event-edit-page section,
-  .event-edit-page form,
-  .event-edit-page details,
-  .event-edit-page summary,
-  .event-edit-page div,
-  .event-edit-page label,
-  .event-edit-page article {
-    min-width: 0 !important;
-  }
-
-  .event-edit-page .hero,
-  .event-edit-page .mediaBox,
-  .event-edit-page .ticketLayout,
-  .event-edit-page .accessCodeGrid,
-  .event-edit-page .guestCateringGrid,
-  .event-edit-page .guestUpgradeGrid,
-  .event-edit-page .guestEditGrid,
-  .event-edit-page .guestHeaderActions,
-  .event-edit-page .twoPanel,
-  .event-edit-page .twoCol,
-  .event-edit-page .threeCol,
-  .event-edit-page .fourCol {
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-edit-page .hero {
-    gap: 16px !important;
-  }
-
-  .event-edit-page .heroTitleRow,
-  .event-edit-page .panelHeader,
-  .event-edit-page .guestCardHeader,
-  .event-edit-page .ticketSummary,
-  .event-edit-page .accessCodeSummary,
-  .event-edit-page .collapsibleSummary,
-  .event-edit-page .submitBar,
-  .event-edit-page .topActions {
-    align-items: stretch !important;
-  }
-
-  .event-edit-page .tabs {
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: thin !important;
-  }
-
-  .event-edit-page .tab,
-  .event-edit-page .tabDanger {
-    white-space: nowrap !important;
-    flex: 0 0 auto !important;
-  }
-
-  .event-edit-page .heroImageWrap {
-    height: 220px !important;
-  }
-
-  .event-edit-page .previewBox {
-    height: 170px !important;
-  }
-
-  .event-edit-page .topActions,
-  .event-edit-page .submitBar,
-  .event-edit-page .guestHeaderActions,
-  .event-edit-page .campaignLimitActions,
-  .event-edit-page .collapsibleActions {
-    width: 100% !important;
-    align-items: stretch !important;
-  }
-
-  .event-edit-page .primaryButton,
-  .event-edit-page .dangerButton,
-  .event-edit-page .dangerOutlineButton,
-  .event-edit-page .primaryLink,
-  .event-edit-page .secondaryButton,
-  .event-edit-page .exportButton,
-  .event-edit-page .menuRequestButton,
-  .event-edit-page .campaignLimitPrimary,
-  .event-edit-page .campaignLimitSecondary {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-    box-sizing: border-box !important;
-  }
-
-  .event-edit-page .inlineForm {
-    width: 100% !important;
-  }
-
-  .event-edit-page .seatManagerShell {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    padding-bottom: 10px !important;
-  }
-
-  .event-edit-page .ticketListScroll {
-    max-height: none !important;
-    overflow: visible !important;
-    padding-right: 0 !important;
-  }
-
-  .event-edit-page .guestCardList,
-  .event-edit-page .accessCodeList,
-  .event-edit-page .winnerList {
-    max-height: none !important;
-    overflow: visible !important;
-    padding-right: 0 !important;
-  }
-}
-
-@media (max-width: 760px) {
-  .event-edit-page .summaryGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .event-edit-page .heroMetricGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .event-edit-page .guestMetaGrid,
-  .event-edit-page .cateringDetailGrid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-edit-page .guestEditGrid {
-    grid-template-columns: 1fr !important;
-    align-items: stretch !important;
-  }
-
-  .event-edit-page .guestCard {
-    padding: 13px !important;
-    border-radius: 18px !important;
-  }
-
-  .event-edit-page .guestName {
-    font-size: 16px !important;
-  }
-
-  .event-edit-page .guestEmail,
-  .event-edit-page .winnerMeta,
-  .event-edit-page .mutedSmall {
-    font-size: 12px !important;
-  }
-
-  .event-edit-page .statusPill,
-  .event-edit-page .statusMiniPill,
-  .event-edit-page .sectionBadge,
-  .event-edit-page .collapsibleToggle {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-    white-space: normal !important;
-  }
-}
-
-@media (max-width: 640px) {
-  .event-edit-page {
-    padding: 18px 12px 44px !important;
-  }
-
-  .event-edit-page .hero {
-    padding: 18px !important;
-    border-radius: 24px !important;
-  }
-
-  .event-edit-page .title {
-    font-size: clamp(31px, 10vw, 42px) !important;
-    line-height: 1.02 !important;
-  }
-
-  .event-edit-page .section,
-  .event-edit-page .panel {
-    padding: 14px !important;
-    border-radius: 20px !important;
-  }
-
-  .event-edit-page .collapsibleSummary,
-  .event-edit-page .ticketSummary,
-  .event-edit-page .accessCodeSummary {
-    align-items: flex-start !important;
-  }
-
-  .event-edit-page .collapsibleActions {
-    width: 100% !important;
-    justify-content: flex-start !important;
-  }
-
-  .event-edit-page .sectionBadge,
-  .event-edit-page .collapsibleToggle {
-    max-width: none !important;
-  }
-
-  .event-edit-page .statValue {
-    font-size: 20px !important;
-  }
-
-  .event-edit-page .heroImageWrap {
-    height: 190px !important;
-  }
-
-  .event-edit-page .previewBox {
-    height: 150px !important;
-  }
-
-  .event-edit-page .tabs {
-    margin-left: -2px !important;
-    margin-right: -2px !important;
-    padding: 10px !important;
-    border-radius: 16px !important;
-  }
-
-  .event-edit-page .tab,
-  .event-edit-page .tabDanger {
-    padding: 9px 11px !important;
-    font-size: 13px !important;
-  }
-
-  .event-edit-page .summaryGrid,
-  .event-edit-page .heroMetricGrid,
-  .event-edit-page .statsGridCompact {
-    gap: 8px !important;
-  }
-
-  .event-edit-page .statBox,
-  .event-edit-page .heroMetric,
-  .event-edit-page .infoTile {
-    padding: 11px !important;
-    border-radius: 15px !important;
-  }
-
-  .event-edit-page .input,
-  .event-edit-page .textarea {
-    font-size: 16px !important;
-  }
-
-  .event-edit-page input[type="datetime-local"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    display: block !important;
-    box-sizing: border-box !important;
-    appearance: none !important;
-    -webkit-appearance: none !important;
-  }
-
-  .event-edit-page input[name="starts_at"],
-  .event-edit-page input[name="ends_at"],
-  .event-edit-page input[name="expires_at"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .event-edit-page .guestHeaderActions {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-edit-page .guestCardHeader,
-  .event-edit-page .panelHeader,
-  .event-edit-page .submitBar {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-edit-page .accessCodeValue,
-  .event-edit-page .guestName,
-  .event-edit-page .infoTileValue,
-  .event-edit-page .cateringValue,
-  .event-edit-page .sectionText,
-  .event-edit-page .heroDescription,
-  .event-edit-page .heroSlug {
-    overflow-wrap: anywhere !important;
-    word-break: break-word !important;
-  }
-}
-
-@media (max-width: 460px) {
-  .event-edit-page {
-    padding-left: 10px !important;
-    padding-right: 10px !important;
-  }
-
-  .event-edit-page .summaryGrid,
-  .event-edit-page .heroMetricGrid,
-  .event-edit-page .statsGridCompact {
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-edit-page .hero {
-    padding: 15px !important;
-    border-radius: 22px !important;
-  }
-
-  .event-edit-page .heroPreview {
-    padding: 10px !important;
-    border-radius: 18px !important;
-  }
-
-  .event-edit-page .heroImageWrap {
-    height: 165px !important;
-    border-radius: 16px !important;
-  }
-
-  .event-edit-page .previewBox {
-    height: 135px !important;
-  }
-
-  .event-edit-page .section,
-  .event-edit-page .panel,
-  .event-edit-page .guestCard,
-  .event-edit-page .ticketDetails,
-  .event-edit-page .accessCodeDetails,
-  .event-edit-page .lockedFeatureCard {
-    border-radius: 18px !important;
-  }
-
-  .event-edit-page .ticketDetailsBody,
-  .event-edit-page .accessCodeBody {
-    padding: 12px !important;
-  }
-
-  .event-edit-page .primaryButton,
-  .event-edit-page .dangerButton,
-  .event-edit-page .dangerOutlineButton,
-  .event-edit-page .primaryLink,
-  .event-edit-page .secondaryButton,
-  .event-edit-page .exportButton,
-  .event-edit-page .menuRequestButton,
-  .event-edit-page .campaignLimitPrimary,
-  .event-edit-page .campaignLimitSecondary {
-    min-height: 46px !important;
-    padding: 12px 14px !important;
-  }
-}
-`;
+
+  const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+  const guestCateringCsvHref = `/api/admin/events/${encodeURIComponent(
+    event.id,
+  )}/guest-catering.csv`;
+  const menuRequestHref = `/api/admin/events/${encodeURIComponent(
+    event.id,
+  )}/send-menu-requests?redirect=1`;
+
+  const capacitySummary = isGeneralAdmission
+    ? event.capacity
+      ? `${event.capacity} tickets`
+      : "Unlimited"
+    : isReservedSeating
+      ? `${rowSeats.length} row seats`
+      : `${tableSeats.length} table seats`;
+
+  const dietaryResponses = guestCateringRows.filter((row) =>
+    String(row.dietary_requirements || "").trim(),
+  ).length;
+
+  const menuResponses = guestCateringRows.filter((row) =>
+    String(row.menu_choice || "").trim(),
+  ).length;
+
+  const missingMenuResponses = guestCateringRows.filter(
+    (row) => !String(row.menu_choice || "").trim(),
+  ).length;
+
+  const sentCount = Number(searchParams?.sent || 0);
+  const skippedCount = Number(searchParams?.skipped || 0);
+  const failedCount = Number(searchParams?.failed || 0);
+  const menuRequestsSent = searchParams?.saved === "menu-requests-sent";
+
+  return (
+    <main className="event-edit-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="hero" style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.eyebrow}>Events editor</div>
+
+          <div style={styles.heroTitleRow}>
+            <h1 className="so-brand-heading title" style={styles.title}>
+              {event.title}
+            </h1>
+
+            <span style={{ ...styles.statusPill, ...statusStyle(event.status) }}>
+              {statusLabel(event.status)}
+            </span>
+          </div>
+
+          <p style={styles.heroSlug}>/e/{event.slug}</p>
+
+          <p style={styles.heroDescription}>
+            {event.description || "No description added yet."}
+          </p>
+
+          <div style={styles.heroMetricGrid}>
+            <HeroMetric label="Type" value={eventTypeLabel(event.event_type)} />
+            <HeroMetric
+              label="Starts"
+              value={formatDisplayDate(event.starts_at)}
+            />
+            <HeroMetric label="Capacity" value={capacitySummary} />
+            <HeroMetric
+              label="From"
+              value={
+                lowestTicketPrice === null
+                  ? "Not priced"
+                  : formatMoney(lowestTicketPrice, event.currency)
+              }
+            />
+          </div>
+        </div>
+
+        <div style={styles.heroPreview}>
+          <div style={styles.previewKicker}>Public preview</div>
+
+          <div className="heroImageWrap" style={styles.heroImageWrap}>
+            <img
+              src={event.image_url || DEFAULT_EVENTS_IMAGE}
+              alt={event.title || "SO Events"}
+              style={{
+                ...styles.heroImage,
+                ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
+              }}
+            />
+          </div>
+        </div>
+      </section>
+            <section className="topActions" style={styles.topActions}>
+        <a
+          href="/admin/events"
+          className="secondaryButton"
+          style={styles.secondaryButton}
+        >
+          ← Back to events
+        </a>
+
+        <a
+          href={publicEventHref}
+          target="_blank"
+          className="primaryLink"
+          style={styles.primaryLink}
+        >
+          View public page
+        </a>
+      </section>
+
+      {campaignLimitReached ? (
+        <section style={styles.campaignLimitBanner}>
+          <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
+
+          <h2 style={styles.campaignLimitTitle}>
+            This event was not published.
+          </h2>
+
+          <p style={styles.campaignLimitText}>
+            This tenant has reached its active campaign allowance across
+            raffles, squares and events. Your event changes were not published.
+            Close or unpublish another campaign, save this event as a draft, or
+            upgrade the tenant plan from the billing page.
+          </p>
+
+          <div style={styles.campaignLimitActions}>
+            <a href="/admin/events" style={styles.campaignLimitSecondary}>
+              Manage events
+            </a>
+
+            <a
+              href="/admin/settings/billing"
+              style={styles.campaignLimitPrimary}
+            >
+              View billing
+            </a>
+          </div>
+        </section>
+      ) : null}
+
+      {upgradeRequired ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Upgrade required</div>
+          <h2 style={styles.upgradeTitle}>Guest editing is locked.</h2>
+          <p style={styles.upgradeText}>
+            {getEventGuestCateringEditUpgradeMessage()}
+          </p>
+          <a href="/admin/settings/billing" style={styles.campaignLimitPrimary}>
+            View billing
+          </a>
+        </section>
+      ) : null}
+
+      {vipUpgradeRequired ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Upgrade required</div>
+          <h2 style={styles.upgradeTitle}>Access codes are locked.</h2>
+          <p style={styles.upgradeText}>
+            {getEventVipAccessCodesUpgradeMessage()}
+          </p>
+          <a href="/admin/settings/billing" style={styles.campaignLimitPrimary}>
+            View billing
+          </a>
+        </section>
+      ) : null}
+
+      {menuRequestFailed ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Menu request failed</div>
+          <h2 style={styles.upgradeTitle}>The request emails were not sent.</h2>
+          <p style={styles.upgradeText}>
+            Please check the event still has paid guests missing menu choices and
+            that this tenant has the Foundation menu-request capability enabled.
+          </p>
+        </section>
+      ) : null}
+
+      <nav className="tabs" style={styles.tabs}>
+        <a href="#overview" className="tab" style={styles.tab}>
+          Overview
+        </a>
+        <a href="#tickets" className="tab" style={styles.tab}>
+          Tickets
+        </a>
+        <a href="#access-codes" className="tab" style={styles.tab}>
+          Access Codes
+        </a>
+        <a href="#prizes-menu" className="tab" style={styles.tab}>
+          Prizes & Menu
+        </a>
+        <a href="#guest-catering" className="tab" style={styles.tab}>
+          Guest & Catering
+        </a>
+        <a href="#winner-draw" className="tab" style={styles.tab}>
+          Winner Draw
+        </a>
+        {isReservedSeating ? (
+          <a href="#row-seating" className="tab" style={styles.tab}>
+            Row Seating
+          </a>
+        ) : null}
+        {isTables ? (
+          <a href="#table-seating" className="tab" style={styles.tab}>
+            Table Seating
+          </a>
+        ) : null}
+        <a href="#danger-zone" className="tabDanger" style={styles.tabDanger}>
+          Danger Zone
+        </a>
+      </nav>
+
+      {searchParams?.saved && !menuRequestsSent ? (
+        <div style={styles.successBox}>Saved successfully.</div>
+      ) : null}
+
+      {searchParams?.error &&
+      !campaignLimitReached &&
+      !upgradeRequired &&
+      !vipUpgradeRequired &&
+      !menuRequestFailed ? (
+        <div style={styles.errorBox}>
+          Please check the missing fields and try again.
+        </div>
+      ) : null}
+
+      <section className="summaryGrid" style={styles.summaryGrid}>
+        <SummaryCard label="Ticket types" value={ticketTypes.length} />
+        <SummaryCard label="Access codes" value={accessCodes.length} />
+        <SummaryCard label="Prizes" value={(event.prizes_json || []).length} />
+        <SummaryCard
+          label="Menu options"
+          value={(event.menu_options || []).length}
+        />
+        <SummaryCard label="Paid guests" value={guestCateringRows.length} />
+        <SummaryCard label="Menu choices" value={menuResponses} />
+        <SummaryCard label="Missing menu" value={missingMenuResponses} />
+        <SummaryCard label="Dietary notes" value={dietaryResponses} />
+        <SummaryCard label="Winners" value={winners.length} />
+        <SummaryCard label="Available" value={availableSeats} />
+        <SummaryCard label="Reserved" value={reservedSeats} />
+        <SummaryCard label="Sold" value={soldSeats} />
+        <SummaryCard label="Blocked" value={blockedSeats} />
+        <SummaryCard label="VIP" value={vipSeats} />
+        <SummaryCard label="Complimentary" value={complimentarySeats} />
+      </section>
+
+      <CollapsibleSection
+        id="overview"
+        eyebrow="Section 1"
+        title="Overview"
+        description="Core event details and headline setup. This is open by default because it contains the main event save form."
+        badge={formatDisplayDate(event.starts_at)}
+        defaultOpen
+      >
+        <div className="panel" style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <div style={styles.innerEyebrow}>Event setup</div>
+              <h3 style={styles.panelTitle}>Event details</h3>
+              <p style={styles.sectionText}>
+                Update the public event page, timing, capacity, image and guest
+                collection settings.
+              </p>
+            </div>
+          </div>
+
+          <form action={updateEventAction} style={styles.form}>
+            <input type="hidden" name="id" value={event.id} />
+
+            <div className="twoCol" style={styles.twoCol}>
+              <Field label="Title">
+                <input
+                  name="title"
+                  required
+                  defaultValue={event.title}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Slug">
+                <input
+                  name="slug"
+                  required
+                  defaultValue={event.slug}
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <Field label="Description">
+              <textarea
+                name="description"
+                rows={3}
+                defaultValue={event.description || ""}
+                style={styles.textarea}
+              />
+            </Field>
+
+            <div className="mediaBox" style={styles.mediaBox}>
+              <div style={styles.mediaControls}>
+                <h3 style={styles.panelTitle}>Event image</h3>
+
+                <p style={styles.sectionText}>
+                  Upload or replace the public event image, then choose the focal
+                  point for wide banners and cards.
+                </p>
+
+                <ImageFocusUploadField
+                  currentImageUrl={event.image_url ?? ""}
+                  currentFocusX={event.image_focus_x ?? 50}
+                  currentFocusY={event.image_focus_y ?? 50}
+                  label="Event image upload"
+                  previewAlt={event.title}
+                  subscriptionTier={tenantSettings?.subscription_tier}
+                  customImagesAllowed={customImagesCapability.allowed}
+                />
+              </div>
+
+              <div className="previewBox" style={styles.previewBox}>
+                <img
+                  src={event.image_url || DEFAULT_EVENTS_IMAGE}
+                  alt={event.title || "SO Events"}
+                  style={{
+                    ...styles.previewImage,
+                    ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="twoCol" style={styles.twoCol}>
+              <Field label="Location">
+                <input
+                  name="location"
+                  defaultValue={event.location || ""}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="General admission capacity">
+                <input
+                  name="capacity"
+                  type="number"
+                  min="0"
+                  defaultValue={event.capacity || ""}
+                  placeholder="Leave blank for unlimited"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
+            <div className="twoCol" style={styles.twoCol}>
+              <Field label="Starts at">
+                <input
+                  name="starts_at"
+                  type="datetime-local"
+                  defaultValue={formatDateTimeLocal(event.starts_at)}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Ends at">
+                <input
+                  name="ends_at"
+                  type="datetime-local"
+                  defaultValue={formatDateTimeLocal(event.ends_at)}
+                  style={styles.input}
+                />
+              </Field>
+            </div>
+
             <div className="threeCol" style={styles.threeCol}>
               <Field label="Currency">
                 <select
@@ -2979,8 +2894,7 @@ const responsiveStyles = `
           </CompactPanel>
         </div>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="access-codes"
         eyebrow="Section 3"
         title="VIP / Complimentary Access Codes"
@@ -3336,3 +3250,1770 @@ const responsiveStyles = `
           updateMenuOptionsAction={updateMenuOptionsAction}
         />
       </CollapsibleSection>
+
+      <CollapsibleSection
+        id="guest-catering"
+        eyebrow="Section 5"
+        title="Guest & Catering"
+        description={
+          canEditGuestCatering
+            ? "Review and update paid guest names, menu choices and dietary requirements."
+            : "Read-only list of paid event guests, menu choices and dietary requirements."
+        }
+        badge={`${guestCateringRows.length} paid guests`}
+      >
+        <div className="panel" style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <div style={styles.innerEyebrow}>
+                {canEditGuestCatering ? "Editable guests" : "Confirmed guests"}
+              </div>
+              <h3 style={styles.panelTitle}>Guest & catering list</h3>
+              <p style={styles.sectionText}>
+                This list only includes paid event order items. Pending or
+                abandoned checkout sessions are excluded.
+              </p>
+            </div>
+
+            <div className="guestHeaderActions" style={styles.guestHeaderActions}>
+              <a
+                href={guestCateringCsvHref}
+                className="exportButton"
+                style={styles.exportButton}
+              >
+                Export CSV
+              </a>
+
+              {canSendMenuRequests ? (
+                <form
+                  action={menuRequestHref}
+                  method="post"
+                  className="inlineForm"
+                  style={styles.inlineForm}
+                >
+                  <button
+                    type="submit"
+                    className="menuRequestButton"
+                    style={styles.menuRequestButton}
+                    disabled={missingMenuResponses === 0}
+                  >
+                    Send missing menu requests
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          </div>
+
+          {menuRequestsSent ? (
+            <div style={styles.menuRequestSuccess}>
+              <strong>Menu request emails processed.</strong>
+              <span>
+                Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no
+                email: {Number.isFinite(skippedCount) ? skippedCount : 0} •
+                Failed: {Number.isFinite(failedCount) ? failedCount : 0}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="guestCateringGrid" style={styles.guestCateringStats}>
+            <SummaryCard label="Paid guests" value={guestCateringRows.length} />
+            <SummaryCard label="Menu choices" value={menuResponses} />
+            <SummaryCard label="Missing menu" value={missingMenuResponses} />
+            <SummaryCard label="Dietary notes" value={dietaryResponses} />
+          </div>
+
+          {!canEditGuestCatering ? (
+            <div className="guestUpgradeGrid" style={styles.guestUpgradeGrid}>
+              <div style={styles.lockedFeatureCard}>
+                <div style={styles.lockedFeatureEyebrow}>Professional</div>
+                <h4 style={styles.lockedFeatureTitle}>
+                  Edit guest details after purchase
+                </h4>
+                <p style={styles.lockedFeatureText}>
+                  {guestCateringEditCapability.reason ||
+                    getEventGuestCateringEditUpgradeMessage()}
+                </p>
+              </div>
+
+              <div style={styles.lockedFeatureCard}>
+                <div style={styles.lockedFeatureEyebrow}>Foundation</div>
+                <h4 style={styles.lockedFeatureTitle}>
+                  Request missing menu choices
+                </h4>
+                <p style={styles.lockedFeatureText}>
+                  {guestMenuRequestCapability.reason ||
+                    getEventGuestMenuRequestEmailsUpgradeMessage()}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div style={styles.editEnabledNotice}>
+              <strong>Professional editing enabled.</strong>
+              <span>
+                Updates are saved to the guest/order item record and mirrored to
+                linked seats where applicable. Payment records are not changed.
+              </span>
+            </div>
+          )}
+
+          {canSendMenuRequests ? (
+            <div style={styles.menuRequestNotice}>
+              <strong>Foundation menu requests enabled.</strong>
+              <span>
+                The request button sends secure update links only to paid guests
+                missing a menu choice. Links expire after 21 days.
+              </span>
+            </div>
+          ) : null}
+
+          {guestCateringRows.length === 0 ? (
+            <div style={styles.emptyBox}>
+              No paid guest or catering data has been recorded for this event
+              yet.
+            </div>
+          ) : (
+            <div className="guestCardList" style={styles.guestCardList}>
+              {guestCateringRows.map((row) => (
+                <article
+                  key={row.order_item_id}
+                  className="guestCard"
+                  style={styles.guestCard}
+                >
+                  <div className="guestCardHeader" style={styles.guestCardHeader}>
+                    <div style={styles.guestPrimary}>
+                      <div className="guestName" style={styles.guestName}>
+                        {guestDisplayName(row)}
+                      </div>
+                      <div className="guestEmail" style={styles.guestEmail}>
+                        {guestDisplayEmail(row)}
+                      </div>
+                    </div>
+
+                    <span
+                      className="statusMiniPill"
+                      style={{
+                        ...styles.statusMiniPill,
+                        background: "#dcfce7",
+                        color: "#166534",
+                        borderColor: "#bbf7d0",
+                      }}
+                    >
+                      Paid
+                    </span>
+                  </div>
+
+                  <div className="guestMetaGrid" style={styles.guestMetaGrid}>
+                    <InfoTile
+                      label="Seat / ticket"
+                      value={seatDisplayLabel(row)}
+                    />
+                    <InfoTile label="Ticket" value={ticketDisplayLabel(row)} />
+                    <InfoTile
+                      label="Quantity"
+                      value={String(Number(row.quantity || 1))}
+                    />
+                    <InfoTile
+                      label="Value"
+                      value={formatMoney(
+                        Number(row.unit_amount || 0) *
+                          Math.max(1, Number(row.quantity || 1)),
+                        row.currency || event.currency,
+                      )}
+                    />
+                    <InfoTile
+                      label="Order date"
+                      value={formatDisplayDate(row.order_created_at)}
+                    />
+                    <InfoTile
+                      label="Buyer"
+                      value={`${fallbackText(
+                        row.buyer_name,
+                        "Unknown buyer",
+                      )} • ${fallbackText(row.buyer_email, "No email")}`}
+                    />
+                  </div>
+
+                  {canEditGuestCatering ? (
+                    <form
+                      action={updateGuestCateringItemAction}
+                      className="guestEditGrid"
+                      style={styles.guestEditForm}
+                    >
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input
+                        type="hidden"
+                        name="order_item_id"
+                        value={row.order_item_id}
+                      />
+
+                      <Field label="Guest name">
+                        <input
+                          name="guest_name"
+                          defaultValue={row.guest_name || ""}
+                          placeholder="Guest name"
+                          style={styles.input}
+                        />
+                      </Field>
+
+                      <Field label="Menu choice">
+                        {event.menu_options && event.menu_options.length > 0 ? (
+                          <select
+                            name="menu_choice"
+                            defaultValue={row.menu_choice || ""}
+                            style={styles.input}
+                          >
+                            <option value="">No menu choice selected</option>
+                            {(event.menu_options || [])
+                              .filter(
+                                (option) =>
+                                  option.isActive ?? option.is_active ?? true,
+                              )
+                              .map((option, index) => {
+                                const name = String(
+                                  option.name || option.title || "",
+                                ).trim();
+
+                                if (!name) return null;
+
+                                return (
+                                  <option key={`${name}-${index}`} value={name}>
+                                    {name}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                        ) : (
+                          <input
+                            name="menu_choice"
+                            defaultValue={row.menu_choice || ""}
+                            placeholder="Menu choice"
+                            style={styles.input}
+                          />
+                        )}
+                      </Field>
+
+                      <Field label="Dietary requirements">
+                        <textarea
+                          name="dietary_requirements"
+                          defaultValue={row.dietary_requirements || ""}
+                          placeholder="None, vegetarian, gluten free, allergies..."
+                          rows={3}
+                          style={styles.textarea}
+                        />
+                      </Field>
+
+                      <button
+                        type="submit"
+                        className="primaryButton"
+                        style={styles.primaryButton}
+                      >
+                        Save guest details
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <div
+                        className="cateringDetailGrid"
+                        style={styles.cateringDetailGrid}
+                      >
+                        <div
+                          style={{
+                            ...styles.cateringDetailCard,
+                            ...(String(row.menu_choice || "").trim()
+                              ? styles.cateringDetailPositive
+                              : styles.cateringDetailMissing),
+                          }}
+                        >
+                          <span style={styles.cateringLabel}>Menu choice</span>
+                          <strong
+                            className="cateringValue"
+                            style={styles.cateringValue}
+                          >
+                            {fallbackText(row.menu_choice)}
+                          </strong>
+                        </div>
+
+                        <div
+                          style={{
+                            ...styles.cateringDetailCard,
+                            ...(String(row.dietary_requirements || "").trim()
+                              ? styles.cateringDetailPositive
+                              : styles.cateringDetailNeutral),
+                          }}
+                        >
+                          <span style={styles.cateringLabel}>
+                            Dietary requirements
+                          </span>
+                          <strong
+                            className="cateringValue"
+                            style={styles.cateringValue}
+                          >
+                            {fallbackText(row.dietary_requirements)}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {!hasGuestCateringDetail(row) ? (
+                        <p style={styles.guestNote}>
+                          No menu choice or dietary requirement was supplied at
+                          checkout.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </CollapsibleSection>
+            <CollapsibleSection
+        id="winner-draw"
+        eyebrow="Section 6"
+        title="Winner Draw"
+        description="Draw event winners from eligible paid event entries and keep winner history."
+        badge={`${winners.length} winners`}
+      >
+        <EventWinnerDrawPanel
+          eventId={event.id}
+          eventType={event.event_type}
+          prizes={event.prizes_json || []}
+          winners={winners}
+          drawWinnerAction={runWinnerDrawAction}
+          deleteWinnerAction={deleteWinnerAction}
+          clearWinnersAction={clearWinnersAction}
+        />
+      </CollapsibleSection>
+
+      {isReservedSeating ? (
+        <CollapsibleSection
+          id="row-seating"
+          eyebrow="Section 7"
+          title="Row Seating"
+          description="Generate seats, block seats, mark VIP/complimentary seats and save row layout nudges."
+          badge={`${rowSeats.length} seats`}
+        >
+          <div className="twoPanel" style={styles.twoPanel}>
+            <CompactPanel title="Generate row seating" eyebrow="Seat builder">
+              <form action={generateSeatsAction} style={styles.form}>
+                <input type="hidden" name="event_id" value={event.id} />
+
+                <Field label="Initial marking">
+                  <select name="ticket_type_id" style={styles.input}>
+                    <option value="">Normal public seats</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Section">
+                  <input
+                    name="section"
+                    placeholder="Main, VIP, Balcony, Left, Centre..."
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Rows">
+                  <input
+                    name="rows"
+                    placeholder="1-10 or A-C or 1-3,8-10"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <div className="twoCol" style={styles.twoCol}>
+                  <Field label="Seats per row">
+                    <input
+                      name="seats_per_row"
+                      type="number"
+                      min="1"
+                      placeholder="40"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Aisles after seats">
+                    <input
+                      name="aisle_after"
+                      placeholder="10,20,30"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <label style={styles.checkboxLabel}>
+                  <input type="checkbox" name="clear_existing" value="yes" />
+                  Clear existing row seats before generating
+                </label>
+
+                <button
+                  type="submit"
+                  className="primaryButton"
+                  style={styles.primaryButton}
+                >
+                  Generate row seating
+                </button>
+              </form>
+            </CompactPanel>
+
+            <CompactPanel title="Row seating summary" eyebrow="Seat status">
+              <div className="statsGridCompact" style={styles.statsGridCompact}>
+                <SummaryCard label="Row seats" value={rowSeats.length} />
+                <SummaryCard
+                  label="Blocked"
+                  value={
+                    rowSeats.filter((seat) => seat.status === "blocked").length
+                  }
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={
+                    rowSeats.filter((seat) => seat.status === "sold").length
+                  }
+                />
+              </div>
+            </CompactPanel>
+          </div>
+
+          <CompactPanel title="Seat Manager" eyebrow="Row tools">
+            <div style={styles.panelHeader}>
+              <p style={styles.sectionText}>
+                Click seats to select them, then save guest/allocation details or
+                block/unblock seats.
+              </p>
+
+              <form action={clearRowSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button
+                  type="submit"
+                  className="dangerOutlineButton"
+                  style={styles.dangerOutlineButton}
+                >
+                  Clear row seats only
+                </button>
+              </form>
+            </div>
+
+            {rowSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No row seats generated yet.</div>
+            ) : (
+              <div className="seatManagerShell" style={styles.seatManagerShell}>
+                <AdminSeatManager
+                  eventId={event.id}
+                  seats={rowSeats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                  mode="rows"
+                  applyTicketTypeAction={applySeatTicketTypeAction}
+                  updateSelectedSeatsMetadataAction={
+                    updateSelectedSeatsMetadataAction
+                  }
+                  updateSelectedSeatsStatusAction={
+                    updateSelectedSeatsStatusAction
+                  }
+                  updateSeatingLayoutAction={updateSeatingLayoutAction}
+                  deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                  deleteSelectedRowsAction={deleteSelectedRowsAction}
+                  initialSeatingLayout={event.seating_layout_json || {}}
+                />
+              </div>
+            )}
+          </CompactPanel>
+        </CollapsibleSection>
+      ) : null}
+
+      {isTables ? (
+        <CollapsibleSection
+          id="table-seating"
+          eyebrow="Section 7"
+          title="Table Seating"
+          description="Generate table layouts, choose a table shape, name tables and manage allocations."
+          badge={`${tableSeats.length} seats • ${uniqueTableNumbers.length} tables`}
+        >
+          <div className="twoPanel" style={styles.twoPanel}>
+            <CompactPanel title="Generate table seating" eyebrow="Table builder">
+              <form action={generateTablesAction} style={styles.form}>
+                <input type="hidden" name="event_id" value={event.id} />
+
+                <Field label="Initial marking">
+                  <select name="ticket_type_id" style={styles.input}>
+                    <option value="">Normal public seats</option>
+                    {ticketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>
+                        {ticketType.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <div className="twoCol" style={styles.twoCol}>
+                  <Field label="Number of tables">
+                    <input
+                      name="table_count"
+                      type="number"
+                      min="1"
+                      placeholder="10"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Seats per table">
+                    <input
+                      name="seats_per_table"
+                      type="number"
+                      min="1"
+                      placeholder="8"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <label style={styles.checkboxLabel}>
+                  <input type="checkbox" name="clear_existing" value="yes" />
+                  Clear existing table seats before generating
+                </label>
+
+                <button
+                  type="submit"
+                  className="primaryButton"
+                  style={styles.primaryButton}
+                >
+                  Generate table seating
+                </button>
+              </form>
+            </CompactPanel>
+
+            <CompactPanel title="Table seating summary" eyebrow="Table status">
+              <div className="statsGridCompact" style={styles.statsGridCompact}>
+                <SummaryCard label="Table seats" value={tableSeats.length} />
+                <SummaryCard label="Tables" value={uniqueTableNumbers.length} />
+                <SummaryCard label="Shape" value={tableShape} />
+                <SummaryCard
+                  label="Named"
+                  value={
+                    Object.keys(event.table_names_json || {}).filter(
+                      (key) => key !== TABLE_SHAPE_KEY,
+                    ).length
+                  }
+                />
+                <SummaryCard
+                  label="Blocked"
+                  value={
+                    tableSeats.filter((seat) => seat.status === "blocked")
+                      .length
+                  }
+                />
+                <SummaryCard
+                  label="Sold"
+                  value={
+                    tableSeats.filter((seat) => seat.status === "sold").length
+                  }
+                />
+              </div>
+            </CompactPanel>
+          </div>
+
+          <CompactPanel title="Table shape" eyebrow="Layout">
+            <form action={updateTableShapeAction} style={styles.form}>
+              <input type="hidden" name="event_id" value={event.id} />
+
+              <Field label="Shape">
+                <select
+                  name="table_shape"
+                  defaultValue={tableShape}
+                  style={styles.input}
+                >
+                  <option value="round">Round tables</option>
+                  <option value="square">Square tables</option>
+                  <option value="rectangle">Rectangle tables</option>
+                </select>
+              </Field>
+
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
+                Save table shape
+              </button>
+            </form>
+          </CompactPanel>
+
+          <CompactPanel title="Table names" eyebrow="Public labels">
+            <form action={updateTableNamesAction} style={styles.form}>
+              <input type="hidden" name="event_id" value={event.id} />
+
+              <p style={styles.sectionText}>
+                Add friendly names such as Sponsors, VIP, Smith Family, or
+                Staff.
+              </p>
+
+              <TableNamesEditor
+                tableNumbers={uniqueTableNumbers}
+                initialTableNames={
+                  uniqueTableNumbers.length > 0
+                    ? tableNamesFromExistingTables
+                    : event.table_names_json || {}
+                }
+              />
+
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
+                Save table names
+              </button>
+            </form>
+          </CompactPanel>
+
+          <CompactPanel title="Seat Manager" eyebrow="Table tools">
+            <div style={styles.panelHeader}>
+              <p style={styles.sectionText}>
+                Select one or more seats, then save allocation details or
+                block/unblock seats.
+              </p>
+
+              <form action={clearTableSeatsAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <button
+                  type="submit"
+                  className="dangerOutlineButton"
+                  style={styles.dangerOutlineButton}
+                >
+                  Clear table seats only
+                </button>
+              </form>
+            </div>
+
+            {tableSeats.length === 0 ? (
+              <div style={styles.emptyBox}>No table seats generated yet.</div>
+            ) : (
+              <div className="seatManagerShell" style={styles.seatManagerShell}>
+                <AdminSeatManager
+                  eventId={event.id}
+                  seats={tableSeats}
+                  ticketTypes={ticketTypes}
+                  currency={event.currency}
+                  mode="tables"
+                  applyTicketTypeAction={applySeatTicketTypeAction}
+                  updateSelectedSeatsMetadataAction={
+                    updateSelectedSeatsMetadataAction
+                  }
+                  updateSelectedSeatsStatusAction={
+                    updateSelectedSeatsStatusAction
+                  }
+                  deleteSelectedSeatsAction={deleteSelectedSeatsAction}
+                  initialSeatingLayout={{
+                    ...(event.seating_layout_json || {}),
+                    tableShape,
+                  }}
+                />
+              </div>
+            )}
+          </CompactPanel>
+        </CollapsibleSection>
+      ) : null}
+
+      <CollapsibleSection
+        id="danger-zone"
+        eyebrow="Final section"
+        title="Danger Zone"
+        description="Permanent destructive actions for this event."
+        badge="Delete"
+      >
+        <div style={styles.dangerSectionInner}>
+          <form action={deleteEventAction}>
+            <input type="hidden" name="event_id" value={event.id} />
+            <button
+              type="submit"
+              className="dangerButton"
+              style={styles.dangerButton}
+            >
+              Delete event
+            </button>
+          </form>
+        </div>
+      </CollapsibleSection>
+    </main>
+  );
+}
+
+function CollapsibleSection({
+  id,
+  title,
+  eyebrow,
+  description,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  description?: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      id={id}
+      open={defaultOpen}
+      className="section"
+      style={styles.section}
+    >
+      <summary className="collapsibleSummary" style={styles.collapsibleSummary}>
+        <div style={styles.collapsibleHeading}>
+          {eyebrow ? <p style={styles.sectionEyebrow}>{eyebrow}</p> : null}
+          <h2 className="so-brand-card-title" style={styles.sectionTitle}>
+            {title}
+          </h2>
+          {description ? <p style={styles.sectionText}>{description}</p> : null}
+        </div>
+
+        <div className="collapsibleActions" style={styles.collapsibleActions}>
+          {badge ? (
+            <span className="sectionBadge" style={styles.sectionBadge}>
+              {badge}
+            </span>
+          ) : null}
+          <span className="collapsibleToggle" style={styles.collapsibleToggle}>
+            Open / close
+          </span>
+        </div>
+      </summary>
+
+      <div style={styles.collapsibleBody}>{children}</div>
+    </details>
+  );
+}
+
+function CompactPanel({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="panel" style={styles.panel}>
+      <div>
+        <div style={styles.innerEyebrow}>{eyebrow}</div>
+        <h3 style={styles.panelTitle}>{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.statBox}>
+      <p style={styles.statLabel}>{label}</p>
+      <p className="statValue" style={styles.statValue}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.heroMetric}>
+      <div style={styles.heroMetricLabel}>{label}</div>
+      <div style={styles.heroMetricValue}>{value}</div>
+    </div>
+  );
+}
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="infoTile" style={styles.infoTile}>
+      <span style={styles.infoTileLabel}>{label}</span>
+      <strong className="infoTileValue" style={styles.infoTileValue}>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    width: "100%",
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "28px 16px 56px",
+    background: "#f8fafc",
+    minHeight: "100vh",
+    overflowX: "hidden",
+    boxSizing: "border-box",
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gap: 20,
+    alignItems: "stretch",
+    padding: "clamp(20px, 4vw, 28px)",
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top left, rgba(59,130,246,0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 16,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
+    overflow: "hidden",
+  },
+  heroContent: { minWidth: 0 },
+  eyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    color: "#bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+    marginBottom: 12,
+  },
+  heroTitleRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  title: {
+    margin: 0,
+    fontSize: "clamp(34px, 5vw, 48px)",
+    lineHeight: 1.02,
+    letterSpacing: "-0.06em",
+    overflowWrap: "anywhere",
+    maxWidth: 720,
+  },
+  statusPill: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    textTransform: "capitalize",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+  heroSlug: {
+    margin: "10px 0 0",
+    color: "#bfdbfe",
+    fontSize: 14,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+  heroDescription: {
+    margin: "14px 0 0",
+    color: "#dbeafe",
+    lineHeight: 1.6,
+    maxWidth: 760,
+    overflowWrap: "anywhere",
+  },
+  heroMetricGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
+    gap: 10,
+    marginTop: 22,
+  },
+  heroMetric: {
+    padding: "13px 14px",
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    minWidth: 0,
+  },
+  heroMetricLabel: {
+    color: "#bfdbfe",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  heroMetricValue: {
+    marginTop: 4,
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
+  },
+  heroPreview: {
+    display: "grid",
+    gap: 12,
+    alignContent: "start",
+    padding: 14,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.18)",
+  },
+  previewKicker: {
+    justifySelf: "start",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  heroImageWrap: {
+    height: 240,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.18)",
+    overflow: "hidden",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+  },
+  topActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  primaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+  },
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+  },
+  campaignLimitBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  campaignLimitEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  campaignLimitTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  campaignLimitText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
+  },
+  campaignLimitActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  campaignLimitPrimary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #1683f8",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
+  },
+  campaignLimitSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+  },
+  upgradeBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fef3c7 0%, #ffffff 52%, #eff6ff 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  upgradeEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  upgradeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  upgradeText: {
+    margin: "10px 0 16px",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
+  },
+  tabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+  tab: {
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: 999,
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+    background: "#ffffff",
+  },
+  tabDanger: {
+    padding: "10px 12px",
+    border: "1px solid #fecaca",
+    borderRadius: 999,
+    color: "#b91c1c",
+    background: "#fff7f7",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+  successBox: {
+    padding: 12,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  errorBox: {
+    padding: 12,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    borderRadius: 16,
+    marginBottom: 12,
+    fontWeight: 900,
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  section: {
+    padding: "clamp(16px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 16,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  collapsibleSummary: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    cursor: "pointer",
+    listStyle: "none",
+    flexWrap: "wrap",
+  },
+  collapsibleHeading: {
+    minWidth: 0,
+    flex: "1 1 260px",
+  },
+  collapsibleActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+  },
+  collapsibleToggle: {
+    flexShrink: 0,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  sectionBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  collapsibleBody: { marginTop: 16 },
+  sectionEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontWeight: 950,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(22px, 5vw, 26px)",
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+  sectionText: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+  },
+  helperText: {
+    margin: "3px 0 0",
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+  },
+  statBox: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  statLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  statValue: {
+    margin: "6px 0 0",
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  statsGridCompact: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+    gap: 10,
+  },
+  panel: {
+    display: "grid",
+    gap: 14,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%)",
+    border: "1px solid #e2e8f0",
+    marginBottom: 14,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  panelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  panelTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  form: {
+    display: "grid",
+    gap: 12,
+    minWidth: 0,
+  },
+  inlineForm: {
+    margin: 0,
+  },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  label: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    resize: "vertical",
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+  mediaBox: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 14,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  mediaControls: { minWidth: 0 },
+  previewBox: {
+    height: 170,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 12,
+  },
+  threeCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+    gap: 12,
+  },
+  fourCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+    gap: 12,
+  },
+  twoPanel: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 14,
+  },
+  ticketLayout: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+    gap: 14,
+    alignItems: "start",
+  },
+  accessCodeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 14,
+    alignItems: "start",
+  },
+  ticketListScroll: {
+    display: "grid",
+    gap: 10,
+    maxHeight: 520,
+    overflow: "auto",
+    paddingRight: 4,
+  },
+  ticketDetails: {
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+  },
+  ticketSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    padding: 14,
+    flexWrap: "wrap",
+  },
+  ticketDetailsBody: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderTop: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  accessCodeList: {
+    display: "grid",
+    gap: 10,
+  },
+  accessCodeDetails: {
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+  },
+  accessCodeSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+    padding: 14,
+    flexWrap: "wrap",
+  },
+  accessCodePrimary: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+  accessCodeValue: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+  accessCodeBody: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderTop: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  statusMiniPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  submitBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  primaryButton: {
+    width: "fit-content",
+    minHeight: 44,
+    padding: "13px 18px",
+    border: "none",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
+  },
+  exportButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(15,23,42,0.14)",
+  },
+  menuRequestButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#f59e0b",
+    color: "#111827",
+    border: "1px solid #f59e0b",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(245,158,11,0.2)",
+  },
+  dangerButton: {
+    minHeight: 44,
+    padding: "13px 18px",
+    border: "none",
+    borderRadius: 999,
+    background: "#ef4444",
+    color: "#ffffff",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  dangerOutlineButton: {
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid #fecaca",
+    background: "#ffffff",
+    color: "#b91c1c",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  checkboxLabel: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    fontWeight: 900,
+    color: "#334155",
+    minHeight: 42,
+  },
+  emptyBox: {
+    padding: 16,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 900,
+  },
+  guestHeaderActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  guestCateringStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 10,
+  },
+  guestUpgradeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 12,
+  },
+  lockedFeatureCard: {
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 10px rgba(15,23,42,0.04)",
+  },
+  lockedFeatureEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 8,
+  },
+  lockedFeatureTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+  },
+  lockedFeatureText: {
+    margin: "7px 0 14px",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  editEnabledNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+  menuRequestNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+  menuRequestSuccess: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#dcfce7",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: 850,
+    lineHeight: 1.45,
+  },
+  guestCardList: {
+    display: "grid",
+    gap: 12,
+  },
+  guestCard: {
+    display: "grid",
+    gap: 13,
+    padding: 15,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
+    minWidth: 0,
+  },
+  guestCardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  guestPrimary: {
+    minWidth: 0,
+  },
+  guestName: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+  guestEmail: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+  guestMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+    gap: 10,
+  },
+  guestEditForm: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gap: 12,
+    alignItems: "end",
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  infoTile: {
+    padding: 12,
+    borderRadius: 15,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  infoTileLabel: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+  infoTileValue: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 13,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
+  },
+  cateringDetailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gap: 10,
+  },
+  cateringDetailCard: {
+    padding: 13,
+    borderRadius: 16,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    minWidth: 0,
+  },
+  cateringDetailPositive: {
+    background: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  cateringDetailMissing: {
+    background: "#fff7ed",
+    borderColor: "#fed7aa",
+  },
+  cateringDetailNeutral: {
+    background: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+  cateringLabel: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+  cateringValue: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+    whiteSpace: "pre-wrap",
+  },
+  guestNote: {
+    margin: 0,
+    padding: 12,
+    borderRadius: 15,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
+    lineHeight: 1.4,
+  },
+  dangerSectionInner: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+  },
+  seatManagerShell: {
+    width: "100%",
+    maxWidth: "100%",
+    overflowX: "auto",
+    paddingBottom: 4,
+  },
+  mutedSmall: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 3,
+  },
+};
