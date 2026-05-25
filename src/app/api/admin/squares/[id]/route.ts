@@ -57,6 +57,121 @@ function parseDateTime(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+function parseBritishDate(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return null;
+
+  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year) ||
+    day < 1 ||
+    day > 31 ||
+    month < 1 ||
+    month > 12 ||
+    year < 2000 ||
+    year > 2100
+  ) {
+    return null;
+  }
+
+  return {
+    day,
+    month,
+    year,
+  };
+}
+
+function parseTime(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return null;
+
+  const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  return {
+    hour,
+    minute,
+  };
+}
+
+function parseSplitDateTime(
+  dateValue: FormDataEntryValue | null,
+  timeValue: FormDataEntryValue | null,
+) {
+  const rawDate = String(dateValue ?? "").trim();
+  const rawTime = String(timeValue ?? "").trim();
+
+  if (!rawDate && !rawTime) {
+    return {
+      ok: true as const,
+      value: null as string | null,
+    };
+  }
+
+  const date = parseBritishDate(dateValue);
+  const time = parseTime(timeValue);
+
+  if (!date || !time) {
+    return {
+      ok: false as const,
+      value: null,
+    };
+  }
+
+  const parsed = new Date(
+    Date.UTC(date.year, date.month - 1, date.day, time.hour, time.minute, 0),
+  );
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== date.year ||
+    parsed.getUTCMonth() !== date.month - 1 ||
+    parsed.getUTCDate() !== date.day ||
+    parsed.getUTCHours() !== time.hour ||
+    parsed.getUTCMinutes() !== time.minute
+  ) {
+    return {
+      ok: false as const,
+      value: null,
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: parsed.toISOString(),
+  };
+}
+
 async function requireTenantAccess(request: NextRequest) {
   const session = await auth();
 
@@ -252,7 +367,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
 
     const pricePerSquareCents = Math.round(priceMajor * 100);
-    const drawAt = parseDateTime(formData.get("draw_at"));
+
+    const splitDrawAt = parseSplitDateTime(
+      formData.get("draw_date"),
+      formData.get("draw_time"),
+    );
+
+    if (!splitDrawAt.ok) {
+      return NextResponse.redirect(
+        new URL(`/admin/squares/${id}?error=invalid_draw_datetime`, request.url),
+        { status: 303 },
+      );
+    }
+
+    const drawAt =
+      formData.has("draw_date") || formData.has("draw_time")
+        ? splitDrawAt.value
+        : parseDateTime(formData.get("draw_at"));
+
     const prizes = parsePrizeRows(formData);
 
     const autoDrawFromPrize = Math.max(
@@ -276,9 +408,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
       formData.get("free_entry_instructions") ?? "",
     ).trim();
 
-    const freeEntryClosesAt = parseDateTime(
-      formData.get("free_entry_closes_at"),
+    const splitFreeEntryClosesAt = parseSplitDateTime(
+      formData.get("free_entry_closes_date"),
+      formData.get("free_entry_closes_time"),
     );
+
+    if (!splitFreeEntryClosesAt.ok) {
+      return NextResponse.redirect(
+        new URL(
+          `/admin/squares/${id}?error=invalid_postal_datetime`,
+          request.url,
+        ),
+        { status: 303 },
+      );
+    }
+
+    const freeEntryClosesAt =
+      formData.has("free_entry_closes_date") ||
+      formData.has("free_entry_closes_time")
+        ? splitFreeEntryClosesAt.value
+        : parseDateTime(formData.get("free_entry_closes_at"));
 
     const config = {
       ...currentConfig,
