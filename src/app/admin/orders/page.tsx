@@ -306,7 +306,6 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-
 async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "events",
@@ -358,6 +357,7 @@ async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
+
 async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "auctions",
@@ -478,6 +478,40 @@ function buildCsvHref(orders: UnifiedOrder[]) {
   return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
 
+function EventOrdersGuestsLink({ order }: { order: UnifiedOrder }) {
+  if (order.type !== "event" || !order.campaignId) {
+    return null;
+  }
+
+  return (
+    <Link
+      href={`/admin/events/${encodeURIComponent(order.campaignId)}/orders`}
+      style={styles.smallLink}
+    >
+      Orders &amp; Guests
+    </Link>
+  );
+}
+
+function AdminLink({ order, label }: { order: UnifiedOrder; label: string }) {
+  if (!order.adminHref) {
+    return null;
+  }
+
+  return (
+    <Link
+      href={order.adminHref}
+      style={
+        order.type === "event" && order.campaignId
+          ? styles.smallLinkMuted
+          : styles.smallLink
+      }
+    >
+      {label}
+    </Link>
+  );
+}
+
 export default async function AdminOrdersPage({ searchParams }: PageProps) {
   const session = await auth();
 
@@ -596,8 +630,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           </a>
         </div>
       </section>
-
-      <section className="summaryGrid" style={styles.summaryGrid}>
+            <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Visible orders" value={filteredOrders.length} />
         <SummaryCard label="All orders" value={allOrders.length} />
         <SummaryCard label="Unique customers" value={uniqueCustomers} />
@@ -748,11 +781,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
                       <td style={styles.td}>
                         <div style={styles.actionLinks}>
-                          {order.adminHref ? (
-                            <Link href={order.adminHref} style={styles.smallLink}>
-                              Admin
-                            </Link>
-                          ) : null}
+                          <EventOrdersGuestsLink order={order} />
+
+                          <AdminLink order={order} label="Admin" />
 
                           {order.publicHref ? (
                             <Link
@@ -808,11 +839,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
                   </div>
 
                   <div style={styles.mobileActions}>
-                    {order.adminHref ? (
-                      <Link href={order.adminHref} style={styles.smallLink}>
-                        Open admin
-                      </Link>
-                    ) : null}
+                    <EventOrdersGuestsLink order={order} />
+
+                    <AdminLink order={order} label="Open admin" />
 
                     {order.publicHref ? (
                       <Link
@@ -973,7 +1002,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
