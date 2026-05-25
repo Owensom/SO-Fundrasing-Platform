@@ -13,6 +13,9 @@ type PageProps = {
   params: {
     id: string;
   };
+  searchParams?: {
+    status?: string;
+  };
 };
 
 type EventOrderDashboardRow = {
@@ -56,7 +59,10 @@ type OrderGroup = {
   items: EventOrderDashboardRow[];
 };
 
-function formatMoney(cents: number | string | null | undefined, currency = "GBP") {
+function formatMoney(
+  cents: number | string | null | undefined,
+  currency = "GBP",
+) {
   const value = Number(cents || 0);
 
   try {
@@ -200,6 +206,36 @@ function groupOrders(rows: EventOrderDashboardRow[]) {
   return Array.from(map.values());
 }
 
+function cleanStatusFilter(value: string | null | undefined) {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (
+    clean === "paid" ||
+    clean === "pending" ||
+    clean === "checkout_started" ||
+    clean === "other"
+  ) {
+    return clean;
+  }
+
+  return "all";
+}
+
+function filterOrders(orders: OrderGroup[], statusFilter: string) {
+  if (statusFilter === "all") return orders;
+
+  if (statusFilter === "other") {
+    return orders.filter(
+      (order) =>
+        order.status !== "paid" &&
+        order.status !== "pending" &&
+        order.status !== "checkout_started",
+    );
+  }
+
+  return orders.filter((order) => order.status === statusFilter);
+}
+
 async function listEventOrderDashboardRows(eventId: string) {
   return query<EventOrderDashboardRow>(
     `
@@ -246,7 +282,10 @@ async function listEventOrderDashboardRows(eventId: string) {
   );
 }
 
-export default async function AdminEventOrdersPage({ params }: PageProps) {
+export default async function AdminEventOrdersPage({
+  params,
+  searchParams,
+}: PageProps) {
   const session = await auth();
 
   if (!session?.user) {
@@ -276,8 +315,21 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
   const rows = await listEventOrderDashboardRows(event.id);
   const orders = groupOrders(rows);
 
+  const statusFilter = cleanStatusFilter(searchParams?.status);
+  const visibleOrders = filterOrders(orders, statusFilter);
+
   const paidOrders = orders.filter((order) => order.status === "paid");
-  const pendingOrders = orders.filter((order) => order.status !== "paid");
+  const pendingOrders = orders.filter((order) => order.status === "pending");
+  const checkoutStartedOrders = orders.filter(
+    (order) => order.status === "checkout_started",
+  );
+
+  const otherOrders = orders.filter(
+    (order) =>
+      order.status !== "paid" &&
+      order.status !== "pending" &&
+      order.status !== "checkout_started",
+  );
 
   const grossTotal = paidOrders.reduce(
     (sum, order) => sum + Number(order.amountTotal || 0),
@@ -306,22 +358,57 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
 
   const currency = event.currency || orders[0]?.currency || "GBP";
 
+  const statusFilters = [
+    {
+      label: "All",
+      value: "all",
+      count: orders.length,
+      href: `/admin/events/${event.id}/orders`,
+    },
+    {
+      label: "Paid",
+      value: "paid",
+      count: paidOrders.length,
+      href: `/admin/events/${event.id}/orders?status=paid`,
+    },
+    {
+      label: "Pending",
+      value: "pending",
+      count: pendingOrders.length,
+      href: `/admin/events/${event.id}/orders?status=pending`,
+    },
+    {
+      label: "Checkout started",
+      value: "checkout_started",
+      count: checkoutStartedOrders.length,
+      href: `/admin/events/${event.id}/orders?status=checkout_started`,
+    },
+    {
+      label: "Other",
+      value: "other",
+      count: otherOrders.length,
+      href: `/admin/events/${event.id}/orders?status=other`,
+    },
+  ];
+
   return (
     <main className="event-orders-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
       <section className="event-orders-hero" style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>Event orders</div>
+          <div style={styles.eyebrow}>Orders & guests</div>
 
-          <h1 className="so-brand-heading event-orders-title" style={styles.title}>
+          <h1
+            className="so-brand-heading event-orders-title"
+            style={styles.title}
+          >
             {event.title}
           </h1>
 
           <p style={styles.subtitle}>
-            Read-only order dashboard for paid, pending and checkout-started
-            event orders. This does not change checkout, Stripe, seats or guest
-            records.
+            Read-only order dashboard for ticket purchases, guest details,
+            seating, menu choices and dietary requirements.
           </p>
 
           <p style={styles.tenant}>
@@ -330,45 +417,96 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
         </div>
 
         <div className="event-orders-hero-actions" style={styles.heroActions}>
-         <Link href={`/admin/events/${event.id}`} style={styles.secondaryButton}>
-          ← Back to event
-         </Link>
+          <Link href={`/admin/events/${event.id}`} style={styles.secondaryButton}>
+            ← Back to event
+          </Link>
 
-         <a
-         href={`/api/admin/events/${encodeURIComponent(event.id)}/orders.csv`}
-        style={styles.secondaryButton}
-        >
-        Export CSV
-        </a>
+          <a
+            href={`/api/admin/events/${encodeURIComponent(event.id)}/orders.csv`}
+            style={styles.secondaryButton}
+          >
+            Export CSV
+          </a>
 
-     <Link href="/admin/events" style={styles.secondaryButton}>
-    All events
-  </Link>
-</div>
+          <Link href="/admin/events" style={styles.secondaryButton}>
+            All events
+          </Link>
+        </div>
+      </section>
+
+      <section
+        className="event-orders-filter-bar"
+        style={styles.filterBar}
+        aria-label="Order status filters"
+      >
+        {statusFilters.map((filter) => {
+          const active = statusFilter === filter.value;
+
+          return (
+            <Link
+              key={filter.value}
+              href={filter.href}
+              style={{
+                ...styles.filterButton,
+                ...(active ? styles.filterButtonActive : {}),
+              }}
+            >
+              {filter.label}
+              <span style={active ? styles.filterCountActive : styles.filterCount}>
+                {filter.count}
+              </span>
+            </Link>
+          );
+        })}
       </section>
 
       <section className="event-orders-summary-grid" style={styles.summaryGrid}>
         <SummaryCard label="Total orders" value={orders.length} />
         <SummaryCard label="Paid orders" value={paidOrders.length} />
-        <SummaryCard label="Other orders" value={pendingOrders.length} />
+        <SummaryCard
+          label="Checkout started"
+          value={checkoutStartedOrders.length}
+        />
         <SummaryCard label="Tickets/items" value={totalTickets} />
         <SummaryCard label="Paid tickets/items" value={paidTickets} />
-        <SummaryCard label="Paid gross" value={formatMoney(grossTotal, currency)} />
+        <SummaryCard
+          label="Paid gross"
+          value={formatMoney(grossTotal, currency)}
+        />
       </section>
 
-      {orders.length === 0 ? (
+      <section style={styles.listHeader}>
+        <div>
+          <h2 style={styles.listTitle}>
+            {statusFilter === "all"
+              ? "All event orders"
+              : `${statusFilters.find((filter) => filter.value === statusFilter)?.label || "Filtered"} orders`}
+          </h2>
+
+          <p style={styles.listText}>
+            Showing {visibleOrders.length} of {orders.length} order
+            {orders.length === 1 ? "" : "s"}.
+          </p>
+        </div>
+      </section>
+
+      {visibleOrders.length === 0 ? (
         <section style={styles.emptyCard}>
-          <h2 style={styles.emptyTitle}>No event orders yet</h2>
+          <h2 style={styles.emptyTitle}>No matching event orders</h2>
 
           <p style={styles.emptyText}>
-            Orders will appear here when supporters begin checkout or complete
-            payment for this event.
+            Try another status filter, or check back after supporters begin
+            checkout or complete payment for this event.
           </p>
         </section>
       ) : (
         <section style={styles.orderList}>
-          {orders.map((order) => (
-            <article key={order.id} className="event-order-card" style={styles.orderCard}>
+          {visibleOrders.map((order) => (
+            <article
+              key={order.id}
+              className="event-order-card"
+              style={styles.orderCard}
+            >
               <div className="event-order-header" style={styles.orderHeader}>
                 <div style={{ minWidth: 0 }}>
                   <h2 style={styles.orderTitle}>
@@ -410,7 +548,10 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
               ) : (
                 <div className="event-order-items" style={styles.orderItems}>
                   {order.items.map((item) => (
-                    <div key={item.order_item_id || `${order.id}-item`} style={styles.itemCard}>
+                    <div
+                      key={item.order_item_id || `${order.id}-item`}
+                      style={styles.itemCard}
+                    >
                       <div>
                         <div style={styles.itemLabel}>Ticket / item</div>
                         <div style={styles.itemValue}>{ticketLabel(item)}</div>
@@ -418,8 +559,12 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
 
                       <div>
                         <div style={styles.itemLabel}>Guest</div>
-                        <div style={styles.itemValue}>{guestName(item, order)}</div>
-                        <div style={styles.itemSubValue}>{guestEmail(item, order)}</div>
+                        <div style={styles.itemValue}>
+                          {guestName(item, order)}
+                        </div>
+                        <div style={styles.itemSubValue}>
+                          {guestEmail(item, order)}
+                        </div>
                       </div>
 
                       <div>
@@ -453,7 +598,10 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
                         </div>
                       </div>
 
-                      <div className="event-order-dietary" style={styles.dietaryCell}>
+                      <div
+                        className="event-order-dietary"
+                        style={styles.dietaryCell}
+                      >
                         <div style={styles.itemLabel}>Dietary</div>
                         <div style={styles.itemValue}>
                           {fallbackText(item.dietary_requirements)}
@@ -522,6 +670,18 @@ const responsiveStyles = `
 
   .event-order-items {
     grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .event-orders-filter-bar {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-orders-filter-bar a {
+    width: 100% !important;
+    justify-content: space-between !important;
   }
 }
 
@@ -650,6 +810,70 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
+  filterBar: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    padding: 12,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+  },
+
+  filterButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 42,
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+
+  filterButtonActive: {
+    background: "#0f172a",
+    color: "#ffffff",
+    borderColor: "#0f172a",
+  },
+
+  filterCount: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 24,
+    height: 24,
+    padding: "0 7px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  filterCountActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 24,
+    height: 24,
+    padding: "0 7px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.28)",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
   summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
@@ -679,6 +903,30 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
+  },
+
+  listHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-end",
+    padding: "0 2px",
+    marginBottom: 12,
+    flexWrap: "wrap",
+  },
+
+  listTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 26,
+    letterSpacing: "-0.05em",
+  },
+
+  listText: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    fontWeight: 800,
   },
 
   emptyCard: {
