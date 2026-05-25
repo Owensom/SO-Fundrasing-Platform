@@ -66,6 +66,10 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   };
 }
 
+function canViewPublicAuction(status: string | null | undefined) {
+  return String(status || "").trim().toLowerCase() === "published";
+}
+
 function cleanAuctionStatus(value: FormDataEntryValue | null): AuctionStatus {
   const clean = String(value || "").trim().toLowerCase();
 
@@ -102,10 +106,7 @@ async function updateAuctionStatusAction(formData: FormData) {
   const tenantSlug = await requireAuctionDashboardAccess();
   const tenantSettings = await getTenantSettings(tenantSlug);
 
-  const capability = checkSubscriptionCapability(
-    tenantSettings,
-    "auctions",
-  );
+  const capability = checkSubscriptionCapability(tenantSettings, "auctions");
 
   if (!capability.allowed) {
     redirect("/admin/auctions?error=subscription-required");
@@ -147,10 +148,7 @@ async function deleteAuctionAction(formData: FormData) {
   const tenantSlug = await requireAuctionDashboardAccess();
   const tenantSettings = await getTenantSettings(tenantSlug);
 
-  const capability = checkSubscriptionCapability(
-    tenantSettings,
-    "auctions",
-  );
+  const capability = checkSubscriptionCapability(tenantSettings, "auctions");
 
   if (!capability.allowed) {
     redirect("/admin/auctions?error=subscription-required");
@@ -196,10 +194,7 @@ export default async function AdminAuctionsPage({
 
   const tierLabel = getTierLabel(subscriptionTier);
 
-  const capability = checkSubscriptionCapability(
-    tenantSettings,
-    "auctions",
-  );
+  const capability = checkSubscriptionCapability(tenantSettings, "auctions");
 
   const auctions = await listAuctions(tenantSlug);
 
@@ -207,15 +202,15 @@ export default async function AdminAuctionsPage({
     (auction) => auction.status === "published",
   ).length;
 
-  const draft = auctions.filter(
-    (auction) => auction.status === "draft",
-  ).length;
+  const draft = auctions.filter((auction) => auction.status === "draft").length;
 
   const closed = auctions.filter(
     (auction) => auction.status === "closed",
   ).length;
 
   const isReadOnly = !capability.allowed;
+  const publicPreviewUnavailable =
+    searchParams?.error === "public-preview-unavailable";
 
   return (
     <main className="auctions-admin-page" style={styles.page}>
@@ -226,18 +221,12 @@ export default async function AdminAuctionsPage({
 
         <div style={styles.heroContent}>
           <div style={styles.heroPillRow}>
-            <span style={styles.heroSectionPill}>
-              Auctions workspace
-            </span>
+            <span style={styles.heroSectionPill}>Auctions workspace</span>
 
-            <span style={styles.subscriptionPill}>
-              {tierLabel} plan
-            </span>
+            <span style={styles.subscriptionPill}>{tierLabel} plan</span>
 
             {isReadOnly ? (
-              <span style={styles.lockedPill}>
-                Professional feature
-              </span>
+              <span style={styles.lockedPill}>Professional feature</span>
             ) : null}
           </div>
 
@@ -248,13 +237,9 @@ export default async function AdminAuctionsPage({
             Manage auctions
           </h1>
 
-          <p
-            className="auctions-admin-subtitle"
-            style={styles.subtitle}
-          >
-            Manage premium auction campaigns, status tools,
-            public pages and bidding windows from one
-            fundraising workspace.
+          <p className="auctions-admin-subtitle" style={styles.subtitle}>
+            Manage premium auction campaigns, status tools, public pages and
+            bidding windows from one fundraising workspace.
           </p>
 
           <p style={styles.tenant}>
@@ -262,63 +247,34 @@ export default async function AdminAuctionsPage({
           </p>
         </div>
 
-        <div
-          className="auctions-hero-stats"
-          style={styles.heroStats}
-        >
-          <HeroStat
-            label="Total auctions"
-            value={auctions.length}
-          />
+        <div className="auctions-hero-stats" style={styles.heroStats}>
+          <HeroStat label="Total auctions" value={auctions.length} />
 
-          <HeroStat
-            label="Published"
-            value={published}
-          />
+          <HeroStat label="Published" value={published} />
 
-          <HeroStat
-            label="Draft"
-            value={draft}
-          />
+          <HeroStat label="Draft" value={draft} />
 
-          <HeroStat
-            label="Closed"
-            value={closed}
-          />
+          <HeroStat label="Closed" value={closed} />
         </div>
 
-        <nav
-          className="auctions-admin-nav"
-          style={styles.nav}
-        >
+        <nav className="auctions-admin-nav" style={styles.nav}>
           <Link href="/admin" style={styles.navButton}>
             ← Dashboard
           </Link>
 
-          <Link
-            href="/admin/raffles"
-            style={styles.navButton}
-          >
+          <Link href="/admin/raffles" style={styles.navButton}>
             Raffles
           </Link>
 
-          <Link
-            href="/admin/squares"
-            style={styles.navButton}
-          >
+          <Link href="/admin/squares" style={styles.navButton}>
             Squares
           </Link>
 
-          <Link
-            href="/admin/events"
-            style={styles.navButton}
-          >
+          <Link href="/admin/events" style={styles.navButton}>
             Events
           </Link>
 
-          <div style={styles.navButtonActive}>
-            Auctions
-          </div>
+          <div style={styles.navButtonActive}>Auctions</div>
 
           <Link
             href={`/c/${tenantSlug}?adminReturn=/admin/auctions`}
@@ -328,20 +284,16 @@ export default async function AdminAuctionsPage({
           </Link>
 
           {isReadOnly ? (
-            <div style={styles.lockedCreateButton}>
-              🔒 Professional
-            </div>
+            <div style={styles.lockedCreateButton}>🔒 Professional</div>
           ) : (
-            <Link
-              href="/admin/auctions/new"
-              style={styles.createButton}
-            >
+            <Link href="/admin/auctions/new" style={styles.createButton}>
               + Create item
             </Link>
           )}
         </nav>
       </section>
-            {searchParams?.saved ? (
+
+      {searchParams?.saved ? (
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
@@ -351,8 +303,23 @@ export default async function AdminAuctionsPage({
             ? "Close the auction before deleting it."
             : searchParams.error === "subscription-required"
               ? "Auctions require the Professional plan or higher."
-              : "Please check the auction and try again."}
+              : searchParams.error === "public-preview-unavailable"
+                ? "This auction is not public yet. Publish it when you are ready for supporters to view it."
+                : "Please check the auction and try again."}
         </div>
+      ) : null}
+
+      {publicPreviewUnavailable ? (
+        <section style={styles.previewBanner}>
+          <div style={styles.previewEyebrow}>Preview unavailable</div>
+
+          <h2 style={styles.previewTitle}>This auction is not public yet.</h2>
+
+          <p style={styles.previewText}>
+            Draft and closed auctions are hidden from public campaign pages.
+            Publish this auction when you are ready for supporters to view it.
+          </p>
+        </section>
       ) : null}
 
       {isReadOnly ? (
@@ -446,6 +413,7 @@ export default async function AdminAuctionsPage({
         <section style={styles.list}>
           {auctions.map((auction) => {
             const hasCustomImage = Boolean(auction.image_url);
+            const canViewPublic = canViewPublicAuction(auction.status);
 
             return (
               <article
@@ -502,9 +470,7 @@ export default async function AdminAuctionsPage({
                         </span>
 
                         {isReadOnly ? (
-                          <span style={styles.readOnlyStatus}>
-                            Read-only
-                          </span>
+                          <span style={styles.readOnlyStatus}>Read-only</span>
                         ) : null}
                       </div>
                     </div>
@@ -537,7 +503,8 @@ export default async function AdminAuctionsPage({
                           : auction.description}
                       </p>
                     ) : null}
-                                        <div
+
+                    <div
                       className="auctions-detail-grid"
                       style={styles.detailGrid}
                     >
@@ -558,11 +525,7 @@ export default async function AdminAuctionsPage({
 
                       <InfoBlock
                         label="Public page"
-                        value={
-                          auction.status === "published"
-                            ? "Visible"
-                            : "Not published"
-                        }
+                        value={canViewPublic ? "Visible" : "Not published"}
                       />
                     </div>
 
@@ -638,11 +601,19 @@ export default async function AdminAuctionsPage({
                     >
                       {isReadOnly ? (
                         <Link
-                          href={`/a/${auction.slug}?adminReturn=/admin/auctions`}
-                          target="_blank"
-                          style={styles.secondaryLink}
+                          href={
+                            canViewPublic
+                              ? `/a/${auction.slug}?adminReturn=/admin/auctions`
+                              : `/admin/auctions?error=public-preview-unavailable`
+                          }
+                          target={canViewPublic ? "_blank" : undefined}
+                          style={
+                            canViewPublic
+                              ? styles.secondaryLink
+                              : styles.secondaryUnavailableLink
+                          }
                         >
-                          View campaign
+                          {canViewPublic ? "View campaign" : "Preview unavailable"}
                         </Link>
                       ) : (
                         <>
@@ -654,11 +625,19 @@ export default async function AdminAuctionsPage({
                           </Link>
 
                           <Link
-                            href={`/a/${auction.slug}?adminReturn=/admin/auctions/${auction.id}`}
-                            target="_blank"
-                            style={styles.secondaryLink}
+                            href={
+                              canViewPublic
+                                ? `/a/${auction.slug}?adminReturn=/admin/auctions/${auction.id}`
+                                : `/admin/auctions/${auction.id}?error=public-preview-unavailable`
+                            }
+                            target={canViewPublic ? "_blank" : undefined}
+                            style={
+                              canViewPublic
+                                ? styles.secondaryLink
+                                : styles.secondaryUnavailableLink
+                            }
                           >
-                            View campaign
+                            {canViewPublic ? "View campaign" : "Preview unavailable"}
                           </Link>
                         </>
                       )}
@@ -895,7 +874,8 @@ const responsiveStyles = `
     border-radius: 24px !important;
     padding: 18px !important;
   }
-    .auctions-stat-value {
+
+  .auctions-stat-value {
     font-size: clamp(36px, 12vw, 52px) !important;
     line-height: 1 !important;
     overflow-wrap: anywhere !important;
@@ -1243,6 +1223,46 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     marginBottom: 12,
     fontWeight: 900,
+  },
+
+  previewBanner: {
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eff6ff 100%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    marginBottom: 16,
+  },
+
+  previewEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+
+  previewTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+
+  previewText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
   },
 
   upgradeCard: {
@@ -1624,6 +1644,21 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbe3ef",
     textDecoration: "none",
     fontWeight: 800,
+    fontSize: 14,
+    boxShadow: "none",
+  },
+
+  secondaryUnavailableLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    textDecoration: "none",
+    fontWeight: 900,
     fontSize: 14,
     boxShadow: "none",
   },
