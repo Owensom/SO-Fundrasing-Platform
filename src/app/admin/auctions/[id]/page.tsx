@@ -146,27 +146,131 @@ function defaultAuctionImageStyle(padding = 20): CSSProperties {
   };
 }
 
-function toDateTimeLocalValue(value: string | null | undefined) {
-  if (!value) return "";
+function getDateParts(value: string | null | undefined) {
+  if (!value) return null;
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) return null;
 
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  return {
+    day: String(date.getUTCDate()).padStart(2, "0"),
+    month: String(date.getUTCMonth() + 1).padStart(2, "0"),
+    year: String(date.getUTCFullYear()).padStart(4, "0"),
+    hour: String(date.getUTCHours()).padStart(2, "0"),
+    minute: String(date.getUTCMinutes()).padStart(2, "0"),
+  };
 }
 
-function cleanDateTime(value: FormDataEntryValue | null) {
+function formatBritishDateInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
+
+  if (!parts) return "";
+
+  return `${parts.day}/${parts.month}/${parts.year}`;
+}
+
+function formatTimeInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
+
+  if (!parts) return "";
+
+  return `${parts.hour}:${parts.minute}`;
+}
+
+function parseBritishDate(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim();
 
   if (!raw) return null;
 
-  const date = new Date(raw);
+  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
 
-  if (Number.isNaN(date.getTime())) return null;
+  if (!match) return null;
 
-  return date.toISOString();
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year) ||
+    day < 1 ||
+    day > 31 ||
+    month < 1 ||
+    month > 12 ||
+    year < 2000 ||
+    year > 2100
+  ) {
+    return null;
+  }
+
+  return {
+    day,
+    month,
+    year,
+  };
+}
+
+function parseTime(value: FormDataEntryValue | null) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return null;
+
+  const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  return {
+    hour,
+    minute,
+  };
+}
+
+function cleanSplitDateTime(
+  dateValue: FormDataEntryValue | null,
+  timeValue: FormDataEntryValue | null,
+) {
+  const rawDate = String(dateValue || "").trim();
+  const rawTime = String(timeValue || "").trim();
+
+  if (!rawDate && !rawTime) return null;
+
+  const date = parseBritishDate(dateValue);
+  const time = parseTime(timeValue);
+
+  if (!date || !time) return null;
+
+  const parsed = new Date(
+    Date.UTC(date.year, date.month - 1, date.day, time.hour, time.minute, 0),
+  );
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== date.year ||
+    parsed.getUTCMonth() !== date.month - 1 ||
+    parsed.getUTCDate() !== date.day ||
+    parsed.getUTCHours() !== time.hour ||
+    parsed.getUTCMinutes() !== time.minute
+  ) {
+    return null;
+  }
+
+  return parsed.toISOString();
 }
 
 function formatDate(value: string | null | undefined) {
@@ -386,7 +490,7 @@ function buildHighestBidMap(bids: SilentAuctionBid[]) {
     const existing = winnerByItemId.get(itemId);
 
     if (!existing || amountCents > Number(existing.amount_cents || 0)) {
-      winnerByItemId.set(itemId, {
+            winnerByItemId.set(itemId, {
         bid_id: bid.id,
         bidder_name: bid.bidder_name || null,
         bidder_email: bid.bidder_email || null,
@@ -403,6 +507,7 @@ function buildHighestBidMap(bids: SilentAuctionBid[]) {
 
   return winnerByItemId;
 }
+
 async function updateAuctionAction(formData: FormData) {
   "use server";
 
@@ -447,8 +552,14 @@ async function updateAuctionAction(formData: FormData) {
     imageFocusY: cleanFocus(formData.get("image_focus_y")),
     status: requestedStatus,
     currency: String(formData.get("currency") || "GBP").trim() || "GBP",
-    opensAt: cleanDateTime(formData.get("opens_at")),
-    closesAt: cleanDateTime(formData.get("closes_at")),
+    opensAt: cleanSplitDateTime(
+      formData.get("opens_date"),
+      formData.get("opens_time"),
+    ),
+    closesAt: cleanSplitDateTime(
+      formData.get("closes_date"),
+      formData.get("closes_time"),
+    ),
     termsText: String(formData.get("terms_text") || "").trim() || null,
   });
 
@@ -624,6 +735,7 @@ async function deleteAuctionItemAction(formData: FormData) {
 
   redirect(`/admin/auctions/${auction.id}#auction-items`);
 }
+
 export default async function AdminAuctionPage({
   params,
   searchParams,
@@ -671,8 +783,7 @@ export default async function AdminAuctionPage({
             }
           />
         </div>
-
-        <div style={styles.heroContent}>
+                <div style={styles.heroContent}>
           <div style={styles.heroTopRow}>
             <div style={styles.badgeRow}>
               <div
@@ -799,7 +910,10 @@ export default async function AdminAuctionPage({
               label="Currency"
               value={(auction.currency || "GBP").toUpperCase()}
             />
-            <InfoCard label="Status" value={auctionStatusLabel(auction.status)} />
+            <InfoCard
+              label="Status"
+              value={auctionStatusLabel(auction.status)}
+            />
             <InfoCard label="Opens" value={formatDate(auction.opens_at)} />
             <InfoCard label="Closes" value={formatDate(auction.closes_at)} />
             <InfoCard
@@ -879,23 +993,53 @@ export default async function AdminAuctionPage({
             </label>
 
             <label style={styles.field}>
-              <span style={styles.label}>Opens at</span>
+              <span style={styles.label}>Opens date</span>
 
               <input
-                type="datetime-local"
-                name="opens_at"
-                defaultValue={toDateTimeLocalValue(auction.opens_at)}
+                type="text"
+                name="opens_date"
+                inputMode="numeric"
+                defaultValue={formatBritishDateInput(auction.opens_at)}
+                placeholder="DD/MM/YYYY"
                 style={styles.input}
               />
             </label>
 
             <label style={styles.field}>
-              <span style={styles.label}>Closes at</span>
+              <span style={styles.label}>Opens time</span>
 
               <input
-                type="datetime-local"
-                name="closes_at"
-                defaultValue={toDateTimeLocalValue(auction.closes_at)}
+                type="text"
+                name="opens_time"
+                inputMode="numeric"
+                defaultValue={formatTimeInput(auction.opens_at)}
+                placeholder="HH:MM"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Closes date</span>
+
+              <input
+                type="text"
+                name="closes_date"
+                inputMode="numeric"
+                defaultValue={formatBritishDateInput(auction.closes_at)}
+                placeholder="DD/MM/YYYY"
+                style={styles.input}
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Closes time</span>
+
+              <input
+                type="text"
+                name="closes_time"
+                inputMode="numeric"
+                defaultValue={formatTimeInput(auction.closes_at)}
+                placeholder="HH:MM"
                 style={styles.input}
               />
             </label>
@@ -942,7 +1086,8 @@ export default async function AdminAuctionPage({
           </form>
         )}
       </section>
-            <section id="auction-items" style={styles.sectionCard}>
+
+      <section id="auction-items" style={styles.sectionCard}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionEyebrow}>Lots</div>
@@ -992,8 +1137,7 @@ export default async function AdminAuctionPage({
                 style={styles.input}
               />
             </label>
-
-            <label style={styles.field}>
+                        <label style={styles.field}>
               <span style={styles.label}>Minimum increment</span>
 
               <input
@@ -1172,7 +1316,10 @@ export default async function AdminAuctionPage({
                               )
                         }
                       />
-                      <InfoCard label="Sort order" value={item.sort_order || 0} />
+                      <InfoCard
+                        label="Sort order"
+                        value={item.sort_order || 0}
+                      />
                       <InfoCard label="Status" value={item.status} />
                       <InfoCard
                         label="Payment status"
@@ -1288,7 +1435,9 @@ export default async function AdminAuctionPage({
                           </select>
                         </label>
 
-                        <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
+                        <label
+                          style={{ ...styles.field, gridColumn: "1 / -1" }}
+                        >
                           <span style={styles.label}>Description</span>
 
                           <textarea
@@ -1348,7 +1497,8 @@ export default async function AdminAuctionPage({
           )}
         </div>
       </section>
-            <section id="winner-tools" style={styles.sectionCard}>
+
+      <section id="winner-tools" style={styles.sectionCard}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionEyebrow}>Winner tools</div>
@@ -1433,7 +1583,11 @@ export default async function AdminAuctionPage({
 
                     <InfoCard
                       label="Paid at"
-                      value={highest?.paid_at ? formatDate(highest.paid_at) : "Not paid"}
+                      value={
+                        highest?.paid_at
+                          ? formatDate(highest.paid_at)
+                          : "Not paid"
+                      }
                     />
                   </div>
 
@@ -1975,7 +2129,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
-    deleteButton: {
+
+  deleteButton: {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
