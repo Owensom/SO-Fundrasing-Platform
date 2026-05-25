@@ -979,6 +979,7 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    margin-top: 24px !important;
   }
 
   .admin-dashboard-page .primaryButton,
@@ -1056,7 +1057,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
-    minHeight: 620,
+    minHeight: 560,
   },
 
   heroGlow: {
@@ -1127,8 +1128,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "stretch",
     width: "100%",
-    marginTop: "auto",
-    paddingTop: 30,
+    marginTop: 54,
+    paddingTop: 0,
   },
 
   primaryButton: {
