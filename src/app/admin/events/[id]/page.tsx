@@ -2115,8 +2115,10 @@ export default async function AdminEventManagePage({
     listEventAccessCodes(event.id),
   ]);
 
-  const hasCustomImage = Boolean(event.image_url);
+    const hasCustomImage = Boolean(event.image_url);
   const campaignLimitReached = searchParams?.error === "campaign-limit";
+  const publicPreviewUnavailable =
+    searchParams?.error === "public-preview-unavailable";
   const upgradeRequired = searchParams?.error === "upgrade-required";
   const vipUpgradeRequired = searchParams?.error === "vip-upgrade-required";
   const menuRequestFailed = searchParams?.error === "menu-request-failed";
@@ -2202,7 +2204,12 @@ export default async function AdminEventManagePage({
     ]),
   );
 
-  const publicEventHref = `/e/${encodeURIComponent(event.slug)}`;
+   const publicEventHref =
+    event.status === "published"
+      ? `/e/${encodeURIComponent(event.slug)}`
+      : `/admin/events/${encodeURIComponent(
+          event.id,
+        )}?error=public-preview-unavailable`;
   const guestCateringCsvHref = `/api/admin/events/${encodeURIComponent(
     event.id,
   )}/guest-catering.csv`;
@@ -2301,17 +2308,32 @@ export default async function AdminEventManagePage({
           ← Back to events
         </a>
 
-        <a
+                <a
           href={publicEventHref}
-          target="_blank"
+          target={event.status === "published" ? "_blank" : undefined}
           className="primaryLink"
           style={styles.primaryLink}
         >
           View public page
         </a>
-      </section>
+            </section>
 
-      {campaignLimitReached ? (
+      {publicPreviewUnavailable ? (
+        <section style={styles.publicPreviewBanner}>
+          <div style={styles.publicPreviewEyebrow}>Public page unavailable</div>
+
+          <h2 style={styles.publicPreviewTitle}>
+            This event is not public yet.
+          </h2>
+
+          <p style={styles.publicPreviewText}>
+            Draft and closed events are hidden from the public campaign page.
+            Publish this event before opening the public page.
+          </p>
+        </section>
+      ) : null}
+
+            {campaignLimitReached ? (
         <section style={styles.campaignLimitBanner}>
           <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
 
@@ -2416,8 +2438,9 @@ export default async function AdminEventManagePage({
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
-      {searchParams?.error &&
+            {searchParams?.error &&
       !campaignLimitReached &&
+      !publicPreviewUnavailable &&
       !upgradeRequired &&
       !vipUpgradeRequired &&
       !menuRequestFailed ? (
@@ -4219,6 +4242,42 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 950,
+  },
+    publicPreviewBanner: {
+    marginBottom: 16,
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 52%, #eff6ff 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+  },
+  publicPreviewEyebrow: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+  publicPreviewTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(24px, 5vw, 32px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+  },
+  publicPreviewText: {
+    margin: "10px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.6,
+    maxWidth: 820,
   },
   campaignLimitBanner: {
     marginBottom: 16,
