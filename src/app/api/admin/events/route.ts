@@ -13,6 +13,7 @@ import {
   createEventTicketType,
   type EventPrize,
   type EventStatus,
+  type EventSubtype,
   type EventType,
 } from "../../../../../api/_lib/events-repo";
 
@@ -77,6 +78,16 @@ function cleanEventType(value: FormDataEntryValue | null): EventType {
   }
 
   return "general_admission";
+}
+
+function cleanEventSubtype(value: FormDataEntryValue | null): EventSubtype {
+  const eventSubtype = String(value || "standard").trim();
+
+  if (eventSubtype === "quiz_night") {
+    return "quiz_night";
+  }
+
+  return "standard";
 }
 
 function cleanStatus(value: FormDataEntryValue | null): EventStatus {
@@ -290,6 +301,7 @@ export async function POST(request: Request) {
   const title = String(formData.get("title") || "").trim();
   const slug = String(formData.get("slug") || "").trim();
   const eventType = cleanEventType(formData.get("event_type"));
+  const eventSubtype = cleanEventSubtype(formData.get("event_subtype"));
   const status = cleanStatus(formData.get("status"));
 
   if (!title || !slug) {
@@ -333,6 +345,7 @@ export async function POST(request: Request) {
       capacity: positiveInteger(formData.get("capacity"), 0) || null,
       currency: String(formData.get("currency") || "GBP").trim() || "GBP",
       eventType,
+      eventSubtype,
       status,
       prizesJson: prizes,
       tableNamesJson,
