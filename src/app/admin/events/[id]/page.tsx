@@ -2316,13 +2316,13 @@ export default async function AdminEventManagePage({
       justifyContent: "flex-end",
     }}
   >
-    <a
-      href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
-      className="secondaryButton"
-      style={styles.secondaryButton}
-    >
-      Orders
-    </a>
+   <a
+    href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
+    className="secondaryButton"
+    style={styles.secondaryButton}
+   >
+    Orders &amp; Guests
+   </a>
 
     <a
       href={publicEventHref}
