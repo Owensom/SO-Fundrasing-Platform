@@ -239,6 +239,81 @@ export default async function AdminDashboardPage() {
           <p className="admin-dashboard-tenant" style={styles.tenant}>
             Tenant: <strong>{tenantSlug}</strong>
           </p>
+
+          <div className="admin-command-actions" style={styles.commandActions}>
+            <Link
+              href={publicCampaignsHref}
+              target="_blank"
+              className="primaryButton"
+              style={styles.primaryButton}
+            >
+              View public site →
+            </Link>
+
+            <Link
+              href="/admin/orders"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Orders →
+            </Link>
+
+            <Link
+              href="/admin/donations"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Donations & Gift Aid →
+            </Link>
+
+            <Link
+              href="/admin/customers"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Customers →
+            </Link>
+
+            <Link
+              href="/admin/metadata"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Finance →
+            </Link>
+
+            <Link
+              href="/admin/support"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Help & Support →
+            </Link>
+
+            <Link
+              href="/admin/settings/public-hub"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Public Hub →
+            </Link>
+
+            <Link
+              href="/admin/settings/branding"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Branding →
+            </Link>
+
+            <Link
+              href="/admin/settings/billing"
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Billing →
+            </Link>
+          </div>
         </div>
 
         <div className="admin-command-stats" style={styles.commandStats}>
@@ -263,81 +338,6 @@ export default async function AdminDashboardPage() {
             value={formatPercent(platformFeePercent)}
             dark
           />
-        </div>
-
-        <div className="admin-command-actions" style={styles.commandActions}>
-          <Link
-            href={publicCampaignsHref}
-            target="_blank"
-            className="primaryButton"
-            style={styles.primaryButton}
-          >
-            View public site →
-          </Link>
-
-          <Link
-            href="/admin/orders"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Orders →
-          </Link>
-
-          <Link
-            href="/admin/donations"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Donations & Gift Aid →
-          </Link>
-
-          <Link
-            href="/admin/customers"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Customers →
-          </Link>
-
-          <Link
-            href="/admin/metadata"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Finance →
-          </Link>
-
-          <Link
-            href="/admin/support"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Help & Support →
-          </Link>
-
-          <Link
-            href="/admin/settings/public-hub"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Public Hub →
-          </Link>
-
-          <Link
-            href="/admin/settings/branding"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Branding →
-          </Link>
-
-          <Link
-            href="/admin/settings/billing"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Billing →
-          </Link>
         </div>
       </section>
             <section className="admin-plan-panel" style={styles.planPanel}>
@@ -500,7 +500,10 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="admin-operations-card-grid" style={styles.operationsCardGrid}>
+      <section
+        className="admin-operations-card-grid"
+        style={styles.operationsCardGrid}
+      >
         <DashboardCard
           href="/admin/orders"
           badgeText="ORDERS"
@@ -579,7 +582,10 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="admin-settings-card-grid" style={styles.settingsCardGrid}>
+      <section
+        className="admin-settings-card-grid"
+        style={styles.settingsCardGrid}
+      >
         <DashboardCard
           href="/admin/settings/public-hub"
           badgeText="HUB"
@@ -942,10 +948,6 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-centre,
   .admin-dashboard-page .admin-operations-grid {
     grid-template-columns: 1fr !important;
-    grid-template-areas:
-      "content"
-      "stats"
-      "actions" !important;
   }
 
   .admin-dashboard-page .admin-command-stats {
@@ -1040,11 +1042,7 @@ const styles: Record<string, CSSProperties> = {
   commandCentre: {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
-    gridTemplateAreas: `
-      "content stats"
-      "actions actions"
-    `,
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
     gap: 24,
     padding: 30,
     borderRadius: 34,
@@ -1068,7 +1066,6 @@ const styles: Record<string, CSSProperties> = {
   commandContent: {
     position: "relative",
     zIndex: 1,
-    gridArea: "content",
     minWidth: 0,
   },
 
@@ -1118,14 +1115,12 @@ const styles: Record<string, CSSProperties> = {
   },
 
   commandActions: {
-    position: "relative",
-    zIndex: 1,
-    gridArea: "actions",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(172px, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
     alignItems: "stretch",
     width: "100%",
+    marginTop: 24,
   },
 
   primaryButton: {
@@ -1141,7 +1136,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid #1683f8",
     boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
     textAlign: "center",
     lineHeight: 1.2,
   },
@@ -1159,7 +1154,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     border: "1px solid rgba(148,163,184,0.52)",
     backdropFilter: "blur(10px)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
     textAlign: "center",
     lineHeight: 1.2,
   },
@@ -1167,7 +1162,6 @@ const styles: Record<string, CSSProperties> = {
   commandStats: {
     position: "relative",
     zIndex: 1,
-    gridArea: "stats",
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 12,
