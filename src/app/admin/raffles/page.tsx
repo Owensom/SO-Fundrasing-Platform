@@ -177,6 +177,10 @@ function formatCampaignLimit(value: number) {
   return `${value} active campaign${value === 1 ? "" : "s"}`;
 }
 
+function canViewPublicRaffle(status: string) {
+  return String(status || "").trim().toLowerCase() === "published";
+}
+
 function CreateRaffleAction({
   canCreate,
   reason,
@@ -353,7 +357,8 @@ export default async function AdminRafflesPage() {
           </div>
         </div>
       </section>
-            <section className="raffles-stats-grid" style={styles.statsGrid}>
+
+      <section className="raffles-stats-grid" style={styles.statsGrid}>
         <StatCard
           label="Total raffles"
           value={totalRaffles}
@@ -414,6 +419,7 @@ export default async function AdminRafflesPage() {
             const progress = getProgressPercent(raffle);
             const statusStyle = getStatusStyle(raffle.status);
             const raised = getRaisedTotal(raffle);
+            const canViewPublic = canViewPublicRaffle(raffle.status);
 
             return (
               <article
@@ -538,11 +544,19 @@ export default async function AdminRafflesPage() {
                       </Link>
 
                       <Link
-                        href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
-                        target="_blank"
-                        style={styles.secondaryLink}
+                        href={
+                          canViewPublic
+                            ? `/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`
+                            : `/admin/raffles/${raffle.id}?error=public-preview-unavailable`
+                        }
+                        target={canViewPublic ? "_blank" : undefined}
+                        style={
+                          canViewPublic
+                            ? styles.secondaryLink
+                            : styles.secondaryUnavailableLink
+                        }
                       >
-                        View campaign
+                        {canViewPublic ? "View campaign" : "Preview unavailable"}
                       </Link>
                     </div>
                   </div>
@@ -635,6 +649,7 @@ function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .raffles-admin-page,
 .raffles-admin-page * {
@@ -1027,7 +1042,8 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
-    nav: {
+
+  nav: {
     position: "relative",
     zIndex: 1,
     gridArea: "nav",
@@ -1458,6 +1474,22 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbe3ef",
     textDecoration: "none",
     fontWeight: 800,
+    fontSize: 14,
+    boxShadow: "none",
+    minWidth: 0,
+  },
+
+  secondaryUnavailableLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    textDecoration: "none",
+    fontWeight: 900,
     fontSize: 14,
     boxShadow: "none",
     minWidth: 0,
