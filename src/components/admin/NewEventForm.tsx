@@ -436,6 +436,21 @@ export default function NewEventForm({
         ? tableSeatsPreview
         : toPositiveNumber(capacity);
 
+  const readinessScore = useMemo(() => {
+    const checks = [
+      Boolean(title.trim()),
+      Boolean(slug.trim()),
+      Boolean(description.trim()),
+      Boolean(location.trim()),
+      Boolean(startsDate.trim()),
+      activeTicketCount > 0,
+    ];
+
+    return checks.filter(Boolean).length;
+  }, [activeTicketCount, description, location, slug, startsDate, title]);
+
+  const readinessPercent = Math.round((readinessScore / 6) * 100);
+
   const prizesValue = useMemo(() => {
     const clean = prizes
       .map((prize, index) => {
@@ -808,8 +823,43 @@ export default function NewEventForm({
         />
       </section>
 
-      <section style={styles.readinessGrid}>
-        <ReadinessCard eyebrow="Campaign readiness" title="Before publishing">
+      <section style={styles.readinessPanel}>
+        <div style={styles.readinessHeader}>
+          <div>
+            <div style={styles.readinessPanelEyebrow}>
+              Campaign readiness
+            </div>
+
+            <h2 style={styles.readinessPanelTitle}>
+              {isQuizNight
+                ? "Quiz night setup checklist"
+                : "Event setup checklist"}
+            </h2>
+
+            <p style={styles.readinessPanelText}>
+              Complete the essentials before publishing. Draft events can be
+              safely prepared here before they appear publicly.
+            </p>
+          </div>
+
+          <div style={styles.readinessScoreCard}>
+            <span style={styles.readinessScoreLabel}>Ready</span>
+            <strong style={styles.readinessScoreValue}>
+              {readinessScore}/6
+            </strong>
+          </div>
+        </div>
+
+        <div style={styles.readinessProgressTrack}>
+          <div
+            style={{
+              ...styles.readinessProgressFill,
+              width: `${readinessPercent}%`,
+            }}
+          />
+        </div>
+
+        <div style={styles.readinessChecklistGrid}>
           <CheckItem done={Boolean(title.trim())}>
             {isQuizNight ? "Add quiz night title" : "Add event title"}
           </CheckItem>
@@ -817,67 +867,53 @@ export default function NewEventForm({
           <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
 
           <CheckItem done={Boolean(description.trim())}>
-            Add description
+            Add public description
           </CheckItem>
 
-          <CheckItem done={Boolean(location.trim())}>Add location</CheckItem>
+          <CheckItem done={Boolean(location.trim())}>
+            {isQuizNight ? "Add quiz venue" : "Add location"}
+          </CheckItem>
 
           <CheckItem done={Boolean(startsDate.trim())}>
             Schedule start date
           </CheckItem>
 
           <CheckItem done={activeTicketCount > 0}>
-            {isQuizNight ? "Add team or player ticket" : "Add active ticket type"}
+            {isQuizNight
+              ? "Add team or player booking"
+              : "Add active ticket type"}
           </CheckItem>
-        </ReadinessCard>
+        </div>
 
-        <ReadinessCard
-          eyebrow={isQuizNight ? "Quiz booking preview" : "Ticket preview"}
-          title={isQuizNight ? "Bookings" : "Tickets"}
-        >
-          <PreviewLine label="Active types" value={activeTicketCount} />
-
-          <PreviewLine
-            label="Starting price"
-            value={
+        <div style={styles.readinessMiniGrid}>
+          <ReadinessMiniCard
+            label={isQuizNight ? "Bookings" : "Tickets"}
+            value={`${activeTicketCount} active`}
+            helper={
               lowestTicketPrice === null
-                ? "Not priced"
-                : formatPreviewMoney(lowestTicketPrice, currency)
+                ? "Price not set"
+                : `${formatPreviewMoney(lowestTicketPrice, currency)} from`
             }
           />
 
-          <PreviewLine
-            label={isQuizNight ? "Booking limit" : "Ticket limit"}
-            value={
-              totalTicketCapacity > 0
-                ? `${totalTicketCapacity} from ticket types`
-                : isQuizNight
-                  ? "No booking limit set"
-                  : "No ticket limit set"
-            }
-          />
-        </ReadinessCard>
-
-        <ReadinessCard
-          eyebrow={isQuizNight ? "Quiz setup preview" : "Event setup preview"}
-          title={formatEventType(eventType)}
-        >
-          <PreviewLine
+          <ReadinessMiniCard
             label={isQuizNight ? "Places / teams" : "Capacity"}
             value={seatingPreview > 0 ? seatingPreview : "Not set"}
+            helper={formatEventType(eventType)}
           />
 
-          {eventType === "tables" ? (
-            <PreviewLine label="Table shape" value={formatTableShape(tableShape)} />
-          ) : null}
-
-          <PreviewLine
+          <ReadinessMiniCard
             label="Starts"
             value={formatDatePreview(startsDate, startsTime)}
+            helper={location.trim() || "Location not set"}
           />
 
-          <PreviewLine label="Prizes" value={prizeText(publicPrizesCount)} />
-        </ReadinessCard>
+          <ReadinessMiniCard
+            label="Prizes"
+            value={prizeText(publicPrizesCount)}
+            helper={publicPrizesCount > 0 ? "Visible publicly" : "Optional"}
+          />
+        </div>
       </section>
 
       <SectionCard
@@ -1047,7 +1083,9 @@ export default function NewEventForm({
               value={location}
               onChange={(event) => setLocation(event.target.value)}
               placeholder={
-                isQuizNight ? "Pub, hall, school or venue" : "Venue, city or online"
+                isQuizNight
+                  ? "Pub, hall, school or venue"
+                  : "Venue, city or online"
               }
               style={styles.input}
             />
@@ -1774,20 +1812,20 @@ function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function ReadinessCard({
-  eyebrow,
-  title,
-  children,
+function ReadinessMiniCard({
+  label,
+  value,
+  helper,
 }: {
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
+  label: string;
+  value: ReactNode;
+  helper: ReactNode;
 }) {
   return (
-    <div style={styles.readinessCard}>
-      <div style={styles.readinessEyebrow}>{eyebrow}</div>
-      <h3 style={styles.readinessTitle}>{title}</h3>
-      <div style={styles.readinessBody}>{children}</div>
+    <div style={styles.readinessMiniCard}>
+      <span style={styles.readinessMiniLabel}>{label}</span>
+      <strong style={styles.readinessMiniValue}>{value}</strong>
+      <span style={styles.readinessMiniHelper}>{helper}</span>
     </div>
   );
 }
@@ -1817,15 +1855,6 @@ function CheckItem({
       </span>
 
       <span>{children}</span>
-    </div>
-  );
-}
-
-function PreviewLine({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={styles.previewLine}>
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
@@ -2156,40 +2185,114 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 5,
     wordBreak: "break-word",
   },
-  readinessGrid: {
+  readinessPanel: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
     gap: 14,
+    padding: "clamp(18px, 4vw, 22px)",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 48%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 12px 30px rgba(15,23,42,0.05)",
+    overflow: "hidden",
   },
-  readinessCard: {
-    padding: 18,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+  readinessHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
-  readinessEyebrow: {
-    margin: 0,
+  readinessPanelEyebrow: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    marginBottom: 6,
   },
-  readinessTitle: {
-    margin: "8px 0 0",
+  readinessPanelTitle: {
+    margin: 0,
     color: "#0f172a",
-    fontSize: 22,
-    lineHeight: 1.1,
-    letterSpacing: "-0.03em",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
   },
-  readinessBody: { display: "grid", gap: 10, marginTop: 14 },
-  previewLine: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    color: "#334155",
+  readinessPanelText: {
+    margin: "8px 0 0",
+    color: "#64748b",
     fontSize: 14,
+    lineHeight: 1.55,
+    maxWidth: 760,
+  },
+  readinessScoreCard: {
+    display: "grid",
+    gap: 3,
+    minWidth: 96,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #bfdbfe",
+    textAlign: "center",
+  },
+  readinessScoreLabel: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  readinessScoreValue: {
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+  },
+  readinessProgressTrack: {
+    height: 10,
+    borderRadius: 999,
+    background: "#dbeafe",
+    overflow: "hidden",
+  },
+  readinessProgressFill: {
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg, #1683f8, #16a34a)",
+  },
+  readinessChecklistGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+    gap: 10,
+  },
+  readinessMiniGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gap: 10,
+  },
+  readinessMiniCard: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  readinessMiniLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  readinessMiniValue: {
+    color: "#0f172a",
+    fontSize: 19,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  readinessMiniHelper: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
   },
   sectionCard: {
     padding: "clamp(18px, 4vw, 22px)",
