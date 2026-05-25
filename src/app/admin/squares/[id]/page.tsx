@@ -59,14 +59,38 @@ function formatMoney(cents: number | null | undefined, currency: string) {
   }
 }
 
-function formatDateTimeLocal(value: string | null | undefined) {
-  if (!value) return "";
+function getDateParts(value: string | null | undefined) {
+  if (!value) return null;
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
 
-  return date.toISOString().slice(0, 16);
+  return {
+    day: String(date.getUTCDate()).padStart(2, "0"),
+    month: String(date.getUTCMonth() + 1).padStart(2, "0"),
+    year: String(date.getUTCFullYear()).padStart(4, "0"),
+    hour: String(date.getUTCHours()).padStart(2, "0"),
+    minute: String(date.getUTCMinutes()).padStart(2, "0"),
+  };
+}
+
+function formatBritishDateInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
+
+  if (!parts) return "";
+
+  return `${parts.day}/${parts.month}/${parts.year}`;
+}
+
+function formatTimeInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
+
+  if (!parts) return "";
+
+  return `${parts.hour}:${parts.minute}`;
 }
 
 function formatDrawDate(value: string | null | undefined) {
@@ -176,6 +200,12 @@ export default async function AdminSquaresEditPage({
   );
 
   const campaignLimitReached = searchParams?.error === "campaign_limit";
+  const publicPreviewUnavailable =
+    searchParams?.error === "public-preview-unavailable";
+  const invalidDrawDateTime =
+    searchParams?.error === "invalid_draw_datetime";
+  const invalidPostalDateTime =
+    searchParams?.error === "invalid_postal_datetime";
 
   const [winners, sales] = await Promise.all([
     safeListSquaresWinners(game.id),
@@ -184,6 +214,9 @@ export default async function AdminSquaresEditPage({
 
   const currency = game.currency || "GBP";
   const status = String(game.status || "draft");
+  const publicSquaresStatus = status.trim().toLowerCase();
+  const canViewPublicSquares = publicSquaresStatus === "published";
+
   const config = (game.config_json ?? {}) as any;
   const question = config.question ?? {};
   const freeEntry = config.free_entry ?? {};
@@ -246,8 +279,20 @@ export default async function AdminSquaresEditPage({
           ← Back to squares
         </Link>
 
-        <Link href={`/s/${game.slug}`} target="_blank" style={styles.publicLink}>
-          View campaign page
+        <Link
+          href={
+            canViewPublicSquares
+              ? `/s/${game.slug}?adminReturn=/admin/squares/${game.id}`
+              : `/admin/squares/${game.id}?error=public-preview-unavailable`
+          }
+          target={canViewPublicSquares ? "_blank" : undefined}
+          style={
+            canViewPublicSquares
+              ? styles.publicLink
+              : styles.publicUnavailableLink
+          }
+        >
+          {canViewPublicSquares ? "View campaign page" : "Preview unavailable"}
         </Link>
       </section>
 
@@ -277,7 +322,41 @@ export default async function AdminSquaresEditPage({
           </div>
         </section>
       ) : null}
-            <section style={styles.hero}>
+
+      {publicPreviewUnavailable ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Preview unavailable</div>
+
+          <h1 style={styles.upgradeTitle}>
+            This squares game is not public yet.
+          </h1>
+
+          <p style={styles.upgradeText}>
+            Draft squares games are hidden from public campaign pages. Publish
+            this game when you are ready for supporters to view and buy squares.
+          </p>
+        </section>
+      ) : null}
+
+      {invalidDrawDateTime || invalidPostalDateTime ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Date format issue</div>
+
+          <h1 style={styles.upgradeTitle}>
+            {invalidDrawDateTime
+              ? "Please check the draw date."
+              : "Please check the postal closing date."}
+          </h1>
+
+          <p style={styles.upgradeText}>
+            {invalidDrawDateTime
+              ? "Draw date must use DD/MM/YYYY format, for example 31/10/2026. Draw time must use 24-hour HH:MM format, for example 19:00. You can also leave both fields blank while drafting."
+              : "Postal closing date must use DD/MM/YYYY format, for example 31/10/2026. Postal closing time must use 24-hour HH:MM format, for example 18:00. You can also leave both fields blank."}
+          </p>
+        </section>
+      ) : null}
+
+      <section style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Squares editor</div>
 
@@ -490,9 +569,22 @@ export default async function AdminSquaresEditPage({
                 <div style={styles.threeColumn}>
                   <Field label="Draw date">
                     <input
-                      name="draw_at"
-                      type="datetime-local"
-                      defaultValue={formatDateTimeLocal(game.draw_at)}
+                      name="draw_date"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatBritishDateInput(game.draw_at)}
+                      placeholder="DD/MM/YYYY"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Draw time">
+                    <input
+                      name="draw_time"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatTimeInput(game.draw_at)}
+                      placeholder="HH:MM"
                       style={styles.input}
                     />
                   </Field>
@@ -577,7 +669,8 @@ export default async function AdminSquaresEditPage({
                     />
                   </Field>
                 </div>
-                                <Field label="Postal address">
+
+                <Field label="Postal address">
                   <textarea
                     name="free_entry_address"
                     rows={2}
@@ -597,14 +690,31 @@ export default async function AdminSquaresEditPage({
                   />
                 </Field>
 
-                <Field label="Postal entry closing date">
-                  <input
-                    name="free_entry_closes_at"
-                    type="datetime-local"
-                    defaultValue={formatDateTimeLocal(freeEntry.closes_at)}
-                    style={styles.input}
-                  />
-                </Field>
+                <div style={styles.twoColumnNoMargin}>
+                  <Field label="Postal entry closing date">
+                    <input
+                      name="free_entry_closes_date"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatBritishDateInput(
+                        freeEntry.closes_at,
+                      )}
+                      placeholder="DD/MM/YYYY"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Postal entry closing time">
+                    <input
+                      name="free_entry_closes_time"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={formatTimeInput(freeEntry.closes_at)}
+                      placeholder="HH:MM"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
 
                 <p style={styles.helpText}>
                   Postal entries should include an email address so the entrant
@@ -925,6 +1035,20 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     fontSize: 14,
   },
+  publicUnavailableLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    textDecoration: "none",
+    fontWeight: 950,
+    fontSize: 14,
+  },
   upgradeBanner: {
     padding: "clamp(18px, 4vw, 24px)",
     borderRadius: 26,
@@ -934,7 +1058,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
     marginBottom: 16,
   },
-    upgradeEyebrow: {
+  upgradeEyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
     borderRadius: 999,
