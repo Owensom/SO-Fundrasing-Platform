@@ -1,6 +1,7 @@
 import { query, queryOne } from "@/lib/db";
 
 export type EventType = "general_admission" | "reserved_seating" | "tables";
+export type EventSubtype = "standard" | "quiz_night";
 export type EventStatus = "draft" | "published" | "closed";
 export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 
@@ -81,6 +82,7 @@ export type EventItem = {
   ends_at: string | null;
   currency: string;
   event_type: EventType;
+  event_subtype: EventSubtype;
   status: EventStatus;
   capacity: number | null;
   prizes_json: EventPrize[];
@@ -172,6 +174,7 @@ export type CreateEventInput = {
   endsAt?: string | null;
   currency?: string;
   eventType?: EventType;
+  eventSubtype?: EventSubtype;
   status?: EventStatus;
   capacity?: number | null;
   prizesJson?: EventPrize[];
@@ -194,6 +197,7 @@ export type UpdateEventInput = {
   endsAt?: string | null;
   currency?: string;
   eventType?: EventType;
+  eventSubtype?: EventSubtype;
   status?: EventStatus;
   capacity?: number | null;
   prizesJson?: EventPrize[];
@@ -207,6 +211,11 @@ export type UpdateEventInput = {
 function normaliseEventType(value: string | null | undefined): EventType {
   if (value === "reserved_seating" || value === "tables") return value;
   return "general_admission";
+}
+
+function normaliseEventSubtype(value: string | null | undefined): EventSubtype {
+  if (value === "quiz_night") return "quiz_night";
+  return "standard";
 }
 
 function normaliseStatus(value: string | null | undefined): EventStatus {
@@ -354,6 +363,8 @@ function normaliseMenuOptions(value: unknown): EventMenuOption[] {
 function normaliseEvent(event: EventItem): EventItem {
   return {
     ...event,
+    event_type: normaliseEventType(event.event_type),
+    event_subtype: normaliseEventSubtype(event.event_subtype),
     image_focus_x: normaliseImageFocus(event.image_focus_x),
     image_focus_y: normaliseImageFocus(event.image_focus_y),
     prizes_json: normalisePrizesJson(event.prizes_json),
@@ -413,6 +424,7 @@ async function assertTicketTypeBelongsToEvent(
     throw new Error("Ticket type does not belong to this event");
   }
 }
+
 /* =========================
    EVENTS
 ========================= */
@@ -517,6 +529,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
         ends_at,
         currency,
         event_type,
+        event_subtype,
         status,
         capacity,
         prizes_json,
@@ -528,8 +541,8 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       )
       values (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15::jsonb,$16::jsonb,
-        $17::jsonb,$18::jsonb,$19,$20
+        $11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,
+        $18::jsonb,$19::jsonb,$20,$21
       )
       returning *
     `,
@@ -546,6 +559,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       input.endsAt || null,
       input.currency || "GBP",
       normaliseEventType(input.eventType),
+      normaliseEventSubtype(input.eventSubtype),
       normaliseStatus(input.status),
       input.capacity ?? null,
       JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
@@ -589,14 +603,15 @@ export async function updateEvent(
         ends_at = $10,
         currency = $11,
         event_type = $12,
-        status = $13,
-        capacity = $14,
-        prizes_json = $15::jsonb,
-        menu_options = $16::jsonb,
-        seating_layout_json = $17::jsonb,
-        table_names_json = $18::jsonb,
-        ask_dietary_requirements = $19,
-        ask_menu_choice = $20,
+        event_subtype = $13,
+        status = $14,
+        capacity = $15,
+        prizes_json = $16::jsonb,
+        menu_options = $17::jsonb,
+        seating_layout_json = $18::jsonb,
+        table_names_json = $19::jsonb,
+        ask_dietary_requirements = $20,
+        ask_menu_choice = $21,
         updated_at = now()
       where id = $1
       returning *
@@ -614,6 +629,7 @@ export async function updateEvent(
       input.endsAt ?? existing.ends_at,
       input.currency ?? existing.currency,
       normaliseEventType(input.eventType ?? existing.event_type),
+      normaliseEventSubtype(input.eventSubtype ?? existing.event_subtype),
       normaliseStatus(input.status ?? existing.status),
       input.capacity ?? existing.capacity,
       JSON.stringify(
@@ -767,6 +783,7 @@ export async function deleteEventTicketTypes(eventId: string): Promise<void> {
     [eventId],
   );
 }
+
 /* =========================
    SEATS / TABLE SEATS
 ========================= */
@@ -1150,6 +1167,7 @@ export async function deleteEventTableSeats(eventId: string): Promise<void> {
     [eventId],
   );
 }
+
 /* =========================
    EVENT WINNERS
 ========================= */
@@ -1521,6 +1539,7 @@ export async function getEligibleEventDrawCandidates(input: {
     return true;
   });
 }
+
 /* =========================
    ORDERS
 ========================= */
