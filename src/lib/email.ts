@@ -125,6 +125,20 @@ function getColourLabel(value?: string | null) {
   return clean || "Default";
 }
 
+function normaliseRaffleSubtype(value?: string | null) {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") {
+    return "fifty_fifty";
+  }
+
+  return "standard";
+}
+
+function isFiftyFiftyRaffle(value?: string | null) {
+  return normaliseRaffleSubtype(value) === "fifty_fifty";
+}
+
 function colourDot(colour?: string | null) {
   const label = getColourLabel(colour);
   const background = getColourCss(colour);
@@ -385,6 +399,72 @@ function renderWinnerTrophyHero(label = "Winner trophy") {
   `;
 }
 
+function renderFiftyFiftyReceiptBlock() {
+  return `
+    <div style="
+      border-radius:18px;
+      padding:18px;
+      margin:20px 0;
+      background:#fffbeb;
+      border:1px solid #fde68a;
+    ">
+      <p style="
+        margin:0 0 7px;
+        color:#92400e;
+        font-size:13px;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+      ">
+        50/50 raffle
+      </p>
+
+      <p style="
+        margin:0;
+        font-size:15px;
+        line-height:1.65;
+        color:#78350f;
+        font-weight:750;
+      ">
+        This is a 50/50 raffle. Half of all paid ticket sales goes to the winning ticket holder, and the other half supports the cause.
+      </p>
+    </div>
+  `;
+}
+
+function renderFiftyFiftyWinnerBlock() {
+  return `
+    <div style="
+      border-radius:18px;
+      padding:18px;
+      margin:20px 0 0;
+      background:#fffbeb;
+      border:1px solid #fde68a;
+    ">
+      <p style="
+        margin:0 0 7px;
+        color:#92400e;
+        font-size:13px;
+        font-weight:900;
+        letter-spacing:0.08em;
+        text-transform:uppercase;
+      ">
+        50/50 prize split
+      </p>
+
+      <p style="
+        margin:0;
+        font-size:15px;
+        line-height:1.65;
+        color:#78350f;
+        font-weight:750;
+      ">
+        The winner receives 50% of the paid ticket pot. The remaining 50% supports the cause. The organiser will confirm the final prize value and next steps.
+      </p>
+    </div>
+  `;
+}
+
 function renderEmailShell(params: {
   branding?: EmailBranding;
   heading: string;
@@ -558,9 +638,7 @@ async function sendEmail(params: {
     subject: params.subject,
     id: result.data?.id,
   });
-}
-
-export async function sendReceiptEmail({
+}export async function sendReceiptEmail({
   to,
   name,
   raffleTitle,
@@ -570,6 +648,7 @@ export async function sendReceiptEmail({
   tickets,
   drawAt,
   branding,
+  raffleSubtype,
 }: {
   to: string;
   name?: string | null;
@@ -580,9 +659,11 @@ export async function sendReceiptEmail({
   tickets: Array<{ ticket_number: number; colour?: string | null }>;
   drawAt?: string | null;
   branding?: EmailBranding;
+  raffleSubtype?: string | null;
 }) {
   const formattedAmount = formatCurrency(amountCents, currency);
   const formattedDrawDate = formatDrawDate(drawAt);
+  const isFiftyFifty = isFiftyFiftyRaffle(raffleSubtype);
 
   const ticketItems = tickets
     .map((ticket) => renderPremiumRaffleTicketItem(ticket))
@@ -590,10 +671,18 @@ export async function sendReceiptEmail({
 
   const html = renderEmailShell({
     branding,
-    eyebrow: "Ticket confirmation",
+    eyebrow: isFiftyFifty ? "50/50 ticket confirmation" : "Ticket confirmation",
     heading: "Payment successful",
-    ticketImageLabel: "Raffle ticket confirmation",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your raffle tickets are confirmed below.`,
+    ticketImageLabel: isFiftyFifty
+      ? "50/50 raffle ticket confirmation"
+      : "Raffle ticket confirmation",
+    intro: isFiftyFifty
+      ? `Hi ${
+          name || "there"
+        }, thank you for your purchase. Your 50/50 raffle tickets are confirmed below.`
+      : `Hi ${
+          name || "there"
+        }, thank you for your purchase. Your raffle tickets are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -611,6 +700,8 @@ export async function sendReceiptEmail({
           ${escapeHtml(reservationToken)}
         </p>
       </div>
+
+      ${isFiftyFifty ? renderFiftyFiftyReceiptBlock() : ""}
 
       <h2 style="font-size:20px;margin:24px 0 12px;color:#0f172a;">
         Your tickets
@@ -636,7 +727,9 @@ export async function sendReceiptEmail({
   try {
     await sendEmail({
       to,
-      subject: `Your tickets for ${raffleTitle}`,
+      subject: isFiftyFifty
+        ? `Your 50/50 raffle tickets for ${raffleTitle}`
+        : `Your tickets for ${raffleTitle}`,
       html,
       branding,
     });
@@ -653,6 +746,7 @@ export async function sendWinnerEmail({
   ticketNumber,
   colour,
   branding,
+  raffleSubtype,
 }: {
   to: string;
   name?: string | null;
@@ -661,18 +755,28 @@ export async function sendWinnerEmail({
   ticketNumber: number;
   colour?: string | null;
   branding?: EmailBranding;
+  raffleSubtype?: string | null;
 }) {
   const safeColour = colour || "Default";
   const safePrizeTitle = cleanPrizeTitle(prizeTitle);
+  const isFiftyFifty = isFiftyFiftyRaffle(raffleSubtype);
 
   const html = renderEmailShell({
     branding,
-    eyebrow: "Winner notification",
-    heading: "You won!",
+    eyebrow: isFiftyFifty ? "50/50 winner notification" : "Winner notification",
+    heading: isFiftyFifty ? "You are the 50/50 winner!" : "You won!",
     showWinnerTrophy: true,
     showTicketImage: false,
-    winnerTrophyLabel: "Winning raffle trophy",
-    intro: `Hi ${name || "there"}, congratulations — your ticket has been selected as a winner.`,
+    winnerTrophyLabel: isFiftyFifty
+      ? "Winning 50/50 raffle trophy"
+      : "Winning raffle trophy",
+    intro: isFiftyFifty
+      ? `Hi ${
+          name || "there"
+        }, congratulations — your ticket has been selected as the 50/50 raffle winner.`
+      : `Hi ${
+          name || "there"
+        }, congratulations — your ticket has been selected as a winner.`,
     body: `
       <div style="
         border:1px solid #bbf7d0;
@@ -698,14 +802,21 @@ export async function sendWinnerEmail({
           margin-top:12px;
         ">
           ${
-            safePrizeTitle
+            isFiftyFifty
               ? `
                 <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
-                  <strong>Prize won:</strong>
-                  ${escapeHtml(safePrizeTitle)}
+                  <strong>Prize:</strong>
+                  50/50 paid ticket pot
                 </p>
               `
-              : ""
+              : safePrizeTitle
+                ? `
+                  <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
+                    <strong>Prize won:</strong>
+                    ${escapeHtml(safePrizeTitle)}
+                  </p>
+                `
+                : ""
           }
 
           <p style="margin:0 0 10px;font-size:17px;color:#0f172a;">
@@ -718,6 +829,8 @@ export async function sendWinnerEmail({
             ${colourDot(colour)}${escapeHtml(safeColour)}
           </p>
         </div>
+
+        ${isFiftyFifty ? renderFiftyFiftyWinnerBlock() : ""}
       </div>
 
       <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
@@ -729,9 +842,11 @@ export async function sendWinnerEmail({
   try {
     await sendEmail({
       to,
-      subject: safePrizeTitle
-        ? `You won ${safePrizeTitle}!`
-        : `You won ${raffleTitle}!`,
+      subject: isFiftyFifty
+        ? `You are the 50/50 winner for ${raffleTitle}!`
+        : safePrizeTitle
+          ? `You won ${safePrizeTitle}!`
+          : `You won ${raffleTitle}!`,
       html,
       branding,
     });
@@ -786,7 +901,9 @@ export async function sendSquaresReceiptEmail({
     showSquaresSquare: true,
     showTicketImage: false,
     squaresSquareLabel: "Squares entry confirmation",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your squares are confirmed below.`,
+    intro: `Hi ${
+      name || "there"
+    }, thank you for your purchase. Your squares are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -971,7 +1088,9 @@ export async function sendEventReceiptEmail({
     showEventChampagne: true,
     showTicketImage: false,
     eventChampagneLabel: "Event ticket confirmation",
-    intro: `Hi ${name || "there"}, thank you for your purchase. Your event tickets are confirmed below.`,
+    intro: `Hi ${
+      name || "there"
+    }, thank you for your purchase. Your event tickets are confirmed below.`,
     body: `
       <div style="
         border:1px solid #e2e8f0;
@@ -1023,7 +1142,6 @@ export async function sendEventReceiptEmail({
     console.error("event receipt email failed", err);
   }
 }
-
 export async function sendDonationReceiptEmail({
   to,
   name,
