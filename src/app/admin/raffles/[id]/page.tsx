@@ -494,6 +494,8 @@ const publicPreviewUnavailable =
   const remainingTickets = Math.max(totalTickets - soldTicketsCount, 0);
   const progress = getProgressPercent(soldTicketsCount, totalTickets);
   const statusStyle = getStatusStyle(raffle.status);
+  const publicRaffleStatus = String(raffle.status || "").trim().toLowerCase();
+  const canViewPublicRaffle = publicRaffleStatus === "published";
 
   const soldByColour = soldTicketRows.reduce((acc, ticket) => {
     const key = ticket.colour || "No colour";
@@ -522,16 +524,16 @@ const publicPreviewUnavailable =
         </Link>
 
         <Link
-          href={
-         raffle.status === "published"
-         ? `/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`
+         href={
+          canViewPublicRaffle
+           ? `/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`
          : `/admin/raffles/${raffle.id}?error=public-preview-unavailable`
-       }
-      target={raffle.status === "published" ? "_blank" : undefined}
+        }
+      target={canViewPublicRaffle ? "_blank" : undefined}
       style={styles.publicLink}
-        >
-          View campaign page
-        </Link>
+     >
+  View campaign page
+</Link>
       </section>
             {campaignLimitReached ? (
         <section style={styles.campaignLimitBanner}>
