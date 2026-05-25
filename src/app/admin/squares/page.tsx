@@ -144,6 +144,10 @@ function formatTierName(value: string) {
   return "Community";
 }
 
+function canViewPublicSquares(status: string | null | undefined) {
+  return String(status || "").trim().toLowerCase() === "published";
+}
+
 function CreateSquaresAction({
   canCreate,
   reason,
@@ -258,7 +262,8 @@ export default async function AdminSquaresListPage() {
             Tenant: <strong>{tenantSlug}</strong>
           </p>
         </div>
-                <div className="squares-hero-stats" style={styles.heroStats}>
+
+        <div className="squares-hero-stats" style={styles.heroStats}>
           <HeroStat label="Total games" value={totalGames} />
           <HeroStat label="Published" value={publishedCount} />
           <HeroStat label="Squares sold" value={soldSquares} />
@@ -396,6 +401,7 @@ export default async function AdminSquaresListPage() {
             const progress = progressPercent(sold, total);
             const raisedCents = getRaisedCents(game);
             const statusStyle = getStatusStyle(game.status);
+            const canViewPublic = canViewPublicSquares(game.status);
 
             return (
               <article
@@ -462,7 +468,8 @@ export default async function AdminSquaresListPage() {
                         </div>
                       </div>
                     </div>
-                                        <div
+
+                    <div
                       className="squares-detail-grid"
                       style={styles.detailGrid}
                     >
@@ -514,11 +521,19 @@ export default async function AdminSquaresListPage() {
                       </Link>
 
                       <Link
-                        href={`/s/${game.slug}?adminReturn=/admin/squares/${game.id}`}
-                        target="_blank"
-                        style={styles.secondaryLink}
+                        href={
+                          canViewPublic
+                            ? `/s/${game.slug}?adminReturn=/admin/squares/${game.id}`
+                            : `/admin/squares/${game.id}?error=public-preview-unavailable`
+                        }
+                        target={canViewPublic ? "_blank" : undefined}
+                        style={
+                          canViewPublic
+                            ? styles.secondaryLink
+                            : styles.secondaryUnavailableLink
+                        }
                       >
-                        View campaign
+                        {canViewPublic ? "View campaign" : "Preview unavailable"}
                       </Link>
 
                       <form
@@ -761,7 +776,8 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
     gap: 16px !important;
   }
-    .squares-image-wrap {
+
+  .squares-image-wrap {
     width: 100% !important;
     height: auto !important;
     aspect-ratio: 16 / 9 !important;
@@ -1345,6 +1361,21 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbe3ef",
     textDecoration: "none",
     fontWeight: 800,
+    fontSize: 14,
+    boxShadow: "none",
+  },
+
+  secondaryUnavailableLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    textDecoration: "none",
+    fontWeight: 900,
     fontSize: 14,
     boxShadow: "none",
   },
