@@ -1,118 +1,175 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { query } from "@/lib/db";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getTenantSettings } from "@/lib/tenant-settings";
-import {
-  canPublishAnotherCampaign,
-  normaliseSubscriptionTier,
-} from "@/lib/subscription-capabilities";
-import {
-  createEvent,
-  createEventSeat,
-  createEventTicketType,
-  type EventPrize,
-  type EventStatus,
-  type EventSubtype,
-  type EventType,
-} from "../../../../../api/_lib/events-repo";
+"use client";
 
-type TicketTypeInput = {
-  id?: string;
-  name?: string;
-  description?: string;
-  price?: string | number;
-  capacity?: string | number | null;
-  sort_order?: string | number;
-  is_active?: boolean;
+import { useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
+
+type Props = {
+  tenantSlug: string;
+  subscriptionTier?: string | null;
+  customImagesAllowed?: boolean;
 };
 
-type SeatingConfigInput = {
-  section?: string;
-  rows?: string;
-  seats_per_row?: string | number;
-  aisle_after?: string;
-  ticket_type_id?: string;
+type EventType = "general_admission" | "reserved_seating" | "tables";
+type EventSubtype = "standard" | "quiz_night";
+type TableShape = "round" | "square" | "rectangle";
+type SectionTone = "default" | "tickets" | "seating" | "media" | "prize";
+
+type PrizeRow = {
+  id: string;
+  position: string;
+  title: string;
+  description: string;
+  is_public: boolean;
 };
 
-type TableConfigInput = {
-  table_count?: string | number;
-  seats_per_table?: string | number;
-  ticket_type_id?: string;
+type TicketTypeRow = {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  capacity: string;
+  sort_order: string;
+  is_active: boolean;
 };
 
-type ActiveCampaignCountRow = {
-  active_count: string | number;
-};
+const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
+const TABLE_SHAPE_KEY = "__table_shape";
 
-function positiveInteger(
-  value: FormDataEntryValue | string | number | null,
-  fallback = 0,
-) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(0, Math.floor(number));
+const DEFAULT_TICKETS: TicketTypeRow[] = [
+  {
+    id: "ticket-standard",
+    name: "Standard",
+    description: "",
+    price: "",
+    capacity: "",
+    sort_order: "0",
+    is_active: true,
+  },
+  {
+    id: "ticket-concession",
+    name: "Concession",
+    description: "",
+    price: "",
+    capacity: "",
+    sort_order: "1",
+    is_active: true,
+  },
+];
+
+const QUIZ_TICKETS: TicketTypeRow[] = [
+  {
+    id: "ticket-team",
+    name: "Team entry",
+    description: "One quiz team booking",
+    price: "",
+    capacity: "",
+    sort_order: "0",
+    is_active: true,
+  },
+  {
+    id: "ticket-individual",
+    name: "Individual player",
+    description: "Single player ticket",
+    price: "",
+    capacity: "",
+    sort_order: "1",
+    is_active: true,
+  },
+];
+
+function safeId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function cleanImageFocus(value: FormDataEntryValue | null) {
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function makePrize(
+  id: string,
+  position = "1",
+  title = "",
+  description = "",
+): PrizeRow {
+  return {
+    id,
+    position,
+    title,
+    description,
+    is_public: true,
+  };
+}
+
+function makeTicketType(id: string, sortOrder: number): TicketTypeRow {
+  return {
+    id,
+    name: "",
+    description: "",
+    price: "",
+    capacity: "",
+    sort_order: String(sortOrder),
+    is_active: true,
+  };
+}
+
+function cleanFocus(value: number | null | undefined) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 50;
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
-function moneyToCents(value: string | number | null | undefined) {
-  const number = Number(String(value || "0").replace(",", "."));
-  if (!Number.isFinite(number) || number < 0) return 0;
-  return Math.round(number * 100);
-}
-
-function cleanEventType(value: FormDataEntryValue | null): EventType {
-  const eventType = String(value || "general_admission").trim();
-
-  if (
-    eventType === "general_admission" ||
-    eventType === "reserved_seating" ||
-    eventType === "tables"
-  ) {
-    return eventType;
+function cleanTableShape(value: string): TableShape {
+  if (value === "square" || value === "rectangle" || value === "round") {
+    return value;
   }
 
-  return "general_admission";
+  return "round";
 }
 
-function cleanEventSubtype(value: FormDataEntryValue | null): EventSubtype {
-  const eventSubtype = String(value || "standard").trim();
+function formatEventType(value: EventType) {
+  if (value === "reserved_seating") return "Reserved seating";
+  if (value === "tables") return "Tables";
+  return "General admission";
+}
 
-  if (eventSubtype === "quiz_night") {
-    return "quiz_night";
+function formatEventSubtype(value: EventSubtype) {
+  if (value === "quiz_night") return "Quiz night";
+  return "Standard event";
+}
+
+function formatTableShape(value: TableShape) {
+  if (value === "square") return "Square tables";
+  if (value === "rectangle") return "Rectangle tables";
+  return "Round tables";
+}
+
+function formatPreviewMoney(value: number | string, currency: string) {
+  const amount = Number(value || 0);
+
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number.isFinite(amount) ? amount : 0);
+  } catch {
+    const safeAmount = Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+    return `${safeAmount} ${currency || "GBP"}`;
   }
-
-  return "standard";
 }
 
-function cleanStatus(value: FormDataEntryValue | null): EventStatus {
-  const status = String(value || "draft").trim();
-
-  if (status === "draft" || status === "published" || status === "closed") {
-    return status;
-  }
-
-  return "draft";
-}
-
-function optionalDate(value: FormDataEntryValue | null) {
-  const clean = String(value || "").trim();
-
-  if (!clean) return null;
-
-  const date = new Date(clean);
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date.toISOString();
-}
-
-function parseBritishDate(value: FormDataEntryValue | null) {
-  const clean = String(value || "").trim();
+function parseBritishDate(value: string) {
+  const clean = value.trim();
 
   if (!clean) return null;
 
@@ -145,8 +202,8 @@ function parseBritishDate(value: FormDataEntryValue | null) {
   };
 }
 
-function parseTime(value: FormDataEntryValue | null) {
-  const clean = String(value || "").trim();
+function parseTime(value: string) {
+  const clean = value.trim();
 
   if (!clean) return null;
 
@@ -174,25 +231,12 @@ function parseTime(value: FormDataEntryValue | null) {
   };
 }
 
-function optionalSplitDateTime(
-  dateValue: FormDataEntryValue | null,
-  timeValue: FormDataEntryValue | null,
-  fallbackValue: FormDataEntryValue | null,
-) {
+function formatDatePreview(dateValue: string, timeValue = "") {
   const dateParts = parseBritishDate(dateValue);
+
+  if (!dateParts) return "Date to be confirmed";
+
   const timeParts = parseTime(timeValue);
-
-  const hasDate = String(dateValue || "").trim().length > 0;
-  const hasTime = String(timeValue || "").trim().length > 0;
-
-  if (!hasDate && !hasTime) {
-    return optionalDate(fallbackValue);
-  }
-
-  if (!dateParts) {
-    return null;
-  }
-
   const hour = timeParts?.hour ?? 0;
   const minute = timeParts?.minute ?? 0;
 
@@ -206,390 +250,148 @@ function optionalSplitDateTime(
     date.getUTCMonth() !== dateParts.month - 1 ||
     date.getUTCDate() !== dateParts.day
   ) {
-    return null;
+    return "Date to be confirmed";
   }
 
-  return date.toISOString();
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: timeValue.trim() ? "short" : undefined,
+    timeZone: "UTC",
+  }).format(date);
 }
 
-function parseJsonArray<T>(value: FormDataEntryValue | null): T[] {
-  try {
-    const parsed = JSON.parse(String(value || "[]"));
-    return Array.isArray(parsed) ? (parsed as T[]) : [];
-  } catch {
-    return [];
-  }
+function toPositiveNumber(value: string) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
-function parseJsonObject<T extends Record<string, unknown>>(
-  value: FormDataEntryValue | null,
-): T | null {
-  try {
-    const parsed = JSON.parse(String(value || "{}"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as T)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseTableNames(value: FormDataEntryValue | null): Record<string, string> {
-  const parsed = parseJsonObject<Record<string, unknown>>(value);
-
-  if (!parsed) return {};
-
-  return Object.fromEntries(
-    Object.entries(parsed)
-      .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
-      .filter(([, name]) => name),
-  );
-}
-
-function parseAisleAfterList(value: string | undefined) {
-  return Array.from(
-    new Set(
-      String(value || "")
-        .split(",")
-        .map((item) => Number(item.trim()))
-        .filter((number) => Number.isFinite(number) && number > 0)
-        .map((number) => Math.floor(number)),
-    ),
-  );
-}
-
-function expandRows(value: string): string[] {
-  const parts = value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const rows: string[] = [];
-
-  for (const part of parts) {
-    if (part.includes("-")) {
-      const [rawStart, rawEnd] = part.split("-").map((item) => item.trim());
-
-      const startNumber = Number(rawStart);
-      const endNumber = Number(rawEnd);
-
-      if (Number.isFinite(startNumber) && Number.isFinite(endNumber)) {
-        const start = Math.min(startNumber, endNumber);
-        const end = Math.max(startNumber, endNumber);
-
-        for (let row = start; row <= end; row += 1) {
-          rows.push(String(row));
-        }
-
-        continue;
-      }
-
-      if (
-        rawStart.length === 1 &&
-        rawEnd.length === 1 &&
-        /^[A-Za-z]$/.test(rawStart) &&
-        /^[A-Za-z]$/.test(rawEnd)
-      ) {
-        const start = Math.min(
-          rawStart.toUpperCase().charCodeAt(0),
-          rawEnd.toUpperCase().charCodeAt(0),
-        );
-        const end = Math.max(
-          rawStart.toUpperCase().charCodeAt(0),
-          rawEnd.toUpperCase().charCodeAt(0),
-        );
-
-        for (let code = start; code <= end; code += 1) {
-          rows.push(String.fromCharCode(code));
-        }
-
-        continue;
-      }
-    }
-
-    rows.push(part);
+function getSectionToneStyle(tone: SectionTone): CSSProperties {
+  if (tone === "tickets") {
+    return {
+      background:
+        "linear-gradient(135deg, #eff6ff 0%, #ffffff 48%, #f8fafc 100%)",
+      borderColor: "#bfdbfe",
+    };
   }
 
-  return Array.from(new Set(rows));
-}
-
-function localTicketIdToCreatedId(
-  localId: string | undefined,
-  ticketTypeIdMap: Map<string, string>,
-) {
-  if (!localId || localId === "__normal__") return null;
-  return ticketTypeIdMap.get(localId) || null;
-}
-
-async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
-  const rows = await query<ActiveCampaignCountRow>(
-    `
-      select count(*)::int as active_count
-      from (
-        select 1
-        from raffles
-        where tenant_slug = $1
-          and status = 'published'
-
-        union all
-
-        select 1
-        from squares_games
-        where tenant_slug = $1
-          and status = 'published'
-
-        union all
-
-        select 1
-        from events
-        where tenant_slug = $1
-          and status = 'published'
-      ) active_campaigns
-    `,
-    [tenantSlug],
-  );
-
-  return Number(rows[0]?.active_count || 0);
-}
-
-async function canPublishEventForTenant(tenantSlug: string) {
-  const tenantSettings = await getTenantSettings(tenantSlug);
-  const subscriptionTier = normaliseSubscriptionTier(
-    tenantSettings?.subscription_tier,
-  );
-  const currentActiveCampaigns =
-    await getActivePublishedCampaignCountForTenant(tenantSlug);
-
-  return canPublishAnotherCampaign({
-    subscription_tier: subscriptionTier,
-    currentActiveCampaigns,
-  });
-}
-
-export async function POST(request: Request) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return NextResponse.redirect(new URL("/admin/login", request.url), {
-      status: 303,
-    });
+  if (tone === "seating") {
+    return {
+      background:
+        "linear-gradient(135deg, #f5f3ff 0%, #ffffff 50%, #eff6ff 100%)",
+      borderColor: "#ddd6fe",
+    };
   }
 
-  const tenantSlug = await getTenantSlugFromHeaders();
+  if (tone === "media") {
+    return {
+      background:
+        "linear-gradient(135deg, #f8fafc 0%, #ffffff 48%, #eef2ff 100%)",
+      borderColor: "#c7d2fe",
+    };
+  }
 
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
-    : [];
+  if (tone === "prize") {
+    return {
+      background:
+        "linear-gradient(135deg, #fffbeb 0%, #ffffff 52%, #f8fafc 100%)",
+      borderColor: "#fde68a",
+    };
+  }
 
-  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    return NextResponse.redirect(
-      new URL("/admin/login?error=tenant_access_denied", request.url),
-      { status: 303 },
+  return {
+    background: "#ffffff",
+    borderColor: "#e2e8f0",
+  };
+}
+
+function prizeText(count: number) {
+  if (count <= 0) return "No prizes yet";
+  return `${count} prize${count === 1 ? "" : "s"}`;
+}
+
+export default function NewEventForm({
+  tenantSlug,
+  subscriptionTier,
+  customImagesAllowed = false,
+}: Props) {
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [description, setDescription] = useState("");
+  const [location, setLocation] = useState("");
+  const [capacity, setCapacity] = useState("");
+  const [startsDate, setStartsDate] = useState("");
+  const [startsTime, setStartsTime] = useState("");
+  const [endsDate, setEndsDate] = useState("");
+  const [endsTime, setEndsTime] = useState("");
+  const [currency, setCurrency] = useState("GBP");
+  const [status, setStatus] = useState("draft");
+  const [eventType, setEventType] = useState<EventType>("general_admission");
+  const [eventSubtype, setEventSubtype] = useState<EventSubtype>("standard");
+
+  const isQuizNight = eventSubtype === "quiz_night";
+
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFocusX, setImageFocusX] = useState(50);
+  const [imageFocusY, setImageFocusY] = useState(50);
+
+  const [prizes, setPrizes] = useState<PrizeRow[]>([
+    makePrize("prize-1", "1", "", ""),
+  ]);
+
+  const [ticketTypes, setTicketTypes] =
+    useState<TicketTypeRow[]>(DEFAULT_TICKETS);
+
+  const [rowSection, setRowSection] = useState("");
+  const [rowRows, setRowRows] = useState("");
+  const [rowSeatsPerRow, setRowSeatsPerRow] = useState("");
+  const [rowAislesAfter, setRowAislesAfter] = useState("");
+  const [rowInitialTicketTypeId, setRowInitialTicketTypeId] = useState("");
+
+  const [tableCount, setTableCount] = useState("");
+  const [tableSeatsPerTable, setTableSeatsPerTable] = useState("");
+  const [tableInitialTicketTypeId, setTableInitialTicketTypeId] = useState("");
+  const [tableShape, setTableShape] = useState<TableShape>("round");
+  const [tableNames, setTableNames] = useState<Record<string, string>>({});
+
+  const tableNumbers = useMemo(() => {
+    const count = Number(tableCount);
+    if (!Number.isFinite(count) || count <= 0) return [];
+
+    return Array.from({ length: Math.floor(count) }, (_, index) =>
+      String(index + 1),
     );
-  }
+  }, [tableCount]);
 
-  const formData = await request.formData();
+  const publicPrizesCount = useMemo(() => {
+    return prizes.filter((prize) => prize.title.trim() && prize.is_public)
+      .length;
+  }, [prizes]);
 
-  const submittedTenantSlug = String(formData.get("tenantSlug") || "").trim();
+  const activeTicketCount = useMemo(() => {
+    return ticketTypes.filter(
+      (ticketType) => ticketType.name.trim() && ticketType.is_active,
+    ).length;
+  }, [ticketTypes]);
 
-  if (submittedTenantSlug && submittedTenantSlug !== tenantSlug) {
-    return NextResponse.redirect(
-      new URL("/admin/login?error=tenant_access_denied", request.url),
-      { status: 303 },
-    );
-  }
+  const lowestTicketPrice = useMemo(() => {
+    const prices = ticketTypes
+      .filter((ticketType) => ticketType.name.trim() && ticketType.is_active)
+      .map((ticketType) => Number(ticketType.price))
+      .filter((price) => Number.isFinite(price) && price >= 0);
 
-  const title = String(formData.get("title") || "").trim();
-  const slug = String(formData.get("slug") || "").trim();
-  const eventType = cleanEventType(formData.get("event_type"));
-  const eventSubtype = cleanEventSubtype(formData.get("event_subtype"));
-  const status = cleanStatus(formData.get("status"));
+    if (!prices.length) return null;
 
-  if (!title || !slug) {
-    return NextResponse.redirect(
-      new URL("/admin/events/new?error=missing-required", request.url),
-      { status: 303 },
-    );
-  }
+    return Math.min(...prices);
+  }, [ticketTypes]);
 
-  const startsAt = optionalSplitDateTime(
-    formData.get("starts_date"),
-    formData.get("starts_time"),
-    formData.get("starts_at"),
-  );
-
-  const endsAt = optionalSplitDateTime(
-    formData.get("ends_date"),
-    formData.get("ends_time"),
-    formData.get("ends_at"),
-  );
-
-  const hasInvalidStartDate =
-    String(formData.get("starts_date") || "").trim() && !startsAt;
-
-  const hasInvalidEndDate =
-    String(formData.get("ends_date") || "").trim() && !endsAt;
-
-  if (hasInvalidStartDate || hasInvalidEndDate) {
-    return NextResponse.redirect(
-      new URL("/admin/events/new?error=invalid-event-datetime", request.url),
-      { status: 303 },
-    );
-  }
-
-  try {
-    if (status === "published" && !(await canPublishEventForTenant(tenantSlug))) {
-      return NextResponse.redirect(
-        new URL("/admin/events/new?error=campaign-limit", request.url),
-        { status: 303 },
-      );
-    }
-
-    const prizes = parseJsonArray<EventPrize>(formData.get("prizes"));
-    const ticketTypes = parseJsonArray<TicketTypeInput>(
-      formData.get("ticket_types"),
-    );
-    const rowSeating = parseJsonObject<SeatingConfigInput>(
-      formData.get("row_seating"),
-    );
-    const tableSeating = parseJsonObject<TableConfigInput>(
-      formData.get("table_seating"),
-    );
-    const tableNamesJson = parseTableNames(formData.get("table_names_json"));
-
-    const event = await createEvent({
-      tenantSlug,
-      title,
-      slug,
-      description: String(formData.get("description") || "").trim() || null,
-      imageUrl: String(formData.get("image_url") || "").trim() || null,
-      imageFocusX: cleanImageFocus(formData.get("image_focus_x")),
-      imageFocusY: cleanImageFocus(formData.get("image_focus_y")),
-      location: String(formData.get("location") || "").trim() || null,
-      startsAt,
-      endsAt,
-      capacity: positiveInteger(formData.get("capacity"), 0) || null,
-      currency: String(formData.get("currency") || "GBP").trim() || "GBP",
-      eventType,
-      eventSubtype,
-      status,
-      prizesJson: prizes,
-      tableNamesJson,
-      seatingLayoutJson: {},
-      menuOptions: [],
-      askDietaryRequirements: true,
-      askMenuChoice: true,
-    });
-
-    const ticketTypeIdMap = new Map<string, string>();
-
-    for (const ticketType of ticketTypes) {
-      const name = String(ticketType.name || "").trim();
-      if (!name) continue;
-
-      const createdTicketType = await createEventTicketType({
-        eventId: event.id,
-        name,
-        description: String(ticketType.description || "").trim() || null,
-        price: moneyToCents(ticketType.price),
-        capacity: positiveInteger(ticketType.capacity ?? null, 0) || null,
-        sortOrder: positiveInteger(ticketType.sort_order ?? 0, 0),
-        isActive: ticketType.is_active !== false,
-      });
-
-      if (ticketType.id) {
-        ticketTypeIdMap.set(String(ticketType.id), createdTicketType.id);
-      }
-    }
-
-    if (eventType === "reserved_seating" && rowSeating) {
-      const rowsRaw = String(rowSeating.rows || "").trim();
-      const seatsPerRow = positiveInteger(rowSeating.seats_per_row ?? null, 0);
-      const section = String(rowSeating.section || "").trim();
-      const aisleAfterList = parseAisleAfterList(rowSeating.aisle_after);
-      const ticketTypeId = localTicketIdToCreatedId(
-        rowSeating.ticket_type_id,
-        ticketTypeIdMap,
-      );
-
-      if (rowsRaw && seatsPerRow > 0) {
-        const rows = expandRows(rowsRaw);
-
-        for (const row of rows) {
-          for (let seat = 1; seat <= seatsPerRow; seat += 1) {
-            try {
-              await createEventSeat({
-                eventId: event.id,
-                ticketTypeId,
-                section: section || null,
-                rowLabel: row,
-                seatNumber: String(seat),
-                tableNumber: null,
-                aisleAfter: aisleAfterList.includes(seat) ? seat : null,
-                status: "available",
-              });
-            } catch {
-              // Skip duplicate seats safely.
-            }
-          }
-        }
-      }
-    }
-
-    if (eventType === "tables" && tableSeating) {
-      const tableCount = positiveInteger(tableSeating.table_count ?? null, 0);
-      const seatsPerTable = positiveInteger(
-        tableSeating.seats_per_table ?? null,
-        0,
-      );
-      const ticketTypeId = localTicketIdToCreatedId(
-        tableSeating.ticket_type_id,
-        ticketTypeIdMap,
-      );
-
-      if (tableCount > 0 && seatsPerTable > 0) {
-        for (let table = 1; table <= tableCount; table += 1) {
-          for (let seat = 1; seat <= seatsPerTable; seat += 1) {
-            try {
-              await createEventSeat({
-                eventId: event.id,
-                ticketTypeId,
-                section: null,
-                rowLabel: null,
-                seatNumber: String(seat),
-                tableNumber: String(table),
-                aisleAfter: null,
-                status: "available",
-              });
-            } catch {
-              // Skip duplicate seats safely.
-            }
-          }
-        }
-      }
-    }
-
-    return NextResponse.redirect(
-      new URL(`/admin/events/${event.id}?saved=created`, request.url),
-      { status: 303 },
-    );
-  } catch (error) {
-    console.error("Create event failed", error);
-
-    return NextResponse.redirect(
-      new URL("/admin/events/new?error=create-failed", request.url),
-      { status: 303 },
-    );
-  }
-}
   const totalTicketCapacity = useMemo(() => {
     return ticketTypes.reduce(
       (sum, ticketType) => sum + toPositiveNumber(ticketType.capacity),
       0,
     );
   }, [ticketTypes]);
-
-  const reservedSeatsPreview = useMemo(() => {
+    const reservedSeatsPreview = useMemo(() => {
     const rowsText = rowRows.trim();
     const seats = toPositiveNumber(rowSeatsPerRow);
 
@@ -976,8 +778,7 @@ export async function POST(request: Request) {
           </div>
         </div>
       </section>
-
-      <section style={styles.summaryGrid}>
+            <section style={styles.summaryGrid}>
         <SummaryCard label="Subtype" value={formatEventSubtype(eventSubtype)} />
 
         <SummaryCard label="Event type" value={formatEventType(eventType)} />
@@ -1012,10 +813,19 @@ export async function POST(request: Request) {
           <CheckItem done={Boolean(title.trim())}>
             {isQuizNight ? "Add quiz night title" : "Add event title"}
           </CheckItem>
+
           <CheckItem done={Boolean(slug.trim())}>Confirm public slug</CheckItem>
-          <CheckItem done={Boolean(description.trim())}>Add description</CheckItem>
+
+          <CheckItem done={Boolean(description.trim())}>
+            Add description
+          </CheckItem>
+
           <CheckItem done={Boolean(location.trim())}>Add location</CheckItem>
-          <CheckItem done={Boolean(startsDate.trim())}>Schedule start date</CheckItem>
+
+          <CheckItem done={Boolean(startsDate.trim())}>
+            Schedule start date
+          </CheckItem>
+
           <CheckItem done={activeTicketCount > 0}>
             {isQuizNight ? "Add team or player ticket" : "Add active ticket type"}
           </CheckItem>
@@ -1069,7 +879,8 @@ export async function POST(request: Request) {
           <PreviewLine label="Prizes" value={prizeText(publicPrizesCount)} />
         </ReadinessCard>
       </section>
-            <SectionCard
+
+      <SectionCard
         number="01"
         title={isQuizNight ? "Quiz night details" : "Event details"}
         description={
@@ -1147,7 +958,9 @@ export async function POST(request: Request) {
               value={title}
               onChange={(event) => updateTitle(event.target.value)}
               style={styles.input}
-              placeholder={isQuizNight ? "Charity Quiz Night" : "Summer Gala Night"}
+              placeholder={
+                isQuizNight ? "Charity Quiz Night" : "Summer Gala Night"
+              }
             />
           </Field>
 
@@ -1161,7 +974,9 @@ export async function POST(request: Request) {
                 setSlug(slugify(event.target.value));
               }}
               style={styles.input}
-              placeholder={isQuizNight ? "charity-quiz-night" : "summer-gala-night"}
+              placeholder={
+                isQuizNight ? "charity-quiz-night" : "summer-gala-night"
+              }
             />
           </Field>
         </div>
@@ -1196,7 +1011,9 @@ export async function POST(request: Request) {
               currentImageUrl={imageUrl}
               currentFocusX={imageFocusX}
               currentFocusY={imageFocusY}
-              label={isQuizNight ? "Quiz night image upload" : "Event image upload"}
+              label={
+                isQuizNight ? "Quiz night image upload" : "Event image upload"
+              }
               previewAlt={title.trim() || "Event image preview"}
               subscriptionTier={subscriptionTier}
               customImagesAllowed={customImagesAllowed}
@@ -1229,7 +1046,9 @@ export async function POST(request: Request) {
               name="location"
               value={location}
               onChange={(event) => setLocation(event.target.value)}
-              placeholder={isQuizNight ? "Pub, hall, school or venue" : "Venue, city or online"}
+              placeholder={
+                isQuizNight ? "Pub, hall, school or venue" : "Venue, city or online"
+              }
               style={styles.input}
             />
           </Field>
@@ -1334,7 +1153,9 @@ export async function POST(request: Request) {
               style={styles.input}
             >
               <option value="general_admission">
-                {isQuizNight ? "General admission / team tickets" : "General admission"}
+                {isQuizNight
+                  ? "General admission / team tickets"
+                  : "General admission"}
               </option>
               <option value="reserved_seating">Reserved seating</option>
               <option value="tables">
@@ -1440,8 +1261,7 @@ export async function POST(request: Request) {
                   />
                 </Field>
               </div>
-
-              <div style={styles.threeCol}>
+                            <div style={styles.threeCol}>
                 <Field label="Price">
                   <input
                     value={ticketType.price}
@@ -1604,7 +1424,8 @@ export async function POST(request: Request) {
           </div>
         </SectionCard>
       ) : null}
-            {eventType === "tables" ? (
+
+      {eventType === "tables" ? (
         <SectionCard
           number="03"
           title={isQuizNight ? "Team table seating" : "Table seating"}
@@ -1780,6 +1601,7 @@ export async function POST(request: Request) {
               <div style={styles.prizeSectionTitle}>
                 {isQuizNight ? "Quiz prize list" : "Public prize list"}
               </div>
+
               <div style={styles.prizeSectionText}>
                 {isQuizNight
                   ? "These prizes can be used for quiz winners or later event draws."
@@ -1835,7 +1657,9 @@ export async function POST(request: Request) {
                           title: event.target.value,
                         })
                       }
-                      placeholder={isQuizNight ? "Winning team prize" : "Luxury hamper"}
+                      placeholder={
+                        isQuizNight ? "Winning team prize" : "Luxury hamper"
+                      }
                       style={styles.input}
                     />
                   </Field>
@@ -2067,21 +1891,11 @@ const responsiveStyles = `
       overflow-wrap: anywhere !important;
     }
 
-    .new-event-form p,
-    .new-event-form span,
-    .new-event-form strong {
-      overflow-wrap: anywhere !important;
-    }
-
     .new-event-form [style*="height: 278px"],
     .new-event-form [style*="height: 260px"] {
       height: auto !important;
       min-height: 190px !important;
       aspect-ratio: 16 / 10 !important;
-    }
-
-    .new-event-form [style*="display: flex"] {
-      flex-wrap: wrap !important;
     }
 
     .new-event-form button,
@@ -2102,8 +1916,7 @@ const responsiveStyles = `
       justify-content: center !important;
     }
 
-    .new-event-form section,
-    .new-event-form details {
+    .new-event-form section {
       border-radius: 22px !important;
     }
 
@@ -2171,9 +1984,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
   },
-  heroContent: {
-    minWidth: 0,
-  },
+  heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -2250,11 +2061,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(255,255,255,0.16)",
   },
-  heroMetricLabel: {
-    color: "#bfdbfe",
-    fontSize: 12,
-    fontWeight: 900,
-  },
+  heroMetricLabel: { color: "#bfdbfe", fontSize: 12, fontWeight: 900 },
   heroMetricValue: {
     marginTop: 4,
     color: "#ffffff",
@@ -2270,7 +2077,6 @@ const styles: Record<string, CSSProperties> = {
     padding: 14,
     background: "rgba(255,255,255,0.1)",
     border: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
   },
   previewBadge: {
     justifySelf: "start",
@@ -2287,7 +2093,6 @@ const styles: Record<string, CSSProperties> = {
     height: 278,
     borderRadius: 20,
     background: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
     overflow: "hidden",
     display: "flex",
     alignItems: "center",
@@ -2341,14 +2146,9 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
   },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
+  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: 900 },
   summaryValue: {
     color: "#0f172a",
     fontSize: 21,
@@ -2366,7 +2166,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
   },
   readinessEyebrow: {
     margin: 0,
@@ -2383,11 +2182,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.1,
     letterSpacing: "-0.03em",
   },
-  readinessBody: {
-    display: "grid",
-    gap: 10,
-    marginTop: 14,
-  },
+  readinessBody: { display: "grid", gap: 10, marginTop: 14 },
   previewLine: {
     display: "flex",
     justifyContent: "space-between",
@@ -2400,7 +2195,6 @@ const styles: Record<string, CSSProperties> = {
     padding: "clamp(18px, 4vw, 22px)",
     borderRadius: 24,
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflow: "hidden",
   },
@@ -2431,7 +2225,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
-    overflowWrap: "anywhere",
   },
   sectionBadge: {
     padding: "7px 10px",
@@ -2456,13 +2249,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     border: "1px solid",
     cursor: "pointer",
-    minWidth: 0,
   },
-  subtypeTitle: {
-    color: "#0f172a",
-    fontSize: 17,
-    fontWeight: 950,
-  },
+  subtypeTitle: { color: "#0f172a", fontSize: 17, fontWeight: 950 },
   subtypeText: {
     color: "#64748b",
     fontSize: 14,
@@ -2499,22 +2287,10 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
-    overflowWrap: "anywhere",
   },
-  formInner: {
-    display: "grid",
-    gap: 14,
-  },
-  field: {
-    display: "grid",
-    gap: 7,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
+  formInner: { display: "grid", gap: 14 },
+  field: { display: "grid", gap: 7, minWidth: 0 },
+  label: { color: "#334155", fontSize: 13, fontWeight: 900 },
   input: {
     width: "100%",
     minHeight: 48,
@@ -2564,9 +2340,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
-  mediaControls: {
-    minWidth: 0,
-  },
+  mediaControls: { minWidth: 0 },
   previewBox: {
     height: 260,
     borderRadius: 18,
@@ -2633,10 +2407,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
-  list: {
-    display: "grid",
-    gap: 12,
-  },
+  list: { display: "grid", gap: 12 },
   editTicketCard: {
     display: "grid",
     gap: 12,
@@ -2655,7 +2426,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #fde68a",
     minWidth: 0,
-    overflow: "hidden",
   },
   prizeSectionTop: {
     display: "flex",
@@ -2686,10 +2456,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
-  prizeGrid: {
-    display: "grid",
-    gap: 12,
-  },
+  prizeGrid: { display: "grid", gap: 12 },
   prizeCard: {
     display: "grid",
     gap: 12,
@@ -2748,24 +2515,15 @@ const styles: Record<string, CSSProperties> = {
     border: "1px dashed #cbd5e1",
     color: "#64748b",
     fontWeight: 800,
-    overflowWrap: "anywhere",
   },
-  tableNamesGrid: {
-    display: "grid",
-    gap: 10,
-    marginTop: 14,
-  },
+  tableNamesGrid: { display: "grid", gap: 10, marginTop: 14 },
   tableNameRow: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 110px), 1fr))",
     gap: 10,
     alignItems: "center",
   },
-  tableNameLabel: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 900,
-  },
+  tableNameLabel: { color: "#334155", fontSize: 13, fontWeight: 900 },
   checkItem: {
     display: "flex",
     gap: 9,
@@ -2801,7 +2559,6 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eff6ff 100%)",
     border: "1px solid #dbeafe",
     marginTop: 18,
-    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
   },
   submitTitle: {
     color: "#0f172a",
@@ -2823,5 +2580,5 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
- };
-}
+  },
+};
