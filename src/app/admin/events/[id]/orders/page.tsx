@@ -330,14 +330,21 @@ export default async function AdminEventOrdersPage({ params }: PageProps) {
         </div>
 
         <div className="event-orders-hero-actions" style={styles.heroActions}>
-          <Link href={`/admin/events/${event.id}`} style={styles.secondaryButton}>
-            ← Back to event
-          </Link>
+         <Link href={`/admin/events/${event.id}`} style={styles.secondaryButton}>
+          ← Back to event
+         </Link>
 
-          <Link href="/admin/events" style={styles.secondaryButton}>
-            All events
-          </Link>
-        </div>
+         <a
+         href={`/api/admin/events/${encodeURIComponent(event.id)}/orders.csv`}
+        style={styles.secondaryButton}
+        >
+        Export CSV
+        </a>
+
+     <Link href="/admin/events" style={styles.secondaryButton}>
+    All events
+  </Link>
+</div>
       </section>
 
       <section className="event-orders-summary-grid" style={styles.summaryGrid}>
