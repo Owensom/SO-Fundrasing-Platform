@@ -344,7 +344,10 @@ export default async function AdminRafflePage({
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const campaignLimitReached =
-    resolvedSearchParams.error === "campaign_limit";
+  resolvedSearchParams.error === "campaign_limit";
+
+const publicPreviewUnavailable =
+  resolvedSearchParams.error === "public-preview-unavailable";
 
   const invalidDrawDateTime =
     resolvedSearchParams.error === "invalid_draw_datetime";
@@ -519,9 +522,13 @@ export default async function AdminRafflePage({
         </Link>
 
         <Link
-          href={`/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`}
-          target="_blank"
-          style={styles.publicLink}
+          href={
+         raffle.status === "published"
+         ? `/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`
+         : `/admin/raffles/${raffle.id}?error=public-preview-unavailable`
+       }
+      target={raffle.status === "published" ? "_blank" : undefined}
+      style={styles.publicLink}
         >
           View campaign page
         </Link>
@@ -555,7 +562,22 @@ export default async function AdminRafflePage({
           </div>
         </section>
       ) : null}
+      
+      {publicPreviewUnavailable ? (
+        <section style={styles.campaignLimitBanner}>
+          <div style={styles.campaignLimitEyebrow}>Preview unavailable</div>
 
+          <h2 style={styles.campaignLimitTitle}>
+            This raffle is not public yet.
+          </h2>
+
+          <p style={styles.campaignLimitText}>
+            Draft raffles are hidden from public campaign pages. Publish this
+            raffle when you are ready for supporters to view and enter it.
+          </p>
+        </section>
+      ) : null}
+      
       {invalidDrawDateTime ||
       invalidPostalDateTime ||
       saveFailed ||
