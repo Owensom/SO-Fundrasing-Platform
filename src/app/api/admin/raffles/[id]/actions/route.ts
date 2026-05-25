@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { auth } from "@/auth";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { deleteRaffle, getRaffleById } from "@/lib/raffles";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { sendWinnerEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -23,6 +23,16 @@ type PrizeRow = {
   position?: number | string | null;
   isPublic?: boolean;
   is_public?: boolean;
+};
+
+type FiftyFiftyFinanceRow = {
+  gross_paid_sales_cents: number | string | null;
+};
+
+type FiftyFiftyEntryCountRow = {
+  paid_entry_count: number | string | null;
+  postal_entry_count: number | string | null;
+  total_entry_count: number | string | null;
 };
 
 function shuffle<T>(items: T[]) {
@@ -45,6 +55,26 @@ function cleanEmail(value: string | null | undefined) {
 
 function cleanName(value: string | null | undefined) {
   return String(value || "").trim() || "Supporter";
+}
+
+function normaliseRaffleSubtype(value: unknown) {
+  const clean = String(value || "").trim().toLowerCase();
+
+  if (clean === "fifty_fifty") {
+    return "fifty_fifty";
+  }
+
+  return "standard";
+}
+
+function toSafeInteger(value: unknown) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(parsed));
 }
 
 function getPrizeTitle(prizes: PrizeRow[], index: number) {
@@ -89,6 +119,71 @@ async function requireTenantAccess() {
     ok: true as const,
     session,
     tenantSlug,
+  };
+}
+
+async function getFiftyFiftySnapshot(raffleId: string) {
+  const finance = await queryOne<FiftyFiftyFinanceRow>(
+    `
+      select
+        coalesce(
+          sum(
+            coalesce(
+              ticket_subtotal_cents,
+              gross_amount_cents,
+              0
+            )
+          ),
+          0
+        )::int as gross_paid_sales_cents
+      from platform_payments
+      where raffle_id = $1
+        and payment_type = 'raffle'
+        and payment_status = 'paid'
+    `,
+    [raffleId],
+  );
+
+  const entryCounts = await queryOne<FiftyFiftyEntryCountRow>(
+    `
+      select
+        count(*) filter (
+          where ticket_number is not null
+            and (
+              stripe_checkout_session_id is not null
+              or payment_id is not null
+              or stripe_payment_intent_id is not null
+            )
+        )::int as paid_entry_count,
+        count(*) filter (
+          where ticket_number is not null
+            and stripe_checkout_session_id is null
+            and payment_id is null
+            and stripe_payment_intent_id is null
+        )::int as postal_entry_count,
+        count(*) filter (
+          where ticket_number is not null
+        )::int as total_entry_count
+      from raffle_ticket_sales
+      where raffle_id = $1
+    `,
+    [raffleId],
+  );
+
+  const grossPaidSalesCents = toSafeInteger(finance?.gross_paid_sales_cents);
+  const winnerPrizeCents = Math.floor(grossPaidSalesCents / 2);
+  const causeShareCents = Math.max(
+    grossPaidSalesCents - winnerPrizeCents,
+    0,
+  );
+
+  return {
+    grossPaidSalesCents,
+    winnerPrizeCents,
+    causeShareCents,
+    paidEntryCount: toSafeInteger(entryCounts?.paid_entry_count),
+    postalEntryCount: toSafeInteger(entryCounts?.postal_entry_count),
+    totalEntryCount: toSafeInteger(entryCounts?.total_entry_count),
   };
 }
 
@@ -152,6 +247,9 @@ export async function POST(
         );
       }
 
+      const raffleSubtype = normaliseRaffleSubtype(raffle.raffle_subtype);
+      const isFiftyFifty = raffleSubtype === "fifty_fifty";
+
       const soldTickets = await query<SoldTicketRow>(
         `
           select
@@ -197,12 +295,16 @@ export async function POST(
           })
         : [];
 
-      const winnerCount = Math.max(prizes.length || 1, 1);
+      const winnerCount = isFiftyFifty ? 1 : Math.max(prizes.length || 1, 1);
 
       const winners = shuffle(validSoldTickets).slice(
         0,
         Math.min(winnerCount, validSoldTickets.length),
       );
+
+      const fiftyFiftySnapshot = isFiftyFifty
+        ? await getFiftyFiftySnapshot(raffle.id)
+        : null;
 
       await query(
         `
@@ -215,7 +317,9 @@ export async function POST(
 
       for (let index = 0; index < winners.length; index += 1) {
         const winner = winners[index];
-        const prizeTitle = getPrizeTitle(prizes, index);
+        const prizeTitle = isFiftyFifty
+          ? "50/50 paid ticket pot"
+          : getPrizeTitle(prizes, index);
 
         await query(
           `
@@ -230,9 +334,20 @@ export async function POST(
               sale_id,
               buyer_name,
               buyer_email,
-              drawn_at
+              drawn_at,
+              raffle_subtype_snapshot,
+              gross_paid_sales_cents,
+              winner_prize_cents,
+              cause_share_cents,
+              paid_entry_count,
+              postal_entry_count,
+              total_entry_count,
+              payout_status
             )
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+            values (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(),
+              $11, $12, $13, $14, $15, $16, $17, $18
+            )
           `,
           [
             crypto.randomUUID(),
@@ -245,6 +360,14 @@ export async function POST(
             winner.sale_id,
             cleanName(winner.buyer_name),
             cleanEmail(winner.buyer_email) || null,
+            isFiftyFifty ? raffleSubtype : null,
+            fiftyFiftySnapshot?.grossPaidSalesCents ?? null,
+            fiftyFiftySnapshot?.winnerPrizeCents ?? null,
+            fiftyFiftySnapshot?.causeShareCents ?? null,
+            fiftyFiftySnapshot?.paidEntryCount ?? null,
+            fiftyFiftySnapshot?.postalEntryCount ?? null,
+            fiftyFiftySnapshot?.totalEntryCount ?? null,
+            isFiftyFifty ? "pending" : "not_required",
           ],
         );
       }
@@ -282,7 +405,9 @@ export async function POST(
       for (let index = 0; index < winners.length; index += 1) {
         const winner = winners[index];
         const winnerEmail = cleanEmail(winner.buyer_email);
-        const prizeTitle = getPrizeTitle(prizes, index);
+        const prizeTitle = isFiftyFifty
+          ? "50/50 paid ticket pot"
+          : getPrizeTitle(prizes, index);
 
         if (!winnerEmail) {
           skippedWinnerEmails += 1;
