@@ -59,6 +59,13 @@ type OrderGroup = {
   items: EventOrderDashboardRow[];
 };
 
+type AddOnSummary = {
+  entries: number;
+  revenueCents: number;
+  paidEntries: number;
+  paidRevenueCents: number;
+};
+
 function formatMoney(
   cents: number | string | null | undefined,
   currency = "GBP",
@@ -139,7 +146,38 @@ function fallbackText(value: unknown, fallback = "Not provided") {
   return clean || fallback;
 }
 
+function isEventAddOnItem(row: EventOrderDashboardRow) {
+  const label = String(row.item_label || "").trim().toLowerCase();
+
+  return (
+    label.startsWith("event add-on") ||
+    label.includes("heads or tails") ||
+    (!row.ticket_type_id && !row.seat_id && label.includes("add-on"))
+  );
+}
+
+function cleanAddOnLabel(row: EventOrderDashboardRow) {
+  const label = ticketLabel(row);
+
+  return label
+    .replace(/^event add-on\s*[—-]\s*/i, "")
+    .replace(/^add-on\s*[—-]\s*/i, "")
+    .trim();
+}
+
+function rowQuantity(row: EventOrderDashboardRow) {
+  return Math.max(1, Number(row.quantity || 1));
+}
+
+function rowTotal(row: EventOrderDashboardRow) {
+  return rowQuantity(row) * Number(row.unit_amount || 0);
+}
+
 function seatLabel(row: EventOrderDashboardRow) {
+  if (isEventAddOnItem(row)) {
+    return "Event add-on";
+  }
+
   if (row.table_number) {
     return `Table ${row.table_number}, Seat ${row.seat_number || "?"}`;
   }
@@ -160,6 +198,10 @@ function ticketLabel(row: EventOrderDashboardRow) {
 }
 
 function guestName(row: EventOrderDashboardRow, order: OrderGroup) {
+  if (isEventAddOnItem(row)) {
+    return fallbackText(order.customerName, "Buyer not provided");
+  }
+
   return (
     String(row.guest_name || "").trim() ||
     String(row.seat_customer_name || "").trim() ||
@@ -234,6 +276,46 @@ function filterOrders(orders: OrderGroup[], statusFilter: string) {
   }
 
   return orders.filter((order) => order.status === statusFilter);
+}
+
+function getAddOnItems(order: OrderGroup) {
+  return order.items.filter(isEventAddOnItem);
+}
+
+function getTicketItems(order: OrderGroup) {
+  return order.items.filter((item) => !isEventAddOnItem(item));
+}
+
+function calculateAddOnSummary(orders: OrderGroup[]): AddOnSummary {
+  return orders.reduce<AddOnSummary>(
+    (summary, order) => {
+      const addOnItems = getAddOnItems(order);
+      const entries = addOnItems.reduce(
+        (sum, item) => sum + rowQuantity(item),
+        0,
+      );
+      const revenueCents = addOnItems.reduce(
+        (sum, item) => sum + rowTotal(item),
+        0,
+      );
+
+      summary.entries += entries;
+      summary.revenueCents += revenueCents;
+
+      if (order.status === "paid") {
+        summary.paidEntries += entries;
+        summary.paidRevenueCents += revenueCents;
+      }
+
+      return summary;
+    },
+    {
+      entries: 0,
+      revenueCents: 0,
+      paidEntries: 0,
+      paidRevenueCents: 0,
+    },
+  );
 }
 
 async function listEventOrderDashboardRows(eventId: string) {
@@ -336,29 +418,34 @@ export default async function AdminEventOrdersPage({
     0,
   );
 
-  const totalTickets = orders.reduce(
+  const totalTicketItems = orders.reduce(
     (sum, order) =>
       sum +
-      order.items.reduce(
-        (itemSum, item) => itemSum + Math.max(1, Number(item.quantity || 1)),
+      getTicketItems(order).reduce(
+        (itemSum, item) => itemSum + rowQuantity(item),
         0,
       ),
     0,
   );
 
-  const paidTickets = paidOrders.reduce(
+  const paidTicketItems = paidOrders.reduce(
     (sum, order) =>
       sum +
-      order.items.reduce(
-        (itemSum, item) => itemSum + Math.max(1, Number(item.quantity || 1)),
+      getTicketItems(order).reduce(
+        (itemSum, item) => itemSum + rowQuantity(item),
         0,
       ),
     0,
+  );
+
+  const addOnSummary = calculateAddOnSummary(orders);
+  const ordersWithAddOns = orders.filter((order) => getAddOnItems(order).length > 0);
+  const paidOrdersWithAddOns = paidOrders.filter(
+    (order) => getAddOnItems(order).length > 0,
   );
 
   const currency = event.currency || orders[0]?.currency || "GBP";
-
-  const statusFilters = [
+    const statusFilters = [
     {
       label: "All",
       value: "all",
@@ -408,7 +495,7 @@ export default async function AdminEventOrdersPage({
 
           <p style={styles.subtitle}>
             Read-only order dashboard for ticket purchases, guest details,
-            seating, menu choices and dietary requirements.
+            seating, menu choices, dietary requirements and event add-ons.
           </p>
 
           <p style={styles.tenant}>
@@ -467,12 +554,54 @@ export default async function AdminEventOrdersPage({
           label="Checkout started"
           value={checkoutStartedOrders.length}
         />
-        <SummaryCard label="Tickets/items" value={totalTickets} />
-        <SummaryCard label="Paid tickets/items" value={paidTickets} />
+        <SummaryCard label="Tickets/items" value={totalTicketItems} />
+        <SummaryCard label="Paid tickets/items" value={paidTicketItems} />
         <SummaryCard
           label="Paid gross"
           value={formatMoney(grossTotal, currency)}
         />
+      </section>
+
+      <section
+        className="event-orders-addon-panel"
+        style={styles.addOnPanel}
+      >
+        <div style={styles.addOnPanelHeader}>
+          <div>
+            <div style={styles.addOnEyebrow}>Event add-ons</div>
+            <h2 style={styles.addOnTitle}>Heads or Tails snapshot</h2>
+            <p style={styles.addOnText}>
+              Read-only summary of event-night add-on entries sold through
+              checkout. These figures are based on event order items labelled as
+              add-ons.
+            </p>
+          </div>
+
+          <span style={styles.addOnBadge}>
+            {addOnSummary.entries > 0 ? "Add-ons recorded" : "No add-ons yet"}
+          </span>
+        </div>
+
+        <div className="event-orders-addon-grid" style={styles.addOnGrid}>
+          <SummaryCard label="Add-on entries" value={addOnSummary.entries} />
+          <SummaryCard
+            label="Paid add-on entries"
+            value={addOnSummary.paidEntries}
+          />
+          <SummaryCard
+            label="Add-on revenue"
+            value={formatMoney(addOnSummary.revenueCents, currency)}
+          />
+          <SummaryCard
+            label="Paid add-on revenue"
+            value={formatMoney(addOnSummary.paidRevenueCents, currency)}
+          />
+          <SummaryCard label="Orders with add-ons" value={ordersWithAddOns.length} />
+          <SummaryCard
+            label="Paid orders with add-ons"
+            value={paidOrdersWithAddOns.length}
+          />
+        </div>
       </section>
 
       <section style={styles.listHeader}>
@@ -480,7 +609,10 @@ export default async function AdminEventOrdersPage({
           <h2 style={styles.listTitle}>
             {statusFilter === "all"
               ? "All event orders"
-              : `${statusFilters.find((filter) => filter.value === statusFilter)?.label || "Filtered"} orders`}
+              : `${
+                  statusFilters.find((filter) => filter.value === statusFilter)
+                    ?.label || "Filtered"
+                } orders`}
           </h2>
 
           <p style={styles.listText}>
@@ -501,121 +633,207 @@ export default async function AdminEventOrdersPage({
         </section>
       ) : (
         <section style={styles.orderList}>
-          {visibleOrders.map((order) => (
-            <article
-              key={order.id}
-              className="event-order-card"
-              style={styles.orderCard}
-            >
-              <div className="event-order-header" style={styles.orderHeader}>
-                <div style={{ minWidth: 0 }}>
-                  <h2 style={styles.orderTitle}>
-                    {fallbackText(order.customerName, "Customer not provided")}
-                  </h2>
+          {visibleOrders.map((order) => {
+            const addOnItems = getAddOnItems(order);
+            const ticketItems = getTicketItems(order);
+            const orderAddOnEntries = addOnItems.reduce(
+              (sum, item) => sum + rowQuantity(item),
+              0,
+            );
+            const orderAddOnRevenue = addOnItems.reduce(
+              (sum, item) => sum + rowTotal(item),
+              0,
+            );
 
-                  <p style={styles.orderEmail}>
-                    {fallbackText(order.customerEmail, "Email not provided")}
-                  </p>
+            return (
+              <article
+                key={order.id}
+                className="event-order-card"
+                style={styles.orderCard}
+              >
+                <div className="event-order-header" style={styles.orderHeader}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={styles.orderTitle}>
+                      {fallbackText(order.customerName, "Customer not provided")}
+                    </h2>
 
-                  <p style={styles.orderMeta}>
-                    {formatDate(order.createdAt)}
-                    {order.stripeSessionId
-                      ? ` · Stripe session ${order.stripeSessionId}`
-                      : ""}
-                  </p>
-                </div>
+                    <p style={styles.orderEmail}>
+                      {fallbackText(order.customerEmail, "Email not provided")}
+                    </p>
 
-                <div style={styles.orderStatusStack}>
-                  <span
-                    style={{
-                      ...styles.statusPill,
-                      ...statusStyle(order.status),
-                    }}
-                  >
-                    {statusLabel(order.status)}
-                  </span>
+                    <p style={styles.orderMeta}>
+                      {formatDate(order.createdAt)}
+                      {order.stripeSessionId
+                        ? ` · Stripe session ${order.stripeSessionId}`
+                        : ""}
+                    </p>
+                  </div>
 
-                  <strong style={styles.orderTotal}>
-                    {formatMoney(order.amountTotal, order.currency)}
-                  </strong>
-                </div>
-              </div>
-
-              {order.items.length === 0 ? (
-                <div style={styles.noItemsBox}>
-                  No order items are attached to this order.
-                </div>
-              ) : (
-                <div className="event-order-items" style={styles.orderItems}>
-                  {order.items.map((item) => (
-                    <div
-                      key={item.order_item_id || `${order.id}-item`}
-                      style={styles.itemCard}
+                  <div style={styles.orderStatusStack}>
+                    <span
+                      style={{
+                        ...styles.statusPill,
+                        ...statusStyle(order.status),
+                      }}
                     >
-                      <div>
-                        <div style={styles.itemLabel}>Ticket / item</div>
-                        <div style={styles.itemValue}>{ticketLabel(item)}</div>
-                      </div>
+                      {statusLabel(order.status)}
+                    </span>
 
-                      <div>
-                        <div style={styles.itemLabel}>Guest</div>
-                        <div style={styles.itemValue}>
-                          {guestName(item, order)}
-                        </div>
-                        <div style={styles.itemSubValue}>
-                          {guestEmail(item, order)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={styles.itemLabel}>Seat / table</div>
-                        <div style={styles.itemValue}>{seatLabel(item)}</div>
-                        {item.seat_purpose ? (
-                          <div style={styles.itemSubValue}>
-                            Purpose: {item.seat_purpose}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div>
-                        <div style={styles.itemLabel}>Quantity</div>
-                        <div style={styles.itemValue}>
-                          {Math.max(1, Number(item.quantity || 1))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={styles.itemLabel}>Unit amount</div>
-                        <div style={styles.itemValue}>
-                          {formatMoney(item.unit_amount, order.currency)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={styles.itemLabel}>Menu</div>
-                        <div style={styles.itemValue}>
-                          {fallbackText(item.menu_choice)}
-                        </div>
-                      </div>
-
-                      <div
-                        className="event-order-dietary"
-                        style={styles.dietaryCell}
-                      >
-                        <div style={styles.itemLabel}>Dietary</div>
-                        <div style={styles.itemValue}>
-                          {fallbackText(item.dietary_requirements)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    <strong style={styles.orderTotal}>
+                      {formatMoney(order.amountTotal, order.currency)}
+                    </strong>
+                  </div>
                 </div>
-              )}
-            </article>
-          ))}
+
+                {addOnItems.length > 0 ? (
+                  <section style={styles.orderAddOnSummary}>
+                    <div>
+                      <div style={styles.orderAddOnEyebrow}>
+                        Event add-ons included
+                      </div>
+                      <strong style={styles.orderAddOnTitle}>
+                        {orderAddOnEntries} Heads or Tails entr
+                        {orderAddOnEntries === 1 ? "y" : "ies"}
+                      </strong>
+                      <p style={styles.orderAddOnText}>
+                        Add-on revenue on this order:{" "}
+                        <strong>
+                          {formatMoney(orderAddOnRevenue, order.currency)}
+                        </strong>
+                      </p>
+                    </div>
+                  </section>
+                ) : null}
+
+                {order.items.length === 0 ? (
+                  <div style={styles.noItemsBox}>
+                    No order items are attached to this order.
+                  </div>
+                ) : (
+                  <>
+                    {ticketItems.length > 0 ? (
+                      <div className="event-order-items" style={styles.orderItems}>
+                        {ticketItems.map((item) => (
+                          <OrderItemCard
+                            key={item.order_item_id || `${order.id}-item`}
+                            item={item}
+                            order={order}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {addOnItems.length > 0 ? (
+                      <div style={styles.addOnItemList}>
+                        {addOnItems.map((item) => (
+                          <div
+                            key={item.order_item_id || `${order.id}-addon`}
+                            style={styles.addOnItemCard}
+                          >
+                            <div>
+                              <div style={styles.itemLabel}>Add-on</div>
+                              <div style={styles.itemValue}>
+                                {cleanAddOnLabel(item) || "Heads or Tails"}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={styles.itemLabel}>Buyer</div>
+                              <div style={styles.itemValue}>
+                                {guestName(item, order)}
+                              </div>
+                              <div style={styles.itemSubValue}>
+                                {guestEmail(item, order)}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={styles.itemLabel}>Quantity</div>
+                              <div style={styles.itemValue}>
+                                {rowQuantity(item)}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={styles.itemLabel}>Unit amount</div>
+                              <div style={styles.itemValue}>
+                                {formatMoney(item.unit_amount, order.currency)}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={styles.itemLabel}>Line total</div>
+                              <div style={styles.itemValue}>
+                                {formatMoney(rowTotal(item), order.currency)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </article>
+            );
+          })}
         </section>
       )}
     </main>
+  );
+}
+
+function OrderItemCard({
+  item,
+  order,
+}: {
+  item: EventOrderDashboardRow;
+  order: OrderGroup;
+}) {
+  return (
+    <div style={styles.itemCard}>
+      <div>
+        <div style={styles.itemLabel}>Ticket / item</div>
+        <div style={styles.itemValue}>{ticketLabel(item)}</div>
+      </div>
+
+      <div>
+        <div style={styles.itemLabel}>Guest</div>
+        <div style={styles.itemValue}>{guestName(item, order)}</div>
+        <div style={styles.itemSubValue}>{guestEmail(item, order)}</div>
+      </div>
+
+      <div>
+        <div style={styles.itemLabel}>Seat / table</div>
+        <div style={styles.itemValue}>{seatLabel(item)}</div>
+        {item.seat_purpose ? (
+          <div style={styles.itemSubValue}>Purpose: {item.seat_purpose}</div>
+        ) : null}
+      </div>
+
+      <div>
+        <div style={styles.itemLabel}>Quantity</div>
+        <div style={styles.itemValue}>{rowQuantity(item)}</div>
+      </div>
+
+      <div>
+        <div style={styles.itemLabel}>Unit amount</div>
+        <div style={styles.itemValue}>
+          {formatMoney(item.unit_amount, order.currency)}
+        </div>
+      </div>
+
+      <div>
+        <div style={styles.itemLabel}>Menu</div>
+        <div style={styles.itemValue}>{fallbackText(item.menu_choice)}</div>
+      </div>
+
+      <div className="event-order-dietary" style={styles.dietaryCell}>
+        <div style={styles.itemLabel}>Dietary</div>
+        <div style={styles.itemValue}>
+          {fallbackText(item.dietary_requirements)}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -660,7 +878,8 @@ const responsiveStyles = `
     width: 100% !important;
   }
 
-  .event-orders-summary-grid {
+  .event-orders-summary-grid,
+  .event-orders-addon-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
@@ -683,6 +902,11 @@ const responsiveStyles = `
     width: 100% !important;
     justify-content: space-between !important;
   }
+
+  .event-orders-addon-panel {
+    padding: 15px !important;
+    border-radius: 22px !important;
+  }
 }
 
 @media (max-width: 560px) {
@@ -700,7 +924,8 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .event-orders-summary-grid {
+  .event-orders-summary-grid,
+  .event-orders-addon-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -718,362 +943,3 @@ const responsiveStyles = `
   }
 }
 `;
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
-    overflowX: "hidden",
-  },
-
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 18,
-    alignItems: "start",
-    padding: 28,
-    borderRadius: 32,
-    background:
-      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
-    color: "#ffffff",
-    marginBottom: 18,
-    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
-    border: "1px solid rgba(148,163,184,0.22)",
-  },
-
-  eyebrow: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "8px 14px",
-    borderRadius: 999,
-    background: "rgba(15,23,42,0.24)",
-    color: "#facc15",
-    border: "1px solid rgba(250,204,21,0.76)",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 14,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: "clamp(46px, 7vw, 72px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
-    color: "#ffffff",
-    overflowWrap: "anywhere",
-  },
-
-  subtitle: {
-    margin: "16px 0 0",
-    maxWidth: 780,
-    color: "#dbeafe",
-    fontSize: 17,
-    lineHeight: 1.6,
-    fontWeight: 750,
-  },
-
-  tenant: {
-    margin: "14px 0 0",
-    color: "#bfdbfe",
-    fontSize: 14,
-    fontWeight: 850,
-    overflowWrap: "anywhere",
-  },
-
-  heroActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    border: "1px solid rgba(148,163,184,0.52)",
-    textDecoration: "none",
-    fontWeight: 900,
-    textAlign: "center",
-  },
-
-  filterBar: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    padding: 12,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 18,
-  },
-
-  filterButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    minHeight: 42,
-    padding: "9px 13px",
-    borderRadius: 999,
-    background: "#f8fafc",
-    color: "#334155",
-    border: "1px solid #dbe3ef",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 14,
-  },
-
-  filterButtonActive: {
-    background: "#0f172a",
-    color: "#ffffff",
-    borderColor: "#0f172a",
-  },
-
-  filterCount: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 24,
-    height: 24,
-    padding: "0 7px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  filterCountActive: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 24,
-    height: 24,
-    padding: "0 7px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.14)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.28)",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-    marginBottom: 18,
-  },
-
-  summaryCard: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    borderTop: "4px solid #1683f8",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 850,
-  },
-
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 30,
-    fontWeight: 950,
-    marginTop: 5,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  listHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-end",
-    padding: "0 2px",
-    marginBottom: 12,
-    flexWrap: "wrap",
-  },
-
-  listTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 26,
-    letterSpacing: "-0.05em",
-  },
-
-  listText: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    fontWeight: 800,
-  },
-
-  emptyCard: {
-    padding: 26,
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-
-  emptyTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.04em",
-  },
-
-  emptyText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 750,
-  },
-
-  orderList: {
-    display: "grid",
-    gap: 14,
-  },
-
-  orderCard: {
-    padding: 18,
-    borderRadius: 26,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
-    overflow: "hidden",
-  },
-
-  orderHeader: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 14,
-    alignItems: "start",
-    marginBottom: 14,
-  },
-
-  orderTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  orderEmail: {
-    margin: "4px 0 0",
-    color: "#334155",
-    fontSize: 14,
-    fontWeight: 850,
-    overflowWrap: "anywhere",
-  },
-
-  orderMeta: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    overflowWrap: "anywhere",
-  },
-
-  orderStatusStack: {
-    display: "grid",
-    gap: 8,
-    justifyItems: "end",
-  },
-
-  statusPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    fontWeight: 950,
-    textTransform: "capitalize",
-  },
-
-  orderTotal: {
-    color: "#0f172a",
-    fontSize: 22,
-    letterSpacing: "-0.035em",
-  },
-
-  noItemsBox: {
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 850,
-  },
-
-  orderItems: {
-    display: "grid",
-    gap: 10,
-  },
-
-  itemCard: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 145px), 1fr))",
-    gap: 10,
-    padding: 14,
-    borderRadius: 18,
-    background:
-      "linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%)",
-    border: "1px solid #e2e8f0",
-  },
-
-  dietaryCell: {
-    gridColumn: "span 2",
-  },
-
-  itemLabel: {
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 5,
-  },
-
-  itemValue: {
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 900,
-    lineHeight: 1.35,
-    overflowWrap: "anywhere",
-    whiteSpace: "pre-wrap",
-  },
-
-  itemSubValue: {
-    marginTop: 4,
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 750,
-    overflowWrap: "anywhere",
-  },
-};
