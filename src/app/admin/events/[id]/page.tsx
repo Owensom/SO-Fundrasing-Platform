@@ -118,6 +118,15 @@ type UpdatedGuestCateringRow = {
 
 type TableShape = "round" | "square" | "rectangle";
 
+type ReadinessTone = "good" | "warning" | "neutral";
+
+type ReadinessItem = {
+  label: string;
+  value: ReactNode;
+  tone: ReadinessTone;
+  detail: string;
+};
+
 const TABLE_SHAPE_KEY = "__table_shape";
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
@@ -271,7 +280,6 @@ function parseSeatingLayout(
     return {};
   }
 }
-
 function parseTableNames(
   value: FormDataEntryValue | null,
 ): Record<string, string> {
@@ -511,6 +519,30 @@ function accessStatusStyle(row: EventAccessCodeRow): CSSProperties {
   };
 }
 
+function readinessToneStyle(tone: ReadinessTone): CSSProperties {
+  if (tone === "good") {
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
+}
+
 function formatDisplayDate(value: string | null | undefined) {
   if (!value) return "Not scheduled";
 
@@ -586,7 +618,6 @@ function hasGuestCateringDetail(row: EventGuestCateringRow) {
       String(row.menu_choice || "").trim(),
   );
 }
-
 async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   const rows = await query<ActiveCampaignCountRow>(
     `
@@ -804,7 +835,9 @@ async function createEventAccessCodeAction(formData: FormData) {
 
   const validTicketType =
     !ticketTypeId ||
-    (event.ticket_types || []).some((ticketType) => ticketType.id === ticketTypeId);
+    (event.ticket_types || []).some(
+      (ticketType) => ticketType.id === ticketTypeId,
+    );
 
   if (!validTicketType) {
     redirect(`/admin/events/${eventId}?error=invalid-ticket-type#access-codes`);
@@ -846,7 +879,6 @@ async function createEventAccessCodeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=access-code#access-codes`);
 }
-
 async function updateEventAccessCodeAction(formData: FormData) {
   "use server";
 
@@ -871,7 +903,9 @@ async function updateEventAccessCodeAction(formData: FormData) {
 
   const validTicketType =
     !ticketTypeId ||
-    (event.ticket_types || []).some((ticketType) => ticketType.id === ticketTypeId);
+    (event.ticket_types || []).some(
+      (ticketType) => ticketType.id === ticketTypeId,
+    );
 
   if (!validTicketType) {
     redirect(`/admin/events/${eventId}?error=invalid-ticket-type#access-codes`);
@@ -941,6 +975,7 @@ async function deleteEventAccessCodeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=access-code-deleted#access-codes`);
 }
+
 async function updateGuestCateringItemAction(formData: FormData) {
   "use server";
 
@@ -1103,7 +1138,6 @@ async function updateMenuOptionsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=menu#prizes-menu`);
 }
-
 async function updateSeatingLayoutAction(formData: FormData) {
   "use server";
 
@@ -1316,7 +1350,6 @@ async function updateSelectedSeatsMetadataAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=seat-metadata#${returnAnchor}`);
 }
-
 async function updateSelectedSeatsStatusAction(formData: FormData) {
   "use server";
 
@@ -1506,6 +1539,7 @@ async function clearTableSeatsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-seats-cleared#table-seating`);
 }
+
 async function runWinnerDrawAction(formData: FormData) {
   "use server";
 
@@ -1681,7 +1715,6 @@ async function deleteEventAction(formData: FormData) {
 
   redirect("/admin/events");
 }
-
 const responsiveStyles = `
 @media (max-width: 1180px) {
   .event-edit-page {
@@ -1832,6 +1865,10 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .event-edit-page .readinessGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .event-edit-page .guestMetaGrid,
   .event-edit-page .cateringDetailGrid {
     grid-template-columns: 1fr !important;
@@ -1884,7 +1921,8 @@ const responsiveStyles = `
   }
 
   .event-edit-page .section,
-  .event-edit-page .panel {
+  .event-edit-page .panel,
+  .event-edit-page .readinessPanel {
     padding: 14px !important;
     border-radius: 20px !important;
   }
@@ -1932,13 +1970,15 @@ const responsiveStyles = `
 
   .event-edit-page .summaryGrid,
   .event-edit-page .heroMetricGrid,
-  .event-edit-page .statsGridCompact {
+  .event-edit-page .statsGridCompact,
+  .event-edit-page .readinessGrid {
     gap: 8px !important;
   }
 
   .event-edit-page .statBox,
   .event-edit-page .heroMetric,
-  .event-edit-page .infoTile {
+  .event-edit-page .infoTile,
+  .event-edit-page .readinessItem {
     padding: 11px !important;
     border-radius: 15px !important;
   }
@@ -1966,6 +2006,7 @@ const responsiveStyles = `
     min-width: 0 !important;
     overflow: hidden !important;
   }
+
   .event-edit-page .guestHeaderActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -1984,7 +2025,9 @@ const responsiveStyles = `
   .event-edit-page .cateringValue,
   .event-edit-page .sectionText,
   .event-edit-page .heroDescription,
-  .event-edit-page .heroSlug {
+  .event-edit-page .heroSlug,
+  .event-edit-page .readinessValue,
+  .event-edit-page .readinessDetail {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
   }
@@ -1998,7 +2041,8 @@ const responsiveStyles = `
 
   .event-edit-page .summaryGrid,
   .event-edit-page .heroMetricGrid,
-  .event-edit-page .statsGridCompact {
+  .event-edit-page .statsGridCompact,
+  .event-edit-page .readinessGrid {
     grid-template-columns: 1fr !important;
   }
 
@@ -2026,7 +2070,8 @@ const responsiveStyles = `
   .event-edit-page .guestCard,
   .event-edit-page .ticketDetails,
   .event-edit-page .accessCodeDetails,
-  .event-edit-page .lockedFeatureCard {
+  .event-edit-page .lockedFeatureCard,
+  .event-edit-page .readinessPanel {
     border-radius: 18px !important;
   }
 
@@ -2049,7 +2094,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -2115,7 +2159,7 @@ export default async function AdminEventManagePage({
     listEventAccessCodes(event.id),
   ]);
 
-    const hasCustomImage = Boolean(event.image_url);
+  const hasCustomImage = Boolean(event.image_url);
   const campaignLimitReached = searchParams?.error === "campaign-limit";
   const publicPreviewUnavailable =
     searchParams?.error === "public-preview-unavailable";
@@ -2204,7 +2248,7 @@ export default async function AdminEventManagePage({
     ]),
   );
 
-   const publicEventHref =
+  const publicEventHref =
     event.status === "published"
       ? `/e/${encodeURIComponent(event.slug)}`
       : `/admin/events/${encodeURIComponent(
@@ -2236,6 +2280,66 @@ export default async function AdminEventManagePage({
   const missingMenuResponses = guestCateringRows.filter(
     (row) => !String(row.menu_choice || "").trim(),
   ).length;
+
+  const readinessItems: ReadinessItem[] = [
+    {
+      label: "Public page",
+      value: statusLabel(event.status),
+      tone: event.status === "published" ? "good" : "warning",
+      detail:
+        event.status === "published"
+          ? "The event can be opened by supporters."
+          : "Draft and closed events stay hidden from the public page.",
+    },
+    {
+      label: "Tickets",
+      value: `${activeTicketTypes.length} active`,
+      tone: activeTicketTypes.length > 0 ? "good" : "warning",
+      detail:
+        activeTicketTypes.length > 0
+          ? "At least one ticket type is active for checkout."
+          : "Add an active ticket type before selling tickets.",
+    },
+    {
+      label: "Timing",
+      value: formatDisplayDate(event.starts_at),
+      tone: event.starts_at ? "good" : "warning",
+      detail: event.starts_at
+        ? "Start date is set."
+        : "Add a start date so supporters know when the event happens.",
+    },
+    {
+      label: "Image",
+      value: hasCustomImage ? "Custom image" : "Default image",
+      tone: hasCustomImage ? "good" : "neutral",
+      detail: hasCustomImage
+        ? "This event has its own campaign image."
+        : "The platform default event image is being used.",
+    },
+    {
+      label: "Guest collection",
+      value: [
+        event.ask_menu_choice ? "Menu" : null,
+        event.ask_dietary_requirements ? "Dietary" : null,
+      ]
+        .filter(Boolean)
+        .join(" + ") || "Off",
+      tone:
+        event.ask_menu_choice || event.ask_dietary_requirements
+          ? "good"
+          : "neutral",
+      detail:
+        event.ask_menu_choice || event.ask_dietary_requirements
+          ? "Guest menu or dietary fields are enabled."
+          : "Guest menu and dietary fields are hidden.",
+    },
+    {
+      label: "Operations",
+      value: `${accessCodes.length} codes • ${winners.length} winners`,
+      tone: "neutral",
+      detail: `${guestCateringRows.length} paid guests recorded so far.`,
+    },
+  ];
 
   const sentCount = Number(searchParams?.sent || 0);
   const skippedCount = Number(searchParams?.skipped || 0);
@@ -2300,40 +2404,40 @@ export default async function AdminEventManagePage({
         </div>
       </section>
             <section className="topActions" style={styles.topActions}>
-  <a
-    href="/admin/events"
-    className="secondaryButton"
-    style={styles.secondaryButton}
-  >
-    ← Back to events
-  </a>
+        <a
+          href="/admin/events"
+          className="secondaryButton"
+          style={styles.secondaryButton}
+        >
+          ← Back to events
+        </a>
 
-  <div
-    style={{
-      display: "flex",
-      gap: 10,
-      flexWrap: "wrap",
-      justifyContent: "flex-end",
-    }}
-  >
-   <a
-    href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
-    className="secondaryButton"
-    style={styles.secondaryButton}
-   >
-    Orders &amp; Guests
-   </a>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
+          <a
+            href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Orders &amp; Guests
+          </a>
 
-    <a
-      href={publicEventHref}
-      target={event.status === "published" ? "_blank" : undefined}
-      className="primaryLink"
-      style={styles.primaryLink}
-    >
-      View public page
-    </a>
-  </div>
-</section>
+          <a
+            href={publicEventHref}
+            target={event.status === "published" ? "_blank" : undefined}
+            className="primaryLink"
+            style={styles.primaryLink}
+          >
+            View public page
+          </a>
+        </div>
+      </section>
 
       {publicPreviewUnavailable ? (
         <section style={styles.publicPreviewBanner}>
@@ -2350,7 +2454,7 @@ export default async function AdminEventManagePage({
         </section>
       ) : null}
 
-            {campaignLimitReached ? (
+      {campaignLimitReached ? (
         <section style={styles.campaignLimitBanner}>
           <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
 
@@ -2428,10 +2532,10 @@ export default async function AdminEventManagePage({
           Access Codes
         </a>
         <a href="#prizes-menu" className="tab" style={styles.tab}>
-          Prizes & Menu
+          Prizes &amp; Menu
         </a>
         <a href="#guest-catering" className="tab" style={styles.tab}>
-          Guest & Catering
+          Guest &amp; Catering
         </a>
         <a href="#winner-draw" className="tab" style={styles.tab}>
           Winner Draw
@@ -2455,7 +2559,7 @@ export default async function AdminEventManagePage({
         <div style={styles.successBox}>Saved successfully.</div>
       ) : null}
 
-            {searchParams?.error &&
+      {searchParams?.error &&
       !campaignLimitReached &&
       !publicPreviewUnavailable &&
       !upgradeRequired &&
@@ -2465,6 +2569,66 @@ export default async function AdminEventManagePage({
           Please check the missing fields and try again.
         </div>
       ) : null}
+
+      <section className="readinessPanel" style={styles.readinessPanel}>
+        <div style={styles.readinessHeader}>
+          <div>
+            <div style={styles.readinessEyebrow}>Campaign readiness</div>
+            <h2 style={styles.readinessTitle}>Event readiness snapshot</h2>
+            <p style={styles.readinessIntro}>
+              A quick operational check before sharing the public page or
+              running the event.
+            </p>
+          </div>
+
+          <span
+            style={{
+              ...styles.readinessStatusPill,
+              ...readinessToneStyle(
+                event.status === "published" && activeTicketTypes.length > 0
+                  ? "good"
+                  : "warning",
+              ),
+            }}
+          >
+            {event.status === "published" && activeTicketTypes.length > 0
+              ? "Ready to sell"
+              : "Needs attention"}
+          </span>
+        </div>
+
+        <div className="readinessGrid" style={styles.readinessGrid}>
+          {readinessItems.map((item) => (
+            <div
+              key={item.label}
+              className="readinessItem"
+              style={styles.readinessItem}
+            >
+              <div
+                style={{
+                  ...styles.readinessToneDot,
+                  ...readinessToneStyle(item.tone),
+                }}
+              />
+
+              <div style={styles.readinessContent}>
+                <span style={styles.readinessLabel}>{item.label}</span>
+
+                <strong className="readinessValue" style={styles.readinessValue}>
+                  {item.value}
+                </strong>
+
+                <span
+                  className="readinessDetail"
+                  style={styles.readinessDetail}
+                >
+                  {item.detail}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Ticket types" value={ticketTypes.length} />
@@ -2529,8 +2693,7 @@ export default async function AdminEventManagePage({
                 />
               </Field>
             </div>
-
-            <Field label="Description">
+                        <Field label="Description">
               <textarea
                 name="description"
                 rows={3}
@@ -2934,7 +3097,8 @@ export default async function AdminEventManagePage({
           </CompactPanel>
         </div>
       </CollapsibleSection>
-            <CollapsibleSection
+
+      <CollapsibleSection
         id="access-codes"
         eyebrow="Section 3"
         title="VIP / Complimentary Access Codes"
@@ -3126,8 +3290,7 @@ export default async function AdminEventManagePage({
                           value={formatDisplayDate(accessCode.created_at)}
                         />
                       </div>
-
-                      <form
+                                            <form
                         action={updateEventAccessCodeAction}
                         style={styles.form}
                       >
@@ -3607,7 +3770,8 @@ export default async function AdminEventManagePage({
           )}
         </div>
       </CollapsibleSection>
-            <CollapsibleSection
+
+      <CollapsibleSection
         id="winner-draw"
         eyebrow="Section 6"
         title="Winner Draw"
@@ -4072,6 +4236,7 @@ function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={styles.field}>
@@ -4091,7 +4256,6 @@ function InfoTile({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -4260,7 +4424,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
   },
-    publicPreviewBanner: {
+  publicPreviewBanner: {
     marginBottom: 16,
     padding: "clamp(18px, 4vw, 24px)",
     borderRadius: 24,
@@ -4449,6 +4613,111 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     marginBottom: 12,
     fontWeight: 900,
+  },
+  readinessPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
+    marginBottom: 16,
+    minWidth: 0,
+  },
+  readinessHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  readinessEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+  readinessTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    letterSpacing: "-0.045em",
+    lineHeight: 1.05,
+    overflowWrap: "anywhere",
+  },
+  readinessIntro: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    maxWidth: 760,
+  },
+  readinessStatusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+  },
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  readinessItem: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  readinessToneDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    border: "1px solid",
+    marginTop: 4,
+  },
+  readinessContent: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+  readinessLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+  readinessValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  readinessDetail: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
   },
   summaryGrid: {
     display: "grid",
