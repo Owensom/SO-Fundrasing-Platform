@@ -943,3 +943,480 @@ const responsiveStyles = `
   }
 }
 `;
+const styles: Record<string, CSSProperties> = {
+  page: {
+    width: "100%",
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "28px 16px 56px",
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
+    overflowX: "hidden",
+  },
+
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 18,
+    alignItems: "start",
+    padding: 28,
+    borderRadius: 32,
+    background:
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  eyebrow: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 14px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.24)",
+    color: "#facc15",
+    border: "1px solid rgba(250,204,21,0.76)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 14,
+  },
+
+  title: {
+    margin: 0,
+    fontSize: "clamp(46px, 7vw, 72px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
+    color: "#ffffff",
+    overflowWrap: "anywhere",
+  },
+
+  subtitle: {
+    margin: "16px 0 0",
+    maxWidth: 780,
+    color: "#dbeafe",
+    fontSize: 17,
+    lineHeight: 1.6,
+    fontWeight: 750,
+  },
+
+  tenant: {
+    margin: "14px 0 0",
+    color: "#bfdbfe",
+    fontSize: 14,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  heroActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    border: "1px solid rgba(148,163,184,0.52)",
+    textDecoration: "none",
+    fontWeight: 900,
+    textAlign: "center",
+  },
+
+  filterBar: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    padding: 12,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+  },
+
+  filterButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 42,
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    border: "1px solid #dbe3ef",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: 14,
+  },
+
+  filterButtonActive: {
+    background: "#0f172a",
+    color: "#ffffff",
+    borderColor: "#0f172a",
+  },
+
+  filterCount: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 24,
+    height: 24,
+    padding: "0 7px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  filterCountActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 24,
+    height: 24,
+    padding: "0 7px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.28)",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 12,
+    marginBottom: 18,
+  },
+
+  summaryCard: {
+    padding: 16,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderTop: "4px solid #1683f8",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 30,
+    fontWeight: 950,
+    marginTop: 5,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  addOnPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 18,
+    borderRadius: 26,
+    background:
+      "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
+    color: "#ffffff",
+    border: "1px solid rgba(250,204,21,0.32)",
+    boxShadow: "0 18px 48px rgba(15,23,42,0.16)",
+    marginBottom: 18,
+    overflow: "hidden",
+  },
+
+  addOnPanelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  addOnEyebrow: {
+    color: "#facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  addOnTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: "clamp(26px, 5vw, 34px)",
+    lineHeight: 1,
+    letterSpacing: "-0.05em",
+  },
+
+  addOnText: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    lineHeight: 1.5,
+    maxWidth: 760,
+    fontWeight: 750,
+  },
+
+  addOnBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.14)",
+    color: "#fef3c7",
+    border: "1px solid rgba(250,204,21,0.36)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+
+  addOnGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 12,
+  },
+
+  listHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-end",
+    padding: "0 2px",
+    marginBottom: 12,
+    flexWrap: "wrap",
+  },
+
+  listTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 26,
+    letterSpacing: "-0.05em",
+  },
+
+  listText: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    fontWeight: 800,
+  },
+
+  emptyCard: {
+    padding: 26,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  emptyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.04em",
+  },
+
+  emptyText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  orderList: {
+    display: "grid",
+    gap: 14,
+  },
+
+  orderCard: {
+    padding: 18,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    overflow: "hidden",
+  },
+
+  orderHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 14,
+    alignItems: "start",
+    marginBottom: 14,
+  },
+
+  orderTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  orderEmail: {
+    margin: "4px 0 0",
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  orderMeta: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+  },
+
+  orderStatusStack: {
+    display: "grid",
+    gap: 8,
+    justifyItems: "end",
+  },
+
+  statusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "capitalize",
+  },
+
+  orderTotal: {
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.035em",
+  },
+
+  orderAddOnSummary: {
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, rgba(250,204,21,0.18), rgba(255,255,255,0.94))",
+    border: "1px solid rgba(250,204,21,0.38)",
+  },
+
+  orderAddOnEyebrow: {
+    color: "#92400e",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  orderAddOnTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+  },
+
+  orderAddOnText: {
+    margin: "5px 0 0",
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+
+  noItemsBox: {
+    padding: 14,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 850,
+  },
+
+  orderItems: {
+    display: "grid",
+    gap: 10,
+  },
+
+  itemCard: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 145px), 1fr))",
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%)",
+    border: "1px solid #e2e8f0",
+  },
+
+  addOnItemList: {
+    display: "grid",
+    gap: 10,
+    marginTop: 10,
+  },
+
+  addOnItemCard: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 145px), 1fr))",
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 56%, #eff6ff 100%)",
+    border: "1px solid #fde68a",
+  },
+
+  dietaryCell: {
+    gridColumn: "span 2",
+  },
+
+  itemLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+
+  itemValue: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 900,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
+    whiteSpace: "pre-wrap",
+  },
+
+  itemSubValue: {
+    marginTop: 4,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+};
