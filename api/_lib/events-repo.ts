@@ -401,35 +401,38 @@ function normaliseEventFundraisingAddOnsJson(
 ): EventFundraisingAddOn[] {
   if (!Array.isArray(value)) return [];
 
-  return value
-    .map((item, index) => {
-      const addOn = item as Partial<EventFundraisingAddOn>;
-      const type = String(addOn.type || "").trim();
+  const addOns: EventFundraisingAddOn[] = [];
 
-      if (type !== "heads_or_tails") {
-        return null;
-      }
+  value.forEach((item, index) => {
+    const addOn = item as Partial<EventFundraisingAddOn>;
+    const type = String(addOn.type || "").trim();
 
-      const title = String(addOn.title || "Heads or Tails").trim();
+    if (type !== "heads_or_tails") {
+      return;
+    }
 
-      return {
-        id: String(addOn.id || `event-addon-${type}-${index + 1}`),
-        type,
-        enabled: Boolean(addOn.enabled),
-        title: title || "Heads or Tails",
-        description: String(addOn.description || "").trim(),
-        instructions: String(addOn.instructions || "").trim(),
-        prizeTitle: String(addOn.prizeTitle || "").trim(),
-        entryPriceCents: normaliseNonNegativeInteger(addOn.entryPriceCents, 0),
-        collectAtCheckout: Boolean(addOn.collectAtCheckout),
-        maxEntriesPerBooking: normaliseNullablePositiveInteger(
-          addOn.maxEntriesPerBooking,
-        ),
-        sortOrder: normaliseNonNegativeInteger(addOn.sortOrder, index),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)) as EventFundraisingAddOn[];
+    const title = String(addOn.title || "Heads or Tails").trim();
+
+    addOns.push({
+      id: String(addOn.id || `event-addon-${type}-${index + 1}`),
+      type,
+      enabled: Boolean(addOn.enabled),
+      title: title || "Heads or Tails",
+      description: String(addOn.description || "").trim(),
+      instructions: String(addOn.instructions || "").trim(),
+      prizeTitle: String(addOn.prizeTitle || "").trim(),
+      entryPriceCents: normaliseNonNegativeInteger(addOn.entryPriceCents, 0),
+      collectAtCheckout: Boolean(addOn.collectAtCheckout),
+      maxEntriesPerBooking: normaliseNullablePositiveInteger(
+        addOn.maxEntriesPerBooking,
+      ),
+      sortOrder: normaliseNonNegativeInteger(addOn.sortOrder, index),
+    });
+  });
+
+  return addOns.sort(
+    (a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0),
+  );
 }
 
 function normaliseEvent(event: EventItem): EventItem {
@@ -1579,10 +1582,7 @@ export async function getEligibleEventDrawCandidates(input: {
 
     const purpose = String(candidate.seat_purpose || "");
 
-    if (
-      purpose === "complimentary" &&
-      input.includeComplimentary === false
-    ) {
+    if (purpose === "complimentary" && input.includeComplimentary === false) {
       return false;
     }
 
