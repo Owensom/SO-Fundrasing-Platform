@@ -160,7 +160,6 @@ function normaliseTenantBilling(row: TenantBillingRow): TenantBillingFormState {
     published_auctions: safeCount(row.published_auctions),
   };
 }
-
 async function updatePlatformTenantBilling(formData: FormData) {
   "use server";
 
@@ -201,7 +200,8 @@ async function updatePlatformTenantBilling(formData: FormData) {
   if (!tenantExists[0]) {
     redirect("/admin/platform/billing?error=tenant_not_found");
   }
-    await query(
+
+  await query(
     `
       insert into tenant_settings (
         tenant_slug,
@@ -340,7 +340,6 @@ async function getTenantBillingRows() {
 
   return rows.map(normaliseTenantBilling);
 }
-
 export default async function PlatformBillingPage({
   searchParams,
 }: {
@@ -368,6 +367,26 @@ export default async function PlatformBillingPage({
     (tenant) => tenant.subscription_tier === "community",
   ).length;
 
+  const totalPublishedRaffles = tenants.reduce(
+    (sum, tenant) => sum + tenant.published_raffles,
+    0,
+  );
+
+  const totalPublishedSquares = tenants.reduce(
+    (sum, tenant) => sum + tenant.published_squares,
+    0,
+  );
+
+  const totalPublishedEvents = tenants.reduce(
+    (sum, tenant) => sum + tenant.published_events,
+    0,
+  );
+
+  const totalPublishedAuctions = tenants.reduce(
+    (sum, tenant) => sum + tenant.published_auctions,
+    0,
+  );
+
   return (
     <main className="platform-billing-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -375,38 +394,72 @@ export default async function PlatformBillingPage({
       <section className="platformHero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
-        <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Platform owner controls</div>
+        <div className="heroMainGrid" style={styles.heroMainGrid}>
+          <div style={styles.heroContent}>
+            <div style={styles.eyebrow}>Platform owner controls</div>
 
-          <h1 className="so-brand-heading title" style={styles.title}>
-            Platform billing
-          </h1>
+            <h1 className="so-brand-heading title" style={styles.title}>
+              Platform billing
+            </h1>
 
-          <p style={styles.subtitle}>
-            Owner-only subscription, commission, Stripe and feature overrides
-            across all tenant sites.
-          </p>
+            <p style={styles.subtitle}>
+              Owner-only subscription tiers, commission rates, Stripe IDs,
+              feature overrides and tenant campaign visibility.
+            </p>
 
-          <div className="heroActions" style={styles.heroActions}>
-            <Link href="/admin" className="heroButton" style={styles.heroButton}>
-              ← Back to dashboard
-            </Link>
-
-            <Link
-              href="/admin/settings/billing"
-              className="heroButtonLight"
-              style={styles.heroButtonLight}
-            >
-              Tenant billing view
-            </Link>
+            <div className="heroStats" style={styles.heroStats}>
+              <HeroStat label="Tenants" value={totalTenants} />
+              <HeroStat label="Foundation" value={foundationTenants} />
+              <HeroStat label="Professional" value={professionalTenants} />
+              <HeroStat label="Community" value={communityTenants} />
+            </div>
           </div>
+
+          <aside className="heroPanel" style={styles.heroPanel}>
+            <div style={styles.heroPanelTitle}>Owner overview</div>
+
+            <p style={styles.heroPanelText}>
+              Review tenant commercial settings and update billing overrides
+              without changing checkout, campaign or public-page flows.
+            </p>
+
+            <div className="heroPanelGrid" style={styles.heroPanelGrid}>
+              <MiniStat label="Raffles" value={totalPublishedRaffles} />
+              <MiniStat label="Squares" value={totalPublishedSquares} />
+              <MiniStat label="Events" value={totalPublishedEvents} />
+              <MiniStat label="Auctions" value={totalPublishedAuctions} />
+            </div>
+          </aside>
         </div>
 
-        <div className="heroSummaryGrid" style={styles.heroSummaryGrid}>
-          <SummaryCard label="Tenants" value={totalTenants} />
-          <SummaryCard label="Foundation" value={foundationTenants} />
-          <SummaryCard label="Professional" value={professionalTenants} />
-          <SummaryCard label="Community" value={communityTenants} />
+        <div className="heroActions" style={styles.heroActions}>
+          <Link href="/admin" className="heroButton" style={styles.heroButton}>
+            ← Back to dashboard
+          </Link>
+
+          <Link
+            href="/admin/settings/billing"
+            className="heroButtonLight"
+            style={styles.heroButtonLight}
+          >
+            Tenant billing view
+          </Link>
+
+          <Link
+            href="/admin/metadata"
+            className="heroButtonLight"
+            style={styles.heroButtonLight}
+          >
+            Finance dashboard
+          </Link>
+
+          <Link
+            href="/admin/orders"
+            className="heroButtonLight"
+            style={styles.heroButtonLight}
+          >
+            Orders dashboard
+          </Link>
         </div>
       </section>
 
@@ -422,7 +475,18 @@ export default async function PlatformBillingPage({
         </div>
       ) : null}
 
-      <section style={styles.panel}>
+      <section className="summaryGrid" style={styles.summaryGrid}>
+        <SummaryCard label="Total tenants" value={totalTenants} />
+        <SummaryCard label="Foundation" value={foundationTenants} />
+        <SummaryCard label="Professional" value={professionalTenants} />
+        <SummaryCard label="Community" value={communityTenants} />
+        <SummaryCard label="Published raffles" value={totalPublishedRaffles} />
+        <SummaryCard label="Published squares" value={totalPublishedSquares} />
+        <SummaryCard label="Published events" value={totalPublishedEvents} />
+        <SummaryCard label="Published auctions" value={totalPublishedAuctions} />
+      </section>
+
+      <section className="panel" style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Owner override table</p>
@@ -440,7 +504,8 @@ export default async function PlatformBillingPage({
 
           <span style={styles.countPill}>{tenants.length} tenants</span>
         </div>
-                {tenants.length === 0 ? (
+
+        {tenants.length === 0 ? (
           <div style={styles.emptyState}>No tenants found.</div>
         ) : (
           <div className="tenantGrid" style={styles.tenantGrid}>
@@ -463,7 +528,10 @@ export default async function PlatformBillingPage({
                     value={tenant.tenant_slug}
                   />
 
-                  <div className="tenantCardHeader" style={styles.tenantCardHeader}>
+                  <div
+                    className="tenantCardHeader"
+                    style={styles.tenantCardHeader}
+                  >
                     <div>
                       <div style={styles.tenantSlug}>{tenant.tenant_slug}</div>
 
@@ -490,17 +558,39 @@ export default async function PlatformBillingPage({
                     </span>
                   </div>
 
-                  <div className="campaignMiniGrid" style={styles.campaignMiniGrid}>
-                    <MiniStat label="Published raffles" value={tenant.published_raffles} />
-                    <MiniStat label="Published squares" value={tenant.published_squares} />
-                    <MiniStat label="Published events" value={tenant.published_events} />
-                    <MiniStat label="Published auctions" value={tenant.published_auctions} />
-                    <MiniStat label="Limit-counted active" value={publishedCampaigns} />
-                  </div>
+                  <div
+                    className="campaignMiniGrid"
+                    style={styles.campaignMiniGrid}
+                  >
+                    <MiniStat
+                      label="Published raffles"
+                      value={tenant.published_raffles}
+                    />
 
-                  <div className="formGrid" style={styles.formGrid}>
+                    <MiniStat
+                      label="Published squares"
+                      value={tenant.published_squares}
+                    />
+
+                    <MiniStat
+                      label="Published events"
+                      value={tenant.published_events}
+                    />
+
+                    <MiniStat
+                      label="Published auctions"
+                      value={tenant.published_auctions}
+                    />
+
+                    <MiniStat
+                      label="Limit-counted active"
+                      value={publishedCampaigns}
+                    />
+                  </div>
+                                    <div className="formGrid" style={styles.formGrid}>
                     <label style={styles.field}>
                       <span style={styles.fieldLabel}>Subscription tier</span>
+
                       <select
                         name="subscription_tier"
                         defaultValue={tenant.subscription_tier}
@@ -514,6 +604,7 @@ export default async function PlatformBillingPage({
 
                     <label style={styles.field}>
                       <span style={styles.fieldLabel}>Platform fee %</span>
+
                       <input
                         type="number"
                         name="platform_fee_percent"
@@ -527,6 +618,7 @@ export default async function PlatformBillingPage({
 
                     <label style={styles.field}>
                       <span style={styles.fieldLabel}>Subscription status</span>
+
                       <select
                         name="subscription_status"
                         defaultValue={tenant.subscription_status}
@@ -541,6 +633,7 @@ export default async function PlatformBillingPage({
 
                     <label style={styles.field}>
                       <span style={styles.fieldLabel}>Stripe customer ID</span>
+
                       <input
                         type="text"
                         name="stripe_customer_id"
@@ -551,7 +644,10 @@ export default async function PlatformBillingPage({
                     </label>
 
                     <label style={styles.field}>
-                      <span style={styles.fieldLabel}>Stripe subscription ID</span>
+                      <span style={styles.fieldLabel}>
+                        Stripe subscription ID
+                      </span>
+
                       <input
                         type="text"
                         name="stripe_subscription_id"
@@ -562,7 +658,10 @@ export default async function PlatformBillingPage({
                     </label>
 
                     <label style={styles.field}>
-                      <span style={styles.fieldLabel}>Stripe Connect account</span>
+                      <span style={styles.fieldLabel}>
+                        Stripe Connect account
+                      </span>
+
                       <input
                         type="text"
                         name="stripe_connect_account_id"
@@ -640,6 +739,15 @@ export default async function PlatformBillingPage({
   );
 }
 
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.heroStat}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.summaryCard}>
@@ -675,7 +783,6 @@ function ToggleField({
     </label>
   );
 }
-
 const responsiveStyles = `
 .platform-billing-page,
 .platform-billing-page * {
@@ -694,17 +801,22 @@ const responsiveStyles = `
 }
 
 @media (max-width: 980px) {
-  .platform-billing-page .platformHero,
-  .platform-billing-page .heroSummaryGrid,
+  .platform-billing-page .heroMainGrid,
   .platform-billing-page .formGrid,
   .platform-billing-page .toggleGrid,
   .platform-billing-page .campaignMiniGrid {
     grid-template-columns: 1fr !important;
   }
 
+  .platform-billing-page .heroStats,
+  .platform-billing-page .heroPanelGrid,
+  .platform-billing-page .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .platform-billing-page .heroActions,
   .platform-billing-page .cardFooter {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .platform-billing-page .heroButton,
@@ -734,11 +846,22 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .platform-billing-page .tenantCardHeader {
+  .platform-billing-page .heroStats,
+  .platform-billing-page .heroPanelGrid,
+  .platform-billing-page .heroActions,
+  .platform-billing-page .summaryGrid,
+  .platform-billing-page .tenantCardHeader,
+  .platform-billing-page .cardFooter {
+    grid-template-columns: 1fr !important;
+  }
+
+  .platform-billing-page .sectionHeader {
+    display: grid !important;
     grid-template-columns: 1fr !important;
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -755,17 +878,26 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)",
-    gap: 22,
-    padding: 30,
-    borderRadius: 34,
+    gap: 18,
+    padding: 28,
+    borderRadius: 30,
     background:
       "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
-    marginBottom: 18,
-    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    marginBottom: 16,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroMainGrid: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
+    gap: 22,
+    alignItems: "stretch",
+    minWidth: 0,
   },
 
   heroGlow: {
@@ -779,11 +911,14 @@ const styles: Record<string, CSSProperties> = {
   heroContent: {
     position: "relative",
     zIndex: 1,
+    display: "grid",
+    alignContent: "start",
     minWidth: 0,
   },
 
   eyebrow: {
     display: "inline-flex",
+    width: "fit-content",
     padding: "8px 14px",
     borderRadius: 999,
     background: "rgba(15,23,42,0.24)",
@@ -793,34 +928,104 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 16,
+    marginBottom: 12,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(48px, 7vw, 78px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
+    fontSize: "clamp(44px, 7vw, 68px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.07em",
     color: "#ffffff",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
-    margin: "18px 0 0",
-    maxWidth: 780,
+    margin: "14px 0 0",
+    maxWidth: 760,
     color: "#dbeafe",
-    fontSize: 18,
-    lineHeight: 1.6,
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 22,
+  },
+
+  heroStat: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+
+  heroPanel: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gap: 13,
+    alignContent: "start",
+    padding: 18,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+    minWidth: 0,
+  },
+
+  heroPanelTitle: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+  },
+
+  heroPanelText: {
+    margin: 0,
+    color: "#dbeafe",
+    lineHeight: 1.45,
     fontWeight: 700,
+  },
+
+  heroPanelGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+    miniStat: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(217,119,6,0.34)",
+    minWidth: 0,
     overflowWrap: "anywhere",
   },
 
   heroActions: {
-    marginTop: 24,
+    position: "relative",
+    zIndex: 1,
     display: "grid",
-    gridTemplateColumns: "repeat(2, max-content)",
-    gap: 10,
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+    alignItems: "stretch",
+    paddingTop: 16,
+    marginTop: 2,
+    borderTop: "1px solid rgba(148,163,184,0.24)",
   },
 
   heroButton: {
@@ -834,7 +1039,9 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid #1683f8",
+    border: "1px solid rgba(96,165,250,0.88)",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
+    textAlign: "center",
   },
 
   heroButtonLight: {
@@ -844,46 +1051,13 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     padding: "11px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.06)",
+    background: "rgba(255,255,255,0.10)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid rgba(148,163,184,0.52)",
-  },
-
-  heroSummaryGrid: {
-    position: "relative",
-    zIndex: 1,
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-    alignContent: "start",
-  },
-
-  summaryCard: {
-    display: "grid",
-    gap: 7,
-    padding: 16,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.26)",
-    minWidth: 0,
-  },
-
-  summaryLabel: {
-    color: "#bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  summaryValue: {
-    color: "#ffffff",
-    fontSize: 30,
-    fontWeight: 950,
-    letterSpacing: "-0.055em",
-    overflowWrap: "anywhere",
+    border: "1px solid rgba(255,255,255,0.28)",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+    textAlign: "center",
   },
 
   successBanner: {
@@ -904,6 +1078,39 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fecaca",
     fontWeight: 900,
     marginBottom: 14,
+  },
+
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+
+  summaryCard: {
+    display: "grid",
+    gap: 5,
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+
+  summaryLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  summaryValue: {
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   panel: {
@@ -1041,18 +1248,6 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 10,
-  },
-
-  miniStat: {
-    display: "grid",
-    gap: 4,
-    padding: 12,
-    borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    color: "#334155",
-    minWidth: 0,
-    overflowWrap: "anywhere",
   },
 
   formGrid: {
