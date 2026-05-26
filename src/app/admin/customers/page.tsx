@@ -565,7 +565,7 @@ function buildCsvHref(customers: CustomerProfile[]) {
     "Name",
     "Email",
     "Total spend",
-    "Order count",
+    "Activity count",
     "Campaign count",
     "Activity types",
     "Last activity",
@@ -675,7 +675,10 @@ export default async function AdminCustomersPage({
             <div className="heroStats" style={styles.heroStats}>
               <HeroStat label="Customers" value={filteredCustomers.length} />
               <HeroStat label="Activity rows" value={totalOrders} />
-              <HeroStat label="Tracked spend" value={formatMoney(totalSpendCents)} />
+              <HeroStat
+                label="Tracked spend"
+                value={formatMoney(totalSpendCents)}
+              />
               <HeroStat label="Tenant" value={tenantSlug} />
             </div>
           </div>
@@ -738,7 +741,10 @@ export default async function AdminCustomersPage({
         <SummaryCard label="Visible customers" value={filteredCustomers.length} />
         <SummaryCard label="All customers" value={customers.length} />
         <SummaryCard label="Activity rows" value={totalOrders} />
-        <SummaryCard label="Tracked spend" value={formatMoney(totalSpendCents)} />
+        <SummaryCard
+          label="Tracked spend"
+          value={formatMoney(totalSpendCents)}
+        />
         <SummaryCard label="Raffle rows" value={raffleOrders.length} />
         <SummaryCard label="Squares rows" value={squaresOrders.length} />
         <SummaryCard label="Event rows" value={eventOrders.length} />
@@ -913,7 +919,7 @@ export default async function AdminCustomersPage({
 
                     {customer.types.has("donation") ? (
                       <Link
-                        href={`/admin/donations`}
+                        href="/admin/donations"
                         className="smallLinkMuted"
                         style={styles.smallLinkMuted}
                       >
@@ -996,8 +1002,7 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .customers-page .heroActions,
-  .customers-page .cardActions {
+  .customers-page .heroActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
   }
@@ -1005,7 +1010,22 @@ const responsiveStyles = `
   .customers-page .heroPrimaryButton,
   .customers-page .heroSecondaryButton,
   .customers-page .filterButton,
-  .customers-page .clearButton,
+  .customers-page .clearButton {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .customers-page .customerGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .customers-page .cardActions {
+    grid-template-columns: 1fr !important;
+  }
+
   .customers-page .smallLink,
   .customers-page .smallLinkMuted {
     width: 100% !important;
@@ -1064,6 +1084,10 @@ const responsiveStyles = `
   .customers-page .filterCard {
     padding: 14px !important;
     border-radius: 20px !important;
+  }
+
+  .customers-page .activityList {
+    min-height: 0 !important;
   }
 
   .customers-page .activityRight {
@@ -1422,12 +1446,14 @@ const styles: Record<string, CSSProperties> = {
 
   customerGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
     gap: 14,
+    alignItems: "stretch",
   },
 
   customerCard: {
     display: "grid",
+    gridTemplateRows: "auto auto auto minmax(178px, 1fr) auto",
     gap: 14,
     padding: 16,
     borderRadius: 22,
@@ -1435,6 +1461,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
     overflow: "hidden",
+    height: "100%",
   },
 
   customerTop: {
@@ -1479,12 +1506,15 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
+    alignItems: "stretch",
   },
 
   typeRow: {
     display: "flex",
     gap: 7,
     flexWrap: "wrap",
+    alignItems: "flex-start",
+    minHeight: 34,
   },
 
   typePill: {
@@ -1500,6 +1530,8 @@ const styles: Record<string, CSSProperties> = {
   activityList: {
     display: "grid",
     gap: 9,
+    alignContent: "start",
+    minHeight: 178,
   },
 
   activityRow: {
@@ -1533,18 +1565,22 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "right",
     color: "#0f172a",
     fontSize: 13,
+    alignContent: "start",
   },
 
   cardActions: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
     gap: 8,
-    flexWrap: "wrap",
+    alignItems: "stretch",
+    marginTop: "auto",
   },
 
   smallLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 38,
     padding: "8px 11px",
     borderRadius: 999,
     background: "#0f172a",
@@ -1552,12 +1588,14 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 12,
     fontWeight: 950,
+    textAlign: "center",
   },
 
   smallLinkMuted: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 38,
     padding: "8px 11px",
     borderRadius: 999,
     background: "#ffffff",
@@ -1566,5 +1604,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 12,
     fontWeight: 950,
+    textAlign: "center",
   },
 };
