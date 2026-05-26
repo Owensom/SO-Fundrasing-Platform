@@ -588,21 +588,74 @@ function EventOrdersGuestsLink({ order }: { order: UnifiedOrder }) {
   );
 }
 
-function AdminLink({ order, label }: { order: UnifiedOrder; label: string }) {
+function PrimaryOrderAction({ order }: { order: UnifiedOrder }) {
+  if (order.type === "event" && order.campaignId) {
+    return <EventOrdersGuestsLink order={order} />;
+  }
+
   if (!order.adminHref) {
-    return null;
+    return (
+      <Link href="/admin/orders" style={styles.smallLink}>
+        Orders
+      </Link>
+    );
   }
 
   return (
-    <Link
-      href={order.adminHref}
-      style={
-        order.type === "event" && order.campaignId
-          ? styles.smallLinkMuted
-          : styles.smallLink
-      }
-    >
-      {label}
+    <Link href={order.adminHref} style={styles.smallLink}>
+      {order.type === "donation" ? "Donation report" : "Open admin"}
+    </Link>
+  );
+}
+
+function SecondaryOrderAction({ order }: { order: UnifiedOrder }) {
+  if (order.type === "event" && order.adminHref) {
+    return (
+      <Link href={order.adminHref} style={styles.smallLinkMuted}>
+        Event admin
+      </Link>
+    );
+  }
+
+  if (order.publicHref) {
+    return (
+      <Link href={order.publicHref} target="_blank" style={styles.smallLinkMuted}>
+        Public page
+      </Link>
+    );
+  }
+
+  if (order.type === "donation") {
+    return (
+      <Link href="/admin/donations" style={styles.smallLinkMuted}>
+        Donations
+      </Link>
+    );
+  }
+
+  return (
+    <Link href="/admin/orders" style={styles.smallLinkMuted}>
+      Orders
+    </Link>
+  );
+}
+
+function TertiaryOrderAction({ order }: { order: UnifiedOrder }) {
+  const customerSearchHref = `/admin/orders?q=${encodeURIComponent(
+    order.customerEmail,
+  )}`;
+
+  if (order.type === "event" && order.publicHref) {
+    return (
+      <Link href={order.publicHref} target="_blank" style={styles.smallLinkMuted}>
+        Public page
+      </Link>
+    );
+  }
+
+  return (
+    <Link href={customerSearchHref} style={styles.smallLinkMuted}>
+      Customer rows
     </Link>
   );
 }
@@ -905,26 +958,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
                       <td style={styles.td}>
                         <div style={styles.actionLinks}>
-                          <EventOrdersGuestsLink order={order} />
-
-                          <AdminLink
-                            order={order}
-                            label={
-                              order.type === "donation"
-                                ? "Donation report"
-                                : "Admin"
-                            }
-                          />
-
-                          {order.publicHref ? (
-                            <Link
-                              href={order.publicHref}
-                              target="_blank"
-                              style={styles.smallLinkMuted}
-                            >
-                              Public
-                            </Link>
-                          ) : null}
+                          <PrimaryOrderAction order={order} />
+                          <SecondaryOrderAction order={order} />
+                          <TertiaryOrderAction order={order} />
                         </div>
                       </td>
                     </tr>
@@ -970,26 +1006,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
                   </div>
 
                   <div style={styles.mobileActions}>
-                    <EventOrdersGuestsLink order={order} />
-
-                    <AdminLink
-                      order={order}
-                      label={
-                        order.type === "donation"
-                          ? "Donation report"
-                          : "Open admin"
-                      }
-                    />
-
-                    {order.publicHref ? (
-                      <Link
-                        href={order.publicHref}
-                        target="_blank"
-                        style={styles.smallLinkMuted}
-                      >
-                        Public page
-                      </Link>
-                    ) : null}
+                    <PrimaryOrderAction order={order} />
+                    <SecondaryOrderAction order={order} />
+                    <TertiaryOrderAction order={order} />
                   </div>
                 </article>
               ))}
@@ -1075,7 +1094,7 @@ const responsiveStyles = `
 
   .orders-page .mobileActions {
     display: grid !important;
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     align-items: stretch !important;
   }
 
@@ -1112,7 +1131,8 @@ const responsiveStyles = `
   .orders-page .heroStats,
   .orders-page .summaryGrid,
   .orders-page .heroPanelGrid,
-  .orders-page .heroActions {
+  .orders-page .heroActions,
+  .orders-page .mobileActions {
     grid-template-columns: 1fr !important;
   }
 
@@ -1557,15 +1577,18 @@ const styles: Record<string, CSSProperties> = {
   },
 
   actionLinks: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 7,
-    flexWrap: "wrap",
+    alignItems: "stretch",
+    minWidth: 260,
   },
 
   smallLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 34,
     padding: "7px 10px",
     borderRadius: 999,
     background: "#0f172a",
@@ -1573,12 +1596,14 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 12,
     fontWeight: 950,
+    textAlign: "center",
   },
 
   smallLinkMuted: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 34,
     padding: "7px 10px",
     borderRadius: 999,
     background: "#ffffff",
@@ -1587,6 +1612,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 12,
     fontWeight: 950,
+    textAlign: "center",
   },
 
   mobileCards: {
@@ -1596,12 +1622,14 @@ const styles: Record<string, CSSProperties> = {
 
   mobileOrderCard: {
     display: "grid",
+    gridTemplateRows: "auto auto auto auto auto auto",
     gap: 10,
     padding: 15,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    height: "100%",
   },
 
   mobileCardTop: {
@@ -1630,6 +1658,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontWeight: 800,
     overflowWrap: "anywhere",
+    minHeight: 20,
   },
 
   mobileBottom: {
@@ -1641,8 +1670,10 @@ const styles: Record<string, CSSProperties> = {
   },
 
   mobileActions: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 8,
-    flexWrap: "wrap",
+    alignItems: "stretch",
+    marginTop: "auto",
   },
 };
