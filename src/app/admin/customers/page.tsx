@@ -15,7 +15,7 @@ type PageProps = {
   }>;
 };
 
-type ActivityType = "raffle" | "squares" | "event" | "auction";
+type ActivityType = "raffle" | "squares" | "event" | "auction" | "donation";
 
 type UnifiedOrder = {
   id: string;
@@ -102,7 +102,8 @@ function typeLabel(type: ActivityType) {
   if (type === "raffle") return "Raffle";
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
-  return "Auction";
+  if (type === "auction") return "Auction";
+  return "Donation";
 }
 
 function typeStyle(type: ActivityType): CSSProperties {
@@ -130,10 +131,18 @@ function typeStyle(type: ActivityType): CSSProperties {
     };
   }
 
+  if (type === "auction") {
+    return {
+      background: "#f5f3ff",
+      color: "#6d28d9",
+      border: "1px solid #ddd6fe",
+    };
+  }
+
   return {
-    background: "#f5f3ff",
-    color: "#6d28d9",
-    border: "1px solid #ddd6fe",
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
   };
 }
 
@@ -161,7 +170,7 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         sale.colour,
         sale.buyer_name,
         sale.buyer_email,
-        sale.created_at,
+        sale.sold_at as created_at,
         raffle.title as campaign_title,
         raffle.slug as campaign_slug,
         raffle.currency,
@@ -169,10 +178,8 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
       from raffle_ticket_sales sale
       join raffles raffle
         on raffle.id = sale.raffle_id
-       and raffle.tenant_slug = sale.tenant_slug
-      where sale.tenant_slug = $1
-        and raffle.tenant_slug = $1
-      order by sale.created_at desc
+      where raffle.tenant_slug = $1
+      order by sale.sold_at desc
       limit 500
     `,
     [tenantSlug],
@@ -331,6 +338,7 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
         bid.bidder_name,
         bid.bidder_email,
         bid.amount_cents,
+        bid.payment_status,
         bid.created_at,
         item.auction_id,
         item.title as item_title,
@@ -352,6 +360,7 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   return rows.map((row) => {
     const campaignId = cleanText(row.auction_id);
     const slug = cleanText(row.campaign_slug);
+    const paymentStatus = cleanText(row.payment_status, "Bid placed");
 
     return {
       id: `auction-${cleanText(row.id, `${campaignId}-${row.item_id}`)}`,
@@ -364,10 +373,99 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
       detail: `Bid · ${cleanText(row.item_title, "Auction item")}`,
       amountCents: safeNumber(row.amount_cents, 0),
       currency: cleanText(row.currency, "GBP"),
-      status: "Bid placed",
+      status:
+        paymentStatus === "paid"
+          ? "Paid"
+          : paymentStatus === "checkout_started"
+            ? "Checkout started"
+            : paymentStatus === "cancelled"
+              ? "Cancelled"
+              : "Bid placed",
       createdAt: row.created_at ? String(row.created_at) : null,
       adminHref: campaignId ? `/admin/auctions/${campaignId}` : null,
       publicHref: slug ? `/a/${slug}` : null,
+    };
+  });
+}
+
+async function getDonationOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
+  const rows = await safeQuery(
+    "donations",
+    `
+      select
+        id::text,
+        campaign_type,
+        campaign_id,
+        campaign_title,
+        donor_name,
+        donor_email,
+        message,
+        amount_cents,
+        gross_amount_cents,
+        currency,
+        payment_status,
+        created_at::text,
+        paid_at::text,
+        gift_aid_claimed
+      from public_donations
+      where tenant_slug = $1
+      order by created_at desc
+      limit 500
+    `,
+    [tenantSlug],
+  );
+
+  return rows.map((row) => {
+    const campaignType = cleanText(row.campaign_type, "general").toLowerCase();
+    const campaignId = cleanText(row.campaign_id);
+    const campaignTitle = cleanText(row.campaign_title, "General donation");
+    const message = cleanText(row.message);
+    const status = cleanText(row.payment_status, "Pending");
+
+    const publicHref =
+      campaignType === "raffle" && campaignId
+        ? null
+        : campaignType === "squares" && campaignId
+          ? null
+          : campaignType === "event" && campaignId
+            ? null
+            : campaignType === "auction" && campaignId
+              ? null
+              : `/c/${tenantSlug}/support`;
+
+    return {
+      id: `donation-${cleanText(row.id)}`,
+      type: "donation",
+      campaignId: campaignId || null,
+      campaignTitle,
+      campaignSlug: null,
+      customerName: cleanText(row.donor_name, "Anonymous donor"),
+      customerEmail: cleanText(row.donor_email, "No email"),
+      detail: `${row.gift_aid_claimed ? "Gift Aid donation" : "Donation"}${
+        message ? ` · ${message}` : ""
+      }`,
+      amountCents:
+        safeNumber(row.gross_amount_cents, 0) ||
+        safeNumber(row.amount_cents, 0),
+      currency: cleanText(row.currency, "GBP"),
+      status:
+        status === "paid"
+          ? "Paid"
+          : status === "checkout_started"
+            ? "Checkout started"
+            : status === "failed"
+              ? "Failed"
+              : status === "cancelled"
+                ? "Cancelled"
+                : "Pending",
+      createdAt:
+        row.paid_at && status === "paid"
+          ? String(row.paid_at)
+          : row.created_at
+            ? String(row.created_at)
+            : null,
+      adminHref: "/admin/donations",
+      publicHref,
     };
   });
 }
@@ -448,6 +546,7 @@ function filterCustomers(
         ...customer.orders.map((order) => order.customerName),
         ...customer.orders.map((order) => order.customerEmail),
         ...customer.orders.map((order) => order.detail),
+        ...customer.orders.map((order) => order.status),
       ]
         .join(" ")
         .toLowerCase()
@@ -488,7 +587,6 @@ function buildCsvHref(customers: CustomerProfile[]) {
 
   return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
-
 export default async function AdminCustomersPage({
   searchParams,
 }: PageProps) {
@@ -512,19 +610,26 @@ export default async function AdminCustomersPage({
   const selectedType = cleanText(resolvedSearchParams.type, "all");
   const searchTerm = cleanText(resolvedSearchParams.q, "");
 
-  const [raffleOrders, squaresOrders, eventOrders, auctionOrders] =
-    await Promise.all([
-      getRaffleOrders(tenantSlug),
-      getSquaresOrders(tenantSlug),
-      getEventOrders(tenantSlug),
-      getAuctionOrders(tenantSlug),
-    ]);
+  const [
+    raffleOrders,
+    squaresOrders,
+    eventOrders,
+    auctionOrders,
+    donationOrders,
+  ] = await Promise.all([
+    getRaffleOrders(tenantSlug),
+    getSquaresOrders(tenantSlug),
+    getEventOrders(tenantSlug),
+    getAuctionOrders(tenantSlug),
+    getDonationOrders(tenantSlug),
+  ]);
 
   const allOrders = [
     ...raffleOrders,
     ...squaresOrders,
     ...eventOrders,
     ...auctionOrders,
+    ...donationOrders,
   ].sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt));
 
   const customers = buildCustomerProfiles(allOrders);
@@ -564,18 +669,13 @@ export default async function AdminCustomersPage({
 
             <p style={styles.subtitle}>
               Supporter profiles grouped from raffle sales, squares sales,
-              event orders and silent auction bids.
+              event orders, silent auction bids and public donations.
             </p>
-                        <div className="heroStats" style={styles.heroStats}>
-              <HeroStat
-                label="Customers"
-                value={filteredCustomers.length}
-              />
-              <HeroStat label="Orders" value={totalOrders} />
-              <HeroStat
-                label="Spend"
-                value={formatMoney(totalSpendCents)}
-              />
+
+            <div className="heroStats" style={styles.heroStats}>
+              <HeroStat label="Customers" value={filteredCustomers.length} />
+              <HeroStat label="Activity rows" value={totalOrders} />
+              <HeroStat label="Tracked spend" value={formatMoney(totalSpendCents)} />
               <HeroStat label="Tenant" value={tenantSlug} />
             </div>
           </div>
@@ -584,7 +684,8 @@ export default async function AdminCustomersPage({
             <div style={styles.heroPanelTitle}>Data included</div>
 
             <p style={styles.heroPanelText}>
-              This page groups the same corrected source data used by Orders.
+              This page groups the same source data used by Orders, plus pure
+              donations from the donations report.
             </p>
 
             <div className="heroPanelGrid" style={styles.heroPanelGrid}>
@@ -592,6 +693,7 @@ export default async function AdminCustomersPage({
               <MiniMetric label="Squares" value={squaresOrders.length} />
               <MiniMetric label="Events" value={eventOrders.length} />
               <MiniMetric label="Auctions" value={auctionOrders.length} />
+              <MiniMetric label="Donations" value={donationOrders.length} />
             </div>
           </div>
         </div>
@@ -613,6 +715,14 @@ export default async function AdminCustomersPage({
             Orders dashboard
           </Link>
 
+          <Link
+            href="/admin/donations"
+            className="heroSecondaryButton"
+            style={styles.heroSecondaryButton}
+          >
+            Donations report
+          </Link>
+
           <a
             href={csvHref}
             download={`customers-${tenantSlug}.csv`}
@@ -625,17 +735,15 @@ export default async function AdminCustomersPage({
       </section>
 
       <section className="summaryGrid" style={styles.summaryGrid}>
-        <SummaryCard
-          label="Visible customers"
-          value={filteredCustomers.length}
-        />
+        <SummaryCard label="Visible customers" value={filteredCustomers.length} />
         <SummaryCard label="All customers" value={customers.length} />
-        <SummaryCard label="Orders" value={totalOrders} />
-        <SummaryCard label="Total spend" value={formatMoney(totalSpendCents)} />
+        <SummaryCard label="Activity rows" value={totalOrders} />
+        <SummaryCard label="Tracked spend" value={formatMoney(totalSpendCents)} />
         <SummaryCard label="Raffle rows" value={raffleOrders.length} />
         <SummaryCard label="Squares rows" value={squaresOrders.length} />
         <SummaryCard label="Event rows" value={eventOrders.length} />
         <SummaryCard label="Auction bids" value={auctionOrders.length} />
+        <SummaryCard label="Donations" value={donationOrders.length} />
       </section>
 
       <section className="filterCard" style={styles.filterCard}>
@@ -649,7 +757,7 @@ export default async function AdminCustomersPage({
             <input
               name="q"
               defaultValue={searchTerm}
-              placeholder="Search name, email, campaign or item..."
+              placeholder="Search name, email, campaign, item or donation..."
               style={styles.input}
             />
           </label>
@@ -662,6 +770,7 @@ export default async function AdminCustomersPage({
               <option value="squares">Squares</option>
               <option value="event">Events</option>
               <option value="auction">Auctions</option>
+              <option value="donation">Donations</option>
             </select>
           </label>
 
@@ -696,8 +805,8 @@ export default async function AdminCustomersPage({
             </h2>
 
             <p style={styles.sectionText}>
-              Each profile shows total spend, order count, campaigns supported
-              and the latest three activity rows.
+              Each profile shows total tracked spend, activity count, campaigns
+              supported and the latest three activity rows.
             </p>
           </div>
 
@@ -738,7 +847,7 @@ export default async function AdminCustomersPage({
                   </div>
 
                   <div className="customerStats" style={styles.customerStats}>
-                    <MiniMetric label="Orders" value={customer.orderCount} />
+                    <MiniMetric label="Activity" value={customer.orderCount} />
                     <MiniMetric
                       label="Campaigns"
                       value={customer.campaignCount}
@@ -802,13 +911,23 @@ export default async function AdminCustomersPage({
                       View orders
                     </Link>
 
+                    {customer.types.has("donation") ? (
+                      <Link
+                        href={`/admin/donations`}
+                        className="smallLinkMuted"
+                        style={styles.smallLinkMuted}
+                      >
+                        Donation report
+                      </Link>
+                    ) : null}
+
                     {recentOrders[0]?.adminHref ? (
                       <Link
                         href={recentOrders[0].adminHref}
                         className="smallLinkMuted"
                         style={styles.smallLinkMuted}
                       >
-                        Latest campaign
+                        Latest activity
                       </Link>
                     ) : null}
                   </div>
@@ -848,7 +967,6 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .customers-page,
 .customers-page * {
@@ -913,7 +1031,8 @@ const responsiveStyles = `
     font-size: clamp(34px, 12vw, 46px) !important;
     line-height: 0.98 !important;
   }
-    .customers-page .heroStats,
+
+  .customers-page .heroStats,
   .customers-page .summaryGrid,
   .customers-page .heroPanelGrid,
   .customers-page .customerStats {
@@ -970,6 +1089,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     overflowX: "hidden",
   },
+
   hero: {
     position: "relative",
     display: "grid",
@@ -984,6 +1104,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
+
   heroMainGrid: {
     position: "relative",
     zIndex: 1,
@@ -993,6 +1114,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "stretch",
     minWidth: 0,
   },
+
   heroGlow: {
     position: "absolute",
     inset: 0,
@@ -1000,11 +1122,13 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
+
   heroContent: {
     position: "relative",
     zIndex: 1,
     minWidth: 0,
   },
+
   eyebrow: {
     display: "inline-flex",
     padding: "8px 14px",
@@ -1019,6 +1143,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 14,
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
+
   title: {
     margin: 0,
     fontSize: "clamp(42px, 7vw, 68px)",
@@ -1027,6 +1152,7 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
+
   subtitle: {
     margin: "16px 0 0",
     maxWidth: 760,
@@ -1036,12 +1162,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
+
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
     marginTop: 24,
   },
+
   heroStat: {
     display: "grid",
     gap: 5,
@@ -1052,6 +1180,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
+
   heroPanel: {
     position: "relative",
     zIndex: 1,
@@ -1066,23 +1195,27 @@ const styles: Record<string, CSSProperties> = {
     backdropFilter: "blur(12px)",
     minWidth: 0,
   },
+
   heroPanelTitle: {
     color: "#ffffff",
     fontSize: 22,
     fontWeight: 950,
     letterSpacing: "-0.035em",
   },
+
   heroPanelText: {
     margin: 0,
     color: "#dbeafe",
     lineHeight: 1.5,
     fontWeight: 700,
   },
+
   heroPanelGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
+
   miniMetric: {
     display: "grid",
     gap: 4,
@@ -1094,6 +1227,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
+
   heroActions: {
     position: "relative",
     zIndex: 1,
@@ -1106,6 +1240,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 2,
     borderTop: "1px solid rgba(148,163,184,0.24)",
   },
+
   heroPrimaryButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1120,6 +1255,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(96,165,250,0.88)",
     boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
   },
+
   heroSecondaryButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1134,12 +1270,14 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.28)",
     boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
   },
+
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 135px), 1fr))",
     gap: 12,
     marginBottom: 16,
   },
+
   summaryCard: {
     display: "grid",
     gap: 5,
@@ -1151,6 +1289,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
+
   filterCard: {
     padding: 16,
     borderRadius: 22,
@@ -1159,6 +1298,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     minWidth: 0,
   },
+
   filterForm: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.4fr) minmax(180px, 0.6fr) auto auto",
@@ -1166,16 +1306,18 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "end",
     minWidth: 0,
   },
-  field: {
+    field: {
     display: "grid",
     gap: 7,
     minWidth: 0,
   },
+
   label: {
     color: "#334155",
     fontSize: 13,
     fontWeight: 950,
   },
+
   input: {
     width: "100%",
     minHeight: 44,
@@ -1188,6 +1330,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     minWidth: 0,
   },
+
   filterButton: {
     minHeight: 44,
     padding: "11px 16px",
@@ -1198,6 +1341,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
+
   clearButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1211,6 +1355,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
   },
+
   customersCard: {
     padding: 18,
     borderRadius: 24,
@@ -1218,6 +1363,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   sectionHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1226,6 +1372,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     marginBottom: 16,
   },
+
   kicker: {
     margin: "0 0 7px",
     color: "#2563eb",
@@ -1234,6 +1381,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
@@ -1241,6 +1389,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
   },
+
   sectionText: {
     margin: "7px 0 0",
     color: "#64748b",
@@ -1248,6 +1397,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 720,
     overflowWrap: "anywhere",
   },
+
   countPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1259,6 +1409,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   emptyBox: {
     padding: 18,
     borderRadius: 18,
@@ -1268,12 +1419,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
     textAlign: "center",
   },
+
   customerGrid: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 14,
   },
+
   customerCard: {
     display: "grid",
     gap: 14,
@@ -1284,15 +1436,18 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
   },
+
   customerTop: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "start",
   },
+
   customerIdentity: {
     minWidth: 0,
   },
+
   customerName: {
     margin: 0,
     color: "#0f172a",
@@ -1300,6 +1455,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.035em",
     overflowWrap: "anywhere",
   },
+
   customerEmail: {
     margin: "4px 0 0",
     color: "#64748b",
@@ -1307,6 +1463,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
     overflowWrap: "anywhere",
   },
+
   spendBadge: {
     padding: "8px 11px",
     borderRadius: 999,
@@ -1317,16 +1474,19 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
+
   customerStats: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
   },
+
   typeRow: {
     display: "flex",
     gap: 7,
     flexWrap: "wrap",
   },
+
   typePill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1336,10 +1496,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
+
   activityList: {
     display: "grid",
     gap: 9,
   },
+
   activityRow: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
@@ -1350,11 +1512,13 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   activityTitle: {
     color: "#0f172a",
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
+
   activityDetail: {
     marginTop: 3,
     color: "#64748b",
@@ -1362,6 +1526,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
+
   activityRight: {
     display: "grid",
     gap: 3,
@@ -1369,11 +1534,13 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 13,
   },
+
   cardActions: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
   },
+
   smallLink: {
     display: "inline-flex",
     alignItems: "center",
@@ -1386,6 +1553,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
   },
+
   smallLinkMuted: {
     display: "inline-flex",
     alignItems: "center",
