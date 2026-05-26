@@ -8,6 +8,22 @@ export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 export type SeatingLayoutJson = Record<string, number>;
 export type TableNamesJson = Record<string, string>;
 
+export type EventFundraisingAddOnType = "heads_or_tails";
+
+export type EventFundraisingAddOn = {
+  id: string;
+  type: EventFundraisingAddOnType;
+  enabled: boolean;
+  title: string;
+  description?: string;
+  instructions?: string;
+  prizeTitle?: string;
+  entryPriceCents?: number;
+  collectAtCheckout?: boolean;
+  maxEntriesPerBooking?: number | null;
+  sortOrder?: number;
+};
+
 export type EventTicketType = {
   id: string;
   event_id: string;
@@ -89,6 +105,7 @@ export type EventItem = {
   menu_options: EventMenuOption[];
   seating_layout_json: SeatingLayoutJson;
   table_names_json: TableNamesJson;
+  event_addons_json: EventFundraisingAddOn[];
   ask_dietary_requirements: boolean;
   ask_menu_choice: boolean;
   created_at: string;
@@ -181,6 +198,7 @@ export type CreateEventInput = {
   menuOptions?: EventMenuOption[];
   seatingLayoutJson?: SeatingLayoutJson;
   tableNamesJson?: TableNamesJson;
+  eventAddOnsJson?: EventFundraisingAddOn[];
   askDietaryRequirements?: boolean;
   askMenuChoice?: boolean;
 };
@@ -204,6 +222,7 @@ export type UpdateEventInput = {
   menuOptions?: EventMenuOption[];
   seatingLayoutJson?: SeatingLayoutJson;
   tableNamesJson?: TableNamesJson;
+  eventAddOnsJson?: EventFundraisingAddOn[];
   askDietaryRequirements?: boolean;
   askMenuChoice?: boolean;
 };
@@ -264,6 +283,23 @@ function normaliseImageFocus(value: number | null | undefined): number {
   const number = Number(value);
   if (!Number.isFinite(number)) return 50;
   return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function normaliseNonNegativeInteger(
+  value: number | string | null | undefined,
+  fallback = 0,
+): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return fallback;
+  return Math.floor(number);
+}
+
+function normaliseNullablePositiveInteger(
+  value: number | string | null | undefined,
+): number | null {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.floor(number);
 }
 
 function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
@@ -360,6 +396,42 @@ function normaliseMenuOptions(value: unknown): EventMenuOption[] {
     .filter(Boolean) as EventMenuOption[];
 }
 
+function normaliseEventFundraisingAddOnsJson(
+  value: unknown,
+): EventFundraisingAddOn[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      const addOn = item as Partial<EventFundraisingAddOn>;
+      const type = String(addOn.type || "").trim();
+
+      if (type !== "heads_or_tails") {
+        return null;
+      }
+
+      const title = String(addOn.title || "Heads or Tails").trim();
+
+      return {
+        id: String(addOn.id || `event-addon-${type}-${index + 1}`),
+        type,
+        enabled: Boolean(addOn.enabled),
+        title: title || "Heads or Tails",
+        description: String(addOn.description || "").trim(),
+        instructions: String(addOn.instructions || "").trim(),
+        prizeTitle: String(addOn.prizeTitle || "").trim(),
+        entryPriceCents: normaliseNonNegativeInteger(addOn.entryPriceCents, 0),
+        collectAtCheckout: Boolean(addOn.collectAtCheckout),
+        maxEntriesPerBooking: normaliseNullablePositiveInteger(
+          addOn.maxEntriesPerBooking,
+        ),
+        sortOrder: normaliseNonNegativeInteger(addOn.sortOrder, index),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)) as EventFundraisingAddOn[];
+}
+
 function normaliseEvent(event: EventItem): EventItem {
   return {
     ...event,
@@ -371,6 +443,9 @@ function normaliseEvent(event: EventItem): EventItem {
     menu_options: normaliseMenuOptions(event.menu_options),
     seating_layout_json: normaliseSeatingLayoutJson(event.seating_layout_json),
     table_names_json: normaliseTableNamesJson(event.table_names_json),
+    event_addons_json: normaliseEventFundraisingAddOnsJson(
+      event.event_addons_json,
+    ),
     ask_dietary_requirements: event.ask_dietary_requirements ?? true,
     ask_menu_choice: event.ask_menu_choice ?? true,
   };
@@ -536,13 +611,14 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
         menu_options,
         seating_layout_json,
         table_names_json,
+        event_addons_json,
         ask_dietary_requirements,
         ask_menu_choice
       )
       values (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,
-        $18::jsonb,$19::jsonb,$20,$21
+        $18::jsonb,$19::jsonb,$20::jsonb,$21,$22
       )
       returning *
     `,
@@ -566,6 +642,9 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
       JSON.stringify(normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {})),
       JSON.stringify(normaliseTableNamesJson(input.tableNamesJson ?? {})),
+      JSON.stringify(
+        normaliseEventFundraisingAddOnsJson(input.eventAddOnsJson ?? []),
+      ),
       input.askDietaryRequirements ?? true,
       input.askMenuChoice ?? true,
     ],
@@ -610,8 +689,9 @@ export async function updateEvent(
         menu_options = $17::jsonb,
         seating_layout_json = $18::jsonb,
         table_names_json = $19::jsonb,
-        ask_dietary_requirements = $20,
-        ask_menu_choice = $21,
+        event_addons_json = $20::jsonb,
+        ask_dietary_requirements = $21,
+        ask_menu_choice = $22,
         updated_at = now()
       where id = $1
       returning *
@@ -646,6 +726,11 @@ export async function updateEvent(
       JSON.stringify(
         normaliseTableNamesJson(
           input.tableNamesJson ?? existing.table_names_json ?? {},
+        ),
+      ),
+      JSON.stringify(
+        normaliseEventFundraisingAddOnsJson(
+          input.eventAddOnsJson ?? existing.event_addons_json ?? [],
         ),
       ),
       input.askDietaryRequirements ?? existing.ask_dietary_requirements ?? true,
