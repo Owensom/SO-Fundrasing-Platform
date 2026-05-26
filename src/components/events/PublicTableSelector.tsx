@@ -2,6 +2,10 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
+import PublicEventCheckoutAddOnSelector, {
+  type PublicEventCheckoutAddOn,
+  type PublicEventCheckoutAddOnSelection,
+} from "@/components/events/PublicEventCheckoutAddOnSelector";
 
 type Seat = {
   id: string;
@@ -92,6 +96,21 @@ function calculatePlatformFeeCents(
   );
 
   return Math.max(0, grossTotalCents - subtotal);
+}
+
+function normaliseAddOnQuantity(
+  quantity: number,
+  addOn?: PublicEventCheckoutAddOn | null,
+) {
+  const cleanQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
+
+  const max = Number(addOn?.maxEntriesPerBooking || 0);
+
+  if (Number.isFinite(max) && max > 0) {
+    return Math.min(cleanQuantity, Math.floor(max));
+  }
+
+  return cleanQuantity;
 }
 
 function tableSortValue(value: string | null | undefined) {
@@ -441,6 +460,7 @@ export default function PublicTableSelector({
   platformFeePercent = 0,
   menuOptions = [],
   seatingLayoutJson = {},
+  checkoutAddOn = null,
 }: {
   eventId: string;
   seats: Seat[];
@@ -449,11 +469,13 @@ export default function PublicTableSelector({
   platformFeePercent?: number;
   menuOptions?: string[];
   seatingLayoutJson?: SeatingLayoutJson | null;
+  checkoutAddOn?: PublicEventCheckoutAddOn | null;
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
+  const [addOnQuantity, setAddOnQuantity] = useState(0);
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -515,25 +537,51 @@ export default function PublicTableSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
+  const safeAddOnQuantity = normaliseAddOnQuantity(
+    hasAccessCode ? 0 : addOnQuantity,
+    checkoutAddOn,
+  );
+
+  const selectedAddOns: PublicEventCheckoutAddOnSelection[] =
+    checkoutAddOn && safeAddOnQuantity > 0
+      ? [
+          {
+            type: checkoutAddOn.type,
+            quantity: safeAddOnQuantity,
+          },
+        ]
+      : [];
+
   const ticketTotal = cartSeats.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
 
+  const addOnTotal = checkoutAddOn
+    ? Number(checkoutAddOn.entryPriceCents || 0) * safeAddOnQuantity
+    : 0;
+
+  const checkoutSubtotal = ticketTotal + addOnTotal;
+
   const estimatedCoverFeeCents = calculatePlatformFeeCents(
-    ticketTotal,
+    checkoutSubtotal,
     platformFeePercent,
   );
 
-  const platformFeeCents = coverFees && !hasAccessCode ? estimatedCoverFeeCents : 0;
-  const totalTodayCents = hasAccessCode ? 0 : ticketTotal + platformFeeCents;
+  const platformFeeCents =
+    coverFees && !hasAccessCode ? estimatedCoverFeeCents : 0;
+
+  const totalTodayCents = hasAccessCode
+    ? 0
+    : checkoutSubtotal + platformFeeCents;
 
   function getSeatTicketType(seat: Seat) {
     const cartTicketTypeId = cartItems.find(
       (item) => item.seatId === seat.id,
     )?.ticketTypeId;
 
-    const ticketTypeId = cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
+    const ticketTypeId =
+      cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
 
     return ticketTypes.find((ticketType) => ticketType.id === ticketTypeId);
   }
@@ -547,6 +595,10 @@ export default function PublicTableSelector({
         ...patch,
       },
     }));
+  }
+
+  function updateAddOnQuantity(nextQuantity: number) {
+    setAddOnQuantity(normaliseAddOnQuantity(nextQuantity, checkoutAddOn));
   }
 
   function toggleSeat(seat: Seat) {
@@ -632,6 +684,7 @@ export default function PublicTableSelector({
           coverFees: hasAccessCode ? false : coverFees,
           platformFeeCents,
           accessCode: cleanedAccessCode || null,
+          addOns: selectedAddOns,
           items: cartItems.map((item) => {
             const data = guestData[item.seatId] || getDefaultGuest();
 
@@ -941,6 +994,20 @@ export default function PublicTableSelector({
                   Codes are validated securely before booking.
                 </small>
               </label>
+
+              {checkoutAddOn ? (
+                <>
+                  <div style={styles.summarySpacer} />
+
+                  <PublicEventCheckoutAddOnSelector
+                    addOn={checkoutAddOn}
+                    currency={currency}
+                    quantity={safeAddOnQuantity}
+                    disabled={hasAccessCode}
+                    onQuantityChange={updateAddOnQuantity}
+                  />
+                </>
+              ) : null}
             </div>
 
             <div>
@@ -1086,11 +1153,30 @@ export default function PublicTableSelector({
               )}
 
               <div style={styles.totalBox}>
-                <span>Ticket total</span>
+                <span>
+                  Ticket total
+                  {safeAddOnQuantity > 0
+                    ? ` • ${safeAddOnQuantity} add-on entr${
+                        safeAddOnQuantity === 1 ? "y" : "ies"
+                      }`
+                    : ""}
+                </span>
                 <strong>
-                  {currency} {moneyFromCents(ticketTotal)}
+                  {currency} {moneyFromCents(checkoutSubtotal)}
                 </strong>
               </div>
+
+              {checkoutAddOn && safeAddOnQuantity > 0 ? (
+                <div style={styles.addOnSummaryRow}>
+                  <span>
+                    {checkoutAddOn.title || "Heads or Tails"} ×{" "}
+                    {safeAddOnQuantity}
+                  </span>
+                  <strong>
+                    {currency} {moneyFromCents(addOnTotal)}
+                  </strong>
+                </div>
+              ) : null}
 
               {hasAccessCode ? (
                 <div style={styles.accessCodeNotice}>
@@ -1105,7 +1191,7 @@ export default function PublicTableSelector({
                     type="checkbox"
                     checked={coverFees}
                     onChange={(event) => setCoverFees(event.target.checked)}
-                    disabled={ticketTotal <= 0}
+                    disabled={checkoutSubtotal <= 0}
                   />
                   <span>
                     <strong>I’d like to cover platform and payment costs</strong>
@@ -1555,6 +1641,20 @@ const styles: Record<string, CSSProperties> = {
     color: "#fde68a",
     fontWeight: 950,
     fontSize: 18,
+  },
+  addOnSummaryRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.06)",
+    color: "#fef3c7",
+    fontWeight: 900,
+    fontSize: 14,
+    border: "1px solid rgba(255,255,255,0.12)",
   },
   totalBoxStrong: {
     display: "flex",
