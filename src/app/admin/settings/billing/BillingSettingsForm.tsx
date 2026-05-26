@@ -1359,7 +1359,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.45fr)",
     gap: 16,
-    alignItems: "center",
+    alignItems: "start",
     padding: 22,
     borderRadius: 28,
     background:
@@ -1400,6 +1400,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    minHeight: 62,
   },
 
   readinessLabel: {
@@ -1424,6 +1425,8 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "1fr",
     gap: 10,
     minWidth: 0,
+    alignContent: "start",
+    paddingTop: 36,
   },
 
   connectPrimaryButton: {
