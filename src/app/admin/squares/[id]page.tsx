@@ -827,7 +827,6 @@ export default async function AdminSquaresEditPage({
                     />
                   </Field>
                 </div>
-                                </div>
 
                 <Field label="Postal address">
                   <textarea
