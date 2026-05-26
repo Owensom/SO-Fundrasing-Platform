@@ -334,6 +334,7 @@ async function incrementAccessCodeUsage(input: {
     throw new Error("This access code is no longer available.");
   }
 }
+
 async function markEventOrderComplimentaryPaid(input: {
   orderId: string;
   accessCode: EventAccessCodeRow;
@@ -398,7 +399,6 @@ async function markSeatsComplimentarySold(input: {
     );
   }
 }
-
 async function sendComplimentaryEventReceipt(input: {
   tenantSlug: string;
   eventId: string;
@@ -486,22 +486,28 @@ function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
     return [];
   }
 
-  return rawAddOns
-    .map((addOn) => {
-      if (!addOn || typeof addOn !== "object") {
-        return null;
-      }
+  const normalisedAddOns: CheckoutAddOnItem[] = [];
 
-      const item = addOn as CheckoutAddOnItem;
+  for (const addOn of rawAddOns) {
+    if (!addOn || typeof addOn !== "object") {
+      continue;
+    }
 
-      return {
-        type: cleanText(item.type),
-        quantity: positiveQuantity(item.quantity),
-      };
-    })
-    .filter((addOn): addOn is CheckoutAddOnItem => {
-      return Boolean(addOn?.type) && positiveQuantity(addOn.quantity) > 0;
+    const item = addOn as CheckoutAddOnItem;
+    const type = cleanText(item.type);
+    const quantity = positiveQuantity(item.quantity);
+
+    if (!type || quantity <= 0) {
+      continue;
+    }
+
+    normalisedAddOns.push({
+      type,
+      quantity,
     });
+  }
+
+  return normalisedAddOns;
 }
 
 function validateCheckoutAddOns(input: {
@@ -771,7 +777,8 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-            if (accessCode) {
+
+      if (accessCode) {
         const order = await createPendingEventOrder({
           tenantSlug: event.tenant_slug,
           eventId: event.id,
@@ -826,8 +833,7 @@ export async function POST(req: Request) {
           url: complimentarySuccessUrl(req, event.slug),
         });
       }
-
-      const paymentSummary = normaliseEventPaymentSummary({
+            const paymentSummary = normaliseEventPaymentSummary({
         ticketTotalCents,
         coverFees,
         platformFeePercent,
