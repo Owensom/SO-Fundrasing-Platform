@@ -163,9 +163,7 @@ export default async function EventSlugPage({
     cleanText(headsOrTailsAddOn?.title) || "Heads or Tails";
 
   const headsOrTailsDescription = cleanText(headsOrTailsAddOn?.description);
-
   const headsOrTailsInstructions = cleanText(headsOrTailsAddOn?.instructions);
-
   const headsOrTailsPrizeTitle = cleanText(headsOrTailsAddOn?.prizeTitle);
 
   const headsOrTailsEntryPriceCents = Number(
@@ -179,13 +177,18 @@ export default async function EventSlugPage({
 
   const lowestTicketPrice =
     ticketTypes.length > 0
-      ? Math.min(...ticketTypes.map((ticketType) => Number(ticketType.price || 0)))
+      ? Math.min(
+          ...ticketTypes.map((ticketType) => Number(ticketType.price || 0)),
+        )
       : 0;
 
-  const availableSeats = seats.filter((seat) => seat.status === "available").length;
+  const availableSeats = seats.filter(
+    (seat) => seat.status === "available",
+  ).length;
 
   const publicDisplayName =
-    cleanText(brandingSettings?.public_display_name) || "SO Fundraising Platform";
+    cleanText(brandingSettings?.public_display_name) ||
+    "SO Fundraising Platform";
 
   const publicTagline =
     cleanText(brandingSettings?.public_tagline) ||
@@ -318,7 +321,9 @@ export default async function EventSlugPage({
           </Link>
 
           <div style={styles.badgeRow}>
-            <span style={brandedBadgeStyle}>{eventTypeLabel(event.event_type)}</span>
+            <span style={brandedBadgeStyle}>
+              {eventTypeLabel(event.event_type)}
+            </span>
             <span style={styles.statusPill}>Open for bookings</span>
           </div>
 
@@ -333,7 +338,8 @@ export default async function EventSlugPage({
               <span style={styles.metaLabel}>Date</span>
               <strong>{formatDate(event.starts_at)}</strong>
             </div>
-                        <div style={styles.metaCard}>
+
+            <div style={styles.metaCard}>
               <span style={styles.metaLabel}>Location</span>
               <strong>{event.location || "Location to be confirmed"}</strong>
             </div>
@@ -398,7 +404,10 @@ export default async function EventSlugPage({
           <Card>
             <h2 style={styles.noticeTitle}>Event details</h2>
 
-            <InfoRow label="Event type" value={eventTypeLabel(event.event_type)} />
+            <InfoRow
+              label="Event type"
+              value={eventTypeLabel(event.event_type)}
+            />
 
             {lowestTicketPrice > 0 && (
               <InfoRow
@@ -468,7 +477,7 @@ export default async function EventSlugPage({
               background: `radial-gradient(circle at top left, ${accentColour}22, transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)`,
             }}
           >
-            <div style={styles.addOnHeader}>
+            <div className="addOnHeader" style={styles.addOnHeader}>
               <div>
                 <div
                   style={{
@@ -481,7 +490,9 @@ export default async function EventSlugPage({
                   Event-night fundraiser
                 </div>
 
-                <h2 style={styles.addOnTitle}>{headsOrTailsTitle}</h2>
+                <h2 className="addOnTitle" style={styles.addOnTitle}>
+                  {headsOrTailsTitle}
+                </h2>
 
                 <p style={styles.addOnDescription}>
                   {headsOrTailsDescription ||
@@ -512,7 +523,7 @@ export default async function EventSlugPage({
               </div>
             </div>
 
-            <div style={styles.addOnDetailsGrid}>
+            <div className="addOnDetailsGrid" style={styles.addOnDetailsGrid}>
               <div style={styles.addOnDetailCard}>
                 <span style={styles.addOnDetailLabel}>How it works</span>
                 <strong style={styles.addOnDetailValue}>
@@ -700,6 +711,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1083,386 +1095,281 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 10,
   },
-  const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    minHeight: "100vh",
-    paddingBottom: 48,
-    overflowX: "hidden",
-  },
 
-  brandHeader: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 0.34fr)",
-    gap: 14,
-    alignItems: "stretch",
-    maxWidth: 1220,
-    margin: "18px auto 14px",
+  ticketItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
     padding: 14,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.94)",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 14px 38px rgba(15,23,42,0.07)",
-    backdropFilter: "blur(14px)",
-  },
-
-  brandIdentity: {
-    display: "grid",
-    gridTemplateColumns: "72px minmax(0, 1fr)",
-    gap: 14,
-    alignItems: "center",
-    minWidth: 0,
-  },
-
-  brandLogoWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
-  },
-
-  brandLogo: {
-    display: "block",
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 7,
-  },
-
-  brandLogoFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    border: "2px solid",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-
-  brandCopy: {
-    display: "grid",
-    gap: 4,
-    minWidth: 0,
-  },
-
-  brandKicker: {
-    margin: 0,
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  brandTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(30px, 4.6vw, 50px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
-    overflowWrap: "anywhere",
-  },
-
-  brandTagline: {
-    margin: 0,
-    color: "#475569",
-    fontSize: 14,
-    lineHeight: 1.35,
-    fontWeight: 850,
-    overflowWrap: "anywhere",
-  },
-
-  brandFeature: {
-    display: "grid",
-    gap: 5,
-    alignContent: "center",
-    padding: 12,
-    borderRadius: 18,
-    border: "1px solid",
-    minWidth: 0,
-  },
-
-  brandFeatureKicker: {
-    color: "#92400e",
-    fontSize: 10,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  brandFeatureTitle: {
-    color: "#0f172a",
-    fontSize: 18,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  brandFeatureText: {
-    color: "#475569",
-    fontSize: 12,
-    lineHeight: 1.35,
-    fontWeight: 750,
-  },
-
-  hero: {
-    position: "relative",
-    width: "100%",
-    minHeight: "clamp(430px, 68vh, 740px)",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "flex-end",
-  },
-
-  heroBackgroundImage: {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    display: "block",
-  },
-
-  heroOverlay: {
-    position: "absolute",
-    inset: 0,
-  },
-
-  heroInner: {
-    position: "relative",
-    zIndex: 2,
-    width: "100%",
-    maxWidth: 1220,
-    margin: "0 auto",
-    padding: "72px 14px 28px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
-    boxSizing: "border-box",
-  },
-
-  backLink: {
-    display: "inline-flex",
-    marginBottom: 14,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 13,
-    backdropFilter: "blur(10px)",
-    maxWidth: "100%",
-    boxSizing: "border-box",
-  },
-
-  badgeRow: {
-    display: "flex",
-    gap: 8,
     flexWrap: "wrap",
-    alignItems: "center",
-    marginBottom: 14,
+    minWidth: 0,
   },
 
-  badge: {
-    display: "inline-flex",
-    padding: "8px 12px",
+  ticketItemText: {
+    minWidth: 0,
+    flex: "1 1 190px",
+    overflowWrap: "anywhere",
+  },
+
+  pricePill: {
+    whiteSpace: "nowrap",
     borderRadius: 999,
+    padding: "7px 11px",
+    color: "#fef3c7",
     fontSize: 13,
-    fontWeight: 950,
-    backdropFilter: "blur(10px)",
+    flexShrink: 0,
     border: "1px solid",
   },
 
-  statusPill: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#dcfce7",
-    color: "#166534",
-    border: "1px solid #bbf7d0",
-    fontSize: 13,
-    fontWeight: 950,
-    backdropFilter: "blur(10px)",
+  addOnPanel: {
+    margin: "0 0 18px",
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 28,
+    border: "1px solid",
+    color: "#ffffff",
+    boxShadow: "0 18px 48px rgba(15,23,42,0.16)",
+    overflow: "hidden",
   },
 
-  title: {
+  addOnHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.34fr)",
+    gap: 16,
+    alignItems: "stretch",
+  },
+
+  addOnEyebrow: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 12,
+  },
+
+  addOnTitle: {
     margin: 0,
-    maxWidth: 900,
-    fontSize: "clamp(34px, 11vw, 96px)",
+    color: "#ffffff",
+    fontSize: "clamp(34px, 7vw, 62px)",
     lineHeight: 0.96,
     letterSpacing: "-0.065em",
     fontWeight: 1000,
-    wordBreak: "break-word",
     overflowWrap: "anywhere",
   },
 
-  description: {
-    margin: "16px 0 0",
-    color: "#e2e8f0",
-    fontSize: "clamp(15px, 4vw, 20px)",
+  addOnDescription: {
+    margin: "12px 0 0",
+    color: "#dbeafe",
+    fontSize: "clamp(15px, 3vw, 18px)",
     lineHeight: 1.55,
-    maxWidth: 780,
+    maxWidth: 760,
     overflowWrap: "anywhere",
   },
 
-  heroMeta: {
+  addOnPriceCard: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 10,
-    marginTop: 22,
-    maxWidth: 920,
-  },
-
-  metaCard: {
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    display: "grid",
+    alignContent: "center",
     gap: 6,
-    backdropFilter: "blur(12px)",
+    padding: 16,
+    borderRadius: 22,
+    border: "1px solid",
     minWidth: 0,
-    overflowWrap: "anywhere",
   },
 
-  metaLabel: {
+  addOnPriceLabel: {
     color: "#cbd5e1",
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.08em",
   },
 
-  heroFooter: {
-    marginTop: 18,
-    width: "fit-content",
-    maxWidth: "100%",
-    padding: "14px 16px",
-    borderRadius: 18,
-    background: "rgba(15,23,42,0.74)",
+  addOnPriceValue: {
     color: "#ffffff",
-    display: "grid",
-    gap: 4,
-    backdropFilter: "blur(12px)",
-    boxSizing: "border-box",
+    fontSize: 28,
+    lineHeight: 1,
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
-  contentWrap: {
-    maxWidth: 1220,
-    margin: "0 auto",
-    padding: "0 14px",
-    boxSizing: "border-box",
-    width: "100%",
+  addOnPriceHint: {
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 800,
   },
 
-  noticeCard: {
+  addOnDetailsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+    marginTop: 16,
+  },
+
+  addOnDetailCard: {
+    display: "grid",
+    gap: 7,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    minWidth: 0,
+  },
+
+  addOnDetailLabel: {
+    color: "#bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  addOnDetailValue: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+    whiteSpace: "pre-line",
+  },
+
+  addOnFootnote: {
+    margin: "15px 0 0",
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+
+  muted: {
+    color: "#64748b",
+  },
+
+  mutedLight: {
+    margin: "5px 0 0",
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 14,
+    lineHeight: 1.45,
+    overflowWrap: "anywhere",
+  },
+
+  emptyDark: {
+    padding: 14,
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px dashed rgba(255,255,255,0.24)",
+    color: "#ffffff",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+
+  successCard: {
     padding: 16,
     borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 14px rgba(15,23,42,0.05)",
-    margin: "18px 0",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    flexWrap: "wrap",
-    alignItems: "center",
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontWeight: 950,
+    marginTop: 18,
+    marginBottom: 16,
   },
 
-  noticeTextBlock: {
-    minWidth: 0,
-    flex: "1 1 260px",
-  },
-
-  noticeTitle: {
-    margin: 0,
-    fontSize: "clamp(21px, 6vw, 26px)",
-    color: "#0f172a",
-    letterSpacing: "-0.03em",
-    overflowWrap: "anywhere",
-  },
-
-  noticeText: {
-    margin: "8px 0 0",
-    color: "#475569",
-    lineHeight: 1.55,
-    overflowWrap: "anywhere",
-  },
-
-  noticeChip: {
-    padding: 14,
-    borderRadius: 18,
-    border: "1px solid #e2e8f0",
-    display: "grid",
-    gap: 5,
-    minWidth: 0,
-    width: "min(100%, 300px)",
-    overflowWrap: "anywhere",
-  },
-
-  contentGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-    gap: 18,
-    marginBottom: 18,
-    alignItems: "start",
-  },
-
-  card: {
-    padding: 18,
+  errorCard: {
+    padding: 16,
     borderRadius: 22,
+    background: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontWeight: 950,
+    marginTop: 18,
+    marginBottom: 16,
+  },
+
+  bookSection: {
+    padding: 16,
+    borderRadius: 24,
     background: "#ffffff",
-    border: "1px solid rgba(13,27,61,0.10)",
+    border: "1px solid #e2e8f0",
     boxShadow: "0 12px 34px rgba(15,23,42,0.08)",
     minWidth: 0,
     overflow: "hidden",
   },
 
-  infoRow: {
-    margin: "0 0 8px",
-    fontSize: 15,
-    lineHeight: 1.45,
-    overflowWrap: "anywhere",
+  bookHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    gap: 14,
+    flexWrap: "wrap",
+    marginBottom: 18,
   },
 
-  detailDescription: {
-    margin: "16px 0 0",
-    color: "#475569",
-    whiteSpace: "pre-line",
-    fontSize: 15,
-    lineHeight: 1.65,
-    fontWeight: 600,
-    overflowWrap: "anywhere",
-  },
-
-  ticketPanel: {
-    padding: 18,
-    borderRadius: 22,
-    background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)",
-    color: "#ffffff",
-    border: "1px solid rgba(251,191,36,0.24)",
-    boxShadow: "0 12px 34px rgba(15,23,42,0.12)",
+  bookHeaderText: {
     minWidth: 0,
-    overflow: "hidden",
+    flex: "1 1 260px",
   },
 
-  ticketPanelTitle: {
-    margin: "0 0 14px",
-    color: "#fef3c7",
-    fontSize: "clamp(21px, 6vw, 26px)",
-    letterSpacing: "-0.03em",
+  bookTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(25px, 7vw, 34px)",
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
-  stack: {
-    display: "grid",
-    gap: 10,
+  bookText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    fontSize: 15,
+    lineHeight: 1.5,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
+
+  checkoutBadge: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    color: "#ffffff",
+    fontWeight: 900,
+    fontSize: 13,
+    maxWidth: "100%",
+    boxSizing: "border-box",
+  },
+
+  emptyLarge: {
+    padding: 22,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    textAlign: "center",
+    color: "#111827",
+    fontSize: 18,
+  },
+
+  footer: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid",
+    textAlign: "center",
+  },
+
+  footerText: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+    lineHeight: 1.5,
+  },
+};
