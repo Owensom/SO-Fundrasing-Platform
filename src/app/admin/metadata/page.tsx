@@ -102,21 +102,39 @@ function paymentReference(payment: PaymentRow) {
 
 function paymentPaidAt(payment: PaymentRow) {
   return (
-    payment.created_at ||
     payment.payout_reconciled_at ||
     payment.paid_out_at ||
+    payment.created_at ||
     null
   );
 }
 
 function paymentCampaignName(payment: PaymentRow) {
   if (payment.campaign_title) return payment.campaign_title;
+
   if (payment.payment_type === "raffle" && payment.raffle_id) {
     return payment.raffle_id;
   }
+
   if (payment.payment_type === "squares" && payment.squares_game_id) {
     return payment.squares_game_id;
   }
+
+  if (payment.payment_type === "donation") {
+    return "Donation";
+  }
+
+  return "Payment";
+}
+
+function paymentTypeLabel(value?: string | null) {
+  const clean = String(value || "payment").trim().toLowerCase();
+
+  if (clean === "raffle") return "Raffle";
+  if (clean === "squares") return "Squares";
+  if (clean === "event") return "Event";
+  if (clean === "auction") return "Auction";
+  if (clean === "donation") return "Donation";
 
   return "Payment";
 }
@@ -179,8 +197,7 @@ export default async function AdminRevenuePage() {
     `,
     [tenantSlug],
   );
-
-  const payments = await query<PaymentRow>(
+    const payments = await query<PaymentRow>(
     `
       select
         p.id::text,
@@ -240,10 +257,34 @@ export default async function AdminRevenuePage() {
     0,
   );
 
+  const totalDonorFeeCents = currencySummaries.reduce(
+    (sum, row) => sum + Number(row.donor_fee_cents ?? 0),
+    0,
+  );
+
+  const totalNetCents = currencySummaries.reduce(
+    (sum, row) => sum + Number(row.net_amount_cents ?? 0),
+    0,
+  );
+
   const totalPendingPayoutCents = currencySummaries.reduce(
     (sum, row) => sum + Number(row.pending_net_amount_cents ?? 0),
     0,
   );
+
+  const totalPaidOutCents = currencySummaries.reduce(
+    (sum, row) => sum + Number(row.paid_net_amount_cents ?? 0),
+    0,
+  );
+
+  const totalPendingPaymentCount = tenantSummaries.reduce(
+    (sum, row) => sum + Number(row.pending_payment_count ?? 0),
+    0,
+  );
+
+  const donorCoveredCount = payments.filter(
+    (payment) => payment.donor_covered_fees,
+  ).length;
 
   const primaryCurrency = currencySummaries[0]?.currency || "gbp";
 
@@ -254,79 +295,129 @@ export default async function AdminRevenuePage() {
       <section className="revenue-hero" style={styles.hero}>
         <div style={styles.heroGlow} />
 
-        <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Finance operations</div>
+        <div className="revenue-hero-main" style={styles.heroMain}>
+          <div style={styles.heroContent}>
+            <div style={styles.eyebrow}>Finance operations</div>
 
-          <h1 className="so-brand-heading revenue-title" style={styles.title}>
-            Revenue dashboard
-          </h1>
+            <h1 className="so-brand-heading revenue-title" style={styles.title}>
+              Revenue dashboard
+            </h1>
 
-          <p style={styles.subtitle}>
-            Platform fee accounting, donor-covered fees, payout tracking and
-            financial oversight for this tenant.
-          </p>
+            <p style={styles.subtitle}>
+              Gross revenue, platform fee accounting, donor-covered fees, net
+              owed and manual payout tracking for this tenant.
+            </p>
 
-          <div className="revenue-hero-stats" style={styles.heroStats}>
-            <HeroStat label="Payments" value={totalPayments} />
-            <HeroStat label="Currencies" value={currencySummaries.length} />
-            <HeroStat label="Tenant rows" value={tenantSummaries.length} />
-            <HeroStat label="Latest rows" value={payments.length} />
+            <div className="revenue-hero-stats" style={styles.heroStats}>
+              <HeroStat label="Paid payments" value={totalPayments} />
+
+              <HeroStat
+                label="Gross"
+                value={money(totalGrossCents, primaryCurrency)}
+              />
+
+              <HeroStat
+                label="Net owed"
+                value={money(totalNetCents, primaryCurrency)}
+              />
+
+              <HeroStat label="Tenant" value={tenantSlug} />
+            </div>
           </div>
+
+          <aside className="revenue-hero-panel" style={styles.heroPanel}>
+            <div style={styles.heroPanelTitle}>Finance overview</div>
+
+            <p style={styles.heroPanelText}>
+              Review the tenant’s paid platform payments and manually mark
+              payout batches as paid once reconciled.
+            </p>
+
+            <div
+              className="revenue-hero-panel-grid"
+              style={styles.heroPanelGrid}
+            >
+              <MiniMetric
+                label="Platform fee"
+                value={money(totalPlatformFeeCents, primaryCurrency)}
+              />
+
+              <MiniMetric
+                label="Donor-covered fees"
+                value={money(totalDonorFeeCents, primaryCurrency)}
+              />
+
+              <MiniMetric
+                label="Pending payouts"
+                value={money(totalPendingPayoutCents, primaryCurrency)}
+              />
+
+              <MiniMetric
+                label="Paid out"
+                value={money(totalPaidOutCents, primaryCurrency)}
+              />
+            </div>
+          </aside>
         </div>
 
-        <aside className="revenue-hero-panel" style={styles.heroPanel}>
-          <div style={styles.heroPanelTitle}>Finance overview</div>
+        <div className="revenue-top-actions" style={styles.topActions}>
+          <Link
+            href="/admin"
+            className="revenue-secondary-button"
+            style={styles.secondaryButton}
+          >
+            ← Back to dashboard
+          </Link>
 
-          <p style={styles.heroPanelText}>
-            Review gross revenue, platform fees, donor-covered fees and payout
-            obligations for the current tenant only.
-          </p>
+          <Link
+            href="/admin/orders"
+            className="revenue-secondary-button"
+            style={styles.secondaryButton}
+          >
+            Orders dashboard
+          </Link>
 
-          <div className="revenue-hero-panel-grid" style={styles.heroPanelGrid}>
-            <MiniMetric
-              label="Gross"
-              value={money(totalGrossCents, primaryCurrency)}
-            />
+          <Link
+            href="/admin/customers"
+            className="revenue-secondary-button"
+            style={styles.secondaryButton}
+          >
+            Customers dashboard
+          </Link>
 
-            <MiniMetric
-              label="Platform fees"
-              value={money(totalPlatformFeeCents, primaryCurrency)}
-            />
-
-            <MiniMetric
-              label="Pending payouts"
-              value={money(totalPendingPayoutCents, primaryCurrency)}
-            />
-          </div>
-
-          <div className="revenue-top-actions" style={styles.topActions}>
-            <Link
-              href="/admin"
-              className="revenue-secondary-button"
-              style={styles.secondaryButton}
-            >
-              ← Back to dashboard
-            </Link>
-
-            <Link
-              href="/admin/orders"
-              className="revenue-primary-button"
-              style={styles.primaryButton}
-            >
-              Orders →
-            </Link>
-          </div>
-        </aside>
+          <Link
+            href="/admin/donations"
+            className="revenue-primary-button"
+            style={styles.primaryButton}
+          >
+            Donations report
+          </Link>
+        </div>
       </section>
 
       <section className="revenue-summary-grid" style={styles.summaryGrid}>
         <SummaryCard label="Total payments" value={totalPayments} />
+        <SummaryCard label="Pending payouts" value={totalPendingPaymentCount} />
         <SummaryCard label="Currencies" value={currencySummaries.length} />
-        <SummaryCard label="Tenant" value={tenantSlug} />
-        <SummaryCard label="Latest payment rows" value={payments.length} />
+        <SummaryCard label="Latest rows" value={payments.length} />
+        <SummaryCard
+          label="Platform fees"
+          value={money(totalPlatformFeeCents, primaryCurrency)}
+        />
+        <SummaryCard
+          label="Donor-covered"
+          value={money(totalDonorFeeCents, primaryCurrency)}
+        />
+        <SummaryCard
+          label="Pending net"
+          value={money(totalPendingPayoutCents, primaryCurrency)}
+        />
+        <SummaryCard
+          label="Paid out"
+          value={money(totalPaidOutCents, primaryCurrency)}
+        />
       </section>
-
-      <section className="revenue-currency-grid" style={styles.currencyGrid}>
+            <section className="revenue-currency-grid" style={styles.currencyGrid}>
         {currencySummaries.length ? (
           currencySummaries.map((row) => {
             const currency = row.currency || "gbp";
@@ -363,7 +454,7 @@ export default async function AdminRevenuePage() {
                   />
 
                   <MetricBlock
-                    label="Platform fees"
+                    label="Platform fee"
                     value={money(row.platform_fee_cents, currency)}
                   />
 
@@ -373,7 +464,13 @@ export default async function AdminRevenuePage() {
                   />
 
                   <MetricBlock
-                    label="Pending payouts"
+                    label="Net owed"
+                    value={money(row.net_amount_cents, currency)}
+                    tone="blue"
+                  />
+
+                  <MetricBlock
+                    label="Pending payout"
                     value={money(row.pending_net_amount_cents, currency)}
                     tone="orange"
                   />
@@ -409,8 +506,9 @@ export default async function AdminRevenuePage() {
             </h2>
 
             <p style={styles.sectionText}>
-              Track platform fees, donor contributions, pending payouts and
-              completed payout batches for the verified current tenant.
+              Track platform fees, donor-covered fee contributions, pending
+              tenant payouts and completed payout batches for the verified
+              current tenant.
             </p>
           </div>
 
@@ -528,8 +626,8 @@ export default async function AdminRevenuePage() {
             </h2>
 
             <p style={styles.sectionText}>
-              Review recent checkout activity, donor fee coverage and payout
-              tracking for this tenant.
+              Review recent checkout activity, donor fee coverage, gross value,
+              platform fee, net owed and payout tracking for this tenant.
             </p>
           </div>
 
@@ -556,6 +654,10 @@ export default async function AdminRevenuePage() {
                         {formatDate(payment.created_at)}
                       </div>
 
+                      <div style={styles.paymentTypePill}>
+                        {paymentTypeLabel(payment.payment_type)}
+                      </div>
+
                       <h3 style={styles.paymentTitle}>{campaignName}</h3>
 
                       <div style={styles.paymentCustomer}>
@@ -567,7 +669,8 @@ export default async function AdminRevenuePage() {
                       className="revenue-payment-net-block"
                       style={styles.paymentNetBlock}
                     >
-                      <span style={styles.paymentLabel}>Net</span>
+                      <span style={styles.paymentLabel}>Net owed</span>
+
                       <strong style={styles.paymentNet}>
                         {money(payment.net_amount_cents, currency)}
                       </strong>
@@ -582,22 +685,27 @@ export default async function AdminRevenuePage() {
                       label="Tenant"
                       value={payment.tenant_slug || "—"}
                     />
+
                     <PaymentMini
                       label="Gross"
                       value={money(payment.gross_amount_cents, currency)}
                     />
+
                     <PaymentMini
-                      label="Fee"
+                      label="Platform fee"
                       value={money(payment.platform_fee_cents, currency)}
                     />
+
                     <PaymentMini
                       label="Donor fee"
                       value={money(payment.donor_fee_cents, currency)}
                     />
+
                     <PaymentMini
                       label="Covered?"
                       value={payment.donor_covered_fees ? "Yes" : "No"}
                     />
+
                     <PaymentMini
                       label="Payout"
                       value={
@@ -613,6 +721,7 @@ export default async function AdminRevenuePage() {
                         </span>
                       }
                     />
+
                     <PaymentMini
                       label="Reference"
                       value={
@@ -621,7 +730,9 @@ export default async function AdminRevenuePage() {
                         </span>
                       }
                     />
+
                     <PaymentMini label="Paid at" value={formatDate(paidAt)} />
+
                     <PaymentMini
                       label="Status"
                       value={payment.payment_status || "—"}
@@ -670,7 +781,6 @@ function MiniMetric({
     </div>
   );
 }
-
 function SummaryCard({
   label,
   value,
@@ -694,14 +804,16 @@ function MetricBlock({
 }: {
   label: string;
   value: ReactNode;
-  tone?: "default" | "green" | "orange";
+  tone?: "default" | "blue" | "green" | "orange";
 }) {
   const valueStyle =
     tone === "green"
       ? styles.greenText
       : tone === "orange"
         ? styles.pendingText
-        : styles.metricValue;
+        : tone === "blue"
+          ? styles.blueText
+          : styles.metricValue;
 
   return (
     <div style={styles.metricBlock}>
@@ -759,11 +871,15 @@ const responsiveStyles = `
 }
 
 @media (max-width: 1180px) {
-  .revenue-page .revenue-hero {
+  .revenue-page .revenue-hero-main {
     grid-template-columns: 1fr !important;
   }
 
   .revenue-page .revenue-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .revenue-page .revenue-top-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -786,7 +902,8 @@ const responsiveStyles = `
   .revenue-page .revenue-hero-stats,
   .revenue-page .revenue-summary-grid,
   .revenue-page .revenue-hero-panel-grid,
-  .revenue-page .revenue-payment-metrics-grid {
+  .revenue-page .revenue-payment-metrics-grid,
+  .revenue-page .currencyMetrics {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
@@ -819,11 +936,9 @@ const responsiveStyles = `
   .revenue-page .revenue-hero-stats,
   .revenue-page .revenue-summary-grid,
   .revenue-page .revenue-hero-panel-grid,
-  .revenue-page .revenue-payment-metrics-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .revenue-page .revenue-top-actions {
+  .revenue-page .revenue-payment-metrics-grid,
+  .revenue-page .revenue-top-actions,
+  .revenue-page .currencyMetrics {
     grid-template-columns: 1fr !important;
   }
 
@@ -852,17 +967,26 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
-    gap: 24,
-    padding: 30,
-    borderRadius: 34,
+    gap: 18,
+    padding: 28,
+    borderRadius: 30,
     background:
       "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
-    marginBottom: 18,
-    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    marginBottom: 16,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroMain: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
+    gap: 22,
+    alignItems: "stretch",
+    minWidth: 0,
   },
 
   heroGlow: {
@@ -876,11 +1000,14 @@ const styles: Record<string, CSSProperties> = {
   heroContent: {
     position: "relative",
     zIndex: 1,
+    display: "grid",
+    alignContent: "start",
     minWidth: 0,
   },
 
   eyebrow: {
     display: "inline-flex",
+    width: "fit-content",
     alignItems: "center",
     justifyContent: "center",
     padding: "8px 14px",
@@ -892,46 +1019,46 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 16,
+    marginBottom: 12,
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(52px, 7vw, 82px)",
-    lineHeight: 0.92,
-    letterSpacing: "-0.08em",
+    fontSize: "clamp(44px, 7vw, 68px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.07em",
     color: "#ffffff",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
   subtitle: {
-    margin: "18px 0 0",
+    margin: "14px 0 0",
     maxWidth: 760,
     color: "#dbeafe",
-    fontSize: 18,
-    lineHeight: 1.6,
-    fontWeight: 700,
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 12,
-    marginTop: 24,
+    gap: 10,
+    marginTop: 22,
   },
 
   heroStat: {
     display: "grid",
-    gap: 6,
-    padding: 16,
-    borderRadius: 20,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.26)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
-    backdropFilter: "blur(12px)",
+    gap: 5,
+    padding: 13,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
 
   heroStatLabel: {
@@ -942,7 +1069,7 @@ const styles: Record<string, CSSProperties> = {
 
   heroStatValue: {
     color: "#ffffff",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 950,
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
@@ -952,10 +1079,10 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gap: 18,
+    gap: 13,
     alignContent: "start",
-    padding: 22,
-    borderRadius: 28,
+    padding: 18,
+    borderRadius: 24,
     background: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(148,163,184,0.26)",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
@@ -965,486 +1092,336 @@ const styles: Record<string, CSSProperties> = {
 
   heroPanelTitle: {
     color: "#ffffff",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 950,
-    letterSpacing: "-0.04em",
+    letterSpacing: "-0.035em",
   },
 
   heroPanelText: {
     margin: 0,
     color: "#dbeafe",
-    lineHeight: 1.6,
+    lineHeight: 1.45,
     fontWeight: 700,
   },
+  function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div style={styles.summaryCard}>
+      <span style={styles.summaryLabel}>{label}</span>
 
-  heroPanelGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 12,
+      <strong style={styles.summaryValue}>{value}</strong>
+    </div>
+  );
+}
+
+function MetricBlock({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "default" | "blue" | "green" | "orange";
+}) {
+  const valueStyle =
+    tone === "green"
+      ? styles.greenText
+      : tone === "orange"
+        ? styles.pendingText
+        : tone === "blue"
+          ? styles.blueText
+          : styles.metricValue;
+
+  return (
+    <div style={styles.metricBlock}>
+      <div style={styles.metricLabel}>{label}</div>
+
+      <div style={valueStyle}>{value}</div>
+    </div>
+  );
+}
+
+function PaymentMini({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div style={styles.paymentMini}>
+      <div style={styles.paymentMiniLabel}>{label}</div>
+
+      <div style={styles.paymentMiniValue}>{value}</div>
+    </div>
+  );
+}
+
+const responsiveStyles = `
+.revenue-page,
+.revenue-page * {
+  box-sizing: border-box;
+}
+
+.revenue-page {
+  overflow-x: hidden;
+}
+
+.revenue-page section,
+.revenue-page article,
+.revenue-page div {
+  min-width: 0;
+}
+
+.revenue-page .revenue-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  padding-bottom: 8px;
+}
+
+.revenue-page .revenue-table-wrap table {
+  width: max-content !important;
+}
+
+@media (max-width: 1180px) {
+  .revenue-page .revenue-hero-main {
+    grid-template-columns: 1fr !important;
+  }
+
+  .revenue-page .revenue-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .revenue-page .revenue-top-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .revenue-page {
+    padding: 18px 12px 48px !important;
+  }
+
+  .revenue-page .revenue-hero {
+    padding: 22px !important;
+    border-radius: 28px !important;
+  }
+
+  .revenue-page .revenue-title {
+    font-size: clamp(38px, 11vw, 56px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .revenue-page .revenue-hero-stats,
+  .revenue-page .revenue-summary-grid,
+  .revenue-page .revenue-hero-panel-grid,
+  .revenue-page .revenue-payment-metrics-grid,
+  .revenue-page .currencyMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .revenue-page .revenue-payment-card-top {
+    grid-template-columns: 1fr !important;
+  }
+
+  .revenue-page .revenue-payment-net-block {
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .revenue-page {
+    padding: 14px 10px 42px !important;
+  }
+
+  .revenue-page .revenue-hero,
+  .revenue-page .revenue-panel,
+  .revenue-page .revenue-currency-card {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .revenue-page .revenue-title {
+    font-size: clamp(34px, 12vw, 46px) !important;
+  }
+
+  .revenue-page .revenue-hero-stats,
+  .revenue-page .revenue-summary-grid,
+  .revenue-page .revenue-hero-panel-grid,
+  .revenue-page .revenue-payment-metrics-grid,
+  .revenue-page .revenue-top-actions,
+  .revenue-page .currencyMetrics {
+    grid-template-columns: 1fr !important;
+  }
+
+  .revenue-page .revenue-primary-button,
+  .revenue-page .revenue-secondary-button {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+}
+`;
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    width: "100%",
+    maxWidth: 1320,
+    margin: "0 auto",
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
+    boxSizing: "border-box",
+    overflowX: "hidden",
   },
 
-  miniMetric: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid rgba(217,119,6,0.20)",
-  },
-
-  miniMetricLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 850,
-  },
-
-  miniMetricValue: {
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  topActions: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  primaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 950,
-    border: "1px solid #1683f8",
-    boxShadow: "0 14px 28px rgba(22,131,248,0.28)",
-    whiteSpace: "nowrap",
-    textAlign: "center",
-  },
-
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.06)",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 900,
-    border: "1px solid rgba(148,163,184,0.52)",
-    backdropFilter: "blur(10px)",
-    whiteSpace: "nowrap",
-    textAlign: "center",
-  },
-
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 12,
-    marginBottom: 18,
-  },
-
-  summaryCard: {
-    display: "grid",
-    gap: 6,
-    padding: 16,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 850,
-  },
-
-  summaryValue: {
-    color: "#0f172a",
-    fontSize: 30,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-    overflowWrap: "anywhere",
-  },
-
-  currencyGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-    gap: 16,
-    marginBottom: 18,
-  },
-
-  currencyCard: {
+  hero: {
+    position: "relative",
     display: "grid",
     gap: 18,
-    padding: 22,
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
-  },
-
-  currencyHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-
-  currencyKicker: {
-    margin: "0 0 7px",
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  currencyTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 28,
-    letterSpacing: "-0.05em",
-  },
-
-  currencyBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  currencyMetrics: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  metricBlock: {
-    display: "grid",
-    gap: 6,
-    padding: 16,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-
-  metricLabel: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 850,
-  },
-
-  metricValue: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  greenText: {
-    color: "#166534",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  pendingText: {
-    color: "#c2410c",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  panel: {
-    padding: 22,
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
-    marginBottom: 18,
-    minWidth: 0,
-    overflow: "hidden",
-  },
-
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-    marginBottom: 18,
-  },
-
-  kicker: {
-    margin: "0 0 7px",
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.05em",
-  },
-
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.6,
-    maxWidth: 760,
-    fontWeight: 700,
-  },
-
-  countPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  tableWrap: {
-    width: "100%",
-    maxWidth: "100%",
-    overflowX: "auto",
-    overflowY: "visible",
-    WebkitOverflowScrolling: "touch",
-    paddingBottom: 8,
-  },
-
-  table: {
-    width: "max-content",
-    minWidth: 1120,
-    borderCollapse: "separate",
-    borderSpacing: "0 10px",
-  },
-
-  th: {
-    padding: "8px 10px",
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 950,
-    textAlign: "left",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    whiteSpace: "nowrap",
-  },
-
-  td: {
-    padding: "14px 10px",
-    background: "#f8fafc",
-    borderTop: "1px solid #e2e8f0",
-    borderBottom: "1px solid #e2e8f0",
-    verticalAlign: "middle",
-    whiteSpace: "nowrap",
-  },
-
-  currencyPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "7px 10px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  primaryText: {
-    color: "#0f172a",
-    fontWeight: 950,
-  },
-
-  secondaryText: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 750,
-  },
-
-  badge: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "7px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "capitalize",
-  },
-
-  badgePending: {
-    background: "#fff7ed",
-    color: "#c2410c",
-    border: "1px solid #fed7aa",
-  },
-
-  badgePaid: {
-    background: "#ecfdf5",
-    color: "#047857",
-    border: "1px solid #a7f3d0",
-  },
-
-  paymentList: {
-    display: "grid",
-    gap: 12,
-  },
-
-  paymentCard: {
-    display: "grid",
-    gap: 14,
-    padding: 16,
-    borderRadius: 22,
+    padding: 28,
+    borderRadius: 30,
     background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 16,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
+    overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
   },
 
-  paymentCardTop: {
+  heroMain: {
+    position: "relative",
+    zIndex: 1,
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 16,
-    alignItems: "start",
-  },
-
-  paymentTitleBlock: {
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
+    gap: 22,
+    alignItems: "stretch",
     minWidth: 0,
   },
 
-  paymentDate: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 850,
-    marginBottom: 5,
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
   },
 
-  paymentTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 20,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  paymentCustomer: {
-    marginTop: 6,
-    color: "#334155",
-    fontSize: 14,
-    fontWeight: 800,
-    overflowWrap: "anywhere",
-  },
-
-  paymentNetBlock: {
+  heroContent: {
+    position: "relative",
+    zIndex: 1,
     display: "grid",
-    gap: 4,
-    justifyItems: "end",
-    textAlign: "right",
-    minWidth: 120,
+    alignContent: "start",
+    minWidth: 0,
   },
 
-  paymentLabel: {
-    color: "#64748b",
+  eyebrow: {
+    display: "inline-flex",
+    width: "fit-content",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 14px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.24)",
+    color: "#facc15",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    marginBottom: 12,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
-  paymentNet: {
-    color: "#0f172a",
-    fontSize: 24,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
+  title: {
+    margin: 0,
+    fontSize: "clamp(44px, 7vw, 68px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.07em",
+    color: "#ffffff",
+    overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
-  paymentMetricsGrid: {
+  subtitle: {
+    margin: "14px 0 0",
+    maxWidth: 760,
+    color: "#dbeafe",
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 10,
+    marginTop: 22,
   },
 
-  paymentMini: {
+  heroStat: {
     display: "grid",
     gap: 5,
-    padding: 12,
+    padding: 13,
     borderRadius: 16,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
     minWidth: 0,
-  },
-
-  paymentMiniLabel: {
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-
-  paymentMiniValue: {
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 850,
     overflowWrap: "anywhere",
   },
 
-  emptyCard: {
-    padding: 24,
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+  heroStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: 850,
   },
 
-  emptyTitle: {
-    color: "#0f172a",
+  heroStatValue: {
+    color: "#ffffff",
     fontSize: 24,
     fontWeight: 950,
-    marginBottom: 10,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
   },
 
-  emptyText: {
+  heroPanel: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gap: 13,
+    alignContent: "start",
+    padding: 18,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+    minWidth: 0,
+  },
+
+  heroPanelTitle: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+  },
+
+  heroPanelText: {
     margin: 0,
-    color: "#64748b",
-    lineHeight: 1.6,
+    color: "#dbeafe",
+    lineHeight: 1.45,
     fontWeight: 700,
   },
-
-  emptyState: {
-    padding: 18,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#64748b",
-    fontWeight: 850,
-    textAlign: "center",
-  },
-};
