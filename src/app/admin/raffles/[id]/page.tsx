@@ -235,244 +235,234 @@ function formatMoney(cents: number | string | null | undefined, currency: string
     }`;
   }
 }
-import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
-import { redirect, notFound } from "next/navigation";
-import { auth } from "@/auth";
-import { getRaffleById } from "@/lib/raffles";
-import { query } from "@/lib/db";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getTenantSettings } from "@/lib/tenant-settings";
-import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
-import RaffleAdminActions from "./RaffleAdminActions";
-import PrizeSettings from "./PrizeSettings";
-import ImageFocusUploadField from "@/components/ImageFocusUploadField";
-import DramaticRaffleDraw from "./DramaticRaffleDraw";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-type PageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-  searchParams?: Promise<{
-    error?: string;
-    payout?: string;
-  }>;
-};
-
-type WinnerRow = {
-  id: string;
-  raffle_id: string;
-  prize_position: number;
-  prize_title: string | null;
-  ticket_number: number;
-  colour: string | null;
-  buyer_name: string | null;
-  buyer_email: string | null;
-  raffle_subtype_snapshot: string | null;
-  gross_paid_sales_cents: number | string | null;
-  winner_prize_cents: number | string | null;
-  cause_share_cents: number | string | null;
-  paid_entry_count: number | string | null;
-  postal_entry_count: number | string | null;
-  total_entry_count: number | string | null;
-  payout_status: string | null;
-  payout_method: string | null;
-  payout_date: string | null;
-  payout_reference: string | null;
-  payout_note: string | null;
-  payout_recorded_by: string | null;
-  payout_recorded_at: string | null;
-};
-
-type SoldTicketRow = {
-  ticket_number: number;
-  colour: string | null;
-};
-
-type ReadinessTone = "good" | "warning" | "neutral";
-
-type ReadinessItem = {
-  label: string;
-  value: ReactNode;
-  tone: ReadinessTone;
-  detail: string;
-};
-
-const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
-
-const PRESET_COLOURS = [
-  "Red",
-  "Blue",
-  "Green",
-  "Yellow",
-  "Orange",
-  "Purple",
-  "Pink",
-  "Black",
-  "White",
-];
-
-const COLOUR_SWATCHES: Record<string, string> = {
-  Red: "#ef4444",
-  Blue: "#1683f8",
-  Green: "#16a34a",
-  Yellow: "#facc15",
-  Orange: "#f97316",
-  Purple: "#8b5cf6",
-  Pink: "#ec4899",
-  Black: "#111827",
-  White: "#ffffff",
-};
-
-function colourToText(colour: any) {
-  if (typeof colour === "string") return colour;
-  if (colour?.name) return colour.name;
-  if (colour?.hex) return colour.hex;
-  return "";
-}
-
-function normaliseOfferForUI(offer: any, index: number) {
-  const quantity = Number(offer?.quantity ?? offer?.tickets ?? 0);
-
-  const price =
-    offer?.price != null
-      ? Number(offer.price)
-      : offer?.price_cents != null
-        ? Number(offer.price_cents) / 100
-        : 0;
-
-  return {
-    id: offer?.id || `offer-${index + 1}`,
-    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : "",
-    price: Number.isFinite(price) && price > 0 ? price : "",
-    is_active:
-      offer?.is_active === false ||
-      offer?.isActive === false ||
-      offer?.active === false
-        ? false
-        : true,
-  };
-}
-
-function normaliseImagePosition(value: unknown) {
-  const clean = String(value ?? "").trim().toLowerCase();
-
-  if (
-    clean === "center" ||
-    clean === "top" ||
-    clean === "bottom" ||
-    clean === "left" ||
-    clean === "right"
-  ) {
-    return clean;
-  }
-
-  return "center";
-}
-
-function normaliseFocus(value: unknown, fallback = 50) {
-  const parsed = Number(value);
+function formatWholeNumber(value: number | string | null | undefined) {
+  const parsed = Number(value || 0);
 
   if (!Number.isFinite(parsed)) {
-    return fallback;
+    return "0";
   }
 
-  return Math.max(0, Math.min(100, Math.round(parsed)));
+  return String(Math.max(0, Math.round(parsed)));
 }
 
-function normaliseRaffleSubtype(value: unknown) {
-  const clean = String(value ?? "").trim().toLowerCase();
+function formatPayoutStatus(value: string | null | undefined) {
+  const clean = String(value || "").trim().toLowerCase();
 
-  if (clean === "fifty_fifty") return "fifty_fifty";
+  if (clean === "paid") return "Paid";
+  if (clean === "pending") return "Pending";
+  if (clean === "not_required") return "Not required";
 
-  return "standard";
+  return "Not recorded";
 }
 
-function getDateParts(value: string | null | undefined) {
-  if (!value) return null;
+function getPayoutStatusStyle(value: string | null | undefined): CSSProperties {
+  const clean = String(value || "").trim().toLowerCase();
 
-  const date = new Date(value);
+  if (clean === "paid") {
+    return {
+      background: "#dcfce7",
+      borderColor: "#bbf7d0",
+      color: "#166534",
+    };
+  }
 
-  if (Number.isNaN(date.getTime())) {
-    return null;
+  if (clean === "pending") {
+    return {
+      background: "#fff7ed",
+      borderColor: "#fed7aa",
+      color: "#9a3412",
+    };
   }
 
   return {
-    day: String(date.getUTCDate()).padStart(2, "0"),
-    month: String(date.getUTCMonth() + 1).padStart(2, "0"),
-    year: String(date.getUTCFullYear()).padStart(4, "0"),
-    hour: String(date.getUTCHours()).padStart(2, "0"),
-    minute: String(date.getUTCMinutes()).padStart(2, "0"),
+    background: "#f1f5f9",
+    borderColor: "#e2e8f0",
+    color: "#475569",
   };
 }
 
-function formatBritishDateInput(value: string | null | undefined) {
-  const parts = getDateParts(value);
+function getStatusStyle(status: string): CSSProperties {
+  const clean = status.toLowerCase();
 
-  if (!parts) return "";
-
-  return `${parts.day}/${parts.month}/${parts.year}`;
-}
-
-function formatTimeInput(value: string | null | undefined) {
-  const parts = getDateParts(value);
-
-  if (!parts) return "";
-
-  return `${parts.hour}:${parts.minute}`;
-}
-
-function formatDrawDate(value: string | null | undefined) {
-  if (!value) return "Not set";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not set";
+  if (clean === "published") {
+    return {
+      background: "#dcfce7",
+      borderColor: "#bbf7d0",
+      color: "#166534",
+    };
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatDateOnlyInput(value: string | null | undefined) {
-  if (!value) return "";
-
-  const clean = String(value).trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-    return clean;
+  if (clean === "closed") {
+    return {
+      background: "#fff7ed",
+      borderColor: "#fed7aa",
+      color: "#9a3412",
+    };
   }
 
-  const date = new Date(clean);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
+  if (clean === "drawn") {
+    return {
+      background: "#dbeafe",
+      borderColor: "#bfdbfe",
+      color: "#1d4ed8",
+    };
   }
 
-  return date.toISOString().slice(0, 10);
+  return {
+    background: "#f1f5f9",
+    borderColor: "#e2e8f0",
+    color: "#475569",
+  };
 }
 
-function formatMoney(cents: number | string | null | undefined, currency: string) {
-  const numericCents = Number(cents || 0);
-
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: currency || "GBP",
-    }).format(Number(numericCents || 0) / 100);
-  } catch {
-    return `${(Number(numericCents || 0) / 100).toFixed(2)} ${
-      currency || "GBP"
-    }`;
+function readinessToneStyle(tone: ReadinessTone): CSSProperties {
+  if (tone === "good") {
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
   }
+
+  if (tone === "warning") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
 }
-  const winners = await query<WinnerRow>(
+
+function getProgressPercent(sold: number, total: number) {
+  if (!total || total <= 0) return 0;
+
+  return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
+}
+
+function offerSavingText(
+  quantity: number | "",
+  price: number | "",
+  singleTicketPriceCents: number,
+) {
+  if (!quantity || !price || !singleTicketPriceCents) {
+    return "Bundle row";
+  }
+
+  const normalPrice = (Number(singleTicketPriceCents) / 100) * Number(quantity);
+  const offerPrice = Number(price);
+  const saving = normalPrice - offerPrice;
+
+  if (!Number.isFinite(saving) || saving <= 0) {
+    return "No saving";
+  }
+
+  return `Save ${saving.toFixed(2)}`;
+}
+
+function isConfigured(value: unknown) {
+  return String(value ?? "").trim().length > 0;
+}
+
+export default async function AdminRafflePage({
+  params,
+  searchParams,
+}: PageProps) {
+  const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const campaignLimitReached =
+    resolvedSearchParams.error === "campaign_limit";
+
+  const publicPreviewUnavailable =
+    resolvedSearchParams.error === "public-preview-unavailable";
+
+  const invalidDrawDateTime =
+    resolvedSearchParams.error === "invalid_draw_datetime";
+
+  const invalidPostalDateTime =
+    resolvedSearchParams.error === "invalid_postal_datetime";
+
+  const saveFailed = resolvedSearchParams.error === "save_failed";
+  const payoutSaved = resolvedSearchParams.payout === "saved";
+  const payoutSaveFailed = resolvedSearchParams.error === "payout_failed";
+
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  const tenantSettings = await getTenantSettings(tenantSlug);
+
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
+  );
+
+  const raffle = await getRaffleById(id);
+
+  if (!raffle) {
+    notFound();
+  }
+
+  if (raffle.tenant_slug !== tenantSlug) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  const config = (raffle.config_json as any) ?? {};
+  const raffleSubtype = normaliseRaffleSubtype((raffle as any).raffle_subtype);
+  const isFiftyFifty = raffleSubtype === "fifty_fifty";
+
+  const imagePosition = normaliseImagePosition(config.image_position);
+  const imageFocusX = normaliseFocus(config.image_focus_x, 50);
+  const imageFocusY = normaliseFocus(config.image_focus_y, 50);
+
+  const imageObjectPosition =
+    config.image_focus_x != null || config.image_focus_y != null
+      ? `${imageFocusX}% ${imageFocusY}%`
+      : imagePosition;
+
+  const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
+  const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
+
+  const colours = Array.isArray(config.colours)
+    ? config.colours.map(colourToText).filter(Boolean)
+    : [];
+
+  const offers = Array.isArray(config.offers)
+    ? config.offers.map(normaliseOfferForUI)
+    : [];
+
+  const offerRows = [
+    ...offers,
+    ...Array.from({ length: Math.max(2, 5 - offers.length) }, (_, index) => ({
+      id: `new-offer-${index + 1}`,
+      quantity: "",
+      price: "",
+      is_active: true,
+    })),
+  ];
+
+  const ticketPrice =
+    Number(raffle.ticket_price_cents) > 0
+      ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
+      : "";
+    const winners = await query<WinnerRow>(
     `
       select
         id,
@@ -558,12 +548,13 @@ function formatMoney(cents: number | string | null | undefined, currency: string
   const ticketPriceConfigured = Number(raffle.ticket_price_cents || 0) > 0;
   const ticketRangeConfigured = totalTickets > 0;
   const drawDateConfigured = isConfigured(raffle.draw_at);
-  const hasCustomImage = Boolean(raffle.image_url);
 
   const readinessItems: ReadinessItem[] = [
     {
       label: "Public page",
-      value: canViewPublicRaffle ? "Published" : String(raffle.status || "Draft"),
+      value: canViewPublicRaffle
+        ? "Published"
+        : String(raffle.status || "Draft"),
       tone: canViewPublicRaffle ? "good" : "warning",
       detail: canViewPublicRaffle
         ? "Supporters can open the public raffle page."
@@ -2004,6 +1995,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
+
 const responsiveStyles = `
   .raffle-admin-page,
   .raffle-admin-page * {
@@ -2123,7 +2115,6 @@ const responsiveStyles = `
     }
   }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -2478,7 +2469,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.05em",
     whiteSpace: "nowrap",
   },
-    readinessGrid: {
+  readinessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
@@ -2526,7 +2517,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-  summaryGrid: {
+    summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
