@@ -11,6 +11,7 @@ import { getEventBySlug } from "../../../../api/_lib/events-repo";
 import PublicGeneralAdmissionSelector from "@/components/events/PublicGeneralAdmissionSelector";
 import PublicReservedSeatSelector from "@/components/events/PublicReservedSeatSelector";
 import PublicTableSelector from "@/components/events/PublicTableSelector";
+import type { PublicEventCheckoutAddOn } from "@/components/events/PublicEventCheckoutAddOnSelector";
 
 export const dynamic = "force-dynamic";
 
@@ -173,6 +174,21 @@ export default async function EventSlugPage({
   const headsOrTailsMaxEntriesPerBooking =
     Number(headsOrTailsAddOn?.maxEntriesPerBooking || 0) > 0
       ? Number(headsOrTailsAddOn?.maxEntriesPerBooking || 0)
+      : null;
+
+  const checkoutAddOn: PublicEventCheckoutAddOn | null =
+    headsOrTailsAddOn?.enabled &&
+    headsOrTailsAddOn?.collectAtCheckout &&
+    headsOrTailsEntryPriceCents > 0
+      ? {
+          type: "heads_or_tails",
+          title: headsOrTailsTitle,
+          description:
+            headsOrTailsDescription ||
+            "Add Heads or Tails entries to your event booking.",
+          entryPriceCents: headsOrTailsEntryPriceCents,
+          maxEntriesPerBooking: headsOrTailsMaxEntriesPerBooking,
+        }
       : null;
 
   const lowestTicketPrice =
@@ -338,8 +354,7 @@ export default async function EventSlugPage({
               <span style={styles.metaLabel}>Date</span>
               <strong>{formatDate(event.starts_at)}</strong>
             </div>
-
-            <div style={styles.metaCard}>
+                        <div style={styles.metaCard}>
               <span style={styles.metaLabel}>Location</span>
               <strong>{event.location || "Location to be confirmed"}</strong>
             </div>
@@ -517,7 +532,7 @@ export default async function EventSlugPage({
                 </strong>
                 <span style={styles.addOnPriceHint}>
                   {headsOrTailsAddOn.collectAtCheckout
-                    ? "Available during checkout soon"
+                    ? "Available during checkout"
                     : "Collected by the organiser"}
                 </span>
               </div>
@@ -583,6 +598,7 @@ export default async function EventSlugPage({
               ticketTypes={ticketTypes}
               currency={event.currency}
               platformFeePercent={platformFeePercent}
+              checkoutAddOn={checkoutAddOn}
             />
           ) : event.event_type === "tables" ? (
             seats.length === 0 ? (
@@ -604,6 +620,7 @@ export default async function EventSlugPage({
                   tableShape,
                   table_shape: tableShape,
                 }}
+                checkoutAddOn={checkoutAddOn}
               />
             )
           ) : seats.length === 0 ? (
@@ -622,6 +639,7 @@ export default async function EventSlugPage({
               platformFeePercent={platformFeePercent}
               menuOptions={menuOptions}
               initialSeatingLayout={event.seating_layout_json || {}}
+              checkoutAddOn={checkoutAddOn}
             />
           )}
         </section>
@@ -711,7 +729,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1095,8 +1112,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 10,
   },
-
-  ticketItem: {
+    ticketItem: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
