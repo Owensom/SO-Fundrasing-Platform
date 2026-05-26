@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -315,12 +315,6 @@ export default function BillingSettingsForm({
   const statusMessage = getStatusMessage(
     searchParams?.get("stripe_status") ?? null,
   );
-
-  const readinessText = readyForLivePayments
-    ? "Ready for live payments and payouts"
-    : hasConnectAccount
-      ? "Stripe account started — complete onboarding and sync status"
-      : "Stripe Connect not started";
 
   const capabilities = useMemo(
     () => [
@@ -976,7 +970,7 @@ export default function BillingSettingsForm({
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: React.ReactNode }) {
+function HeroStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.heroStat}>
       <span>{label}</span>
@@ -985,13 +979,7 @@ function HeroStat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function MiniMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function MiniMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.miniMetric}>
       <span>{label}</span>
@@ -1037,7 +1025,6 @@ function ReadinessItem({ label, ready }: { label: string; ready: boolean }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .billing-page,
 .billing-page * {
@@ -1119,356 +1106,766 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
     maxWidth: 1240,
-                    <label style={styles.toggleCard}>
-                  <input
-                    type="checkbox"
-                    name="white_label_enabled"
-                    defaultChecked={formState.white_label_enabled}
-                  />
+    margin: "0 auto",
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
+    color: "#0f172a",
+    overflowX: "hidden",
+  },
 
-                  <div>
-                    <div style={styles.toggleCardTitle}>White label</div>
+  messageSuccess: {
+    display: "grid",
+    gap: 5,
+    marginBottom: 14,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+  },
 
-                    <div style={styles.toggleCardText}>
-                      Enable reduced SO branding / white-label direction.
-                    </div>
-                  </div>
-                </label>
+  messageWarning: {
+    display: "grid",
+    gap: 5,
+    marginBottom: 14,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
+  },
 
-                <label style={styles.toggleCard}>
-                  <input
-                    type="checkbox"
-                    name="custom_domain_enabled"
-                    defaultChecked={formState.custom_domain_enabled}
-                  />
+  messageError: {
+    display: "grid",
+    gap: 5,
+    marginBottom: 14,
+    padding: "14px 16px",
+    borderRadius: 18,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+  },
 
-                  <div>
-                    <div style={styles.toggleCardTitle}>Custom domain</div>
+  messageTitle: {
+    fontSize: 14,
+    fontWeight: 950,
+  },
 
-                    <div style={styles.toggleCardText}>
-                      Mark this tenant as eligible for custom-domain support.
-                    </div>
-                  </div>
-                </label>
+  messageText: {
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
 
-                <label style={styles.ownerBypassCard}>
-                  <input
-                    type="checkbox"
-                    name="platform_owner_bypass"
-                    defaultChecked={formState.platform_owner_bypass}
-                  />
+  hero: {
+    position: "relative",
+    display: "grid",
+    gap: 18,
+    padding: 28,
+    borderRadius: 30,
+    background:
+      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 16,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
+    overflow: "hidden",
+    border: "1px solid rgba(148,163,184,0.22)",
+  },
 
-                  <div>
-                    <div style={styles.toggleCardTitle}>
-                      Platform owner bypass
-                    </div>
+  heroMainGrid: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
+    gap: 22,
+    alignItems: "stretch",
+    minWidth: 0,
+  },
 
-                    <div style={styles.toggleCardText}>
-                      Gives this tenant all platform capabilities and can be used
-                      for internal/free owner tenants. Use carefully.
-                    </div>
-                  </div>
-                </label>
-              </>
-            ) : (
-              capabilities.map((item) => (
-                <div key={item.key} style={styles.readOnlyToggleCard}>
-                  <span
-                    style={{
-                      ...styles.statusDot,
-                      ...(item.enabled
-                        ? styles.statusDotOn
-                        : styles.statusDotOff),
-                    }}
-                  />
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
+  },
 
-                  <div>
-                    <div style={styles.toggleCardTitle}>{item.label}</div>
+  heroContent: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    alignContent: "start",
+    minWidth: 0,
+  },
 
-                    <div style={styles.toggleCardText}>
-                      {enabledLabel(item.enabled)}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+  eyebrow: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 14px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.24)",
+    color: "#facc15",
+    border: "1px solid rgba(250,204,21,0.76)",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 12,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
+  },
 
-          {isPlatformOwner ? (
-            <div style={styles.ownerWarning}>
-              <strong>Owner control warning:</strong> these settings affect
-              subscription access, platform commission and premium feature
-              gating for this tenant. They should only be changed intentionally.
-            </div>
-          ) : null}
+  title: {
+    margin: 0,
+    fontSize: "clamp(44px, 7vw, 68px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.07em",
+    overflowWrap: "anywhere",
+    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
+  },
 
-          <div className="submitRow" style={styles.submitRow}>
-            <button type="submit" style={styles.saveButton}>
-              {isPlatformOwner
-                ? "Save billing and feature settings"
-                : "Save contribution setting"}
-            </button>
-          </div>
-        </form>
+  subtitle: {
+    margin: "14px 0 0",
+    maxWidth: 780,
+    color: "#dbeafe",
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
 
-        <section style={styles.sideColumn}>
-          <article style={styles.sideCard}>
-            <div style={styles.cardEyebrow}>Subscription tiers</div>
+  tenantLine: {
+    margin: "12px 0 0",
+    color: "#bfdbfe",
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
 
-            <h2 style={styles.cardTitle}>Platform positioning</h2>
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 22,
+  },
 
-            <div style={styles.tiersList}>
-              {(
-                Object.entries(TIER_DETAILS) as [
-                  TierKey,
-                  (typeof TIER_DETAILS)[TierKey],
-                ][]
-              ).map(([key, value]) => (
-                <div
-                  key={key}
-                  style={key === tier ? styles.activeTierCard : styles.tierCard}
-                >
-                  <div className="tierTop" style={styles.tierTop}>
-                    <div>
-                      <div style={styles.tierName}>{value.name}</div>
+  heroStat: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(148,163,184,0.25)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
 
-                      <div style={styles.tierPrice}>{value.monthly}</div>
-                    </div>
+  heroPanel: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gap: 13,
+    alignContent: "start",
+    padding: 18,
+    borderRadius: 24,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(148,163,184,0.26)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+    minWidth: 0,
+  },
 
-                    <div style={styles.tierFee}>{value.fee}</div>
-                  </div>
+  heroPanelTitle: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+  },
 
-                  <p style={styles.tierDescription}>{value.description}</p>
+  heroPanelText: {
+    margin: 0,
+    color: "#dbeafe",
+    lineHeight: 1.45,
+    fontWeight: 700,
+  },
 
-                  <ul style={styles.featureList}>
-                    {value.features.map((feature) => (
-                      <li key={feature} style={styles.featureItem}>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </article>
+  heroPanelGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
 
-          <article style={styles.sideCard}>
-            <div style={styles.cardEyebrow}>Connect status</div>
+  miniMetric: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(217,119,6,0.34)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
 
-            <h2 style={styles.cardTitle}>Stripe readiness</h2>
+  heroActions: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+    alignItems: "stretch",
+    paddingTop: 16,
+    marginTop: 2,
+    borderTop: "1px solid rgba(148,163,184,0.24)",
+  },
 
-            <div style={styles.statusList}>
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Connected account</span>
-                <strong>{hasConnectAccount ? "Created" : "Not created"}</strong>
-              </div>
+  heroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid rgba(96,165,250,0.88)",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
+    textAlign: "center",
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Onboarding</span>
-                <strong>{completeLabel(onboardingComplete)}</strong>
-              </div>
+  heroButtonLight: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid rgba(255,255,255,0.28)",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+    textAlign: "center",
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Charges</span>
-                <strong>{enabledLabel(chargesEnabled)}</strong>
-              </div>
+  stripeActionPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.45fr)",
+    gap: 16,
+    alignItems: "center",
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 54%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 12px 34px rgba(15,23,42,0.055)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Payouts</span>
-                <strong>{enabledLabel(payoutsEnabled)}</strong>
-              </div>
+  stripeActionContent: {
+    minWidth: 0,
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Details submitted</span>
-                <strong>{savedLabel(detailsSubmitted)}</strong>
-              </div>
+  stripeActionText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    maxWidth: 820,
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Country</span>
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 16,
+  },
 
-                <strong>
-                  {connectStatus?.stripe_connect_country || "Not synced"}
-                </strong>
-              </div>
+  readinessItem: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Currency</span>
+  readinessLabel: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
 
-                <strong>
-                  {(
-                    connectStatus?.stripe_connect_default_currency ||
-                    "Not synced"
-                  ).toUpperCase()}
-                </strong>
-              </div>
+  readinessText: {
+    display: "block",
+    marginTop: 2,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
+    lineHeight: 1.35,
+  },
 
-              <div className="statusRow" style={styles.statusRow}>
-                <span>Last synced</span>
+  stripeActionButtons: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 10,
+    minWidth: 0,
+  },
 
-                <strong>
-                  {formatSyncDate(
-                    connectStatus?.stripe_connect_last_synced_at,
-                  )}
-                </strong>
-              </div>
-            </div>
-          </article>
-        </section>
-      </section>
-    </main>
-  );
-}
+  connectPrimaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    boxShadow: "0 14px 28px rgba(22,131,248,0.22)",
+    textAlign: "center",
+  },
 
-function HeroStat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={styles.heroStat}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
+  connectSecondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+    textAlign: "center",
+  },
 
-function MiniMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div style={styles.miniMetric}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)",
+    gap: 16,
+    alignItems: "start",
+  },
 
-function ReadOnlyField({
-  label,
-  value,
-  helper,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-}) {
-  return (
-    <div style={styles.readOnlyField}>
-      <span style={styles.fieldLabel}>{label}</span>
-      <strong style={styles.readOnlyValue}>{value}</strong>
-      <span style={styles.helperTextMuted}>{helper}</span>
-    </div>
-  );
-}
+  formCard: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
 
-function ReadinessItem({ label, ready }: { label: string; ready: boolean }) {
-  return (
-    <div style={styles.readinessItem}>
-      <span
-        style={{
-          ...styles.statusDot,
-          ...(ready ? styles.statusDotOn : styles.statusDotOff),
-        }}
-      />
+  ownerPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 16,
+    borderRadius: 22,
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)",
+    border: "1px solid #fde68a",
+  },
 
-      <div>
-        <strong style={styles.readinessLabel}>{label}</strong>
-        <span style={styles.readinessText}>
-          {ready ? "Ready" : "Needs attention"}
-        </span>
-      </div>
-    </div>
-  );
-}
+  ownerPanelEyebrow: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
 
-const responsiveStyles = `
-.billing-page,
-.billing-page * {
-  box-sizing: border-box;
-}
+  ownerPanelTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    letterSpacing: "-0.04em",
+  },
 
-.billing-page {
-  overflow-x: hidden;
-}
+  ownerPanelText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
 
-.billing-page section,
-.billing-page article,
-.billing-page div,
-.billing-page form,
-.billing-page label {
-  min-width: 0;
-}
+  cardHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+  },
 
-@media (max-width: 980px) {
-  .billing-page .heroMainGrid,
-  .billing-page .contentGrid,
-  .billing-page .stripeActionPanel {
-    grid-template-columns: 1fr !important;
-  }
+  cardEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 7,
+  },
 
-  .billing-page .heroStats,
-  .billing-page .heroPanelGrid,
-  .billing-page .formGrid,
-  .billing-page .toggleGrid,
-  .billing-page .readinessGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
+  cardTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
 
-  .billing-page .heroActions {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
+  liveBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+    width: "fit-content",
+  },
 
-@media (max-width: 680px) {
-  .billing-page {
-    padding: 16px 10px 44px !important;
-  }
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
 
-  .billing-page .hero,
-  .billing-page .formCard,
-  .billing-page .sideCard,
-  .billing-page .stripeActionPanel {
-    padding: 18px !important;
-    border-radius: 24px !important;
-  }
+  inputField: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
 
-  .billing-page .title {
-    font-size: clamp(36px, 12vw, 52px) !important;
-    line-height: 0.98 !important;
-  }
+  fieldLabel: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+  },
 
-  .billing-page .heroActions,
-  .billing-page .heroStats,
-  .billing-page .heroPanelGrid,
-  .billing-page .formGrid,
-  .billing-page .toggleGrid,
-  .billing-page .readinessGrid,
-  .billing-page .stripeActionButtons,
-  .billing-page .submitRow,
-  .billing-page .statusRow,
-  .billing-page .cardHeader,
-  .billing-page .tierTop {
-    grid-template-columns: 1fr !important;
-  }
-
-  .billing-page .heroButton,
-  .billing-page .heroButtonLight,
-  .billing-page .saveButton,
-  .billing-page .connectPrimaryButton,
-  .billing-page .connectSecondaryButton {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-}
-`;
-
-const styles: Record<string, CSSProperties> = {
-  page: {
+  textInput: {
     width: "100%",
-    maxWidth: 1240,
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 800,
+    background: "#ffffff",
+  },
+
+  selectInput: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 800,
+    background: "#ffffff",
+  },
+
+  readOnlyField: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  readOnlyValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  helperTextMuted: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 800,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
+  },
+
+  toggleGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  toggleCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  readOnlyToggleCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  ownerBypassCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  ownerWarning: {
+    padding: 13,
+    borderRadius: 18,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    color: "#9a3412",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    marginTop: 4,
+    display: "inline-flex",
+    flexShrink: 0,
+  },
+
+  statusDotOn: {
+    background: "#16a34a",
+    boxShadow: "0 0 0 4px rgba(22,163,74,0.12)",
+  },
+
+  statusDotOff: {
+    background: "#94a3b8",
+    boxShadow: "0 0 0 4px rgba(148,163,184,0.14)",
+  },
+
+  toggleCardTitle: {
+    color: "#0f172a",
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  toggleCardText: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  submitRow: {
+    display: "grid",
+    gridTemplateColumns: "max-content",
+    justifyContent: "end",
+  },
+
+  saveButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 18px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  sideColumn: {
+    display: "grid",
+    gap: 16,
+    minWidth: 0,
+  },
+
+  sideCard: {
+    display: "grid",
+    gap: 14,
+    padding: 20,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  tiersList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  tierCard: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  activeTierCard: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background: "#eff6ff",
+    border: "2px solid #1683f8",
+    minWidth: 0,
+  },
+
+  tierTop: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 10,
+    alignItems: "start",
+  },
+
+  tierName: {
+    color: "#0f172a",
+    fontSize: 20,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+  },
+
+  tierPrice: {
+    marginTop: 3,
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  tierFee: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#2563eb",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+    width: "fit-content",
+  },
+
+  tierDescription: {
+    margin: 0,
+    color: "#475569",
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  featureList: {
+    display: "grid",
+    gap: 6,
+    margin: 0,
+    paddingLeft: 18,
+    color: "#334155",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  featureItem: {
+    paddingLeft: 2,
+  },
+
+  statusList: {
+    display: "grid",
+    gap: 9,
+  },
+
+  statusRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 10,
+    padding: 11,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 800,
+    minWidth: 0,
+  },
+
+  enabledPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  disabledPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#64748b",
+    border: "1px solid #cbd5e1",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+};
