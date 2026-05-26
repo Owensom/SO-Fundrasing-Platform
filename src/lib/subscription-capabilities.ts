@@ -13,7 +13,9 @@ export type SubscriptionCapability =
   | "platform_owner_bypass"
   | "event_guest_catering_edit"
   | "event_guest_menu_request_emails"
-  | "event_vip_access_codes";
+  | "event_vip_access_codes"
+  | "event_fundraising_addons"
+  | "multiple_event_fundraising_addons";
 
 export type SubscriptionCapabilityResult = {
   allowed: boolean;
@@ -25,6 +27,14 @@ export type TenantSubscriptionLike = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
+};
+
+export type EventFundraisingAddOnType = "heads_or_tails";
+
+export type EventFundraisingAddOnLimits = {
+  enabled: boolean;
+  maxAddOnsPerEvent: number;
+  allowedTypes: EventFundraisingAddOnType[];
 };
 
 const VALID_TIERS: SubscriptionTier[] = [
@@ -89,6 +99,8 @@ export function getTierCapabilities(
       "event_guest_catering_edit",
       "event_guest_menu_request_emails",
       "event_vip_access_codes",
+      "event_fundraising_addons",
+      "multiple_event_fundraising_addons",
     ];
   }
 
@@ -103,6 +115,7 @@ export function getTierCapabilities(
       "custom_commission",
       "event_guest_catering_edit",
       "event_vip_access_codes",
+      "event_fundraising_addons",
     ];
   }
 
@@ -144,7 +157,8 @@ export function checkSubscriptionCapability(
     capability === "advanced_branding" ||
     capability === "custom_commission" ||
     capability === "event_guest_catering_edit" ||
-    capability === "event_vip_access_codes"
+    capability === "event_vip_access_codes" ||
+    capability === "event_fundraising_addons"
   ) {
     return {
       allowed: false,
@@ -157,7 +171,8 @@ export function checkSubscriptionCapability(
     capability === "custom_domain" ||
     capability === "priority_support" ||
     capability === "platform_owner_bypass" ||
-    capability === "event_guest_menu_request_emails"
+    capability === "event_guest_menu_request_emails" ||
+    capability === "multiple_event_fundraising_addons"
   ) {
     return {
       allowed: false,
@@ -211,6 +226,65 @@ export function getCampaignLimitMessage(tier: SubscriptionTier) {
   return "Unlimited active campaigns available.";
 }
 
+export function getEventFundraisingAddOnLimits(
+  tier: SubscriptionTier,
+): EventFundraisingAddOnLimits {
+  if (tier === "foundation") {
+    return {
+      enabled: true,
+      maxAddOnsPerEvent: Number.POSITIVE_INFINITY,
+      allowedTypes: ["heads_or_tails"],
+    };
+  }
+
+  if (tier === "professional") {
+    return {
+      enabled: true,
+      maxAddOnsPerEvent: 1,
+      allowedTypes: ["heads_or_tails"],
+    };
+  }
+
+  return {
+    enabled: false,
+    maxAddOnsPerEvent: 0,
+    allowedTypes: [],
+  };
+}
+
+export function getTenantEventFundraisingAddOnLimits(
+  tenant: TenantSubscriptionLike | null | undefined,
+): EventFundraisingAddOnLimits {
+  if (tenant?.platform_owner_bypass) {
+    return {
+      enabled: true,
+      maxAddOnsPerEvent: Number.POSITIVE_INFINITY,
+      allowedTypes: ["heads_or_tails"],
+    };
+  }
+
+  const tier = normaliseSubscriptionTier(tenant?.subscription_tier);
+
+  if (!isSubscriptionActive(tenant?.subscription_status)) {
+    return {
+      enabled: false,
+      maxAddOnsPerEvent: 0,
+      allowedTypes: [],
+    };
+  }
+
+  return getEventFundraisingAddOnLimits(tier);
+}
+
+export function canUseEventFundraisingAddOnType(params: {
+  tenant: TenantSubscriptionLike | null | undefined;
+  addOnType: EventFundraisingAddOnType;
+}) {
+  const limits = getTenantEventFundraisingAddOnLimits(params.tenant);
+
+  return limits.enabled && limits.allowedTypes.includes(params.addOnType);
+}
+
 export function getCustomCampaignImagesUpgradeMessage() {
   return "Custom campaign images require the Professional plan or higher. Community campaigns use the platform default images.";
 }
@@ -225,4 +299,12 @@ export function getEventGuestMenuRequestEmailsUpgradeMessage() {
 
 export function getEventVipAccessCodesUpgradeMessage() {
   return "VIP and complimentary event access codes require the Professional plan or higher.";
+}
+
+export function getEventFundraisingAddOnsUpgradeMessage() {
+  return "Event fundraising add-ons such as Heads or Tails require the Professional plan or higher.";
+}
+
+export function getMultipleEventFundraisingAddOnsUpgradeMessage() {
+  return "Multiple event fundraising add-ons per event require the Foundation plan.";
 }
