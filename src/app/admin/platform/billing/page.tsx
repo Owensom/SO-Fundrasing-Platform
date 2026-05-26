@@ -98,6 +98,9 @@ function checkboxValue(formData: FormData, key: keyof TenantBillingFormState) {
 function statusLabel(value: string) {
   if (value === "active") return "Active";
   if (value === "trialing") return "Trialing";
+  if (value === "manual") return "Manual";
+  if (value === "exempt") return "Exempt";
+  if (value === "free") return "Free";
   if (value === "past_due") return "Past due";
   if (value === "cancelled") return "Cancelled";
   return value || "Unknown";
@@ -420,7 +423,8 @@ export default async function PlatformBillingPage({
 
             <p style={styles.heroPanelText}>
               Review tenant commercial settings and update billing overrides
-              without changing checkout, campaign or public-page flows.
+              without changing checkout, campaign, public-page or Stripe
+              subscription flows.
             </p>
 
             <div className="heroPanelGrid" style={styles.heroPanelGrid}>
@@ -474,6 +478,20 @@ export default async function PlatformBillingPage({
           Could not save billing override: <strong>{error}</strong>.
         </div>
       ) : null}
+
+      <section style={styles.noticePanel}>
+        <div style={styles.noticeKicker}>Billing record notice</div>
+
+        <h2 style={styles.noticeTitle}>Database status is not Stripe billing</h2>
+
+        <p style={styles.noticeText}>
+          These controls update the platform billing record and feature access
+          for each tenant. They do not automatically cancel, pause, resume or
+          change a real Stripe subscription. If a Stripe subscription ID is
+          linked, manage live monthly billing deliberately in Stripe until a
+          dedicated Stripe subscription action is built.
+        </p>
+      </section>
 
       <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard label="Total tenants" value={totalTenants} />
@@ -626,9 +644,17 @@ export default async function PlatformBillingPage({
                       >
                         <option value="active">Active</option>
                         <option value="trialing">Trialing</option>
+                        <option value="manual">Manual</option>
+                        <option value="exempt">Exempt</option>
+                        <option value="free">Free</option>
                         <option value="past_due">Past due</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
+
+                      <span style={styles.helperText}>
+                        Platform record only. This does not change Stripe
+                        subscriptions automatically.
+                      </span>
                     </label>
 
                     <label style={styles.field}>
@@ -655,6 +681,11 @@ export default async function PlatformBillingPage({
                         placeholder="sub_xxxxxxxxx"
                         style={styles.input}
                       />
+
+                      <span style={styles.helperText}>
+                        Leave blank for manual, free, exempt or internal tenants
+                        unless a real Stripe subscription exists.
+                      </span>
                     </label>
 
                     <label style={styles.field}>
@@ -836,7 +867,8 @@ const responsiveStyles = `
 
   .platform-billing-page .platformHero,
   .platform-billing-page .panel,
-  .platform-billing-page .tenantCard {
+  .platform-billing-page .tenantCard,
+  .platform-billing-page .noticePanel {
     padding: 16px !important;
     border-radius: 22px !important;
   }
@@ -1080,6 +1112,44 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 14,
   },
 
+  noticePanel: {
+    display: "grid",
+    gap: 7,
+    padding: 18,
+    borderRadius: 24,
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 8px 26px rgba(15,23,42,0.045)",
+    marginBottom: 16,
+    minWidth: 0,
+  },
+
+  noticeKicker: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  noticeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  noticeText: {
+    margin: 0,
+    color: "#475569",
+    lineHeight: 1.55,
+    fontWeight: 750,
+    maxWidth: 980,
+    overflowWrap: "anywhere",
+  },
+
   summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
@@ -1279,6 +1349,14 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 12px",
     fontSize: 15,
     boxSizing: "border-box",
+  },
+
+  helperText: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   toggleGrid: {
