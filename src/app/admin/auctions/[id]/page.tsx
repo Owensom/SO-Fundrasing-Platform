@@ -64,6 +64,15 @@ type WinningBidSummary = {
   created_at: string;
 };
 
+type ReadinessTone = "good" | "warning" | "neutral";
+
+type ReadinessItem = {
+  label: string;
+  value: ReactNode;
+  tone: ReadinessTone;
+  detail: string;
+};
+
 function moneyFromCents(cents: number | null | undefined, currency = "GBP") {
   const amount = Number(cents || 0) / 100;
 
@@ -285,7 +294,6 @@ function formatDate(value: string | null | undefined) {
     timeStyle: "short",
   }).format(date);
 }
-
 function getStatusStyle(status: string | null | undefined): CSSProperties {
   const clean = String(status || "draft").toLowerCase();
 
@@ -336,6 +344,30 @@ function getStatusStyle(status: string | null | undefined): CSSProperties {
   };
 }
 
+function readinessToneStyle(tone: ReadinessTone): CSSProperties {
+  if (tone === "good") {
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
+}
+
 function auctionStatusLabel(status: string | null | undefined) {
   const clean = String(status || "draft").toLowerCase();
 
@@ -361,6 +393,10 @@ function getErrorMessage(value: string | undefined) {
   }
 
   return value;
+}
+
+function isConfigured(value: unknown) {
+  return String(value ?? "").trim().length > 0;
 }
 
 async function getAppBaseUrl() {
@@ -478,7 +514,6 @@ async function getActiveCampaignCountForTenant(tenantSlug: string) {
     auctions.filter((item) => item.status === "published").length
   );
 }
-
 function buildHighestBidMap(bids: SilentAuctionBid[]) {
   const winnerByItemId = new Map<string, WinningBidSummary>();
 
@@ -490,7 +525,7 @@ function buildHighestBidMap(bids: SilentAuctionBid[]) {
     const existing = winnerByItemId.get(itemId);
 
     if (!existing || amountCents > Number(existing.amount_cents || 0)) {
-            winnerByItemId.set(itemId, {
+      winnerByItemId.set(itemId, {
         bid_id: bid.id,
         bidder_name: bid.bidder_name || null,
         bidder_email: bid.bidder_email || null,
@@ -662,7 +697,6 @@ async function deleteClosedAuctionAction(formData: FormData) {
 
   redirect("/admin/auctions");
 }
-
 async function createAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -766,9 +800,89 @@ export default async function AdminAuctionPage({
   const publishedItems = items.filter((item) => item.status === "active");
   const errorMessage = getErrorMessage(resolvedSearchParams?.error);
 
+  const canViewPublicAuction = auction.status === "published";
+  const hasTiming = Boolean(auction.opens_at && auction.closes_at);
+  const hasLots = items.length > 0;
+  const hasActiveLots = publishedItems.length > 0;
+  const hasTerms = isConfigured(auction.terms_text);
+
+  const readinessItems: ReadinessItem[] = [
+    {
+      label: "Public page",
+      value: canViewPublicAuction
+        ? "Published"
+        : auctionStatusLabel(auction.status),
+      tone: canViewPublicAuction ? "good" : "warning",
+      detail: canViewPublicAuction
+        ? "Supporters can view and bid on the public auction page."
+        : "Draft and closed auctions are not open for public bidding.",
+    },
+    {
+      label: "Plan access",
+      value: isReadOnly ? "Read-only" : `${tierLabel} enabled`,
+      tone: isReadOnly ? "warning" : "good",
+      detail: isReadOnly
+        ? "Auction editing and winner tools are locked on this plan."
+        : "Auction management tools are available for this tenant.",
+    },
+    {
+      label: "Timing",
+      value: hasTiming ? "Scheduled" : "Needs dates",
+      tone: hasTiming ? "good" : "warning",
+      detail: hasTiming
+        ? `Opens ${formatDate(auction.opens_at)} and closes ${formatDate(
+            auction.closes_at,
+          )}.`
+        : "Add both opening and closing dates before promoting the auction.",
+    },
+    {
+      label: "Lots",
+      value: hasLots ? `${items.length} lots` : "No lots",
+      tone: hasLots ? "good" : "warning",
+      detail: hasLots
+        ? "Auction lots have been added."
+        : "Add at least one auction item before publishing.",
+    },
+    {
+      label: "Active lots",
+      value: hasActiveLots ? `${publishedItems.length} active` : "None active",
+      tone: hasActiveLots ? "good" : "warning",
+      detail: hasActiveLots
+        ? "At least one lot is available for bidding."
+        : "Set at least one lot to active before opening bids.",
+    },
+    {
+      label: "Terms",
+      value: hasTerms ? "Configured" : "Missing",
+      tone: hasTerms ? "good" : "warning",
+      detail: hasTerms
+        ? "Auction rules and terms are configured."
+        : "Add auction terms, payment and collection rules.",
+    },
+    {
+      label: "Bidding",
+      value: `${bids.length} bids`,
+      tone: bids.length > 0 ? "good" : "neutral",
+      detail:
+        bids.length > 0
+          ? "Bidding activity has started."
+          : "No bids have been placed yet.",
+    },
+  ];
+
+  const readinessReady =
+    canViewPublicAuction &&
+    !isReadOnly &&
+    hasTiming &&
+    hasLots &&
+    hasActiveLots &&
+    hasTerms;
+
   return (
-    <main style={styles.page}>
-      <section style={styles.hero}>
+    <main className="auction-admin-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="auction-hero" style={styles.hero}>
         <div style={styles.heroImageWrap}>
           <img
             src={auction.image_url || DEFAULT_AUCTION_IMAGE}
@@ -783,7 +897,8 @@ export default async function AdminAuctionPage({
             }
           />
         </div>
-                <div style={styles.heroContent}>
+
+        <div style={styles.heroContent}>
           <div style={styles.heroTopRow}>
             <div style={styles.badgeRow}>
               <div
@@ -813,8 +928,7 @@ export default async function AdminAuctionPage({
             {auction.description?.trim() ||
               "Configure your auction details, items, bidding and closing workflow."}
           </p>
-
-          <div style={styles.heroStats}>
+                    <div className="auction-hero-stats" style={styles.heroStats}>
             <div style={styles.statCard}>
               <div style={styles.statLabel}>Currency</div>
               <div style={styles.statValue}>
@@ -851,6 +965,68 @@ export default async function AdminAuctionPage({
               <strong>Tenant:</strong> {tenantSlug}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section
+        className="auction-readiness-panel"
+        style={styles.readinessPanel}
+      >
+        <div style={styles.readinessHeader}>
+          <div>
+            <div style={styles.readinessEyebrow}>Campaign readiness</div>
+
+            <h2 style={styles.readinessTitle}>Auction readiness snapshot</h2>
+
+            <p style={styles.readinessIntro}>
+              A quick operational check before sharing the auction, opening bids
+              or closing and notifying winners.
+            </p>
+          </div>
+
+          <span
+            style={{
+              ...styles.readinessStatusPill,
+              ...readinessToneStyle(readinessReady ? "good" : "warning"),
+            }}
+          >
+            {readinessReady ? "Ready for bids" : "Needs attention"}
+          </span>
+        </div>
+
+        <div className="auction-readiness-grid" style={styles.readinessGrid}>
+          {readinessItems.map((item) => (
+            <div
+              key={item.label}
+              className="auction-readiness-item"
+              style={styles.readinessItem}
+            >
+              <div
+                style={{
+                  ...styles.readinessToneDot,
+                  ...readinessToneStyle(item.tone),
+                }}
+              />
+
+              <div style={styles.readinessContent}>
+                <span style={styles.readinessLabel}>{item.label}</span>
+
+                <strong
+                  className="auction-readiness-value"
+                  style={styles.readinessValue}
+                >
+                  {item.value}
+                </strong>
+
+                <span
+                  className="auction-readiness-detail"
+                  style={styles.readinessDetail}
+                >
+                  {item.detail}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -940,8 +1116,7 @@ export default async function AdminAuctionPage({
                 style={styles.input}
               />
             </label>
-
-            <label style={styles.field}>
+                        <label style={styles.field}>
               <span style={styles.label}>Slug</span>
 
               <input
@@ -1137,7 +1312,8 @@ export default async function AdminAuctionPage({
                 style={styles.input}
               />
             </label>
-                        <label style={styles.field}>
+
+            <label style={styles.field}>
               <span style={styles.label}>Minimum increment</span>
 
               <input
@@ -1158,8 +1334,7 @@ export default async function AdminAuctionPage({
                 style={styles.input}
               />
             </label>
-
-            <label style={styles.field}>
+                        <label style={styles.field}>
               <span style={styles.label}>Sort order</span>
 
               <input
@@ -1359,8 +1534,7 @@ export default async function AdminAuctionPage({
                             style={styles.input}
                           />
                         </label>
-
-                        <label style={styles.field}>
+                                                <label style={styles.field}>
                           <span style={styles.label}>Donor / sponsor</span>
 
                           <input
@@ -1590,8 +1764,7 @@ export default async function AdminAuctionPage({
                       }
                     />
                   </div>
-
-                  {highest &&
+                                    {highest &&
                   highest.payment_status !== "paid" &&
                   highest.payment_token &&
                   reserveMet ? (
@@ -1702,6 +1875,65 @@ function InfoCard({
     </div>
   );
 }
+
+const responsiveStyles = `
+  .auction-admin-page,
+  .auction-admin-page * {
+    box-sizing: border-box;
+  }
+
+  .auction-admin-page {
+    overflow-x: hidden;
+  }
+
+  .auction-admin-page img,
+  .auction-admin-page input,
+  .auction-admin-page textarea,
+  .auction-admin-page select,
+  .auction-admin-page button {
+    max-width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    .auction-hero {
+      grid-template-columns: 1fr !important;
+    }
+
+    .auction-hero-stats,
+    .auction-readiness-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .auction-admin-page {
+      padding: 18px 12px 44px !important;
+    }
+
+    .auction-hero,
+    .auction-readiness-panel {
+      padding: 20px !important;
+      border-radius: 24px !important;
+    }
+
+    .auction-hero h1 {
+      font-size: clamp(34px, 12vw, 44px) !important;
+      line-height: 1 !important;
+    }
+
+    .auction-admin-page button,
+    .auction-admin-page a {
+      min-height: 46px !important;
+    }
+
+    .auction-readiness-value,
+    .auction-readiness-detail {
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+    }
+  }
+`;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1777,8 +2009,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
-
-  heroStats: {
+    heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
@@ -1859,6 +2090,124 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 22,
     fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  readinessPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
+
+  readinessHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  readinessEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  readinessTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    letterSpacing: "-0.045em",
+    lineHeight: 1.05,
+    overflowWrap: "anywhere",
+  },
+
+  readinessIntro: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    maxWidth: 760,
+  },
+
+  readinessStatusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+  },
+
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  readinessItem: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  readinessToneDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    border: "1px solid",
+    marginTop: 4,
+  },
+
+  readinessContent: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+
+  readinessLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  readinessValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  readinessDetail: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
