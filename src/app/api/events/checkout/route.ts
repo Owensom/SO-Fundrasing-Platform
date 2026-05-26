@@ -30,6 +30,19 @@ type CheckoutItem = {
   tableName?: string;
 };
 
+type CheckoutAddOnItem = {
+  type?: string;
+  quantity?: number;
+};
+
+type ValidatedCheckoutAddOn = {
+  type: "heads_or_tails";
+  title: string;
+  quantity: number;
+  unitAmount: number;
+  totalAmount: number;
+};
+
 type EventCheckoutPaymentSummary = {
   ticketTotalCents: number;
   amountTotalCents: number;
@@ -187,6 +200,8 @@ function eventCheckoutMetadata(input: {
   ticketTotalCents: number;
   amountTotalCents: number;
   tenantNetCents: number;
+  addOnTotalCents: number;
+  addOnSummary: string;
 }) {
   return {
     type: "event",
@@ -227,6 +242,9 @@ function eventCheckoutMetadata(input: {
     ticket_subtotal_cents: String(input.ticketTotalCents),
     base_amount_cents: String(input.ticketTotalCents),
     tenant_target_amount_cents: String(input.ticketTotalCents),
+
+    event_addon_total_cents: String(input.addOnTotalCents),
+    event_addon_summary: input.addOnSummary,
 
     amount_total_cents: String(input.amountTotalCents),
     checkout_total_cents: String(input.amountTotalCents),
@@ -316,7 +334,6 @@ async function incrementAccessCodeUsage(input: {
     throw new Error("This access code is no longer available.");
   }
 }
-
 async function markEventOrderComplimentaryPaid(input: {
   orderId: string;
   accessCode: EventAccessCodeRow;
@@ -464,6 +481,157 @@ function complimentarySuccessUrl(req: Request, slug: string) {
   return `${siteUrl(req)}/e/${slug}?checkout=success&access=complimentary`;
 }
 
+function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
+  if (!Array.isArray(rawAddOns)) {
+    return [];
+  }
+
+  return rawAddOns
+    .map((addOn) => {
+      if (!addOn || typeof addOn !== "object") {
+        return null;
+      }
+
+      const item = addOn as CheckoutAddOnItem;
+
+      return {
+        type: cleanText(item.type),
+        quantity: positiveQuantity(item.quantity),
+      };
+    })
+    .filter((addOn): addOn is CheckoutAddOnItem => {
+      return Boolean(addOn?.type) && positiveQuantity(addOn.quantity) > 0;
+    });
+}
+
+function validateCheckoutAddOns(input: {
+  eventAddOnsJson: unknown;
+  submittedAddOns: CheckoutAddOnItem[];
+  hasAccessCode: boolean;
+}): ValidatedCheckoutAddOn[] {
+  if (input.hasAccessCode) {
+    return [];
+  }
+
+  if (input.submittedAddOns.length === 0) {
+    return [];
+  }
+
+  const eventAddOns = Array.isArray(input.eventAddOnsJson)
+    ? input.eventAddOnsJson
+    : [];
+
+  const validatedAddOns: ValidatedCheckoutAddOn[] = [];
+
+  for (const submittedAddOn of input.submittedAddOns) {
+    const type = cleanText(submittedAddOn.type);
+
+    if (type !== "heads_or_tails") {
+      throw new Error("Invalid event add-on.");
+    }
+
+    const configuredAddOn = eventAddOns.find((addOn) => {
+      if (!addOn || typeof addOn !== "object") return false;
+
+      const current = addOn as Record<string, unknown>;
+
+      return (
+        cleanText(current.type) === "heads_or_tails" &&
+        truthy(current.enabled) &&
+        truthy(current.collectAtCheckout)
+      );
+    }) as Record<string, unknown> | undefined;
+
+    if (!configuredAddOn) {
+      throw new Error("This event add-on is not available for checkout.");
+    }
+
+    const entryPriceCents = safeMoneyCents(configuredAddOn.entryPriceCents);
+
+    if (entryPriceCents <= 0) {
+      throw new Error("This event add-on is not priced for checkout.");
+    }
+
+    const quantity = positiveQuantity(submittedAddOn.quantity);
+
+    if (quantity <= 0) {
+      continue;
+    }
+
+    const maxEntriesPerBooking = positiveQuantity(
+      configuredAddOn.maxEntriesPerBooking,
+    );
+
+    if (maxEntriesPerBooking > 0 && quantity > maxEntriesPerBooking) {
+      throw new Error(
+        `Heads or Tails is limited to ${maxEntriesPerBooking} entries per booking.`,
+      );
+    }
+
+    const title = cleanText(configuredAddOn.title) || "Heads or Tails";
+
+    validatedAddOns.push({
+      type: "heads_or_tails",
+      title,
+      quantity,
+      unitAmount: entryPriceCents,
+      totalAmount: entryPriceCents * quantity,
+    });
+  }
+
+  return validatedAddOns;
+}
+
+function eventAddOnSummary(addOns: ValidatedCheckoutAddOn[]) {
+  if (addOns.length === 0) {
+    return "";
+  }
+
+  return addOns
+    .map((addOn) => `${addOn.title} × ${addOn.quantity}`)
+    .join(", ");
+}
+
+async function createEventAddOnOrderItems(input: {
+  orderId: string;
+  eventId: string;
+  buyerName: string;
+  addOns: ValidatedCheckoutAddOn[];
+}) {
+  for (const addOn of input.addOns) {
+    await createEventOrderItem({
+      orderId: input.orderId,
+      eventId: input.eventId,
+      ticketTypeId: null,
+      seatId: null,
+      label: `Event add-on — ${addOn.title}`,
+      quantity: addOn.quantity,
+      unitAmount: addOn.unitAmount,
+      guest_name: input.buyerName,
+      dietary_requirements: null,
+      menu_choice: null,
+    } as never);
+  }
+}
+
+function createEventAddOnStripeLineItems(input: {
+  eventTitle: string;
+  currency: string;
+  addOns: ValidatedCheckoutAddOn[];
+}): Stripe.Checkout.SessionCreateParams.LineItem[] {
+  return input.addOns.map((addOn) => ({
+    quantity: addOn.quantity,
+    price_data: {
+      currency: input.currency.toLowerCase(),
+      unit_amount: addOn.unitAmount,
+      product_data: {
+        name: `${input.eventTitle} — ${addOn.title}`,
+        description: "Event-night fundraising add-on.",
+      },
+    },
+  }));
+}
+
 export async function POST(req: Request) {
   let orderId: string | null = null;
 
@@ -480,6 +648,7 @@ export async function POST(req: Request) {
     const coverFees = hasAccessCode ? false : truthy(body.coverFees);
 
     const items: CheckoutItem[] = Array.isArray(body.items) ? body.items : [];
+    const submittedAddOns = normaliseEventAddOns(body.addOns);
 
     if (!eventId || items.length === 0) {
       return NextResponse.json(
@@ -518,6 +687,19 @@ export async function POST(req: Request) {
           code: requestedAccessCode,
         })
       : null;
+
+    const validatedAddOns = validateCheckoutAddOns({
+      eventAddOnsJson: event.event_addons_json || [],
+      submittedAddOns,
+      hasAccessCode: Boolean(accessCode),
+    });
+
+    const addOnTotalCents = validatedAddOns.reduce(
+      (sum, addOn) => sum + addOn.totalAmount,
+      0,
+    );
+
+    const addOnSummary = eventAddOnSummary(validatedAddOns);
 
     const finance = await getTenantFinanceSettings(event.tenant_slug);
     const platformFeePercent = getPlatformFeePercent(finance);
@@ -576,10 +758,12 @@ export async function POST(req: Request) {
         ticketTypeIds: checkoutRows.map((row) => row.ticketType.id),
       });
 
-      const ticketTotalCents = checkoutRows.reduce(
+      const ticketOnlyTotalCents = checkoutRows.reduce(
         (sum, row) => sum + Number(row.ticketType.price || 0) * row.quantity,
         0,
       );
+
+      const ticketTotalCents = ticketOnlyTotalCents + addOnTotalCents;
 
       if (ticketTotalCents <= 0) {
         return NextResponse.json(
@@ -587,8 +771,7 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-
-      if (accessCode) {
+            if (accessCode) {
         const order = await createPendingEventOrder({
           tenantSlug: event.tenant_slug,
           eventId: event.id,
@@ -678,6 +861,13 @@ export async function POST(req: Request) {
         });
       }
 
+      await createEventAddOnOrderItems({
+        orderId: order.id,
+        eventId: event.id,
+        buyerName,
+        addOns: validatedAddOns,
+      });
+
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
         checkoutRows.map((row) => ({
           quantity: row.quantity,
@@ -689,6 +879,14 @@ export async function POST(req: Request) {
             },
           },
         }));
+
+      lineItems.push(
+        ...createEventAddOnStripeLineItems({
+          eventTitle: event.title,
+          currency: event.currency,
+          addOns: validatedAddOns,
+        }),
+      );
 
       if (paymentSummary.buyerContributionCents > 0) {
         lineItems.push({
@@ -730,6 +928,8 @@ export async function POST(req: Request) {
           ticketTotalCents: paymentSummary.ticketTotalCents,
           amountTotalCents: paymentSummary.amountTotalCents,
           tenantNetCents: paymentSummary.tenantNetCents,
+          addOnTotalCents,
+          addOnSummary,
         }),
       });
 
@@ -811,10 +1011,12 @@ export async function POST(req: Request) {
       ticketTypeIds: checkoutRows.map((row) => row.ticketType.id),
     });
 
-    const ticketTotalCents = checkoutRows.reduce(
+    const ticketOnlyTotalCents = checkoutRows.reduce(
       (sum, row) => sum + Number(row.ticketType.price || 0),
       0,
     );
+
+    const ticketTotalCents = ticketOnlyTotalCents + addOnTotalCents;
 
     if (ticketTotalCents <= 0) {
       return NextResponse.json(
@@ -969,17 +1171,29 @@ export async function POST(req: Request) {
       });
     }
 
+    await createEventAddOnOrderItems({
+      orderId: order.id,
+      eventId: event.id,
+      buyerName,
+      addOns: validatedAddOns,
+    });
+
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         quantity: 1,
         price_data: {
           currency: event.currency.toLowerCase(),
-          unit_amount: ticketTotalCents,
+          unit_amount: ticketOnlyTotalCents,
           product_data: {
             name: event.title,
           },
         },
       },
+      ...createEventAddOnStripeLineItems({
+        eventTitle: event.title,
+        currency: event.currency,
+        addOns: validatedAddOns,
+      }),
     ];
 
     if (paymentSummary.buyerContributionCents > 0) {
@@ -1021,6 +1235,8 @@ export async function POST(req: Request) {
         ticketTotalCents: paymentSummary.ticketTotalCents,
         amountTotalCents: paymentSummary.amountTotalCents,
         tenantNetCents: paymentSummary.tenantNetCents,
+        addOnTotalCents,
+        addOnSummary,
       }),
     });
 
