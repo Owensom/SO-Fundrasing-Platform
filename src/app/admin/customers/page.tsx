@@ -276,316 +276,283 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
-  const rows = await safeQuery(
-    "events",
-    `
-      select
-        event_order.id,
-        event_order.event_id,
-        event_order.customer_name,
-        event_order.customer_email,
-        event_order.amount_total,
-        event_order.currency as order_currency,
-        event_order.status,
-        event_order.created_at,
-        event.title as campaign_title,
-        event.slug as campaign_slug,
-        event.currency as event_currency
-      from event_orders event_order
-      join events event
-        on event.id = event_order.event_id
-       and event.tenant_slug = event_order.tenant_slug
-      where event_order.tenant_slug = $1
-        and event.tenant_slug = $1
-      order by event_order.created_at desc
-      limit 500
-    `,
-    [tenantSlug],
-  );
+import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
 
-  return rows.map((row) => {
-    const campaignId = cleanText(row.event_id);
-    const slug = cleanText(row.campaign_slug);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-    return {
-      id: `event-${cleanText(row.id, campaignId)}`,
-      type: "event",
-      campaignId: campaignId || null,
-      campaignTitle: cleanText(row.campaign_title, "Untitled event"),
-      campaignSlug: slug || null,
-      customerName: cleanText(row.customer_name, "Ticket buyer"),
-      customerEmail: cleanText(row.customer_email, "No email"),
-      detail: "Event ticket order",
-      amountCents: safeNumber(row.amount_total, 0),
-      currency:
-        cleanText(row.order_currency) || cleanText(row.event_currency, "GBP"),
-      status: cleanText(row.status, "Paid"),
-      createdAt: row.created_at ? String(row.created_at) : null,
-      adminHref: campaignId ? `/admin/events/${campaignId}` : null,
-      publicHref: slug ? `/e/${slug}` : null,
-    };
-  });
+type PageProps = {
+  searchParams?: Promise<{
+    type?: string;
+    q?: string;
+  }>;
+};
+
+type ActivityType = "raffle" | "squares" | "event" | "auction" | "donation";
+
+type UnifiedOrder = {
+  id: string;
+  type: ActivityType;
+  campaignId: string | null;
+  campaignTitle: string;
+  campaignSlug: string | null;
+  customerName: string;
+  customerEmail: string;
+  detail: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  createdAt: string | null;
+  adminHref: string | null;
+  publicHref: string | null;
+};
+
+type CustomerProfile = {
+  key: string;
+  name: string;
+  email: string;
+  totalSpendCents: number;
+  orderCount: number;
+  campaignCount: number;
+  lastActivity: string | null;
+  types: Set<ActivityType>;
+  orders: UnifiedOrder[];
+};
+
+type RawRow = Record<string, any>;
+
+function cleanText(value: unknown, fallback = "") {
+  const clean = String(value ?? "").trim();
+  return clean || fallback;
 }
 
-async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
-  const rows = await safeQuery(
-    "auctions",
-    `
-      select
-        bid.id,
-        bid.item_id,
-        bid.bidder_name,
-        bid.bidder_email,
-        bid.amount_cents,
-        bid.payment_status,
-        bid.created_at,
-        item.auction_id,
-        item.title as item_title,
-        auction.title as campaign_title,
-        auction.slug as campaign_slug,
-        auction.currency
-      from silent_auction_bids bid
-      join silent_auction_items item
-        on item.id = bid.item_id
-      join silent_auctions auction
-        on auction.id = item.auction_id
-      where auction.tenant_slug = $1
-      order by bid.created_at desc
-      limit 500
-    `,
-    [tenantSlug],
-  );
-
-  return rows.map((row) => {
-    const campaignId = cleanText(row.auction_id);
-    const slug = cleanText(row.campaign_slug);
-    const paymentStatus = cleanText(row.payment_status, "Bid placed");
-
-    return {
-      id: `auction-${cleanText(row.id, `${campaignId}-${row.item_id}`)}`,
-      type: "auction",
-      campaignId: campaignId || null,
-      campaignTitle: cleanText(row.campaign_title, "Untitled auction"),
-      campaignSlug: slug || null,
-      customerName: cleanText(row.bidder_name, "Bidder"),
-      customerEmail: cleanText(row.bidder_email, "No email"),
-      detail: `Bid · ${cleanText(row.item_title, "Auction item")}`,
-      amountCents: safeNumber(row.amount_cents, 0),
-      currency: cleanText(row.currency, "GBP"),
-      status:
-        paymentStatus === "paid"
-          ? "Paid"
-          : paymentStatus === "checkout_started"
-            ? "Checkout started"
-            : paymentStatus === "cancelled"
-              ? "Cancelled"
-              : "Bid placed",
-      createdAt: row.created_at ? String(row.created_at) : null,
-      adminHref: campaignId ? `/admin/auctions/${campaignId}` : null,
-      publicHref: slug ? `/a/${slug}` : null,
-    };
-  });
+function safeNumber(value: unknown, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return number;
 }
 
-async function getDonationOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
-  const rows = await safeQuery(
-    "donations",
-    `
-      select
-        id::text,
-        campaign_type,
-        campaign_id,
-        campaign_title,
-        donor_name,
-        donor_email,
-        message,
-        amount_cents,
-        gross_amount_cents,
-        currency,
-        payment_status,
-        created_at::text,
-        paid_at::text,
-        gift_aid_claimed
-      from public_donations
-      where tenant_slug = $1
-      order by created_at desc
-      limit 500
-    `,
-    [tenantSlug],
-  );
-
-  return rows.map((row) => {
-    const campaignType = cleanText(row.campaign_type, "general").toLowerCase();
-    const campaignId = cleanText(row.campaign_id);
-    const campaignTitle = cleanText(row.campaign_title, "General donation");
-    const message = cleanText(row.message);
-    const status = cleanText(row.payment_status, "Pending");
-
-    const publicHref =
-      campaignType === "raffle" && campaignId
-        ? null
-        : campaignType === "squares" && campaignId
-          ? null
-          : campaignType === "event" && campaignId
-            ? null
-            : campaignType === "auction" && campaignId
-              ? null
-              : `/c/${tenantSlug}/support`;
-
-    return {
-      id: `donation-${cleanText(row.id)}`,
-      type: "donation",
-      campaignId: campaignId || null,
-      campaignTitle,
-      campaignSlug: null,
-      customerName: cleanText(row.donor_name, "Anonymous donor"),
-      customerEmail: cleanText(row.donor_email, "No email"),
-      detail: `${row.gift_aid_claimed ? "Gift Aid donation" : "Donation"}${
-        message ? ` · ${message}` : ""
-      }`,
-      amountCents:
-        safeNumber(row.gross_amount_cents, 0) ||
-        safeNumber(row.amount_cents, 0),
-      currency: cleanText(row.currency, "GBP"),
-      status:
-        status === "paid"
-          ? "Paid"
-          : status === "checkout_started"
-            ? "Checkout started"
-            : status === "failed"
-              ? "Failed"
-              : status === "cancelled"
-                ? "Cancelled"
-                : "Pending",
-      createdAt:
-        row.paid_at && status === "paid"
-          ? String(row.paid_at)
-          : row.created_at
-            ? String(row.created_at)
-            : null,
-      adminHref: "/admin/donations",
-      publicHref,
-    };
-  });
+function normaliseEmail(value: unknown) {
+  const clean = cleanText(value).toLowerCase();
+  if (!clean || clean === "no email" || clean === "unknown") return "";
+  return clean;
 }
 
-function buildCustomerProfiles(orders: UnifiedOrder[]) {
-  const map = new Map<string, CustomerProfile>();
+function formatMoney(cents: number, currency = "GBP") {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `£${(Number(cents || 0) / 100).toFixed(2)}`;
+  }
+}
 
-  for (const order of orders) {
-    const email = normaliseEmail(order.customerEmail);
-    const key = email || `${order.type}-${order.id}`;
+function formatDate(value: string | null) {
+  if (!value) return "Unknown";
 
-    const existing = map.get(key);
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Unknown";
 
-    if (!existing) {
-      map.set(key, {
-        key,
-        name: cleanText(order.customerName, "Supporter"),
-        email: email || "No email",
-        totalSpendCents: Number(order.amountCents || 0),
-        orderCount: 1,
-        campaignCount: 1,
-        lastActivity: order.createdAt,
-        types: new Set([order.type]),
-        orders: [order],
-      });
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+  } catch {
+    return "Unknown";
+  }
+}
 
-      continue;
-    }
+function activityTime(value: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
 
-    existing.totalSpendCents += Number(order.amountCents || 0);
-    existing.orderCount += 1;
-    existing.types.add(order.type);
-    existing.orders.push(order);
+function typeLabel(type: ActivityType) {
+  if (type === "raffle") return "Raffle";
+  if (type === "squares") return "Squares";
+  if (type === "event") return "Event";
+  if (type === "auction") return "Auction";
+  return "Donation";
+}
 
-    const campaigns = new Set(
-      existing.orders.map(
-        (item) => `${item.type}:${item.campaignId || item.campaignTitle}`,
-      ),
-    );
-
-    existing.campaignCount = campaigns.size;
-
-    if (activityTime(order.createdAt) > activityTime(existing.lastActivity)) {
-      existing.lastActivity = order.createdAt;
-      existing.name = cleanText(order.customerName, existing.name);
-    }
+function typeStyle(type: ActivityType): CSSProperties {
+  if (type === "raffle") {
+    return {
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      border: "1px solid #bfdbfe",
+    };
   }
 
-  return Array.from(map.values()).sort((a, b) => {
-    if (b.totalSpendCents !== a.totalSpendCents) {
-      return b.totalSpendCents - a.totalSpendCents;
-    }
+  if (type === "squares") {
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      border: "1px solid #bbf7d0",
+    };
+  }
 
-    return activityTime(b.lastActivity) - activityTime(a.lastActivity);
+  if (type === "event") {
+    return {
+      background: "#fef3c7",
+      color: "#92400e",
+      border: "1px solid #fde68a",
+    };
+  }
+
+  if (type === "auction") {
+    return {
+      background: "#f5f3ff",
+      color: "#6d28d9",
+      border: "1px solid #ddd6fe",
+    };
+  }
+
+  return {
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+  };
+}
+
+async function safeQuery<T extends RawRow>(
+  label: string,
+  sql: string,
+  values: unknown[],
+): Promise<T[]> {
+  try {
+    return await query<T>(sql, values);
+  } catch (error) {
+    console.error(`Admin customers ${label} query failed:`, error);
+    return [];
+  }
+}
+
+async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
+  const rows = await safeQuery(
+    "raffles",
+    `
+      select
+        sale.id,
+        sale.raffle_id,
+        sale.ticket_number,
+        sale.colour,
+        sale.buyer_name,
+        sale.buyer_email,
+        sale.sold_at as created_at,
+        raffle.title as campaign_title,
+        raffle.slug as campaign_slug,
+        raffle.currency,
+        raffle.ticket_price_cents
+      from raffle_ticket_sales sale
+      join raffles raffle
+        on raffle.id = sale.raffle_id
+      where raffle.tenant_slug = $1
+      order by sale.sold_at desc
+      limit 500
+    `,
+    [tenantSlug],
+  );
+
+  return rows.map((row) => {
+    const campaignId = cleanText(row.raffle_id);
+    const slug = cleanText(row.campaign_slug);
+
+    return {
+      id: `raffle-${cleanText(row.id, `${campaignId}-${row.ticket_number}`)}`,
+      type: "raffle",
+      campaignId: campaignId || null,
+      campaignTitle: cleanText(row.campaign_title, "Untitled raffle"),
+      campaignSlug: slug || null,
+      customerName: cleanText(row.buyer_name, "Supporter"),
+      customerEmail: cleanText(row.buyer_email, "No email"),
+      detail: `Ticket #${cleanText(row.ticket_number, "—")}${
+        row.colour ? ` · ${row.colour}` : ""
+      }`,
+      amountCents: safeNumber(row.ticket_price_cents, 0),
+      currency: cleanText(row.currency, "GBP"),
+      status: "Sold",
+      createdAt: row.created_at ? String(row.created_at) : null,
+      adminHref: campaignId ? `/admin/raffles/${campaignId}` : null,
+      publicHref: slug ? `/r/${slug}` : null,
+    };
   });
 }
 
-function filterCustomers(
-  customers: CustomerProfile[],
-  typeFilter: string,
-  searchTerm: string,
-) {
-  const cleanType = typeFilter.trim().toLowerCase();
-  const cleanSearch = searchTerm.trim().toLowerCase();
+async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
+  const rows = await safeQuery(
+    "squares",
+    `
+      select
+        sale.id,
+        sale.game_id,
+        sale.customer_name,
+        sale.customer_email,
+        sale.squares,
+        sale.payment_status,
+        sale.currency as sale_currency,
+        sale.gross_amount_cents,
+        sale.created_at,
+        game.title as campaign_title,
+        game.slug as campaign_slug,
+        game.currency as game_currency,
+        game.price_per_square_cents
+      from squares_sales sale
+      join squares_games game
+        on game.id = sale.game_id
+       and game.tenant_slug = sale.tenant_slug
+      where sale.tenant_slug = $1
+        and game.tenant_slug = $1
+      order by sale.created_at desc
+      limit 500
+    `,
+    [tenantSlug],
+  );
 
-  return customers.filter((customer) => {
-    const typeMatch =
-      !cleanType ||
-      cleanType === "all" ||
-      customer.types.has(cleanType as ActivityType);
+  return rows.map((row) => {
+    const campaignId = cleanText(row.game_id);
+    const slug = cleanText(row.campaign_slug);
+    const squares = Array.isArray(row.squares)
+      ? row.squares.join(", ")
+      : cleanText(row.squares);
 
-    const searchMatch =
-      !cleanSearch ||
-      [
-        customer.name,
-        customer.email,
-        ...customer.orders.map((order) => order.campaignTitle),
-        ...customer.orders.map((order) => order.customerName),
-        ...customer.orders.map((order) => order.customerEmail),
-        ...customer.orders.map((order) => order.detail),
-        ...customer.orders.map((order) => order.status),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(cleanSearch);
+    const squareCount = Array.isArray(row.squares)
+      ? row.squares.length
+      : squares
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean).length;
 
-    return typeMatch && searchMatch;
+    const fallbackAmount =
+      safeNumber(row.price_per_square_cents, 0) * Math.max(squareCount, 1);
+
+    return {
+      id: `squares-${cleanText(row.id, `${campaignId}-${squares}`)}`,
+      type: "squares",
+      campaignId: campaignId || null,
+      campaignTitle: cleanText(row.campaign_title, "Untitled squares game"),
+      campaignSlug: slug || null,
+      customerName: cleanText(row.customer_name, "Supporter"),
+      customerEmail: cleanText(row.customer_email, "No email"),
+      detail: squares ? `Squares ${squares}` : "Squares order",
+      amountCents: safeNumber(row.gross_amount_cents, 0) || fallbackAmount,
+      currency:
+        cleanText(row.sale_currency) || cleanText(row.game_currency, "GBP"),
+      status: cleanText(row.payment_status, "Sold"),
+      createdAt: row.created_at ? String(row.created_at) : null,
+      adminHref: campaignId ? `/admin/squares/${campaignId}` : null,
+      publicHref: slug ? `/s/${slug}` : null,
+    };
   });
-}
-
-function toCsvValue(value: unknown) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
-}
-
-function buildCsvHref(customers: CustomerProfile[]) {
-  const headers = [
-    "Name",
-    "Email",
-    "Total spend",
-    "Activity count",
-    "Campaign count",
-    "Activity types",
-    "Last activity",
-  ];
-
-  const rows = customers.map((customer) => [
-    customer.name,
-    customer.email,
-    (customer.totalSpendCents / 100).toFixed(2),
-    customer.orderCount,
-    customer.campaignCount,
-    Array.from(customer.types).map(typeLabel).join(" | "),
-    formatDate(customer.lastActivity),
-  ]);
-
-  const csv = [headers, ...rows]
-    .map((row) => row.map(toCsvValue).join(","))
-    .join("\n");
-
-  return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
 export default async function AdminCustomersPage({
   searchParams,
@@ -1014,8 +981,7 @@ const responsiveStyles = `
   }
 
   .customers-page .heroActions {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .customers-page .heroPrimaryButton,
@@ -1055,7 +1021,7 @@ const responsiveStyles = `
   .customers-page .hero {
     padding: 18px !important;
     border-radius: 24px !important;
-    gap: 14px !important;
+    gap: 16px !important;
   }
 
   .customers-page .title {
@@ -1066,7 +1032,8 @@ const responsiveStyles = `
   .customers-page .heroStats,
   .customers-page .summaryGrid,
   .customers-page .heroPanelGrid,
-  .customers-page .customerStats {
+  .customers-page .customerStats,
+  .customers-page .heroActions {
     grid-template-columns: 1fr !important;
   }
 
@@ -1128,8 +1095,8 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gap: 22,
-    padding: 30,
+    gap: 18,
+    padding: 28,
     borderRadius: 30,
     background:
       "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
@@ -1144,7 +1111,7 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
+    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
     gap: 22,
     alignItems: "stretch",
     minWidth: 0,
@@ -1161,11 +1128,14 @@ const styles: Record<string, CSSProperties> = {
   heroContent: {
     position: "relative",
     zIndex: 1,
+    display: "grid",
+    alignContent: "start",
     minWidth: 0,
   },
 
   eyebrow: {
     display: "inline-flex",
+    width: "fit-content",
     padding: "8px 14px",
     borderRadius: 999,
     background: "rgba(15,23,42,0.24)",
@@ -1175,13 +1145,13 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
-    marginBottom: 14,
+    marginBottom: 12,
     boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(42px, 7vw, 68px)",
+    fontSize: "clamp(44px, 7vw, 68px)",
     lineHeight: 0.95,
     letterSpacing: "-0.07em",
     overflowWrap: "anywhere",
@@ -1189,11 +1159,11 @@ const styles: Record<string, CSSProperties> = {
   },
 
   subtitle: {
-    margin: "16px 0 0",
+    margin: "14px 0 0",
     maxWidth: 760,
     color: "#dbeafe",
     fontSize: 17,
-    lineHeight: 1.55,
+    lineHeight: 1.5,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
@@ -1201,15 +1171,15 @@ const styles: Record<string, CSSProperties> = {
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 12,
-    marginTop: 24,
+    gap: 10,
+    marginTop: 22,
   },
 
   heroStat: {
     display: "grid",
     gap: 5,
-    padding: 14,
-    borderRadius: 18,
+    padding: 13,
+    borderRadius: 16,
     background: "rgba(255,255,255,0.09)",
     border: "1px solid rgba(148,163,184,0.25)",
     minWidth: 0,
@@ -1220,7 +1190,7 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gap: 14,
+    gap: 13,
     alignContent: "start",
     padding: 18,
     borderRadius: 24,
@@ -1241,7 +1211,7 @@ const styles: Record<string, CSSProperties> = {
   heroPanelText: {
     margin: 0,
     color: "#dbeafe",
-    lineHeight: 1.5,
+    lineHeight: 1.45,
     fontWeight: 700,
   },
 
@@ -1266,12 +1236,11 @@ const styles: Record<string, CSSProperties> = {
   heroActions: {
     position: "relative",
     zIndex: 1,
-    display: "flex",
-    justifyContent: "space-between",
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
-    flexWrap: "wrap",
-    alignItems: "center",
-    paddingTop: 18,
+    alignItems: "stretch",
+    paddingTop: 16,
     marginTop: 2,
     borderTop: "1px solid rgba(148,163,184,0.24)",
   },
@@ -1289,6 +1258,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid rgba(96,165,250,0.88)",
     boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
+    textAlign: "center",
   },
 
   heroSecondaryButton: {
@@ -1304,6 +1274,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     border: "1px solid rgba(255,255,255,0.28)",
     boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+    textAlign: "center",
   },
 
   summaryGrid: {
