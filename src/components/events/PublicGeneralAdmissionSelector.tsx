@@ -2,6 +2,10 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
+import PublicEventCheckoutAddOnSelector, {
+  type PublicEventCheckoutAddOn,
+  type PublicEventCheckoutAddOnSelection,
+} from "@/components/events/PublicEventCheckoutAddOnSelector";
 
 type TicketType = {
   id: string;
@@ -68,20 +72,38 @@ function calculatePlatformFeeCents(
   return Math.max(0, grossTotalCents - subtotal);
 }
 
+function normaliseAddOnQuantity(
+  quantity: number,
+  addOn?: PublicEventCheckoutAddOn | null,
+) {
+  const cleanQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
+
+  const max = Number(addOn?.maxEntriesPerBooking || 0);
+
+  if (Number.isFinite(max) && max > 0) {
+    return Math.min(cleanQuantity, Math.floor(max));
+  }
+
+  return cleanQuantity;
+}
+
 export default function PublicGeneralAdmissionSelector({
   eventId,
   ticketTypes,
   currency,
   platformFeePercent = 0,
+  checkoutAddOn = null,
 }: {
   eventId: string;
   ticketTypes: TicketType[];
   currency: string;
   platformFeePercent?: number;
+  checkoutAddOn?: PublicEventCheckoutAddOn | null;
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [addOnQuantity, setAddOnQuantity] = useState(0);
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -102,19 +124,43 @@ export default function PublicGeneralAdmissionSelector({
       .filter((item) => item.quantity > 0);
   }, [ticketTypes, quantities]);
 
+  const safeAddOnQuantity = normaliseAddOnQuantity(
+    hasAccessCode ? 0 : addOnQuantity,
+    checkoutAddOn,
+  );
+
+  const selectedAddOns: PublicEventCheckoutAddOnSelection[] =
+    checkoutAddOn && safeAddOnQuantity > 0
+      ? [
+          {
+            type: checkoutAddOn.type,
+            quantity: safeAddOnQuantity,
+          },
+        ]
+      : [];
+
   const ticketTotal = selectedItems.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0) * item.quantity,
     0,
   );
 
+  const addOnTotal = checkoutAddOn
+    ? Number(checkoutAddOn.entryPriceCents || 0) * safeAddOnQuantity
+    : 0;
+
+  const checkoutSubtotal = ticketTotal + addOnTotal;
+
   const estimatedCoverFeeCents = calculatePlatformFeeCents(
-    ticketTotal,
+    checkoutSubtotal,
     platformFeePercent,
   );
 
-  const platformFeeCents = coverFees && !hasAccessCode ? estimatedCoverFeeCents : 0;
+  const platformFeeCents =
+    coverFees && !hasAccessCode ? estimatedCoverFeeCents : 0;
 
-  const totalTodayCents = hasAccessCode ? 0 : ticketTotal + platformFeeCents;
+  const totalTodayCents = hasAccessCode
+    ? 0
+    : checkoutSubtotal + platformFeeCents;
 
   const totalQuantity = selectedItems.reduce(
     (sum, item) => sum + item.quantity,
@@ -126,6 +172,10 @@ export default function PublicGeneralAdmissionSelector({
       ...current,
       [ticketTypeId]: Math.max(0, Math.floor(Number(nextQuantity || 0))),
     }));
+  }
+
+  function updateAddOnQuantity(nextQuantity: number) {
+    setAddOnQuantity(normaliseAddOnQuantity(nextQuantity, checkoutAddOn));
   }
 
   async function startCheckout() {
@@ -157,6 +207,7 @@ export default function PublicGeneralAdmissionSelector({
           coverFees: hasAccessCode ? false : coverFees,
           platformFeeCents,
           accessCode: cleanedAccessCode || null,
+          addOns: selectedAddOns,
           items: selectedItems.map((item) => ({
             ticketTypeId: item.ticketType.id,
             quantity: item.quantity,
@@ -275,6 +326,20 @@ export default function PublicGeneralAdmissionSelector({
           </small>
         </label>
 
+        {checkoutAddOn ? (
+          <>
+            <div style={styles.summarySpacer} />
+
+            <PublicEventCheckoutAddOnSelector
+              addOn={checkoutAddOn}
+              currency={currency}
+              quantity={safeAddOnQuantity}
+              disabled={hasAccessCode}
+              onQuantityChange={updateAddOnQuantity}
+            />
+          </>
+        ) : null}
+
         <div style={styles.summarySpacer} />
 
         <p style={styles.eyebrow}>Booking summary</p>
@@ -302,15 +367,36 @@ export default function PublicGeneralAdmissionSelector({
                 </strong>
               </div>
             ))}
+
+            {checkoutAddOn && safeAddOnQuantity > 0 ? (
+              <div style={styles.summaryRow}>
+                <span>
+                  {checkoutAddOn.title || "Heads or Tails"} ×{" "}
+                  {safeAddOnQuantity}
+                </span>
+                <strong>
+                  {currency}{" "}
+                  {moneyFromCents(
+                    Number(checkoutAddOn.entryPriceCents || 0) *
+                      safeAddOnQuantity,
+                  )}
+                </strong>
+              </div>
+            ) : null}
           </div>
         )}
 
         <div style={styles.totalBox}>
           <span>
             {totalQuantity} ticket{totalQuantity === 1 ? "" : "s"}
+            {safeAddOnQuantity > 0
+              ? ` • ${safeAddOnQuantity} add-on entr${
+                  safeAddOnQuantity === 1 ? "y" : "ies"
+                }`
+              : ""}
           </span>
           <strong>
-            {currency} {moneyFromCents(ticketTotal)}
+            {currency} {moneyFromCents(checkoutSubtotal)}
           </strong>
         </div>
 
@@ -328,7 +414,7 @@ export default function PublicGeneralAdmissionSelector({
               type="checkbox"
               checked={coverFees}
               onChange={(event) => setCoverFees(event.target.checked)}
-              disabled={ticketTotal <= 0}
+              disabled={checkoutSubtotal <= 0}
             />
             <span>
               <strong>I’d like to cover platform and payment costs</strong>
@@ -341,7 +427,11 @@ export default function PublicGeneralAdmissionSelector({
           </label>
         )}
 
-        <div style={hasAccessCode ? styles.totalBoxComplimentary : styles.totalBoxStrong}>
+        <div
+          style={
+            hasAccessCode ? styles.totalBoxComplimentary : styles.totalBoxStrong
+          }
+        >
           <span>{hasAccessCode ? "Due after valid code" : "Total today"}</span>
           <strong>
             {currency} {moneyFromCents(totalTodayCents)}
