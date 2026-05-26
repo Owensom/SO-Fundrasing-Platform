@@ -55,6 +55,15 @@ type SoldTicketRow = {
   colour: string | null;
 };
 
+type ReadinessTone = "good" | "warning" | "neutral";
+
+type ReadinessItem = {
+  label: string;
+  value: ReactNode;
+  tone: ReadinessTone;
+  detail: string;
+};
+
 const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
 
 const PRESET_COLOURS = [
@@ -226,211 +235,243 @@ function formatMoney(cents: number | string | null | undefined, currency: string
     }`;
   }
 }
+import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import { redirect, notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { getRaffleById } from "@/lib/raffles";
+import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import RaffleAdminActions from "./RaffleAdminActions";
+import PrizeSettings from "./PrizeSettings";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
+import DramaticRaffleDraw from "./DramaticRaffleDraw";
 
-function formatWholeNumber(value: number | string | null | undefined) {
-  const parsed = Number(value || 0);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+  searchParams?: Promise<{
+    error?: string;
+    payout?: string;
+  }>;
+};
+
+type WinnerRow = {
+  id: string;
+  raffle_id: string;
+  prize_position: number;
+  prize_title: string | null;
+  ticket_number: number;
+  colour: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  raffle_subtype_snapshot: string | null;
+  gross_paid_sales_cents: number | string | null;
+  winner_prize_cents: number | string | null;
+  cause_share_cents: number | string | null;
+  paid_entry_count: number | string | null;
+  postal_entry_count: number | string | null;
+  total_entry_count: number | string | null;
+  payout_status: string | null;
+  payout_method: string | null;
+  payout_date: string | null;
+  payout_reference: string | null;
+  payout_note: string | null;
+  payout_recorded_by: string | null;
+  payout_recorded_at: string | null;
+};
+
+type SoldTicketRow = {
+  ticket_number: number;
+  colour: string | null;
+};
+
+type ReadinessTone = "good" | "warning" | "neutral";
+
+type ReadinessItem = {
+  label: string;
+  value: ReactNode;
+  tone: ReadinessTone;
+  detail: string;
+};
+
+const DEFAULT_RAFFLE_IMAGE = "/brand/so-default-raffles.png";
+
+const PRESET_COLOURS = [
+  "Red",
+  "Blue",
+  "Green",
+  "Yellow",
+  "Orange",
+  "Purple",
+  "Pink",
+  "Black",
+  "White",
+];
+
+const COLOUR_SWATCHES: Record<string, string> = {
+  Red: "#ef4444",
+  Blue: "#1683f8",
+  Green: "#16a34a",
+  Yellow: "#facc15",
+  Orange: "#f97316",
+  Purple: "#8b5cf6",
+  Pink: "#ec4899",
+  Black: "#111827",
+  White: "#ffffff",
+};
+
+function colourToText(colour: any) {
+  if (typeof colour === "string") return colour;
+  if (colour?.name) return colour.name;
+  if (colour?.hex) return colour.hex;
+  return "";
+}
+
+function normaliseOfferForUI(offer: any, index: number) {
+  const quantity = Number(offer?.quantity ?? offer?.tickets ?? 0);
+
+  const price =
+    offer?.price != null
+      ? Number(offer.price)
+      : offer?.price_cents != null
+        ? Number(offer.price_cents) / 100
+        : 0;
+
+  return {
+    id: offer?.id || `offer-${index + 1}`,
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : "",
+    price: Number.isFinite(price) && price > 0 ? price : "",
+    is_active:
+      offer?.is_active === false ||
+      offer?.isActive === false ||
+      offer?.active === false
+        ? false
+        : true,
+  };
+}
+
+function normaliseImagePosition(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  if (
+    clean === "center" ||
+    clean === "top" ||
+    clean === "bottom" ||
+    clean === "left" ||
+    clean === "right"
+  ) {
+    return clean;
+  }
+
+  return "center";
+}
+
+function normaliseFocus(value: unknown, fallback = 50) {
+  const parsed = Number(value);
 
   if (!Number.isFinite(parsed)) {
-    return "0";
+    return fallback;
   }
 
-  return String(Math.max(0, Math.round(parsed)));
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
-function formatPayoutStatus(value: string | null | undefined) {
-  const clean = String(value || "").trim().toLowerCase();
+function normaliseRaffleSubtype(value: unknown) {
+  const clean = String(value ?? "").trim().toLowerCase();
 
-  if (clean === "paid") return "Paid";
-  if (clean === "pending") return "Pending";
-  if (clean === "not_required") return "Not required";
+  if (clean === "fifty_fifty") return "fifty_fifty";
 
-  return "Not recorded";
+  return "standard";
 }
 
-function getPayoutStatusStyle(value: string | null | undefined): CSSProperties {
-  const clean = String(value || "").trim().toLowerCase();
+function getDateParts(value: string | null | undefined) {
+  if (!value) return null;
 
-  if (clean === "paid") {
-    return {
-      background: "#dcfce7",
-      borderColor: "#bbf7d0",
-      color: "#166534",
-    };
-  }
+  const date = new Date(value);
 
-  if (clean === "pending") {
-    return {
-      background: "#fff7ed",
-      borderColor: "#fed7aa",
-      color: "#9a3412",
-    };
+  if (Number.isNaN(date.getTime())) {
+    return null;
   }
 
   return {
-    background: "#f1f5f9",
-    borderColor: "#e2e8f0",
-    color: "#475569",
+    day: String(date.getUTCDate()).padStart(2, "0"),
+    month: String(date.getUTCMonth() + 1).padStart(2, "0"),
+    year: String(date.getUTCFullYear()).padStart(4, "0"),
+    hour: String(date.getUTCHours()).padStart(2, "0"),
+    minute: String(date.getUTCMinutes()).padStart(2, "0"),
   };
 }
 
-function getStatusStyle(status: string): CSSProperties {
-  const clean = status.toLowerCase();
+function formatBritishDateInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
 
-  if (clean === "published") {
-    return {
-      background: "#dcfce7",
-      borderColor: "#bbf7d0",
-      color: "#166534",
-    };
-  }
+  if (!parts) return "";
 
-  if (clean === "closed") {
-    return {
-      background: "#fff7ed",
-      borderColor: "#fed7aa",
-      color: "#9a3412",
-    };
-  }
-
-  if (clean === "drawn") {
-    return {
-      background: "#dbeafe",
-      borderColor: "#bfdbfe",
-      color: "#1d4ed8",
-    };
-  }
-
-  return {
-    background: "#f1f5f9",
-    borderColor: "#e2e8f0",
-    color: "#475569",
-  };
+  return `${parts.day}/${parts.month}/${parts.year}`;
 }
 
-function getProgressPercent(sold: number, total: number) {
-  if (!total || total <= 0) return 0;
+function formatTimeInput(value: string | null | undefined) {
+  const parts = getDateParts(value);
 
-  return Math.min(100, Math.max(0, Math.round((sold / total) * 100)));
+  if (!parts) return "";
+
+  return `${parts.hour}:${parts.minute}`;
 }
 
-function offerSavingText(
-  quantity: number | "",
-  price: number | "",
-  singleTicketPriceCents: number,
-) {
-  if (!quantity || !price || !singleTicketPriceCents) {
-    return "Bundle row";
+function formatDrawDate(value: string | null | undefined) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not set";
   }
 
-  const normalPrice = (Number(singleTicketPriceCents) / 100) * Number(quantity);
-  const offerPrice = Number(price);
-  const saving = normalPrice - offerPrice;
-
-  if (!Number.isFinite(saving) || saving <= 0) {
-    return "No saving";
-  }
-
-  return `Save ${saving.toFixed(2)}`;
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
-function isConfigured(value: unknown) {
-  return String(value ?? "").trim().length > 0;
+function formatDateOnlyInput(value: string | null | undefined) {
+  if (!value) return "";
+
+  const clean = String(value).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+
+  const date = new Date(clean);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
-export default async function AdminRafflePage({
-  params,
-  searchParams,
-}: PageProps) {
-  const { id } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-  const campaignLimitReached =
-  resolvedSearchParams.error === "campaign_limit";
+function formatMoney(cents: number | string | null | undefined, currency: string) {
+  const numericCents = Number(cents || 0);
 
-const publicPreviewUnavailable =
-  resolvedSearchParams.error === "public-preview-unavailable";
-
-  const invalidDrawDateTime =
-    resolvedSearchParams.error === "invalid_draw_datetime";
-
-  const invalidPostalDateTime =
-    resolvedSearchParams.error === "invalid_postal_datetime";
-
-  const saveFailed = resolvedSearchParams.error === "save_failed";
-  const payoutSaved = resolvedSearchParams.payout === "saved";
-  const payoutSaveFailed = resolvedSearchParams.error === "payout_failed";
-
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect("/admin/login");
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number(numericCents || 0) / 100);
+  } catch {
+    return `${(Number(numericCents || 0) / 100).toFixed(2)} ${
+      currency || "GBP"
+    }`;
   }
-
-  const tenantSlug = await getTenantSlugFromHeaders();
-
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
-    : [];
-
-  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
-    redirect("/admin/login?error=tenant_access_denied");
-  }
-
-  const tenantSettings = await getTenantSettings(tenantSlug);
-
-  const customImagesCapability = checkSubscriptionCapability(
-    tenantSettings,
-    "custom_campaign_images",
-  );
-
-  const raffle = await getRaffleById(id);
-
-  if (!raffle) {
-    notFound();
-  }
-
-  if (raffle.tenant_slug !== tenantSlug) {
-    redirect("/admin/login?error=tenant_access_denied");
-  }
-
-  const config = (raffle.config_json as any) ?? {};
-  const raffleSubtype = normaliseRaffleSubtype((raffle as any).raffle_subtype);
-  const isFiftyFifty = raffleSubtype === "fifty_fifty";
-
-  const imagePosition = normaliseImagePosition(config.image_position);
-  const imageFocusX = normaliseFocus(config.image_focus_x, 50);
-  const imageFocusY = normaliseFocus(config.image_focus_y, 50);
-
-  const imageObjectPosition =
-    config.image_focus_x != null || config.image_focus_y != null
-      ? `${imageFocusX}% ${imageFocusY}%`
-      : imagePosition;
-
-  const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
-  const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
-
-  const colours = Array.isArray(config.colours)
-    ? config.colours.map(colourToText).filter(Boolean)
-    : [];
-
-  const offers = Array.isArray(config.offers)
-    ? config.offers.map(normaliseOfferForUI)
-    : [];
-
-  const offerRows = [
-    ...offers,
-    ...Array.from({ length: Math.max(2, 5 - offers.length) }, (_, index) => ({
-      id: `new-offer-${index + 1}`,
-      quantity: "",
-      price: "",
-      is_active: true,
-    })),
-  ];
-
-  const ticketPrice =
-    Number(raffle.ticket_price_cents) > 0
-      ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
-      : "";
-
+}
   const winners = await query<WinnerRow>(
     `
       select
@@ -514,6 +555,81 @@ const publicPreviewUnavailable =
   const prizesConfigured =
     Array.isArray(config.prizes) && config.prizes.length > 0;
 
+  const ticketPriceConfigured = Number(raffle.ticket_price_cents || 0) > 0;
+  const ticketRangeConfigured = totalTickets > 0;
+  const drawDateConfigured = isConfigured(raffle.draw_at);
+  const hasCustomImage = Boolean(raffle.image_url);
+
+  const readinessItems: ReadinessItem[] = [
+    {
+      label: "Public page",
+      value: canViewPublicRaffle ? "Published" : String(raffle.status || "Draft"),
+      tone: canViewPublicRaffle ? "good" : "warning",
+      detail: canViewPublicRaffle
+        ? "Supporters can open the public raffle page."
+        : "Draft, closed and drawn raffles are not open for public entries.",
+    },
+    {
+      label: "Tickets",
+      value:
+        ticketRangeConfigured && ticketPriceConfigured
+          ? `${totalTickets} tickets`
+          : "Needs setup",
+      tone: ticketRangeConfigured && ticketPriceConfigured ? "good" : "warning",
+      detail:
+        ticketRangeConfigured && ticketPriceConfigured
+          ? `${remainingTickets} tickets remain available.`
+          : "Set a ticket price and ticket range before selling entries.",
+    },
+    {
+      label: "Draw",
+      value: formatDrawDate(raffle.draw_at),
+      tone: drawDateConfigured ? "good" : "warning",
+      detail: drawDateConfigured
+        ? "Draw date is set for the raffle."
+        : "Add a draw date before publishing or promoting the raffle.",
+    },
+    {
+      label: "Legal question",
+      value: legalQuestionEnabled ? "Configured" : "Missing",
+      tone: legalQuestionEnabled ? "good" : "warning",
+      detail: legalQuestionEnabled
+        ? "Public entrants must answer the skill question before checkout."
+        : "Add the entry question and correct answer for compliance.",
+    },
+    {
+      label: "Postal entry",
+      value: postalEntryEnabled ? "Configured" : "Missing",
+      tone: postalEntryEnabled ? "good" : "warning",
+      detail: postalEntryEnabled
+        ? "Free postal entry details are available on the public page."
+        : "Add the free postal entry address and instructions.",
+    },
+    {
+      label: isFiftyFifty ? "Prize pot" : "Prizes",
+      value: isFiftyFifty
+        ? "50/50 mode"
+        : prizesConfigured
+          ? `${config.prizes.length} prizes`
+          : "No prizes",
+      tone: isFiftyFifty || prizesConfigured ? "good" : "warning",
+      detail: isFiftyFifty
+        ? "Winner and cause shares are calculated from paid ticket sales."
+        : prizesConfigured
+          ? "Prize rows are configured for the draw."
+          : "Add prize rows before promoting the raffle.",
+    },
+  ];
+
+  const readinessReady =
+    canViewPublicRaffle &&
+    ticketRangeConfigured &&
+    ticketPriceConfigured &&
+    drawDateConfigured &&
+    legalQuestionEnabled &&
+    postalEntryEnabled &&
+    (isFiftyFifty || prizesConfigured);
+
   return (
     <main className="raffle-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -524,18 +640,19 @@ const publicPreviewUnavailable =
         </Link>
 
         <Link
-         href={
-          canViewPublicRaffle
-           ? `/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`
-         : `/admin/raffles/${raffle.id}?error=public-preview-unavailable`
-        }
-      target={canViewPublicRaffle ? "_blank" : undefined}
-      style={styles.publicLink}
-     >
-  View campaign page
-</Link>
+          href={
+            canViewPublicRaffle
+              ? `/r/${raffle.slug}?adminReturn=/admin/raffles/${raffle.id}`
+              : `/admin/raffles/${raffle.id}?error=public-preview-unavailable`
+          }
+          target={canViewPublicRaffle ? "_blank" : undefined}
+          style={styles.publicLink}
+        >
+          View campaign page
+        </Link>
       </section>
-            {campaignLimitReached ? (
+
+      {campaignLimitReached ? (
         <section style={styles.campaignLimitBanner}>
           <div style={styles.campaignLimitEyebrow}>Plan limit reached</div>
 
@@ -564,7 +681,7 @@ const publicPreviewUnavailable =
           </div>
         </section>
       ) : null}
-      
+
       {publicPreviewUnavailable ? (
         <section style={styles.campaignLimitBanner}>
           <div style={styles.campaignLimitEyebrow}>Preview unavailable</div>
@@ -579,8 +696,7 @@ const publicPreviewUnavailable =
           </p>
         </section>
       ) : null}
-      
-      {invalidDrawDateTime ||
+            {invalidDrawDateTime ||
       invalidPostalDateTime ||
       saveFailed ||
       payoutSaveFailed ? (
@@ -679,6 +795,65 @@ const publicPreviewUnavailable =
         </div>
       </section>
 
+      <section className="raffle-readiness-panel" style={styles.readinessPanel}>
+        <div style={styles.readinessHeader}>
+          <div>
+            <div style={styles.readinessEyebrow}>Campaign readiness</div>
+
+            <h2 style={styles.readinessTitle}>Raffle readiness snapshot</h2>
+
+            <p style={styles.readinessIntro}>
+              A quick operational check before sharing the raffle, taking paid
+              entries or running the draw.
+            </p>
+          </div>
+
+          <span
+            style={{
+              ...styles.readinessStatusPill,
+              ...readinessToneStyle(readinessReady ? "good" : "warning"),
+            }}
+          >
+            {readinessReady ? "Ready to sell" : "Needs attention"}
+          </span>
+        </div>
+
+        <div className="raffle-readiness-grid" style={styles.readinessGrid}>
+          {readinessItems.map((item) => (
+            <div
+              key={item.label}
+              className="raffle-readiness-item"
+              style={styles.readinessItem}
+            >
+              <div
+                style={{
+                  ...styles.readinessToneDot,
+                  ...readinessToneStyle(item.tone),
+                }}
+              />
+
+              <div style={styles.readinessContent}>
+                <span style={styles.readinessLabel}>{item.label}</span>
+
+                <strong
+                  className="raffle-readiness-value"
+                  style={styles.readinessValue}
+                >
+                  {item.value}
+                </strong>
+
+                <span
+                  className="raffle-readiness-detail"
+                  style={styles.readinessDetail}
+                >
+                  {item.detail}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="raffle-summary-grid" style={styles.summaryGrid}>
         <SummaryCard
           label="Raffle type"
@@ -739,8 +914,7 @@ const publicPreviewUnavailable =
           </div>
         </section>
       ) : null}
-
-      {isFiftyFifty && fiftyFiftySnapshotWinner ? (
+            {isFiftyFifty && fiftyFiftySnapshotWinner ? (
         <section style={styles.fiftyFiftySnapshotCard}>
           <div style={styles.fiftyFiftySnapshotHeader}>
             <div>
@@ -1037,8 +1211,7 @@ const publicPreviewUnavailable =
                     style={styles.textarea}
                   />
                 </Field>
-
-                <div className="raffle-media-box" style={styles.mediaBox}>
+                                <div className="raffle-media-box" style={styles.mediaBox}>
                   <div style={styles.mediaControls}>
                     <h3 style={styles.subTitle}>Raffle image</h3>
 
@@ -1080,7 +1253,8 @@ const publicPreviewUnavailable =
                     />
                   </div>
                 </div>
-                                <div
+
+                <div
                   className="raffle-subtype-grid"
                   style={styles.subtypeGrid}
                 >
@@ -1365,8 +1539,7 @@ const publicPreviewUnavailable =
                   </>
                 )}
               </section>
-
-              <section style={styles.innerPanel}>
+                            <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Compliance</div>
@@ -1613,8 +1786,7 @@ const publicPreviewUnavailable =
                         #{winner.ticket_number}
                       </div>
                     </div>
-
-                    <div>
+                                        <div>
                       <div style={styles.winnerLabel}>Colour</div>
 
                       <div style={styles.winnerValue}>
@@ -1639,7 +1811,8 @@ const publicPreviewUnavailable =
             ) : (
               <div style={styles.emptyBox}>No winners yet.</div>
             )}
-                        <details open style={styles.drawDetails}>
+
+            <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Manual postal ticket</h3>
@@ -1831,7 +2004,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
-
 const responsiveStyles = `
   .raffle-admin-page,
   .raffle-admin-page * {
@@ -1862,6 +2034,7 @@ const responsiveStyles = `
     }
 
     .raffle-summary-grid,
+    .raffle-readiness-grid,
     .raffle-three-column,
     .raffle-two-column,
     .raffle-media-box,
@@ -1900,7 +2073,8 @@ const responsiveStyles = `
       text-align: center !important;
     }
 
-    .raffle-hero {
+    .raffle-hero,
+    .raffle-readiness-panel {
       padding: 20px !important;
       border-radius: 24px !important;
     }
@@ -1940,6 +2114,12 @@ const responsiveStyles = `
       min-height: 46px !important;
       -webkit-appearance: none !important;
       appearance: none !important;
+    }
+
+    .raffle-readiness-value,
+    .raffle-readiness-detail {
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
     }
   }
 `;
@@ -2240,6 +2420,111 @@ const styles: Record<string, CSSProperties> = {
     height: "100%",
     maxHeight: 280,
     display: "block",
+  },
+  readinessPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
+    marginBottom: 16,
+    minWidth: 0,
+  },
+  readinessHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  readinessEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+  readinessTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    letterSpacing: "-0.045em",
+    lineHeight: 1.05,
+    overflowWrap: "anywhere",
+  },
+  readinessIntro: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    maxWidth: 760,
+  },
+  readinessStatusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+  },
+    readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  readinessItem: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+  readinessToneDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    border: "1px solid",
+    marginTop: 4,
+  },
+  readinessContent: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+  readinessLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+  readinessValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+  readinessDetail: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
   },
   summaryGrid: {
     display: "grid",
