@@ -35,6 +35,13 @@ type TenantSettingsLike = {
   platform_owner_bypass?: boolean | null;
 };
 
+type ReadinessItem = {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "good" | "warning" | "neutral";
+};
+
 const HEADS_OR_TAILS_ID = "event-addon-heads-or-tails";
 
 function cleanText(value: FormDataEntryValue | null) {
@@ -123,6 +130,118 @@ function buildHeadsOrTailsAddOn(formData: FormData): EventFundraisingAddOn {
   };
 }
 
+function readinessToneStyle(tone: ReadinessItem["tone"]) {
+  if (tone === "good") {
+    return {
+      dot: styles.readinessDotGood,
+      card: styles.readinessItemGood,
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      dot: styles.readinessDotWarning,
+      card: styles.readinessItemWarning,
+    };
+  }
+
+  return {
+    dot: styles.readinessDotNeutral,
+    card: styles.readinessItemNeutral,
+  };
+}
+
+function buildHeadsOrTailsReadiness(input: {
+  addOn: EventFundraisingAddOn;
+  currency: string;
+}): ReadinessItem[] {
+  const addOn = input.addOn;
+  const enabled = Boolean(addOn.enabled);
+  const collectAtCheckout = Boolean(addOn.collectAtCheckout);
+  const entryPriceCents = Number(addOn.entryPriceCents || 0);
+  const hasPrice = entryPriceCents > 0;
+  const hasDescription = Boolean(String(addOn.description || "").trim());
+  const hasInstructions = Boolean(String(addOn.instructions || "").trim());
+  const hasPrize = Boolean(String(addOn.prizeTitle || "").trim());
+  const maxEntries = Number(addOn.maxEntriesPerBooking || 0);
+
+  return [
+    {
+      label: "Public display",
+      value: enabled ? "Ready" : "Disabled",
+      detail: enabled
+        ? "The public event page can show the Heads or Tails panel."
+        : "Enable the add-on before it appears on the public event page.",
+      tone: enabled ? "good" : "neutral",
+    },
+    {
+      label: "Checkout collection",
+      value: collectAtCheckout ? "On" : "Off",
+      detail: collectAtCheckout
+        ? "Supporters can add entries during event checkout."
+        : "Entries are shown publicly but collected by the organiser on the night.",
+      tone: collectAtCheckout ? "good" : "neutral",
+    },
+    {
+      label: "Entry price",
+      value: hasPrice
+        ? formatMoney(entryPriceCents, input.currency)
+        : "Missing",
+      detail: hasPrice
+        ? "The checkout add-on has a valid entry price."
+        : "Set an entry price before using checkout collection.",
+      tone: hasPrice ? "good" : collectAtCheckout ? "warning" : "neutral",
+    },
+    {
+      label: "Booking limit",
+      value: maxEntries > 0 ? `${maxEntries} per booking` : "Unlimited",
+      detail:
+        maxEntries > 0
+          ? "The public checkout selector will cap entries at this amount."
+          : "No per-booking limit is currently set.",
+      tone: maxEntries > 0 ? "good" : "neutral",
+    },
+    {
+      label: "Instructions",
+      value: hasInstructions ? "Added" : "Missing",
+      detail: hasInstructions
+        ? "Supporters can see how the game works."
+        : "Add short instructions so supporters understand the game.",
+      tone: hasInstructions ? "good" : "warning",
+    },
+    {
+      label: "Prize note",
+      value: hasPrize ? "Added" : "Optional",
+      detail: hasPrize
+        ? "The public panel can show the prize or prize note."
+        : "A prize note is optional but helps make the add-on clearer.",
+      tone: hasPrize ? "good" : "neutral",
+    },
+    {
+      label: "Description",
+      value: hasDescription ? "Added" : "Missing",
+      detail: hasDescription
+        ? "The public panel has supporting copy."
+        : "Add a short public description for a more polished display.",
+      tone: hasDescription ? "good" : "warning",
+    },
+    {
+      label: "Admin reporting",
+      value: "Ready",
+      detail: "Orders reporting can show add-on entries and revenue.",
+      tone: "good",
+    },
+  ];
+}
+
+function headsOrTailsReadyForCheckout(addOn: EventFundraisingAddOn) {
+  return (
+    Boolean(addOn.enabled) &&
+    Boolean(addOn.collectAtCheckout) &&
+    Number(addOn.entryPriceCents || 0) > 0
+  );
+}
+
 async function requireEventAccess(eventId: string) {
   const session = await auth();
 
@@ -204,7 +323,6 @@ async function saveHeadsOrTailsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}/addons?saved=heads-or-tails`);
 }
-
 export default async function EventFundraisingAddOnsPage({
   params,
   searchParams,
@@ -228,10 +346,19 @@ export default async function EventFundraisingAddOnsPage({
   const canManageAddOns = addOnsCapability.allowed;
   const canUseMultipleAddOns = multipleAddOnsCapability.allowed;
   const headsOrTailsAddOn = getHeadsOrTailsAddOn(event.event_addons_json || []);
+  const readinessItems = buildHeadsOrTailsReadiness({
+    addOn: headsOrTailsAddOn,
+    currency: event.currency || "GBP",
+  });
 
   const enabledAddOns = (event.event_addons_json || []).filter(
     (addOn) => addOn.enabled,
   );
+
+  const readyForCheckout = headsOrTailsReadyForCheckout(headsOrTailsAddOn);
+  const readinessWarnings = readinessItems.filter(
+    (item) => item.tone === "warning",
+  ).length;
 
   const upgradeRequired = searchParams?.error === "upgrade-required";
   const multipleUpgradeRequired =
@@ -242,21 +369,21 @@ export default async function EventFundraisingAddOnsPage({
     <main className="event-addons-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
-      <section style={styles.hero}>
+      <section className="hero" style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.eyebrow}>Events add-ons</div>
 
-          <h1 className="so-brand-heading" style={styles.title}>
+          <h1 className="so-brand-heading title" style={styles.title}>
             Event Fundraising Add-ons
           </h1>
 
           <p style={styles.heroText}>
-            Add live fundraising tools to this event. Heads or Tails is the
-            first add-on in this section and is designed for ceilidhs, quiz
-            nights, dinners, auctions and gala events.
+            Add live fundraising tools to this event. Heads or Tails is designed
+            for ceilidhs, quiz nights, dinners, auctions and gala events, with
+            public display, optional checkout collection and admin reporting.
           </p>
 
-          <div style={styles.heroMetaGrid}>
+          <div className="heroMetaGrid" style={styles.heroMetaGrid}>
             <HeroMetric label="Event" value={event.title} />
             <HeroMetric
               label="Plan"
@@ -283,30 +410,44 @@ export default async function EventFundraisingAddOnsPage({
           <div style={styles.heroPanelEyebrow}>Current status</div>
           <strong style={styles.heroPanelTitle}>
             {headsOrTailsAddOn.enabled
-              ? "Heads or Tails is enabled"
+              ? readyForCheckout
+                ? "Heads or Tails is checkout-ready"
+                : "Heads or Tails is display-ready"
               : "Heads or Tails is not enabled"}
           </strong>
           <span style={styles.heroPanelText}>
-            {headsOrTailsAddOn.collectAtCheckout
+            {readyForCheckout
               ? `Collecting ${formatMoney(
                   headsOrTailsAddOn.entryPriceCents,
                   event.currency,
-                )} entries at checkout.`
-              : "Checkout collection is currently off."}
+                )} entries during checkout.`
+              : headsOrTailsAddOn.enabled
+                ? "The public panel can display, but checkout collection needs to be enabled with a valid price."
+                : "Enable the add-on to show it on the public event page."}
           </span>
         </div>
       </section>
 
-      <section style={styles.topActions}>
+      <section className="topActions" style={styles.topActions}>
         <Link
           href={`/admin/events/${encodeURIComponent(event.id)}`}
+          className="secondaryButton"
           style={styles.secondaryButton}
         >
           ← Back to event editor
         </Link>
 
         <Link
+          href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
+          className="secondaryButton"
+          style={styles.secondaryButton}
+        >
+          View orders & add-on reporting
+        </Link>
+
+        <Link
           href="/admin/settings/billing"
+          className="secondaryButton"
           style={styles.secondaryButton}
         >
           Billing &amp; plan
@@ -338,7 +479,7 @@ export default async function EventFundraisingAddOnsPage({
         />
       ) : null}
 
-      <section style={styles.summaryGrid}>
+      <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard
           label="Community"
           value="No add-ons"
@@ -356,8 +497,87 @@ export default async function EventFundraisingAddOnsPage({
         />
       </section>
 
+      {canManageAddOns ? (
+        <section className="readinessPanel" style={styles.readinessPanel}>
+          <div style={styles.readinessHeader}>
+            <div>
+              <div style={styles.readinessEyebrow}>Readiness</div>
+              <h2 style={styles.readinessTitle}>Heads or Tails checklist</h2>
+              <p style={styles.readinessIntro}>
+                A quick admin view of what is live, what is checkout-ready, and
+                what would improve the public add-on experience.
+              </p>
+            </div>
+
+            <span
+              style={{
+                ...styles.readinessStatusPill,
+                ...(readyForCheckout
+                  ? styles.statusGood
+                  : headsOrTailsAddOn.enabled
+                    ? styles.statusWarning
+                    : styles.statusNeutral),
+              }}
+            >
+              {readyForCheckout
+                ? "Checkout ready"
+                : headsOrTailsAddOn.enabled
+                  ? `${readinessWarnings} warning${
+                      readinessWarnings === 1 ? "" : "s"
+                    }`
+                  : "Disabled"}
+            </span>
+          </div>
+
+          <div className="readinessGrid" style={styles.readinessGrid}>
+            {readinessItems.map((item) => {
+              const toneStyles = readinessToneStyle(item.tone);
+
+              return (
+                <article
+                  key={item.label}
+                  style={{
+                    ...styles.readinessItem,
+                    ...toneStyles.card,
+                  }}
+                >
+                  <span
+                    style={{
+                      ...styles.readinessToneDot,
+                      ...toneStyles.dot,
+                    }}
+                  />
+                  <div style={styles.readinessContent}>
+                    <span style={styles.readinessLabel}>{item.label}</span>
+                    <strong style={styles.readinessValue}>{item.value}</strong>
+                    <p style={styles.readinessDetail}>{item.detail}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div style={styles.readinessActions}>
+            <Link
+              href={`/e/${encodeURIComponent(event.slug)}`}
+              target="_blank"
+              style={styles.primaryLink}
+            >
+              View public event page
+            </Link>
+
+            <Link
+              href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
+              style={styles.secondaryButtonDark}
+            >
+              View add-on reporting
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       {!canManageAddOns ? (
-        <section style={styles.lockedPanel}>
+        <section className="lockedPanel" style={styles.lockedPanel}>
           <div style={styles.lockedEyebrow}>Professional feature</div>
           <h2 style={styles.panelTitle}>Upgrade to use Heads or Tails</h2>
           <p style={styles.sectionText}>
@@ -368,15 +588,16 @@ export default async function EventFundraisingAddOnsPage({
           </Link>
         </section>
       ) : (
-        <section style={styles.panel}>
-          <div style={styles.panelHeader}>
+        <section className="panel" style={styles.panel}>
+          <div className="panelHeader" style={styles.panelHeader}>
             <div>
               <div style={styles.innerEyebrow}>Heads or Tails</div>
               <h2 style={styles.panelTitle}>Live event game settings</h2>
               <p style={styles.sectionText}>
                 Configure the public wording and whether entries should be
-                collected during event checkout. This does not change the main
-                event ticket, seating, VIP, menu or winner draw logic.
+                collected during event checkout. Existing event tickets, seating,
+                VIP access, menus, checkout, receipts and reporting are
+                preserved.
               </p>
             </div>
 
@@ -395,11 +616,12 @@ export default async function EventFundraisingAddOnsPage({
           <form action={saveHeadsOrTailsAction} style={styles.form}>
             <input type="hidden" name="event_id" value={event.id} />
 
-            <div style={styles.twoCol}>
+            <div className="twoCol" style={styles.twoCol}>
               <Field label="Enable Heads or Tails">
                 <select
                   name="enabled"
                   defaultValue={headsOrTailsAddOn.enabled ? "true" : "false"}
+                  className="input"
                   style={styles.input}
                 >
                   <option value="false">No, keep disabled</option>
@@ -413,6 +635,7 @@ export default async function EventFundraisingAddOnsPage({
                   defaultValue={
                     headsOrTailsAddOn.collectAtCheckout ? "true" : "false"
                   }
+                  className="input"
                   style={styles.input}
                 >
                   <option value="false">No, collect on the night</option>
@@ -425,6 +648,7 @@ export default async function EventFundraisingAddOnsPage({
               <input
                 name="title"
                 defaultValue={headsOrTailsAddOn.title || "Heads or Tails"}
+                className="input"
                 style={styles.input}
               />
             </Field>
@@ -435,6 +659,7 @@ export default async function EventFundraisingAddOnsPage({
                 rows={3}
                 defaultValue={headsOrTailsAddOn.description || ""}
                 placeholder="Join our Heads or Tails fundraiser on the night and keep playing until one winner remains."
+                className="textarea"
                 style={styles.textarea}
               />
             </Field>
@@ -445,11 +670,12 @@ export default async function EventFundraisingAddOnsPage({
                 rows={4}
                 defaultValue={headsOrTailsAddOn.instructions || ""}
                 placeholder="Choose heads or tails each round. Stay standing if you are correct. The last person standing wins."
+                className="textarea"
                 style={styles.textarea}
               />
             </Field>
 
-            <div style={styles.threeCol}>
+            <div className="threeCol" style={styles.threeCol}>
               <Field label="Entry price">
                 <input
                   name="entry_price"
@@ -459,6 +685,7 @@ export default async function EventFundraisingAddOnsPage({
                   defaultValue={moneyFromCents(
                     headsOrTailsAddOn.entryPriceCents,
                   )}
+                  className="input"
                   style={styles.input}
                 />
               </Field>
@@ -469,6 +696,7 @@ export default async function EventFundraisingAddOnsPage({
                   type="number"
                   min="1"
                   defaultValue={headsOrTailsAddOn.maxEntriesPerBooking || 1}
+                  className="input"
                   style={styles.input}
                 />
               </Field>
@@ -478,6 +706,7 @@ export default async function EventFundraisingAddOnsPage({
                   name="prize_title"
                   defaultValue={headsOrTailsAddOn.prizeTitle || ""}
                   placeholder="Cash prize, hamper, sponsored prize..."
+                  className="input"
                   style={styles.input}
                 />
               </Field>
@@ -501,18 +730,18 @@ export default async function EventFundraisingAddOnsPage({
               </div>
             )}
 
-            <section style={styles.submitBar}>
+            <section className="submitBar" style={styles.submitBar}>
               <div>
                 <strong style={{ color: "#0f172a" }}>
                   Save Heads or Tails settings
                 </strong>
                 <div style={styles.mutedSmall}>
-                  Saves to this event only. Checkout/public display wiring comes
-                  in the next phase.
+                  Updates this event only. Public display, checkout collection
+                  and admin reporting use these settings automatically.
                 </div>
               </div>
 
-              <button type="submit" style={styles.primaryButton}>
+              <button type="submit" className="primaryButton" style={styles.primaryButton}>
                 Save add-on settings
               </button>
             </section>
@@ -561,7 +790,7 @@ function SummaryCard({
 
 function UpgradeBanner({ title, text }: { title: string; text: string }) {
   return (
-    <section style={styles.upgradeBanner}>
+    <section className="upgradeBanner" style={styles.upgradeBanner}>
       <div style={styles.upgradeEyebrow}>Upgrade required</div>
       <h2 style={styles.upgradeTitle}>{title}</h2>
       <p style={styles.upgradeText}>{text}</p>
@@ -587,6 +816,7 @@ const responsiveStyles = `
 @media (max-width: 760px) {
   .event-addons-page .heroMetaGrid,
   .event-addons-page .summaryGrid,
+  .event-addons-page .readinessGrid,
   .event-addons-page .twoCol,
   .event-addons-page .threeCol {
     grid-template-columns: 1fr !important;
@@ -595,7 +825,9 @@ const responsiveStyles = `
   .event-addons-page .hero,
   .event-addons-page .topActions,
   .event-addons-page .panelHeader,
-  .event-addons-page .submitBar {
+  .event-addons-page .submitBar,
+  .event-addons-page .readinessHeader,
+  .event-addons-page .readinessActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
     align-items: stretch !important;
@@ -603,7 +835,8 @@ const responsiveStyles = `
 
   .event-addons-page .primaryButton,
   .event-addons-page .primaryLink,
-  .event-addons-page .secondaryButton {
+  .event-addons-page .secondaryButton,
+  .event-addons-page .secondaryButtonDark {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
@@ -618,7 +851,8 @@ const responsiveStyles = `
   .event-addons-page .hero,
   .event-addons-page .panel,
   .event-addons-page .lockedPanel,
-  .event-addons-page .upgradeBanner {
+  .event-addons-page .upgradeBanner,
+  .event-addons-page .readinessPanel {
     border-radius: 22px !important;
     padding: 16px !important;
   }
@@ -633,418 +867,3 @@ const responsiveStyles = `
   }
 }
 `;
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: 1120,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-    overflowX: "hidden",
-    boxSizing: "border-box",
-  },
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(260px, 0.85fr)",
-    gap: 18,
-    alignItems: "stretch",
-    padding: "clamp(20px, 4vw, 28px)",
-    borderRadius: 28,
-    background:
-      "radial-gradient(circle at top left, rgba(245,158,11,0.24), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
-    color: "#ffffff",
-    marginBottom: 16,
-    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
-    overflow: "hidden",
-  },
-  heroContent: {
-    minWidth: 0,
-  },
-  eyebrow: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.1em",
-    marginBottom: 12,
-  },
-  title: {
-    margin: 0,
-    fontSize: "clamp(36px, 5vw, 54px)",
-    lineHeight: 1.02,
-    letterSpacing: "-0.06em",
-    overflowWrap: "anywhere",
-  },
-  heroText: {
-    margin: "14px 0 0",
-    color: "#dbeafe",
-    lineHeight: 1.65,
-    maxWidth: 760,
-    fontSize: 15,
-  },
-  heroMetaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
-    marginTop: 22,
-  },
-  heroMetric: {
-    padding: "13px 14px",
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(255,255,255,0.16)",
-    minWidth: 0,
-  },
-  heroMetricLabel: {
-    display: "block",
-    color: "#bfdbfe",
-    fontSize: 12,
-    fontWeight: 900,
-    marginBottom: 4,
-  },
-  heroMetricValue: {
-    display: "block",
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-  heroPanel: {
-    display: "grid",
-    alignContent: "center",
-    gap: 10,
-    padding: 18,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.18)",
-  },
-  heroPanelEyebrow: {
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  heroPanelTitle: {
-    color: "#ffffff",
-    fontSize: 24,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-  },
-  heroPanelText: {
-    color: "#dbeafe",
-    fontSize: 14,
-    lineHeight: 1.55,
-    fontWeight: 800,
-  },
-  topActions: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  primaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "1px solid #1683f8",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
-  },
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 950,
-  },
-  successBox: {
-    padding: 13,
-    background: "#dcfce7",
-    color: "#166534",
-    border: "1px solid #bbf7d0",
-    borderRadius: 16,
-    marginBottom: 16,
-    fontWeight: 950,
-  },
-  upgradeBanner: {
-    marginBottom: 16,
-    padding: "clamp(18px, 4vw, 24px)",
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #fef3c7 0%, #ffffff 52%, #eff6ff 100%)",
-    border: "1px solid #fde68a",
-    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
-  },
-  upgradeEyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fffbeb",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-  upgradeTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(24px, 5vw, 32px)",
-    lineHeight: 1.05,
-    letterSpacing: "-0.045em",
-  },
-  upgradeText: {
-    margin: "10px 0 16px",
-    color: "#475569",
-    fontSize: 15,
-    lineHeight: 1.6,
-    maxWidth: 820,
-  },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
-  },
-  summaryLabel: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 6,
-  },
-  summaryValue: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-  },
-  summaryDetail: {
-    margin: "7px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-  lockedPanel: {
-    padding: 20,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
-  },
-  lockedEyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-  panel: {
-    display: "grid",
-    gap: 16,
-    padding: 18,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
-    minWidth: 0,
-  },
-  panelHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  innerEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-  panelTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(23px, 5vw, 30px)",
-    letterSpacing: "-0.045em",
-    lineHeight: 1.05,
-  },
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.55,
-    maxWidth: 820,
-  },
-  statusPill: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-  statusGood: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-  statusNeutral: {
-    background: "#f8fafc",
-    color: "#64748b",
-    borderColor: "#cbd5e1",
-  },
-  form: {
-    display: "grid",
-    gap: 13,
-    minWidth: 0,
-  },
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-  },
-  threeCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-  },
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    resize: "vertical",
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
-  professionalNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-  foundationNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-  primaryButton: {
-    width: "fit-content",
-    minHeight: 44,
-    padding: "13px 18px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
-  },
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
-  },
-};
