@@ -687,7 +687,7 @@ async function listEventGuestCateringRows(eventId: string) {
         eo.id as order_id,
         eoi.id as order_item_id,
         eo.created_at as order_created_at,
-        eo.status as order_status,
+                eo.status as order_status,
         eo.customer_name as buyer_name,
         eo.customer_email as buyer_email,
         eo.amount_total as order_amount_total,
@@ -1212,7 +1212,6 @@ async function updateTableShapeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-shape#table-seating`);
 }
-
 async function addTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -2094,6 +2093,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 export default async function AdminEventManagePage({
   params,
   searchParams,
@@ -2146,12 +2146,27 @@ export default async function AdminEventManagePage({
     "event_vip_access_codes",
   );
 
+  const eventAddOnsCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "event_fundraising_addons",
+  );
+
   const canEditGuestCatering = guestCateringEditCapability.allowed;
   const canSendMenuRequests = guestMenuRequestCapability.allowed;
   const canManageAccessCodes = accessCodeCapability.allowed;
+  const canManageEventAddOns = eventAddOnsCapability.allowed;
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
+  const eventAddOns = event.event_addons_json || [];
+  const enabledEventAddOns = eventAddOns.filter((addOn) => addOn.enabled);
+  const headsOrTailsAddOn = eventAddOns.find(
+    (addOn) => addOn.type === "heads_or_tails",
+  );
+  const headsOrTailsEnabled = Boolean(headsOrTailsAddOn?.enabled);
+  const eventAddOnsHref = `/admin/events/${encodeURIComponent(
+    event.id,
+  )}/addons`;
 
   const [winners, guestCateringRows, accessCodes] = await Promise.all([
     listEventWinners(event.id),
@@ -2280,8 +2295,7 @@ export default async function AdminEventManagePage({
   const missingMenuResponses = guestCateringRows.filter(
     (row) => !String(row.menu_choice || "").trim(),
   ).length;
-
-  const readinessItems: ReadinessItem[] = [
+    const readinessItems: ReadinessItem[] = [
     {
       label: "Public page",
       value: statusLabel(event.status),
@@ -2332,6 +2346,24 @@ export default async function AdminEventManagePage({
         event.ask_menu_choice || event.ask_dietary_requirements
           ? "Guest menu or dietary fields are enabled."
           : "Guest menu and dietary fields are hidden.",
+    },
+    {
+      label: "Event add-ons",
+      value: headsOrTailsEnabled
+        ? "Heads or Tails"
+        : canManageEventAddOns
+          ? "Available"
+          : "Locked",
+      tone: headsOrTailsEnabled
+        ? "good"
+        : canManageEventAddOns
+          ? "neutral"
+          : "warning",
+      detail: headsOrTailsEnabled
+        ? "Heads or Tails is enabled for this event."
+        : canManageEventAddOns
+          ? "Professional/Foundation event add-ons can be configured."
+          : "Event fundraising add-ons require Professional or Foundation.",
     },
     {
       label: "Operations",
@@ -2403,7 +2435,8 @@ export default async function AdminEventManagePage({
           </div>
         </div>
       </section>
-            <section className="topActions" style={styles.topActions}>
+
+      <section className="topActions" style={styles.topActions}>
         <a
           href="/admin/events"
           className="secondaryButton"
@@ -2426,6 +2459,14 @@ export default async function AdminEventManagePage({
             style={styles.secondaryButton}
           >
             Orders &amp; Guests
+          </a>
+
+          <a
+            href={eventAddOnsHref}
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Event Fundraising Add-ons
           </a>
 
           <a
@@ -2540,6 +2581,9 @@ export default async function AdminEventManagePage({
         <a href="#winner-draw" className="tab" style={styles.tab}>
           Winner Draw
         </a>
+        <a href="#event-addons" className="tab" style={styles.tab}>
+          Event Add-ons
+        </a>
         {isReservedSeating ? (
           <a href="#row-seating" className="tab" style={styles.tab}>
             Row Seating
@@ -2643,6 +2687,14 @@ export default async function AdminEventManagePage({
         <SummaryCard label="Missing menu" value={missingMenuResponses} />
         <SummaryCard label="Dietary notes" value={dietaryResponses} />
         <SummaryCard label="Winners" value={winners.length} />
+        <SummaryCard
+          label="Event add-ons"
+          value={
+            headsOrTailsEnabled
+              ? "Heads or Tails"
+              : enabledEventAddOns.length
+          }
+        />
         <SummaryCard label="Available" value={availableSeats} />
         <SummaryCard label="Reserved" value={reservedSeats} />
         <SummaryCard label="Sold" value={soldSeats} />
@@ -2650,8 +2702,7 @@ export default async function AdminEventManagePage({
         <SummaryCard label="VIP" value={vipSeats} />
         <SummaryCard label="Complimentary" value={complimentarySeats} />
       </section>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="overview"
         eyebrow="Section 1"
         title="Overview"
@@ -2693,7 +2744,7 @@ export default async function AdminEventManagePage({
                 />
               </Field>
             </div>
-                        <Field label="Description">
+            <Field label="Description">
               <textarea
                 name="description"
                 rows={3}
@@ -3097,8 +3148,7 @@ export default async function AdminEventManagePage({
           </CompactPanel>
         </div>
       </CollapsibleSection>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="access-codes"
         eyebrow="Section 3"
         title="VIP / Complimentary Access Codes"
@@ -3290,7 +3340,7 @@ export default async function AdminEventManagePage({
                           value={formatDisplayDate(accessCode.created_at)}
                         />
                       </div>
-                                            <form
+                      <form
                         action={updateEventAccessCodeAction}
                         style={styles.form}
                       >
@@ -3789,7 +3839,106 @@ export default async function AdminEventManagePage({
         />
       </CollapsibleSection>
 
-      {isReservedSeating ? (
+      <CollapsibleSection
+        id="event-addons"
+        eyebrow="Section 6D"
+        title="Event Fundraising Add-ons"
+        description={
+          canManageEventAddOns
+            ? "Configure live fundraising add-ons such as Heads or Tails for this event."
+            : "Event fundraising add-ons are available on Professional and Foundation plans."
+        }
+        badge={
+          headsOrTailsEnabled
+            ? "Heads or Tails enabled"
+            : canManageEventAddOns
+              ? "Available"
+              : "Upgrade required"
+        }
+      >
+        <div className="panel" style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <div style={styles.innerEyebrow}>Live fundraising</div>
+              <h3 style={styles.panelTitle}>Heads or Tails</h3>
+              <p style={styles.sectionText}>
+                Add Heads or Tails to this event as a live fundraising add-on.
+                This keeps the existing event tickets, seating, VIP access,
+                guest catering, emails and checkout flow separate and stable.
+              </p>
+            </div>
+
+            <span
+              className="statusMiniPill"
+              style={{
+                ...styles.statusMiniPill,
+                ...(headsOrTailsEnabled
+                  ? {
+                      background: "#dcfce7",
+                      color: "#166534",
+                      borderColor: "#bbf7d0",
+                    }
+                  : canManageEventAddOns
+                    ? {
+                        background: "#eff6ff",
+                        color: "#1d4ed8",
+                        borderColor: "#bfdbfe",
+                      }
+                    : {
+                        background: "#fff7ed",
+                        color: "#9a3412",
+                        borderColor: "#fed7aa",
+                      }),
+              }}
+            >
+              {headsOrTailsEnabled
+                ? "Enabled"
+                : canManageEventAddOns
+                  ? "Ready to configure"
+                  : "Upgrade required"}
+            </span>
+          </div>
+
+          <div className="summaryGrid" style={styles.summaryGrid}>
+            <SummaryCard
+              label="Status"
+              value={headsOrTailsEnabled ? "Enabled" : "Disabled"}
+            />
+            <SummaryCard
+              label="Checkout collection"
+              value={headsOrTailsAddOn?.collectAtCheckout ? "On" : "Off"}
+            />
+            <SummaryCard
+              label="Entry price"
+              value={formatMoney(
+                headsOrTailsAddOn?.entryPriceCents || 0,
+                event.currency,
+              )}
+            />
+          </div>
+
+          <section className="submitBar" style={styles.submitBar}>
+            <div>
+              <strong style={{ color: "#0f172a" }}>
+                Manage event fundraising add-ons
+              </strong>
+              <div style={styles.mutedSmall}>
+                Professional tenants can use Heads or Tails. Foundation tenants
+                can support multiple event add-ons as more types are introduced.
+              </div>
+            </div>
+
+            <a
+              href={eventAddOnsHref}
+              className="primaryLink"
+              style={styles.primaryLink}
+            >
+              Manage add-ons
+            </a>
+          </section>
+        </div>
+      </CollapsibleSection>
+            {isReservedSeating ? (
         <CollapsibleSection
           id="row-seating"
           eyebrow="Section 7"
@@ -4256,6 +4405,7 @@ function InfoTile({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
