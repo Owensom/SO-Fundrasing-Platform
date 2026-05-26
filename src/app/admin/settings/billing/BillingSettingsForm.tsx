@@ -1426,7 +1426,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     minWidth: 0,
     alignContent: "start",
-    paddingTop: 20,
+    paddingTop: 24,
   },
 
   connectPrimaryButton: {
