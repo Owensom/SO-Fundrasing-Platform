@@ -282,10 +282,6 @@ export default async function AdminRevenuePage() {
     0,
   );
 
-  const donorCoveredCount = payments.filter(
-    (payment) => payment.donor_covered_fees,
-  ).length;
-
   const primaryCurrency = currencySummaries[0]?.currency || "gbp";
 
   return (
@@ -447,7 +443,7 @@ export default async function AdminRevenuePage() {
                   </div>
                 </div>
 
-                <div style={styles.currencyMetrics}>
+                <div className="currencyMetrics" style={styles.currencyMetrics}>
                   <MetricBlock
                     label="Gross"
                     value={money(row.gross_amount_cents, currency)}
@@ -749,7 +745,6 @@ export default async function AdminRevenuePage() {
     </main>
   );
 }
-
 function HeroStat({
   label,
   value,
@@ -781,6 +776,7 @@ function MiniMetric({
     </div>
   );
 }
+
 function SummaryCard({
   label,
   value,
@@ -1103,325 +1099,508 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontWeight: 700,
   },
-  function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
-  return (
-    <div style={styles.summaryCard}>
-      <span style={styles.summaryLabel}>{label}</span>
-
-      <strong style={styles.summaryValue}>{value}</strong>
-    </div>
-  );
-}
-
-function MetricBlock({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: ReactNode;
-  tone?: "default" | "blue" | "green" | "orange";
-}) {
-  const valueStyle =
-    tone === "green"
-      ? styles.greenText
-      : tone === "orange"
-        ? styles.pendingText
-        : tone === "blue"
-          ? styles.blueText
-          : styles.metricValue;
-
-  return (
-    <div style={styles.metricBlock}>
-      <div style={styles.metricLabel}>{label}</div>
-
-      <div style={valueStyle}>{value}</div>
-    </div>
-  );
-}
-
-function PaymentMini({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
-  return (
-    <div style={styles.paymentMini}>
-      <div style={styles.paymentMiniLabel}>{label}</div>
-
-      <div style={styles.paymentMiniValue}>{value}</div>
-    </div>
-  );
-}
-
-const responsiveStyles = `
-.revenue-page,
-.revenue-page * {
-  box-sizing: border-box;
-}
-
-.revenue-page {
-  overflow-x: hidden;
-}
-
-.revenue-page section,
-.revenue-page article,
-.revenue-page div {
-  min-width: 0;
-}
-
-.revenue-page .revenue-table-wrap {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto !important;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  padding-bottom: 8px;
-}
-
-.revenue-page .revenue-table-wrap table {
-  width: max-content !important;
-}
-
-@media (max-width: 1180px) {
-  .revenue-page .revenue-hero-main {
-    grid-template-columns: 1fr !important;
-  }
-
-  .revenue-page .revenue-summary-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  }
-
-  .revenue-page .revenue-top-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 900px) {
-  .revenue-page {
-    padding: 18px 12px 48px !important;
-  }
-
-  .revenue-page .revenue-hero {
-    padding: 22px !important;
-    border-radius: 28px !important;
-  }
-
-  .revenue-page .revenue-title {
-    font-size: clamp(38px, 11vw, 56px) !important;
-    line-height: 0.98 !important;
-  }
-
-  .revenue-page .revenue-hero-stats,
-  .revenue-page .revenue-summary-grid,
-  .revenue-page .revenue-hero-panel-grid,
-  .revenue-page .revenue-payment-metrics-grid,
-  .revenue-page .currencyMetrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .revenue-page .revenue-payment-card-top {
-    grid-template-columns: 1fr !important;
-  }
-
-  .revenue-page .revenue-payment-net-block {
-    align-items: flex-start !important;
-    text-align: left !important;
-  }
-}
-
-@media (max-width: 620px) {
-  .revenue-page {
-    padding: 14px 10px 42px !important;
-  }
-
-  .revenue-page .revenue-hero,
-  .revenue-page .revenue-panel,
-  .revenue-page .revenue-currency-card {
-    padding: 16px !important;
-    border-radius: 22px !important;
-  }
-
-  .revenue-page .revenue-title {
-    font-size: clamp(34px, 12vw, 46px) !important;
-  }
-
-  .revenue-page .revenue-hero-stats,
-  .revenue-page .revenue-summary-grid,
-  .revenue-page .revenue-hero-panel-grid,
-  .revenue-page .revenue-payment-metrics-grid,
-  .revenue-page .revenue-top-actions,
-  .revenue-page .currencyMetrics {
-    grid-template-columns: 1fr !important;
-  }
-
-  .revenue-page .revenue-primary-button,
-  .revenue-page .revenue-secondary-button {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-}
-`;
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: 1320,
-    margin: "0 auto",
-    padding: "28px 16px 64px",
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(15,23,42,0.05), transparent 34%), #f8fafc",
-    boxSizing: "border-box",
-    overflowX: "hidden",
+    heroPanelGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
   },
 
-  hero: {
-    position: "relative",
+  miniMetric: {
     display: "grid",
-    gap: 18,
-    padding: 28,
-    borderRadius: 30,
-    background:
-      "radial-gradient(circle at bottom right, rgba(37,99,235,0.20), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
-    color: "#ffffff",
-    marginBottom: 16,
-    boxShadow: "0 24px 60px rgba(15,23,42,0.20)",
-    overflow: "hidden",
-    border: "1px solid rgba(148,163,184,0.22)",
-  },
-
-  heroMain: {
-    position: "relative",
-    zIndex: 1,
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.18fr) minmax(300px, 0.82fr)",
-    gap: 22,
-    alignItems: "stretch",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(217,119,6,0.34)",
     minWidth: 0,
+    overflowWrap: "anywhere",
   },
 
-  heroGlow: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-    background:
-      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 28%)",
-  },
-
-  heroContent: {
-    position: "relative",
-    zIndex: 1,
-    display: "grid",
-    alignContent: "start",
-    minWidth: 0,
-  },
-
-  eyebrow: {
-    display: "inline-flex",
-    width: "fit-content",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "8px 14px",
-    borderRadius: 999,
-    background: "rgba(15,23,42,0.24)",
-    color: "#facc15",
-    border: "1px solid rgba(250,204,21,0.76)",
+  miniMetricLabel: {
+    color: "#64748b",
     fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 12,
-    boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
+    fontWeight: 850,
   },
 
-  title: {
-    margin: 0,
-    fontSize: "clamp(44px, 7vw, 68px)",
-    lineHeight: 0.95,
-    letterSpacing: "-0.07em",
-    color: "#ffffff",
-    overflowWrap: "anywhere",
-    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
-  },
-
-  subtitle: {
-    margin: "14px 0 0",
-    maxWidth: 760,
-    color: "#dbeafe",
+  miniMetricValue: {
+    color: "#0f172a",
     fontSize: 17,
-    lineHeight: 1.5,
-    fontWeight: 750,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
     overflowWrap: "anywhere",
   },
 
-  heroStats: {
+  topActions: {
+    position: "relative",
+    zIndex: 1,
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 10,
-    marginTop: 22,
+    gap: 12,
+    alignItems: "stretch",
+    paddingTop: 16,
+    marginTop: 2,
+    borderTop: "1px solid rgba(148,163,184,0.24)",
   },
 
-  heroStat: {
+  primaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid rgba(96,165,250,0.88)",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.24)",
+    textAlign: "center",
+  },
+
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid rgba(255,255,255,0.28)",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+    textAlign: "center",
+  },
+
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+
+  summaryCard: {
     display: "grid",
     gap: 5,
-    padding: 13,
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(148,163,184,0.25)",
+    padding: 15,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflowWrap: "anywhere",
   },
 
-  heroStatLabel: {
-    color: "#bfdbfe",
+  summaryLabel: {
+    color: "#64748b",
     fontSize: 13,
     fontWeight: 850,
   },
 
-  heroStatValue: {
-    color: "#ffffff",
+  summaryValue: {
+    color: "#0f172a",
     fontSize: 24,
     fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  currencyGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 16,
+    marginBottom: 18,
+  },
+
+  currencyCard: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+  },
+
+  currencyHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  currencyKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  currencyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    letterSpacing: "-0.05em",
+  },
+
+  currencyBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  currencyMetrics: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  metricBlock: {
+    display: "grid",
+    gap: 6,
+    padding: 16,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  metricLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 850,
+  },
+
+  metricValue: {
+    color: "#0f172a",
+    fontSize: 21,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  blueText: {
+    color: "#1d4ed8",
+    fontSize: 21,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  greenText: {
+    color: "#166534",
+    fontSize: 21,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  pendingText: {
+    color: "#c2410c",
+    fontSize: 21,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  panel: {
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
+    marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    marginBottom: 18,
+  },
+
+  kicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
-  heroPanel: {
-    position: "relative",
-    zIndex: 1,
+  sectionText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.6,
+    maxWidth: 760,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  countPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  tableWrap: {
+    width: "100%",
+    maxWidth: "100%",
+    overflowX: "auto",
+    overflowY: "visible",
+    WebkitOverflowScrolling: "touch",
+    paddingBottom: 8,
+  },
+
+  table: {
+    width: "max-content",
+    minWidth: 1120,
+    borderCollapse: "separate",
+    borderSpacing: "0 10px",
+  },
+
+  th: {
+    padding: "8px 10px",
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textAlign: "left",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  td: {
+    padding: "14px 10px",
+    background: "#f8fafc",
+    borderTop: "1px solid #e2e8f0",
+    borderBottom: "1px solid #e2e8f0",
+    verticalAlign: "middle",
+    whiteSpace: "nowrap",
+  },
+
+  currencyPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  primaryText: {
+    color: "#0f172a",
+    fontWeight: 950,
+  },
+
+  secondaryText: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 750,
+  },
+
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "capitalize",
+  },
+
+  badgePending: {
+    background: "#fff7ed",
+    color: "#c2410c",
+    border: "1px solid #fed7aa",
+  },
+
+  badgePaid: {
+    background: "#ecfdf5",
+    color: "#047857",
+    border: "1px solid #a7f3d0",
+  },
+
+  paymentList: {
     display: "grid",
-    gap: 13,
-    alignContent: "start",
-    padding: 18,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.26)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
-    backdropFilter: "blur(12px)",
+    gap: 12,
+  },
+
+  paymentCard: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+  },
+
+  paymentCardTop: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 16,
+    alignItems: "start",
+  },
+
+  paymentTitleBlock: {
     minWidth: 0,
   },
 
-  heroPanelTitle: {
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.035em",
+  paymentDate: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 850,
+    marginBottom: 6,
   },
 
-  heroPanelText: {
+  paymentTypePill: {
+    display: "inline-flex",
+    width: "fit-content",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    marginBottom: 8,
+  },
+
+  paymentTitle: {
     margin: 0,
-    color: "#dbeafe",
-    lineHeight: 1.45,
+    color: "#0f172a",
+    fontSize: 20,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  paymentCustomer: {
+    marginTop: 6,
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+
+  paymentNetBlock: {
+    display: "grid",
+    gap: 4,
+    justifyItems: "end",
+    textAlign: "right",
+    minWidth: 120,
+  },
+
+  paymentLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  paymentNet: {
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
+  paymentMetricsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  paymentMini: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  paymentMiniLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  paymentMiniValue: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  emptyCard: {
+    padding: 24,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  emptyTitle: {
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 950,
+    marginBottom: 10,
+  },
+
+  emptyText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.6,
     fontWeight: 700,
   },
+
+  emptyState: {
+    padding: 18,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 850,
+    textAlign: "center",
+  },
+};
