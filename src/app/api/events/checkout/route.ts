@@ -19,6 +19,8 @@ import {
   updateEventOrderStripeSession,
 } from "../../../../../api/_lib/events-repo";
 
+type EventCheckoutAddOnType = "heads_or_tails" | "higher_or_lower";
+
 type CheckoutItem = {
   seatId?: string;
   ticketTypeId: string;
@@ -36,7 +38,7 @@ type CheckoutAddOnItem = {
 };
 
 type ValidatedCheckoutAddOn = {
-  type: "heads_or_tails";
+  type: EventCheckoutAddOnType;
   title: string;
   quantity: number;
   unitAmount: number;
@@ -117,6 +119,23 @@ function safeMoneyCents(value: unknown) {
   return Math.max(0, Math.round(number));
 }
 
+function normaliseEventAddOnType(
+  value: unknown,
+): EventCheckoutAddOnType | null {
+  const clean = cleanText(value);
+
+  if (clean === "heads_or_tails" || clean === "higher_or_lower") {
+    return clean;
+  }
+
+  return null;
+}
+
+function defaultAddOnTitle(type: EventCheckoutAddOnType) {
+  if (type === "higher_or_lower") return "Higher or Lower";
+  return "Heads or Tails";
+}
+
 function normaliseEventPaymentSummary(input: {
   ticketTotalCents: number;
   coverFees: boolean;
@@ -130,11 +149,9 @@ function normaliseEventPaymentSummary(input: {
 
   const ticketTotalCents = safeMoneyCents(paymentSummary.ticketTotalCents);
   const amountTotalCents = safeMoneyCents(paymentSummary.amountTotalCents);
-
   const buyerContributionCents = safeMoneyCents(
     paymentSummary.buyerContributionCents,
   );
-
   const platformCommissionCents = safeMoneyCents(
     paymentSummary.platformCommissionCents,
   );
@@ -399,6 +416,7 @@ async function markSeatsComplimentarySold(input: {
     );
   }
 }
+
 async function sendComplimentaryEventReceipt(input: {
   tenantSlug: string;
   eventId: string;
@@ -530,9 +548,9 @@ function validateCheckoutAddOns(input: {
   const validatedAddOns: ValidatedCheckoutAddOn[] = [];
 
   for (const submittedAddOn of input.submittedAddOns) {
-    const type = cleanText(submittedAddOn.type);
+    const type = normaliseEventAddOnType(submittedAddOn.type);
 
-    if (type !== "heads_or_tails") {
+    if (!type) {
       throw new Error("Invalid event add-on.");
     }
 
@@ -542,7 +560,7 @@ function validateCheckoutAddOns(input: {
       const current = addOn as Record<string, unknown>;
 
       return (
-        cleanText(current.type) === "heads_or_tails" &&
+        cleanText(current.type) === type &&
         truthy(current.enabled) &&
         truthy(current.collectAtCheckout)
       );
@@ -570,14 +588,14 @@ function validateCheckoutAddOns(input: {
 
     if (maxEntriesPerBooking > 0 && quantity > maxEntriesPerBooking) {
       throw new Error(
-        `Heads or Tails is limited to ${maxEntriesPerBooking} entries per booking.`,
+        `${cleanText(configuredAddOn.title) || defaultAddOnTitle(type)} is limited to ${maxEntriesPerBooking} entries per booking.`,
       );
     }
 
-    const title = cleanText(configuredAddOn.title) || "Heads or Tails";
+    const title = cleanText(configuredAddOn.title) || defaultAddOnTitle(type);
 
     validatedAddOns.push({
-      type: "heads_or_tails",
+      type,
       title,
       quantity,
       unitAmount: entryPriceCents,
@@ -833,7 +851,8 @@ export async function POST(req: Request) {
           url: complimentarySuccessUrl(req, event.slug),
         });
       }
-            const paymentSummary = normaliseEventPaymentSummary({
+
+      const paymentSummary = normaliseEventPaymentSummary({
         ticketTotalCents,
         coverFees,
         platformFeePercent,
