@@ -24,6 +24,9 @@ export type EventFundraisingAddOn = {
   sortOrder?: number;
 };
 
+type EventFundraisingAddOnRaw = Partial<EventFundraisingAddOn> &
+  Record<string, unknown>;
+
 export type EventTicketType = {
   id: string;
   event_id: string;
@@ -233,6 +236,7 @@ const EVENT_FUNDRAISING_ADD_ON_DEFAULTS: Record<
     title: string;
     description: string;
     instructions: string;
+    sortOrder: number;
   }
 > = {
   heads_or_tails: {
@@ -241,6 +245,7 @@ const EVENT_FUNDRAISING_ADD_ON_DEFAULTS: Record<
       "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains.",
     instructions:
       "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins.",
+    sortOrder: 0,
   },
   higher_or_lower: {
     title: "Higher or Lower",
@@ -248,6 +253,7 @@ const EVENT_FUNDRAISING_ADD_ON_DEFAULTS: Record<
       "Join our Higher or Lower fundraiser on the night and see how long you can stay in the game.",
     instructions:
       "Guess whether the next card, number or total will be higher or lower. Keep playing while you are correct.",
+    sortOrder: 1,
   },
 };
 
@@ -334,6 +340,91 @@ function normaliseEventFundraisingAddOnType(
   }
 
   return null;
+}
+
+function readStringField(
+  source: EventFundraisingAddOnRaw,
+  keys: string[],
+  fallback: string,
+) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (value !== null && value !== undefined && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+
+  return fallback;
+}
+
+function readNumberField(
+  source: EventFundraisingAddOnRaw,
+  keys: string[],
+  fallback = 0,
+) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    const number = Number(value);
+
+    if (Number.isFinite(number) && number >= 0) {
+      return Math.floor(number);
+    }
+  }
+
+  return fallback;
+}
+
+function readNullablePositiveIntegerField(
+  source: EventFundraisingAddOnRaw,
+  keys: string[],
+  fallback: number | null = null,
+) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    const number = Number(value);
+
+    if (Number.isFinite(number) && number > 0) {
+      return Math.floor(number);
+    }
+  }
+
+  return fallback;
+}
+
+function readBooleanField(
+  source: EventFundraisingAddOnRaw,
+  keys: string[],
+  fallback = false,
+) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (value === true || value === "true" || value === 1 || value === "1") {
+      return true;
+    }
+
+    if (
+      value === false ||
+      value === "false" ||
+      value === 0 ||
+      value === "0"
+    ) {
+      return false;
+    }
+  }
+
+  return fallback;
 }
 
 function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
@@ -438,7 +529,11 @@ function normaliseEventFundraisingAddOnsJson(
   const addOns: EventFundraisingAddOn[] = [];
 
   value.forEach((item, index) => {
-    const addOn = item as Partial<EventFundraisingAddOn>;
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return;
+    }
+
+    const addOn = item as EventFundraisingAddOnRaw;
     const type = normaliseEventFundraisingAddOnType(
       String(addOn.type || "").trim(),
     );
@@ -448,22 +543,52 @@ function normaliseEventFundraisingAddOnsJson(
     }
 
     const defaults = EVENT_FUNDRAISING_ADD_ON_DEFAULTS[type];
-    const title = String(addOn.title || defaults.title).trim();
 
     addOns.push({
-      id: String(addOn.id || `event-addon-${type}-${index + 1}`),
-      type,
-      enabled: Boolean(addOn.enabled),
-      title: title || defaults.title,
-      description: String(addOn.description || defaults.description).trim(),
-      instructions: String(addOn.instructions || defaults.instructions).trim(),
-      prizeTitle: String(addOn.prizeTitle || "").trim(),
-      entryPriceCents: normaliseNonNegativeInteger(addOn.entryPriceCents, 0),
-      collectAtCheckout: Boolean(addOn.collectAtCheckout),
-      maxEntriesPerBooking: normaliseNullablePositiveInteger(
-        addOn.maxEntriesPerBooking,
+      id: readStringField(
+        addOn,
+        ["id"],
+        `event-addon-${type}-${index + 1}`,
       ),
-      sortOrder: normaliseNonNegativeInteger(addOn.sortOrder, index),
+      type,
+      enabled: readBooleanField(addOn, ["enabled"], false),
+      title: readStringField(addOn, ["title"], defaults.title),
+      description: readStringField(
+        addOn,
+        ["description"],
+        defaults.description,
+      ),
+      instructions: readStringField(
+        addOn,
+        ["instructions"],
+        defaults.instructions,
+      ),
+      prizeTitle: readStringField(addOn, ["prizeTitle", "prize_title"], ""),
+      entryPriceCents: readNumberField(
+        addOn,
+        [
+          "entryPriceCents",
+          "entry_price_cents",
+          "entryPrice",
+          "entry_price",
+        ],
+        0,
+      ),
+      collectAtCheckout: readBooleanField(
+        addOn,
+        ["collectAtCheckout", "collect_at_checkout"],
+        false,
+      ),
+      maxEntriesPerBooking: readNullablePositiveIntegerField(
+        addOn,
+        ["maxEntriesPerBooking", "max_entries_per_booking"],
+        1,
+      ),
+      sortOrder: readNumberField(
+        addOn,
+        ["sortOrder", "sort_order"],
+        defaults.sortOrder,
+      ),
     });
   });
 
