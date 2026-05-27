@@ -15,6 +15,7 @@ import {
   getEventById,
   updateEvent,
   type EventFundraisingAddOn,
+  type EventFundraisingAddOnType,
 } from "../../../../../../api/_lib/events-repo";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,52 @@ type ReadinessItem = {
   tone: "good" | "warning" | "neutral";
 };
 
-const HEADS_OR_TAILS_ID = "event-addon-heads-or-tails";
+type AddOnDefinition = {
+  id: string;
+  type: EventFundraisingAddOnType;
+  name: string;
+  shortName: string;
+  panelTitle: string;
+  eyebrow: string;
+  defaultTitle: string;
+  defaultDescription: string;
+  defaultInstructions: string;
+  defaultPrizePlaceholder: string;
+  savedParam: string;
+};
+
+const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
+  {
+    id: "event-addon-heads-or-tails",
+    type: "heads_or_tails",
+    name: "Heads or Tails",
+    shortName: "Heads or Tails",
+    panelTitle: "Live event game settings",
+    eyebrow: "Heads or Tails",
+    defaultTitle: "Heads or Tails",
+    defaultDescription:
+      "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains.",
+    defaultInstructions:
+      "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins.",
+    defaultPrizePlaceholder: "Cash prize, hamper, sponsored prize...",
+    savedParam: "heads-or-tails",
+  },
+  {
+    id: "event-addon-higher-or-lower",
+    type: "higher_or_lower",
+    name: "Higher or Lower",
+    shortName: "Higher or Lower",
+    panelTitle: "Live event game settings",
+    eyebrow: "Higher or Lower",
+    defaultTitle: "Higher or Lower",
+    defaultDescription:
+      "Join our Higher or Lower fundraiser on the night and see how long you can stay in the game.",
+    defaultInstructions:
+      "Guess whether the next card, number or total will be higher or lower. Keep playing while you are correct.",
+    defaultPrizePlaceholder: "Cash prize, mystery prize, sponsored prize...",
+    savedParam: "higher-or-lower",
+  },
+];
 
 function cleanText(value: FormDataEntryValue | null) {
   return String(value || "").trim();
@@ -91,32 +137,43 @@ function formatMoney(cents: number | null | undefined, currency = "GBP") {
   }
 }
 
-function getHeadsOrTailsAddOn(addOns: EventFundraisingAddOn[]) {
+function getAddOnDefinition(type: string | null | undefined) {
   return (
-    addOns.find((addOn) => addOn.type === "heads_or_tails") || {
-      id: HEADS_OR_TAILS_ID,
-      type: "heads_or_tails" as const,
+    ADD_ON_DEFINITIONS.find((definition) => definition.type === type) ||
+    ADD_ON_DEFINITIONS[0]
+  );
+}
+
+function getAddOn(
+  addOns: EventFundraisingAddOn[],
+  definition: AddOnDefinition,
+): EventFundraisingAddOn {
+  return (
+    addOns.find((addOn) => addOn.type === definition.type) || {
+      id: definition.id,
+      type: definition.type,
       enabled: false,
-      title: "Heads or Tails",
-      description:
-        "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains.",
-      instructions:
-        "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins.",
+      title: definition.defaultTitle,
+      description: definition.defaultDescription,
+      instructions: definition.defaultInstructions,
       prizeTitle: "",
       entryPriceCents: 0,
       collectAtCheckout: false,
       maxEntriesPerBooking: 1,
-      sortOrder: 0,
+      sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
     }
   );
 }
 
-function buildHeadsOrTailsAddOn(formData: FormData): EventFundraisingAddOn {
+function buildAddOnFromForm(
+  formData: FormData,
+  definition: AddOnDefinition,
+): EventFundraisingAddOn {
   return {
-    id: HEADS_OR_TAILS_ID,
-    type: "heads_or_tails",
+    id: definition.id,
+    type: definition.type,
     enabled: String(formData.get("enabled") || "") === "true",
-    title: cleanText(formData.get("title")) || "Heads or Tails",
+    title: cleanText(formData.get("title")) || definition.defaultTitle,
     description: cleanOptionalText(formData.get("description")),
     instructions: cleanOptionalText(formData.get("instructions")),
     prizeTitle: cleanOptionalText(formData.get("prize_title")),
@@ -126,7 +183,7 @@ function buildHeadsOrTailsAddOn(formData: FormData): EventFundraisingAddOn {
     maxEntriesPerBooking: positiveIntegerOrNull(
       formData.get("max_entries_per_booking"),
     ),
-    sortOrder: 0,
+    sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
   };
 }
 
@@ -151,9 +208,10 @@ function readinessToneStyle(tone: ReadinessItem["tone"]) {
   };
 }
 
-function buildHeadsOrTailsReadiness(input: {
+function buildAddOnReadiness(input: {
   addOn: EventFundraisingAddOn;
   currency: string;
+  definition: AddOnDefinition;
 }): ReadinessItem[] {
   const addOn = input.addOn;
   const enabled = Boolean(addOn.enabled);
@@ -170,7 +228,7 @@ function buildHeadsOrTailsReadiness(input: {
       label: "Public display",
       value: enabled ? "Ready" : "Disabled",
       detail: enabled
-        ? "The public event page can show the Heads or Tails panel."
+        ? `The public event page can show the ${input.definition.shortName} panel once the public display phase is wired.`
         : "Enable the add-on before it appears on the public event page.",
       tone: enabled ? "good" : "neutral",
     },
@@ -178,7 +236,7 @@ function buildHeadsOrTailsReadiness(input: {
       label: "Checkout collection",
       value: collectAtCheckout ? "On" : "Off",
       detail: collectAtCheckout
-        ? "Supporters can add entries during event checkout."
+        ? "Supporters will be able to add entries during event checkout once the checkout phase is wired."
         : "Entries are shown publicly but collected by the organiser on the night.",
       tone: collectAtCheckout ? "good" : "neutral",
     },
@@ -197,7 +255,7 @@ function buildHeadsOrTailsReadiness(input: {
       value: maxEntries > 0 ? `${maxEntries} per booking` : "Unlimited",
       detail:
         maxEntries > 0
-          ? "The public checkout selector will cap entries at this amount."
+          ? "The public checkout selector will cap entries at this amount once checkout support is wired."
           : "No per-booking limit is currently set.",
       tone: maxEntries > 0 ? "good" : "neutral",
     },
@@ -227,14 +285,15 @@ function buildHeadsOrTailsReadiness(input: {
     },
     {
       label: "Admin reporting",
-      value: "Ready",
-      detail: "Orders reporting can show add-on entries and revenue.",
-      tone: "good",
+      value: "Prepared",
+      detail:
+        "Reporting will be extended in a later phase so add-on entries and revenue can be separated clearly.",
+      tone: "neutral",
     },
   ];
 }
 
-function headsOrTailsReadyForCheckout(addOn: EventFundraisingAddOn) {
+function addOnReadyForCheckout(addOn: EventFundraisingAddOn) {
   return (
     Boolean(addOn.enabled) &&
     Boolean(addOn.collectAtCheckout) &&
@@ -272,10 +331,12 @@ async function requireEventAccess(eventId: string) {
   return event;
 }
 
-async function saveHeadsOrTailsAction(formData: FormData) {
+async function saveEventAddOnAction(formData: FormData) {
   "use server";
 
   const eventId = cleanText(formData.get("event_id"));
+  const addOnType = cleanText(formData.get("addon_type")) as EventFundraisingAddOnType;
+  const definition = getAddOnDefinition(addOnType);
 
   if (!eventId) {
     redirect("/admin/events?error=missing-event");
@@ -297,31 +358,30 @@ async function saveHeadsOrTailsAction(formData: FormData) {
 
   const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
 
-  if (!limits.allowedTypes.includes("heads_or_tails")) {
+  if (!limits.allowedTypes.includes(definition.type)) {
     redirect(`/admin/events/${eventId}/addons?error=addon-not-allowed`);
   }
 
   const currentAddOns = event.event_addons_json || [];
-  const nonHeadsOrTailsAddOns = currentAddOns.filter(
-    (addOn) => addOn.type !== "heads_or_tails",
+  const otherAddOns = currentAddOns.filter(
+    (addOn) => addOn.type !== definition.type,
   );
 
-  const nextHeadsOrTailsAddOn = buildHeadsOrTailsAddOn(formData);
+  const nextAddOn = buildAddOnFromForm(formData, definition);
 
-  const nextEnabledAddOnCount = [
-    ...nonHeadsOrTailsAddOns,
-    nextHeadsOrTailsAddOn,
-  ].filter((addOn) => addOn.enabled).length;
+  const nextEnabledAddOnCount = [...otherAddOns, nextAddOn].filter(
+    (addOn) => addOn.enabled,
+  ).length;
 
   if (nextEnabledAddOnCount > limits.maxAddOnsPerEvent) {
     redirect(`/admin/events/${eventId}/addons?error=multiple-upgrade-required`);
   }
 
   await updateEvent(eventId, {
-    eventAddOnsJson: [...nonHeadsOrTailsAddOns, nextHeadsOrTailsAddOn],
+    eventAddOnsJson: [...otherAddOns, nextAddOn],
   });
 
-  redirect(`/admin/events/${eventId}/addons?saved=heads-or-tails`);
+  redirect(`/admin/events/${eventId}/addons?saved=${definition.savedParam}`);
 }
 
 export default async function EventFundraisingAddOnsPage({
@@ -346,20 +406,33 @@ export default async function EventFundraisingAddOnsPage({
 
   const canManageAddOns = addOnsCapability.allowed;
   const canUseMultipleAddOns = multipleAddOnsCapability.allowed;
-  const headsOrTailsAddOn = getHeadsOrTailsAddOn(event.event_addons_json || []);
-  const readinessItems = buildHeadsOrTailsReadiness({
-    addOn: headsOrTailsAddOn,
-    currency: event.currency || "GBP",
+  const addOns = event.event_addons_json || [];
+
+  const configuredAddOns = ADD_ON_DEFINITIONS.map((definition) => {
+    const addOn = getAddOn(addOns, definition);
+    const readinessItems = buildAddOnReadiness({
+      addOn,
+      currency: event.currency || "GBP",
+      definition,
+    });
+    const readyForCheckout = addOnReadyForCheckout(addOn);
+    const warnings = readinessItems.filter((item) => item.tone === "warning")
+      .length;
+
+    return {
+      definition,
+      addOn,
+      readinessItems,
+      readyForCheckout,
+      warnings,
+    };
   });
 
-  const enabledAddOns = (event.event_addons_json || []).filter(
-    (addOn) => addOn.enabled,
+  const enabledAddOns = addOns.filter((addOn) => addOn.enabled);
+  const checkoutReadyAddOns = configuredAddOns.filter(
+    (item) => item.readyForCheckout,
   );
-
-  const readyForCheckout = headsOrTailsReadyForCheckout(headsOrTailsAddOn);
-  const readinessWarnings = readinessItems.filter(
-    (item) => item.tone === "warning",
-  ).length;
+  const firstEnabledAddOn = configuredAddOns.find((item) => item.addOn.enabled);
 
   const upgradeRequired = searchParams?.error === "upgrade-required";
   const multipleUpgradeRequired =
@@ -379,9 +452,10 @@ export default async function EventFundraisingAddOnsPage({
           </h1>
 
           <p style={styles.heroText}>
-            Add live fundraising tools to this event. Heads or Tails is designed
-            for ceilidhs, quiz nights, dinners, auctions and gala events, with
-            public display, optional checkout collection and admin reporting.
+            Add live fundraising tools to this event. Heads or Tails and Higher
+            or Lower are designed for ceilidhs, quiz nights, dinners, auctions
+            and gala events, with public display, optional checkout collection
+            and admin reporting phased in safely.
           </p>
 
           <div className="heroMetaGrid" style={styles.heroMetaGrid}>
@@ -410,21 +484,20 @@ export default async function EventFundraisingAddOnsPage({
         <div style={styles.heroPanel}>
           <div style={styles.heroPanelEyebrow}>Current status</div>
           <strong style={styles.heroPanelTitle}>
-            {headsOrTailsAddOn.enabled
-              ? readyForCheckout
-                ? "Heads or Tails is checkout-ready"
-                : "Heads or Tails is display-ready"
-              : "Heads or Tails is not enabled"}
+            {checkoutReadyAddOns.length > 0
+              ? `${checkoutReadyAddOns.length} add-on${
+                  checkoutReadyAddOns.length === 1 ? "" : "s"
+                } checkout-ready`
+              : firstEnabledAddOn
+                ? `${firstEnabledAddOn.definition.shortName} is display-ready`
+                : "No event add-ons enabled"}
           </strong>
           <span style={styles.heroPanelText}>
-            {readyForCheckout
-              ? `Collecting ${formatMoney(
-                  headsOrTailsAddOn.entryPriceCents,
-                  event.currency,
-                )} entries during checkout.`
-              : headsOrTailsAddOn.enabled
-                ? "The public panel can display, but checkout collection needs to be enabled with a valid price."
-                : "Enable the add-on to show it on the public event page."}
+            {checkoutReadyAddOns.length > 0
+              ? "Checkout-ready settings are saved for the enabled add-ons. Public checkout support for the next add-on will be wired in a later phase."
+              : firstEnabledAddOn
+                ? "At least one add-on can be prepared for public display. Checkout collection needs a valid price and checkout wiring."
+                : "Enable an add-on to prepare event-night fundraising for this event."}
           </span>
         </div>
       </section>
@@ -490,8 +563,8 @@ export default async function EventFundraisingAddOnsPage({
         />
         <SummaryCard
           label="Professional"
-          value="Heads or Tails"
-          detail="One event fundraising add-on per event."
+          value="One add-on"
+          detail="Use either Heads or Tails or Higher or Lower on an event."
         />
         <SummaryCard
           label="Foundation"
@@ -505,59 +578,68 @@ export default async function EventFundraisingAddOnsPage({
           <div style={styles.readinessHeader}>
             <div>
               <div style={styles.readinessEyebrow}>Readiness</div>
-              <h2 style={styles.readinessTitle}>Heads or Tails checklist</h2>
+              <h2 style={styles.readinessTitle}>Event add-ons checklist</h2>
               <p style={styles.readinessIntro}>
-                A quick admin view of what is live, what is checkout-ready, and
-                what would improve the public add-on experience.
+                A quick admin view of what is enabled, what is checkout-ready,
+                and what would improve each public add-on experience.
               </p>
             </div>
 
             <span
               style={{
                 ...styles.readinessStatusPill,
-                ...(readyForCheckout
+                ...(checkoutReadyAddOns.length > 0
                   ? styles.statusGood
-                  : headsOrTailsAddOn.enabled
+                  : firstEnabledAddOn
                     ? styles.statusWarning
                     : styles.statusNeutral),
               }}
             >
-              {readyForCheckout
-                ? "Checkout ready"
-                : headsOrTailsAddOn.enabled
-                  ? `${readinessWarnings} warning${
-                      readinessWarnings === 1 ? "" : "s"
-                    }`
+              {checkoutReadyAddOns.length > 0
+                ? "Checkout settings ready"
+                : firstEnabledAddOn
+                  ? "Display settings started"
                   : "Disabled"}
             </span>
           </div>
 
-          <div className="readinessGrid" style={styles.readinessGrid}>
-            {readinessItems.map((item) => {
-              const toneStyles = readinessToneStyle(item.tone);
-
-              return (
-                <article
-                  key={item.label}
-                  style={{
-                    ...styles.readinessItem,
-                    ...toneStyles.card,
-                  }}
-                >
+          <div className="readinessOverviewGrid" style={styles.readinessOverviewGrid}>
+            {configuredAddOns.map((item) => (
+              <article
+                key={item.definition.type}
+                style={styles.readinessOverviewCard}
+              >
+                <div style={styles.readinessOverviewHeader}>
+                  <span style={styles.readinessOverviewLabel}>
+                    {item.definition.shortName}
+                  </span>
                   <span
                     style={{
-                      ...styles.readinessToneDot,
-                      ...toneStyles.dot,
+                      ...styles.miniStatusPill,
+                      ...(item.readyForCheckout
+                        ? styles.statusGood
+                        : item.addOn.enabled
+                          ? styles.statusWarning
+                          : styles.statusNeutral),
                     }}
-                  />
-                  <div style={styles.readinessContent}>
-                    <span style={styles.readinessLabel}>{item.label}</span>
-                    <strong style={styles.readinessValue}>{item.value}</strong>
-                    <p style={styles.readinessDetail}>{item.detail}</p>
-                  </div>
-                </article>
-              );
-            })}
+                  >
+                    {item.readyForCheckout
+                      ? "Checkout-ready"
+                      : item.addOn.enabled
+                        ? `${item.warnings} warning${
+                            item.warnings === 1 ? "" : "s"
+                          }`
+                        : "Disabled"}
+                  </span>
+                </div>
+
+                <p style={styles.readinessOverviewText}>
+                  {item.addOn.enabled
+                    ? `${item.definition.shortName} is prepared for this event.`
+                    : `${item.definition.shortName} is not currently enabled.`}
+                </p>
+              </article>
+            ))}
           </div>
 
           <div style={styles.readinessActions}>
@@ -582,7 +664,7 @@ export default async function EventFundraisingAddOnsPage({
       {!canManageAddOns ? (
         <section className="lockedPanel" style={styles.lockedPanel}>
           <div style={styles.lockedEyebrow}>Professional feature</div>
-          <h2 style={styles.panelTitle}>Upgrade to use Heads or Tails</h2>
+          <h2 style={styles.panelTitle}>Upgrade to use event add-ons</h2>
           <p style={styles.sectionText}>
             {addOnsCapability.reason || getEventFundraisingAddOnsUpgradeMessage()}
           </p>
@@ -591,171 +673,247 @@ export default async function EventFundraisingAddOnsPage({
           </Link>
         </section>
       ) : (
-        <section className="panel" style={styles.panel}>
-          <div className="panelHeader" style={styles.panelHeader}>
-            <div>
-              <div style={styles.innerEyebrow}>Heads or Tails</div>
-              <h2 style={styles.panelTitle}>Live event game settings</h2>
-              <p style={styles.sectionText}>
-                Configure the public wording and whether entries should be
-                collected during event checkout. Existing event tickets, seating,
-                VIP access, menus, checkout, receipts and reporting are
-                preserved.
-              </p>
-            </div>
-
-            <span
-              style={{
-                ...styles.statusPill,
-                ...(headsOrTailsAddOn.enabled
-                  ? styles.statusGood
-                  : styles.statusNeutral),
-              }}
-            >
-              {headsOrTailsAddOn.enabled ? "Enabled" : "Disabled"}
-            </span>
-          </div>
-
-          <form action={saveHeadsOrTailsAction} style={styles.form}>
-            <input type="hidden" name="event_id" value={event.id} />
-
-            <div className="twoCol" style={styles.twoCol}>
-              <Field label="Enable Heads or Tails">
-                <select
-                  name="enabled"
-                  defaultValue={headsOrTailsAddOn.enabled ? "true" : "false"}
-                  className="input"
-                  style={styles.input}
-                >
-                  <option value="false">No, keep disabled</option>
-                  <option value="true">Yes, enable for this event</option>
-                </select>
-              </Field>
-
-              <Field label="Collect entries at checkout">
-                <select
-                  name="collect_at_checkout"
-                  defaultValue={
-                    headsOrTailsAddOn.collectAtCheckout ? "true" : "false"
-                  }
-                  className="input"
-                  style={styles.input}
-                >
-                  <option value="false">No, collect on the night</option>
-                  <option value="true">Yes, collect during checkout</option>
-                </select>
-              </Field>
-            </div>
-
-            <Field label="Display title">
-              <input
-                name="title"
-                defaultValue={headsOrTailsAddOn.title || "Heads or Tails"}
-                className="input"
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Short description">
-              <textarea
-                name="description"
-                rows={3}
-                defaultValue={headsOrTailsAddOn.description || ""}
-                placeholder="Join our Heads or Tails fundraiser on the night and keep playing until one winner remains."
-                className="textarea"
-                style={styles.textarea}
-              />
-            </Field>
-
-            <Field label="How it works / instructions">
-              <textarea
-                name="instructions"
-                rows={4}
-                defaultValue={headsOrTailsAddOn.instructions || ""}
-                placeholder="Choose heads or tails each round. Stay standing if you are correct. The last person standing wins."
-                className="textarea"
-                style={styles.textarea}
-              />
-            </Field>
-
-            <div className="threeCol" style={styles.threeCol}>
-              <Field label="Entry price">
-                <input
-                  name="entry_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={moneyFromCents(
-                    headsOrTailsAddOn.entryPriceCents,
-                  )}
-                  className="input"
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Max entries per booking">
-                <input
-                  name="max_entries_per_booking"
-                  type="number"
-                  min="1"
-                  defaultValue={headsOrTailsAddOn.maxEntriesPerBooking || 1}
-                  className="input"
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Prize title / note">
-                <input
-                  name="prize_title"
-                  defaultValue={headsOrTailsAddOn.prizeTitle || ""}
-                  placeholder="Cash prize, hamper, sponsored prize..."
-                  className="input"
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-
-            {!canUseMultipleAddOns ? (
-              <div style={styles.professionalNotice}>
-                <strong>Professional add-on limit</strong>
-                <span>
-                  This tenant can use one event fundraising add-on per event.
-                  Foundation unlocks multiple add-ons per event.
-                </span>
-              </div>
-            ) : (
-              <div style={styles.foundationNotice}>
-                <strong>Foundation add-ons enabled</strong>
-                <span>
-                  This tenant can support multiple event fundraising add-ons per
-                  event as more add-on types are introduced.
-                </span>
-              </div>
-            )}
-
-            <section className="submitBar" style={styles.submitBar}>
-              <div>
-                <strong style={{ color: "#0f172a" }}>
-                  Save Heads or Tails settings
-                </strong>
-                <div style={styles.mutedSmall}>
-                  Updates this event only. Public display, checkout collection
-                  and admin reporting use these settings automatically.
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="primaryButton"
-                style={styles.primaryButton}
-              >
-                Save add-on settings
-              </button>
-            </section>
-          </form>
-        </section>
+        <div style={styles.addOnPanels}>
+          {configuredAddOns.map((item) => (
+            <AddOnSettingsPanel
+              key={item.definition.type}
+              eventId={event.id}
+              addOn={item.addOn}
+              definition={item.definition}
+              readinessItems={item.readinessItems}
+              readyForCheckout={item.readyForCheckout}
+              readinessWarnings={item.warnings}
+              canUseMultipleAddOns={canUseMultipleAddOns}
+            />
+          ))}
+        </div>
       )}
     </main>
+  );
+}
+
+function AddOnSettingsPanel({
+  eventId,
+  addOn,
+  definition,
+  readinessItems,
+  readyForCheckout,
+  readinessWarnings,
+  canUseMultipleAddOns,
+}: {
+  eventId: string;
+  addOn: EventFundraisingAddOn;
+  definition: AddOnDefinition;
+  readinessItems: ReadinessItem[];
+  readyForCheckout: boolean;
+  readinessWarnings: number;
+  canUseMultipleAddOns: boolean;
+}) {
+  return (
+    <section className="panel" style={styles.panel}>
+      <div className="panelHeader" style={styles.panelHeader}>
+        <div>
+          <div style={styles.innerEyebrow}>{definition.eyebrow}</div>
+          <h2 style={styles.panelTitle}>{definition.panelTitle}</h2>
+          <p style={styles.sectionText}>
+            Configure the public wording and whether entries should be collected
+            during event checkout. Existing event tickets, seating, VIP access,
+            menus, checkout, receipts and reporting are preserved.
+          </p>
+        </div>
+
+        <span
+          style={{
+            ...styles.statusPill,
+            ...(readyForCheckout
+              ? styles.statusGood
+              : addOn.enabled
+                ? styles.statusWarning
+                : styles.statusNeutral),
+          }}
+        >
+          {readyForCheckout
+            ? "Checkout-ready"
+            : addOn.enabled
+              ? "Enabled"
+              : "Disabled"}
+        </span>
+      </div>
+
+      <div className="readinessGrid" style={styles.readinessGridLight}>
+        {readinessItems.map((item) => {
+          const toneStyles = readinessToneStyle(item.tone);
+
+          return (
+            <article
+              key={`${definition.type}-${item.label}`}
+              style={{
+                ...styles.readinessItemLight,
+                ...toneStyles.card,
+              }}
+            >
+              <span
+                style={{
+                  ...styles.readinessToneDot,
+                  ...toneStyles.dot,
+                }}
+              />
+              <div style={styles.readinessContent}>
+                <span style={styles.readinessLabelLight}>{item.label}</span>
+                <strong style={styles.readinessValueLight}>{item.value}</strong>
+                <p style={styles.readinessDetailLight}>{item.detail}</p>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {addOn.enabled && readinessWarnings > 0 ? (
+        <div style={styles.warningNotice}>
+          <strong>{definition.shortName} has {readinessWarnings} warning{readinessWarnings === 1 ? "" : "s"}</strong>
+          <span>
+            The add-on can be saved, but completing the missing fields will make
+            the public experience clearer.
+          </span>
+        </div>
+      ) : null}
+
+      <form action={saveEventAddOnAction} style={styles.form}>
+        <input type="hidden" name="event_id" value={eventId} />
+        <input type="hidden" name="addon_type" value={definition.type} />
+
+        <div className="twoCol" style={styles.twoCol}>
+          <Field label={`Enable ${definition.shortName}`}>
+            <select
+              name="enabled"
+              defaultValue={addOn.enabled ? "true" : "false"}
+              className="input"
+              style={styles.input}
+            >
+              <option value="false">No, keep disabled</option>
+              <option value="true">Yes, enable for this event</option>
+            </select>
+          </Field>
+
+          <Field label="Collect entries at checkout">
+            <select
+              name="collect_at_checkout"
+              defaultValue={addOn.collectAtCheckout ? "true" : "false"}
+              className="input"
+              style={styles.input}
+            >
+              <option value="false">No, collect on the night</option>
+              <option value="true">Yes, collect during checkout</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Display title">
+          <input
+            name="title"
+            defaultValue={addOn.title || definition.defaultTitle}
+            className="input"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Short description">
+          <textarea
+            name="description"
+            rows={3}
+            defaultValue={addOn.description || ""}
+            placeholder={definition.defaultDescription}
+            className="textarea"
+            style={styles.textarea}
+          />
+        </Field>
+
+        <Field label="How it works / instructions">
+          <textarea
+            name="instructions"
+            rows={4}
+            defaultValue={addOn.instructions || ""}
+            placeholder={definition.defaultInstructions}
+            className="textarea"
+            style={styles.textarea}
+          />
+        </Field>
+
+        <div className="threeCol" style={styles.threeCol}>
+          <Field label="Entry price">
+            <input
+              name="entry_price"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={moneyFromCents(addOn.entryPriceCents)}
+              className="input"
+              style={styles.input}
+            />
+          </Field>
+
+          <Field label="Max entries per booking">
+            <input
+              name="max_entries_per_booking"
+              type="number"
+              min="1"
+              defaultValue={addOn.maxEntriesPerBooking || 1}
+              className="input"
+              style={styles.input}
+            />
+          </Field>
+
+          <Field label="Prize title / note">
+            <input
+              name="prize_title"
+              defaultValue={addOn.prizeTitle || ""}
+              placeholder={definition.defaultPrizePlaceholder}
+              className="input"
+              style={styles.input}
+            />
+          </Field>
+        </div>
+
+        {!canUseMultipleAddOns ? (
+          <div style={styles.professionalNotice}>
+            <strong>Professional add-on limit</strong>
+            <span>
+              This tenant can enable one event fundraising add-on per event.
+              Save only one enabled add-on at a time, or upgrade to Foundation
+              for multiple add-ons per event.
+            </span>
+          </div>
+        ) : (
+          <div style={styles.foundationNotice}>
+            <strong>Foundation add-ons enabled</strong>
+            <span>
+              This tenant can support multiple event fundraising add-ons per
+              event as more add-on types are introduced.
+            </span>
+          </div>
+        )}
+
+        <section className="submitBar" style={styles.submitBar}>
+          <div>
+            <strong style={{ color: "#0f172a" }}>
+              Save {definition.shortName} settings
+            </strong>
+            <div style={styles.mutedSmall}>
+              Updates this event only. Public display, checkout collection and
+              admin reporting use these settings as each phase is wired.
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="primaryButton"
+            style={styles.primaryButton}
+          >
+            Save {definition.shortName}
+          </button>
+        </section>
+      </form>
+    </section>
   );
 }
 
@@ -824,6 +982,7 @@ const responsiveStyles = `
   .event-addons-page .heroMetaGrid,
   .event-addons-page .summaryGrid,
   .event-addons-page .readinessGrid,
+  .event-addons-page .readinessOverviewGrid,
   .event-addons-page .twoCol,
   .event-addons-page .threeCol {
     grid-template-columns: 1fr !important;
@@ -1224,7 +1383,60 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.05em",
   },
 
+  readinessOverviewGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  readinessOverviewCard: {
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+
+  readinessOverviewHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  readinessOverviewLabel: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
+  },
+
+  readinessOverviewText: {
+    margin: "7px 0 0",
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  miniStatusPill: {
+    display: "inline-flex",
+    padding: "6px 9px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+
   readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  readinessGridLight: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
@@ -1241,9 +1453,20 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
+  readinessItemLight: {
+    display: "grid",
+    gridTemplateColumns: "14px minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid",
+    minWidth: 0,
+  },
+
   readinessItemGood: {
     background: "rgba(34,197,94,0.12)",
-    borderColor: "rgba(187,247,208,0.24)",
+    borderColor: "rgba(187,247,208,0.34)",
   },
 
   readinessItemWarning: {
@@ -1252,8 +1475,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   readinessItemNeutral: {
-    background: "rgba(255,255,255,0.08)",
-    borderColor: "rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.76)",
+    borderColor: "rgba(203,213,225,0.9)",
   },
 
   readinessToneDot: {
@@ -1292,6 +1515,16 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 4,
   },
 
+  readinessLabelLight: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 4,
+  },
+
   readinessValue: {
     display: "block",
     color: "#ffffff",
@@ -1300,9 +1533,25 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  readinessValueLight: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
   readinessDetail: {
     margin: "5px 0 0",
     color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  readinessDetailLight: {
+    margin: "5px 0 0",
+    color: "#64748b",
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 750,
@@ -1336,6 +1585,11 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     marginBottom: 10,
+  },
+
+  addOnPanels: {
+    display: "grid",
+    gap: 16,
   },
 
   panel: {
@@ -1489,6 +1743,19 @@ const styles: Record<string, CSSProperties> = {
     background: "#ecfdf5",
     border: "1px solid #bbf7d0",
     color: "#166534",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+
+  warningNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    color: "#92400e",
     fontSize: 13,
     fontWeight: 800,
     lineHeight: 1.45,
