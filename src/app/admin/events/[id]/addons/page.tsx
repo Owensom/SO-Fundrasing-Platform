@@ -438,21 +438,23 @@ export default async function EventFundraisingAddOnsPage({
           ← Back to event editor
         </Link>
 
-        <Link
-          href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          View orders & add-on reporting
-        </Link>
+        <div className="topActionsRight" style={styles.topActionsRight}>
+          <Link
+            href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            View orders & add-on reporting
+          </Link>
 
-        <Link
-          href="/admin/settings/billing"
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          Billing &amp; plan
-        </Link>
+          <Link
+            href="/admin/settings/billing"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Billing &amp; plan
+          </Link>
+        </div>
       </section>
 
       {searchParams?.saved ? (
@@ -838,12 +840,11 @@ const responsiveStyles = `
     align-items: stretch !important;
   }
 
-  .event-addons-page .topActions {
+  .event-addons-page .topActionsRight {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
     width: 100% !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
   }
 
   .event-addons-page .primaryButton,
@@ -1011,17 +1012,18 @@ const styles: Record<string, CSSProperties> = {
 
   topActions: {
     display: "flex",
-    justifyContent: "center",
-    gap: 8,
+    justifyContent: "space-between",
+    gap: 12,
     alignItems: "center",
-    width: "fit-content",
-    maxWidth: "100%",
-    margin: "0 auto 16px",
-    padding: 6,
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.88)",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+
+  topActionsRight: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    justifyContent: "flex-end",
     flexWrap: "wrap",
   },
 
@@ -1044,8 +1046,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 40,
-    padding: "9px 13px",
+    minHeight: 44,
+    padding: "10px 15px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#334155",
@@ -1053,6 +1055,7 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     whiteSpace: "nowrap",
+    boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
   },
 
   secondaryButtonDark: {
