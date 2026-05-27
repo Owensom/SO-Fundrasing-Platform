@@ -57,6 +57,9 @@ type AddOnDefinition = {
   savedParam: string;
 };
 
+type EventFundraisingAddOnLike = Partial<EventFundraisingAddOn> &
+  Record<string, unknown>;
+
 const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
   {
     id: "event-addon-heads-or-tails",
@@ -90,7 +93,7 @@ const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
   },
 ];
 
-function cleanText(value: FormDataEntryValue | null) {
+function cleanText(value: FormDataEntryValue | string | null | undefined) {
   return String(value || "").trim();
 }
 
@@ -137,6 +140,91 @@ function formatMoney(cents: number | null | undefined, currency = "GBP") {
   }
 }
 
+function readStringField(
+  addOn: EventFundraisingAddOnLike,
+  keys: string[],
+  fallback = "",
+) {
+  for (const key of keys) {
+    const value = addOn[key];
+
+    if (value !== null && value !== undefined && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+
+  return fallback;
+}
+
+function readNumberField(
+  addOn: EventFundraisingAddOnLike,
+  keys: string[],
+  fallback = 0,
+) {
+  for (const key of keys) {
+    const value = addOn[key];
+
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    const number = Number(value);
+
+    if (Number.isFinite(number) && number >= 0) {
+      return Math.floor(number);
+    }
+  }
+
+  return fallback;
+}
+
+function readNullablePositiveIntegerField(
+  addOn: EventFundraisingAddOnLike,
+  keys: string[],
+  fallback: number | null = null,
+) {
+  for (const key of keys) {
+    const value = addOn[key];
+
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    const number = Number(value);
+
+    if (Number.isFinite(number) && number > 0) {
+      return Math.floor(number);
+    }
+  }
+
+  return fallback;
+}
+
+function readBooleanField(
+  addOn: EventFundraisingAddOnLike,
+  keys: string[],
+  fallback = false,
+) {
+  for (const key of keys) {
+    const value = addOn[key];
+
+    if (value === true || value === "true" || value === 1 || value === "1") {
+      return true;
+    }
+
+    if (
+      value === false ||
+      value === "false" ||
+      value === 0 ||
+      value === "0"
+    ) {
+      return false;
+    }
+  }
+
+  return fallback;
+}
+
 function getAddOnDefinition(type: string | null | undefined) {
   return (
     ADD_ON_DEFINITIONS.find((definition) => definition.type === type) ||
@@ -144,12 +232,12 @@ function getAddOnDefinition(type: string | null | undefined) {
   );
 }
 
-function getAddOn(
-  addOns: EventFundraisingAddOn[],
+function normaliseAddOnForAdmin(
+  addOn: EventFundraisingAddOnLike | null | undefined,
   definition: AddOnDefinition,
 ): EventFundraisingAddOn {
-  return (
-    addOns.find((addOn) => addOn.type === definition.type) || {
+  if (!addOn) {
+    return {
       id: definition.id,
       type: definition.type,
       enabled: false,
@@ -161,8 +249,55 @@ function getAddOn(
       collectAtCheckout: false,
       maxEntriesPerBooking: 1,
       sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
-    }
-  );
+    };
+  }
+
+  return {
+    id: readStringField(addOn, ["id"], definition.id),
+    type: definition.type,
+    enabled: readBooleanField(addOn, ["enabled"], false),
+    title: readStringField(addOn, ["title"], definition.defaultTitle),
+    description: readStringField(
+      addOn,
+      ["description"],
+      definition.defaultDescription,
+    ),
+    instructions: readStringField(
+      addOn,
+      ["instructions"],
+      definition.defaultInstructions,
+    ),
+    prizeTitle: readStringField(addOn, ["prizeTitle", "prize_title"], ""),
+    entryPriceCents: readNumberField(
+      addOn,
+      ["entryPriceCents", "entry_price_cents", "entryPrice", "entry_price"],
+      0,
+    ),
+    collectAtCheckout: readBooleanField(
+      addOn,
+      ["collectAtCheckout", "collect_at_checkout"],
+      false,
+    ),
+    maxEntriesPerBooking: readNullablePositiveIntegerField(
+      addOn,
+      ["maxEntriesPerBooking", "max_entries_per_booking"],
+      1,
+    ),
+    sortOrder: readNumberField(
+      addOn,
+      ["sortOrder", "sort_order"],
+      definition.type === "heads_or_tails" ? 0 : 1,
+    ),
+  };
+}
+
+function getAddOn(
+  addOns: EventFundraisingAddOn[],
+  definition: AddOnDefinition,
+): EventFundraisingAddOn {
+  const existing = addOns.find((addOn) => addOn.type === definition.type);
+
+  return normaliseAddOnForAdmin(existing, definition);
 }
 
 function buildAddOnFromForm(
@@ -185,6 +320,18 @@ function buildAddOnFromForm(
     ),
     sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
   };
+}
+
+function normaliseExistingAddOnsForSave(
+  addOns: EventFundraisingAddOn[],
+  replacingType: EventFundraisingAddOnType,
+) {
+  return addOns
+    .filter((addOn) => addOn.type !== replacingType)
+    .map((addOn) => {
+      const definition = getAddOnDefinition(addOn.type);
+      return normaliseAddOnForAdmin(addOn, definition);
+    });
 }
 
 function readinessToneStyle(tone: ReadinessItem["tone"]) {
@@ -369,13 +516,18 @@ async function saveEventAddOnAction(formData: FormData) {
   }
 
   const currentAddOns = event.event_addons_json || [];
-  const otherAddOns = currentAddOns.filter(
-    (addOn) => addOn.type !== definition.type,
+  const otherAddOns = normaliseExistingAddOnsForSave(
+    currentAddOns,
+    definition.type,
   );
 
   const nextAddOn = buildAddOnFromForm(formData, definition);
 
-  const nextEnabledAddOnCount = [...otherAddOns, nextAddOn].filter(
+  const nextAddOns = [...otherAddOns, nextAddOn].sort(
+    (a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0),
+  );
+
+  const nextEnabledAddOnCount = nextAddOns.filter(
     (addOn) => addOn.enabled,
   ).length;
 
@@ -384,7 +536,7 @@ async function saveEventAddOnAction(formData: FormData) {
   }
 
   await updateEvent(eventId, {
-    eventAddOnsJson: [...otherAddOns, nextAddOn],
+    eventAddOnsJson: nextAddOns,
   });
 
   redirect(`/admin/events/${eventId}/addons?saved=${definition.savedParam}`);
@@ -434,7 +586,10 @@ export default async function EventFundraisingAddOnsPage({
     };
   });
 
-  const enabledAddOns = addOns.filter((addOn) => addOn.enabled);
+  const enabledAddOns = configuredAddOns
+    .map((item) => item.addOn)
+    .filter((addOn) => addOn.enabled);
+
   const checkoutReadyAddOns = configuredAddOns.filter(
     (item) => item.readyForCheckout,
   );
@@ -1443,27 +1598,10 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.04em",
   },
 
-  readinessGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
   readinessGridLight: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
-  },
-
-  readinessItem: {
-    display: "grid",
-    gridTemplateColumns: "14px minmax(0, 1fr)",
-    gap: 10,
-    alignItems: "start",
-    padding: 14,
-    borderRadius: 18,
-    border: "1px solid",
-    minWidth: 0,
   },
 
   readinessItemLight: {
