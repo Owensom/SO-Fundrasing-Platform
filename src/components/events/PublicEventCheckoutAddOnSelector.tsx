@@ -2,8 +2,10 @@
 
 import type { CSSProperties } from "react";
 
+export type PublicEventCheckoutAddOnType = "heads_or_tails" | "higher_or_lower";
+
 export type PublicEventCheckoutAddOn = {
-  type: "heads_or_tails";
+  type: PublicEventCheckoutAddOnType;
   title: string;
   description?: string;
   entryPriceCents: number;
@@ -11,12 +13,25 @@ export type PublicEventCheckoutAddOn = {
 };
 
 export type PublicEventCheckoutAddOnSelection = {
-  type: "heads_or_tails";
+  type: PublicEventCheckoutAddOnType;
   quantity: number;
 };
 
 function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function addOnFallbackTitle(type: PublicEventCheckoutAddOnType) {
+  if (type === "higher_or_lower") return "Higher or Lower";
+  return "Heads or Tails";
+}
+
+function addOnFallbackDescription(type: PublicEventCheckoutAddOnType) {
+  if (type === "higher_or_lower") {
+    return "Add Higher or Lower entries to your event booking.";
+  }
+
+  return "Add Heads or Tails entries to your event booking.";
 }
 
 function cleanQuantity(value: unknown, maxEntriesPerBooking?: number | null) {
@@ -64,13 +79,16 @@ export default function PublicEventCheckoutAddOnSelector({
       <div style={styles.header}>
         <div style={styles.copy}>
           <p style={styles.eyebrow}>Event-night add-on</p>
-          <h4 style={styles.title}>{addOn.title || "Heads or Tails"}</h4>
+
+          <h4 style={styles.title}>
+            {addOn.title || addOnFallbackTitle(addOn.type)}
+          </h4>
 
           {addOn.description ? (
             <p style={styles.description}>{addOn.description}</p>
           ) : (
             <p style={styles.description}>
-              Add Heads or Tails entries to your event booking.
+              {addOnFallbackDescription(addOn.type)}
             </p>
           )}
 
@@ -164,15 +182,18 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(250,204,21,0.32)",
     color: "#ffffff",
   },
+
   header: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "start",
   },
+
   copy: {
     minWidth: 0,
   },
+
   eyebrow: {
     margin: 0,
     color: "#facc15",
@@ -181,6 +202,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.12em",
   },
+
   title: {
     margin: "5px 0 0",
     color: "#ffffff",
@@ -189,6 +211,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.02em",
     overflowWrap: "anywhere",
   },
+
   description: {
     margin: "6px 0 0",
     color: "#cbd5e1",
@@ -197,6 +220,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
+
   limitText: {
     margin: "6px 0 0",
     color: "#fde68a",
@@ -204,6 +228,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     fontWeight: 850,
   },
+
   priceBox: {
     display: "grid",
     gap: 3,
@@ -214,6 +239,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.12)",
     minWidth: 92,
   },
+
   priceLabel: {
     color: "#cbd5e1",
     fontSize: 10,
@@ -221,18 +247,21 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   priceValue: {
     color: "#fef3c7",
     fontSize: 15,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
+
   quantityRow: {
     display: "grid",
     gridTemplateColumns: "42px minmax(64px, 1fr) 42px",
     gap: 8,
     alignItems: "center",
   },
+
   quantityButton: {
     width: 42,
     height: 42,
@@ -243,6 +272,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 22,
     fontWeight: 950,
   },
+
   quantityInput: {
     width: "100%",
     height: 42,
@@ -255,6 +285,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     boxSizing: "border-box",
   },
+
   disabledNotice: {
     margin: 0,
     color: "#fecaca",
