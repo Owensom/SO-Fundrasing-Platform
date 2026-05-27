@@ -220,21 +220,20 @@ export default async function EventSlugPage({
       };
     });
 
-  const headsOrTailsDisplayAddOn = publicDisplayAddOns.find(
-    (addOn) => addOn.type === "heads_or_tails",
+  const checkoutReadyDisplayAddOn = publicDisplayAddOns.find(
+    (addOn) => addOn.collectAtCheckout && addOn.entryPriceCents > 0,
   );
 
   const checkoutAddOn: PublicEventCheckoutAddOn | null =
-    headsOrTailsDisplayAddOn?.collectAtCheckout &&
-    headsOrTailsDisplayAddOn.entryPriceCents > 0
+    checkoutReadyDisplayAddOn
       ? {
-          type: "heads_or_tails",
-          title: headsOrTailsDisplayAddOn.title,
+          type: checkoutReadyDisplayAddOn.type,
+          title: checkoutReadyDisplayAddOn.title,
           description:
-            headsOrTailsDisplayAddOn.description ||
-            "Add Heads or Tails entries to your event booking.",
-          entryPriceCents: headsOrTailsDisplayAddOn.entryPriceCents,
-          maxEntriesPerBooking: headsOrTailsDisplayAddOn.maxEntriesPerBooking,
+            checkoutReadyDisplayAddOn.description ||
+            `Add ${checkoutReadyDisplayAddOn.title} entries to your event booking.`,
+          entryPriceCents: checkoutReadyDisplayAddOn.entryPriceCents,
+          maxEntriesPerBooking: checkoutReadyDisplayAddOn.maxEntriesPerBooking,
         }
       : null;
 
@@ -577,10 +576,10 @@ export default async function EventSlugPage({
                     : "On the night"}
                 </strong>
                 <span style={styles.addOnPriceHint}>
-                  {addOn.collectAtCheckout && addOn.type === "heads_or_tails"
+                  {addOn.collectAtCheckout && addOn.entryPriceCents > 0
                     ? "Available during checkout"
                     : addOn.collectAtCheckout
-                      ? "Checkout collection coming soon"
+                      ? "Set up for checkout collection"
                       : "Collected by the organiser"}
                 </span>
               </div>
