@@ -29,7 +29,7 @@ export type TenantSubscriptionLike = {
   platform_owner_bypass?: boolean | null;
 };
 
-export type EventFundraisingAddOnType = "heads_or_tails";
+export type EventFundraisingAddOnType = "heads_or_tails" | "higher_or_lower";
 
 export type EventFundraisingAddOnLimits = {
   enabled: boolean;
@@ -41,6 +41,14 @@ const VALID_TIERS: SubscriptionTier[] = [
   "community",
   "professional",
   "foundation",
+];
+
+const PROFESSIONAL_EVENT_FUNDRAISING_ADD_ON_TYPES: EventFundraisingAddOnType[] =
+  ["heads_or_tails", "higher_or_lower"];
+
+const FOUNDATION_EVENT_FUNDRAISING_ADD_ON_TYPES: EventFundraisingAddOnType[] = [
+  "heads_or_tails",
+  "higher_or_lower",
 ];
 
 export function normaliseSubscriptionTier(
@@ -233,7 +241,7 @@ export function getEventFundraisingAddOnLimits(
     return {
       enabled: true,
       maxAddOnsPerEvent: Number.POSITIVE_INFINITY,
-      allowedTypes: ["heads_or_tails"],
+      allowedTypes: FOUNDATION_EVENT_FUNDRAISING_ADD_ON_TYPES,
     };
   }
 
@@ -241,7 +249,7 @@ export function getEventFundraisingAddOnLimits(
     return {
       enabled: true,
       maxAddOnsPerEvent: 1,
-      allowedTypes: ["heads_or_tails"],
+      allowedTypes: PROFESSIONAL_EVENT_FUNDRAISING_ADD_ON_TYPES,
     };
   }
 
@@ -259,7 +267,7 @@ export function getTenantEventFundraisingAddOnLimits(
     return {
       enabled: true,
       maxAddOnsPerEvent: Number.POSITIVE_INFINITY,
-      allowedTypes: ["heads_or_tails"],
+      allowedTypes: FOUNDATION_EVENT_FUNDRAISING_ADD_ON_TYPES,
     };
   }
 
@@ -302,7 +310,7 @@ export function getEventVipAccessCodesUpgradeMessage() {
 }
 
 export function getEventFundraisingAddOnsUpgradeMessage() {
-  return "Event fundraising add-ons such as Heads or Tails require the Professional plan or higher.";
+  return "Event fundraising add-ons such as Heads or Tails and Higher or Lower require the Professional plan or higher.";
 }
 
 export function getMultipleEventFundraisingAddOnsUpgradeMessage() {
