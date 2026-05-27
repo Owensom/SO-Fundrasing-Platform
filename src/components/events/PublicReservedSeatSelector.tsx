@@ -108,7 +108,6 @@ function normaliseAddOnQuantity(
   addOn?: PublicEventCheckoutAddOn | null,
 ) {
   const cleanQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-
   const max = Number(addOn?.maxEntriesPerBooking || 0);
 
   if (Number.isFinite(max) && max > 0) {
@@ -116,6 +115,23 @@ function normaliseAddOnQuantity(
   }
 
   return cleanQuantity;
+}
+
+function normaliseAddOnQuantities(input: {
+  checkoutAddOns: PublicEventCheckoutAddOn[];
+  addOnQuantities: Record<string, number>;
+  hasAccessCode: boolean;
+}) {
+  if (input.hasAccessCode) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    input.checkoutAddOns.map((addOn) => [
+      addOn.type,
+      normaliseAddOnQuantity(input.addOnQuantities[addOn.type] || 0, addOn),
+    ]),
+  );
 }
 
 function seatLabel(seat: Seat) {
@@ -260,7 +276,7 @@ export default function PublicReservedSeatSelector({
   platformFeePercent = 0,
   menuOptions = [],
   initialSeatingLayout = {},
-  checkoutAddOn = null,
+  checkoutAddOns = [],
 }: {
   eventId: string;
   eventType?: string;
@@ -270,13 +286,15 @@ export default function PublicReservedSeatSelector({
   platformFeePercent?: number;
   menuOptions?: string[];
   initialSeatingLayout?: Record<string, number>;
-  checkoutAddOn?: PublicEventCheckoutAddOn | null;
+  checkoutAddOns?: PublicEventCheckoutAddOn[];
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
-  const [addOnQuantity, setAddOnQuantity] = useState(0);
+  const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>(
+    {},
+  );
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -314,29 +332,31 @@ export default function PublicReservedSeatSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
-  const safeAddOnQuantity = normaliseAddOnQuantity(
-    hasAccessCode ? 0 : addOnQuantity,
-    checkoutAddOn,
-  );
+  const safeAddOnQuantities = normaliseAddOnQuantities({
+    checkoutAddOns,
+    addOnQuantities,
+    hasAccessCode,
+  });
 
-  const selectedAddOns: PublicEventCheckoutAddOnSelection[] =
-    checkoutAddOn && safeAddOnQuantity > 0
-      ? [
-          {
-            type: checkoutAddOn.type,
-            quantity: safeAddOnQuantity,
-          },
-        ]
-      : [];
+  const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
+    .map((addOn) => ({
+      type: addOn.type,
+      quantity: safeAddOnQuantities[addOn.type] || 0,
+    }))
+    .filter((addOn) => addOn.quantity > 0);
 
   const ticketTotal = cartSeats.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
 
-  const addOnTotal = checkoutAddOn
-    ? Number(checkoutAddOn.entryPriceCents || 0) * safeAddOnQuantity
-    : 0;
+  const addOnTotal = checkoutAddOns.reduce(
+    (sum, addOn) =>
+      sum +
+      Number(addOn.entryPriceCents || 0) *
+        Number(safeAddOnQuantities[addOn.type] || 0),
+    0,
+  );
 
   const checkoutSubtotal = ticketTotal + addOnTotal;
 
@@ -352,6 +372,11 @@ export default function PublicReservedSeatSelector({
     ? 0
     : checkoutSubtotal + platformFeeCents;
 
+  const totalAddOnQuantity = selectedAddOns.reduce(
+    (sum, addOn) => sum + addOn.quantity,
+    0,
+  );
+
   function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
       ...current,
@@ -363,8 +388,14 @@ export default function PublicReservedSeatSelector({
     }));
   }
 
-  function updateAddOnQuantity(nextQuantity: number) {
-    setAddOnQuantity(normaliseAddOnQuantity(nextQuantity, checkoutAddOn));
+  function updateAddOnQuantity(
+    addOn: PublicEventCheckoutAddOn,
+    nextQuantity: number,
+  ) {
+    setAddOnQuantities((current) => ({
+      ...current,
+      [addOn.type]: normaliseAddOnQuantity(nextQuantity, addOn),
+    }));
   }
 
   function toggleSeat(seat: Seat) {
@@ -688,17 +719,24 @@ export default function PublicReservedSeatSelector({
                 </small>
               </label>
 
-              {checkoutAddOn ? (
+              {checkoutAddOns.length > 0 ? (
                 <>
                   <div style={styles.summarySpacer} />
 
-                  <PublicEventCheckoutAddOnSelector
-                    addOn={checkoutAddOn}
-                    currency={currency}
-                    quantity={safeAddOnQuantity}
-                    disabled={hasAccessCode}
-                    onQuantityChange={updateAddOnQuantity}
-                  />
+                  <div style={styles.addOnStack}>
+                    {checkoutAddOns.map((addOn) => (
+                      <PublicEventCheckoutAddOnSelector
+                        key={addOn.type}
+                        addOn={addOn}
+                        currency={currency}
+                        quantity={safeAddOnQuantities[addOn.type] || 0}
+                        disabled={hasAccessCode}
+                        onQuantityChange={(nextQuantity) =>
+                          updateAddOnQuantity(addOn, nextQuantity)
+                        }
+                      />
+                    ))}
+                  </div>
                 </>
               ) : null}
             </div>
@@ -850,9 +888,9 @@ export default function PublicReservedSeatSelector({
               <div style={styles.totalBox}>
                 <span>
                   Ticket total
-                  {safeAddOnQuantity > 0
-                    ? ` • ${safeAddOnQuantity} add-on entr${
-                        safeAddOnQuantity === 1 ? "y" : "ies"
+                  {totalAddOnQuantity > 0
+                    ? ` • ${totalAddOnQuantity} add-on entr${
+                        totalAddOnQuantity === 1 ? "y" : "ies"
                       }`
                     : ""}
                 </span>
@@ -861,17 +899,27 @@ export default function PublicReservedSeatSelector({
                 </strong>
               </div>
 
-              {checkoutAddOn && safeAddOnQuantity > 0 ? (
-                <div style={styles.addOnSummaryRow}>
-                  <span>
-                    {checkoutAddOn.title || "Heads or Tails"} ×{" "}
-                    {safeAddOnQuantity}
-                  </span>
-                  <strong>
-                    {currency} {moneyFromCents(addOnTotal)}
-                  </strong>
-                </div>
-              ) : null}
+              {checkoutAddOns.map((addOn) => {
+                const quantity = safeAddOnQuantities[addOn.type] || 0;
+
+                if (quantity <= 0) {
+                  return null;
+                }
+
+                return (
+                  <div key={addOn.type} style={styles.addOnSummaryRow}>
+                    <span>
+                      {addOn.title || "Event add-on"} × {quantity}
+                    </span>
+                    <strong>
+                      {currency}{" "}
+                      {moneyFromCents(
+                        Number(addOn.entryPriceCents || 0) * quantity,
+                      )}
+                    </strong>
+                  </div>
+                );
+              })}
 
               {hasAccessCode ? (
                 <div style={styles.accessCodeNotice}>
@@ -899,7 +947,13 @@ export default function PublicReservedSeatSelector({
                 </label>
               )}
 
-              <div style={hasAccessCode ? styles.totalBoxComplimentary : styles.totalBoxStrong}>
+              <div
+                style={
+                  hasAccessCode
+                    ? styles.totalBoxComplimentary
+                    : styles.totalBoxStrong
+                }
+              >
                 <span>{hasAccessCode ? "Due after valid code" : "Total today"}</span>
                 <strong>
                   {currency} {moneyFromCents(totalTodayCents)}
@@ -945,43 +999,43 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr)",
-    gap: 20,
-    alignItems: "stretch",
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(340px, 0.8fr)",
+    gap: 18,
+    alignItems: "start",
     width: "100%",
     minWidth: 0,
   },
+
   mapPanel: {
-    display: "flex",
-    flexDirection: "column",
-    padding: 20,
+    padding: "clamp(14px, 4vw, 18px)",
     borderRadius: 24,
-    background: "#ffffff",
+    background: "#f8fafc",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.05)",
-    width: "100%",
-    boxSizing: "border-box",
     minWidth: 0,
+    overflow: "hidden",
   },
+
   mapHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
+    gap: 14,
     flexWrap: "wrap",
-    marginBottom: 16,
+    alignItems: "flex-start",
+    marginBottom: 14,
   },
+
   mapTitle: {
     margin: 0,
     color: "#111827",
-    fontSize: 26,
+    fontSize: "clamp(24px, 5vw, 30px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
     fontWeight: 950,
-    letterSpacing: "-0.03em",
   },
+
   mapText: {
     margin: "6px 0 0",
     color: "#64748b",
@@ -989,163 +1043,194 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontWeight: 700,
   },
+
   legend: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     flexWrap: "wrap",
-    color: "#334155",
-    fontSize: 12,
-    fontWeight: 900,
     alignItems: "center",
+    justifyContent: "flex-end",
   },
+
   legendItem: {
     display: "inline-flex",
     gap: 6,
     alignItems: "center",
+    padding: "7px 9px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 850,
     whiteSpace: "nowrap",
   },
+
   legendDot: {
     width: 10,
     height: 10,
     borderRadius: 999,
-    border: "1px solid rgba(15,23,42,0.12)",
+    border: "1px solid rgba(15,23,42,0.14)",
   },
+
   stageWrap: {
+    display: "flex",
+    justifyContent: "center",
+    margin: "12px 0 14px",
+    minWidth: 0,
+  },
+
+  stage: {
+    width: "min(100%, 620px)",
+    minWidth: 320,
+    padding: "10px 14px",
+    borderRadius: "16px 16px 34px 34px",
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
+    color: "#fef3c7",
+    border: "1px solid rgba(250,204,21,0.28)",
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.16em",
+    boxShadow: "0 12px 28px rgba(15,23,42,0.16)",
+  },
+
+  seatMapScroll: {
+    width: "100%",
     overflowX: "auto",
     overflowY: "hidden",
-    marginBottom: 16,
-  },
-  stage: {
-    width: "100%",
-    minWidth: 760,
-    padding: "10px 14px",
-    borderRadius: 14,
-    background: "#111827",
-    color: "#ffffff",
-    textAlign: "center",
-    fontWeight: 950,
-    letterSpacing: "0.14em",
-    fontSize: 12,
-    boxSizing: "border-box",
-  },
-  seatMapScroll: {
-    maxHeight: 620,
-    overflow: "auto",
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minWidth: 0,
-    WebkitOverflowScrolling: "touch",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
   },
+
   groupBlock: {
     display: "grid",
     gap: 10,
-    minWidth: "max-content",
-    marginBottom: 22,
+    minWidth: 620,
   },
+
   groupTitle: {
-    margin: 0,
+    margin: "8px 0 2px",
     color: "#334155",
     fontSize: 13,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  rowLine: {
+    display: "grid",
+    gridTemplateColumns: "76px 1fr",
+    gap: 10,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  rowButton: {
+    minHeight: 36,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 8px",
+    borderRadius: 12,
+    background: "#f1f5f9",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
+  },
+
+  seatLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    minHeight: 42,
+    minWidth: 0,
+  },
+
+  seatWrap: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  aisle: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 64,
+    height: 28,
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#94a3b8",
+    border: "1px dashed #cbd5e1",
+    fontSize: 10,
     fontWeight: 900,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
-  rowLine: {
-    display: "grid",
-    gridTemplateColumns: "80px 1fr",
-    gap: 10,
-    alignItems: "center",
-  },
-  rowButton: {
-    minHeight: 36,
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 12,
-    fontWeight: 900,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    whiteSpace: "nowrap",
-  },
-  seatLine: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    flexWrap: "nowrap",
-  },
-  seatWrap: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  aisle: {
-    width: 52,
-    height: 30,
-    borderRadius: 9,
-    border: "1px dashed #f59e0b",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 9,
-    fontWeight: 900,
-    color: "#92400e",
-    background: "#fef3c7",
-    margin: "0 6px",
-  },
+
   helperNotice: {
     display: "flex",
+    gap: 8,
     alignItems: "center",
-    gap: 10,
-    marginTop: 14,
-    padding: "13px 15px",
+    marginTop: 12,
+    padding: 12,
     borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    color: "#475569",
+    background: "#eff6ff",
+    color: "#1e3a8a",
+    border: "1px solid #bfdbfe",
     fontSize: 13,
-    fontWeight: 800,
     lineHeight: 1.4,
+    fontWeight: 800,
   },
+
   helperIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     width: 22,
     height: 22,
     borderRadius: 999,
-    border: "1px solid #cbd5e1",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flex: "0 0 auto",
-    color: "#0f172a",
-    fontSize: 13,
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    fontWeight: 950,
+    flexShrink: 0,
   },
+
   cart: {
-    padding: 18,
-    borderRadius: 28,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
-    boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
-    width: "100%",
-    boxSizing: "border-box",
+    position: "sticky",
+    top: 18,
+    padding: "clamp(14px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#111827",
+    color: "#ffffff",
+    boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
     minWidth: 0,
   },
+
   cartGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)",
     gap: 18,
-    alignItems: "start",
+    minWidth: 0,
   },
+
   cartTop: {
     display: "flex",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "center",
     marginBottom: 14,
   },
+
   cartEyebrow: {
     margin: 0,
     color: "#facc15",
@@ -1154,69 +1239,83 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.14em",
   },
+
   cartTitle: {
-    margin: "4px 0 0",
-    color: "#ffffff",
-    fontSize: 26,
+    margin: "5px 0 0",
+    fontSize: "clamp(23px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
     fontWeight: 950,
-    letterSpacing: "-0.03em",
   },
+
   countBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#111827",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 42,
+    height: 42,
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.16)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
     fontWeight: 950,
-    fontSize: 18,
-    flex: "0 0 auto",
   },
+
+  summarySpacer: {
+    height: 16,
+  },
+
+  addOnStack: {
+    display: "grid",
+    gap: 12,
+  },
+
   emptyBox: {
-    padding: 22,
-    borderRadius: 22,
-    border: "1px dashed rgba(255,255,255,0.18)",
-    background: "rgba(255,255,255,0.04)",
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px dashed rgba(255,255,255,0.22)",
+    background: "rgba(255,255,255,0.05)",
     textAlign: "center",
   },
+
   emptyTicketImage: {
-    width: 150,
-    height: 96,
+    width: 78,
+    height: 78,
     objectFit: "contain",
-    display: "block",
-    margin: "0 auto 12px",
-    filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.32))",
+    opacity: 0.82,
   },
+
   emptyTitle: {
-    margin: "8px 0 0",
+    margin: 0,
     color: "#ffffff",
     fontWeight: 950,
   },
+
   emptyText: {
-    margin: "4px 0 0",
+    margin: 0,
     color: "#94a3b8",
     fontSize: 13,
-    lineHeight: 1.4,
+    lineHeight: 1.45,
   },
+
   cartList: {
     display: "grid",
-    gap: 13,
-    maxHeight: "58vh",
-    overflow: "auto",
-    paddingRight: 4,
-    WebkitOverflowScrolling: "touch",
+    gap: 12,
   },
+
   cartItem: {
     display: "grid",
     gap: 10,
     padding: 14,
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 20,
-    background: "rgba(255,255,255,0.055)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
     minWidth: 0,
   },
+
   cartItemHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1224,38 +1323,45 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+
   cartSeatLabel: {
     margin: 0,
     color: "#ffffff",
-    fontWeight: 950,
     fontSize: 15,
-    overflowWrap: "anywhere",
-  },
-  cartPrice: {
-    margin: "3px 0 0",
-    color: "#facc15",
     fontWeight: 950,
-    fontSize: 13,
+    lineHeight: 1.25,
   },
+
+  cartPrice: {
+    margin: "4px 0 0",
+    color: "#fde68a",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
   removeButton: {
-    border: "1px solid rgba(248,113,113,0.35)",
-    background: "rgba(127,29,29,0.25)",
+    border: "1px solid rgba(254,202,202,0.28)",
+    background: "rgba(254,202,202,0.1)",
     color: "#fecaca",
     borderRadius: 999,
     padding: "7px 10px",
-    fontWeight: 900,
+    fontSize: 12,
+    fontWeight: 950,
     cursor: "pointer",
   },
+
   field: {
     display: "grid",
-    gap: 5,
+    gap: 6,
     minWidth: 0,
   },
+
   label: {
     color: "#cbd5e1",
     fontSize: 12,
-    fontWeight: 950,
+    fontWeight: 900,
   },
+
   input: {
     width: "100%",
     minHeight: 42,
@@ -1264,10 +1370,11 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 15,
     boxSizing: "border-box",
     minWidth: 0,
   },
+
   textarea: {
     width: "100%",
     padding: "10px 11px",
@@ -1275,11 +1382,12 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 15,
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
   },
+
   totalBox: {
     display: "flex",
     justifyContent: "space-between",
@@ -1293,20 +1401,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     fontSize: 18,
   },
+
   addOnSummaryRow: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
-    marginTop: 10,
+    marginTop: 8,
     padding: 12,
     borderRadius: 16,
     background: "rgba(255,255,255,0.06)",
-    color: "#fef3c7",
-    fontWeight: 900,
-    fontSize: 14,
-    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#e2e8f0",
+    border: "1px solid rgba(255,255,255,0.1)",
+    fontSize: 13,
+    fontWeight: 850,
   },
+
   totalBoxStrong: {
     display: "flex",
     justifyContent: "space-between",
@@ -1321,6 +1431,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(187,247,208,0.18)",
   },
+
   totalBoxComplimentary: {
     display: "flex",
     justifyContent: "space-between",
@@ -1335,6 +1446,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(147,197,253,0.22)",
   },
+
   feeBox: {
     display: "flex",
     gap: 10,
@@ -1348,12 +1460,14 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     lineHeight: 1.35,
   },
+
   feeSmall: {
     display: "block",
     marginTop: 4,
     color: "#cbd5e1",
     lineHeight: 1.4,
   },
+
   accessCodeBox: {
     display: "grid",
     gap: 7,
@@ -1362,6 +1476,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.14)",
   },
+
   accessCodeLabel: {
     color: "#facc15",
     fontSize: 12,
@@ -1369,25 +1484,28 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   accessCodeInput: {
     width: "100%",
-    minHeight: 42,
-    padding: "10px 11px",
+    minHeight: 44,
+    padding: "10px 12px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 850,
     boxSizing: "border-box",
     textTransform: "uppercase",
   },
+
   accessCodeHelp: {
     color: "#cbd5e1",
     lineHeight: 1.4,
     fontSize: 12,
     fontWeight: 750,
   },
+
   accessCodeNotice: {
     display: "grid",
     gap: 4,
@@ -1401,6 +1519,16 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 800,
   },
+
+  errorBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontWeight: 900,
+  },
+
   checkout: {
     marginTop: 14,
     width: "100%",
@@ -1412,16 +1540,5 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     fontSize: 15,
     boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
-  },
-  errorBox: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 14,
-    background: "#fee2e2",
-    color: "#991b1b",
-    fontWeight: 900,
-  },
-  summarySpacer: {
-    height: 16,
   },
 };
