@@ -8,7 +8,7 @@ export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 export type SeatingLayoutJson = Record<string, number>;
 export type TableNamesJson = Record<string, string>;
 
-export type EventFundraisingAddOnType = "heads_or_tails";
+export type EventFundraisingAddOnType = "heads_or_tails" | "higher_or_lower";
 
 export type EventFundraisingAddOn = {
   id: string;
@@ -227,6 +227,30 @@ export type UpdateEventInput = {
   askMenuChoice?: boolean;
 };
 
+const EVENT_FUNDRAISING_ADD_ON_DEFAULTS: Record<
+  EventFundraisingAddOnType,
+  {
+    title: string;
+    description: string;
+    instructions: string;
+  }
+> = {
+  heads_or_tails: {
+    title: "Heads or Tails",
+    description:
+      "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains.",
+    instructions:
+      "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins.",
+  },
+  higher_or_lower: {
+    title: "Higher or Lower",
+    description:
+      "Join our Higher or Lower fundraiser on the night and see how long you can stay in the game.",
+    instructions:
+      "Guess whether the next card, number or total will be higher or lower. Keep playing while you are correct.",
+  },
+};
+
 function normaliseEventType(value: string | null | undefined): EventType {
   if (value === "reserved_seating" || value === "tables") return value;
   return "general_admission";
@@ -300,6 +324,16 @@ function normaliseNullablePositiveInteger(
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return null;
   return Math.floor(number);
+}
+
+function normaliseEventFundraisingAddOnType(
+  value: string | null | undefined,
+): EventFundraisingAddOnType | null {
+  if (value === "heads_or_tails" || value === "higher_or_lower") {
+    return value;
+  }
+
+  return null;
 }
 
 function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
@@ -405,21 +439,24 @@ function normaliseEventFundraisingAddOnsJson(
 
   value.forEach((item, index) => {
     const addOn = item as Partial<EventFundraisingAddOn>;
-    const type = String(addOn.type || "").trim();
+    const type = normaliseEventFundraisingAddOnType(
+      String(addOn.type || "").trim(),
+    );
 
-    if (type !== "heads_or_tails") {
+    if (!type) {
       return;
     }
 
-    const title = String(addOn.title || "Heads or Tails").trim();
+    const defaults = EVENT_FUNDRAISING_ADD_ON_DEFAULTS[type];
+    const title = String(addOn.title || defaults.title).trim();
 
     addOns.push({
       id: String(addOn.id || `event-addon-${type}-${index + 1}`),
       type,
       enabled: Boolean(addOn.enabled),
-      title: title || "Heads or Tails",
-      description: String(addOn.description || "").trim(),
-      instructions: String(addOn.instructions || "").trim(),
+      title: title || defaults.title,
+      description: String(addOn.description || defaults.description).trim(),
+      instructions: String(addOn.instructions || defaults.instructions).trim(),
       prizeTitle: String(addOn.prizeTitle || "").trim(),
       entryPriceCents: normaliseNonNegativeInteger(addOn.entryPriceCents, 0),
       collectAtCheckout: Boolean(addOn.collectAtCheckout),
