@@ -323,6 +323,7 @@ async function saveHeadsOrTailsAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}/addons?saved=heads-or-tails`);
 }
+
 export default async function EventFundraisingAddOnsPage({
   params,
   searchParams,
@@ -741,7 +742,11 @@ export default async function EventFundraisingAddOnsPage({
                 </div>
               </div>
 
-              <button type="submit" className="primaryButton" style={styles.primaryButton}>
+              <button
+                type="submit"
+                className="primaryButton"
+                style={styles.primaryButton}
+              >
                 Save add-on settings
               </button>
             </section>
@@ -833,6 +838,14 @@ const responsiveStyles = `
     align-items: stretch !important;
   }
 
+  .event-addons-page .topActions {
+    width: 100% !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
   .event-addons-page .primaryButton,
   .event-addons-page .primaryLink,
   .event-addons-page .secondaryButton,
@@ -867,6 +880,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -997,10 +1011,17 @@ const styles: Record<string, CSSProperties> = {
 
   topActions: {
     display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
+    justifyContent: "center",
+    gap: 8,
     alignItems: "center",
-    marginBottom: 16,
+    width: "fit-content",
+    maxWidth: "100%",
+    margin: "0 auto 16px",
+    padding: 6,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.88)",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
     flexWrap: "wrap",
   },
 
@@ -1023,14 +1044,15 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
+    minHeight: 40,
+    padding: "9px 13px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#334155",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   secondaryButtonDark: {
