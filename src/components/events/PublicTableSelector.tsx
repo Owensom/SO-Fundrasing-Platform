@@ -103,7 +103,6 @@ function normaliseAddOnQuantity(
   addOn?: PublicEventCheckoutAddOn | null,
 ) {
   const cleanQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-
   const max = Number(addOn?.maxEntriesPerBooking || 0);
 
   if (Number.isFinite(max) && max > 0) {
@@ -111,6 +110,23 @@ function normaliseAddOnQuantity(
   }
 
   return cleanQuantity;
+}
+
+function normaliseAddOnQuantities(input: {
+  checkoutAddOns: PublicEventCheckoutAddOn[];
+  addOnQuantities: Record<string, number>;
+  hasAccessCode: boolean;
+}) {
+  if (input.hasAccessCode) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    input.checkoutAddOns.map((addOn) => [
+      addOn.type,
+      normaliseAddOnQuantity(input.addOnQuantities[addOn.type] || 0, addOn),
+    ]),
+  );
 }
 
 function tableSortValue(value: string | null | undefined) {
@@ -451,7 +467,6 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
-
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -460,7 +475,7 @@ export default function PublicTableSelector({
   platformFeePercent = 0,
   menuOptions = [],
   seatingLayoutJson = {},
-  checkoutAddOn = null,
+  checkoutAddOns = [],
 }: {
   eventId: string;
   seats: Seat[];
@@ -468,56 +483,66 @@ export default function PublicTableSelector({
   currency: string;
   platformFeePercent?: number;
   menuOptions?: string[];
-  seatingLayoutJson?: SeatingLayoutJson | null;
-  checkoutAddOn?: PublicEventCheckoutAddOn | null;
+  seatingLayoutJson?: SeatingLayoutJson;
+  checkoutAddOns?: PublicEventCheckoutAddOn[];
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
-  const [addOnQuantity, setAddOnQuantity] = useState(0);
+  const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>(
+    {},
+  );
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [activeTableIndex, setActiveTableIndex] = useState(0);
 
   const cleanedAccessCode = cleanAccessCode(accessCode);
   const hasAccessCode = cleanedAccessCode.length > 0;
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
-  const groupedSeats = useMemo(() => {
-    const groups = new Map<string, Seat[]>();
+  const tableSeats = useMemo(
+    () => seats.filter((seat) => seat.table_number),
+    [seats],
+  );
 
-    for (const seat of seats.filter((seat) => seat.table_number)) {
-      const label = groupLabel(seat);
-      const existing = groups.get(label) || [];
-      existing.push(seat);
-      groups.set(label, existing);
-    }
+  const groupedTables = useMemo(() => {
+    return tableSeats.reduce<Record<string, Seat[]>>((groups, seat) => {
+      const key = seat.table_number || "Unassigned";
+      groups[key] = groups[key] || [];
+      groups[key].push(seat);
+      return groups;
+    }, {});
+  }, [tableSeats]);
 
-    return Array.from(groups.entries())
-      .map(([label, groupSeats]) => ({
-        label,
-        tableNumber: groupSeats[0]?.table_number || "",
-        seats: groupSeats.slice().sort(sortSeatNumber),
-      }))
-      .sort((a, b) => {
-        const aNumber = tableSortValue(a.tableNumber);
-        const bNumber = tableSortValue(b.tableNumber);
+  const tableEntries = useMemo(() => {
+    return Object.entries(groupedTables)
+      .sort(([a], [b]) => {
+        const aSort = tableSortValue(a);
+        const bSort = tableSortValue(b);
 
-        if (aNumber !== bNumber) return aNumber - bNumber;
-        return a.label.localeCompare(b.label);
+        if (aSort !== bSort) return aSort - bSort;
+        return a.localeCompare(b);
+      })
+      .map(([tableNumber, currentSeats]) => {
+        const sortedSeats = currentSeats.slice().sort(sortSeatNumber);
+        const tableLabel = groupLabel(sortedSeats[0]);
+
+        return {
+          tableNumber,
+          tableLabel,
+          seats: sortedSeats,
+          shape: getTableShapeForGroup({
+            seatingLayoutJson,
+            tableNumber,
+            tableLabel,
+            seatCount: sortedSeats.length,
+          }),
+        };
       });
-  }, [seats]);
-
-  const safeActiveTableIndex =
-    groupedSeats.length === 0
-      ? 0
-      : Math.min(activeTableIndex, groupedSeats.length - 1);
-
-  const activeTable = groupedSeats[safeActiveTableIndex] || null;
+  }, [groupedTables, seatingLayoutJson]);
 
   const cartSeats = useMemo(() => {
     return cartItems
@@ -537,29 +562,31 @@ export default function PublicTableSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
-  const safeAddOnQuantity = normaliseAddOnQuantity(
-    hasAccessCode ? 0 : addOnQuantity,
-    checkoutAddOn,
-  );
+  const safeAddOnQuantities = normaliseAddOnQuantities({
+    checkoutAddOns,
+    addOnQuantities,
+    hasAccessCode,
+  });
 
-  const selectedAddOns: PublicEventCheckoutAddOnSelection[] =
-    checkoutAddOn && safeAddOnQuantity > 0
-      ? [
-          {
-            type: checkoutAddOn.type,
-            quantity: safeAddOnQuantity,
-          },
-        ]
-      : [];
+  const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
+    .map((addOn) => ({
+      type: addOn.type,
+      quantity: safeAddOnQuantities[addOn.type] || 0,
+    }))
+    .filter((addOn) => addOn.quantity > 0);
 
   const ticketTotal = cartSeats.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
 
-  const addOnTotal = checkoutAddOn
-    ? Number(checkoutAddOn.entryPriceCents || 0) * safeAddOnQuantity
-    : 0;
+  const addOnTotal = checkoutAddOns.reduce(
+    (sum, addOn) =>
+      sum +
+      Number(addOn.entryPriceCents || 0) *
+        Number(safeAddOnQuantities[addOn.type] || 0),
+    0,
+  );
 
   const checkoutSubtotal = ticketTotal + addOnTotal;
 
@@ -575,16 +602,10 @@ export default function PublicTableSelector({
     ? 0
     : checkoutSubtotal + platformFeeCents;
 
-  function getSeatTicketType(seat: Seat) {
-    const cartTicketTypeId = cartItems.find(
-      (item) => item.seatId === seat.id,
-    )?.ticketTypeId;
-
-    const ticketTypeId =
-      cartTicketTypeId || seat.ticket_type_id || ticketTypes[0]?.id;
-
-    return ticketTypes.find((ticketType) => ticketType.id === ticketTypeId);
-  }
+  const totalAddOnQuantity = selectedAddOns.reduce(
+    (sum, addOn) => sum + addOn.quantity,
+    0,
+  );
 
   function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
@@ -597,19 +618,28 @@ export default function PublicTableSelector({
     }));
   }
 
-  function updateAddOnQuantity(nextQuantity: number) {
-    setAddOnQuantity(normaliseAddOnQuantity(nextQuantity, checkoutAddOn));
+  function updateAddOnQuantity(
+    addOn: PublicEventCheckoutAddOn,
+    nextQuantity: number,
+  ) {
+    setAddOnQuantities((current) => ({
+      ...current,
+      [addOn.type]: normaliseAddOnQuantity(nextQuantity, addOn),
+    }));
   }
 
   function toggleSeat(seat: Seat) {
     if (seat.status !== "available") return;
 
     setCartItems((current) => {
-      const exists = current.find((item) => item.seatId === seat.id);
+      const existing = current.find((item) => item.seatId === seat.id);
 
-      if (exists) return current.filter((item) => item.seatId !== seat.id);
+      if (existing) {
+        return current.filter((item) => item.seatId !== seat.id);
+      }
 
       const ticketTypeId = seat.ticket_type_id || ticketTypes[0]?.id || "";
+
       if (!ticketTypeId) return current;
 
       return [...current, { seatId: seat.id, ticketTypeId }];
@@ -626,33 +656,6 @@ export default function PublicTableSelector({
 
   function removeSeat(seatId: string) {
     setCartItems((current) => current.filter((item) => item.seatId !== seatId));
-  }
-
-  function selectAvailableTable(groupSeats: Seat[]) {
-    setCartItems((current) => {
-      const existingIds = new Set(current.map((item) => item.seatId));
-
-      const additions = groupSeats
-        .filter((seat) => seat.status === "available")
-        .filter((seat) => !existingIds.has(seat.id))
-        .map((seat) => ({
-          seatId: seat.id,
-          ticketTypeId: seat.ticket_type_id || ticketTypes[0]?.id || "",
-        }))
-        .filter((item) => item.ticketTypeId);
-
-      return [...current, ...additions];
-    });
-  }
-
-  function goToPreviousTable() {
-    setActiveTableIndex((current) => Math.max(0, current - 1));
-  }
-
-  function goToNextTable() {
-    setActiveTableIndex((current) =>
-      Math.min(groupedSeats.length - 1, current + 1),
-    );
   }
 
   async function startCheckout() {
@@ -686,6 +689,7 @@ export default function PublicTableSelector({
           accessCode: cleanedAccessCode || null,
           addOns: selectedAddOns,
           items: cartItems.map((item) => {
+            const seat = seats.find((currentSeat) => currentSeat.id === item.seatId);
             const data = guestData[item.seatId] || getDefaultGuest();
 
             return {
@@ -695,6 +699,7 @@ export default function PublicTableSelector({
               dietary: data.dietaryRequirements,
               dietaryRequirements: data.dietaryRequirements,
               menuChoice: data.menuChoice,
+              tableName: seat?.table_name || "",
             };
           }),
         }),
@@ -708,7 +713,9 @@ export default function PublicTableSelector({
 
       window.location.href = data.url;
     } catch (error) {
-      setCheckoutError(error instanceof Error ? error.message : "Checkout failed.");
+      setCheckoutError(
+        error instanceof Error ? error.message : "Checkout failed.",
+      );
       setIsCheckingOut(false);
     }
   }
@@ -722,21 +729,12 @@ export default function PublicTableSelector({
               grid-template-columns: 1fr !important;
             }
 
-            .public-table-selector-map-panel,
-            .public-table-selector-cart {
-              min-height: auto !important;
-            }
-
             .public-table-selector-cart {
               position: static !important;
             }
 
             .public-table-selector-cart-grid {
               grid-template-columns: 1fr !important;
-            }
-
-            .public-table-selector-map-panel {
-              padding: 16px !important;
             }
           }
 
@@ -747,33 +745,25 @@ export default function PublicTableSelector({
               border-radius: 20px !important;
             }
 
-            .public-table-selector-table-header {
-              grid-template-columns: 1fr !important;
-            }
-
-            .public-table-selector-table-actions {
-              display: grid !important;
-              grid-template-columns: 1fr 1fr !important;
-              justify-content: stretch !important;
-              width: 100% !important;
-            }
-
-            .public-table-selector-table-actions select {
-              grid-column: 1 / -1 !important;
-              width: 100% !important;
-              max-width: none !important;
-            }
-
-            .public-table-selector-table-actions button {
-              width: 100% !important;
-            }
-
-            .public-table-selector-select-table {
-              grid-column: 1 / -1 !important;
-            }
-
-            .public-table-selector-desktop-title {
+            .public-table-selector-map-title,
+            .public-table-selector-cart-title {
               font-size: 24px !important;
+            }
+
+            .public-table-selector-table-scroll {
+              padding: 10px !important;
+              border-radius: 14px !important;
+            }
+
+            .public-table-selector-table-card {
+              padding: 12px !important;
+              border-radius: 18px !important;
+            }
+
+            .public-table-selector-table-area {
+              transform: scale(0.82);
+              transform-origin: top center;
+              margin-bottom: -52px !important;
             }
           }
         `}
@@ -783,189 +773,102 @@ export default function PublicTableSelector({
         <div className="public-table-selector-map-panel" style={styles.mapPanel}>
           <div style={styles.mapHeader}>
             <div>
-              <h3 className="public-table-selector-desktop-title" style={styles.mapTitle}>
-                Table layout
+              <h3 className="public-table-selector-map-title" style={styles.mapTitle}>
+                Table plan
               </h3>
               <p style={styles.mapText}>
-                Choose a table, then select individual seats at that table.
+                Choose available seats from the table layout below.
               </p>
             </div>
 
             <div style={styles.legend}>
               <Legend color="#16a34a" label="Available" />
               <Legend color="#2563eb" label="Selected" />
+              <Legend color="#64748b" label="Blocked" />
               <Legend color="#f59e0b" label="Reserved" />
               <Legend color="#ef4444" label="Sold" />
-              <Legend color="#64748b" label="Blocked" />
             </div>
           </div>
 
-          {groupedSeats.length === 0 || !activeTable ? (
-            <div style={styles.emptyMap}>
-              No table seats are available for this event yet.
-            </div>
-          ) : (
-            <div style={styles.singleTablePanel}>
-              {(() => {
-                const availableCount = activeTable.seats.filter(
-                  (seat) => seat.status === "available",
-                ).length;
-
-                const selectedCount = activeTable.seats.filter((seat) =>
-                  selectedSeatIds.includes(seat.id),
-                ).length;
-
-                const tableShape = getTableShapeForGroup({
-                  seatingLayoutJson,
-                  tableNumber: activeTable.tableNumber,
-                  tableLabel: activeTable.label,
-                  seatCount: activeTable.seats.length,
-                });
-
-                return (
-                  <>
-                    <div
-                      className="public-table-selector-table-header"
-                      style={styles.singleTableHeader}
-                    >
+          <div className="public-table-selector-table-scroll" style={styles.tableScroll}>
+            {tableEntries.length === 0 ? (
+              <div style={styles.emptyLight}>
+                <strong>No table seats available yet</strong>
+                <p>Tables may not have been released yet.</p>
+              </div>
+            ) : (
+              <div style={styles.tableGrid}>
+                {tableEntries.map((table) => (
+                  <section
+                    key={table.tableNumber}
+                    className="public-table-selector-table-card"
+                    style={styles.tableCard}
+                  >
+                    <div style={styles.tableHeader}>
                       <div>
-                        <p style={styles.tableNumber}>
-                          Table {safeActiveTableIndex + 1} of {groupedSeats.length}
-                        </p>
-                        <h4 style={styles.groupTitle}>{activeTable.label}</h4>
-                        <p style={styles.groupSub}>
-                          {availableCount} available from {activeTable.seats.length}
-                          {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
+                        <h4 style={styles.tableTitle}>{table.tableLabel}</h4>
+                        <p style={styles.tableMeta}>
+                          {table.seats.length} seat
+                          {table.seats.length === 1 ? "" : "s"} •{" "}
+                          {table.shape === "round"
+                            ? "Round"
+                            : table.shape === "square"
+                              ? "Square"
+                              : "Rectangle"}{" "}
+                          table
                         </p>
                       </div>
+                    </div>
 
-                      <div
-                        className="public-table-selector-table-actions"
-                        style={styles.tableActions}
-                      >
-                        <select
-                          value={safeActiveTableIndex}
-                          onChange={(event) =>
-                            setActiveTableIndex(Number(event.target.value))
-                          }
-                          style={styles.tableSelect}
-                        >
-                          {groupedSeats.map((group, index) => (
-                            <option
-                              key={`${group.tableNumber}-${group.label}`}
-                              value={index}
-                            >
-                              Table {group.tableNumber || "—"} — {group.label}
-                            </option>
-                          ))}
-                        </select>
+                    <div
+                      className="public-table-selector-table-area"
+                      style={tableAreaStyle(table.shape)}
+                    >
+                      <div style={tablePlateStyle(table.shape)}>
+                        <span style={styles.tablePlateLabel}>
+                          {table.tableLabel}
+                        </span>
+                      </div>
 
-                        <button
-                          type="button"
-                          onClick={goToPreviousTable}
-                          disabled={safeActiveTableIndex === 0}
-                          style={{
-                            ...styles.smallNavButton,
-                            opacity: safeActiveTableIndex === 0 ? 0.5 : 1,
-                            cursor:
-                              safeActiveTableIndex === 0 ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          Previous
-                        </button>
+                      {table.seats.map((seat, index) => {
+                        const selected = selectedSeatIds.includes(seat.id);
+                        const colours = seatColours(seat.status, selected);
+                        const ticketType = ticketTypes.find(
+                          (item) => item.id === seat.ticket_type_id,
+                        );
 
-                        <button
-                          type="button"
-                          onClick={goToNextTable}
-                          disabled={safeActiveTableIndex >= groupedSeats.length - 1}
-                          style={{
-                            ...styles.smallNavButton,
-                            opacity:
-                              safeActiveTableIndex >= groupedSeats.length - 1
-                                ? 0.5
-                                : 1,
-                            cursor:
-                              safeActiveTableIndex >= groupedSeats.length - 1
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
-                        >
-                          Next
-                        </button>
-
-                        {availableCount > 0 && (
+                        return (
                           <button
+                            key={seat.id}
                             type="button"
-                            onClick={() => selectAvailableTable(activeTable.seats)}
-                            className="public-table-selector-select-table"
-                            style={styles.selectTableButton}
+                            onClick={() => toggleSeat(seat)}
+                            disabled={seat.status !== "available"}
+                            title={seatHoverLabel(seat, ticketType, currency)}
+                            style={{
+                              ...styles.tableSeat,
+                              ...seatPosition(
+                                index,
+                                table.seats.length,
+                                table.shape,
+                              ),
+                              ...colours,
+                            }}
                           >
-                            Select table
+                            {seat.seat_number || index + 1}
                           </button>
-                        )}
-                      </div>
+                        );
+                      })}
                     </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
 
-                    <div style={styles.tableScroll}>
-                      <div style={tableAreaStyle(tableShape)}>
-                        <div style={tablePlateStyle(tableShape)}>
-                          <span style={styles.tablePlateTop}>
-                            Table {activeTable.tableNumber || "—"}
-                          </span>
-                          <strong style={styles.tablePlateName}>
-                            {activeTable.label}
-                          </strong>
-                        </div>
-
-                        {activeTable.seats.map((seat, index) => {
-                          const selected = selectedSeatIds.includes(seat.id);
-                          const unavailable = seat.status !== "available";
-                          const colours = seatColours(seat.status, selected);
-                          const position = seatPosition(
-                            index,
-                            activeTable.seats.length,
-                            tableShape,
-                          );
-
-                          return (
-                            <button
-                              key={seat.id}
-                              type="button"
-                              disabled={unavailable}
-                              onClick={() => toggleSeat(seat)}
-                              title={seatHoverLabel(
-                                seat,
-                                getSeatTicketType(seat),
-                                currency,
-                              )}
-                              style={{
-                                ...styles.seatButton,
-                                ...position,
-                                background: colours.background,
-                                color: colours.color,
-                                border: colours.border,
-                                opacity: colours.opacity,
-                                cursor: unavailable ? "not-allowed" : "pointer",
-                                boxShadow: colours.boxShadow,
-                              }}
-                            >
-                              {seat.seat_number}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div style={styles.helperNotice}>
-                      <span style={styles.helperIcon}>ⓘ</span>
-                      Tap a seat to select. Selected seats will appear in your
-                      basket.
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          )}
+          <div style={styles.helperNotice}>
+            <span style={styles.helperIcon}>ⓘ</span>
+            On smaller screens, swipe across the table plan to view all seats.
+          </div>
         </div>
 
         <aside className="public-table-selector-cart" style={styles.cart}>
@@ -995,17 +898,24 @@ export default function PublicTableSelector({
                 </small>
               </label>
 
-              {checkoutAddOn ? (
+              {checkoutAddOns.length > 0 ? (
                 <>
                   <div style={styles.summarySpacer} />
 
-                  <PublicEventCheckoutAddOnSelector
-                    addOn={checkoutAddOn}
-                    currency={currency}
-                    quantity={safeAddOnQuantity}
-                    disabled={hasAccessCode}
-                    onQuantityChange={updateAddOnQuantity}
-                  />
+                  <div style={styles.addOnStack}>
+                    {checkoutAddOns.map((addOn) => (
+                      <PublicEventCheckoutAddOnSelector
+                        key={addOn.type}
+                        addOn={addOn}
+                        currency={currency}
+                        quantity={safeAddOnQuantities[addOn.type] || 0}
+                        disabled={hasAccessCode}
+                        onQuantityChange={(nextQuantity) =>
+                          updateAddOnQuantity(addOn, nextQuantity)
+                        }
+                      />
+                    ))}
+                  </div>
                 </>
               ) : null}
             </div>
@@ -1014,7 +924,9 @@ export default function PublicTableSelector({
               <div style={styles.cartTop}>
                 <div>
                   <p style={styles.cartEyebrow}>Booking summary</p>
-                  <h3 style={styles.cartTitle}>Your tickets</h3>
+                  <h3 className="public-table-selector-cart-title" style={styles.cartTitle}>
+                    Your table seats
+                  </h3>
                 </div>
 
                 <div style={styles.countBadge}>{cartSeats.length}</div>
@@ -1028,9 +940,9 @@ export default function PublicTableSelector({
                     style={styles.emptyTicketImage}
                   />
 
-                  <p style={styles.emptyTitle}>Select table seats to begin</p>
+                  <p style={styles.emptyTitle}>Select seats to begin</p>
                   <p style={styles.emptyText}>
-                    Your selected seats and guest details will appear here.
+                    Your selected table seats and guest details will appear here.
                   </p>
                 </div>
               ) : (
@@ -1151,13 +1063,14 @@ export default function PublicTableSelector({
                   })}
                 </div>
               )}
+                            )}
 
               <div style={styles.totalBox}>
                 <span>
                   Ticket total
-                  {safeAddOnQuantity > 0
-                    ? ` • ${safeAddOnQuantity} add-on entr${
-                        safeAddOnQuantity === 1 ? "y" : "ies"
+                  {totalAddOnQuantity > 0
+                    ? ` • ${totalAddOnQuantity} add-on entr${
+                        totalAddOnQuantity === 1 ? "y" : "ies"
                       }`
                     : ""}
                 </span>
@@ -1166,17 +1079,27 @@ export default function PublicTableSelector({
                 </strong>
               </div>
 
-              {checkoutAddOn && safeAddOnQuantity > 0 ? (
-                <div style={styles.addOnSummaryRow}>
-                  <span>
-                    {checkoutAddOn.title || "Heads or Tails"} ×{" "}
-                    {safeAddOnQuantity}
-                  </span>
-                  <strong>
-                    {currency} {moneyFromCents(addOnTotal)}
-                  </strong>
-                </div>
-              ) : null}
+              {checkoutAddOns.map((addOn) => {
+                const quantity = safeAddOnQuantities[addOn.type] || 0;
+
+                if (quantity <= 0) {
+                  return null;
+                }
+
+                return (
+                  <div key={addOn.type} style={styles.addOnSummaryRow}>
+                    <span>
+                      {addOn.title || "Event add-on"} × {quantity}
+                    </span>
+                    <strong>
+                      {currency}{" "}
+                      {moneyFromCents(
+                        Number(addOn.entryPriceCents || 0) * quantity,
+                      )}
+                    </strong>
+                  </div>
+                );
+              })}
 
               {hasAccessCode ? (
                 <div style={styles.accessCodeNotice}>
@@ -1195,7 +1118,7 @@ export default function PublicTableSelector({
                   />
                   <span>
                     <strong>I’d like to cover platform and payment costs</strong>
-                    <small>
+                    <small style={styles.feeSmall}>
                       Adds approximately {currency}{" "}
                       {moneyFromCents(estimatedCoverFeeCents)} so the organiser
                       receives the full ticket value.
@@ -1204,14 +1127,22 @@ export default function PublicTableSelector({
                 </label>
               )}
 
-              <div style={hasAccessCode ? styles.totalBoxComplimentary : styles.totalBoxStrong}>
+              <div
+                style={
+                  hasAccessCode
+                    ? styles.totalBoxComplimentary
+                    : styles.totalBoxStrong
+                }
+              >
                 <span>{hasAccessCode ? "Due after valid code" : "Total today"}</span>
                 <strong>
                   {currency} {moneyFromCents(totalTodayCents)}
                 </strong>
               </div>
 
-              {checkoutError ? <div style={styles.errorBox}>{checkoutError}</div> : null}
+              {checkoutError ? (
+                <div style={styles.errorBox}>{checkoutError}</div>
+              ) : null}
 
               <button
                 type="button"
@@ -1252,258 +1183,245 @@ function Legend({ color, label }: { color: string; label: string }) {
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(330px, 420px)",
-    gap: 22,
-    alignItems: "stretch",
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(340px, 0.8fr)",
+    gap: 18,
+    alignItems: "start",
     width: "100%",
-    maxWidth: "100%",
-  },
-  mapPanel: {
-    display: "flex",
-    flexDirection: "column",
-    padding: 18,
-    borderRadius: 28,
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
-    border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
     minWidth: 0,
-    minHeight: 650,
   },
+
+  mapPanel: {
+    padding: "clamp(14px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
   mapHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
+    gap: 14,
     flexWrap: "wrap",
-    marginBottom: 18,
+    alignItems: "flex-start",
+    marginBottom: 14,
   },
+
   mapTitle: {
     margin: 0,
-    color: "#ffffff",
-    fontSize: 26,
+    color: "#111827",
+    fontSize: "clamp(24px, 5vw, 30px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
     fontWeight: 950,
-    letterSpacing: "-0.03em",
   },
+
   mapText: {
     margin: "6px 0 0",
-    color: "#94a3b8",
+    color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
     fontWeight: 700,
   },
+
   legend: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     flexWrap: "wrap",
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: 900,
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
+
   legendItem: {
     display: "inline-flex",
     gap: 6,
     alignItems: "center",
+    padding: "7px 9px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 850,
+    whiteSpace: "nowrap",
   },
+
   legendDot: {
     width: 10,
     height: 10,
     borderRadius: 999,
+    border: "1px solid rgba(15,23,42,0.14)",
   },
-  emptyMap: {
-    padding: 22,
-    borderRadius: 20,
-    border: "1px dashed rgba(255,255,255,0.18)",
-    background: "rgba(255,255,255,0.04)",
-    color: "#cbd5e1",
-    fontWeight: 900,
-    textAlign: "center",
-  },
-  singleTablePanel: {
-    display: "grid",
-    gridTemplateRows: "auto 1fr auto",
-    gap: 18,
-    minWidth: 0,
-    flex: 1,
-  },
-  singleTableHeader: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 16,
-    alignItems: "start",
-    padding: 16,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.055)",
-    border: "1px solid rgba(255,255,255,0.1)",
-  },
-  tableActions: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-  },
-  tableSelect: {
-    minHeight: 42,
-    maxWidth: 260,
-    padding: "9px 12px",
-    borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.22)",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontWeight: 900,
-  },
-  smallNavButton: {
-    minHeight: 42,
-    border: "1px solid rgba(255,255,255,0.22)",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    padding: "9px 12px",
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-  tableNumber: {
-    margin: "0 0 4px",
-    color: "#facc15",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-  },
-  groupTitle: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.02em",
-  },
-  groupSub: {
-    margin: "5px 0 0",
-    color: "#94a3b8",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  selectTableButton: {
-    minHeight: 42,
-    border: "none",
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#111827",
-    padding: "10px 13px",
-    fontWeight: 950,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
+
   tableScroll: {
     width: "100%",
     overflowX: "auto",
     overflowY: "hidden",
-    padding: "10px 4px 14px",
-    boxSizing: "border-box",
-    display: "flex",
-    alignItems: "center",
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
   },
+
+  tableGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
+    gap: 14,
+    alignItems: "start",
+    minWidth: 0,
+  },
+
+  tableCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  tableHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  tableTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+
+  tableMeta: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
+  },
+
   tableArea: {
     position: "relative",
     margin: "0 auto",
     background:
-      "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.035))",
-    border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-    flex: "0 0 auto",
+      "radial-gradient(circle at 50% 50%, rgba(250,204,21,0.13), transparent 46%), linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
+    flexShrink: 0,
   },
+
   tablePlate: {
     position: "absolute",
     left: "50%",
     top: "50%",
     transform: "translate(-50%, -50%)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(226,232,240,0.92))",
-    border: "1px solid rgba(255,255,255,0.8)",
-    boxShadow: "0 18px 45px rgba(0,0,0,0.26)",
-    color: "#0f172a",
     display: "flex",
-    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+    padding: 10,
+    background:
+      "linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
+    color: "#fef3c7",
+    border: "1px solid rgba(250,204,21,0.28)",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.18)",
     textAlign: "center",
-    padding: 14,
-    zIndex: 1,
     boxSizing: "border-box",
   },
-  tablePlateTop: {
-    color: "#64748b",
-    fontSize: 11,
+
+  tablePlateLabel: {
+    display: "block",
+    fontSize: 12,
     fontWeight: 950,
+    lineHeight: 1.2,
     textTransform: "uppercase",
-    letterSpacing: "0.12em",
+    letterSpacing: "0.06em",
+    overflowWrap: "anywhere",
   },
-  tablePlateName: {
-    marginTop: 6,
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 950,
-    lineHeight: 1.15,
-  },
-  seatButton: {
+
+  tableSeat: {
     width: 42,
     height: 42,
     borderRadius: 999,
     fontSize: 13,
     fontWeight: 950,
-    transition: "box-shadow 140ms ease, transform 140ms ease",
-    zIndex: 3,
+    padding: 0,
+    cursor: "pointer",
+    boxSizing: "border-box",
   },
+
   helperNotice: {
     display: "flex",
+    gap: 8,
     alignItems: "center",
-    gap: 10,
-    padding: "13px 15px",
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.055)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    color: "#cbd5e1",
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "#eff6ff",
+    color: "#1e3a8a",
+    border: "1px solid #bfdbfe",
     fontSize: 13,
-    fontWeight: 800,
     lineHeight: 1.4,
+    fontWeight: 800,
   },
+
   helperIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.24)",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    flex: "0 0 auto",
-    color: "#ffffff",
-    fontSize: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    fontWeight: 950,
+    flexShrink: 0,
   },
+
+  emptyLight: {
+    padding: 26,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#111827",
+    textAlign: "center",
+    minWidth: 320,
+  },
+
   cart: {
     position: "sticky",
     top: 18,
-    padding: 18,
-    borderRadius: 28,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))",
-    boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+    padding: "clamp(14px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#111827",
+    color: "#ffffff",
+    boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
     minWidth: 0,
   },
+
   cartGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr",
     gap: 18,
-    alignItems: "start",
+    minWidth: 0,
   },
+
   cartTop: {
     display: "flex",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "center",
     marginBottom: 14,
   },
+
   cartEyebrow: {
     margin: 0,
     color: "#facc15",
@@ -1512,102 +1430,129 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.14em",
   },
+
   cartTitle: {
-    margin: "4px 0 0",
-    color: "#ffffff",
-    fontSize: 26,
+    margin: "5px 0 0",
+    fontSize: "clamp(23px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
     fontWeight: 950,
-    letterSpacing: "-0.03em",
   },
+
   countBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#111827",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 42,
+    height: 42,
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.16)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
     fontWeight: 950,
-    fontSize: 18,
   },
+
+  summarySpacer: {
+    height: 16,
+  },
+
+  addOnStack: {
+    display: "grid",
+    gap: 12,
+  },
+
   emptyBox: {
-    padding: 22,
-    borderRadius: 22,
-    border: "1px dashed rgba(255,255,255,0.18)",
-    background: "rgba(255,255,255,0.04)",
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px dashed rgba(255,255,255,0.22)",
+    background: "rgba(255,255,255,0.05)",
     textAlign: "center",
   },
+
   emptyTicketImage: {
-    width: 150,
-    height: 96,
+    width: 78,
+    height: 78,
     objectFit: "contain",
-    display: "block",
-    margin: "0 auto 12px",
-    filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.32))",
+    opacity: 0.82,
   },
+
   emptyTitle: {
-    margin: "8px 0 0",
+    margin: 0,
     color: "#ffffff",
     fontWeight: 950,
   },
+
   emptyText: {
-    margin: "4px 0 0",
+    margin: 0,
     color: "#94a3b8",
     fontSize: 13,
-    lineHeight: 1.4,
+    lineHeight: 1.45,
   },
+
   cartList: {
     display: "grid",
-    gap: 13,
-    maxHeight: "48vh",
-    overflow: "auto",
-    paddingRight: 4,
+    gap: 12,
   },
+
   cartItem: {
     display: "grid",
     gap: 10,
     padding: 14,
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 20,
-    background: "rgba(255,255,255,0.055)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    minWidth: 0,
   },
+
   cartItemHeader: {
     display: "flex",
     justifyContent: "space-between",
     gap: 10,
     alignItems: "flex-start",
+    flexWrap: "wrap",
   },
+
   cartSeatLabel: {
     margin: 0,
     color: "#ffffff",
-    fontWeight: 950,
     fontSize: 15,
-  },
-  cartPrice: {
-    margin: "3px 0 0",
-    color: "#facc15",
     fontWeight: 950,
-    fontSize: 13,
+    lineHeight: 1.25,
   },
+
+  cartPrice: {
+    margin: "4px 0 0",
+    color: "#fde68a",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
   removeButton: {
-    border: "1px solid rgba(248,113,113,0.35)",
-    background: "rgba(127,29,29,0.25)",
+    border: "1px solid rgba(254,202,202,0.28)",
+    background: "rgba(254,202,202,0.1)",
     color: "#fecaca",
     borderRadius: 999,
     padding: "7px 10px",
-    fontWeight: 900,
+    fontSize: 12,
+    fontWeight: 950,
     cursor: "pointer",
   },
+
   field: {
     display: "grid",
-    gap: 5,
+    gap: 6,
+    minWidth: 0,
   },
+
   label: {
     color: "#cbd5e1",
     fontSize: 12,
-    fontWeight: 950,
+    fontWeight: 900,
   },
+
   input: {
     width: "100%",
     minHeight: 42,
@@ -1616,9 +1561,11 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 15,
     boxSizing: "border-box",
+    minWidth: 0,
   },
+
   textarea: {
     width: "100%",
     padding: "10px 11px",
@@ -1626,14 +1573,17 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 15,
     resize: "vertical",
     boxSizing: "border-box",
+    minWidth: 0,
   },
+
   totalBox: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 14,
     padding: 15,
     borderRadius: 18,
@@ -1642,24 +1592,27 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     fontSize: 18,
   },
+
   addOnSummaryRow: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
-    marginTop: 10,
+    marginTop: 8,
     padding: 12,
     borderRadius: 16,
     background: "rgba(255,255,255,0.06)",
-    color: "#fef3c7",
-    fontWeight: 900,
-    fontSize: 14,
-    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#e2e8f0",
+    border: "1px solid rgba(255,255,255,0.1)",
+    fontSize: 13,
+    fontWeight: 850,
   },
+
   totalBoxStrong: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 10,
     padding: 15,
     borderRadius: 18,
@@ -1669,10 +1622,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(187,247,208,0.18)",
   },
+
   totalBoxComplimentary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
     marginTop: 10,
     padding: 15,
     borderRadius: 18,
@@ -1682,6 +1637,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(147,197,253,0.22)",
   },
+
   feeBox: {
     display: "flex",
     gap: 10,
@@ -1693,7 +1649,16 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
     cursor: "pointer",
+    lineHeight: 1.35,
   },
+
+  feeSmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#cbd5e1",
+    lineHeight: 1.4,
+  },
+
   accessCodeBox: {
     display: "grid",
     gap: 7,
@@ -1702,6 +1667,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.14)",
   },
+
   accessCodeLabel: {
     color: "#facc15",
     fontSize: 12,
@@ -1709,25 +1675,28 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   accessCodeInput: {
     width: "100%",
-    minHeight: 42,
-    padding: "10px 11px",
+    minHeight: 44,
+    padding: "10px 12px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 850,
     boxSizing: "border-box",
     textTransform: "uppercase",
   },
+
   accessCodeHelp: {
     color: "#cbd5e1",
     lineHeight: 1.4,
     fontSize: 12,
     fontWeight: 750,
   },
+
   accessCodeNotice: {
     display: "grid",
     gap: 4,
@@ -1741,6 +1710,16 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 800,
   },
+
+  errorBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontWeight: 900,
+  },
+
   checkout: {
     marginTop: 14,
     width: "100%",
@@ -1752,16 +1731,5 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     fontSize: 15,
     boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
-  },
-  errorBox: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 14,
-    background: "#fee2e2",
-    color: "#991b1b",
-    fontWeight: 900,
-  },
-  summarySpacer: {
-    height: 16,
   },
 };
