@@ -335,7 +335,9 @@ async function saveEventAddOnAction(formData: FormData) {
   "use server";
 
   const eventId = cleanText(formData.get("event_id"));
-  const addOnType = cleanText(formData.get("addon_type")) as EventFundraisingAddOnType;
+  const addOnType = cleanText(
+    formData.get("addon_type"),
+  ) as EventFundraisingAddOnType;
   const definition = getAddOnDefinition(addOnType);
 
   if (!eventId) {
@@ -358,7 +360,11 @@ async function saveEventAddOnAction(formData: FormData) {
 
   const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
 
-  if (!limits.allowedTypes.includes(definition.type)) {
+  const addOnTypeAllowed = limits.allowedTypes.some(
+    (allowedType) => String(allowedType) === definition.type,
+  );
+
+  if (!addOnTypeAllowed) {
     redirect(`/admin/events/${eventId}/addons?error=addon-not-allowed`);
   }
 
@@ -603,7 +609,10 @@ export default async function EventFundraisingAddOnsPage({
             </span>
           </div>
 
-          <div className="readinessOverviewGrid" style={styles.readinessOverviewGrid}>
+          <div
+            className="readinessOverviewGrid"
+            style={styles.readinessOverviewGrid}
+          >
             {configuredAddOns.map((item) => (
               <article
                 key={item.definition.type}
@@ -666,7 +675,8 @@ export default async function EventFundraisingAddOnsPage({
           <div style={styles.lockedEyebrow}>Professional feature</div>
           <h2 style={styles.panelTitle}>Upgrade to use event add-ons</h2>
           <p style={styles.sectionText}>
-            {addOnsCapability.reason || getEventFundraisingAddOnsUpgradeMessage()}
+            {addOnsCapability.reason ||
+              getEventFundraisingAddOnsUpgradeMessage()}
           </p>
           <Link href="/admin/settings/billing" style={styles.primaryLink}>
             View billing
@@ -770,7 +780,10 @@ function AddOnSettingsPanel({
 
       {addOn.enabled && readinessWarnings > 0 ? (
         <div style={styles.warningNotice}>
-          <strong>{definition.shortName} has {readinessWarnings} warning{readinessWarnings === 1 ? "" : "s"}</strong>
+          <strong>
+            {definition.shortName} has {readinessWarnings} warning
+            {readinessWarnings === 1 ? "" : "s"}
+          </strong>
           <span>
             The add-on can be saved, but completing the missing fields will make
             the public experience clearer.
@@ -1505,16 +1518,6 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  readinessLabel: {
-    display: "block",
-    color: "#cbd5e1",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 4,
-  },
-
   readinessLabelLight: {
     display: "block",
     color: "#64748b",
@@ -1525,28 +1528,12 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 4,
   },
 
-  readinessValue: {
-    display: "block",
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-
   readinessValueLight: {
     display: "block",
     color: "#0f172a",
     fontSize: 16,
     fontWeight: 950,
     overflowWrap: "anywhere",
-  },
-
-  readinessDetail: {
-    margin: "5px 0 0",
-    color: "#cbd5e1",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
   },
 
   readinessDetailLight: {
