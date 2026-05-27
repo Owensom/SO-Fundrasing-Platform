@@ -35,6 +35,18 @@ type TenantBrandingSettings = {
   public_footer_text: string | null;
 };
 
+type PublicDisplayAddOn = {
+  type: "heads_or_tails" | "higher_or_lower";
+  title: string;
+  description: string;
+  instructions: string;
+  prizeTitle: string;
+  entryPriceCents: number;
+  maxEntriesPerBooking: number | null;
+  collectAtCheckout: boolean;
+  footnote: string;
+};
+
 const TABLE_SHAPE_KEY = "__table_shape";
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
@@ -77,6 +89,30 @@ function eventTypeLabel(type: string) {
 
 function isDefaultBrandImage(imageUrl: string | null | undefined) {
   return Boolean(imageUrl && imageUrl.includes("/brand/so-default-"));
+}
+
+function getAddOnDefaults(type: string) {
+  if (type === "higher_or_lower") {
+    return {
+      title: "Higher or Lower",
+      description:
+        "Join our Higher or Lower fundraiser on the night and see how long you can stay in the game.",
+      instructions:
+        "Guess whether the next card, number or total will be higher or lower. Keep playing while you are correct.",
+      footnote:
+        "Higher or Lower is run live by the organiser during the event. Main event tickets and seating are booked separately below.",
+    };
+  }
+
+  return {
+    title: "Heads or Tails",
+    description:
+      "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains.",
+    instructions:
+      "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins.",
+    footnote:
+      "Heads or Tails is run live by the organiser during the event. Main event tickets and seating are booked separately below.",
+  };
 }
 
 async function getTenantBrandingSettings(tenantSlug: string) {
@@ -156,38 +192,49 @@ export default async function EventSlugPage({
     .map((option) => String(option.name || option.title || "").trim())
     .filter(Boolean);
 
-  const headsOrTailsAddOn = (event.event_addons_json || []).find(
-    (addOn) => addOn.type === "heads_or_tails" && addOn.enabled,
+  const publicDisplayAddOns: PublicDisplayAddOn[] = (event.event_addons_json || [])
+    .filter(
+      (addOn) =>
+        addOn.enabled &&
+        (addOn.type === "heads_or_tails" || addOn.type === "higher_or_lower"),
+    )
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+    .map((addOn) => {
+      const defaults = getAddOnDefaults(addOn.type);
+      const entryPriceCents = Number(addOn.entryPriceCents || 0);
+      const maxEntriesPerBooking =
+        Number(addOn.maxEntriesPerBooking || 0) > 0
+          ? Number(addOn.maxEntriesPerBooking || 0)
+          : null;
+
+      return {
+        type: addOn.type,
+        title: cleanText(addOn.title) || defaults.title,
+        description: cleanText(addOn.description) || defaults.description,
+        instructions: cleanText(addOn.instructions) || defaults.instructions,
+        prizeTitle: cleanText(addOn.prizeTitle),
+        entryPriceCents,
+        maxEntriesPerBooking,
+        collectAtCheckout: Boolean(addOn.collectAtCheckout),
+        footnote: defaults.footnote,
+      };
+    });
+
+  const headsOrTailsDisplayAddOn = publicDisplayAddOns.find(
+    (addOn) => addOn.type === "heads_or_tails",
   );
-
-  const headsOrTailsTitle =
-    cleanText(headsOrTailsAddOn?.title) || "Heads or Tails";
-
-  const headsOrTailsDescription = cleanText(headsOrTailsAddOn?.description);
-  const headsOrTailsInstructions = cleanText(headsOrTailsAddOn?.instructions);
-  const headsOrTailsPrizeTitle = cleanText(headsOrTailsAddOn?.prizeTitle);
-
-  const headsOrTailsEntryPriceCents = Number(
-    headsOrTailsAddOn?.entryPriceCents || 0,
-  );
-
-  const headsOrTailsMaxEntriesPerBooking =
-    Number(headsOrTailsAddOn?.maxEntriesPerBooking || 0) > 0
-      ? Number(headsOrTailsAddOn?.maxEntriesPerBooking || 0)
-      : null;
 
   const checkoutAddOn: PublicEventCheckoutAddOn | null =
-    headsOrTailsAddOn?.enabled &&
-    headsOrTailsAddOn?.collectAtCheckout &&
-    headsOrTailsEntryPriceCents > 0
+    headsOrTailsDisplayAddOn?.collectAtCheckout &&
+    headsOrTailsDisplayAddOn.entryPriceCents > 0
       ? {
           type: "heads_or_tails",
-          title: headsOrTailsTitle,
+          title: headsOrTailsDisplayAddOn.title,
           description:
-            headsOrTailsDescription ||
+            headsOrTailsDisplayAddOn.description ||
             "Add Heads or Tails entries to your event booking.",
-          entryPriceCents: headsOrTailsEntryPriceCents,
-          maxEntriesPerBooking: headsOrTailsMaxEntriesPerBooking,
+          entryPriceCents: headsOrTailsDisplayAddOn.entryPriceCents,
+          maxEntriesPerBooking: headsOrTailsDisplayAddOn.maxEntriesPerBooking,
         }
       : null;
 
@@ -354,7 +401,8 @@ export default async function EventSlugPage({
               <span style={styles.metaLabel}>Date</span>
               <strong>{formatDate(event.starts_at)}</strong>
             </div>
-                        <div style={styles.metaCard}>
+
+            <div style={styles.metaCard}>
               <span style={styles.metaLabel}>Location</span>
               <strong>{event.location || "Location to be confirmed"}</strong>
             </div>
@@ -484,8 +532,9 @@ export default async function EventSlugPage({
           </section>
         </div>
 
-        {headsOrTailsAddOn ? (
+        {publicDisplayAddOns.map((addOn) => (
           <section
+            key={addOn.type}
             style={{
               ...styles.addOnPanel,
               borderColor: `${accentColour}66`,
@@ -506,13 +555,10 @@ export default async function EventSlugPage({
                 </div>
 
                 <h2 className="addOnTitle" style={styles.addOnTitle}>
-                  {headsOrTailsTitle}
+                  {addOn.title}
                 </h2>
 
-                <p style={styles.addOnDescription}>
-                  {headsOrTailsDescription ||
-                    "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains."}
-                </p>
+                <p style={styles.addOnDescription}>{addOn.description}</p>
               </div>
 
               <div
@@ -524,16 +570,18 @@ export default async function EventSlugPage({
               >
                 <span style={styles.addOnPriceLabel}>Entry</span>
                 <strong style={styles.addOnPriceValue}>
-                  {headsOrTailsEntryPriceCents > 0
+                  {addOn.entryPriceCents > 0
                     ? `${event.currency} ${moneyFromCents(
-                        headsOrTailsEntryPriceCents,
+                        addOn.entryPriceCents,
                       )}`
                     : "On the night"}
                 </strong>
                 <span style={styles.addOnPriceHint}>
-                  {headsOrTailsAddOn.collectAtCheckout
+                  {addOn.collectAtCheckout && addOn.type === "heads_or_tails"
                     ? "Available during checkout"
-                    : "Collected by the organiser"}
+                    : addOn.collectAtCheckout
+                      ? "Checkout collection coming soon"
+                      : "Collected by the organiser"}
                 </span>
               </div>
             </div>
@@ -542,34 +590,30 @@ export default async function EventSlugPage({
               <div style={styles.addOnDetailCard}>
                 <span style={styles.addOnDetailLabel}>How it works</span>
                 <strong style={styles.addOnDetailValue}>
-                  {headsOrTailsInstructions ||
-                    "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins."}
+                  {addOn.instructions}
                 </strong>
               </div>
 
               <div style={styles.addOnDetailCard}>
                 <span style={styles.addOnDetailLabel}>Prize</span>
                 <strong style={styles.addOnDetailValue}>
-                  {headsOrTailsPrizeTitle || "Prize to be announced"}
+                  {addOn.prizeTitle || "Prize to be announced"}
                 </strong>
               </div>
 
               <div style={styles.addOnDetailCard}>
                 <span style={styles.addOnDetailLabel}>Entries</span>
                 <strong style={styles.addOnDetailValue}>
-                  {headsOrTailsMaxEntriesPerBooking
-                    ? `Up to ${headsOrTailsMaxEntriesPerBooking} per booking`
+                  {addOn.maxEntriesPerBooking
+                    ? `Up to ${addOn.maxEntriesPerBooking} per booking`
                     : "Entry details on the night"}
                 </strong>
               </div>
             </div>
 
-            <p style={styles.addOnFootnote}>
-              Heads or Tails is run live by the organiser during the event.
-              Main event tickets and seating are booked separately below.
-            </p>
+            <p style={styles.addOnFootnote}>{addOn.footnote}</p>
           </section>
-        ) : null}
+        ))}
 
         <section id="book" style={styles.bookSection}>
           <div style={styles.bookHeader}>
@@ -729,6 +773,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1112,7 +1157,8 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 10,
   },
-    ticketItem: {
+
+  ticketItem: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
