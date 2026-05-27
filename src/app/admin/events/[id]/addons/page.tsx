@@ -1,152 +1,354 @@
-import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getTenantSettings } from "@/lib/tenant-settings";
-import {
-  checkSubscriptionCapability,
-  getEventFundraisingAddOnsUpgradeMessage,
-  getMultipleEventFundraisingAddOnsUpgradeMessage,
-  getTenantEventFundraisingAddOnLimits,
-  normaliseSubscriptionTier,
-} from "@/lib/subscription-capabilities";
-import {
-  getEventById,
-  updateEvent,
-  type EventFundraisingAddOn,
-  type EventFundraisingAddOnType,
-} from "../../../../../../api/_lib/events-repo";
+import { query, queryOne } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
+export type EventType = "general_admission" | "reserved_seating" | "tables";
+export type EventSubtype = "standard" | "quiz_night";
+export type EventStatus = "draft" | "published" | "closed";
+export type EventSeatStatus = "available" | "reserved" | "sold" | "blocked";
 
-type PageProps = {
-  params: {
-    id: string;
-  };
-  searchParams?: {
-    saved?: string;
-    error?: string;
-  };
-};
+export type SeatingLayoutJson = Record<string, number>;
+export type TableNamesJson = Record<string, string>;
 
-type TenantSettingsLike = {
-  subscription_tier?: string | null;
-  subscription_status?: string | null;
-  platform_owner_bypass?: boolean | null;
-};
+export type EventFundraisingAddOnType = "heads_or_tails" | "higher_or_lower";
 
-type ReadinessItem = {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "good" | "warning" | "neutral";
-};
-
-type AddOnDefinition = {
+export type EventFundraisingAddOn = {
   id: string;
   type: EventFundraisingAddOnType;
-  name: string;
-  shortName: string;
-  panelTitle: string;
-  eyebrow: string;
-  defaultTitle: string;
-  defaultDescription: string;
-  defaultInstructions: string;
-  defaultPrizePlaceholder: string;
-  savedParam: string;
+  enabled: boolean;
+  title: string;
+  description?: string;
+  instructions?: string;
+  prizeTitle?: string;
+  entryPriceCents?: number;
+  collectAtCheckout?: boolean;
+  maxEntriesPerBooking?: number | null;
+  sortOrder?: number;
 };
 
-type EventFundraisingAddOnLike = Partial<EventFundraisingAddOn> &
+type EventFundraisingAddOnRaw = Partial<EventFundraisingAddOn> &
   Record<string, unknown>;
 
-const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
+export type EventTicketType = {
+  id: string;
+  event_id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  capacity: number | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type EventSeat = {
+  id: string;
+  event_id: string;
+  ticket_type_id: string | null;
+  seat_purpose: string | null;
+  admin_label: string | null;
+  admin_note: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
+  dietary_requirements: string | null;
+  menu_choice: string | null;
+  section: string | null;
+  row_label: string | null;
+  seat_number: string | null;
+  table_number: string | null;
+  aisle_after: number | null;
+  status: EventSeatStatus;
+  customer_name: string | null;
+  customer_email: string | null;
+  stripe_session_id: string | null;
+  order_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventPrize = {
+  id?: string;
+  position?: number;
+  title?: string;
+  name?: string;
+  description?: string;
+  isPublic?: boolean;
+  is_public?: boolean;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
+export type EventMenuOption = {
+  id?: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  isActive?: boolean;
+  is_active?: boolean;
+  sortOrder?: number;
+  sort_order?: number;
+};
+
+export type EventItem = {
+  id: string;
+  tenant_slug: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  image_focus_x: number;
+  image_focus_y: number;
+  location: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  currency: string;
+  event_type: EventType;
+  event_subtype: EventSubtype;
+  status: EventStatus;
+  capacity: number | null;
+  prizes_json: EventPrize[];
+  menu_options: EventMenuOption[];
+  seating_layout_json: SeatingLayoutJson;
+  table_names_json: TableNamesJson;
+  event_addons_json: EventFundraisingAddOn[];
+  ask_dietary_requirements: boolean;
+  ask_menu_choice: boolean;
+  created_at: string;
+  updated_at: string;
+  ticket_types?: EventTicketType[];
+  seats?: EventSeat[];
+};
+
+export type EventOrder = {
+  id: string;
+  tenant_slug: string;
+  event_id: string;
+  stripe_session_id: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  amount_total: number;
+  currency: string;
+  status: string;
+  created_at: string;
+};
+
+export type EventOrderItem = {
+  id: string;
+  order_id: string;
+  event_id: string;
+  ticket_type_id: string | null;
+  seat_id: string | null;
+  label: string;
+  quantity: number;
+  unit_amount: number;
+  guest_name: string | null;
+  dietary_requirements: string | null;
+  menu_choice: string | null;
+  created_at: string;
+};
+
+export type EventWinner = {
+  id: string;
+  tenant_slug: string;
+  event_id: string;
+  prize_id: string | null;
+  prize_title: string;
+  prize_position: number | null;
+  draw_scope: string;
+  draw_settings: Record<string, unknown>;
+  event_order_id: string | null;
+  event_order_item_id: string | null;
+  event_seat_id: string | null;
+  ticket_type_id: string | null;
+  table_number: string | null;
+  row_label: string | null;
+  seat_number: string | null;
+  winner_name: string | null;
+  winner_email: string | null;
+  status: string;
+  drawn_at: string;
+  created_at: string;
+};
+
+export type EventDrawCandidate = {
+  event_order_id: string | null;
+  event_order_item_id: string | null;
+  event_seat_id: string | null;
+  ticket_type_id: string | null;
+  table_number: string | null;
+  row_label: string | null;
+  seat_number: string | null;
+  winner_name: string | null;
+  winner_email: string | null;
+  seat_purpose: string | null;
+};
+
+export type CreateEventInput = {
+  tenantSlug: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  imageFocusX?: number | null;
+  imageFocusY?: number | null;
+  location?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  currency?: string;
+  eventType?: EventType;
+  eventSubtype?: EventSubtype;
+  status?: EventStatus;
+  capacity?: number | null;
+  prizesJson?: EventPrize[];
+  menuOptions?: EventMenuOption[];
+  seatingLayoutJson?: SeatingLayoutJson;
+  tableNamesJson?: TableNamesJson;
+  eventAddOnsJson?: EventFundraisingAddOn[];
+  askDietaryRequirements?: boolean;
+  askMenuChoice?: boolean;
+};
+
+export type UpdateEventInput = {
+  slug?: string;
+  title?: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  imageFocusX?: number | null;
+  imageFocusY?: number | null;
+  location?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  currency?: string;
+  eventType?: EventType;
+  eventSubtype?: EventSubtype;
+  status?: EventStatus;
+  capacity?: number | null;
+  prizesJson?: EventPrize[];
+  menuOptions?: EventMenuOption[];
+  seatingLayoutJson?: SeatingLayoutJson;
+  tableNamesJson?: TableNamesJson;
+  eventAddOnsJson?: EventFundraisingAddOn[];
+  askDietaryRequirements?: boolean;
+  askMenuChoice?: boolean;
+};
+
+const EVENT_FUNDRAISING_ADD_ON_DEFAULTS: Record<
+  EventFundraisingAddOnType,
   {
-    id: "event-addon-heads-or-tails",
-    type: "heads_or_tails",
-    name: "Heads or Tails",
-    shortName: "Heads or Tails",
-    panelTitle: "Live event game settings",
-    eyebrow: "Heads or Tails",
-    defaultTitle: "Heads or Tails",
-    defaultDescription:
+    title: string;
+    description: string;
+    instructions: string;
+    sortOrder: number;
+  }
+> = {
+  heads_or_tails: {
+    title: "Heads or Tails",
+    description:
       "Join our Heads or Tails fundraiser on the night and keep playing until one winner remains.",
-    defaultInstructions:
+    instructions:
       "Choose heads or tails each round. Stay standing if you are correct. The last person standing wins.",
-    defaultPrizePlaceholder: "Cash prize, hamper, sponsored prize...",
-    savedParam: "heads-or-tails",
+    sortOrder: 0,
   },
-  {
-    id: "event-addon-higher-or-lower",
-    type: "higher_or_lower",
-    name: "Higher or Lower",
-    shortName: "Higher or Lower",
-    panelTitle: "Live event game settings",
-    eyebrow: "Higher or Lower",
-    defaultTitle: "Higher or Lower",
-    defaultDescription:
+  higher_or_lower: {
+    title: "Higher or Lower",
+    description:
       "Join our Higher or Lower fundraiser on the night and see how long you can stay in the game.",
-    defaultInstructions:
+    instructions:
       "Guess whether the next card, number or total will be higher or lower. Keep playing while you are correct.",
-    defaultPrizePlaceholder: "Cash prize, mystery prize, sponsored prize...",
-    savedParam: "higher-or-lower",
+    sortOrder: 1,
   },
-];
+};
 
-function cleanText(value: FormDataEntryValue | string | null | undefined) {
-  return String(value || "").trim();
+function normaliseEventType(value: string | null | undefined): EventType {
+  if (value === "reserved_seating" || value === "tables") return value;
+  return "general_admission";
 }
 
-function cleanOptionalText(value: FormDataEntryValue | null) {
-  return cleanText(value) || "";
+function normaliseEventSubtype(value: string | null | undefined): EventSubtype {
+  if (value === "quiz_night") return "quiz_night";
+  return "standard";
 }
 
-function poundsToCents(value: FormDataEntryValue | null) {
-  const number = Number(String(value || "0").replace(",", "."));
+function normaliseStatus(value: string | null | undefined): EventStatus {
+  if (value === "published" || value === "closed") return value;
+  return "draft";
+}
 
-  if (!Number.isFinite(number) || number < 0) {
-    return 0;
+function normaliseSeatStatus(
+  value: string | null | undefined,
+): EventSeatStatus {
+  if (value === "reserved" || value === "sold" || value === "blocked") {
+    return value;
   }
 
-  return Math.round(number * 100);
+  return "available";
 }
 
-function moneyFromCents(cents: number | null | undefined) {
-  return (Number(cents || 0) / 100).toFixed(2);
-}
+function normaliseSeatPurpose(
+  value: string | null | undefined,
+): string | null {
+  const clean = String(value || "").trim();
 
-function positiveIntegerOrNull(value: FormDataEntryValue | null) {
-  const clean = cleanText(value);
-
-  if (!clean) return null;
-
-  const number = Number(clean);
-
-  if (!Number.isFinite(number) || number <= 0) {
-    return null;
+  if (
+    clean === "vip" ||
+    clean === "complimentary" ||
+    clean === "staff" ||
+    clean === "sponsor" ||
+    clean === "guest" ||
+    clean === "blocked" ||
+    clean === "other"
+  ) {
+    return clean;
   }
 
+  return null;
+}
+
+function normaliseNullableText(
+  value: string | null | undefined,
+): string | null {
+  const clean = String(value || "").trim();
+  return clean || null;
+}
+
+function normaliseImageFocus(value: number | null | undefined): number {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 50;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function normaliseNonNegativeInteger(
+  value: number | string | null | undefined,
+  fallback = 0,
+): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return fallback;
   return Math.floor(number);
 }
 
-function formatMoney(cents: number | null | undefined, currency = "GBP") {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: currency || "GBP",
-    }).format(Number(cents || 0) / 100);
-  } catch {
-    return `${moneyFromCents(cents)} ${currency || "GBP"}`;
+function normaliseNullablePositiveInteger(
+  value: number | string | null | undefined,
+): number | null {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.floor(number);
+}
+
+function normaliseEventFundraisingAddOnType(
+  value: string | null | undefined,
+): EventFundraisingAddOnType | null {
+  if (value === "heads_or_tails" || value === "higher_or_lower") {
+    return value;
   }
+
+  return null;
 }
 
 function readStringField(
-  addOn: EventFundraisingAddOnLike,
+  source: EventFundraisingAddOnRaw,
   keys: string[],
-  fallback = "",
+  fallback: string,
 ) {
   for (const key of keys) {
-    const value = addOn[key];
+    const value = source[key];
 
     if (value !== null && value !== undefined && String(value).trim()) {
       return String(value).trim();
@@ -157,12 +359,12 @@ function readStringField(
 }
 
 function readNumberField(
-  addOn: EventFundraisingAddOnLike,
+  source: EventFundraisingAddOnRaw,
   keys: string[],
   fallback = 0,
 ) {
   for (const key of keys) {
-    const value = addOn[key];
+    const value = source[key];
 
     if (value === null || value === undefined || value === "") {
       continue;
@@ -179,12 +381,12 @@ function readNumberField(
 }
 
 function readNullablePositiveIntegerField(
-  addOn: EventFundraisingAddOnLike,
+  source: EventFundraisingAddOnRaw,
   keys: string[],
   fallback: number | null = null,
 ) {
   for (const key of keys) {
-    const value = addOn[key];
+    const value = source[key];
 
     if (value === null || value === undefined || value === "") {
       continue;
@@ -201,12 +403,12 @@ function readNullablePositiveIntegerField(
 }
 
 function readBooleanField(
-  addOn: EventFundraisingAddOnLike,
+  source: EventFundraisingAddOnRaw,
   keys: string[],
   fallback = false,
 ) {
   for (const key of keys) {
-    const value = addOn[key];
+    const value = source[key];
 
     if (value === true || value === "true" || value === 1 || value === "1") {
       return true;
@@ -225,1695 +427,1685 @@ function readBooleanField(
   return fallback;
 }
 
-function getAddOnDefinition(type: string | null | undefined) {
-  return (
-    ADD_ON_DEFINITIONS.find((definition) => definition.type === type) ||
-    ADD_ON_DEFINITIONS[0]
+function normaliseSeatingLayoutJson(value: unknown): SeatingLayoutJson {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, rawValue]) => {
+        const number = Number(rawValue);
+
+        if (!Number.isFinite(number)) {
+          return null;
+        }
+
+        return [String(key), Math.max(-20, Math.min(20, Math.floor(number)))];
+      })
+      .filter(Boolean) as [string, number][],
   );
 }
 
-function normaliseAddOnForAdmin(
-  addOn: EventFundraisingAddOnLike | null | undefined,
-  definition: AddOnDefinition,
-): EventFundraisingAddOn {
-  if (!addOn) {
-    return {
-      id: definition.id,
-      type: definition.type,
-      enabled: false,
-      title: definition.defaultTitle,
-      description: definition.defaultDescription,
-      instructions: definition.defaultInstructions,
-      prizeTitle: "",
-      entryPriceCents: 0,
-      collectAtCheckout: false,
-      maxEntriesPerBooking: 1,
-      sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
-    };
+function normaliseTableNamesJson(value: unknown): TableNamesJson {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
   }
 
-  return {
-    id: readStringField(addOn, ["id"], definition.id),
-    type: definition.type,
-    enabled: readBooleanField(addOn, ["enabled"], false),
-    title: readStringField(addOn, ["title"], definition.defaultTitle),
-    description: readStringField(
-      addOn,
-      ["description"],
-      definition.defaultDescription,
-    ),
-    instructions: readStringField(
-      addOn,
-      ["instructions"],
-      definition.defaultInstructions,
-    ),
-    prizeTitle: readStringField(addOn, ["prizeTitle", "prize_title"], ""),
-    entryPriceCents: readNumberField(
-      addOn,
-      ["entryPriceCents", "entry_price_cents", "entryPrice", "entry_price"],
-      0,
-    ),
-    collectAtCheckout: readBooleanField(
-      addOn,
-      ["collectAtCheckout", "collect_at_checkout"],
-      false,
-    ),
-    maxEntriesPerBooking: readNullablePositiveIntegerField(
-      addOn,
-      ["maxEntriesPerBooking", "max_entries_per_booking"],
-      1,
-    ),
-    sortOrder: readNumberField(
-      addOn,
-      ["sortOrder", "sort_order"],
-      definition.type === "heads_or_tails" ? 0 : 1,
-    ),
-  };
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, rawValue]) => [String(key), String(rawValue || "").trim()])
+      .filter(([, name]) => name),
+  );
 }
 
-function getAddOn(
-  addOns: EventFundraisingAddOn[],
-  definition: AddOnDefinition,
-): EventFundraisingAddOn {
-  const existing = addOns.find((addOn) => addOn.type === definition.type);
+function normalisePrizesJson(value: unknown): EventPrize[] {
+  if (!Array.isArray(value)) return [];
 
-  return normaliseAddOnForAdmin(existing, definition);
+  return value
+    .map((item, index) => {
+      const prize = item as EventPrize;
+
+      const title = String(prize.title || prize.name || "").trim();
+
+      if (!title) {
+        return null;
+      }
+
+      const rawPosition = Number(prize.position);
+
+      const position =
+        Number.isFinite(rawPosition) && rawPosition > 0
+          ? Math.floor(rawPosition)
+          : index + 1;
+
+      return {
+        id: String(prize.id || `prize-${index + 1}`),
+        position,
+        title,
+        name: title,
+        description: String(prize.description || "").trim(),
+        isPublic: prize.isPublic ?? prize.is_public ?? true,
+        is_public: prize.is_public ?? prize.isPublic ?? true,
+        sortOrder: prize.sortOrder ?? prize.sort_order ?? index,
+        sort_order: prize.sort_order ?? prize.sortOrder ?? index,
+      };
+    })
+    .filter(Boolean) as EventPrize[];
 }
 
-function buildAddOnFromForm(
-  formData: FormData,
-  definition: AddOnDefinition,
-): EventFundraisingAddOn {
-  return {
-    id: definition.id,
-    type: definition.type,
-    enabled: String(formData.get("enabled") || "") === "true",
-    title: cleanText(formData.get("title")) || definition.defaultTitle,
-    description: cleanOptionalText(formData.get("description")),
-    instructions: cleanOptionalText(formData.get("instructions")),
-    prizeTitle: cleanOptionalText(formData.get("prize_title")),
-    entryPriceCents: poundsToCents(formData.get("entry_price")),
-    collectAtCheckout:
-      String(formData.get("collect_at_checkout") || "") === "true",
-    maxEntriesPerBooking: positiveIntegerOrNull(
-      formData.get("max_entries_per_booking"),
-    ),
-    sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
-  };
+function normaliseMenuOptions(value: unknown): EventMenuOption[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      const option = item as EventMenuOption;
+
+      const name = String(option.name || option.title || "").trim();
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        id: String(option.id || `menu-${index + 1}`),
+        name,
+        title: name,
+        description: String(option.description || "").trim(),
+        isActive: option.isActive ?? option.is_active ?? true,
+        is_active: option.is_active ?? option.isActive ?? true,
+        sortOrder: option.sortOrder ?? option.sort_order ?? index,
+        sort_order: option.sort_order ?? option.sortOrder ?? index,
+      };
+    })
+    .filter(Boolean) as EventMenuOption[];
 }
 
-function normaliseExistingAddOnsForSave(
-  addOns: EventFundraisingAddOn[],
-  replacingType: EventFundraisingAddOnType,
-) {
-  return addOns
-    .filter((addOn) => addOn.type !== replacingType)
-    .map((addOn) => {
-      const definition = getAddOnDefinition(addOn.type);
-      return normaliseAddOnForAdmin(addOn, definition);
+function normaliseEventFundraisingAddOnsJson(
+  value: unknown,
+): EventFundraisingAddOn[] {
+  if (!Array.isArray(value)) return [];
+
+  const addOns: EventFundraisingAddOn[] = [];
+
+  value.forEach((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return;
+    }
+
+    const addOn = item as EventFundraisingAddOnRaw;
+    const type = normaliseEventFundraisingAddOnType(
+      String(addOn.type || "").trim(),
+    );
+
+    if (!type) {
+      return;
+    }
+
+    const defaults = EVENT_FUNDRAISING_ADD_ON_DEFAULTS[type];
+
+    addOns.push({
+      id: readStringField(
+        addOn,
+        ["id"],
+        `event-addon-${type}-${index + 1}`,
+      ),
+      type,
+      enabled: readBooleanField(addOn, ["enabled"], false),
+      title: readStringField(addOn, ["title"], defaults.title),
+      description: readStringField(
+        addOn,
+        ["description"],
+        defaults.description,
+      ),
+      instructions: readStringField(
+        addOn,
+        ["instructions"],
+        defaults.instructions,
+      ),
+      prizeTitle: readStringField(addOn, ["prizeTitle", "prize_title"], ""),
+      entryPriceCents: readNumberField(
+        addOn,
+        [
+          "entryPriceCents",
+          "entry_price_cents",
+          "entryPrice",
+          "entry_price",
+        ],
+        0,
+      ),
+      collectAtCheckout: readBooleanField(
+        addOn,
+        ["collectAtCheckout", "collect_at_checkout"],
+        false,
+      ),
+      maxEntriesPerBooking: readNullablePositiveIntegerField(
+        addOn,
+        ["maxEntriesPerBooking", "max_entries_per_booking"],
+        1,
+      ),
+      sortOrder: readNumberField(
+        addOn,
+        ["sortOrder", "sort_order"],
+        defaults.sortOrder,
+      ),
     });
-}
+  });
 
-function readinessToneStyle(tone: ReadinessItem["tone"]) {
-  if (tone === "good") {
-    return {
-      dot: styles.readinessDotGood,
-      card: styles.readinessItemGood,
-    };
-  }
-
-  if (tone === "warning") {
-    return {
-      dot: styles.readinessDotWarning,
-      card: styles.readinessItemWarning,
-    };
-  }
-
-  return {
-    dot: styles.readinessDotNeutral,
-    card: styles.readinessItemNeutral,
-  };
-}
-
-function buildAddOnReadiness(input: {
-  addOn: EventFundraisingAddOn;
-  currency: string;
-  definition: AddOnDefinition;
-}): ReadinessItem[] {
-  const addOn = input.addOn;
-  const enabled = Boolean(addOn.enabled);
-  const collectAtCheckout = Boolean(addOn.collectAtCheckout);
-  const entryPriceCents = Number(addOn.entryPriceCents || 0);
-  const hasPrice = entryPriceCents > 0;
-  const hasDescription = Boolean(String(addOn.description || "").trim());
-  const hasInstructions = Boolean(String(addOn.instructions || "").trim());
-  const hasPrize = Boolean(String(addOn.prizeTitle || "").trim());
-  const maxEntries = Number(addOn.maxEntriesPerBooking || 0);
-
-  return [
-    {
-      label: "Public display",
-      value: enabled ? "Ready" : "Disabled",
-      detail: enabled
-        ? `The public event page can show the ${input.definition.shortName} panel once the public display phase is wired.`
-        : "Enable the add-on before it appears on the public event page.",
-      tone: enabled ? "good" : "neutral",
-    },
-    {
-      label: "Checkout collection",
-      value: collectAtCheckout ? "On" : "Off",
-      detail: collectAtCheckout
-        ? "Supporters will be able to add entries during event checkout once the checkout phase is wired."
-        : "Entries are shown publicly but collected by the organiser on the night.",
-      tone: collectAtCheckout ? "good" : "neutral",
-    },
-    {
-      label: "Entry price",
-      value: hasPrice
-        ? formatMoney(entryPriceCents, input.currency)
-        : "Missing",
-      detail: hasPrice
-        ? "The checkout add-on has a valid entry price."
-        : "Set an entry price before using checkout collection.",
-      tone: hasPrice ? "good" : collectAtCheckout ? "warning" : "neutral",
-    },
-    {
-      label: "Booking limit",
-      value: maxEntries > 0 ? `${maxEntries} per booking` : "Unlimited",
-      detail:
-        maxEntries > 0
-          ? "The public checkout selector will cap entries at this amount once checkout support is wired."
-          : "No per-booking limit is currently set.",
-      tone: maxEntries > 0 ? "good" : "neutral",
-    },
-    {
-      label: "Instructions",
-      value: hasInstructions ? "Added" : "Missing",
-      detail: hasInstructions
-        ? "Supporters can see how the game works."
-        : "Add short instructions so supporters understand the game.",
-      tone: hasInstructions ? "good" : "warning",
-    },
-    {
-      label: "Prize note",
-      value: hasPrize ? "Added" : "Optional",
-      detail: hasPrize
-        ? "The public panel can show the prize or prize note."
-        : "A prize note is optional but helps make the add-on clearer.",
-      tone: hasPrize ? "good" : "neutral",
-    },
-    {
-      label: "Description",
-      value: hasDescription ? "Added" : "Missing",
-      detail: hasDescription
-        ? "The public panel has supporting copy."
-        : "Add a short public description for a more polished display.",
-      tone: hasDescription ? "good" : "warning",
-    },
-    {
-      label: "Admin reporting",
-      value: "Prepared",
-      detail:
-        "Reporting will be extended in a later phase so add-on entries and revenue can be separated clearly.",
-      tone: "neutral",
-    },
-  ];
-}
-
-function addOnReadyForCheckout(addOn: EventFundraisingAddOn) {
-  return (
-    Boolean(addOn.enabled) &&
-    Boolean(addOn.collectAtCheckout) &&
-    Number(addOn.entryPriceCents || 0) > 0
-  );
-}
-
-async function requireEventAccess(eventId: string) {
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
-
-  const event = await getEventById(eventId);
-
-  if (!event) {
-    notFound();
-  }
-
-  const tenantSlug = await getTenantSlugFromHeaders();
-
-  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
-    ? session.user.tenantSlugs.map((value) => String(value))
-    : [];
-
-  if (
-    !tenantSlug ||
-    event.tenant_slug !== tenantSlug ||
-    !sessionTenantSlugs.includes(tenantSlug)
-  ) {
-    redirect("/admin/login?error=tenant_access_denied");
-  }
-
-  return event;
-}
-
-async function saveEventAddOnAction(formData: FormData) {
-  "use server";
-
-  const eventId = cleanText(formData.get("event_id"));
-  const addOnType = cleanText(
-    formData.get("addon_type"),
-  ) as EventFundraisingAddOnType;
-  const definition = getAddOnDefinition(addOnType);
-
-  if (!eventId) {
-    redirect("/admin/events?error=missing-event");
-  }
-
-  const event = await requireEventAccess(eventId);
-  const tenantSettings = (await getTenantSettings(
-    event.tenant_slug,
-  )) as TenantSettingsLike | null;
-
-  const addOnsCapability = checkSubscriptionCapability(
-    tenantSettings,
-    "event_fundraising_addons",
-  );
-
-  if (!addOnsCapability.allowed) {
-    redirect(`/admin/events/${eventId}/addons?error=upgrade-required`);
-  }
-
-  const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
-
-  const addOnTypeAllowed = limits.allowedTypes.some(
-    (allowedType) => String(allowedType) === definition.type,
-  );
-
-  if (!addOnTypeAllowed) {
-    redirect(`/admin/events/${eventId}/addons?error=addon-not-allowed`);
-  }
-
-  const currentAddOns = event.event_addons_json || [];
-  const otherAddOns = normaliseExistingAddOnsForSave(
-    currentAddOns,
-    definition.type,
-  );
-
-  const nextAddOn = buildAddOnFromForm(formData, definition);
-
-  const nextAddOns = [...otherAddOns, nextAddOn].sort(
+  return addOns.sort(
     (a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0),
   );
+}
 
-  const nextEnabledAddOnCount = nextAddOns.filter(
-    (addOn) => addOn.enabled,
-  ).length;
+function normaliseEvent(event: EventItem): EventItem {
+  return {
+    ...event,
+    event_type: normaliseEventType(event.event_type),
+    event_subtype: normaliseEventSubtype(event.event_subtype),
+    image_focus_x: normaliseImageFocus(event.image_focus_x),
+    image_focus_y: normaliseImageFocus(event.image_focus_y),
+    prizes_json: normalisePrizesJson(event.prizes_json),
+    menu_options: normaliseMenuOptions(event.menu_options),
+    seating_layout_json: normaliseSeatingLayoutJson(event.seating_layout_json),
+    table_names_json: normaliseTableNamesJson(event.table_names_json),
+    event_addons_json: normaliseEventFundraisingAddOnsJson(
+      event.event_addons_json,
+    ),
+    ask_dietary_requirements: event.ask_dietary_requirements ?? true,
+    ask_menu_choice: event.ask_menu_choice ?? true,
+  };
+}
 
-  if (nextEnabledAddOnCount > limits.maxAddOnsPerEvent) {
-    redirect(`/admin/events/${eventId}/addons?error=multiple-upgrade-required`);
+export function slugifyEventTitle(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || `event-${Date.now()}`;
+}
+
+async function assertEventExists(eventId: string) {
+  const event = await queryOne<{ id: string }>(
+    `
+      select id
+      from events
+      where id = $1
+      limit 1
+    `,
+    [eventId],
+  );
+
+  if (!event) {
+    throw new Error("Event not found");
+  }
+}
+
+async function assertTicketTypeBelongsToEvent(
+  eventId: string,
+  ticketTypeId: string | null | undefined,
+) {
+  if (!ticketTypeId) return;
+
+  const ticketType = await queryOne<{ id: string }>(
+    `
+      select id
+      from event_ticket_types
+      where id = $1
+        and event_id = $2
+      limit 1
+    `,
+    [ticketTypeId, eventId],
+  );
+
+  if (!ticketType) {
+    throw new Error("Ticket type does not belong to this event");
+  }
+}
+
+/* =========================
+   EVENTS
+========================= */
+
+export async function listEvents(tenantSlug: string): Promise<EventItem[]> {
+  const events = await query<EventItem>(
+    `
+      select *
+      from events
+      where tenant_slug = $1
+      order by created_at desc
+    `,
+    [tenantSlug],
+  );
+
+  return events.map(normaliseEvent);
+}
+
+export async function listPublishedEvents(
+  tenantSlug: string,
+): Promise<EventItem[]> {
+  const events = await query<EventItem>(
+    `
+      select *
+      from events
+      where tenant_slug = $1
+        and status = 'published'
+      order by starts_at asc nulls last, created_at desc
+    `,
+    [tenantSlug],
+  );
+
+  return events.map(normaliseEvent);
+}
+
+export async function hydrateEvent(event: EventItem): Promise<EventItem> {
+  const [ticketTypes, seats] = await Promise.all([
+    listEventTicketTypes(event.id),
+    listEventSeats(event.id),
+  ]);
+
+  return {
+    ...normaliseEvent(event),
+    ticket_types: ticketTypes,
+    seats,
+  };
+}
+
+export async function getEventById(id: string): Promise<EventItem | null> {
+  const event = await queryOne<EventItem>(
+    `
+      select *
+      from events
+      where id = $1
+      limit 1
+    `,
+    [id],
+  );
+
+  if (!event) {
+    return null;
   }
 
-  await updateEvent(eventId, {
-    eventAddOnsJson: nextAddOns,
-  });
-
-  redirect(`/admin/events/${eventId}/addons?saved=${definition.savedParam}`);
+  return hydrateEvent(event);
 }
 
-export default async function EventFundraisingAddOnsPage({
-  params,
-  searchParams,
-}: PageProps) {
-  const event = await requireEventAccess(params.id);
-  const tenantSettings = (await getTenantSettings(
-    event.tenant_slug,
-  )) as TenantSettingsLike | null;
-
-  const tier = normaliseSubscriptionTier(tenantSettings?.subscription_tier);
-  const addOnsCapability = checkSubscriptionCapability(
-    tenantSettings,
-    "event_fundraising_addons",
+export async function getEventBySlug(
+  tenantSlug: string,
+  slug: string,
+): Promise<EventItem | null> {
+  const event = await queryOne<EventItem>(
+    `
+      select *
+      from events
+      where tenant_slug = $1
+        and slug = $2
+      limit 1
+    `,
+    [tenantSlug, slug],
   );
-  const multipleAddOnsCapability = checkSubscriptionCapability(
-    tenantSettings,
-    "multiple_event_fundraising_addons",
+
+  if (!event) {
+    return null;
+  }
+
+  return hydrateEvent(event);
+}
+
+export async function createEvent(input: CreateEventInput): Promise<EventItem> {
+  const created = await queryOne<EventItem>(
+    `
+      insert into events (
+        tenant_slug,
+        slug,
+        title,
+        description,
+        image_url,
+        image_focus_x,
+        image_focus_y,
+        location,
+        starts_at,
+        ends_at,
+        currency,
+        event_type,
+        event_subtype,
+        status,
+        capacity,
+        prizes_json,
+        menu_options,
+        seating_layout_json,
+        table_names_json,
+        event_addons_json,
+        ask_dietary_requirements,
+        ask_menu_choice
+      )
+      values (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,
+        $18::jsonb,$19::jsonb,$20::jsonb,$21,$22
+      )
+      returning *
+    `,
+    [
+      input.tenantSlug,
+      input.slug,
+      input.title,
+      input.description ?? null,
+      input.imageUrl ?? null,
+      normaliseImageFocus(input.imageFocusX),
+      normaliseImageFocus(input.imageFocusY),
+      input.location ?? null,
+      input.startsAt || null,
+      input.endsAt || null,
+      input.currency || "GBP",
+      normaliseEventType(input.eventType),
+      normaliseEventSubtype(input.eventSubtype),
+      normaliseStatus(input.status),
+      input.capacity ?? null,
+      JSON.stringify(normalisePrizesJson(input.prizesJson ?? [])),
+      JSON.stringify(normaliseMenuOptions(input.menuOptions ?? [])),
+      JSON.stringify(normaliseSeatingLayoutJson(input.seatingLayoutJson ?? {})),
+      JSON.stringify(normaliseTableNamesJson(input.tableNamesJson ?? {})),
+      JSON.stringify(
+        normaliseEventFundraisingAddOnsJson(input.eventAddOnsJson ?? []),
+      ),
+      input.askDietaryRequirements ?? true,
+      input.askMenuChoice ?? true,
+    ],
   );
-  const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
 
-  const canManageAddOns = addOnsCapability.allowed;
-  const canUseMultipleAddOns = multipleAddOnsCapability.allowed;
-  const addOns = event.event_addons_json || [];
+  if (!created) {
+    throw new Error("Failed to create event");
+  }
 
-  const configuredAddOns = ADD_ON_DEFINITIONS.map((definition) => {
-    const addOn = getAddOn(addOns, definition);
-    const readinessItems = buildAddOnReadiness({
-      addOn,
-      currency: event.currency || "GBP",
-      definition,
-    });
-    const readyForCheckout = addOnReadyForCheckout(addOn);
-    const warnings = readinessItems.filter((item) => item.tone === "warning")
-      .length;
+  return hydrateEvent(created);
+}
 
-    return {
-      definition,
-      addOn,
-      readinessItems,
-      readyForCheckout,
-      warnings,
-    };
-  });
+export async function updateEvent(
+  id: string,
+  input: UpdateEventInput,
+): Promise<EventItem | null> {
+  const existing = await getEventById(id);
 
-  const enabledAddOns = configuredAddOns
-    .map((item) => item.addOn)
-    .filter((addOn) => addOn.enabled);
+  if (!existing) {
+    return null;
+  }
 
-  const checkoutReadyAddOns = configuredAddOns.filter(
-    (item) => item.readyForCheckout,
+  const updated = await queryOne<EventItem>(
+    `
+      update events
+      set
+        slug = $2,
+        title = $3,
+        description = $4,
+        image_url = $5,
+        image_focus_x = $6,
+        image_focus_y = $7,
+        location = $8,
+        starts_at = $9,
+        ends_at = $10,
+        currency = $11,
+        event_type = $12,
+        event_subtype = $13,
+        status = $14,
+        capacity = $15,
+        prizes_json = $16::jsonb,
+        menu_options = $17::jsonb,
+        seating_layout_json = $18::jsonb,
+        table_names_json = $19::jsonb,
+        event_addons_json = $20::jsonb,
+        ask_dietary_requirements = $21,
+        ask_menu_choice = $22,
+        updated_at = now()
+      where id = $1
+      returning *
+    `,
+    [
+      id,
+      input.slug ?? existing.slug,
+      input.title ?? existing.title,
+      input.description ?? existing.description,
+      input.imageUrl ?? existing.image_url,
+      normaliseImageFocus(input.imageFocusX ?? existing.image_focus_x),
+      normaliseImageFocus(input.imageFocusY ?? existing.image_focus_y),
+      input.location ?? existing.location,
+      input.startsAt ?? existing.starts_at,
+      input.endsAt ?? existing.ends_at,
+      input.currency ?? existing.currency,
+      normaliseEventType(input.eventType ?? existing.event_type),
+      normaliseEventSubtype(input.eventSubtype ?? existing.event_subtype),
+      normaliseStatus(input.status ?? existing.status),
+      input.capacity ?? existing.capacity,
+      JSON.stringify(
+        normalisePrizesJson(input.prizesJson ?? existing.prizes_json ?? []),
+      ),
+      JSON.stringify(
+        normaliseMenuOptions(input.menuOptions ?? existing.menu_options ?? []),
+      ),
+      JSON.stringify(
+        normaliseSeatingLayoutJson(
+          input.seatingLayoutJson ?? existing.seating_layout_json ?? {},
+        ),
+      ),
+      JSON.stringify(
+        normaliseTableNamesJson(
+          input.tableNamesJson ?? existing.table_names_json ?? {},
+        ),
+      ),
+      JSON.stringify(
+        normaliseEventFundraisingAddOnsJson(
+          input.eventAddOnsJson ?? existing.event_addons_json ?? [],
+        ),
+      ),
+      input.askDietaryRequirements ?? existing.ask_dietary_requirements ?? true,
+      input.askMenuChoice ?? existing.ask_menu_choice ?? true,
+    ],
   );
-  const firstEnabledAddOn = configuredAddOns.find((item) => item.addOn.enabled);
 
-  const upgradeRequired = searchParams?.error === "upgrade-required";
-  const multipleUpgradeRequired =
-    searchParams?.error === "multiple-upgrade-required";
-  const addOnNotAllowed = searchParams?.error === "addon-not-allowed";
+  if (!updated) {
+    return null;
+  }
 
-  return (
-    <main className="event-addons-page" style={styles.page}>
-      <style>{responsiveStyles}</style>
+  return hydrateEvent(updated);
+}
 
-      <section className="hero" style={styles.hero}>
-        <div style={styles.heroContent}>
-          <div style={styles.eyebrow}>Events add-ons</div>
+/* =========================
+   TICKET TYPES
+========================= */
 
-          <h1 className="so-brand-heading title" style={styles.title}>
-            Event Fundraising Add-ons
-          </h1>
-
-          <p style={styles.heroText}>
-            Add live fundraising tools to this event. Heads or Tails and Higher
-            or Lower are designed for ceilidhs, quiz nights, dinners, auctions
-            and gala events, with public display, optional checkout collection
-            and admin reporting phased in safely.
-          </p>
-
-          <div className="heroMetaGrid" style={styles.heroMetaGrid}>
-            <HeroMetric label="Event" value={event.title} />
-            <HeroMetric
-              label="Plan"
-              value={
-                tier === "foundation"
-                  ? "Foundation"
-                  : tier === "professional"
-                    ? "Professional"
-                    : "Community"
-              }
-            />
-            <HeroMetric
-              label="Add-ons enabled"
-              value={`${enabledAddOns.length} / ${
-                Number.isFinite(limits.maxAddOnsPerEvent)
-                  ? limits.maxAddOnsPerEvent
-                  : "Unlimited"
-              }`}
-            />
-          </div>
-        </div>
-
-        <div style={styles.heroPanel}>
-          <div style={styles.heroPanelEyebrow}>Current status</div>
-          <strong style={styles.heroPanelTitle}>
-            {checkoutReadyAddOns.length > 0
-              ? `${checkoutReadyAddOns.length} add-on${
-                  checkoutReadyAddOns.length === 1 ? "" : "s"
-                } checkout-ready`
-              : firstEnabledAddOn
-                ? `${firstEnabledAddOn.definition.shortName} is display-ready`
-                : "No event add-ons enabled"}
-          </strong>
-          <span style={styles.heroPanelText}>
-            {checkoutReadyAddOns.length > 0
-              ? "Checkout-ready settings are saved for the enabled add-ons. Public checkout support for the next add-on will be wired in a later phase."
-              : firstEnabledAddOn
-                ? "At least one add-on can be prepared for public display. Checkout collection needs a valid price and checkout wiring."
-                : "Enable an add-on to prepare event-night fundraising for this event."}
-          </span>
-        </div>
-      </section>
-
-      <section className="topActions" style={styles.topActions}>
-        <Link
-          href={`/admin/events/${encodeURIComponent(event.id)}`}
-          className="secondaryButton"
-          style={styles.secondaryButton}
-        >
-          ← Back to event editor
-        </Link>
-
-        <div className="topActionsRight" style={styles.topActionsRight}>
-          <Link
-            href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            View orders & add-on reporting
-          </Link>
-
-          <Link
-            href="/admin/settings/billing"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-          >
-            Billing &amp; plan
-          </Link>
-        </div>
-      </section>
-
-      {searchParams?.saved ? (
-        <div style={styles.successBox}>Event add-on settings saved.</div>
-      ) : null}
-
-      {upgradeRequired ? (
-        <UpgradeBanner
-          title="Event fundraising add-ons are locked."
-          text={getEventFundraisingAddOnsUpgradeMessage()}
-        />
-      ) : null}
-
-      {multipleUpgradeRequired ? (
-        <UpgradeBanner
-          title="Multiple event add-ons are locked."
-          text={getMultipleEventFundraisingAddOnsUpgradeMessage()}
-        />
-      ) : null}
-
-      {addOnNotAllowed ? (
-        <UpgradeBanner
-          title="This add-on is not available."
-          text="This event add-on is not available on the current tenant plan."
-        />
-      ) : null}
-
-      <section className="summaryGrid" style={styles.summaryGrid}>
-        <SummaryCard
-          label="Community"
-          value="No add-ons"
-          detail="Community keeps events simple and focused."
-        />
-        <SummaryCard
-          label="Professional"
-          value="One add-on"
-          detail="Use either Heads or Tails or Higher or Lower on an event."
-        />
-        <SummaryCard
-          label="Foundation"
-          value="Multiple add-ons"
-          detail="Foundation can support several live fundraising add-ons per event."
-        />
-      </section>
-
-      {canManageAddOns ? (
-        <section className="readinessPanel" style={styles.readinessPanel}>
-          <div style={styles.readinessHeader}>
-            <div>
-              <div style={styles.readinessEyebrow}>Readiness</div>
-              <h2 style={styles.readinessTitle}>Event add-ons checklist</h2>
-              <p style={styles.readinessIntro}>
-                A quick admin view of what is enabled, what is checkout-ready,
-                and what would improve each public add-on experience.
-              </p>
-            </div>
-
-            <span
-              style={{
-                ...styles.readinessStatusPill,
-                ...(checkoutReadyAddOns.length > 0
-                  ? styles.statusGood
-                  : firstEnabledAddOn
-                    ? styles.statusWarning
-                    : styles.statusNeutral),
-              }}
-            >
-              {checkoutReadyAddOns.length > 0
-                ? "Checkout settings ready"
-                : firstEnabledAddOn
-                  ? "Display settings started"
-                  : "Disabled"}
-            </span>
-          </div>
-
-          <div
-            className="readinessOverviewGrid"
-            style={styles.readinessOverviewGrid}
-          >
-            {configuredAddOns.map((item) => (
-              <article
-                key={item.definition.type}
-                style={styles.readinessOverviewCard}
-              >
-                <div style={styles.readinessOverviewHeader}>
-                  <span style={styles.readinessOverviewLabel}>
-                    {item.definition.shortName}
-                  </span>
-                  <span
-                    style={{
-                      ...styles.miniStatusPill,
-                      ...(item.readyForCheckout
-                        ? styles.statusGood
-                        : item.addOn.enabled
-                          ? styles.statusWarning
-                          : styles.statusNeutral),
-                    }}
-                  >
-                    {item.readyForCheckout
-                      ? "Checkout-ready"
-                      : item.addOn.enabled
-                        ? `${item.warnings} warning${
-                            item.warnings === 1 ? "" : "s"
-                          }`
-                        : "Disabled"}
-                  </span>
-                </div>
-
-                <p style={styles.readinessOverviewText}>
-                  {item.addOn.enabled
-                    ? `${item.definition.shortName} is prepared for this event.`
-                    : `${item.definition.shortName} is not currently enabled.`}
-                </p>
-              </article>
-            ))}
-          </div>
-
-          <div style={styles.readinessActions}>
-            <Link
-              href={`/e/${encodeURIComponent(event.slug)}`}
-              target="_blank"
-              style={styles.primaryLink}
-            >
-              View public event page
-            </Link>
-
-            <Link
-              href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
-              style={styles.secondaryButtonDark}
-            >
-              View add-on reporting
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
-      {!canManageAddOns ? (
-        <section className="lockedPanel" style={styles.lockedPanel}>
-          <div style={styles.lockedEyebrow}>Professional feature</div>
-          <h2 style={styles.panelTitle}>Upgrade to use event add-ons</h2>
-          <p style={styles.sectionText}>
-            {addOnsCapability.reason ||
-              getEventFundraisingAddOnsUpgradeMessage()}
-          </p>
-          <Link href="/admin/settings/billing" style={styles.primaryLink}>
-            View billing
-          </Link>
-        </section>
-      ) : (
-        <div style={styles.addOnPanels}>
-          {configuredAddOns.map((item) => (
-            <AddOnSettingsPanel
-              key={item.definition.type}
-              eventId={event.id}
-              addOn={item.addOn}
-              definition={item.definition}
-              readinessItems={item.readinessItems}
-              readyForCheckout={item.readyForCheckout}
-              readinessWarnings={item.warnings}
-              canUseMultipleAddOns={canUseMultipleAddOns}
-            />
-          ))}
-        </div>
-      )}
-    </main>
+export async function listEventTicketTypes(
+  eventId: string,
+): Promise<EventTicketType[]> {
+  return query<EventTicketType>(
+    `
+      select *
+      from event_ticket_types
+      where event_id = $1
+      order by sort_order asc, created_at asc
+    `,
+    [eventId],
   );
 }
 
-function AddOnSettingsPanel({
-  eventId,
-  addOn,
-  definition,
-  readinessItems,
-  readyForCheckout,
-  readinessWarnings,
-  canUseMultipleAddOns,
-}: {
+export async function createEventTicketType(input: {
   eventId: string;
-  addOn: EventFundraisingAddOn;
-  definition: AddOnDefinition;
-  readinessItems: ReadinessItem[];
-  readyForCheckout: boolean;
-  readinessWarnings: number;
-  canUseMultipleAddOns: boolean;
-}) {
-  return (
-    <section className="panel" style={styles.panel}>
-      <div className="panelHeader" style={styles.panelHeader}>
-        <div>
-          <div style={styles.innerEyebrow}>{definition.eyebrow}</div>
-          <h2 style={styles.panelTitle}>{definition.panelTitle}</h2>
-          <p style={styles.sectionText}>
-            Configure the public wording and whether entries should be collected
-            during event checkout. Existing event tickets, seating, VIP access,
-            menus, checkout, receipts and reporting are preserved.
-          </p>
-        </div>
+  name: string;
+  description?: string | null;
+  price: number;
+  capacity?: number | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}): Promise<EventTicketType> {
+  await assertEventExists(input.eventId);
 
-        <span
-          style={{
-            ...styles.statusPill,
-            ...(readyForCheckout
-              ? styles.statusGood
-              : addOn.enabled
-                ? styles.statusWarning
-                : styles.statusNeutral),
-          }}
-        >
-          {readyForCheckout
-            ? "Checkout-ready"
-            : addOn.enabled
-              ? "Enabled"
-              : "Disabled"}
-        </span>
-      </div>
-
-      <div className="readinessGrid" style={styles.readinessGridLight}>
-        {readinessItems.map((item) => {
-          const toneStyles = readinessToneStyle(item.tone);
-
-          return (
-            <article
-              key={`${definition.type}-${item.label}`}
-              style={{
-                ...styles.readinessItemLight,
-                ...toneStyles.card,
-              }}
-            >
-              <span
-                style={{
-                  ...styles.readinessToneDot,
-                  ...toneStyles.dot,
-                }}
-              />
-              <div style={styles.readinessContent}>
-                <span style={styles.readinessLabelLight}>{item.label}</span>
-                <strong style={styles.readinessValueLight}>{item.value}</strong>
-                <p style={styles.readinessDetailLight}>{item.detail}</p>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      {addOn.enabled && readinessWarnings > 0 ? (
-        <div style={styles.warningNotice}>
-          <strong>
-            {definition.shortName} has {readinessWarnings} warning
-            {readinessWarnings === 1 ? "" : "s"}
-          </strong>
-          <span>
-            The add-on can be saved, but completing the missing fields will make
-            the public experience clearer.
-          </span>
-        </div>
-      ) : null}
-
-      <form action={saveEventAddOnAction} style={styles.form}>
-        <input type="hidden" name="event_id" value={eventId} />
-        <input type="hidden" name="addon_type" value={definition.type} />
-
-        <div className="twoCol" style={styles.twoCol}>
-          <Field label={`Enable ${definition.shortName}`}>
-            <select
-              name="enabled"
-              defaultValue={addOn.enabled ? "true" : "false"}
-              className="input"
-              style={styles.input}
-            >
-              <option value="false">No, keep disabled</option>
-              <option value="true">Yes, enable for this event</option>
-            </select>
-          </Field>
-
-          <Field label="Collect entries at checkout">
-            <select
-              name="collect_at_checkout"
-              defaultValue={addOn.collectAtCheckout ? "true" : "false"}
-              className="input"
-              style={styles.input}
-            >
-              <option value="false">No, collect on the night</option>
-              <option value="true">Yes, collect during checkout</option>
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Display title">
-          <input
-            name="title"
-            defaultValue={addOn.title || definition.defaultTitle}
-            className="input"
-            style={styles.input}
-          />
-        </Field>
-
-        <Field label="Short description">
-          <textarea
-            name="description"
-            rows={3}
-            defaultValue={addOn.description || ""}
-            placeholder={definition.defaultDescription}
-            className="textarea"
-            style={styles.textarea}
-          />
-        </Field>
-
-        <Field label="How it works / instructions">
-          <textarea
-            name="instructions"
-            rows={4}
-            defaultValue={addOn.instructions || ""}
-            placeholder={definition.defaultInstructions}
-            className="textarea"
-            style={styles.textarea}
-          />
-        </Field>
-
-        <div className="threeCol" style={styles.threeCol}>
-          <Field label="Entry price">
-            <input
-              name="entry_price"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={moneyFromCents(addOn.entryPriceCents)}
-              className="input"
-              style={styles.input}
-            />
-          </Field>
-
-          <Field label="Max entries per booking">
-            <input
-              name="max_entries_per_booking"
-              type="number"
-              min="1"
-              defaultValue={addOn.maxEntriesPerBooking || 1}
-              className="input"
-              style={styles.input}
-            />
-          </Field>
-
-          <Field label="Prize title / note">
-            <input
-              name="prize_title"
-              defaultValue={addOn.prizeTitle || ""}
-              placeholder={definition.defaultPrizePlaceholder}
-              className="input"
-              style={styles.input}
-            />
-          </Field>
-        </div>
-
-        {!canUseMultipleAddOns ? (
-          <div style={styles.professionalNotice}>
-            <strong>Professional add-on limit</strong>
-            <span>
-              This tenant can enable one event fundraising add-on per event.
-              Save only one enabled add-on at a time, or upgrade to Foundation
-              for multiple add-ons per event.
-            </span>
-          </div>
-        ) : (
-          <div style={styles.foundationNotice}>
-            <strong>Foundation add-ons enabled</strong>
-            <span>
-              This tenant can support multiple event fundraising add-ons per
-              event as more add-on types are introduced.
-            </span>
-          </div>
-        )}
-
-        <section className="submitBar" style={styles.submitBar}>
-          <div>
-            <strong style={{ color: "#0f172a" }}>
-              Save {definition.shortName} settings
-            </strong>
-            <div style={styles.mutedSmall}>
-              Updates this event only. Public display, checkout collection and
-              admin reporting use these settings as each phase is wired.
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="primaryButton"
-            style={styles.primaryButton}
-          >
-            Save {definition.shortName}
-          </button>
-        </section>
-      </form>
-    </section>
+  const created = await queryOne<EventTicketType>(
+    `
+      insert into event_ticket_types (
+        event_id,
+        name,
+        description,
+        price,
+        capacity,
+        sort_order,
+        is_active
+      )
+      values ($1,$2,$3,$4,$5,$6,$7)
+      returning *
+    `,
+    [
+      input.eventId,
+      input.name,
+      input.description ?? null,
+      input.price,
+      input.capacity ?? null,
+      input.sortOrder ?? 0,
+      input.isActive ?? true,
+    ],
   );
+
+  if (!created) {
+    throw new Error("Failed to create event ticket type");
+  }
+
+  return created;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label style={styles.field}>
-      <span style={styles.label}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function HeroMetric({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={styles.heroMetric}>
-      <span style={styles.heroMetricLabel}>{label}</span>
-      <strong style={styles.heroMetricValue}>{value}</strong>
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: ReactNode;
-  detail: string;
-}) {
-  return (
-    <article style={styles.summaryCard}>
-      <span style={styles.summaryLabel}>{label}</span>
-      <strong style={styles.summaryValue}>{value}</strong>
-      <p style={styles.summaryDetail}>{detail}</p>
-    </article>
-  );
-}
-
-function UpgradeBanner({ title, text }: { title: string; text: string }) {
-  return (
-    <section className="upgradeBanner" style={styles.upgradeBanner}>
-      <div style={styles.upgradeEyebrow}>Upgrade required</div>
-      <h2 style={styles.upgradeTitle}>{title}</h2>
-      <p style={styles.upgradeText}>{text}</p>
-      <Link href="/admin/settings/billing" style={styles.primaryLink}>
-        View billing
-      </Link>
-    </section>
-  );
-}
-
-const responsiveStyles = `
-@media (max-width: 900px) {
-  .event-addons-page * {
-    box-sizing: border-box !important;
-  }
-
-  .event-addons-page {
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
-  }
-}
-
-@media (max-width: 760px) {
-  .event-addons-page .heroMetaGrid,
-  .event-addons-page .summaryGrid,
-  .event-addons-page .readinessGrid,
-  .event-addons-page .readinessOverviewGrid,
-  .event-addons-page .twoCol,
-  .event-addons-page .threeCol {
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-addons-page .hero,
-  .event-addons-page .topActions,
-  .event-addons-page .panelHeader,
-  .event-addons-page .submitBar,
-  .event-addons-page .readinessHeader,
-  .event-addons-page .readinessActions {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    align-items: stretch !important;
-  }
-
-  .event-addons-page .topActionsRight {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-    width: 100% !important;
-  }
-
-  .event-addons-page .primaryButton,
-  .event-addons-page .primaryLink,
-  .event-addons-page .secondaryButton,
-  .event-addons-page .secondaryButtonDark {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-}
-
-@media (max-width: 520px) {
-  .event-addons-page {
-    padding: 18px 12px 44px !important;
-  }
-
-  .event-addons-page .hero,
-  .event-addons-page .panel,
-  .event-addons-page .lockedPanel,
-  .event-addons-page .upgradeBanner,
-  .event-addons-page .readinessPanel {
-    border-radius: 22px !important;
-    padding: 16px !important;
-  }
-
-  .event-addons-page .title {
-    font-size: clamp(32px, 10vw, 42px) !important;
-  }
-
-  .event-addons-page .input,
-  .event-addons-page .textarea {
-    font-size: 16px !important;
-  }
-}
-`;
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: 1120,
-    margin: "0 auto",
-    padding: "28px 16px 56px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-    overflowX: "hidden",
-    boxSizing: "border-box",
-  },
-
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(260px, 0.85fr)",
-    gap: 18,
-    alignItems: "stretch",
-    padding: "clamp(20px, 4vw, 28px)",
-    borderRadius: 28,
-    background:
-      "radial-gradient(circle at top left, rgba(245,158,11,0.24), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
-    color: "#ffffff",
-    marginBottom: 16,
-    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
-    overflow: "hidden",
-  },
-
-  heroContent: {
-    minWidth: 0,
-  },
-
-  eyebrow: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.1em",
-    marginBottom: 12,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: "clamp(36px, 5vw, 54px)",
-    lineHeight: 1.02,
-    letterSpacing: "-0.06em",
-    overflowWrap: "anywhere",
-  },
-
-  heroText: {
-    margin: "14px 0 0",
-    color: "#dbeafe",
-    lineHeight: 1.65,
-    maxWidth: 760,
-    fontSize: 15,
-  },
-
-  heroMetaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
-    marginTop: 22,
-  },
-
-  heroMetric: {
-    padding: "13px 14px",
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(255,255,255,0.16)",
-    minWidth: 0,
-  },
-
-  heroMetricLabel: {
-    display: "block",
-    color: "#bfdbfe",
-    fontSize: 12,
-    fontWeight: 900,
-    marginBottom: 4,
-  },
-
-  heroMetricValue: {
-    display: "block",
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-
-  heroPanel: {
-    display: "grid",
-    alignContent: "center",
-    gap: 10,
-    padding: 18,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.18)",
-  },
-
-  heroPanelEyebrow: {
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  heroPanelTitle: {
-    color: "#ffffff",
-    fontSize: 24,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-  },
-
-  heroPanelText: {
-    color: "#dbeafe",
-    fontSize: 14,
-    lineHeight: 1.55,
-    fontWeight: 800,
-  },
-
-  topActions: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-
-  topActionsRight: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-  },
-
-  primaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "1px solid #1683f8",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
-  },
-
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-    boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
-  },
-
-  secondaryButtonDark: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.2)",
-    textDecoration: "none",
-    fontWeight: 950,
-  },
-
-  successBox: {
-    padding: 13,
-    background: "#dcfce7",
-    color: "#166534",
-    border: "1px solid #bbf7d0",
-    borderRadius: 16,
-    marginBottom: 16,
-    fontWeight: 950,
-  },
-
-  upgradeBanner: {
-    marginBottom: 16,
-    padding: "clamp(18px, 4vw, 24px)",
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #fef3c7 0%, #ffffff 52%, #eff6ff 100%)",
-    border: "1px solid #fde68a",
-    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
-  },
-
-  upgradeEyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fffbeb",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-
-  upgradeTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(24px, 5vw, 32px)",
-    lineHeight: 1.05,
-    letterSpacing: "-0.045em",
-  },
-
-  upgradeText: {
-    margin: "10px 0 16px",
-    color: "#475569",
-    fontSize: 15,
-    lineHeight: 1.6,
-    maxWidth: 820,
-  },
-
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-    marginBottom: 16,
-  },
-
-  summaryCard: {
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
-  },
-
-  summaryLabel: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 6,
-  },
-
-  summaryValue: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-  },
-
-  summaryDetail: {
-    margin: "7px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  readinessPanel: {
-    display: "grid",
-    gap: 16,
-    padding: 18,
-    borderRadius: 24,
-    background:
-      "radial-gradient(circle at top left, rgba(250,204,21,0.14), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #020617 100%)",
-    color: "#ffffff",
-    border: "1px solid rgba(250,204,21,0.26)",
-    boxShadow: "0 18px 48px rgba(15,23,42,0.16)",
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-
-  readinessHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-
-  readinessEyebrow: {
-    color: "#facc15",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-
-  readinessTitle: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: "clamp(24px, 5vw, 32px)",
-    lineHeight: 1.05,
-    letterSpacing: "-0.045em",
-  },
-
-  readinessIntro: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    fontSize: 14,
-    lineHeight: 1.55,
-    maxWidth: 780,
-    fontWeight: 750,
-  },
-
-  readinessStatusPill: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-
-  readinessOverviewGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  readinessOverviewCard: {
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.14)",
-  },
-
-  readinessOverviewHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  readinessOverviewLabel: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: 950,
-    letterSpacing: "-0.03em",
-  },
-
-  readinessOverviewText: {
-    margin: "7px 0 0",
-    color: "#cbd5e1",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  miniStatusPill: {
-    display: "inline-flex",
-    padding: "6px 9px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-
-  readinessGridLight: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  readinessItemLight: {
-    display: "grid",
-    gridTemplateColumns: "14px minmax(0, 1fr)",
-    gap: 10,
-    alignItems: "start",
-    padding: 14,
-    borderRadius: 18,
-    border: "1px solid",
-    minWidth: 0,
-  },
-
-  readinessItemGood: {
-    background: "rgba(34,197,94,0.12)",
-    borderColor: "rgba(187,247,208,0.34)",
-  },
-
-  readinessItemWarning: {
-    background: "rgba(250,204,21,0.12)",
-    borderColor: "rgba(250,204,21,0.34)",
-  },
-
-  readinessItemNeutral: {
-    background: "rgba(255,255,255,0.76)",
-    borderColor: "rgba(203,213,225,0.9)",
-  },
-
-  readinessToneDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 999,
-    marginTop: 4,
-  },
-
-  readinessDotGood: {
-    background: "#22c55e",
-    boxShadow: "0 0 0 4px rgba(34,197,94,0.14)",
-  },
-
-  readinessDotWarning: {
-    background: "#facc15",
-    boxShadow: "0 0 0 4px rgba(250,204,21,0.14)",
-  },
-
-  readinessDotNeutral: {
-    background: "#94a3b8",
-    boxShadow: "0 0 0 4px rgba(148,163,184,0.14)",
-  },
-
-  readinessContent: {
-    minWidth: 0,
-  },
-
-  readinessLabelLight: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 4,
-  },
-
-  readinessValueLight: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-
-  readinessDetailLight: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  readinessActions: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  lockedPanel: {
-    padding: 20,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
-  },
-
-  lockedEyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-
-  addOnPanels: {
-    display: "grid",
-    gap: 16,
-  },
-
-  panel: {
-    display: "grid",
-    gap: 16,
-    padding: 18,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
-    minWidth: 0,
-  },
-
-  panelHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-
-  innerEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-
-  panelTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(23px, 5vw, 30px)",
-    letterSpacing: "-0.045em",
-    lineHeight: 1.05,
-  },
-
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.55,
-    maxWidth: 820,
-  },
-
-  statusPill: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-
-  statusGood: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  statusWarning: {
-    background: "#fef3c7",
-    color: "#92400e",
-    borderColor: "#fde68a",
-  },
-
-  statusNeutral: {
-    background: "#f8fafc",
-    color: "#64748b",
-    borderColor: "#cbd5e1",
-  },
-
-  form: {
-    display: "grid",
-    gap: 13,
-    minWidth: 0,
-  },
-
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  threeCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
+export async function updateEventTicketType(
+  eventId: string,
+  id: string,
   input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-    minWidth: 0,
+    name: string;
+    description?: string | null;
+    price: number;
+    capacity?: number | null;
+    sortOrder?: number;
+    isActive?: boolean;
   },
+): Promise<EventTicketType | null> {
+  return queryOne<EventTicketType>(
+    `
+      update event_ticket_types
+      set
+        name = $3,
+        description = $4,
+        price = $5,
+        capacity = $6,
+        sort_order = $7,
+        is_active = $8
+      where event_id = $1
+        and id = $2
+      returning *
+    `,
+    [
+      eventId,
+      id,
+      input.name,
+      input.description ?? null,
+      input.price,
+      input.capacity ?? null,
+      input.sortOrder ?? 0,
+      input.isActive ?? true,
+    ],
+  );
+}
 
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    resize: "vertical",
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
+export async function deleteEventTicketType(
+  eventId: string,
+  id: string,
+): Promise<void> {
+  await query(
+    `
+      delete from event_ticket_types
+      where event_id = $1
+        and id = $2
+    `,
+    [eventId, id],
+  );
+}
 
-  professionalNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
+export async function deleteEventTicketTypes(eventId: string): Promise<void> {
+  await query(
+    `
+      delete from event_ticket_types
+      where event_id = $1
+    `,
+    [eventId],
+  );
+}
 
-  foundationNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
+/* =========================
+   SEATS / TABLE SEATS
+========================= */
 
-  warningNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
+export async function listEventSeats(eventId: string): Promise<EventSeat[]> {
+  return query<EventSeat>(
+    `
+      select *
+      from event_seats
+      where event_id = $1
+      order by
+        section asc nulls last,
+        case
+          when row_label ~ '^[0-9]+$'
+          then row_label::int
+          else null
+        end asc nulls last,
+        row_label asc nulls last,
+        case
+          when table_number ~ '^[0-9]+$'
+          then table_number::int
+          else null
+        end asc nulls last,
+        table_number asc nulls last,
+        case
+          when seat_number ~ '^[0-9]+$'
+          then seat_number::int
+          else null
+        end asc nulls last,
+        seat_number asc nulls last,
+        created_at asc
+    `,
+    [eventId],
+  );
+}
 
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
+export async function listAvailableEventSeats(
+  eventId: string,
+): Promise<EventSeat[]> {
+  return query<EventSeat>(
+    `
+      select *
+      from event_seats
+      where event_id = $1
+        and status = 'available'
+      order by
+        section asc nulls last,
+        case
+          when row_label ~ '^[0-9]+$'
+          then row_label::int
+          else null
+        end asc nulls last,
+        row_label asc nulls last,
+        case
+          when table_number ~ '^[0-9]+$'
+          then table_number::int
+          else null
+        end asc nulls last,
+        table_number asc nulls last,
+        case
+          when seat_number ~ '^[0-9]+$'
+          then seat_number::int
+          else null
+        end asc nulls last,
+        seat_number asc nulls last,
+        created_at asc
+    `,
+    [eventId],
+  );
+}
 
-  primaryButton: {
-    width: "fit-content",
-    minHeight: 44,
-    padding: "13px 18px",
-    border: "none",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
-  },
+export async function createEventSeat(input: {
+  eventId: string;
+  ticketTypeId?: string | null;
+  seatPurpose?: string | null;
+  adminLabel?: string | null;
+  adminNote?: string | null;
+  guestName?: string | null;
+  guestEmail?: string | null;
+  dietaryRequirements?: string | null;
+  menuChoice?: string | null;
+  section?: string | null;
+  rowLabel?: string | null;
+  seatNumber?: string | null;
+  tableNumber?: string | null;
+  aisleAfter?: number | null;
+  status?: EventSeatStatus;
+}): Promise<EventSeat> {
+  await assertEventExists(input.eventId);
+  await assertTicketTypeBelongsToEvent(input.eventId, input.ticketTypeId);
 
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
+  const created = await queryOne<EventSeat>(
+    `
+      insert into event_seats (
+        event_id,
+        ticket_type_id,
+        seat_purpose,
+        admin_label,
+        admin_note,
+        guest_name,
+        guest_email,
+        dietary_requirements,
+        menu_choice,
+        section,
+        row_label,
+        seat_number,
+        table_number,
+        aisle_after,
+        status
+      )
+      values (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,
+        $10,$11,$12,$13,$14,$15
+      )
+      returning *
+    `,
+    [
+      input.eventId,
+      input.ticketTypeId ?? null,
+      normaliseSeatPurpose(input.seatPurpose),
+      normaliseNullableText(input.adminLabel),
+      normaliseNullableText(input.adminNote),
+      normaliseNullableText(input.guestName),
+      normaliseNullableText(input.guestEmail),
+      normaliseNullableText(input.dietaryRequirements),
+      normaliseNullableText(input.menuChoice),
+      input.section ?? null,
+      input.rowLabel ?? null,
+      input.seatNumber ?? null,
+      input.tableNumber ?? null,
+      input.aisleAfter ?? null,
+      normaliseSeatStatus(input.status),
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event seat");
+  }
+
+  return created;
+}
+
+export async function updateEventSeat(
+  eventId: string,
+  id: string,
+  input: {
+    ticketTypeId?: string | null;
+    seatPurpose?: string | null;
+    adminLabel?: string | null;
+    adminNote?: string | null;
+    guestName?: string | null;
+    guestEmail?: string | null;
+    dietaryRequirements?: string | null;
+    menuChoice?: string | null;
+    section?: string | null;
+    rowLabel?: string | null;
+    seatNumber?: string | null;
+    tableNumber?: string | null;
+    aisleAfter?: number | null;
+    status?: EventSeatStatus;
+    customerName?: string | null;
+    customerEmail?: string | null;
   },
-};
+): Promise<EventSeat | null> {
+  await assertTicketTypeBelongsToEvent(eventId, input.ticketTypeId);
+
+  return queryOne<EventSeat>(
+    `
+      update event_seats
+      set
+        ticket_type_id = $3,
+        seat_purpose = $4,
+        admin_label = $5,
+        admin_note = $6,
+        guest_name = $7,
+        guest_email = $8,
+        dietary_requirements = $9,
+        menu_choice = $10,
+        section = $11,
+        row_label = $12,
+        seat_number = $13,
+        table_number = $14,
+        aisle_after = $15,
+        status = $16,
+        customer_name = $17,
+        customer_email = $18,
+        updated_at = now()
+      where event_id = $1
+        and id = $2
+      returning *
+    `,
+    [
+      eventId,
+      id,
+      input.ticketTypeId ?? null,
+      normaliseSeatPurpose(input.seatPurpose),
+      normaliseNullableText(input.adminLabel),
+      normaliseNullableText(input.adminNote),
+      normaliseNullableText(input.guestName),
+      normaliseNullableText(input.guestEmail),
+      normaliseNullableText(input.dietaryRequirements),
+      normaliseNullableText(input.menuChoice),
+      input.section ?? null,
+      input.rowLabel ?? null,
+      input.seatNumber ?? null,
+      input.tableNumber ?? null,
+      input.aisleAfter ?? null,
+      normaliseSeatStatus(input.status),
+      normaliseNullableText(input.customerName),
+      normaliseNullableText(input.customerEmail),
+    ],
+  );
+}
+
+export async function updateEventSeatsTicketType(input: {
+  eventId: string;
+  seatIds: string[];
+  ticketTypeId: string | null;
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await assertTicketTypeBelongsToEvent(input.eventId, input.ticketTypeId);
+
+  await query(
+    `
+      update event_seats
+      set
+        ticket_type_id = $3,
+        updated_at = now()
+      where event_id = $1
+        and id = any($2::uuid[])
+    `,
+    [input.eventId, input.seatIds, input.ticketTypeId],
+  );
+}
+
+export async function updateEventSeatsMetadata(input: {
+  eventId: string;
+  seatIds: string[];
+  seatPurpose?: string | null;
+  adminLabel?: string | null;
+  adminNote?: string | null;
+  guestName?: string | null;
+  guestEmail?: string | null;
+  dietaryRequirements?: string | null;
+  menuChoice?: string | null;
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+      update event_seats
+      set
+        seat_purpose = $3,
+        admin_label = $4,
+        admin_note = $5,
+        guest_name = $6,
+        guest_email = $7,
+        dietary_requirements = $8,
+        menu_choice = $9,
+        updated_at = now()
+      where event_id = $1
+        and id = any($2::uuid[])
+    `,
+    [
+      input.eventId,
+      input.seatIds,
+      normaliseSeatPurpose(input.seatPurpose),
+      normaliseNullableText(input.adminLabel),
+      normaliseNullableText(input.adminNote),
+      normaliseNullableText(input.guestName),
+      normaliseNullableText(input.guestEmail),
+      normaliseNullableText(input.dietaryRequirements),
+      normaliseNullableText(input.menuChoice),
+    ],
+  );
+}
+
+export async function updateEventSeatsStatus(input: {
+  eventId: string;
+  seatIds: string[];
+  status: EventSeatStatus;
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+      update event_seats
+      set
+        status = $3,
+        updated_at = now()
+      where event_id = $1
+        and id = any($2::uuid[])
+        and status in ('available', 'blocked')
+    `,
+    [input.eventId, input.seatIds, normaliseSeatStatus(input.status)],
+  );
+}
+
+export async function deleteEventSeat(
+  eventId: string,
+  id: string,
+): Promise<void> {
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+        and id = $2
+    `,
+    [eventId, id],
+  );
+}
+
+export async function deleteEventSeatsByIds(input: {
+  eventId: string;
+  seatIds: string[];
+}): Promise<void> {
+  if (input.seatIds.length === 0) return;
+
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+        and id = any($2::uuid[])
+    `,
+    [input.eventId, input.seatIds],
+  );
+}
+
+export async function deleteEventRowsByKeys(input: {
+  eventId: string;
+  rowKeys: string[];
+}): Promise<void> {
+  if (input.rowKeys.length === 0) return;
+
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+        and row_label is not null
+        and table_number is null
+        and concat(
+          coalesce(section, ''),
+          '|',
+          coalesce(row_label, '')
+        ) = any($2::text[])
+    `,
+    [input.eventId, input.rowKeys],
+  );
+}
+
+export async function deleteEventSeats(eventId: string): Promise<void> {
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+    `,
+    [eventId],
+  );
+}
+
+export async function deleteEventRowSeats(eventId: string): Promise<void> {
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+        and row_label is not null
+        and table_number is null
+    `,
+    [eventId],
+  );
+}
+
+export async function deleteEventTableSeats(eventId: string): Promise<void> {
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+        and table_number is not null
+    `,
+    [eventId],
+  );
+}
+
+/* =========================
+   EVENT WINNERS
+========================= */
+
+export async function listEventWinners(eventId: string): Promise<EventWinner[]> {
+  return query<EventWinner>(
+    `
+      select *
+      from event_winners
+      where event_id = $1
+      order by
+        prize_position asc nulls last,
+        drawn_at desc,
+        created_at desc
+    `,
+    [eventId],
+  );
+}
+
+export async function deleteEventWinner(
+  eventId: string,
+  id: string,
+): Promise<void> {
+  await query(
+    `
+      delete from event_winners
+      where event_id = $1
+        and id = $2
+    `,
+    [eventId, id],
+  );
+}
+
+export async function clearEventWinners(eventId: string): Promise<void> {
+  await query(
+    `
+      delete from event_winners
+      where event_id = $1
+    `,
+    [eventId],
+  );
+}
+
+export async function createEventWinner(input: {
+  tenantSlug: string;
+  eventId: string;
+  prizeId?: string | null;
+  prizeTitle: string;
+  prizePosition?: number | null;
+  drawScope?: string;
+  drawSettings?: Record<string, unknown>;
+  eventOrderId?: string | null;
+  eventOrderItemId?: string | null;
+  eventSeatId?: string | null;
+  ticketTypeId?: string | null;
+  tableNumber?: string | null;
+  rowLabel?: string | null;
+  seatNumber?: string | null;
+  winnerName?: string | null;
+  winnerEmail?: string | null;
+  status?: string;
+}): Promise<EventWinner> {
+  await assertEventExists(input.eventId);
+  await assertTicketTypeBelongsToEvent(input.eventId, input.ticketTypeId);
+
+  const created = await queryOne<EventWinner>(
+    `
+      insert into event_winners (
+        tenant_slug,
+        event_id,
+        prize_id,
+        prize_title,
+        prize_position,
+        draw_scope,
+        draw_settings,
+        event_order_id,
+        event_order_item_id,
+        event_seat_id,
+        ticket_type_id,
+        table_number,
+        row_label,
+        seat_number,
+        winner_name,
+        winner_email,
+        status
+      )
+      values (
+        $1,$2,
+        $3,$4,$5,
+        $6,$7::jsonb,
+        $8,$9,$10,
+        $11,
+        $12,$13,$14,
+        $15,$16,
+        $17
+      )
+      returning *
+    `,
+    [
+      input.tenantSlug,
+      input.eventId,
+      input.prizeId ?? null,
+      input.prizeTitle,
+      input.prizePosition ?? null,
+      input.drawScope ?? "all",
+      JSON.stringify(input.drawSettings ?? {}),
+      input.eventOrderId ?? null,
+      input.eventOrderItemId ?? null,
+      input.eventSeatId ?? null,
+      input.ticketTypeId ?? null,
+      input.tableNumber ?? null,
+      input.rowLabel ?? null,
+      input.seatNumber ?? null,
+      normaliseNullableText(input.winnerName),
+      normaliseNullableText(input.winnerEmail),
+      input.status ?? "drawn",
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event winner");
+  }
+
+  return created;
+}
+
+export async function getEligibleEventDrawCandidates(input: {
+  eventId: string;
+  includeComplimentary?: boolean;
+  includeVip?: boolean;
+  includeStaff?: boolean;
+  includeSponsors?: boolean;
+  includeGuests?: boolean;
+  excludeWinnerEmails?: boolean;
+  maxWinnersPerTable?: number | null;
+}): Promise<EventDrawCandidate[]> {
+  const excludedEmailRows = input.excludeWinnerEmails
+    ? await query<{ winner_email: string }>(
+        `
+          select distinct lower(winner_email) as winner_email
+          from event_winners
+          where event_id = $1
+            and winner_email is not null
+            and trim(winner_email) <> ''
+        `,
+        [input.eventId],
+      )
+    : [];
+
+  const excludedEmails = new Set(
+    excludedEmailRows
+      .map((row) => String(row.winner_email || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  const alreadyDrawnRows = await query<{
+    event_order_item_id: string | null;
+    event_seat_id: string | null;
+  }>(
+    `
+      select
+        event_order_item_id,
+        event_seat_id
+      from event_winners
+      where event_id = $1
+        and status = 'drawn'
+    `,
+    [input.eventId],
+  );
+
+  const alreadyDrawnOrderItemIds = new Set(
+    alreadyDrawnRows
+      .map((row) => row.event_order_item_id)
+      .filter(Boolean) as string[],
+  );
+
+  const alreadyDrawnSeatIds = new Set(
+    alreadyDrawnRows
+      .map((row) => row.event_seat_id)
+      .filter(Boolean) as string[],
+  );
+
+  const paidCandidates = await query<EventDrawCandidate>(
+    `
+      select
+        eo.id as event_order_id,
+        eoi.id as event_order_item_id,
+        es.id as event_seat_id,
+        coalesce(es.ticket_type_id, eoi.ticket_type_id) as ticket_type_id,
+        es.table_number,
+        es.row_label,
+        es.seat_number,
+        coalesce(
+          es.guest_name,
+          eoi.guest_name,
+          es.customer_name,
+          eo.customer_name
+        ) as winner_name,
+        lower(
+          coalesce(
+            es.guest_email,
+            es.customer_email,
+            eo.customer_email
+          )
+        ) as winner_email,
+        es.seat_purpose
+      from event_orders eo
+      inner join event_order_items eoi
+        on eoi.order_id = eo.id
+      left join event_seats es
+        on es.id = eoi.seat_id
+      where eo.event_id = $1
+        and eo.status = 'paid'
+      order by eo.created_at asc, eoi.created_at asc
+    `,
+    [input.eventId],
+  );
+
+  const adminSeatCandidates = await query<EventDrawCandidate>(
+    `
+      select
+        null::uuid as event_order_id,
+        null::uuid as event_order_item_id,
+        es.id as event_seat_id,
+        es.ticket_type_id,
+        es.table_number,
+        es.row_label,
+        es.seat_number,
+        coalesce(es.guest_name, es.customer_name) as winner_name,
+        lower(coalesce(es.guest_email, es.customer_email)) as winner_email,
+        es.seat_purpose
+      from event_seats es
+      where es.event_id = $1
+        and es.status <> 'blocked'
+        and es.seat_purpose in (
+          'vip',
+          'complimentary',
+          'staff',
+          'sponsor',
+          'guest'
+        )
+        and (
+          coalesce(trim(es.guest_email), '') <> ''
+          or coalesce(trim(es.customer_email), '') <> ''
+        )
+      order by
+        case
+          when es.table_number ~ '^[0-9]+$'
+          then es.table_number::int
+          else null
+        end asc nulls last,
+        es.table_number asc nulls last,
+        es.row_label asc nulls last,
+        case
+          when es.seat_number ~ '^[0-9]+$'
+          then es.seat_number::int
+          else null
+        end asc nulls last,
+        es.seat_number asc nulls last,
+        es.created_at asc
+    `,
+    [input.eventId],
+  );
+
+  const candidatesByKey = new Map<string, EventDrawCandidate>();
+
+  for (const candidate of [...paidCandidates, ...adminSeatCandidates]) {
+    const key =
+      candidate.event_order_item_id ||
+      candidate.event_seat_id ||
+      `${candidate.winner_email}-${candidate.table_number}-${candidate.row_label}-${candidate.seat_number}`;
+
+    if (key) {
+      candidatesByKey.set(key, candidate);
+    }
+  }
+
+  const rows = Array.from(candidatesByKey.values());
+
+  const tableWinnerCounts = new Map<string, number>();
+
+  if (input.maxWinnersPerTable && input.maxWinnersPerTable > 0) {
+    const existingTableWinners = await query<{
+      table_number: string | null;
+      total: string;
+    }>(
+      `
+        select
+          table_number,
+          count(*)::text as total
+        from event_winners
+        where event_id = $1
+          and status = 'drawn'
+          and table_number is not null
+        group by table_number
+      `,
+      [input.eventId],
+    );
+
+    for (const row of existingTableWinners) {
+      if (!row.table_number) continue;
+      tableWinnerCounts.set(row.table_number, Number(row.total || 0));
+    }
+  }
+
+  return rows.filter((candidate) => {
+    if (
+      candidate.event_order_item_id &&
+      alreadyDrawnOrderItemIds.has(candidate.event_order_item_id)
+    ) {
+      return false;
+    }
+
+    if (
+      candidate.event_seat_id &&
+      alreadyDrawnSeatIds.has(candidate.event_seat_id)
+    ) {
+      return false;
+    }
+
+    if (!candidate.winner_email) {
+      return false;
+    }
+
+    const purpose = String(candidate.seat_purpose || "");
+
+    if (purpose === "complimentary" && input.includeComplimentary === false) {
+      return false;
+    }
+
+    if (purpose === "vip" && input.includeVip === false) {
+      return false;
+    }
+
+    if (purpose === "staff" && input.includeStaff === false) {
+      return false;
+    }
+
+    if (purpose === "sponsor" && input.includeSponsors === false) {
+      return false;
+    }
+
+    if (purpose === "guest" && input.includeGuests === false) {
+      return false;
+    }
+
+    if (
+      input.excludeWinnerEmails &&
+      excludedEmails.has(String(candidate.winner_email).trim().toLowerCase())
+    ) {
+      return false;
+    }
+
+    if (
+      input.maxWinnersPerTable &&
+      input.maxWinnersPerTable > 0 &&
+      candidate.table_number
+    ) {
+      const currentCount = tableWinnerCounts.get(candidate.table_number) || 0;
+
+      if (currentCount >= input.maxWinnersPerTable) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/* =========================
+   ORDERS
+========================= */
+
+export async function listEventOrders(eventId: string): Promise<EventOrder[]> {
+  return query<EventOrder>(
+    `
+      select *
+      from event_orders
+      where event_id = $1
+      order by created_at desc
+    `,
+    [eventId],
+  );
+}
+
+export async function listEventOrderItems(
+  orderId: string,
+): Promise<EventOrderItem[]> {
+  return query<EventOrderItem>(
+    `
+      select *
+      from event_order_items
+      where order_id = $1
+      order by created_at asc
+    `,
+    [orderId],
+  );
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  await query(
+    `
+      delete from event_winners
+      where event_id = $1
+    `,
+    [id],
+  );
+
+  await query(
+    `
+      delete from event_order_items
+      where event_id = $1
+    `,
+    [id],
+  );
+
+  await query(
+    `
+      delete from event_seats
+      where event_id = $1
+    `,
+    [id],
+  );
+
+  await query(
+    `
+      delete from event_orders
+      where event_id = $1
+    `,
+    [id],
+  );
+
+  await query(
+    `
+      delete from event_ticket_types
+      where event_id = $1
+    `,
+    [id],
+  );
+
+  await query(
+    `
+      delete from events
+      where id = $1
+    `,
+    [id],
+  );
+}
+
+export async function createPendingEventOrder(input: {
+  tenantSlug: string;
+  eventId: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+  buyer_name?: string | null;
+  buyer_email?: string | null;
+  amountTotal: number;
+  currency: string;
+}): Promise<EventOrder> {
+  const customerName =
+    input.customerName ?? input.buyerName ?? input.buyer_name ?? null;
+
+  const customerEmail =
+    input.customerEmail ?? input.buyerEmail ?? input.buyer_email ?? null;
+
+  const created = await queryOne<EventOrder>(
+    `
+      insert into event_orders (
+        tenant_slug,
+        event_id,
+        customer_name,
+        customer_email,
+        amount_total,
+        currency,
+        status
+      )
+      values ($1,$2,$3,$4,$5,$6,'pending')
+      returning *
+    `,
+    [
+      input.tenantSlug,
+      input.eventId,
+      customerName,
+      customerEmail,
+      input.amountTotal,
+      input.currency.toLowerCase(),
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event order");
+  }
+
+  return created;
+}
+
+export async function updateEventOrderStripeSession(input: {
+  orderId: string;
+  stripeSessionId: string;
+}): Promise<void> {
+  await query(
+    `
+      update event_orders
+      set stripe_session_id = $2
+      where id = $1
+    `,
+    [input.orderId, input.stripeSessionId],
+  );
+}
+
+export async function updateEventOrderStatus(input: {
+  orderId: string;
+  status: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+}): Promise<void> {
+  await query(
+    `
+      update event_orders
+      set
+        status = $2,
+        customer_name = coalesce($3, customer_name),
+        customer_email = coalesce($4, customer_email)
+      where id = $1
+    `,
+    [
+      input.orderId,
+      input.status,
+      input.customerName ?? null,
+      input.customerEmail ?? null,
+    ],
+  );
+}
+
+export async function createEventOrderItem(input: {
+  orderId: string;
+  eventId: string;
+  ticketTypeId: string | null;
+  seatId: string | null;
+  label: string;
+  quantity: number;
+  unitAmount: number;
+  guest_name?: string | null;
+  dietary_requirements?: string | null;
+  menu_choice?: string | null;
+}): Promise<EventOrderItem> {
+  const created = await queryOne<EventOrderItem>(
+    `
+      insert into event_order_items (
+        order_id,
+        event_id,
+        ticket_type_id,
+        seat_id,
+        label,
+        quantity,
+        unit_amount,
+        guest_name,
+        dietary_requirements,
+        menu_choice
+      )
+      values (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+      )
+      returning *
+    `,
+    [
+      input.orderId,
+      input.eventId,
+      input.ticketTypeId,
+      input.seatId,
+      input.label,
+      input.quantity,
+      input.unitAmount,
+      input.guest_name ?? null,
+      input.dietary_requirements ?? null,
+      input.menu_choice ?? null,
+    ],
+  );
+
+  if (!created) {
+    throw new Error("Failed to create event order item");
+  }
+
+  return created;
+}
+
+export async function reserveEventSeatsForOrder(input: {
+  eventId: string;
+  orderId: string;
+  seatIds: string[];
+}): Promise<number> {
+  if (input.seatIds.length === 0) return 0;
+
+  const rows = await query<{ id: string }>(
+    `
+      update event_seats
+      set
+        status = 'reserved',
+        order_id = $2,
+        updated_at = now()
+      where event_id = $1
+        and id = any($3::uuid[])
+        and status = 'available'
+      returning id
+    `,
+    [input.eventId, input.orderId, input.seatIds],
+  );
+
+  return rows.length;
+}
+
+export async function attachStripeSessionToReservedSeats(input: {
+  orderId: string;
+  stripeSessionId: string;
+}): Promise<void> {
+  await query(
+    `
+      update event_seats
+      set
+        stripe_session_id = $2,
+        updated_at = now()
+      where order_id = $1
+        and status = 'reserved'
+    `,
+    [input.orderId, input.stripeSessionId],
+  );
+}
+
+export async function markEventSeatsSoldForStripeSession(input: {
+  stripeSessionId: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+}): Promise<void> {
+  await query(
+    `
+      update event_seats
+      set
+        status = 'sold',
+        customer_name = $2,
+        customer_email = $3,
+        updated_at = now()
+      where stripe_session_id = $1
+        and status = 'reserved'
+    `,
+    [
+      input.stripeSessionId,
+      input.customerName ?? null,
+      input.customerEmail ?? null,
+    ],
+  );
+}
+
+export async function releaseEventSeatsForStripeSession(input: {
+  stripeSessionId: string;
+}): Promise<void> {
+  await query(
+    `
+      update event_seats
+      set
+        status = 'available',
+        stripe_session_id = null,
+        order_id = null,
+        customer_name = null,
+        customer_email = null,
+        updated_at = now()
+      where stripe_session_id = $1
+        and status = 'reserved'
+    `,
+    [input.stripeSessionId],
+  );
+}
+
+export async function deleteEventOrderAndItems(orderId: string): Promise<void> {
+  await query(
+    `
+      delete from event_order_items
+      where order_id = $1
+    `,
+    [orderId],
+  );
+
+  await query(
+    `
+      delete from event_orders
+      where id = $1
+    `,
+    [orderId],
+  );
+}
