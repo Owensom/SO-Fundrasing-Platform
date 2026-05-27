@@ -445,7 +445,7 @@ export default async function AdminEventOrdersPage({
   );
 
   const currency = event.currency || orders[0]?.currency || "GBP";
-    const statusFilters = [
+  const statusFilters = [
     {
       label: "All",
       value: "all",
@@ -943,6 +943,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1038,11 +1039,9 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
-    padding: 12,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    padding: 0,
     marginBottom: 18,
   },
 
@@ -1051,21 +1050,24 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    minHeight: 42,
-    padding: "9px 13px",
+    minHeight: 44,
+    padding: "10px 15px",
     borderRadius: 999,
-    background: "#f8fafc",
+    background: "#ffffff",
     color: "#334155",
-    border: "1px solid #dbe3ef",
+    border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 900,
+    fontWeight: 950,
     fontSize: 14,
+    boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
+    whiteSpace: "nowrap",
   },
 
   filterButtonActive: {
     background: "#0f172a",
     color: "#ffffff",
     borderColor: "#0f172a",
+    boxShadow: "0 10px 22px rgba(15,23,42,0.14)",
   },
 
   filterCount: {
@@ -1076,7 +1078,7 @@ const styles: Record<string, CSSProperties> = {
     height: 24,
     padding: "0 7px",
     borderRadius: 999,
-    background: "#ffffff",
+    background: "#f8fafc",
     color: "#334155",
     border: "1px solid #e2e8f0",
     fontSize: 12,
