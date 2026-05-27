@@ -220,22 +220,20 @@ export default async function EventSlugPage({
       };
     });
 
-  const checkoutReadyDisplayAddOn = publicDisplayAddOns.find(
+  const checkoutReadyDisplayAddOns = publicDisplayAddOns.filter(
     (addOn) => addOn.collectAtCheckout && addOn.entryPriceCents > 0,
   );
 
-  const checkoutAddOn: PublicEventCheckoutAddOn | null =
-    checkoutReadyDisplayAddOn
-      ? {
-          type: checkoutReadyDisplayAddOn.type,
-          title: checkoutReadyDisplayAddOn.title,
-          description:
-            checkoutReadyDisplayAddOn.description ||
-            `Add ${checkoutReadyDisplayAddOn.title} entries to your event booking.`,
-          entryPriceCents: checkoutReadyDisplayAddOn.entryPriceCents,
-          maxEntriesPerBooking: checkoutReadyDisplayAddOn.maxEntriesPerBooking,
-        }
-      : null;
+  const checkoutAddOns: PublicEventCheckoutAddOn[] =
+    checkoutReadyDisplayAddOns.map((addOn) => ({
+      type: addOn.type,
+      title: addOn.title,
+      description:
+        addOn.description ||
+        `Add ${addOn.title} entries to your event booking.`,
+      entryPriceCents: addOn.entryPriceCents,
+      maxEntriesPerBooking: addOn.maxEntriesPerBooking,
+    }));
 
   const lowestTicketPrice =
     ticketTypes.length > 0
@@ -429,8 +427,7 @@ export default async function EventSlugPage({
           </div>
         </div>
       </section>
-
-      <div style={styles.contentWrap}>
+            <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
           <section style={styles.successCard}>
             <strong>Payment successful.</strong>
@@ -641,7 +638,7 @@ export default async function EventSlugPage({
               ticketTypes={ticketTypes}
               currency={event.currency}
               platformFeePercent={platformFeePercent}
-              checkoutAddOn={checkoutAddOn}
+              checkoutAddOns={checkoutAddOns}
             />
           ) : event.event_type === "tables" ? (
             seats.length === 0 ? (
@@ -663,7 +660,7 @@ export default async function EventSlugPage({
                   tableShape,
                   table_shape: tableShape,
                 }}
-                checkoutAddOn={checkoutAddOn}
+                checkoutAddOns={checkoutAddOns}
               />
             )
           ) : seats.length === 0 ? (
@@ -682,7 +679,7 @@ export default async function EventSlugPage({
               platformFeePercent={platformFeePercent}
               menuOptions={menuOptions}
               initialSeatingLayout={event.seating_layout_json || {}}
-              checkoutAddOn={checkoutAddOn}
+              checkoutAddOns={checkoutAddOns}
             />
           )}
         </section>
@@ -709,7 +706,6 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
     </p>
   );
 }
-
 const responsiveStyles = `
 .public-event-page,
 .public-event-page * {
