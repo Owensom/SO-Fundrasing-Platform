@@ -77,7 +77,6 @@ function normaliseAddOnQuantity(
   addOn?: PublicEventCheckoutAddOn | null,
 ) {
   const cleanQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-
   const max = Number(addOn?.maxEntriesPerBooking || 0);
 
   if (Number.isFinite(max) && max > 0) {
@@ -87,23 +86,42 @@ function normaliseAddOnQuantity(
   return cleanQuantity;
 }
 
+function normaliseAddOnQuantities(input: {
+  checkoutAddOns: PublicEventCheckoutAddOn[];
+  addOnQuantities: Record<string, number>;
+  hasAccessCode: boolean;
+}) {
+  if (input.hasAccessCode) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    input.checkoutAddOns.map((addOn) => [
+      addOn.type,
+      normaliseAddOnQuantity(input.addOnQuantities[addOn.type] || 0, addOn),
+    ]),
+  );
+}
+
 export default function PublicGeneralAdmissionSelector({
   eventId,
   ticketTypes,
   currency,
   platformFeePercent = 0,
-  checkoutAddOn = null,
+  checkoutAddOns = [],
 }: {
   eventId: string;
   ticketTypes: TicketType[];
   currency: string;
   platformFeePercent?: number;
-  checkoutAddOn?: PublicEventCheckoutAddOn | null;
+  checkoutAddOns?: PublicEventCheckoutAddOn[];
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [addOnQuantity, setAddOnQuantity] = useState(0);
+  const [addOnQuantities, setAddOnQuantities] = useState<
+    Record<string, number>
+  >({});
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -124,29 +142,31 @@ export default function PublicGeneralAdmissionSelector({
       .filter((item) => item.quantity > 0);
   }, [ticketTypes, quantities]);
 
-  const safeAddOnQuantity = normaliseAddOnQuantity(
-    hasAccessCode ? 0 : addOnQuantity,
-    checkoutAddOn,
-  );
+  const safeAddOnQuantities = normaliseAddOnQuantities({
+    checkoutAddOns,
+    addOnQuantities,
+    hasAccessCode,
+  });
 
-  const selectedAddOns: PublicEventCheckoutAddOnSelection[] =
-    checkoutAddOn && safeAddOnQuantity > 0
-      ? [
-          {
-            type: checkoutAddOn.type,
-            quantity: safeAddOnQuantity,
-          },
-        ]
-      : [];
+  const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
+    .map((addOn) => ({
+      type: addOn.type,
+      quantity: safeAddOnQuantities[addOn.type] || 0,
+    }))
+    .filter((addOn) => addOn.quantity > 0);
 
   const ticketTotal = selectedItems.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0) * item.quantity,
     0,
   );
 
-  const addOnTotal = checkoutAddOn
-    ? Number(checkoutAddOn.entryPriceCents || 0) * safeAddOnQuantity
-    : 0;
+  const addOnTotal = checkoutAddOns.reduce(
+    (sum, addOn) =>
+      sum +
+      Number(addOn.entryPriceCents || 0) *
+        Number(safeAddOnQuantities[addOn.type] || 0),
+    0,
+  );
 
   const checkoutSubtotal = ticketTotal + addOnTotal;
 
@@ -167,6 +187,11 @@ export default function PublicGeneralAdmissionSelector({
     0,
   );
 
+  const totalAddOnQuantity = selectedAddOns.reduce(
+    (sum, addOn) => sum + addOn.quantity,
+    0,
+  );
+
   function updateQuantity(ticketTypeId: string, nextQuantity: number) {
     setQuantities((current) => ({
       ...current,
@@ -174,8 +199,14 @@ export default function PublicGeneralAdmissionSelector({
     }));
   }
 
-  function updateAddOnQuantity(nextQuantity: number) {
-    setAddOnQuantity(normaliseAddOnQuantity(nextQuantity, checkoutAddOn));
+  function updateAddOnQuantity(
+    addOn: PublicEventCheckoutAddOn,
+    nextQuantity: number,
+  ) {
+    setAddOnQuantities((current) => ({
+      ...current,
+      [addOn.type]: normaliseAddOnQuantity(nextQuantity, addOn),
+    }));
   }
 
   async function startCheckout() {
@@ -326,17 +357,24 @@ export default function PublicGeneralAdmissionSelector({
           </small>
         </label>
 
-        {checkoutAddOn ? (
+        {checkoutAddOns.length > 0 ? (
           <>
             <div style={styles.summarySpacer} />
 
-            <PublicEventCheckoutAddOnSelector
-              addOn={checkoutAddOn}
-              currency={currency}
-              quantity={safeAddOnQuantity}
-              disabled={hasAccessCode}
-              onQuantityChange={updateAddOnQuantity}
-            />
+            <div style={styles.addOnStack}>
+              {checkoutAddOns.map((addOn) => (
+                <PublicEventCheckoutAddOnSelector
+                  key={addOn.type}
+                  addOn={addOn}
+                  currency={currency}
+                  quantity={safeAddOnQuantities[addOn.type] || 0}
+                  disabled={hasAccessCode}
+                  onQuantityChange={(nextQuantity) =>
+                    updateAddOnQuantity(addOn, nextQuantity)
+                  }
+                />
+              ))}
+            </div>
           </>
         ) : null}
 
@@ -368,30 +406,36 @@ export default function PublicGeneralAdmissionSelector({
               </div>
             ))}
 
-            {checkoutAddOn && safeAddOnQuantity > 0 ? (
-              <div style={styles.summaryRow}>
-                <span>
-                  {checkoutAddOn.title || "Heads or Tails"} ×{" "}
-                  {safeAddOnQuantity}
-                </span>
-                <strong>
-                  {currency}{" "}
-                  {moneyFromCents(
-                    Number(checkoutAddOn.entryPriceCents || 0) *
-                      safeAddOnQuantity,
-                  )}
-                </strong>
-              </div>
-            ) : null}
+            {checkoutAddOns.map((addOn) => {
+              const quantity = safeAddOnQuantities[addOn.type] || 0;
+
+              if (quantity <= 0) {
+                return null;
+              }
+
+              return (
+                <div key={addOn.type} style={styles.summaryRow}>
+                  <span>
+                    {addOn.title || "Event add-on"} × {quantity}
+                  </span>
+                  <strong>
+                    {currency}{" "}
+                    {moneyFromCents(
+                      Number(addOn.entryPriceCents || 0) * quantity,
+                    )}
+                  </strong>
+                </div>
+              );
+            })}
           </div>
         )}
 
         <div style={styles.totalBox}>
           <span>
             {totalQuantity} ticket{totalQuantity === 1 ? "" : "s"}
-            {safeAddOnQuantity > 0
-              ? ` • ${safeAddOnQuantity} add-on entr${
-                  safeAddOnQuantity === 1 ? "y" : "ies"
+            {totalAddOnQuantity > 0
+              ? ` • ${totalAddOnQuantity} add-on entr${
+                  totalAddOnQuantity === 1 ? "y" : "ies"
                 }`
               : ""}
           </span>
@@ -568,6 +612,10 @@ const styles: Record<string, CSSProperties> = {
   },
   summarySpacer: {
     height: 16,
+  },
+  addOnStack: {
+    display: "grid",
+    gap: 12,
   },
   eyebrow: {
     margin: 0,
