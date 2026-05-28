@@ -3918,11 +3918,13 @@ export default async function AdminEventManagePage({
         badge={`${winners.length} winners`}
       >
         <EventWinnerDrawPanel
-          event={event}
-          winners={winners}
-          runWinnerDrawAction={runWinnerDrawAction}
-          deleteWinnerAction={deleteWinnerAction}
-          clearWinnersAction={clearWinnersAction}
+         eventId={event.id}
+         eventType={event.event_type}
+         prizes={event.prizes_json || []}
+         winners={winners}
+         drawWinnerAction={runWinnerDrawAction}
+         deleteWinnerAction={deleteWinnerAction}
+         clearWinnersAction={clearWinnersAction}
         />
               </CollapsibleSection>
 
