@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { queryOne } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
-import { getTenantEventFundraisingAddOnLimits } from "@/lib/subscription-capabilities";
 import {
   getPlatformFeePercent,
   getTenantFinanceSettings,
@@ -123,25 +122,23 @@ function getAddOnDefaults(type: string) {
   };
 }
 
-function applyCurrentTenantAddOnLimits(
+function applyPublicTierAddOnLimit(
   addOns: PublicDisplayAddOn[],
   tenantSettings: TenantSettingsLike | null,
 ) {
-  const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
-  const allowedTypes = new Set(limits.allowedTypes.map((value) => String(value)));
+  const tier = String(tenantSettings?.subscription_tier || "")
+    .trim()
+    .toLowerCase();
 
-  const allowedAddOns = addOns.filter((addOn) => allowedTypes.has(addOn.type));
-  const maxAddOns = Number(limits.maxAddOnsPerEvent);
-
-  if (!Number.isFinite(maxAddOns)) {
-    return allowedAddOns;
+  if (tier === "foundation") {
+    return addOns;
   }
 
-  if (maxAddOns <= 0) {
-    return [];
+  if (tier === "professional") {
+    return addOns.slice(0, 1);
   }
 
-  return allowedAddOns.slice(0, Math.floor(maxAddOns));
+  return [];
 }
 
 async function getTenantBrandingSettings(tenantSlug: string) {
@@ -222,7 +219,7 @@ export default async function EventSlugPage({
     .map((option) => String(option.name || option.title || "").trim())
     .filter(Boolean);
 
-  const allPublicDisplayAddOns: PublicDisplayAddOn[] = (event.event_addons_json || [])
+  const savedPublicDisplayAddOns: PublicDisplayAddOn[] = (event.event_addons_json || [])
     .filter(
       (addOn) =>
         addOn.enabled &&
@@ -250,8 +247,8 @@ export default async function EventSlugPage({
       };
     });
 
-  const publicDisplayAddOns = applyCurrentTenantAddOnLimits(
-    allPublicDisplayAddOns,
+  const publicDisplayAddOns = applyPublicTierAddOnLimit(
+    savedPublicDisplayAddOns,
     tenantSettings,
   );
 
