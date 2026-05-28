@@ -42,6 +42,17 @@ type TenantSettingsLike = {
   platform_owner_bypass?: boolean | null;
 };
 
+type PublicPrizeRevealPrize = {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  sponsorName: string;
+  estimatedValueCents: number;
+  revealOrder: number;
+  isRevealed: boolean;
+};
+
 type PublicDisplayAddOn = {
   type: "heads_or_tails" | "higher_or_lower";
   title: string;
@@ -52,6 +63,11 @@ type PublicDisplayAddOn = {
   maxEntriesPerBooking: number | null;
   collectAtCheckout: boolean;
   footnote: string;
+  prizeRevealModeEnabled: boolean;
+  prizeRevealRandomiseOrder: boolean;
+  prizeRevealTitle: string;
+  prizeRevealDescription: string;
+  prizeRevealPrizes: PublicPrizeRevealPrize[];
 };
 
 const TABLE_SHAPE_KEY = "__table_shape";
@@ -88,6 +104,20 @@ function moneyFromCents(cents: number | null | undefined) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function formatMoneyFromCents(
+  cents: number | null | undefined,
+  currency = "GBP",
+) {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `${currency || "GBP"} ${moneyFromCents(cents)}`;
+  }
+}
+
 function eventTypeLabel(type: string) {
   if (type === "reserved_seating") return "Reserved seating";
   if (type === "tables") return "Table seating";
@@ -120,6 +150,72 @@ function getAddOnDefaults(type: string) {
     footnote:
       "Heads or Tails is run live by the organiser during the event. Main event tickets and seating are booked separately below.",
   };
+}
+
+function normalisePrizeRevealPrize(
+  value: Record<string, unknown>,
+  index: number,
+): PublicPrizeRevealPrize | null {
+  const title = cleanText(value.title);
+
+  if (!title) {
+    return null;
+  }
+
+  const estimatedValueCents = Number(
+    value.estimatedValueCents ??
+      value.estimated_value_cents ??
+      value.estimatedValue ??
+      value.estimated_value ??
+      0,
+  );
+
+  const revealOrder = Number(
+    value.revealOrder ?? value.reveal_order ?? index + 1,
+  );
+
+  const isRevealed =
+    value.isRevealed === true ||
+    value.is_revealed === true ||
+    value.isRevealed === "true" ||
+    value.is_revealed === "true";
+
+  return {
+    id: cleanText(value.id) || `public-reveal-prize-${index + 1}`,
+    title,
+    description: cleanText(value.description),
+    imageUrl: cleanText(value.imageUrl ?? value.image_url),
+    sponsorName: cleanText(value.sponsorName ?? value.sponsor_name),
+    estimatedValueCents:
+      Number.isFinite(estimatedValueCents) && estimatedValueCents > 0
+        ? Math.round(estimatedValueCents)
+        : 0,
+    revealOrder:
+      Number.isFinite(revealOrder) && revealOrder > 0
+        ? Math.floor(revealOrder)
+        : index + 1,
+    isRevealed,
+  };
+}
+
+function normalisePrizeRevealPrizes(value: unknown): PublicPrizeRevealPrize[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      return normalisePrizeRevealPrize(item as Record<string, unknown>, index);
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        Number(a?.revealOrder || 0) - Number(b?.revealOrder || 0),
+    ) as PublicPrizeRevealPrize[];
 }
 
 function applyPublicTierAddOnLimit(
@@ -163,7 +259,6 @@ async function getTenantBrandingSettings(tenantSlug: string) {
 function Card({ children }: { children: ReactNode }) {
   return <section style={styles.card}>{children}</section>;
 }
-
 export default async function EventSlugPage({
   params,
   searchParams,
@@ -219,7 +314,9 @@ export default async function EventSlugPage({
     .map((option) => String(option.name || option.title || "").trim())
     .filter(Boolean);
 
-  const savedPublicDisplayAddOns: PublicDisplayAddOn[] = (event.event_addons_json || [])
+  const savedPublicDisplayAddOns: PublicDisplayAddOn[] = (
+    event.event_addons_json || []
+  )
     .filter(
       (addOn) =>
         addOn.enabled &&
@@ -233,6 +330,9 @@ export default async function EventSlugPage({
         Number(addOn.maxEntriesPerBooking || 0) > 0
           ? Number(addOn.maxEntriesPerBooking || 0)
           : null;
+      const prizeRevealPrizes = normalisePrizeRevealPrizes(
+        addOn.prizeRevealPrizes,
+      );
 
       return {
         type: addOn.type,
@@ -244,6 +344,11 @@ export default async function EventSlugPage({
         maxEntriesPerBooking,
         collectAtCheckout: Boolean(addOn.collectAtCheckout),
         footnote: defaults.footnote,
+        prizeRevealModeEnabled: Boolean(addOn.prizeRevealModeEnabled),
+        prizeRevealRandomiseOrder: Boolean(addOn.prizeRevealRandomiseOrder),
+        prizeRevealTitle: cleanText(addOn.prizeRevealTitle),
+        prizeRevealDescription: cleanText(addOn.prizeRevealDescription),
+        prizeRevealPrizes,
       };
     });
 
@@ -266,6 +371,13 @@ export default async function EventSlugPage({
       entryPriceCents: addOn.entryPriceCents,
       maxEntriesPerBooking: addOn.maxEntriesPerBooking,
     }));
+
+  const prizeRevealAddOns = publicDisplayAddOns.filter(
+    (addOn) =>
+      addOn.type === "higher_or_lower" &&
+      addOn.prizeRevealModeEnabled &&
+      addOn.prizeRevealPrizes.length > 0,
+  );
 
   const lowestTicketPrice =
     ticketTypes.length > 0
@@ -459,7 +571,7 @@ export default async function EventSlugPage({
           </div>
         </div>
       </section>
-            <div style={styles.contentWrap}>
+      <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
           <section style={styles.successCard}>
             <strong>Payment successful.</strong>
@@ -475,8 +587,7 @@ export default async function EventSlugPage({
             Your order was not completed. You can choose again below.
           </section>
         )}
-
-        <section style={brandedNoticeCardStyle}>
+                <section style={brandedNoticeCardStyle}>
           <div style={styles.noticeTextBlock}>
             <h2 style={styles.noticeTitle}>Open for bookings</h2>
             <p style={styles.noticeText}>
@@ -643,6 +754,159 @@ export default async function EventSlugPage({
           </section>
         ))}
 
+        {prizeRevealAddOns.map((addOn) => {
+          const revealedPrizes = addOn.prizeRevealPrizes.filter(
+            (prize) => prize.isRevealed,
+          ).length;
+          const revealTitle =
+            addOn.prizeRevealTitle ||
+            `${addOn.title || "Higher or Lower"} Prize Reveal`;
+          const revealDescription =
+            addOn.prizeRevealDescription ||
+            "Follow the prize reveal and guess whether the next prize value will be higher or lower.";
+
+          return (
+            <section
+              key={`${addOn.type}-prize-reveal`}
+              className="prizeRevealPublicPanel"
+              style={{
+                ...styles.prizeRevealPublicPanel,
+                borderColor: `${accentColour}66`,
+                background: `radial-gradient(circle at top left, ${accentColour}24, transparent 32%), linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #eff6ff 100%)`,
+              }}
+            >
+              <div
+                className="prizeRevealPublicHeader"
+                style={styles.prizeRevealPublicHeader}
+              >
+                <div>
+                  <div
+                    style={{
+                      ...styles.prizeRevealPublicEyebrow,
+                      color: "#92400e",
+                      borderColor: `${accentColour}66`,
+                      background: `${accentColour}1A`,
+                    }}
+                  >
+                    Higher or Lower preview
+                  </div>
+
+                  <h2
+                    className="prizeRevealPublicTitle"
+                    style={styles.prizeRevealPublicTitle}
+                  >
+                    {revealTitle}
+                  </h2>
+
+                  <p style={styles.prizeRevealPublicText}>
+                    {revealDescription}
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    ...styles.prizeRevealPublicStatusCard,
+                    borderColor: `${accentColour}66`,
+                    background: `${accentColour}16`,
+                  }}
+                >
+                  <span style={styles.prizeRevealPublicStatusLabel}>
+                    Revealed
+                  </span>
+                  <strong style={styles.prizeRevealPublicStatusValue}>
+                    {revealedPrizes} / {addOn.prizeRevealPrizes.length}
+                  </strong>
+                  <span style={styles.prizeRevealPublicStatusHint}>
+                    {addOn.prizeRevealRandomiseOrder
+                      ? "Order may be randomised"
+                      : "Shown in saved order"}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="prizeRevealPrizeGrid"
+                style={styles.prizeRevealPrizeGrid}
+              >
+                {addOn.prizeRevealPrizes.map((prize, index) => (
+                  <article
+                    key={prize.id || `${addOn.type}-prize-${index + 1}`}
+                    style={styles.prizeRevealPrizeCard}
+                  >
+                    <div style={styles.prizeRevealImageWrap}>
+                      {prize.imageUrl ? (
+                        <img
+                          src={prize.imageUrl}
+                          alt={prize.title}
+                          style={styles.prizeRevealImage}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            ...styles.prizeRevealImageFallback,
+                            background: `linear-gradient(135deg, ${accentColour}22, #eff6ff 100%)`,
+                          }}
+                        >
+                          <span>Prize {index + 1}</span>
+                        </div>
+                      )}
+
+                      <span
+                        style={{
+                          ...styles.prizeRevealStatusPill,
+                          ...(prize.isRevealed
+                            ? styles.prizeRevealStatusRevealed
+                            : styles.prizeRevealStatusHidden),
+                        }}
+                      >
+                        {prize.isRevealed ? "Revealed" : "Hidden"}
+                      </span>
+                    </div>
+
+                    <div style={styles.prizeRevealPrizeBody}>
+                      <div style={styles.prizeRevealPrizeMetaRow}>
+                        <span style={styles.prizeRevealOrderPill}>
+                          #{prize.revealOrder || index + 1}
+                        </span>
+
+                        {prize.estimatedValueCents > 0 ? (
+                          <span style={styles.prizeRevealValuePill}>
+                            {formatMoneyFromCents(
+                              prize.estimatedValueCents,
+                              event.currency,
+                            )}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <h3 style={styles.prizeRevealPrizeTitle}>
+                        {prize.title}
+                      </h3>
+
+                      {prize.sponsorName ? (
+                        <p style={styles.prizeRevealSponsor}>
+                          Donated by {prize.sponsorName}
+                        </p>
+                      ) : null}
+
+                      {prize.description ? (
+                        <p style={styles.prizeRevealDescription}>
+                          {prize.description}
+                        </p>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <p style={styles.prizeRevealPublicFootnote}>
+                Prize reveal preview only. The live game is managed by the event
+                organiser.
+              </p>
+            </section>
+          );
+        })}
+
         <section id="book" style={styles.bookSection}>
           <div style={styles.bookHeader}>
             <div style={styles.bookHeaderText}>
@@ -663,8 +927,7 @@ export default async function EventSlugPage({
 
             <div style={brandedCheckoutBadgeStyle}>Secure Stripe checkout</div>
           </div>
-
-          {event.event_type === "general_admission" ? (
+                    {event.event_type === "general_admission" ? (
             <PublicGeneralAdmissionSelector
               eventId={event.id}
               ticketTypes={ticketTypes}
@@ -738,6 +1001,7 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
     </p>
   );
 }
+
 const responsiveStyles = `
 .public-event-page,
 .public-event-page * {
@@ -762,8 +1026,13 @@ const responsiveStyles = `
   }
 
   .public-event-page .addOnHeader,
-  .public-event-page .addOnDetailsGrid {
+  .public-event-page .addOnDetailsGrid,
+  .public-event-page .prizeRevealPublicHeader {
     grid-template-columns: 1fr !important;
+  }
+
+  .public-event-page .prizeRevealPrizeGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -790,13 +1059,19 @@ const responsiveStyles = `
     letter-spacing: -0.06em !important;
   }
 
-  .public-event-page .addOnPanel {
+  .public-event-page .addOnPanel,
+  .public-event-page .prizeRevealPublicPanel {
     padding: 16px !important;
     border-radius: 22px !important;
   }
 
-  .public-event-page .addOnTitle {
+  .public-event-page .addOnTitle,
+  .public-event-page .prizeRevealPublicTitle {
     font-size: clamp(30px, 10vw, 42px) !important;
+  }
+
+  .public-event-page .prizeRevealPrizeGrid {
+    grid-template-columns: 1fr !important;
   }
 }
 `;
@@ -1336,6 +1611,235 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealPublicPanel: {
+    margin: "0 0 18px",
+    padding: "clamp(18px, 4vw, 24px)",
+    borderRadius: 28,
+    border: "1px solid",
+    color: "#0f172a",
+    boxShadow: "0 18px 48px rgba(15,23,42,0.12)",
+    overflow: "hidden",
+  },
+
+  prizeRevealPublicHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.32fr)",
+    gap: 16,
+    alignItems: "stretch",
+    marginBottom: 18,
+  },
+
+  prizeRevealPublicEyebrow: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 12,
+  },
+
+  prizeRevealPublicTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(34px, 7vw, 58px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.065em",
+    fontWeight: 1000,
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealPublicText: {
+    margin: "12px 0 0",
+    color: "#475569",
+    fontSize: "clamp(15px, 3vw, 18px)",
+    lineHeight: 1.55,
+    maxWidth: 780,
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealPublicStatusCard: {
+    display: "grid",
+    alignContent: "center",
+    gap: 6,
+    padding: 16,
+    borderRadius: 22,
+    border: "1px solid",
+    minWidth: 0,
+  },
+
+  prizeRevealPublicStatusLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  prizeRevealPublicStatusValue: {
+    color: "#0f172a",
+    fontSize: 34,
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealPublicStatusHint: {
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 850,
+  },
+
+  prizeRevealPrizeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 14,
+  },
+
+  prizeRevealPrizeCard: {
+    display: "grid",
+    gridTemplateRows: "auto 1fr",
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 12px 30px rgba(15,23,42,0.08)",
+    overflow: "hidden",
+    minWidth: 0,
+  },
+
+  prizeRevealImageWrap: {
+    position: "relative",
+    width: "100%",
+    aspectRatio: "4 / 3",
+    overflow: "hidden",
+    background: "#e2e8f0",
+  },
+
+  prizeRevealImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  prizeRevealImageFallback: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: "100%",
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  prizeRevealStatusPill: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    display: "inline-flex",
+    padding: "7px 10px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    boxShadow: "0 8px 18px rgba(15,23,42,0.14)",
+  },
+
+  prizeRevealStatusRevealed: {
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+  },
+
+  prizeRevealStatusHidden: {
+    background: "rgba(15,23,42,0.82)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.22)",
+  },
+
+  prizeRevealPrizeBody: {
+    display: "grid",
+    alignContent: "start",
+    gap: 8,
+    padding: 15,
+    minWidth: 0,
+  },
+
+  prizeRevealPrizeMetaRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  prizeRevealOrderPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  prizeRevealValuePill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  prizeRevealPrizeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealSponsor: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealDescription: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
+  },
+
+  prizeRevealPublicFootnote: {
+    margin: "15px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
     overflowWrap: "anywhere",
   },
 
