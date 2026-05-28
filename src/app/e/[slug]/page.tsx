@@ -429,15 +429,22 @@ export default async function EventSlugPage({
   );
 
   const checkoutAddOns: PublicEventCheckoutAddOn[] =
-    checkoutReadyDisplayAddOns.map((addOn) => ({
-      type: addOn.type,
-      title: addOn.title,
-      description:
-        addOn.description ||
-        `Add ${addOn.title} entries to your event booking.`,
-      entryPriceCents: addOn.entryPriceCents,
-      maxEntriesPerBooking: addOn.maxEntriesPerBooking,
-    }));
+  checkoutReadyDisplayAddOns.map((addOn) => ({
+    type: addOn.type,
+    title: addOn.title,
+    description:
+      addOn.description ||
+      `Add ${addOn.title} entries to your event booking.`,
+    entryPriceCents: addOn.entryPriceCents,
+    maxEntriesPerBooking: addOn.maxEntriesPerBooking,
+    legalQuestionEnabled: addOn.legalQuestionEnabled,
+    legalQuestionText: addOn.legalQuestionText,
+    legalQuestionHelperText: addOn.legalQuestionHelperText,
+    prizeValueRangeEnabled: addOn.prizeValueRangeEnabled,
+    prizeValueRangeMinCents: addOn.prizeValueRangeMinCents,
+    prizeValueRangeMaxCents: addOn.prizeValueRangeMaxCents,
+    prizeValueRangeNote: addOn.prizeValueRangeNote,
+  }));
 
   const prizeRevealAddOns = publicDisplayAddOns.filter(
     (addOn) =>
@@ -937,7 +944,8 @@ export default async function EventSlugPage({
 
                 <p style={styles.addOnSafeguardsFootnote}>
                   The organiser is responsible for running this promotion
-                  lawfully. This public information does not change checkout yet.
+                  lawfully. When checkout collection is enabled, the Higher or
+                   Lower answer is requested during booking.
                 </p>
               </section>
             ) : null}
