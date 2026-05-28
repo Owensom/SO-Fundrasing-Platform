@@ -16,6 +16,7 @@ import {
   updateEvent,
   type EventFundraisingAddOn,
   type EventFundraisingAddOnType,
+  type EventPrizeRevealPrize,
 } from "../../../../../../api/_lib/events-repo";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +101,8 @@ const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
     savedParam: "higher-or-lower",
   },
 ];
+
+const MAX_PRIZE_REVEAL_PRIZES = 8;
 
 function cleanText(value: FormDataEntryValue | string | null | undefined) {
   return String(value || "").trim();
@@ -240,6 +243,124 @@ function getAddOnDefinition(type: string | null | undefined) {
   );
 }
 
+function normalisePrizeRevealPrize(
+  value: Partial<EventPrizeRevealPrize> | Record<string, unknown>,
+  index: number,
+): EventPrizeRevealPrize | null {
+  const title = String(value.title || "").trim();
+
+  if (!title) return null;
+
+  const estimatedValueCents = Number(
+    value.estimatedValueCents ??
+      value.estimated_value_cents ??
+      value.estimatedValue ??
+      value.estimated_value ??
+      0,
+  );
+
+  const revealOrder = Number(value.revealOrder ?? value.reveal_order ?? index + 1);
+
+  const isRevealed =
+    value.isRevealed === true ||
+    value.is_revealed === true ||
+    value.isRevealed === "true" ||
+    value.is_revealed === "true";
+
+  return {
+    id: String(value.id || `reveal-prize-${index + 1}`),
+    title,
+    description: String(value.description || "").trim(),
+    imageUrl: String(value.imageUrl ?? value.image_url ?? "").trim(),
+    sponsorName: String(value.sponsorName ?? value.sponsor_name ?? "").trim(),
+    estimatedValueCents:
+      Number.isFinite(estimatedValueCents) && estimatedValueCents > 0
+        ? Math.round(estimatedValueCents)
+        : 0,
+    revealOrder:
+      Number.isFinite(revealOrder) && revealOrder > 0
+        ? Math.floor(revealOrder)
+        : index + 1,
+    isRevealed,
+  };
+}
+
+function normalisePrizeRevealPrizes(value: unknown): EventPrizeRevealPrize[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      return normalisePrizeRevealPrize(
+        item as Partial<EventPrizeRevealPrize> & Record<string, unknown>,
+        index,
+      );
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        Number(a?.revealOrder || 0) - Number(b?.revealOrder || 0),
+    ) as EventPrizeRevealPrize[];
+}
+
+function getPrizeRevealPrizes(addOn: EventFundraisingAddOnLike) {
+  return normalisePrizeRevealPrizes(
+    addOn.prizeRevealPrizes ?? addOn.prize_reveal_prizes,
+  );
+}
+
+function buildPrizeRevealPrizesFromForm(formData: FormData) {
+  const prizeCount = Math.min(
+    MAX_PRIZE_REVEAL_PRIZES,
+    Math.max(0, Number(formData.get("prize_reveal_prize_count") || 0)),
+  );
+
+  const prizes: EventPrizeRevealPrize[] = [];
+
+  for (let index = 0; index < prizeCount; index += 1) {
+    const title = cleanText(formData.get(`prize_reveal_prize_${index}_title`));
+
+    if (!title) {
+      continue;
+    }
+
+    const existingId = cleanText(formData.get(`prize_reveal_prize_${index}_id`));
+    const estimatedValueCents = poundsToCents(
+      formData.get(`prize_reveal_prize_${index}_estimated_value`),
+    );
+    const revealOrder =
+      positiveIntegerOrNull(
+        formData.get(`prize_reveal_prize_${index}_reveal_order`),
+      ) || index + 1;
+
+    prizes.push({
+      id: existingId || `reveal-prize-${Date.now()}-${index + 1}`,
+      title,
+      description: cleanOptionalText(
+        formData.get(`prize_reveal_prize_${index}_description`),
+      ),
+      imageUrl: cleanOptionalText(
+        formData.get(`prize_reveal_prize_${index}_image_url`),
+      ),
+      sponsorName: cleanOptionalText(
+        formData.get(`prize_reveal_prize_${index}_sponsor_name`),
+      ),
+      estimatedValueCents,
+      revealOrder,
+      isRevealed:
+        String(formData.get(`prize_reveal_prize_${index}_is_revealed`) || "") ===
+        "true",
+    });
+  }
+
+  return prizes.sort(
+    (a, b) => Number(a.revealOrder || 0) - Number(b.revealOrder || 0),
+  );
+}
+
 function normaliseAddOnForAdmin(
   addOn: EventFundraisingAddOnLike | null | undefined,
   definition: AddOnDefinition,
@@ -257,6 +378,11 @@ function normaliseAddOnForAdmin(
       collectAtCheckout: false,
       maxEntriesPerBooking: 1,
       sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
+      prizeRevealModeEnabled: false,
+      prizeRevealRandomiseOrder: false,
+      prizeRevealTitle: "",
+      prizeRevealDescription: "",
+      prizeRevealPrizes: [],
     };
   }
 
@@ -296,9 +422,29 @@ function normaliseAddOnForAdmin(
       ["sortOrder", "sort_order"],
       definition.type === "heads_or_tails" ? 0 : 1,
     ),
+    prizeRevealModeEnabled: readBooleanField(
+      addOn,
+      ["prizeRevealModeEnabled", "prize_reveal_mode_enabled"],
+      false,
+    ),
+    prizeRevealRandomiseOrder: readBooleanField(
+      addOn,
+      ["prizeRevealRandomiseOrder", "prize_reveal_randomise_order"],
+      false,
+    ),
+    prizeRevealTitle: readStringField(
+      addOn,
+      ["prizeRevealTitle", "prize_reveal_title"],
+      "",
+    ),
+    prizeRevealDescription: readStringField(
+      addOn,
+      ["prizeRevealDescription", "prize_reveal_description"],
+      "",
+    ),
+    prizeRevealPrizes: getPrizeRevealPrizes(addOn),
   };
 }
-
 function getAddOn(
   addOns: EventFundraisingAddOn[],
   definition: AddOnDefinition,
@@ -312,6 +458,8 @@ function buildAddOnFromForm(
   formData: FormData,
   definition: AddOnDefinition,
 ): EventFundraisingAddOn {
+  const isHigherOrLower = definition.type === "higher_or_lower";
+
   return {
     id: definition.id,
     type: definition.type,
@@ -327,6 +475,22 @@ function buildAddOnFromForm(
       formData.get("max_entries_per_booking"),
     ),
     sortOrder: definition.type === "heads_or_tails" ? 0 : 1,
+
+    prizeRevealModeEnabled: isHigherOrLower
+      ? String(formData.get("prize_reveal_mode_enabled") || "") === "true"
+      : false,
+    prizeRevealRandomiseOrder: isHigherOrLower
+      ? String(formData.get("prize_reveal_randomise_order") || "") === "true"
+      : false,
+    prizeRevealTitle: isHigherOrLower
+      ? cleanOptionalText(formData.get("prize_reveal_title"))
+      : "",
+    prizeRevealDescription: isHigherOrLower
+      ? cleanOptionalText(formData.get("prize_reveal_description"))
+      : "",
+    prizeRevealPrizes: isHigherOrLower
+      ? buildPrizeRevealPrizesFromForm(formData)
+      : [],
   };
 }
 
@@ -378,7 +542,7 @@ function buildAddOnReadiness(input: {
   const hasPrize = Boolean(String(addOn.prizeTitle || "").trim());
   const maxEntries = Number(addOn.maxEntriesPerBooking || 0);
 
-  return [
+  const baseItems: ReadinessItem[] = [
     {
       label: "Public display",
       value: enabled ? "Live-ready" : "Disabled",
@@ -446,6 +610,42 @@ function buildAddOnReadiness(input: {
       tone: "good",
     },
   ];
+
+  if (input.definition.type !== "higher_or_lower") {
+    return baseItems;
+  }
+
+  const prizeRevealEnabled = Boolean(addOn.prizeRevealModeEnabled);
+  const prizeRevealPrizeCount = (addOn.prizeRevealPrizes || []).length;
+
+  return [
+    ...baseItems,
+    {
+      label: "Prize reveal mode",
+      value: prizeRevealEnabled ? "Configured" : "Off",
+      detail: prizeRevealEnabled
+        ? "Prize reveal settings are saved for a future public reveal mode."
+        : "Optional premium mode for prize-by-prize Higher or Lower reveals.",
+      tone: prizeRevealEnabled ? "good" : "neutral",
+    },
+    {
+      label: "Reveal prizes",
+      value:
+        prizeRevealPrizeCount === 1
+          ? "1 prize"
+          : `${prizeRevealPrizeCount} prizes`,
+      detail:
+        prizeRevealPrizeCount > 0
+          ? "Prize reveal rows are stored inside this Higher or Lower add-on."
+          : "Add prize rows before using prize reveal mode publicly.",
+      tone:
+        prizeRevealEnabled && prizeRevealPrizeCount === 0
+          ? "warning"
+          : prizeRevealPrizeCount > 0
+            ? "good"
+            : "neutral",
+    },
+  ];
 }
 
 function addOnReadyForCheckout(addOn: EventFundraisingAddOn) {
@@ -480,7 +680,9 @@ function getVisibleConfiguredAddOnsForTier(
   }
 
   return [];
-}async function requireEventAccess(eventId: string) {
+}
+
+async function requireEventAccess(eventId: string) {
   const session = await auth();
 
   if (!session?.user) {
@@ -573,7 +775,6 @@ async function saveEventAddOnAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}/addons?saved=${definition.savedParam}`);
 }
-
 export default async function EventFundraisingAddOnsPage({
   params,
   searchParams,
@@ -946,6 +1147,7 @@ export default async function EventFundraisingAddOnsPage({
     </main>
   );
 }
+
 function AddOnSettingsPanel({
   eventId,
   addOn,
@@ -963,6 +1165,16 @@ function AddOnSettingsPanel({
   readinessWarnings: number;
   canUseMultipleAddOns: boolean;
 }) {
+  const isHigherOrLower = definition.type === "higher_or_lower";
+  const prizeRevealPrizes = (addOn.prizeRevealPrizes || []).slice(
+    0,
+    MAX_PRIZE_REVEAL_PRIZES,
+  );
+  const prizeRevealRows = Array.from(
+    { length: MAX_PRIZE_REVEAL_PRIZES },
+    (_, index) => prizeRevealPrizes[index] || null,
+  );
+
   return (
     <section className="panel" style={styles.panel}>
       <div className="panelHeader" style={styles.panelHeader}>
@@ -1130,6 +1342,194 @@ function AddOnSettingsPanel({
             />
           </Field>
         </div>
+                {isHigherOrLower ? (
+          <section style={styles.prizeRevealPanel}>
+            <div style={styles.prizeRevealHeader}>
+              <div>
+                <div style={styles.prizeRevealEyebrow}>
+                  Higher or Lower prize reveal mode
+                </div>
+                <h3 style={styles.prizeRevealTitle}>Prize reveal setup</h3>
+                <p style={styles.prizeRevealText}>
+                  Store optional prize reveal settings for a future public
+                  Higher or Lower mode. This does not change checkout, public
+                  display, Stripe, receipts or orders yet.
+                </p>
+              </div>
+
+              <span style={styles.prizeRevealBadge}>
+                {addOn.prizeRevealModeEnabled
+                  ? "Reveal mode saved"
+                  : "Optional mode"}
+              </span>
+            </div>
+
+            <div className="twoCol" style={styles.twoCol}>
+              <Field label="Enable prize reveal mode">
+                <select
+                  name="prize_reveal_mode_enabled"
+                  defaultValue={
+                    addOn.prizeRevealModeEnabled ? "true" : "false"
+                  }
+                  className="input"
+                  style={styles.input}
+                >
+                  <option value="false">No, keep prize reveal mode off</option>
+                  <option value="true">Yes, save prize reveal settings</option>
+                </select>
+              </Field>
+
+              <Field label="Reveal order">
+                <select
+                  name="prize_reveal_randomise_order"
+                  defaultValue={
+                    addOn.prizeRevealRandomiseOrder ? "true" : "false"
+                  }
+                  className="input"
+                  style={styles.input}
+                >
+                  <option value="false">Use the order below</option>
+                  <option value="true">Randomise before the game</option>
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Prize reveal title">
+              <input
+                name="prize_reveal_title"
+                defaultValue={addOn.prizeRevealTitle || ""}
+                placeholder="Higher or Lower Prize Reveal"
+                className="input"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Prize reveal description">
+              <textarea
+                name="prize_reveal_description"
+                rows={3}
+                defaultValue={addOn.prizeRevealDescription || ""}
+                placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
+                className="textarea"
+                style={styles.textarea}
+              />
+            </Field>
+
+            <input
+              type="hidden"
+              name="prize_reveal_prize_count"
+              value={MAX_PRIZE_REVEAL_PRIZES}
+            />
+
+            <div style={styles.prizeRevealRows}>
+              {prizeRevealRows.map((prize, index) => (
+                <article
+                  key={prize?.id || `new-reveal-prize-${index + 1}`}
+                  style={styles.prizeRevealRow}
+                >
+                  <input
+                    type="hidden"
+                    name={`prize_reveal_prize_${index}_id`}
+                    defaultValue={prize?.id || ""}
+                  />
+
+                  <div style={styles.prizeRevealRowHeader}>
+                    <div>
+                      <span style={styles.prizeRevealRowEyebrow}>
+                        Prize {index + 1}
+                      </span>
+                      <strong style={styles.prizeRevealRowTitle}>
+                        {prize?.title || "Empty prize row"}
+                      </strong>
+                    </div>
+
+                    <Field label="Revealed">
+                      <select
+                        name={`prize_reveal_prize_${index}_is_revealed`}
+                        defaultValue={prize?.isRevealed ? "true" : "false"}
+                        className="input"
+                        style={styles.compactInput}
+                      >
+                        <option value="false">Hidden</option>
+                        <option value="true">Revealed</option>
+                      </select>
+                    </Field>
+                  </div>
+
+                  <div className="twoCol" style={styles.twoCol}>
+                    <Field label="Prize name">
+                      <input
+                        name={`prize_reveal_prize_${index}_title`}
+                        defaultValue={prize?.title || ""}
+                        placeholder="Spa day, signed shirt, mystery hamper..."
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+
+                    <Field label="Sponsor / donor">
+                      <input
+                        name={`prize_reveal_prize_${index}_sponsor_name`}
+                        defaultValue={prize?.sponsorName || ""}
+                        placeholder="Business, donor or sponsor name"
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="threeCol" style={styles.threeCol}>
+                    <Field label="Estimated value">
+                      <input
+                        name={`prize_reveal_prize_${index}_estimated_value`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={moneyFromCents(
+                          prize?.estimatedValueCents || 0,
+                        )}
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+
+                    <Field label="Reveal order">
+                      <input
+                        name={`prize_reveal_prize_${index}_reveal_order`}
+                        type="number"
+                        min="1"
+                        defaultValue={prize?.revealOrder || index + 1}
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+
+                    <Field label="Image URL">
+                      <input
+                        name={`prize_reveal_prize_${index}_image_url`}
+                        defaultValue={prize?.imageUrl || ""}
+                        placeholder="https://..."
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Prize description">
+                    <textarea
+                      name={`prize_reveal_prize_${index}_description`}
+                      rows={2}
+                      defaultValue={prize?.description || ""}
+                      placeholder="Short description for this prize."
+                      className="textarea"
+                      style={styles.textarea}
+                    />
+                  </Field>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {!canUseMultipleAddOns ? (
           <div style={styles.professionalNotice}>
@@ -1249,7 +1649,9 @@ const responsiveStyles = `
   .event-addons-page .panelHeader,
   .event-addons-page .submitBar,
   .event-addons-page .readinessHeader,
-  .event-addons-page .readinessActions {
+  .event-addons-page .readinessActions,
+  .event-addons-page .prizeRevealHeader,
+  .event-addons-page .prizeRevealRowHeader {
     display: grid !important;
     grid-template-columns: 1fr !important;
     align-items: stretch !important;
@@ -1281,7 +1683,8 @@ const responsiveStyles = `
   .event-addons-page .panel,
   .event-addons-page .lockedPanel,
   .event-addons-page .upgradeBanner,
-  .event-addons-page .readinessPanel {
+  .event-addons-page .readinessPanel,
+  .event-addons-page .prizeRevealPanel {
     border-radius: 22px !important;
     padding: 16px !important;
   }
@@ -1922,6 +2325,19 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
+  compactInput: {
+    width: "100%",
+    minHeight: 40,
+    padding: "8px 10px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+
   textarea: {
     width: "100%",
     padding: "10px 12px",
@@ -1933,6 +2349,106 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
+  },
+
+  prizeRevealPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #fffbeb 0%, #ffffff 58%, #eff6ff 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+  },
+
+  prizeRevealHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  prizeRevealEyebrow: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  prizeRevealTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
+  },
+
+  prizeRevealText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    maxWidth: 760,
+  },
+
+  prizeRevealBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+
+  prizeRevealRows: {
+    display: "grid",
+    gap: 12,
+  },
+
+  prizeRevealRow: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 10px rgba(15,23,42,0.035)",
+  },
+
+  prizeRevealRowHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  prizeRevealRowEyebrow: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 4,
+  },
+
+  prizeRevealRowTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 17,
+    fontWeight: 950,
+    letterSpacing: "-0.03em",
   },
 
   professionalNotice: {
