@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { queryOne } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import { getTenantEventFundraisingAddOnLimits } from "@/lib/subscription-capabilities";
 import {
   getPlatformFeePercent,
   getTenantFinanceSettings,
@@ -33,6 +35,12 @@ type TenantBrandingSettings = {
   public_primary_colour: string | null;
   public_accent_colour: string | null;
   public_footer_text: string | null;
+};
+
+type TenantSettingsLike = {
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  platform_owner_bypass?: boolean | null;
 };
 
 type PublicDisplayAddOn = {
@@ -115,6 +123,27 @@ function getAddOnDefaults(type: string) {
   };
 }
 
+function applyCurrentTenantAddOnLimits(
+  addOns: PublicDisplayAddOn[],
+  tenantSettings: TenantSettingsLike | null,
+) {
+  const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
+  const allowedTypes = new Set(limits.allowedTypes.map((value) => String(value)));
+
+  const allowedAddOns = addOns.filter((addOn) => allowedTypes.has(addOn.type));
+  const maxAddOns = Number(limits.maxAddOnsPerEvent);
+
+  if (!Number.isFinite(maxAddOns)) {
+    return allowedAddOns;
+  }
+
+  if (maxAddOns <= 0) {
+    return [];
+  }
+
+  return allowedAddOns.slice(0, Math.floor(maxAddOns));
+}
+
 async function getTenantBrandingSettings(tenantSlug: string) {
   return queryOne<TenantBrandingSettings>(
     `
@@ -152,9 +181,10 @@ export default async function EventSlugPage({
     notFound();
   }
 
-  const [finance, brandingSettings] = await Promise.all([
+  const [finance, brandingSettings, tenantSettings] = await Promise.all([
     getTenantFinanceSettings(event.tenant_slug),
     getTenantBrandingSettings(event.tenant_slug),
+    getTenantSettings(event.tenant_slug) as Promise<TenantSettingsLike | null>,
   ]);
 
   const platformFeePercent = getPlatformFeePercent(finance);
@@ -192,7 +222,7 @@ export default async function EventSlugPage({
     .map((option) => String(option.name || option.title || "").trim())
     .filter(Boolean);
 
-  const publicDisplayAddOns: PublicDisplayAddOn[] = (event.event_addons_json || [])
+  const allPublicDisplayAddOns: PublicDisplayAddOn[] = (event.event_addons_json || [])
     .filter(
       (addOn) =>
         addOn.enabled &&
@@ -219,6 +249,11 @@ export default async function EventSlugPage({
         footnote: defaults.footnote,
       };
     });
+
+  const publicDisplayAddOns = applyCurrentTenantAddOnLimits(
+    allPublicDisplayAddOns,
+    tenantSettings,
+  );
 
   const checkoutReadyDisplayAddOns = publicDisplayAddOns.filter(
     (addOn) => addOn.collectAtCheckout && addOn.entryPriceCents > 0,
