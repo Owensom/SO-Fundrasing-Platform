@@ -77,6 +77,16 @@ type PublicDisplayAddOn = {
   prizeValueRangeNote: string;
 };
 
+type PublicEventFundraisingAddOnRaw = {
+  legalQuestionEnabled?: unknown;
+  legalQuestionText?: unknown;
+  legalQuestionHelperText?: unknown;
+  prizeValueRangeEnabled?: unknown;
+  prizeValueRangeMinCents?: unknown;
+  prizeValueRangeMaxCents?: unknown;
+  prizeValueRangeNote?: unknown;
+};
+
 const TABLE_SHAPE_KEY = "__table_shape";
 const DEFAULT_EVENTS_IMAGE = "/brand/so-default-events.png";
 
@@ -367,6 +377,7 @@ export default async function EventSlugPage({
     )
     .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
     .map((addOn) => {
+      const rawAddOn = addOn as typeof addOn & PublicEventFundraisingAddOnRaw;
       const defaults = getAddOnDefaults(addOn.type);
       const entryPriceCents = Number(addOn.entryPriceCents || 0);
       const maxEntriesPerBooking =
@@ -392,19 +403,19 @@ export default async function EventSlugPage({
         prizeRevealTitle: cleanText(addOn.prizeRevealTitle),
         prizeRevealDescription: cleanText(addOn.prizeRevealDescription),
         prizeRevealPrizes,
-        legalQuestionEnabled: normaliseBoolean(addOn.legalQuestionEnabled),
-        legalQuestionText: cleanText(addOn.legalQuestionText),
-        legalQuestionHelperText: cleanText(addOn.legalQuestionHelperText),
+        legalQuestionEnabled: normaliseBoolean(rawAddOn.legalQuestionEnabled),
+        legalQuestionText: cleanText(rawAddOn.legalQuestionText),
+        legalQuestionHelperText: cleanText(rawAddOn.legalQuestionHelperText),
         prizeValueRangeEnabled: normaliseBoolean(
-          addOn.prizeValueRangeEnabled,
+          rawAddOn.prizeValueRangeEnabled,
         ),
         prizeValueRangeMinCents: normaliseNonNegativeCents(
-          addOn.prizeValueRangeMinCents,
+          rawAddOn.prizeValueRangeMinCents,
         ),
         prizeValueRangeMaxCents: normaliseNonNegativeCents(
-          addOn.prizeValueRangeMaxCents,
+          rawAddOn.prizeValueRangeMaxCents,
         ),
-        prizeValueRangeNote: cleanText(addOn.prizeValueRangeNote),
+        prizeValueRangeNote: cleanText(rawAddOn.prizeValueRangeNote),
       };
     });
 
@@ -644,8 +655,7 @@ export default async function EventSlugPage({
             Your order was not completed. You can choose again below.
           </section>
         )}
-
-        <section style={brandedNoticeCardStyle}>
+                <section style={brandedNoticeCardStyle}>
           <div style={styles.noticeTextBlock}>
             <h2 style={styles.noticeTitle}>Open for bookings</h2>
             <p style={styles.noticeText}>
@@ -728,7 +738,8 @@ export default async function EventSlugPage({
             </div>
           </section>
         </div>
-                {publicDisplayAddOns.map((addOn) => (
+
+        {publicDisplayAddOns.map((addOn) => (
           <section
             key={addOn.type}
             style={{
@@ -816,7 +827,10 @@ export default async function EventSlugPage({
                   background: `linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)), radial-gradient(circle at top left, ${accentColour}1F, transparent 36%)`,
                 }}
               >
-                <div className="addOnSafeguardsHeader" style={styles.addOnSafeguardsHeader}>
+                <div
+                  className="addOnSafeguardsHeader"
+                  style={styles.addOnSafeguardsHeader}
+                >
                   <div>
                     <div
                       style={{
@@ -869,7 +883,10 @@ export default async function EventSlugPage({
                   ) : null}
                 </div>
 
-                <div className="addOnSafeguardsGrid" style={styles.addOnSafeguardsGrid}>
+                <div
+                  className="addOnSafeguardsGrid"
+                  style={styles.addOnSafeguardsGrid}
+                >
                   {addOn.legalQuestionEnabled && addOn.legalQuestionText ? (
                     <article style={styles.safeguardCard}>
                       <span style={styles.safeguardLabel}>
@@ -1116,7 +1133,9 @@ export default async function EventSlugPage({
               <div style={styles.emptyLarge}>
                 <strong>No table seats available yet</strong>
 
-                <p style={styles.muted}>Tables may not have been released yet.</p>
+                <p style={styles.muted}>
+                  Tables may not have been released yet.
+                </p>
               </div>
             ) : (
               <PublicTableSelector
