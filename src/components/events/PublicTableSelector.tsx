@@ -65,6 +65,10 @@ function cleanAccessCode(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function cleanAnswer(value: unknown) {
+  return String(value || "").trim();
+}
+
 function calculatePlatformCommissionCents(
   subtotalCents: number,
   platformFeePercent: number,
@@ -126,6 +130,14 @@ function normaliseAddOnQuantities(input: {
       addOn.type,
       normaliseAddOnQuantity(input.addOnQuantities[addOn.type] || 0, addOn),
     ]),
+  );
+}
+
+function addOnNeedsBuyerAnswer(addOn: PublicEventCheckoutAddOn) {
+  return Boolean(
+    addOn.type === "higher_or_lower" &&
+      addOn.legalQuestionEnabled &&
+      cleanAnswer(addOn.legalQuestionText),
   );
 }
 
@@ -467,6 +479,7 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
+
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -493,6 +506,9 @@ export default function PublicTableSelector({
   const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>(
     {},
   );
+  const [addOnBuyerAnswers, setAddOnBuyerAnswers] = useState<
+    Record<string, string>
+  >({});
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -572,6 +588,7 @@ export default function PublicTableSelector({
     .map((addOn) => ({
       type: addOn.type,
       quantity: safeAddOnQuantities[addOn.type] || 0,
+      buyerAnswer: cleanAnswer(addOnBuyerAnswers[addOn.type]),
     }))
     .filter((addOn) => addOn.quantity > 0);
 
@@ -628,6 +645,39 @@ export default function PublicTableSelector({
     }));
   }
 
+  function updateAddOnBuyerAnswer(
+    addOn: PublicEventCheckoutAddOn,
+    answer: string,
+  ) {
+    setAddOnBuyerAnswers((current) => ({
+      ...current,
+      [addOn.type]: answer,
+    }));
+  }
+
+  function validateAddOnAnswers() {
+    if (hasAccessCode) {
+      return true;
+    }
+
+    for (const addOn of checkoutAddOns) {
+      const quantity = safeAddOnQuantities[addOn.type] || 0;
+
+      if (quantity <= 0 || !addOnNeedsBuyerAnswer(addOn)) {
+        continue;
+      }
+
+      if (!cleanAnswer(addOnBuyerAnswers[addOn.type])) {
+        setCheckoutError(
+          "Please answer the Higher or Lower skill question before continuing.",
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   function toggleSeat(seat: Seat) {
     if (seat.status !== "available") return;
 
@@ -671,6 +721,10 @@ export default function PublicTableSelector({
       return;
     }
 
+    if (!validateAddOnAnswers()) {
+      return;
+    }
+
     setCheckoutError("");
     setIsCheckingOut(true);
 
@@ -689,7 +743,9 @@ export default function PublicTableSelector({
           accessCode: cleanedAccessCode || null,
           addOns: selectedAddOns,
           items: cartItems.map((item) => {
-            const seat = seats.find((currentSeat) => currentSeat.id === item.seatId);
+            const seat = seats.find(
+              (currentSeat) => currentSeat.id === item.seatId,
+            );
             const data = guestData[item.seatId] || getDefaultGuest();
 
             return {
@@ -909,9 +965,13 @@ export default function PublicTableSelector({
                         addOn={addOn}
                         currency={currency}
                         quantity={safeAddOnQuantities[addOn.type] || 0}
+                        buyerAnswer={addOnBuyerAnswers[addOn.type] || ""}
                         disabled={hasAccessCode}
                         onQuantityChange={(nextQuantity) =>
                           updateAddOnQuantity(addOn, nextQuantity)
+                        }
+                        onBuyerAnswerChange={(answer) =>
+                          updateAddOnBuyerAnswer(addOn, answer)
                         }
                       />
                     ))}
