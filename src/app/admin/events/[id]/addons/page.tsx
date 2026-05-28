@@ -11,6 +11,7 @@ import {
   getTenantEventFundraisingAddOnLimits,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import {
   getEventById,
   updateEvent,
@@ -259,7 +260,9 @@ function normalisePrizeRevealPrize(
       0,
   );
 
-  const revealOrder = Number(value.revealOrder ?? value.reveal_order ?? index + 1);
+  const revealOrder = Number(
+    value.revealOrder ?? value.reveal_order ?? index + 1,
+  );
 
   const isRevealed =
     value.isRevealed === true ||
@@ -614,6 +617,9 @@ function buildAddOnReadiness(input: {
 
   const prizeRevealEnabled = Boolean(addOn.prizeRevealModeEnabled);
   const prizeRevealPrizeCount = (addOn.prizeRevealPrizes || []).length;
+  const prizeRevealImages = (addOn.prizeRevealPrizes || []).filter((prize) =>
+    String(prize.imageUrl || "").trim(),
+  ).length;
 
   return [
     ...baseItems,
@@ -641,6 +647,16 @@ function buildAddOnReadiness(input: {
           : prizeRevealPrizeCount > 0
             ? "good"
             : "neutral",
+    },
+    {
+      label: "Prize images",
+      value:
+        prizeRevealImages === 1 ? "1 image" : `${prizeRevealImages} images`,
+      detail:
+        prizeRevealImages > 0
+          ? "Uploaded prize image URLs are saved with the reveal prizes."
+          : "Add image uploads for a stronger reveal experience.",
+      tone: prizeRevealImages > 0 ? "good" : "neutral",
     },
   ];
 }
@@ -789,6 +805,10 @@ export default async function EventFundraisingAddOnsPage({
   const multipleAddOnsCapability = checkSubscriptionCapability(
     tenantSettings,
     "multiple_event_fundraising_addons",
+  );
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
   );
   const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
 
@@ -1137,6 +1157,8 @@ export default async function EventFundraisingAddOnsPage({
               readyForCheckout={item.readyForCheckout}
               readinessWarnings={item.warnings}
               canUseMultipleAddOns={canUseMultipleAddOns}
+              subscriptionTier={tier}
+              customImagesAllowed={customImagesCapability.allowed}
             />
           ))}
         </div>
@@ -1153,6 +1175,8 @@ function AddOnSettingsPanel({
   readyForCheckout,
   readinessWarnings,
   canUseMultipleAddOns,
+  subscriptionTier,
+  customImagesAllowed,
 }: {
   eventId: string;
   addOn: EventFundraisingAddOn;
@@ -1161,6 +1185,8 @@ function AddOnSettingsPanel({
   readyForCheckout: boolean;
   readinessWarnings: number;
   canUseMultipleAddOns: boolean;
+  subscriptionTier: string;
+  customImagesAllowed: boolean;
 }) {
   const isHigherOrLower = definition.type === "higher_or_lower";
   const prizeRevealPrizes = (addOn.prizeRevealPrizes || []).slice(
@@ -1171,6 +1197,8 @@ function AddOnSettingsPanel({
     { length: MAX_PRIZE_REVEAL_PRIZES },
     (_, index) => prizeRevealPrizes[index] || null,
   );
+  const prizeRevealDefaultOpen =
+    Boolean(addOn.prizeRevealModeEnabled) || prizeRevealPrizes.length > 0;
 
   return (
     <section className="panel" style={styles.panel}>
@@ -1340,8 +1368,15 @@ function AddOnSettingsPanel({
           </Field>
         </div>
                 {isHigherOrLower ? (
-          <section style={styles.prizeRevealPanel}>
-            <div style={styles.prizeRevealHeader}>
+          <details
+            open={prizeRevealDefaultOpen}
+            className="prizeRevealPanel"
+            style={styles.prizeRevealPanel}
+          >
+            <summary
+              className="prizeRevealSummary"
+              style={styles.prizeRevealSummary}
+            >
               <div>
                 <div style={styles.prizeRevealEyebrow}>
                   Higher or Lower prize reveal mode
@@ -1354,178 +1389,202 @@ function AddOnSettingsPanel({
                 </p>
               </div>
 
-              <span style={styles.prizeRevealBadge}>
-                {addOn.prizeRevealModeEnabled
-                  ? "Reveal mode saved"
-                  : "Optional mode"}
-              </span>
-            </div>
+              <div style={styles.prizeRevealSummaryActions}>
+                <span style={styles.prizeRevealBadge}>
+                  {addOn.prizeRevealModeEnabled
+                    ? "Reveal mode saved"
+                    : "Optional mode"}
+                </span>
 
-            <div className="twoCol" style={styles.twoCol}>
-              <Field label="Enable prize reveal mode">
-                <select
-                  name="prize_reveal_mode_enabled"
-                  defaultValue={
-                    addOn.prizeRevealModeEnabled ? "true" : "false"
-                  }
+                <span style={styles.prizeRevealToggle}>Open / close</span>
+              </div>
+            </summary>
+
+            <div style={styles.prizeRevealBody}>
+              <div className="twoCol" style={styles.twoCol}>
+                <Field label="Enable prize reveal mode">
+                  <select
+                    name="prize_reveal_mode_enabled"
+                    defaultValue={
+                      addOn.prizeRevealModeEnabled ? "true" : "false"
+                    }
+                    className="input"
+                    style={styles.input}
+                  >
+                    <option value="false">No, keep prize reveal mode off</option>
+                    <option value="true">Yes, save prize reveal settings</option>
+                  </select>
+                </Field>
+
+                <Field label="Reveal order">
+                  <select
+                    name="prize_reveal_randomise_order"
+                    defaultValue={
+                      addOn.prizeRevealRandomiseOrder ? "true" : "false"
+                    }
+                    className="input"
+                    style={styles.input}
+                  >
+                    <option value="false">Use the order below</option>
+                    <option value="true">Randomise before the game</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Prize reveal title">
+                <input
+                  name="prize_reveal_title"
+                  defaultValue={addOn.prizeRevealTitle || ""}
+                  placeholder="Higher or Lower Prize Reveal"
                   className="input"
                   style={styles.input}
-                >
-                  <option value="false">No, keep prize reveal mode off</option>
-                  <option value="true">Yes, save prize reveal settings</option>
-                </select>
+                />
               </Field>
 
-              <Field label="Reveal order">
-                <select
-                  name="prize_reveal_randomise_order"
-                  defaultValue={
-                    addOn.prizeRevealRandomiseOrder ? "true" : "false"
-                  }
-                  className="input"
-                  style={styles.input}
-                >
-                  <option value="false">Use the order below</option>
-                  <option value="true">Randomise before the game</option>
-                </select>
+              <Field label="Prize reveal description">
+                <textarea
+                  name="prize_reveal_description"
+                  rows={3}
+                  defaultValue={addOn.prizeRevealDescription || ""}
+                  placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
+                  className="textarea"
+                  style={styles.textarea}
+                />
               </Field>
-            </div>
 
-            <Field label="Prize reveal title">
               <input
-                name="prize_reveal_title"
-                defaultValue={addOn.prizeRevealTitle || ""}
-                placeholder="Higher or Lower Prize Reveal"
-                className="input"
-                style={styles.input}
+                type="hidden"
+                name="prize_reveal_prize_count"
+                value={MAX_PRIZE_REVEAL_PRIZES}
               />
-            </Field>
 
-            <Field label="Prize reveal description">
-              <textarea
-                name="prize_reveal_description"
-                rows={3}
-                defaultValue={addOn.prizeRevealDescription || ""}
-                placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
-                className="textarea"
-                style={styles.textarea}
-              />
-            </Field>
+              <div style={styles.prizeRevealRows}>
+                {prizeRevealRows.map((prize, index) => (
+                  <details
+                    key={prize?.id || `new-reveal-prize-${index + 1}`}
+                    open={Boolean(prize?.title)}
+                    style={styles.prizeRevealRow}
+                  >
+                    <summary
+                      className="prizeRevealRowHeader"
+                      style={styles.prizeRevealRowHeader}
+                    >
+                      <div>
+                        <span style={styles.prizeRevealRowEyebrow}>
+                          Prize {index + 1}
+                        </span>
+                        <strong style={styles.prizeRevealRowTitle}>
+                          {prize?.title || "Empty prize row"}
+                        </strong>
+                      </div>
 
-            <input
-              type="hidden"
-              name="prize_reveal_prize_count"
-              value={MAX_PRIZE_REVEAL_PRIZES}
-            />
+                      <div style={styles.prizeRevealRowActions}>
+                        <span style={styles.prizeRevealRowStatus}>
+                          {prize?.isRevealed ? "Revealed" : "Hidden"}
+                        </span>
+                        <span style={styles.prizeRevealToggle}>Open</span>
+                      </div>
+                    </summary>
 
-            <div style={styles.prizeRevealRows}>
-              {prizeRevealRows.map((prize, index) => (
-                <article
-                  key={prize?.id || `new-reveal-prize-${index + 1}`}
-                  style={styles.prizeRevealRow}
-                >
-                  <input
-                    type="hidden"
-                    name={`prize_reveal_prize_${index}_id`}
-                    defaultValue={prize?.id || ""}
-                  />
+                    <div style={styles.prizeRevealRowBody}>
+                      <input
+                        type="hidden"
+                        name={`prize_reveal_prize_${index}_id`}
+                        defaultValue={prize?.id || ""}
+                      />
 
-                  <div style={styles.prizeRevealRowHeader}>
-                    <div>
-                      <span style={styles.prizeRevealRowEyebrow}>
-                        Prize {index + 1}
-                      </span>
-                      <strong style={styles.prizeRevealRowTitle}>
-                        {prize?.title || "Empty prize row"}
-                      </strong>
+                      <div className="twoCol" style={styles.twoCol}>
+                        <Field label="Prize name">
+                          <input
+                            name={`prize_reveal_prize_${index}_title`}
+                            defaultValue={prize?.title || ""}
+                            placeholder="Spa day, signed shirt, mystery hamper..."
+                            className="input"
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Sponsor / donor">
+                          <input
+                            name={`prize_reveal_prize_${index}_sponsor_name`}
+                            defaultValue={prize?.sponsorName || ""}
+                            placeholder="Business, donor or sponsor name"
+                            className="input"
+                            style={styles.input}
+                          />
+                        </Field>
+                      </div>
+
+                      <div className="threeCol" style={styles.threeCol}>
+                        <Field label="Estimated value">
+                          <input
+                            name={`prize_reveal_prize_${index}_estimated_value`}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={moneyFromCents(
+                              prize?.estimatedValueCents || 0,
+                            )}
+                            className="input"
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Reveal order">
+                          <input
+                            name={`prize_reveal_prize_${index}_reveal_order`}
+                            type="number"
+                            min="1"
+                            defaultValue={prize?.revealOrder || index + 1}
+                            className="input"
+                            style={styles.input}
+                          />
+                        </Field>
+
+                        <Field label="Revealed">
+                          <select
+                            name={`prize_reveal_prize_${index}_is_revealed`}
+                            defaultValue={prize?.isRevealed ? "true" : "false"}
+                            className="input"
+                            style={styles.input}
+                          >
+                            <option value="false">Hidden</option>
+                            <option value="true">Revealed</option>
+                          </select>
+                        </Field>
+                      </div>
+
+                      <Field label="Prize description">
+                        <textarea
+                          name={`prize_reveal_prize_${index}_description`}
+                          rows={2}
+                          defaultValue={prize?.description || ""}
+                          placeholder="Short description for this prize."
+                          className="textarea"
+                          style={styles.textarea}
+                        />
+                      </Field>
+
+                      <div style={styles.prizeImageUploadShell}>
+                        <ImageFocusUploadField
+                          currentImageUrl={prize?.imageUrl || ""}
+                          currentFocusX={50}
+                          currentFocusY={50}
+                          imageFieldName={`prize_reveal_prize_${index}_image_url`}
+                          focusXFieldName={`prize_reveal_prize_${index}_image_focus_x`}
+                          focusYFieldName={`prize_reveal_prize_${index}_image_focus_y`}
+                          label={`Prize ${index + 1} image upload`}
+                          previewAlt={prize?.title || `Prize ${index + 1}`}
+                          subscriptionTier={subscriptionTier}
+                          customImagesAllowed={customImagesAllowed}
+                        />
+                      </div>
                     </div>
-
-                    <Field label="Revealed">
-                      <select
-                        name={`prize_reveal_prize_${index}_is_revealed`}
-                        defaultValue={prize?.isRevealed ? "true" : "false"}
-                        className="input"
-                        style={styles.compactInput}
-                      >
-                        <option value="false">Hidden</option>
-                        <option value="true">Revealed</option>
-                      </select>
-                    </Field>
-                  </div>
-
-                  <div className="twoCol" style={styles.twoCol}>
-                    <Field label="Prize name">
-                      <input
-                        name={`prize_reveal_prize_${index}_title`}
-                        defaultValue={prize?.title || ""}
-                        placeholder="Spa day, signed shirt, mystery hamper..."
-                        className="input"
-                        style={styles.input}
-                      />
-                    </Field>
-
-                    <Field label="Sponsor / donor">
-                      <input
-                        name={`prize_reveal_prize_${index}_sponsor_name`}
-                        defaultValue={prize?.sponsorName || ""}
-                        placeholder="Business, donor or sponsor name"
-                        className="input"
-                        style={styles.input}
-                      />
-                    </Field>
-                  </div>
-
-                  <div className="threeCol" style={styles.threeCol}>
-                    <Field label="Estimated value">
-                      <input
-                        name={`prize_reveal_prize_${index}_estimated_value`}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        defaultValue={moneyFromCents(
-                          prize?.estimatedValueCents || 0,
-                        )}
-                        className="input"
-                        style={styles.input}
-                      />
-                    </Field>
-
-                    <Field label="Reveal order">
-                      <input
-                        name={`prize_reveal_prize_${index}_reveal_order`}
-                        type="number"
-                        min="1"
-                        defaultValue={prize?.revealOrder || index + 1}
-                        className="input"
-                        style={styles.input}
-                      />
-                    </Field>
-
-                    <Field label="Image URL">
-                      <input
-                        name={`prize_reveal_prize_${index}_image_url`}
-                        defaultValue={prize?.imageUrl || ""}
-                        placeholder="https://..."
-                        className="input"
-                        style={styles.input}
-                      />
-                    </Field>
-                  </div>
-
-                  <Field label="Prize description">
-                    <textarea
-                      name={`prize_reveal_prize_${index}_description`}
-                      rows={2}
-                      defaultValue={prize?.description || ""}
-                      placeholder="Short description for this prize."
-                      className="textarea"
-                      style={styles.textarea}
-                    />
-                  </Field>
-                </article>
-              ))}
+                  </details>
+                ))}
+              </div>
             </div>
-          </section>
+          </details>
         ) : null}
 
         {!canUseMultipleAddOns ? (
@@ -1647,7 +1706,7 @@ const responsiveStyles = `
   .event-addons-page .submitBar,
   .event-addons-page .readinessHeader,
   .event-addons-page .readinessActions,
-  .event-addons-page .prizeRevealHeader,
+  .event-addons-page .prizeRevealSummary,
   .event-addons-page .prizeRevealRowHeader {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -2322,19 +2381,6 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  compactInput: {
-    width: "100%",
-    minHeight: 40,
-    padding: "8px 10px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 14,
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
-
   textarea: {
     width: "100%",
     padding: "10px 12px",
@@ -2350,21 +2396,38 @@ const styles: Record<string, CSSProperties> = {
 
   prizeRevealPanel: {
     display: "grid",
-    gap: 14,
+    gap: 0,
     padding: 16,
     borderRadius: 22,
     background:
       "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #fffbeb 0%, #ffffff 58%, #eff6ff 100%)",
     border: "1px solid #fde68a",
     boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+    overflow: "hidden",
   },
 
-  prizeRevealHeader: {
+  prizeRevealSummary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 14,
     alignItems: "flex-start",
     flexWrap: "wrap",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+
+  prizeRevealSummaryActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+
+  prizeRevealBody: {
+    display: "grid",
+    gap: 14,
+    marginTop: 16,
   },
 
   prizeRevealEyebrow: {
@@ -2407,6 +2470,20 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.04em",
   },
 
+  prizeRevealToggle: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+
   prizeRevealRows: {
     display: "grid",
     gap: 12,
@@ -2414,12 +2491,13 @@ const styles: Record<string, CSSProperties> = {
 
   prizeRevealRow: {
     display: "grid",
-    gap: 12,
+    gap: 0,
     padding: 14,
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 10px rgba(15,23,42,0.035)",
+    overflow: "hidden",
   },
 
   prizeRevealRowHeader: {
@@ -2428,6 +2506,22 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     alignItems: "flex-start",
     flexWrap: "wrap",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+
+  prizeRevealRowActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+
+  prizeRevealRowBody: {
+    display: "grid",
+    gap: 12,
+    marginTop: 14,
   },
 
   prizeRevealRowEyebrow: {
@@ -2446,6 +2540,29 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 17,
     fontWeight: 950,
     letterSpacing: "-0.03em",
+  },
+
+  prizeRevealRowStatus: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#64748b",
+    border: "1px solid #cbd5e1",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  prizeImageUploadShell: {
+    display: "grid",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   professionalNotice: {
