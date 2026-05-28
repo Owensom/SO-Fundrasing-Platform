@@ -10,6 +10,17 @@ export type TableNamesJson = Record<string, string>;
 
 export type EventFundraisingAddOnType = "heads_or_tails" | "higher_or_lower";
 
+export type EventPrizeRevealPrize = {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  sponsorName?: string;
+  estimatedValueCents?: number;
+  revealOrder?: number;
+  isRevealed?: boolean;
+};
+
 export type EventFundraisingAddOn = {
   id: string;
   type: EventFundraisingAddOnType;
@@ -22,6 +33,12 @@ export type EventFundraisingAddOn = {
   collectAtCheckout?: boolean;
   maxEntriesPerBooking?: number | null;
   sortOrder?: number;
+
+  prizeRevealModeEnabled?: boolean;
+  prizeRevealRandomiseOrder?: boolean;
+  prizeRevealTitle?: string;
+  prizeRevealDescription?: string;
+  prizeRevealPrizes?: EventPrizeRevealPrize[];
 };
 
 type EventFundraisingAddOnRaw = Partial<EventFundraisingAddOn> &
@@ -309,6 +326,10 @@ function normaliseNullableText(
   return clean || null;
 }
 
+function normaliseOptionalText(value: unknown): string {
+  return String(value || "").trim();
+}
+
 function normaliseImageFocus(value: number | null | undefined): number {
   const number = Number(value);
   if (!Number.isFinite(number)) return 50;
@@ -521,6 +542,61 @@ function normaliseMenuOptions(value: unknown): EventMenuOption[] {
     .filter(Boolean) as EventMenuOption[];
 }
 
+function normalisePrizeRevealPrizes(value: unknown): EventPrizeRevealPrize[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      const rawPrize = item as Record<string, unknown>;
+      const title = normaliseOptionalText(rawPrize.title);
+
+      if (!title) {
+        return null;
+      }
+
+      const estimatedValueCents = normaliseNonNegativeInteger(
+        rawPrize.estimatedValueCents ??
+          rawPrize.estimated_value_cents ??
+          rawPrize.estimatedValue ??
+          rawPrize.estimated_value,
+        0,
+      );
+
+      const revealOrder = normaliseNonNegativeInteger(
+        rawPrize.revealOrder ?? rawPrize.reveal_order,
+        index + 1,
+      );
+
+      const isRevealed =
+        rawPrize.isRevealed === true ||
+        rawPrize.is_revealed === true ||
+        rawPrize.isRevealed === "true" ||
+        rawPrize.is_revealed === "true";
+
+      return {
+        id: normaliseOptionalText(rawPrize.id) || `reveal-prize-${index + 1}`,
+        title,
+        description: normaliseOptionalText(rawPrize.description),
+        imageUrl: normaliseOptionalText(rawPrize.imageUrl ?? rawPrize.image_url),
+        sponsorName: normaliseOptionalText(
+          rawPrize.sponsorName ?? rawPrize.sponsor_name,
+        ),
+        estimatedValueCents,
+        revealOrder,
+        isRevealed,
+      };
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        Number(a?.revealOrder || 0) - Number(b?.revealOrder || 0),
+    ) as EventPrizeRevealPrize[];
+}
+
 function normaliseEventFundraisingAddOnsJson(
   value: unknown,
 ): EventFundraisingAddOn[] {
@@ -589,6 +665,29 @@ function normaliseEventFundraisingAddOnsJson(
         ["sortOrder", "sort_order"],
         defaults.sortOrder,
       ),
+      prizeRevealModeEnabled: readBooleanField(
+        addOn,
+        ["prizeRevealModeEnabled", "prize_reveal_mode_enabled"],
+        false,
+      ),
+      prizeRevealRandomiseOrder: readBooleanField(
+        addOn,
+        ["prizeRevealRandomiseOrder", "prize_reveal_randomise_order"],
+        false,
+      ),
+      prizeRevealTitle: readStringField(
+        addOn,
+        ["prizeRevealTitle", "prize_reveal_title"],
+        "",
+      ),
+      prizeRevealDescription: readStringField(
+        addOn,
+        ["prizeRevealDescription", "prize_reveal_description"],
+        "",
+      ),
+      prizeRevealPrizes: normalisePrizeRevealPrizes(
+        addOn.prizeRevealPrizes ?? addOn.prize_reveal_prizes,
+      ),
     });
   });
 
@@ -615,7 +714,6 @@ function normaliseEvent(event: EventItem): EventItem {
     ask_menu_choice: event.ask_menu_choice ?? true,
   };
 }
-
 export function slugifyEventTitle(value: string): string {
   const slug = value
     .toLowerCase()
@@ -1311,7 +1409,6 @@ export async function updateEventSeatsMetadata(input: {
     ],
   );
 }
-
 export async function updateEventSeatsStatus(input: {
   eventId: string;
   seatIds: string[];
