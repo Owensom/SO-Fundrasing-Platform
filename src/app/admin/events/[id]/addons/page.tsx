@@ -361,6 +361,25 @@ function buildPrizeRevealPrizesFromForm(formData: FormData) {
   );
 }
 
+function revealProgressText(prizes: EventPrizeRevealPrize[]) {
+  const total = prizes.length;
+  const revealed = prizes.filter((prize) => prize.isRevealed).length;
+
+  if (total === 0) {
+    return "No prizes saved yet";
+  }
+
+  return `${revealed} of ${total} revealed`;
+}
+
+function revealStatusLabel(prize: EventPrizeRevealPrize | null) {
+  if (!prize?.title) {
+    return "Empty row";
+  }
+
+  return prize.isRevealed ? "Revealed publicly" : "Hidden from reveal";
+}
+
 function normaliseAddOnForAdmin(
   addOn: EventFundraisingAddOnLike | null | undefined,
   definition: AddOnDefinition,
@@ -616,9 +635,13 @@ function buildAddOnReadiness(input: {
   }
 
   const prizeRevealEnabled = Boolean(addOn.prizeRevealModeEnabled);
-  const prizeRevealPrizeCount = (addOn.prizeRevealPrizes || []).length;
-  const prizeRevealImages = (addOn.prizeRevealPrizes || []).filter((prize) =>
+  const prizeRevealPrizes = addOn.prizeRevealPrizes || [];
+  const prizeRevealPrizeCount = prizeRevealPrizes.length;
+  const prizeRevealImages = prizeRevealPrizes.filter((prize) =>
     String(prize.imageUrl || "").trim(),
+  ).length;
+  const prizeRevealRevealed = prizeRevealPrizes.filter(
+    (prize) => prize.isRevealed,
   ).length;
 
   return [
@@ -627,7 +650,7 @@ function buildAddOnReadiness(input: {
       label: "Prize reveal mode",
       value: prizeRevealEnabled ? "Configured" : "Off",
       detail: prizeRevealEnabled
-        ? "Prize reveal settings are saved for a future public reveal mode."
+        ? "Prize reveal settings are saved and can be controlled by marking each prize hidden or revealed."
         : "Optional premium mode for prize-by-prize Higher or Lower reveals.",
       tone: prizeRevealEnabled ? "good" : "neutral",
     },
@@ -657,6 +680,19 @@ function buildAddOnReadiness(input: {
           ? "Uploaded prize image URLs are saved with the reveal prizes."
           : "Add image uploads for a stronger reveal experience.",
       tone: prizeRevealImages > 0 ? "good" : "neutral",
+    },
+    {
+      label: "Live reveal control",
+      value:
+        prizeRevealPrizeCount > 0
+          ? `${prizeRevealRevealed} / ${prizeRevealPrizeCount} revealed`
+          : "No prizes",
+      detail:
+        prizeRevealPrizeCount > 0
+          ? "Use each prize row’s hidden/revealed control, then save the Higher or Lower settings."
+          : "Add at least one prize before using event-night reveal controls.",
+      tone:
+        prizeRevealEnabled && prizeRevealPrizeCount > 0 ? "good" : "neutral",
     },
   ];
 }
@@ -1199,6 +1235,7 @@ function AddOnSettingsPanel({
   );
   const prizeRevealDefaultOpen =
     Boolean(addOn.prizeRevealModeEnabled) || prizeRevealPrizes.length > 0;
+  const revealProgress = revealProgressText(prizeRevealPrizes);
 
   return (
     <section className="panel" style={styles.panel}>
@@ -1381,26 +1418,30 @@ function AddOnSettingsPanel({
                 <div style={styles.prizeRevealEyebrow}>
                   Higher or Lower prize reveal mode
                 </div>
-                <h3 style={styles.prizeRevealTitle}>Prize reveal setup</h3>
+                <h3 style={styles.prizeRevealTitle}>Prize reveal controls</h3>
                 <p style={styles.prizeRevealText}>
-                  Store optional prize reveal settings for a future public
-                  Higher or Lower mode. This does not change checkout, public
-                  display, Stripe, receipts or orders yet.
+                  Set up the prizes, then use each prize row’s hidden/revealed
+                  control during the campaign or event night. Save the Higher or
+                  Lower settings to update the public preview.
                 </p>
               </div>
 
               <div style={styles.prizeRevealSummaryActions}>
-                <span style={styles.prizeRevealBadge}>
-                  {addOn.prizeRevealModeEnabled
-                    ? "Reveal mode saved"
-                    : "Optional mode"}
-                </span>
-
+                <span style={styles.prizeRevealBadge}>{revealProgress}</span>
                 <span style={styles.prizeRevealToggle}>Open / close</span>
               </div>
             </summary>
 
             <div style={styles.prizeRevealBody}>
+              <div style={styles.revealControlNotice}>
+                <strong>Event-night reveal control</strong>
+                <span>
+                  Mark a prize as revealed when you are ready for it to appear as
+                  revealed on the public event page. Hidden prizes still show as
+                  hidden in the preview.
+                </span>
+              </div>
+
               <div className="twoCol" style={styles.twoCol}>
                 <Field label="Enable prize reveal mode">
                   <select
@@ -1412,7 +1453,7 @@ function AddOnSettingsPanel({
                     style={styles.input}
                   >
                     <option value="false">No, keep prize reveal mode off</option>
-                    <option value="true">Yes, save prize reveal settings</option>
+                    <option value="true">Yes, show prize reveal preview</option>
                   </select>
                 </Field>
 
@@ -1479,8 +1520,15 @@ function AddOnSettingsPanel({
                       </div>
 
                       <div style={styles.prizeRevealRowActions}>
-                        <span style={styles.prizeRevealRowStatus}>
-                          {prize?.isRevealed ? "Revealed" : "Hidden"}
+                        <span
+                          style={{
+                            ...styles.prizeRevealRowStatus,
+                            ...(prize?.isRevealed
+                              ? styles.prizeRevealRowStatusRevealed
+                              : styles.prizeRevealRowStatusHidden),
+                          }}
+                        >
+                          {revealStatusLabel(prize)}
                         </span>
                         <span style={styles.prizeRevealToggle}>Open</span>
                       </div>
@@ -1492,6 +1540,35 @@ function AddOnSettingsPanel({
                         name={`prize_reveal_prize_${index}_id`}
                         defaultValue={prize?.id || ""}
                       />
+
+                      <div style={styles.revealControlBox}>
+                        <div>
+                          <strong style={styles.revealControlTitle}>
+                            Public reveal status
+                          </strong>
+                          <p style={styles.revealControlText}>
+                            Use this during the event or campaign build-up.
+                            Change the status, save the Higher or Lower
+                            settings, then refresh the public page.
+                          </p>
+                        </div>
+
+                        <Field label="Reveal status">
+                          <select
+                            name={`prize_reveal_prize_${index}_is_revealed`}
+                            defaultValue={prize?.isRevealed ? "true" : "false"}
+                            className="input"
+                            style={styles.input}
+                          >
+                            <option value="false">
+                              Hidden — not revealed yet
+                            </option>
+                            <option value="true">
+                              Revealed — show as revealed publicly
+                            </option>
+                          </select>
+                        </Field>
+                      </div>
 
                       <div className="twoCol" style={styles.twoCol}>
                         <Field label="Prize name">
@@ -1515,7 +1592,7 @@ function AddOnSettingsPanel({
                         </Field>
                       </div>
 
-                      <div className="threeCol" style={styles.threeCol}>
+                      <div className="twoCol" style={styles.twoCol}>
                         <Field label="Estimated value">
                           <input
                             name={`prize_reveal_prize_${index}_estimated_value`}
@@ -1539,18 +1616,6 @@ function AddOnSettingsPanel({
                             className="input"
                             style={styles.input}
                           />
-                        </Field>
-
-                        <Field label="Revealed">
-                          <select
-                            name={`prize_reveal_prize_${index}_is_revealed`}
-                            defaultValue={prize?.isRevealed ? "true" : "false"}
-                            className="input"
-                            style={styles.input}
-                          >
-                            <option value="false">Hidden</option>
-                            <option value="true">Revealed</option>
-                          </select>
                         </Field>
                       </div>
 
@@ -1707,7 +1772,8 @@ const responsiveStyles = `
   .event-addons-page .readinessHeader,
   .event-addons-page .readinessActions,
   .event-addons-page .prizeRevealSummary,
-  .event-addons-page .prizeRevealRowHeader {
+  .event-addons-page .prizeRevealRowHeader,
+  .event-addons-page .revealControlBox {
     display: grid !important;
     grid-template-columns: 1fr !important;
     align-items: stretch !important;
@@ -1783,9 +1849,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
-  heroContent: {
-    minWidth: 0,
-  },
+  heroContent: { minWidth: 0 },
 
   eyebrow: {
     display: "inline-flex",
@@ -2199,9 +2263,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 0 0 4px rgba(148,163,184,0.14)",
   },
 
-  readinessContent: {
-    minWidth: 0,
-  },
+  readinessContent: { minWidth: 0 },
 
   readinessLabelLight: {
     display: "block",
@@ -2259,10 +2321,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 10,
   },
 
-  addOnPanels: {
-    display: "grid",
-    gap: 16,
-  },
+  addOnPanels: { display: "grid", gap: 16 },
 
   panel: {
     display: "grid",
@@ -2338,11 +2397,7 @@ const styles: Record<string, CSSProperties> = {
     borderColor: "#cbd5e1",
   },
 
-  form: {
-    display: "grid",
-    gap: 13,
-    minWidth: 0,
-  },
+  form: { display: "grid", gap: 13, minWidth: 0 },
 
   twoCol: {
     display: "grid",
@@ -2356,11 +2411,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
 
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
+  field: { display: "grid", gap: 6, minWidth: 0 },
 
   label: {
     color: "#334155",
@@ -2484,10 +2535,20 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.04em",
   },
 
-  prizeRevealRows: {
+  revealControlNotice: {
     display: "grid",
-    gap: 12,
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
   },
+
+  prizeRevealRows: { display: "grid", gap: 12 },
 
   prizeRevealRow: {
     display: "grid",
@@ -2547,11 +2608,48 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
-    background: "#f8fafc",
-    color: "#64748b",
-    border: "1px solid #cbd5e1",
+    border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
+  },
+
+  prizeRevealRowStatusRevealed: {
+    background: "#dcfce7",
+    color: "#166534",
+    borderColor: "#bbf7d0",
+  },
+
+  prizeRevealRowStatusHidden: {
+    background: "#f8fafc",
+    color: "#64748b",
+    borderColor: "#cbd5e1",
+  },
+
+  revealControlBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.35fr)",
+    gap: 12,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  revealControlTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 950,
+    marginBottom: 4,
+  },
+
+  revealControlText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
   },
 
   prizeImageUploadShell: {
