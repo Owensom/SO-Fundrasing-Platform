@@ -68,6 +68,13 @@ type PublicDisplayAddOn = {
   prizeRevealTitle: string;
   prizeRevealDescription: string;
   prizeRevealPrizes: PublicPrizeRevealPrize[];
+  legalQuestionEnabled: boolean;
+  legalQuestionText: string;
+  legalQuestionHelperText: string;
+  prizeValueRangeEnabled: boolean;
+  prizeValueRangeMinCents: number;
+  prizeValueRangeMaxCents: number;
+  prizeValueRangeNote: string;
 };
 
 const TABLE_SHAPE_KEY = "__table_shape";
@@ -150,6 +157,42 @@ function getAddOnDefaults(type: string) {
     footnote:
       "Heads or Tails is run live by the organiser during the event. Main event tickets and seating are booked separately below.",
   };
+}
+
+function normaliseBoolean(value: unknown) {
+  return (
+    value === true ||
+    value === "true" ||
+    value === 1 ||
+    value === "1"
+  );
+}
+
+function normaliseNonNegativeCents(value: unknown) {
+  const number = Number(value || 0);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.round(number);
+}
+
+function hasValidPrizeValueRange(addOn: PublicDisplayAddOn) {
+  return (
+    addOn.prizeValueRangeEnabled &&
+    addOn.prizeValueRangeMinCents > 0 &&
+    addOn.prizeValueRangeMaxCents > 0 &&
+    addOn.prizeValueRangeMaxCents >= addOn.prizeValueRangeMinCents
+  );
+}
+
+function shouldShowLegalSafeguards(addOn: PublicDisplayAddOn) {
+  return (
+    addOn.type === "higher_or_lower" &&
+    ((addOn.legalQuestionEnabled && Boolean(addOn.legalQuestionText)) ||
+      hasValidPrizeValueRange(addOn))
+  );
 }
 
 function normalisePrizeRevealPrize(
@@ -349,6 +392,19 @@ export default async function EventSlugPage({
         prizeRevealTitle: cleanText(addOn.prizeRevealTitle),
         prizeRevealDescription: cleanText(addOn.prizeRevealDescription),
         prizeRevealPrizes,
+        legalQuestionEnabled: normaliseBoolean(addOn.legalQuestionEnabled),
+        legalQuestionText: cleanText(addOn.legalQuestionText),
+        legalQuestionHelperText: cleanText(addOn.legalQuestionHelperText),
+        prizeValueRangeEnabled: normaliseBoolean(
+          addOn.prizeValueRangeEnabled,
+        ),
+        prizeValueRangeMinCents: normaliseNonNegativeCents(
+          addOn.prizeValueRangeMinCents,
+        ),
+        prizeValueRangeMaxCents: normaliseNonNegativeCents(
+          addOn.prizeValueRangeMaxCents,
+        ),
+        prizeValueRangeNote: cleanText(addOn.prizeValueRangeNote),
       };
     });
 
@@ -571,6 +627,7 @@ export default async function EventSlugPage({
           </div>
         </div>
       </section>
+
       <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
           <section style={styles.successCard}>
@@ -587,7 +644,8 @@ export default async function EventSlugPage({
             Your order was not completed. You can choose again below.
           </section>
         )}
-                <section style={brandedNoticeCardStyle}>
+
+        <section style={brandedNoticeCardStyle}>
           <div style={styles.noticeTextBlock}>
             <h2 style={styles.noticeTitle}>Open for bookings</h2>
             <p style={styles.noticeText}>
@@ -670,8 +728,7 @@ export default async function EventSlugPage({
             </div>
           </section>
         </div>
-
-        {publicDisplayAddOns.map((addOn) => (
+                {publicDisplayAddOns.map((addOn) => (
           <section
             key={addOn.type}
             style={{
@@ -749,6 +806,124 @@ export default async function EventSlugPage({
                 </strong>
               </div>
             </div>
+
+            {shouldShowLegalSafeguards(addOn) ? (
+              <section
+                className="addOnSafeguardsPanel"
+                style={{
+                  ...styles.addOnSafeguardsPanel,
+                  borderColor: `${accentColour}66`,
+                  background: `linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)), radial-gradient(circle at top left, ${accentColour}1F, transparent 36%)`,
+                }}
+              >
+                <div className="addOnSafeguardsHeader" style={styles.addOnSafeguardsHeader}>
+                  <div>
+                    <div
+                      style={{
+                        ...styles.addOnSafeguardsEyebrow,
+                        color: accentColour,
+                        borderColor: `${accentColour}66`,
+                        background: `${accentColour}14`,
+                      }}
+                    >
+                      Skill and judgement
+                    </div>
+
+                    <h3 style={styles.addOnSafeguardsTitle}>
+                      Higher or Lower entry information
+                    </h3>
+
+                    <p style={styles.addOnSafeguardsText}>
+                      These details are provided by the organiser to help
+                      supporters understand the entry requirements and the prize
+                      value range before taking part.
+                    </p>
+                  </div>
+
+                  {hasValidPrizeValueRange(addOn) ? (
+                    <div
+                      style={{
+                        ...styles.valueRangePublicCard,
+                        borderColor: `${accentColour}66`,
+                        background: `${accentColour}14`,
+                      }}
+                    >
+                      <span style={styles.valueRangePublicLabel}>
+                        Prize values
+                      </span>
+                      <strong style={styles.valueRangePublicValue}>
+                        {formatMoneyFromCents(
+                          addOn.prizeValueRangeMinCents,
+                          event.currency,
+                        )}{" "}
+                        –{" "}
+                        {formatMoneyFromCents(
+                          addOn.prizeValueRangeMaxCents,
+                          event.currency,
+                        )}
+                      </strong>
+                      <span style={styles.valueRangePublicHint}>
+                        Approximate range
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="addOnSafeguardsGrid" style={styles.addOnSafeguardsGrid}>
+                  {addOn.legalQuestionEnabled && addOn.legalQuestionText ? (
+                    <article style={styles.safeguardCard}>
+                      <span style={styles.safeguardLabel}>
+                        Entry question
+                      </span>
+                      <strong style={styles.safeguardQuestion}>
+                        {addOn.legalQuestionText}
+                      </strong>
+
+                      {addOn.legalQuestionHelperText ? (
+                        <p style={styles.safeguardHelp}>
+                          {addOn.legalQuestionHelperText}
+                        </p>
+                      ) : (
+                        <p style={styles.safeguardHelp}>
+                          Answer requirements will be checked during the entry
+                          process when enabled by the organiser.
+                        </p>
+                      )}
+                    </article>
+                  ) : null}
+
+                  {hasValidPrizeValueRange(addOn) ? (
+                    <article style={styles.safeguardCard}>
+                      <span style={styles.safeguardLabel}>
+                        Prize value range
+                      </span>
+                      <strong style={styles.safeguardQuestion}>
+                        Prizes range from{" "}
+                        {formatMoneyFromCents(
+                          addOn.prizeValueRangeMinCents,
+                          event.currency,
+                        )}{" "}
+                        to{" "}
+                        {formatMoneyFromCents(
+                          addOn.prizeValueRangeMaxCents,
+                          event.currency,
+                        )}
+                      </strong>
+
+                      <p style={styles.safeguardHelp}>
+                        {addOn.prizeValueRangeNote ||
+                          "Prize values are shown to help supporters make a judgement during the game."}
+                      </p>
+                    </article>
+                  ) : null}
+                </div>
+
+                <p style={styles.addOnSafeguardsFootnote}>
+                  The organiser is responsible for running this promotion
+                  lawfully. This public information does not change checkout yet.
+                </p>
+              </section>
+            ) : null}
 
             <p style={styles.addOnFootnote}>{addOn.footnote}</p>
           </section>
@@ -927,7 +1102,8 @@ export default async function EventSlugPage({
 
             <div style={brandedCheckoutBadgeStyle}>Secure Stripe checkout</div>
           </div>
-                    {event.event_type === "general_admission" ? (
+
+          {event.event_type === "general_admission" ? (
             <PublicGeneralAdmissionSelector
               eventId={event.id}
               ticketTypes={ticketTypes}
@@ -1001,7 +1177,6 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
     </p>
   );
 }
-
 const responsiveStyles = `
 .public-event-page,
 .public-event-page * {
@@ -1027,6 +1202,8 @@ const responsiveStyles = `
 
   .public-event-page .addOnHeader,
   .public-event-page .addOnDetailsGrid,
+  .public-event-page .addOnSafeguardsHeader,
+  .public-event-page .addOnSafeguardsGrid,
   .public-event-page .prizeRevealPublicHeader {
     grid-template-columns: 1fr !important;
   }
@@ -1060,6 +1237,7 @@ const responsiveStyles = `
   }
 
   .public-event-page .addOnPanel,
+  .public-event-page .addOnSafeguardsPanel,
   .public-event-page .prizeRevealPublicPanel {
     padding: 16px !important;
     border-radius: 22px !important;
@@ -1603,6 +1781,136 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "anywhere",
     whiteSpace: "pre-line",
+  },
+
+  addOnSafeguardsPanel: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 22,
+    border: "1px solid",
+    color: "#ffffff",
+    overflow: "hidden",
+  },
+
+  addOnSafeguardsHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.34fr)",
+    gap: 14,
+    alignItems: "stretch",
+    marginBottom: 14,
+  },
+
+  addOnSafeguardsEyebrow: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 10,
+  },
+
+  addOnSafeguardsTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: "clamp(24px, 5vw, 34px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  addOnSafeguardsText: {
+    margin: "9px 0 0",
+    color: "#dbeafe",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  valueRangePublicCard: {
+    display: "grid",
+    alignContent: "center",
+    gap: 6,
+    padding: 15,
+    borderRadius: 20,
+    border: "1px solid",
+  },
+
+  valueRangePublicLabel: {
+    color: "#bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  valueRangePublicValue: {
+    color: "#ffffff",
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  valueRangePublicHint: {
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 850,
+  },
+
+  addOnSafeguardsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  safeguardCard: {
+    display: "grid",
+    gap: 8,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.11)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    minWidth: 0,
+  },
+
+  safeguardLabel: {
+    color: "#bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  safeguardQuestion: {
+    color: "#ffffff",
+    fontSize: 17,
+    lineHeight: 1.35,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+
+  safeguardHelp: {
+    margin: 0,
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  addOnSafeguardsFootnote: {
+    margin: "12px 0 0",
+    color: "#cbd5e1",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   addOnFootnote: {
