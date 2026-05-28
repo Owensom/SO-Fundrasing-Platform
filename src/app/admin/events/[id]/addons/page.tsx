@@ -59,12 +59,21 @@ type AddOnDefinition = {
   savedParam: string;
 };
 
-type EventFundraisingAddOnLike = Partial<EventFundraisingAddOn> &
+type LegalQuestionFields = {
+  legalQuestionEnabled?: boolean;
+  legalQuestionText?: string;
+  legalQuestionAnswer?: string;
+  legalQuestionHelperText?: string;
+};
+
+type AdminEventFundraisingAddOn = EventFundraisingAddOn & LegalQuestionFields;
+
+type EventFundraisingAddOnLike = Partial<AdminEventFundraisingAddOn> &
   Record<string, unknown>;
 
 type ConfiguredAddOn = {
   definition: AddOnDefinition;
-  addOn: EventFundraisingAddOn;
+  addOn: AdminEventFundraisingAddOn;
   readinessItems: ReadinessItem[];
   readyForCheckout: boolean;
   warnings: number;
@@ -383,7 +392,7 @@ function revealStatusLabel(prize: EventPrizeRevealPrize | null) {
 function normaliseAddOnForAdmin(
   addOn: EventFundraisingAddOnLike | null | undefined,
   definition: AddOnDefinition,
-): EventFundraisingAddOn {
+): AdminEventFundraisingAddOn {
   if (!addOn) {
     return {
       id: definition.id,
@@ -402,6 +411,10 @@ function normaliseAddOnForAdmin(
       prizeRevealTitle: "",
       prizeRevealDescription: "",
       prizeRevealPrizes: [],
+      legalQuestionEnabled: false,
+      legalQuestionText: "",
+      legalQuestionAnswer: "",
+      legalQuestionHelperText: "",
     };
   }
 
@@ -462,12 +475,32 @@ function normaliseAddOnForAdmin(
       "",
     ),
     prizeRevealPrizes: getPrizeRevealPrizes(addOn),
+    legalQuestionEnabled: readBooleanField(
+      addOn,
+      ["legalQuestionEnabled", "legal_question_enabled"],
+      false,
+    ),
+    legalQuestionText: readStringField(
+      addOn,
+      ["legalQuestionText", "legal_question_text"],
+      "",
+    ),
+    legalQuestionAnswer: readStringField(
+      addOn,
+      ["legalQuestionAnswer", "legal_question_answer"],
+      "",
+    ),
+    legalQuestionHelperText: readStringField(
+      addOn,
+      ["legalQuestionHelperText", "legal_question_helper_text"],
+      "",
+    ),
   };
 }
 function getAddOn(
   addOns: EventFundraisingAddOn[],
   definition: AddOnDefinition,
-): EventFundraisingAddOn {
+): AdminEventFundraisingAddOn {
   const existing = addOns.find((addOn) => addOn.type === definition.type);
 
   return normaliseAddOnForAdmin(existing, definition);
@@ -476,7 +509,7 @@ function getAddOn(
 function buildAddOnFromForm(
   formData: FormData,
   definition: AddOnDefinition,
-): EventFundraisingAddOn {
+): AdminEventFundraisingAddOn {
   const isHigherOrLower = definition.type === "higher_or_lower";
 
   return {
@@ -510,6 +543,19 @@ function buildAddOnFromForm(
     prizeRevealPrizes: isHigherOrLower
       ? buildPrizeRevealPrizesFromForm(formData)
       : [],
+
+    legalQuestionEnabled: isHigherOrLower
+      ? String(formData.get("legal_question_enabled") || "") === "true"
+      : false,
+    legalQuestionText: isHigherOrLower
+      ? cleanOptionalText(formData.get("legal_question_text"))
+      : "",
+    legalQuestionAnswer: isHigherOrLower
+      ? cleanOptionalText(formData.get("legal_question_answer"))
+      : "",
+    legalQuestionHelperText: isHigherOrLower
+      ? cleanOptionalText(formData.get("legal_question_helper_text"))
+      : "",
   };
 }
 
@@ -547,7 +593,7 @@ function readinessToneStyle(tone: ReadinessItem["tone"]) {
 }
 
 function buildAddOnReadiness(input: {
-  addOn: EventFundraisingAddOn;
+  addOn: AdminEventFundraisingAddOn;
   currency: string;
   definition: AddOnDefinition;
 }): ReadinessItem[] {
@@ -643,9 +689,27 @@ function buildAddOnReadiness(input: {
   const prizeRevealRevealed = prizeRevealPrizes.filter(
     (prize) => prize.isRevealed,
   ).length;
+  const legalQuestionEnabled = Boolean(addOn.legalQuestionEnabled);
+  const hasLegalQuestion = Boolean(String(addOn.legalQuestionText || "").trim());
+  const hasLegalAnswer = Boolean(String(addOn.legalQuestionAnswer || "").trim());
 
   return [
     ...baseItems,
+    {
+      label: "Legal / skill question",
+      value: legalQuestionEnabled ? "Enabled" : "Off",
+      detail: legalQuestionEnabled
+        ? hasLegalQuestion && hasLegalAnswer
+          ? "A skill, knowledge or judgement question is saved for this add-on."
+          : "Complete the question and answer before enforcing this at checkout."
+        : "Optional safeguard for paid online Higher or Lower entries.",
+      tone:
+        legalQuestionEnabled && (!hasLegalQuestion || !hasLegalAnswer)
+          ? "warning"
+          : legalQuestionEnabled
+            ? "good"
+            : "neutral",
+    },
     {
       label: "Prize reveal mode",
       value: prizeRevealEnabled ? "Configured" : "Off",
@@ -697,7 +761,7 @@ function buildAddOnReadiness(input: {
   ];
 }
 
-function addOnReadyForCheckout(addOn: EventFundraisingAddOn) {
+function addOnReadyForCheckout(addOn: AdminEventFundraisingAddOn) {
   return (
     Boolean(addOn.enabled) &&
     Boolean(addOn.collectAtCheckout) &&
@@ -1215,7 +1279,7 @@ function AddOnSettingsPanel({
   customImagesAllowed,
 }: {
   eventId: string;
-  addOn: EventFundraisingAddOn;
+  addOn: AdminEventFundraisingAddOn;
   definition: AddOnDefinition;
   readinessItems: ReadinessItem[];
   readyForCheckout: boolean;
@@ -1236,6 +1300,9 @@ function AddOnSettingsPanel({
   const prizeRevealDefaultOpen =
     Boolean(addOn.prizeRevealModeEnabled) || prizeRevealPrizes.length > 0;
   const revealProgress = revealProgressText(prizeRevealPrizes);
+  const legalQuestionDefaultOpen =
+    Boolean(addOn.legalQuestionEnabled) ||
+    Boolean(String(addOn.legalQuestionText || "").trim());
 
   return (
     <section className="panel" style={styles.panel}>
@@ -1405,6 +1472,108 @@ function AddOnSettingsPanel({
           </Field>
         </div>
                 {isHigherOrLower ? (
+          <details
+            open={legalQuestionDefaultOpen}
+            className="legalQuestionPanel"
+            style={styles.legalQuestionPanel}
+          >
+            <summary
+              className="legalQuestionSummary"
+              style={styles.legalQuestionSummary}
+            >
+              <div>
+                <div style={styles.legalQuestionEyebrow}>
+                  Legal / skill question
+                </div>
+                <h3 style={styles.legalQuestionTitle}>
+                  Higher or Lower entry question
+                </h3>
+                <p style={styles.legalQuestionText}>
+                  Optional storage for a genuine skill, knowledge or judgement
+                  question. This step saves the settings only and does not
+                  enforce checkout yet.
+                </p>
+              </div>
+
+              <div style={styles.legalQuestionSummaryActions}>
+                <span
+                  style={{
+                    ...styles.legalQuestionBadge,
+                    ...(addOn.legalQuestionEnabled
+                      ? styles.legalQuestionBadgeEnabled
+                      : styles.legalQuestionBadgeNeutral),
+                  }}
+                >
+                  {addOn.legalQuestionEnabled ? "Question enabled" : "Optional"}
+                </span>
+
+                <span style={styles.prizeRevealToggle}>Open / close</span>
+              </div>
+            </summary>
+
+            <div style={styles.legalQuestionBody}>
+              <div style={styles.legalQuestionNotice}>
+                <strong>Organiser responsibility</strong>
+                <span>
+                  For paid online entries, organisers should use a genuine
+                  skill, knowledge or judgement question where appropriate and
+                  make sure their promotion is lawful for their event. This is a
+                  configuration aid, not legal advice.
+                </span>
+              </div>
+
+              <div className="twoCol" style={styles.twoCol}>
+                <Field label="Enable legal / skill question">
+                  <select
+                    name="legal_question_enabled"
+                    defaultValue={
+                      addOn.legalQuestionEnabled ? "true" : "false"
+                    }
+                    className="input"
+                    style={styles.input}
+                  >
+                    <option value="false">No, do not use a question</option>
+                    <option value="true">Yes, save a question</option>
+                  </select>
+                </Field>
+
+                <Field label="Correct answer">
+                  <input
+                    name="legal_question_answer"
+                    defaultValue={addOn.legalQuestionAnswer || ""}
+                    placeholder="Correct answer"
+                    className="input"
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Question shown to supporters">
+                <textarea
+                  name="legal_question_text"
+                  rows={3}
+                  defaultValue={addOn.legalQuestionText || ""}
+                  placeholder="Example: Which city is the capital of Scotland?"
+                  className="textarea"
+                  style={styles.textarea}
+                />
+              </Field>
+
+              <Field label="Helper text shown near the question">
+                <textarea
+                  name="legal_question_helper_text"
+                  rows={3}
+                  defaultValue={addOn.legalQuestionHelperText || ""}
+                  placeholder="Example: Answer the question correctly before adding Higher or Lower entries at checkout."
+                  className="textarea"
+                  style={styles.textarea}
+                />
+              </Field>
+            </div>
+          </details>
+        ) : null}
+
+        {isHigherOrLower ? (
           <details
             open={prizeRevealDefaultOpen}
             className="prizeRevealPanel"
@@ -1771,6 +1940,7 @@ const responsiveStyles = `
   .event-addons-page .submitBar,
   .event-addons-page .readinessHeader,
   .event-addons-page .readinessActions,
+  .event-addons-page .legalQuestionSummary,
   .event-addons-page .prizeRevealSummary,
   .event-addons-page .prizeRevealRowHeader,
   .event-addons-page .revealControlBox {
@@ -1806,6 +1976,7 @@ const responsiveStyles = `
   .event-addons-page .lockedPanel,
   .event-addons-page .upgradeBanner,
   .event-addons-page .readinessPanel,
+  .event-addons-page .legalQuestionPanel,
   .event-addons-page .prizeRevealPanel {
     border-radius: 22px !important;
     padding: 16px !important;
@@ -2443,6 +2614,105 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
+  },
+
+  legalQuestionPanel: {
+    display: "grid",
+    gap: 0,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "radial-gradient(circle at top left, rgba(59,130,246,0.16), transparent 34%), linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+    overflow: "hidden",
+  },
+
+  legalQuestionSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+
+  legalQuestionSummaryActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+
+  legalQuestionBody: {
+    display: "grid",
+    gap: 14,
+    marginTop: 16,
+  },
+
+  legalQuestionEyebrow: {
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  legalQuestionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
+  },
+
+  legalQuestionText: {
+    margin: "7px 0 0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    maxWidth: 760,
+  },
+
+  legalQuestionBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+
+  legalQuestionBadgeEnabled: {
+    background: "#dcfce7",
+    color: "#166534",
+    borderColor: "#bbf7d0",
+  },
+
+  legalQuestionBadgeNeutral: {
+    background: "#ffffff",
+    color: "#334155",
+    borderColor: "#cbd5e1",
+  },
+
+  legalQuestionNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
   },
 
   prizeRevealPanel: {
