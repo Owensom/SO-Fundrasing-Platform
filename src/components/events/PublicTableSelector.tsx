@@ -1063,7 +1063,6 @@ export default function PublicTableSelector({
                   })}
                 </div>
               )}
-                            )}
 
               <div style={styles.totalBox}>
                 <span>
