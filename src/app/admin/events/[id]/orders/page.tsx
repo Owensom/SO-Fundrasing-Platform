@@ -66,6 +66,13 @@ type AddOnSummary = {
   paidRevenueCents: number;
 };
 
+type AddOnTypeSummary = AddOnSummary & {
+  key: string;
+  label: string;
+  orders: number;
+  paidOrders: number;
+};
+
 function formatMoney(
   cents: number | string | null | undefined,
   currency = "GBP",
@@ -152,7 +159,16 @@ function isEventAddOnItem(row: EventOrderDashboardRow) {
   return (
     label.startsWith("event add-on") ||
     label.includes("heads or tails") ||
+    label.includes("higher or lower") ||
     (!row.ticket_type_id && !row.seat_id && label.includes("add-on"))
+  );
+}
+
+function ticketLabel(row: EventOrderDashboardRow) {
+  return (
+    String(row.item_label || "").trim() ||
+    String(row.ticket_type_name || "").trim() ||
+    "Ticket"
   );
 }
 
@@ -163,6 +179,51 @@ function cleanAddOnLabel(row: EventOrderDashboardRow) {
     .replace(/^event add-on\s*[—-]\s*/i, "")
     .replace(/^add-on\s*[—-]\s*/i, "")
     .trim();
+}
+
+function addOnDisplayLabel(row: EventOrderDashboardRow) {
+  const label = cleanAddOnLabel(row);
+
+  if (label) return label;
+
+  const rawLabel = String(row.item_label || "").toLowerCase();
+
+  if (rawLabel.includes("higher or lower")) return "Higher or Lower";
+  if (rawLabel.includes("heads or tails")) return "Heads or Tails";
+
+  return "Event add-on";
+}
+
+function addOnKey(row: EventOrderDashboardRow) {
+  return addOnDisplayLabel(row)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function formatAddOnEntryLabel(entries: number) {
+  if (entries === 1) return "1 add-on entry";
+  return `${entries} add-on entries`;
+}
+
+function formatOrderAddOnSummary(addOnItems: EventOrderDashboardRow[]) {
+  if (addOnItems.length === 0) return "No add-ons";
+
+  const grouped = new Map<string, { label: string; entries: number }>();
+
+  for (const item of addOnItems) {
+    const key = addOnKey(item);
+    const label = addOnDisplayLabel(item);
+    const current = grouped.get(key) || { label, entries: 0 };
+
+    current.entries += rowQuantity(item);
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.values())
+    .map((summary) => `${summary.label} × ${summary.entries}`)
+    .join(", ");
 }
 
 function rowQuantity(row: EventOrderDashboardRow) {
@@ -187,14 +248,6 @@ function seatLabel(row: EventOrderDashboardRow) {
   }
 
   return "General admission";
-}
-
-function ticketLabel(row: EventOrderDashboardRow) {
-  return (
-    String(row.item_label || "").trim() ||
-    String(row.ticket_type_name || "").trim() ||
-    "Ticket"
-  );
 }
 
 function guestName(row: EventOrderDashboardRow, order: OrderGroup) {
@@ -315,6 +368,58 @@ function calculateAddOnSummary(orders: OrderGroup[]): AddOnSummary {
       paidEntries: 0,
       paidRevenueCents: 0,
     },
+  );
+}
+
+function calculateAddOnSummariesByType(orders: OrderGroup[]) {
+  const map = new Map<string, AddOnTypeSummary>();
+
+  for (const order of orders) {
+    const addOnItems = getAddOnItems(order);
+    const orderSeenKeys = new Set<string>();
+
+    for (const item of addOnItems) {
+      const key = addOnKey(item);
+      const label = addOnDisplayLabel(item);
+      const entries = rowQuantity(item);
+      const revenueCents = rowTotal(item);
+
+      const current =
+        map.get(key) || {
+          key,
+          label,
+          entries: 0,
+          revenueCents: 0,
+          paidEntries: 0,
+          paidRevenueCents: 0,
+          orders: 0,
+          paidOrders: 0,
+        };
+
+      current.entries += entries;
+      current.revenueCents += revenueCents;
+
+      if (!orderSeenKeys.has(key)) {
+        current.orders += 1;
+
+        if (order.status === "paid") {
+          current.paidOrders += 1;
+        }
+
+        orderSeenKeys.add(key);
+      }
+
+      if (order.status === "paid") {
+        current.paidEntries += entries;
+        current.paidRevenueCents += revenueCents;
+      }
+
+      map.set(key, current);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) =>
+    a.label.localeCompare(b.label),
   );
 }
 
@@ -439,7 +544,10 @@ export default async function AdminEventOrdersPage({
   );
 
   const addOnSummary = calculateAddOnSummary(orders);
-  const ordersWithAddOns = orders.filter((order) => getAddOnItems(order).length > 0);
+  const addOnSummariesByType = calculateAddOnSummariesByType(orders);
+  const ordersWithAddOns = orders.filter(
+    (order) => getAddOnItems(order).length > 0,
+  );
   const paidOrdersWithAddOns = paidOrders.filter(
     (order) => getAddOnItems(order).length > 0,
   );
@@ -477,8 +585,7 @@ export default async function AdminEventOrdersPage({
       href: `/admin/events/${event.id}/orders?status=other`,
     },
   ];
-
-  return (
+    return (
     <main className="event-orders-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -539,7 +646,9 @@ export default async function AdminEventOrdersPage({
               }}
             >
               {filter.label}
-              <span style={active ? styles.filterCountActive : styles.filterCount}>
+              <span
+                style={active ? styles.filterCountActive : styles.filterCount}
+              >
                 {filter.count}
               </span>
             </Link>
@@ -562,18 +671,15 @@ export default async function AdminEventOrdersPage({
         />
       </section>
 
-      <section
-        className="event-orders-addon-panel"
-        style={styles.addOnPanel}
-      >
+      <section className="event-orders-addon-panel" style={styles.addOnPanel}>
         <div style={styles.addOnPanelHeader}>
           <div>
             <div style={styles.addOnEyebrow}>Event add-ons</div>
-            <h2 style={styles.addOnTitle}>Heads or Tails snapshot</h2>
+            <h2 style={styles.addOnTitle}>Event add-ons snapshot</h2>
             <p style={styles.addOnText}>
               Read-only summary of event-night add-on entries sold through
-              checkout. These figures are based on event order items labelled as
-              add-ons.
+              checkout. Heads or Tails and Higher or Lower are counted
+              separately when both are used on the same event.
             </p>
           </div>
 
@@ -596,12 +702,55 @@ export default async function AdminEventOrdersPage({
             label="Paid add-on revenue"
             value={formatMoney(addOnSummary.paidRevenueCents, currency)}
           />
-          <SummaryCard label="Orders with add-ons" value={ordersWithAddOns.length} />
+          <SummaryCard
+            label="Orders with add-ons"
+            value={ordersWithAddOns.length}
+          />
           <SummaryCard
             label="Paid orders with add-ons"
             value={paidOrdersWithAddOns.length}
           />
         </div>
+
+        {addOnSummariesByType.length > 0 ? (
+          <div
+            className="event-orders-addon-type-grid"
+            style={styles.addOnTypeGrid}
+          >
+            {addOnSummariesByType.map((summary) => (
+              <div key={summary.key} style={styles.addOnTypeCard}>
+                <div style={styles.addOnTypeHeader}>
+                  <div>
+                    <div style={styles.addOnTypeEyebrow}>Add-on type</div>
+                    <h3 style={styles.addOnTypeTitle}>{summary.label}</h3>
+                  </div>
+
+                  <span style={styles.addOnTypeBadge}>
+                    {formatAddOnEntryLabel(summary.paidEntries)}
+                  </span>
+                </div>
+
+                <div style={styles.addOnTypeStats}>
+                  <SummaryCard label="Entries" value={summary.entries} />
+                  <SummaryCard
+                    label="Paid entries"
+                    value={summary.paidEntries}
+                  />
+                  <SummaryCard
+                    label="Revenue"
+                    value={formatMoney(summary.revenueCents, currency)}
+                  />
+                  <SummaryCard
+                    label="Paid revenue"
+                    value={formatMoney(summary.paidRevenueCents, currency)}
+                  />
+                  <SummaryCard label="Orders" value={summary.orders} />
+                  <SummaryCard label="Paid orders" value={summary.paidOrders} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section style={styles.listHeader}>
@@ -636,10 +785,6 @@ export default async function AdminEventOrdersPage({
           {visibleOrders.map((order) => {
             const addOnItems = getAddOnItems(order);
             const ticketItems = getTicketItems(order);
-            const orderAddOnEntries = addOnItems.reduce(
-              (sum, item) => sum + rowQuantity(item),
-              0,
-            );
             const orderAddOnRevenue = addOnItems.reduce(
               (sum, item) => sum + rowTotal(item),
               0,
@@ -691,10 +836,11 @@ export default async function AdminEventOrdersPage({
                       <div style={styles.orderAddOnEyebrow}>
                         Event add-ons included
                       </div>
+
                       <strong style={styles.orderAddOnTitle}>
-                        {orderAddOnEntries} Heads or Tails entr
-                        {orderAddOnEntries === 1 ? "y" : "ies"}
+                        {formatOrderAddOnSummary(addOnItems)}
                       </strong>
+
                       <p style={styles.orderAddOnText}>
                         Add-on revenue on this order:{" "}
                         <strong>
@@ -733,7 +879,7 @@ export default async function AdminEventOrdersPage({
                             <div>
                               <div style={styles.itemLabel}>Add-on</div>
                               <div style={styles.itemValue}>
-                                {cleanAddOnLabel(item) || "Heads or Tails"}
+                                {addOnDisplayLabel(item)}
                               </div>
                             </div>
 
@@ -847,7 +993,6 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .event-orders-page,
 .event-orders-page * {
@@ -879,7 +1024,8 @@ const responsiveStyles = `
   }
 
   .event-orders-summary-grid,
-  .event-orders-addon-grid {
+  .event-orders-addon-grid,
+  .event-orders-addon-type-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
@@ -925,7 +1071,8 @@ const responsiveStyles = `
   }
 
   .event-orders-summary-grid,
-  .event-orders-addon-grid {
+  .event-orders-addon-grid,
+  .event-orders-addon-type-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -1198,6 +1345,64 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
     gap: 12,
+  },
+
+  addOnTypeGrid: {
+    display: "grid",
+    gap: 12,
+  },
+
+  addOnTypeCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(250,204,21,0.22)",
+  },
+
+  addOnTypeHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  addOnTypeEyebrow: {
+    color: "#facc15",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  addOnTypeTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 22,
+    lineHeight: 1.05,
+    letterSpacing: "-0.04em",
+  },
+
+  addOnTypeBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.14)",
+    color: "#fef3c7",
+    border: "1px solid rgba(250,204,21,0.36)",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  addOnTypeStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
+    gap: 10,
   },
 
   listHeader: {
