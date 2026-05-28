@@ -373,18 +373,18 @@ function buildAddOnReadiness(input: {
   return [
     {
       label: "Public display",
-      value: enabled ? "Ready" : "Disabled",
+      value: enabled ? "Live-ready" : "Disabled",
       detail: enabled
-        ? `The public event page can show the ${input.definition.shortName} panel once the public display phase is wired.`
+        ? `The public event page can show the ${input.definition.shortName} panel for this event.`
         : "Enable the add-on before it appears on the public event page.",
       tone: enabled ? "good" : "neutral",
     },
     {
       label: "Checkout collection",
-      value: collectAtCheckout ? "On" : "Off",
+      value: collectAtCheckout ? "Enabled" : "Off",
       detail: collectAtCheckout
-        ? "Supporters will be able to add entries during event checkout once the checkout phase is wired."
-        : "Entries are shown publicly but collected by the organiser on the night.",
+        ? "Supporters can add entries during event checkout when a valid entry price is saved."
+        : "Entries can still be promoted publicly and collected by the organiser on the night.",
       tone: collectAtCheckout ? "good" : "neutral",
     },
     {
@@ -402,7 +402,7 @@ function buildAddOnReadiness(input: {
       value: maxEntries > 0 ? `${maxEntries} per booking` : "Unlimited",
       detail:
         maxEntries > 0
-          ? "The public checkout selector will cap entries at this amount once checkout support is wired."
+          ? "The public checkout selector caps entries at this amount."
           : "No per-booking limit is currently set.",
       tone: maxEntries > 0 ? "good" : "neutral",
     },
@@ -432,10 +432,10 @@ function buildAddOnReadiness(input: {
     },
     {
       label: "Admin reporting",
-      value: "Prepared",
+      value: "Live",
       detail:
-        "Reporting will be extended in a later phase so add-on entries and revenue can be separated clearly.",
-      tone: "neutral",
+        "The orders dashboard separates add-on entries and revenue by add-on type.",
+      tone: "good",
     },
   ];
 }
@@ -447,7 +447,6 @@ function addOnReadyForCheckout(addOn: EventFundraisingAddOn) {
     Number(addOn.entryPriceCents || 0) > 0
   );
 }
-
 async function requireEventAccess(eventId: string) {
   const session = await auth();
 
@@ -614,9 +613,8 @@ export default async function EventFundraisingAddOnsPage({
 
           <p style={styles.heroText}>
             Add live fundraising tools to this event. Heads or Tails and Higher
-            or Lower are designed for ceilidhs, quiz nights, dinners, auctions
-            and gala events, with public display, optional checkout collection
-            and admin reporting phased in safely.
+            or Lower can now be shown publicly, collected during checkout and
+            reported clearly in event orders.
           </p>
 
           <div className="heroMetaGrid" style={styles.heroMetaGrid}>
@@ -655,9 +653,9 @@ export default async function EventFundraisingAddOnsPage({
           </strong>
           <span style={styles.heroPanelText}>
             {checkoutReadyAddOns.length > 0
-              ? "Checkout-ready settings are saved for the enabled add-ons. Public checkout support for the next add-on will be wired in a later phase."
+              ? "Checkout-ready add-ons can appear in public event checkout and report separately in event orders."
               : firstEnabledAddOn
-                ? "At least one add-on can be prepared for public display. Checkout collection needs a valid price and checkout wiring."
+                ? "At least one add-on can appear on the public event page. Add a valid price and enable checkout collection to sell entries online."
                 : "Enable an add-on to prepare event-night fundraising for this event."}
           </span>
         </div>
@@ -673,6 +671,15 @@ export default async function EventFundraisingAddOnsPage({
         </Link>
 
         <div className="topActionsRight" style={styles.topActionsRight}>
+          <Link
+            href={`/e/${encodeURIComponent(event.slug)}`}
+            target="_blank"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            View public event page
+          </Link>
+
           <Link
             href={`/admin/events/${encodeURIComponent(event.id)}/orders`}
             className="secondaryButton"
@@ -730,7 +737,7 @@ export default async function EventFundraisingAddOnsPage({
         <SummaryCard
           label="Foundation"
           value="Multiple add-ons"
-          detail="Foundation can support several live fundraising add-ons per event."
+          detail="Foundation can sell and report several live fundraising add-ons on the same event."
         />
       </section>
 
@@ -741,8 +748,9 @@ export default async function EventFundraisingAddOnsPage({
               <div style={styles.readinessEyebrow}>Readiness</div>
               <h2 style={styles.readinessTitle}>Event add-ons checklist</h2>
               <p style={styles.readinessIntro}>
-                A quick admin view of what is enabled, what is checkout-ready,
-                and what would improve each public add-on experience.
+                A quick admin view of what is enabled, what is public-ready,
+                what is checkout-ready and what is already reporting in event
+                orders.
               </p>
             </div>
 
@@ -757,9 +765,9 @@ export default async function EventFundraisingAddOnsPage({
               }}
             >
               {checkoutReadyAddOns.length > 0
-                ? "Checkout settings ready"
+                ? "Checkout-ready"
                 : firstEnabledAddOn
-                  ? "Display settings started"
+                  ? "Display-ready"
                   : "Disabled"}
             </span>
           </div>
@@ -798,9 +806,11 @@ export default async function EventFundraisingAddOnsPage({
                 </div>
 
                 <p style={styles.readinessOverviewText}>
-                  {item.addOn.enabled
-                    ? `${item.definition.shortName} is prepared for this event.`
-                    : `${item.definition.shortName} is not currently enabled.`}
+                  {item.readyForCheckout
+                    ? `${item.definition.shortName} can be sold during checkout and tracked in orders.`
+                    : item.addOn.enabled
+                      ? `${item.definition.shortName} can be displayed publicly, but needs the warning items completed for best results.`
+                      : `${item.definition.shortName} is not currently enabled.`}
                 </p>
               </article>
             ))}
@@ -856,7 +866,6 @@ export default async function EventFundraisingAddOnsPage({
     </main>
   );
 }
-
 function AddOnSettingsPanel({
   eventId,
   addOn,
@@ -900,7 +909,7 @@ function AddOnSettingsPanel({
           {readyForCheckout
             ? "Checkout-ready"
             : addOn.enabled
-              ? "Enabled"
+              ? "Display-ready"
               : "Disabled"}
         </span>
       </div>
@@ -941,7 +950,7 @@ function AddOnSettingsPanel({
           </strong>
           <span>
             The add-on can be saved, but completing the missing fields will make
-            the public experience clearer.
+            the public page and checkout experience clearer.
           </span>
         </div>
       ) : null}
@@ -1056,7 +1065,7 @@ function AddOnSettingsPanel({
             <strong>Foundation add-ons enabled</strong>
             <span>
               This tenant can support multiple event fundraising add-ons per
-              event as more add-on types are introduced.
+              event, including Heads or Tails and Higher or Lower together.
             </span>
           </div>
         )}
@@ -1068,7 +1077,7 @@ function AddOnSettingsPanel({
             </strong>
             <div style={styles.mutedSmall}>
               Updates this event only. Public display, checkout collection and
-              admin reporting use these settings as each phase is wired.
+              admin reporting use these saved settings.
             </div>
           </div>
 
