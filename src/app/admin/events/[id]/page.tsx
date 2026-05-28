@@ -3658,12 +3658,12 @@ export default async function AdminEventManagePage({
         } menus`}
       >
         <EventPrizeMenuSettings
-          eventId={event.id}
-          prizes={event.prizes_json || []}
-          menuOptions={event.menu_options || []}
-          updatePrizesAction={updatePrizesAction}
-          updateMenuOptionsAction={updateMenuOptionsAction}
-        />
+         eventId={event.id}
+         initialPrizes={event.prizes_json || []}
+         initialMenuOptions={event.menu_options || []}
+         updatePrizesAction={updatePrizesAction}
+         updateMenuOptionsAction={updateMenuOptionsAction}
+      />
       </CollapsibleSection>
 
       <CollapsibleSection
